@@ -38,9 +38,10 @@ namespace DB
 {
 
 template<typename M>
-inline void reportStats(const M & map, const String & name, size_t num_workers)
+inline void reportStats(Poco::Logger * log, const M & map, const String & name, size_t num_workers)
 {
     std::stringstream ss;
+    ss << name << " : ";
     double sum = 0;
     double max_load = 0;
     for (const auto & it : map)
@@ -62,7 +63,7 @@ inline void reportStats(const M & map, const String & name, size_t num_workers)
     /// peak over average ratio, lower is better and must not exceed the load factor if use bounded load balancing
     double peak_over_avg = max_load / mean;
     ss << "stats: " << co_var << " " << peak_over_avg << std::endl;
-    LOG_DEBUG(&Poco::Logger::get(name), ss.str());
+    LOG_DEBUG(log, ss.str());
 }
 
 /// explicit instantiation for server part and cnch data part.
@@ -74,6 +75,7 @@ template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<D
 template <typename DataPartsCnchVector>
 std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context)
 {
+    static auto * log = &Poco::Logger::get("assignCnchParts");
     Context::PartAllocator part_allocation_algorithm;
     if (query_context->getSettingsRef().cnch_part_allocation_algorithm.changed)
         part_allocation_algorithm = query_context->getPartAllocationAlgo();
@@ -85,35 +87,35 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
         case Context::PartAllocator::JUMP_CONSISTENT_HASH:
         {
             auto ret = assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
-            reportStats(ret, "Jump Consistent Hash", worker_group->getWorkerIDVec().size());
+            reportStats(log, ret, "Jump Consistent Hash", worker_group->getWorkerIDVec().size());
             return ret;
         }
         case Context::PartAllocator::RING_CONSISTENT_HASH:
         {
             if (!worker_group->hasRing())
             {
-                LOG_WARNING(&Poco::Logger::get("Consistent Hash"), "Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
+                LOG_WARNING(log, "Consistent Hash: Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
                 return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
             }
-            auto ret = assignCnchPartsWithRingAndBalance(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts);
-            reportStats(ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
+            auto ret = assignCnchPartsWithRingAndBalance(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts);
+            reportStats(log, ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
             return ret;
         }
         case Context::PartAllocator::STRICT_RING_CONSISTENT_HASH:
         {
             if (!worker_group->hasRing())
             {
-                LOG_WARNING(&Poco::Logger::get("Strict Consistent Hash"), "Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
+                LOG_WARNING(log, "Strict Consistent Hash: Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
                 return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
             }
-            auto ret = assignCnchPartsWithStrictBoundedHash(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts, true);
-            reportStats(ret, "Strict Consistent Hash", worker_group->getRing().size());
+            auto ret = assignCnchPartsWithStrictBoundedHash(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts, true);
+            reportStats(log, ret, "Strict Consistent Hash", worker_group->getRing().size());
             return ret;
         }
         case Context::PartAllocator::SIMPLE_HASH: //Note: Now just used for test disk cache stealing so not used for online
         {
             auto ret = assignCnchPartsWithSimpleHash(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
-            reportStats(ret, "Simple Hash", worker_group->getWorkerIDVec().size());
+            reportStats(log, ret, "Simple Hash", worker_group->getWorkerIDVec().size());
             return ret;
         }
     }
@@ -170,9 +172,9 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(WorkerLi
 
 /// 2 round apporach
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalance(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts)
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalance(Poco::Logger * log, WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts)
 {
-    LOG_INFO(&Poco::Logger::get("Consistent Hash"), "Start to allocate part with bounded ring based hash policy.");
+    LOG_INFO(log, "Consistent Hash: Start to allocate part with bounded ring based hash policy.");
     std::unordered_map<String, DataPartsCnchVector> ret;
     size_t num_parts = parts.size();
     auto cap_limit = ring.getCapLimit(num_parts);
@@ -218,16 +220,16 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
     }
 
 
-    LOG_INFO(&Poco::Logger::get("Consistent Hash"),
-             "Finish allocate part with bounded ring based hash policy, # of overloaded parts {}.", exceed_parts.size());
+    LOG_INFO(log,
+             "Consistent Hash: Finish allocate part with bounded ring based hash policy, # of overloaded parts {}.", exceed_parts.size());
     return ret;
 }
 
 // 1 round approach
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBoundedHash(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts, bool strict)
+static std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBoundedHash(Poco::Logger * log, WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts, bool strict)
 {
-    LOG_INFO(&Poco::Logger::get("Strict Bounded Consistent Hash"), "Start to allocate part with bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
+    LOG_DEBUG(log, "Strict Bounded Consistent Hash: Start to allocate part with bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
     std::unordered_map<String, DataPartsCnchVector> ret;
     size_t cap_limit = 0;
     std::unordered_map<String, UInt64> stats;
@@ -254,7 +256,7 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBounded
                 ProfileEvents::increment(ProfileEvents::CnchDiskCacheNodeUnLocalityParts, 1);
     }
 
-    LOG_INFO(&Poco::Logger::get("Strict Bounded Consistent Hash"), "Finish allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
+    LOG_DEBUG(log, "Strict Bounded Consistent Hash: Finish allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
     return ret;
 }
 
@@ -383,53 +385,8 @@ size_t computeVirtualPartSize(size_t min_rows_per_vp, size_t index_granularity)
     return min_rows_per_vp % index_granularity ? min_rows_per_vp / index_granularity + 1 : min_rows_per_vp / index_granularity;
 }
 
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
-    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */, const ContextPtr & query_context)
-{
-    // If part_allocation_algorithm is specified in SQL Level, use it with high priority
-    Context::HybridPartAllocator part_allocation_algorithm;
-    if (query_context->getSettingsRef().cnch_hybrid_part_allocation_algorithm.changed)
-        part_allocation_algorithm = query_context->getHybridPartAllocationAlgo();
-    else
-        part_allocation_algorithm = worker_group->getContext()->getHybridPartAllocationAlgo();
-
-    switch (part_allocation_algorithm)
-    {
-        case Context::HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH: {
-            auto res = assignCnchHybridPartsWithMod(worker_group, parts, virtual_part_size);
-            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Modular Hashing)");
-            return res;
-        }
-        case Context::HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH: {
-            auto res = assignCnchHybridPartsWithConsistentHash(worker_group, parts, virtual_part_size);
-            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Ring Consistent Hashing)");
-            return res;
-        }
-        case Context::HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH: {
-            auto res = assignCnchHybridPartsWithBoundedHash(worker_group, parts, virtual_part_size);
-            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Bounded Ring Consistent Hashing)");
-            return res;
-        }
-        case Context::HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH_ONE_STAGE: {
-            auto res = assignCnchHybridPartsWithStrictBoundedHash(worker_group, parts, virtual_part_size);
-            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (One Stage Bounded Consistent Hashing)");
-            return res;
-        }
-        case Context::HybridPartAllocator::HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE: {
-            auto res = assignCnchHybridPartsWithStrictBoundedHash(worker_group, parts, virtual_part_size, true);
-            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Strict One Stage Bounded Consistent Hashing)");
-            return res;
-        }
-        default: {
-            auto res = assignCnchHybridPartsWithBoundedHash(worker_group, parts, virtual_part_size);
-            reportHybridAllocStats(res.first, res.second, "Hybrid Allocation (Bounded Ring Consistent Hashing)");
-            return res;
-        }
-    }
-}
-
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithMod(
-    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
+static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithMod(
+    Poco::Logger * log, const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
 {
     std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
     auto & physical_assignment = res.first;
@@ -452,14 +409,13 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWi
             // First virtual part, [0, virtual_part_size)
             size_t begin = 0, end = virtual_part_size;
             String base_name = part->info().getBasicPartName();
-            auto * logger = &Poco::Logger::get("assignCnchHybridPartsWithMod");
             while (begin < end)
             {
                 /// TODO: control number of virtual parts
                 String key = fmt::format("{}{}_{}", base_name, begin, end);
                 auto index = hasher(key) % shard_infos.size();
                 String hostname = shard_infos[index].worker_id;
-                LOG_TRACE(logger, "virtual part key {} assign to worker {}", key, hostname);
+                LOG_TRACE(log, "assignCnchHybridPartsWithMod: virtual part key {} assign to worker {}", key, hostname);
 
                 auto insert_entry = virtual_assignment.try_emplace(hostname).first;
                 auto & virtual_parts = insert_entry->second;
@@ -482,7 +438,7 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWi
     return res;
 }
 
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithBoundedHash(
+static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithBoundedHash(
     const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
 {
     std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
@@ -555,15 +511,18 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWi
     return res;
 }
 
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithStrictBoundedHash(
+static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithStrictBoundedHash(
+    Poco::Logger * log,
     const WorkerGroupHandle & worker_group,
     const ServerDataPartsVector & parts,
     size_t virtual_part_size /* unit = num marks */,
     bool strict)
 {
-    LOG_INFO(
-        &Poco::Logger::get("Strict Bounded Consistent Hash for Hybrid Allocation"),
-        "Start to allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
+    LOG_DEBUG(
+        log,
+        "Strict Bounded Consistent Hash for Hybrid Allocation: "
+        "Start to allocate part with strict bounded ring based hash policy under strict mode {}.",
+        std::to_string(strict));
 
     std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
     auto & physical_assignment = res.first;
@@ -588,8 +547,9 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWi
         cap_limit = ring.getCapLimit(i + 1, strict);
         auto hostname = ring.findAndRebalance(hybrid_part.key, cap_limit, stats);
         LOG_TRACE(
-            &Poco::Logger::get("Strict bounded consistent hash"),
-            "Allocate hybrid part " + hybrid_part.toString() + " to host " + hostname);
+            log,
+            "Strict bounded consistent hash: Allocate hybrid part {} to host {}",
+            hybrid_part.toString(), hostname);
         if (hybrid_part.is_virtual)
         {
             auto insert_entry = virtual_assignment.try_emplace(hostname).first;
@@ -608,14 +568,16 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWi
     // try to merge consecutive ranges
     mergeConsecutiveRanges(virtual_assignment);
 
-    LOG_INFO(
-        &Poco::Logger::get("Strict Bounded Consistent Hash for Hybrid Allocation"),
-        "Finish allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
+    LOG_DEBUG(
+        log,
+        "Strict Bounded Consistent Hash for Hybrid Allocation: "
+        "Finish allocate part with strict bounded ring based hash policy under strict mode {}.",
+        std::to_string(strict));
     return res;
 }
 
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithConsistentHash(
-    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
+static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithConsistentHash(
+    Poco::Logger * log, const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
 {
     const auto & ring = worker_group->getRing();
     std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
@@ -635,7 +597,6 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWi
         {
             size_t begin = 0, end = std::min(marks_cnt, virtual_part_size);
             String base_name = part->info().getBasicPartName();
-            const auto * logger = &Poco::Logger::get("assignCnchHybridPartsWithConsistentHash");
             while (begin < end)
             {
                 /// TODO: control number of virtual parts
@@ -643,7 +604,7 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWi
                 String hostname = ring.find(key);
                 auto insert_entry = virtual_assignment.try_emplace(hostname).first;
 
-                LOG_TRACE(logger, "virtual part key {} assign to worker {}", key, hostname);
+                LOG_TRACE(log, "assignCnchHybridPartsWithConsistentHash: virtual part key {} assign to worker {}", key, hostname);
                 auto & virtual_parts = insert_entry->second;
                 auto & mark_ranges = virtual_parts[i];
                 if (mark_ranges == nullptr)
@@ -728,7 +689,7 @@ void mergeConsecutiveRanges(VirtualPartAssignmentMap & virtual_part_assignment)
         }
 }
 
-void reportHybridAllocStats(ServerAssignmentMap & physical_parts, VirtualPartAssignmentMap & virtual_parts, const String & name)
+static void reportHybridAllocStats(Poco::Logger * log, ServerAssignmentMap & physical_parts, VirtualPartAssignmentMap & virtual_parts, const String & name)
 {
     std::unordered_map<String, size_t> allocated_marks;
     for (const auto & physical_part : physical_parts)
@@ -761,6 +722,7 @@ void reportHybridAllocStats(ServerAssignmentMap & physical_parts, VirtualPartAss
     double max_load = 0;
     size_t sz = allocated_marks.size();
     std::stringstream ss;
+    ss << name << " : ";
     for (const auto & [host, mark_count] : allocated_marks)
     {
         sum += mark_count;
@@ -780,7 +742,7 @@ void reportHybridAllocStats(ServerAssignmentMap & physical_parts, VirtualPartAss
     /// peak over average ratio, lower is better and must not exceed the load factor if use bounded load balancing
     double peak_over_avg = max_load / mean;
     ss << "; stats: " << co_var << " " << peak_over_avg << std::endl;
-    LOG_DEBUG(&Poco::Logger::get(name), ss.str());
+    LOG_DEBUG(log, ss.str());
 }
 
 ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts, std::map<int, std::unique_ptr<MarkRanges>> & parts_entry)
@@ -793,4 +755,51 @@ ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts
     }
     return res;
 }
+
+std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
+    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */, const ContextPtr & query_context)
+{
+    static auto * log = &Poco::Logger::get("assignCnchHybridParts");
+    // If part_allocation_algorithm is specified in SQL Level, use it with high priority
+    Context::HybridPartAllocator part_allocation_algorithm;
+    if (query_context->getSettingsRef().cnch_hybrid_part_allocation_algorithm.changed)
+        part_allocation_algorithm = query_context->getHybridPartAllocationAlgo();
+    else
+        part_allocation_algorithm = worker_group->getContext()->getHybridPartAllocationAlgo();
+
+    switch (part_allocation_algorithm)
+    {
+        case Context::HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH: {
+            auto res = assignCnchHybridPartsWithMod(log, worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(log, res.first, res.second, "Hybrid Allocation (Modular Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH: {
+            auto res = assignCnchHybridPartsWithConsistentHash(log, worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(log, res.first, res.second, "Hybrid Allocation (Ring Consistent Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH: {
+            auto res = assignCnchHybridPartsWithBoundedHash(worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(log, res.first, res.second, "Hybrid Allocation (Bounded Ring Consistent Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_RING_CONSISTENT_HASH_ONE_STAGE: {
+            auto res = assignCnchHybridPartsWithStrictBoundedHash(log, worker_group, parts, virtual_part_size, false);
+            reportHybridAllocStats(log, res.first, res.second, "Hybrid Allocation (One Stage Bounded Consistent Hashing)");
+            return res;
+        }
+        case Context::HybridPartAllocator::HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE: {
+            auto res = assignCnchHybridPartsWithStrictBoundedHash(log, worker_group, parts, virtual_part_size, true);
+            reportHybridAllocStats(log, res.first, res.second, "Hybrid Allocation (Strict One Stage Bounded Consistent Hashing)");
+            return res;
+        }
+        default: {
+            auto res = assignCnchHybridPartsWithBoundedHash(worker_group, parts, virtual_part_size);
+            reportHybridAllocStats(log, res.first, res.second, "Hybrid Allocation (Bounded Ring Consistent Hashing)");
+            return res;
+        }
+    }
+}
+
 }

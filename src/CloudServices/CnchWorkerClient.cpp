@@ -80,7 +80,7 @@ void CnchWorkerClient::submitManipulationTask(
         params.mutation_commands->writeText(write_buf);
     }
 
-    if (hasDynamicSubcolumns(storage.getInMemoryMetadata().columns))
+    if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         request.set_dynamic_object_column_schema(
             storage.getStorageSnapshot(storage.getInMemoryMetadataPtr(), nullptr)->object_columns.toString());
@@ -433,7 +433,7 @@ brpc::CallId CnchWorkerClient::sendResources(
             {
                 for (auto const & mutation_str : cnch_merge_tree->getPlainMutationEntries())
                 {
-                    LOG_TRACE(&Poco::Logger::get(__func__), "Send mutations to worker: {}", mutation_str);
+                    LOG_TRACE(log, "Send mutations to worker: {}", mutation_str);
                     table_data_parts.add_cnch_mutation_entries(mutation_str);
                 }
             }
@@ -503,7 +503,7 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
-    LOG_TRACE(&Poco::Logger::get("CnchWorkerClient"), "request : {}", request.ShortDebugString());
+    LOG_TRACE(log, "request : {}", request.ShortDebugString());
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms

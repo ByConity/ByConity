@@ -81,7 +81,7 @@ void InsertAction::executeV2()
     bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
     catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false, write_manifest);
 
-    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().columns))
+    if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         catalog->appendObjectPartialSchema(table, txn_id, parts);
 }
 
@@ -96,7 +96,7 @@ void InsertAction::postCommit(TxnTimestamp commit_time)
         part->commit_time = commit_time;
 
     // set commit flag for dynamic object column schema
-    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+    if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         global_context.getCnchCatalog()->commitObjectPartialSchema(txn_id);
 
     ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ false);
@@ -109,7 +109,7 @@ void InsertAction::abort()
     global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}});
 
     // set commit flag for dynamic object column schema
-    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+    if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         global_context.getCnchCatalog()->abortObjectPartialSchema(txn_id);
 
     ServerPartLog::addNewParts(getContext(), table->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ true);

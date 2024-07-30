@@ -160,7 +160,7 @@ void PipelineExecutor::addJob(ExecutingGraph::Node * execution_state)
                 bool bsp_mode = query_context->getSettingsRef().bsp_mode;
                 auto segment_id = query_context->getPlanSegmentInstanceId().segment_id;
                 auto exception_handler = query_context->getPlanSegmentExHandler();
-                if (!bsp_mode && segment_id != std::numeric_limits<UInt32>::max() && segment_id != 0 
+                if (!bsp_mode && segment_id != std::numeric_limits<UInt32>::max() && segment_id != 0
                     && exception_handler->setException(std::current_exception()))
                 {
                     int exception_code = getCurrentExceptionCode();
@@ -522,6 +522,7 @@ void collectProfileMetricRequest(
 }
 
 void reportToCoordinator(
+    Poco::Logger * log,
     const AddressInfo & coordinator_address,
     const AddressInfo & current_address,
     const IProcessor * processor,
@@ -540,7 +541,7 @@ void reportToCoordinator(
         collectProfileMetricRequest(request, current_address, processor, query_id, finish_time, segment_id);
         manager.reportProcessorProfileMetrics(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(&Poco::Logger::get("PipelineExecutor"), "Processor-{} send profile metrics to coordinator successfully.", request.id());
+        LOG_TRACE(log, "Processor-{} send profile metrics to coordinator successfully.", request.id());
     }
     catch (...)
     {
@@ -549,6 +550,7 @@ void reportToCoordinator(
 }
 
 void reportToCoordinator(
+    Poco::Logger * log,
     const AddressInfo & coordinator_address,
     const AddressInfo & current_address,
     const Processors & processors,
@@ -572,7 +574,7 @@ void reportToCoordinator(
         }
         manager.batchReportProcessorProfileMetrics(&cntl, &requests, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(&Poco::Logger::get("PipelineExecutor"), "Batch processors send profile metrics to coordinator successfully.");
+        LOG_TRACE(log, "Batch processors send profile metrics to coordinator successfully.");
     }
     catch (...)
     {
@@ -601,7 +603,7 @@ void PipelineExecutor::reportProcessorProfileOnCancel(const Processors & process
 
         auto finish_time = std::chrono::system_clock::now();
         if (segment_id > 0)
-            reportToCoordinator(coordinator_address, current_address, processors_, query_id, finish_time, segment_id);
+            reportToCoordinator(log, coordinator_address, current_address, processors_, query_id, finish_time, segment_id);
     }
 }
 
@@ -625,7 +627,7 @@ void PipelineExecutor::reportProcessorProfile(const IProcessor * processor) cons
         }
 
         if (segment_id > 0)
-            reportToCoordinator(coordinator_address, current_address, processor, query_id, std::chrono::system_clock::now(), segment_id);
+            reportToCoordinator(log, coordinator_address, current_address, processor, query_id, std::chrono::system_clock::now(), segment_id);
     }
 }
 

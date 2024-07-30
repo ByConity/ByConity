@@ -654,7 +654,7 @@ void TableScanExecutor::prunePartsByIndex(MergeTreeData::DataPartsVector & parts
         copy_select_query.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
         auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
         interpreter->execute();
-        LOG_TRACE(&Poco::Logger::get("TableScanExecutor::prunePartsByIndex"), "Construct partition filter query {}", queryToString(copy_select));
+        LOG_TRACE(log, "Construct partition filter query {}", queryToString(copy_select));
         MergeTreeDataSelectExecutor::filterPartsByPartition(
             parts, part_values, storage_metadata, storage, interpreter->getQueryInfo(), context, max_added_blocks.get(), log, result.index_stats);
     }
@@ -1148,7 +1148,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (is_null_source)
     {
         LOG_DEBUG(log, "Create NullSource from TableScanStep without storage");
-        pipeline.init(Pipe(std::make_shared<NullSource>(output_stream->header))); 
+        pipeline.init(Pipe(std::make_shared<NullSource>(output_stream->header)));
         return;
     }
     auto * query = query_info.query->as<ASTSelectQuery>();
@@ -1648,7 +1648,7 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
 
 std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
 {
-    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context) 
+    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context)
                                                                             : StorageID::fromProto(proto.storage_id(), context);
     NamesWithAliases column_alias;
     for (const auto & proto_element : proto.column_alias())
@@ -1691,7 +1691,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         pushdown_projection,
         pushdown_filter,
         output_stream);
-    
+
     return step;
 }
 

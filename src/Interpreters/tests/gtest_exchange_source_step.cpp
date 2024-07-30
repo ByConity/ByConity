@@ -64,7 +64,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
     AddressInfo coordinator_address("localhost", 8888, "test", "123456");
-    
+
     auto coordinator_address_str = extractExchangeHostPort(coordinator_address);
     plan_segment.setCoordinatorAddress(coordinator_address);
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
@@ -101,7 +101,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
 
     QueryPipeline pipeline;
     exchange_source_step.initializePipeline(pipeline, BuildQueryPipelineSettings::fromContext(context));
-    PlanSegmentExecutor::registerAllExchangeReceivers(pipeline, 200);
+    PlanSegmentExecutor::registerAllExchangeReceivers(&Poco::Logger::get("PlanSegmentExecutor"), pipeline, 200);
 
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();

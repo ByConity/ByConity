@@ -388,7 +388,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         database = nullptr;
     }
 
-    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+    if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         if (auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(table))
             cnch_table->resetObjectColumns(context_);

@@ -1404,7 +1404,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     if (create.replace_table)
         return doCreateOrReplaceTable(create, properties);
-    
+
     /// when create materialized view and tenant id is not empty add setting tenant_id to select query
     if (create.is_materialized_view && !getCurrentTenantId().empty())
     {
@@ -1421,7 +1421,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
                 select->setOrReplace(setting_ptr, settings);
                 create.setOrReplace(create.select, select);
             }
-        }   
+        }
         else
         {
             select->as<ASTSelectWithUnionQuery &>().settings_ast = settings;
@@ -1624,7 +1624,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     /// we can safely destroy the object without a call to "shutdown", because there is guarantee
     /// that no background threads/similar resources remain after exception from "startup".
 
-    if (!res->supportsDynamicSubcolumns() && hasDynamicSubcolumns(res->getInMemoryMetadataPtr()->getColumns()))
+    if (!res->supportsDynamicSubcolumns() && res->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         throw Exception(ErrorCodes::ILLEGAL_COLUMN,
             "Cannot create table with column of type Object, "

@@ -1072,6 +1072,7 @@
     M(RegionManagerNumInMemBufCleanupRetries, "RegionManager number of in-memory buffer cleanup retries") \
 \
     M(TSORequest, "Number requests sent to TSO") \
+    M(TSORequestMicroseconds, "Total time spent in get timestamp from TSO") \
     M(TSOError, "Error logged by TSO Service as a response to CNCH") \
     \
     M(BackupVW, "Whether use backup virtual warehouse or not") \

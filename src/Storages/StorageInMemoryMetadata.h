@@ -236,6 +236,9 @@ struct StorageInMemoryMetadata
         const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty(),
         BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) const;
 
+    /// Returns whether there are any column that has dynamic subcolumns
+    bool hasDynamicSubcolumns() const;
+
     /// Returns structure with partition key.
     const KeyDescription & getPartitionKey() const;
     /// Returns ASTExpressionList of partition key expression for storage or nullptr if there is none.

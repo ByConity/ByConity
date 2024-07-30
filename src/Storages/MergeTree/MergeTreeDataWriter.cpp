@@ -362,7 +362,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     auto columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
     auto storage_snapshot = data.getStorageSnapshot(metadata_snapshot, context);
 
-    if (hasDynamicSubcolumns(metadata_snapshot->getColumns()))
+    if (metadata_snapshot->hasDynamicSubcolumns())
     {
         convertDynamicColumnsToTuples(block, storage_snapshot);
     }
@@ -370,7 +370,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     for (auto & column : columns)
         if (column.type->hasDynamicSubcolumns())
             column.type = block.getByName(column.name).type;
-    
+
     static const String TMP_PREFIX = "tmp_insert_";
 
     /// This will generate unique name in scope of current server process.

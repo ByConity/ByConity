@@ -238,7 +238,7 @@ static void blockQueryJSONUseOptimizer(std::set<StorageID> used_storage_ids, Con
     for (const auto & storage_id : used_storage_ids)
     {
         auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-        if (hasDynamicSubcolumns(storage->getInMemoryMetadata().columns))
+        if (storage->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
             throw Exception("JSON query is not supported in Optimizer mode.", ErrorCodes::OPTIMIZER_NONSUPPORT);
     }
 }
@@ -603,7 +603,7 @@ void InterpreterSelectQueryUseOptimizer::resetFinalSampleSize(PlanSegmentTreePtr
                     size_t sample_size = (sample->getSampleSize() + 1) / plan_segment.getPlanSegment()->getParallelSize();
                     sample->setSampleSize(sample_size);
                 }
-                    
+
             }
         }
     }

@@ -453,12 +453,12 @@ void PlanSegmentExecutor::doExecute()
     }
 }
 
-static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(ContextMutablePtr& context)
+static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(Poco::Logger * log, ContextMutablePtr& context)
 {
     QueryPlanOptimizationSettings settings = QueryPlanOptimizationSettings::fromContext(context);
     if(!settings.enable_optimizer)
     {
-        LOG_WARNING(&Poco::Logger::get("PlanSegmentExecutor"), "enable_optimizer should be true");
+        LOG_WARNING(log, "enable_optimizer should be true");
         settings.enable_optimizer = true;
     }
     return settings;
@@ -467,9 +467,9 @@ static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(ContextM
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 {
     QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        buildOptimizationSettingsWithCheck(context),
+        buildOptimizationSettingsWithCheck(logger, context),
         BuildQueryPipelineSettings::fromPlanSegment(plan_segment, plan_segment_instance->info, context));
-    registerAllExchangeReceivers(*pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
+    registerAllExchangeReceivers(logger, *pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
     return pipeline;
 }
 
@@ -542,14 +542,14 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
     }
 
     pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        buildOptimizationSettingsWithCheck(context),
+        buildOptimizationSettingsWithCheck(logger, context),
         BuildQueryPipelineSettings::fromPlanSegment(plan_segment, plan_segment_instance->info, context)
     );
 
     pipeline->setTotalsPortToMainPortTransform();
     pipeline->setExtremesPortToMainPortTransform();
 
-    registerAllExchangeReceivers(*pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
+    registerAllExchangeReceivers(logger, *pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
 
     pipeline->setMaxThreads(pipeline->getNumThreads());
 
@@ -746,7 +746,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         throw Exception("Plan segment has no exchange sender!", ErrorCodes::LOGICAL_ERROR);
 }
 
-void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms)
+void PlanSegmentExecutor::registerAllExchangeReceivers(Poco::Logger * log, const QueryPipeline & pipeline, UInt32 register_timeout_ms)
 {
     const Processors & procesors = pipeline.getProcessors();
     std::vector<AsyncRegisterResult> async_results;
@@ -802,7 +802,7 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         if (res.cntl->ErrorCode() == brpc::EREQUEST && boost::algorithm::ends_with(res.cntl->ErrorText(), "was closed before responded"))
         {
             LOG_INFO(
-                &Poco::Logger::get("PlanSegmentExecutor"),
+                log,
                 "Receiver register sender successfully but sender already finished, host: {}, request: {}",
                 butil::endpoint2str(res.cntl->remote_side()).c_str(),
                 *res.request);
@@ -810,7 +810,7 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         }
         res.channel->assertController(*res.cntl, ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         LOG_TRACE(
-            &Poco::Logger::get("PlanSegmentExecutor"),
+            log,
             "Receiver register sender successfully, host: {}, request: {}",
             butil::endpoint2str(res.cntl->remote_side()).c_str(),
             *res.request);

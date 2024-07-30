@@ -49,6 +49,11 @@ extern thread_local bool memory_tracker_always_throw_logical_error_on_allocation
 #define ALLOW_ALLOCATIONS_IN_SCOPE static_assert(true)
 #endif
 
+namespace Poco
+{
+class Logger;
+}
+
 /** Tracks memory consumption.
   * It throws an exception if amount of consumed memory become greater than certain limit.
   * The same memory tracker could be simultaneously used in different threads.
@@ -73,6 +78,8 @@ private:
     /// Singly-linked list. All information will be passed to subsequent memory trackers also (it allows to implement trackers hierarchy).
     /// In terms of tree nodes it is the list of parents. Lifetime of these trackers should "include" lifetime of current tracker.
     std::atomic<MemoryTracker *> parent {};
+
+    Poco::Logger * log;
 
     /// You could specify custom metric to track memory usage.
     std::atomic<CurrentMetrics::Metric> metric = CurrentMetrics::end();

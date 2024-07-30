@@ -474,6 +474,15 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
     return res;
 }
 
+bool StorageInMemoryMetadata::hasDynamicSubcolumns() const
+{
+    return std::any_of(columns.begin(), columns.end(),
+        [](const auto & column)
+        {
+            return column.type->hasDynamicSubcolumns();
+        });
+}
+
 const KeyDescription & StorageInMemoryMetadata::getPartitionKey() const
 {
     return partition_key;

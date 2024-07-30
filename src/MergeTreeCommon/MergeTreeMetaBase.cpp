@@ -1761,10 +1761,10 @@ bool MergeTreeMetaBase::mayBenefitFromIndexForIn(
 
 TableDefinitionHash MergeTreeMetaBase::getTableHashForClusterBy() const
 {
-    const auto & metadata = getInMemoryMetadata();
-    const auto & partition_by_ast = metadata.getPartitionKeyAST();
-    const auto & order_by_ast = metadata.getSortingKeyAST();
-    const auto & cluster_by_ast = metadata.getClusterByKeyAST();
+    auto metadata = getInMemoryMetadataPtr();
+    const auto & partition_by_ast = metadata->getPartitionKeyAST();
+    const auto & order_by_ast = metadata->getSortingKeyAST();
+    const auto & cluster_by_ast = metadata->getClusterByKeyAST();
     String partition_by = partition_by_ast ? queryToString(partition_by_ast) : "";
     String order_by = order_by_ast ? queryToString(order_by_ast) : "";
     String cluster_by = cluster_by_ast ? queryToString(cluster_by_ast) : "";
@@ -2103,7 +2103,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
     TTLTableDescription table_ttl = metadata_snapshot->getTableTTLs();
-    if (getInMemoryMetadata().hasPartitionLevelTTL() && table_ttl.definition_ast && local_context->getCurrentTransaction())
+    if (metadata_snapshot->hasPartitionLevelTTL() && table_ttl.definition_ast && local_context->getCurrentTransaction())
     {
         if (!metadata_snapshot->hasRowsTTL())
             return;

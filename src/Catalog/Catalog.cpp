@@ -1302,7 +1302,7 @@ namespace Catalog
     void Catalog::initStorageObjectSchema(StoragePtr & res)
     {
         // Load dynamic object column schema
-        if (res && hasDynamicSubcolumns(res->getInMemoryMetadata().getColumns()))
+        if (res && res->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         {
             auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(res);
 

@@ -544,7 +544,7 @@ private:
             //sync inner_container
             if (inner_container)
                 inner_container->remove(key);
-            
+
             cells.erase(it);
             queue.pop_front();
             --queue_size;

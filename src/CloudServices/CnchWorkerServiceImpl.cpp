@@ -494,7 +494,7 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
             request->txn_id());
 
         MergeTreeMutableDataPartsVector data_parts;
-        if (cloud_merge_tree.getInMemoryMetadata().hasUniqueKey())
+        if (cloud_merge_tree.getInMemoryMetadataPtr()->hasUniqueKey())
             data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
                 cloud_merge_tree, request->parts(), request->bitmaps());
         else
@@ -773,7 +773,7 @@ void CnchWorkerServiceImpl::sendResources(
                 else if (!data.server_parts().empty())
                 {
                     MergeTreeMutableDataPartsVector server_parts;
-                    if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
+                    if (cloud_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
                         server_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
                             *cloud_merge_tree, data.server_parts(), data.server_part_bitmaps());
                     else
@@ -803,7 +803,7 @@ void CnchWorkerServiceImpl::sendResources(
                 if (!data.virtual_parts().empty())
                 {
                     MergeTreeMutableDataPartsVector virtual_parts;
-                    if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
+                    if (cloud_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
                         virtual_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
                             *cloud_merge_tree, data.virtual_parts(), data.virtual_part_bitmaps());
                     else
