@@ -19,9 +19,16 @@
 #include <Storages/StorageView.h>
 #include <Storages/StorageMaterializedView.h>
 #include "Parsers/ASTIdentifier.h"
+#include <Access/AccessType.h>
+#include <Access/ContextAccess.h>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int ACCESS_DENIED;
+}
 
 struct ReplaceViewWithSubquery
 {
@@ -47,6 +54,19 @@ struct ReplaceViewWithSubquery
             if (dynamic_cast<const StorageView *>(table.get()))
             {
                 auto table_metadata_snapshot = table->getInMemoryMetadataPtr();
+                {
+                    // check access rights.
+                    auto access = context->getAccess();
+                    if (!access->isGranted(AccessType::SELECT, database_name, table_name))
+                    {
+                        throw Exception(
+                            ErrorCodes::ACCESS_DENIED,
+                            "{}: Not enough privileges. To execute this query it's necessary to have grant SELECT on {}",
+                            context->getUserName(),
+                            table->getStorageID().getFullTableName());
+                    }
+                }
+            
                 auto subquery = table_metadata_snapshot->getSelectQuery().inner_query->clone();
                 const auto alias = table_expression.database_and_table_name->tryGetAlias();
                 table_expression.database_and_table_name = {};
