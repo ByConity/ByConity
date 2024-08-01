@@ -124,6 +124,18 @@ public:
     String getHashFunc(String default_func) const;
     Array getParams() const;
 
+    void resetIfPartitionHandle()
+    {
+        if (!isPartitionHandle())
+        {
+            return;
+        }
+        this->columns = {};
+        this->handle = Handle::UNKNOWN;
+        this->bucket_expr = nullptr;
+        this->buckets = 0;
+    }
+
     bool isSatisfyWorker() const
     {
         return satisfy_worker;
@@ -397,6 +409,7 @@ public:
     const Partitioning & getNodePartitioning() const { return node_partitioning; }
     Partitioning & getNodePartitioningRef() { return node_partitioning; }
     const Partitioning & getStreamPartitioning() const { return stream_partitioning; }
+    Partitioning & getStreamPartitioningRef() { return stream_partitioning; }
     const Sorting & getSorting() const { return sorting; }
     const CTEDescriptions & getCTEDescriptions() const { return cte_descriptions; }
     CTEDescriptions & getCTEDescriptions() { return cte_descriptions; }
