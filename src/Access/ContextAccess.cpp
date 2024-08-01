@@ -74,6 +74,7 @@ namespace
         "current_roles",
         "enabled_roles",
         "quota_usage",
+        "processes",
 
         /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
         /// For IDE tools to get schema info
