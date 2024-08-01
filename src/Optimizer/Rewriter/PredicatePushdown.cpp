@@ -225,9 +225,13 @@ PlanNodePtr PredicateVisitor::visitAggregatingNode(AggregatingNode & node, Predi
     const auto & step = *node.getStep();
     const auto & keys = step.getKeys();
 
-    // TODO: in case of grouping sets, we should be able to push the filters over grouping keys below the aggregation
-    // and also preserve the filter above the aggregation if it has an empty grouping set
     if (keys.empty())
+    {
+        return visitPlanNode(node, predicate_context);
+    }
+
+    // never push predicate through grouping sets agg
+    if (step.isGroupingSet())
     {
         return visitPlanNode(node, predicate_context);
     }
