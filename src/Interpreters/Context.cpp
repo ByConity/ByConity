@@ -3141,14 +3141,6 @@ ThrottlerPtr Context::getDiskCacheThrottler() const
     return shared->disk_cache_throttler;
 }
 
-ThrottlerPtr Context::tryGetPreloadThrottler() const
-{
-    callOnce(shared->preload_throttler_initialized, [&] {
-        shared->preload_throttler = settings.parts_preload_throttler == 0 ? nullptr : std::make_shared<Throttler>(settings.parts_preload_throttler);
-    });
-    return shared->preload_throttler;
-}
-
 ThrottlerPtr Context::getReplicatedSendsThrottler() const
 {
     callOnce(shared->replicated_sends_throttler_initialized, [&] {
@@ -5743,31 +5735,11 @@ std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> Context::getAllWorkerResou
     return shared->named_cnch_sessions->getAllWorkerResources();
 }
 
-Context::PartAllocator Context::getPartAllocationAlgo() const
+Context::PartAllocator Context::getPartAllocationAlgo(MergeTreeSettingsPtr table_settings) const
 {
-    /// we prefer the config setting first
-    if (getConfigRef().has("part_allocation_algorithm"))
-    {
-        LOG_DEBUG(
-            shared->log,
-            "Using part allocation algorithm from config: {}.",
-            getConfigRef().getInt("part_allocation_algorithm"));
-        switch (getConfigRef().getInt("part_allocation_algorithm"))
-        {
-            case 0:
-                return PartAllocator::JUMP_CONSISTENT_HASH;
-            case 1:
-                return PartAllocator::RING_CONSISTENT_HASH;
-            case 2:
-                return PartAllocator::STRICT_RING_CONSISTENT_HASH;
-            case 3:
-                return PartAllocator::SIMPLE_HASH;
-            default:
-                return PartAllocator::JUMP_CONSISTENT_HASH;
-        }
-    }
+    auto algorithm = table_settings->cnch_part_allocation_algorithm >= 0 ? table_settings->cnch_part_allocation_algorithm : settings.cnch_part_allocation_algorithm;
+    LOG_DEBUG(shared->log, "Send query with cnch_part_allocation_algorithm = {}, system setting = {}, table setting = {}", algorithm, settings.cnch_part_allocation_algorithm, table_settings->cnch_part_allocation_algorithm);
 
-    /// if not set, we use the query settings
     switch (settings.cnch_part_allocation_algorithm)
     {
         case 0:
@@ -5777,7 +5749,7 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
         case 2:
             return PartAllocator::STRICT_RING_CONSISTENT_HASH;
         case 3:
-            return PartAllocator::SIMPLE_HASH;
+            return PartAllocator::DISK_CACHE_STEALING_DEBUG;
         default:
             return PartAllocator::JUMP_CONSISTENT_HASH;
     }

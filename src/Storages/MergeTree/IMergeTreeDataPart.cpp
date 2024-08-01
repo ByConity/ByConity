@@ -914,13 +914,10 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
 
     loadUUID();
     loadColumns(require_columns_checksums);
-    {
-        std::lock_guard lock(checksums_mutex);
-        checksums_ptr = loadChecksums(require_columns_checksums);
-    }
+    getChecksums();
     loadIndexGranularity();
     calculateColumnsSizesOnDisk();
-    loadIndex();     /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`
+    getIndex();     /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`
     loadRowsCount(); /// Must be called after loadIndexGranularity() as it uses the value of `index_granularity`.
     loadPartitionAndMinMaxIndex();
     if (!parent_part)

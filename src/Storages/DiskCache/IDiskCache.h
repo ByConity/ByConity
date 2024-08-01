@@ -48,6 +48,7 @@ public:
     static void close();
     static ThreadPool & getThreadPool();
     static ThreadPool & getEvictPool();
+    static ThreadPool & getPreloadPool();
 
     enum class DataType
     {
@@ -151,6 +152,7 @@ protected:
 private:
     bool scheduleCacheTask(const std::function<void()> & task);
 
+    static std::unique_ptr<ThreadPool> local_disk_cache_preload_thread_pool;
     static std::unique_ptr<ThreadPool> local_disk_cache_thread_pool;
     static std::unique_ptr<ThreadPool> local_disk_cache_evict_thread_pool;
 };
