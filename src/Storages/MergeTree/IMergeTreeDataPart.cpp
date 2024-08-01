@@ -2557,6 +2557,10 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
         flags |= IMergeTreeDataPart::LOW_PRIORITY_FLAG;
     writeIntBinary(flags, buf);
 
+    /// WARNING: For CNCH, bytes_on_disk is always 0. Keep it here for compatibility. 
+    /// We can only get the value of bytes_on_disk after the whole data file wrote to vfs.
+    /// So actually we have no way to store correct bytes_on_disk when writing part.
+    /// It's corrected when loading part. See MergeTreeDataPartCNCH::loadMetaInfoFromBuffer and MergeTreeDataPartCNCH::loadChecksumsFromRemote.
     writeVarUInt(part.bytes_on_disk, buf);
     writeVarUInt(part.rows_count, buf);
     if (auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this()))

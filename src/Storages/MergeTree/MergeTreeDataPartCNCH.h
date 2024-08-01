@@ -126,7 +126,7 @@ private:
     void loadIndex() override;
     IndexPtr loadIndexFromStorage() const;
 
-    MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
+    MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter(size_t & out_file_size) const;
 
     ChecksumsPtr loadChecksums(bool require) override;
     ChecksumsPtr loadChecksumsFromRemote(bool follow_part_chain);
