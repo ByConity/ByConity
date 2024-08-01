@@ -161,9 +161,16 @@ PlanNodePtr ColumnPruningVisitor::visitOffsetNode(OffsetNode & node, ColumnPruni
     return visitDefault<false>(node, column_pruning_context);
 }
 
-PlanNodePtr ColumnPruningVisitor::visitTableFinishNode(TableFinishNode & node, ColumnPruningContext & column_pruning_context)
+PlanNodePtr ColumnPruningVisitor::visitTableFinishNode(TableFinishNode & node, ColumnPruningContext &)
 {
-    return visitPlanNode(node, column_pruning_context);
+    NameSet require;
+    PlanNodePtr child = node.getChildren()[0];
+    for (const auto & item : child->getCurrentDataStream().header)
+        require.insert(item.name);
+    ColumnPruningContext child_column_pruning_context{.name_set = require};
+    PlanNodePtr new_child = VisitorUtil::accept(*child, *this, child_column_pruning_context);
+    node.replaceChildren({new_child});
+    return node.shared_from_this();
 }
 
 PlanNodePtr ColumnPruningVisitor::visitOutfileFinishNode(OutfileFinishNode & node, ColumnPruningContext & column_pruning_context)
