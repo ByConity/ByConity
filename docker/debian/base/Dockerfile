@@ -10,7 +10,7 @@ RUN wget -qO foundationdb-clients.deb https://github.com/apple/foundationdb/rele
 RUN wget -qO tini https://github.com/krallin/tini/releases/download/v0.19.0/tini
 
 # Debian builder
-FROM debian:11.6 as debian-builder
+FROM debian:11.9 as debian-builder
 LABEL description="Debian image for compiling"
 LABEL org.opencontainers.image.source="https://github.com/ByConity/ByConity"
 
@@ -39,7 +39,7 @@ RUN ldconfig
 ENV CC=clang-11 CXX=clang++-11
 
 # Base runner image
-FROM debian:11.6-slim as debian-runner
+FROM debian:11.9-slim as debian-runner
 LABEL description="Base Debian image for runtime"
 LABEL org.opencontainers.image.source="https://github.com/ByConity/ByConity"
 
