@@ -244,10 +244,13 @@ bool ParserGrantQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     // String cluster;
     // parseOnCluster(pos, expected, cluster);
 
+    bool if_exists = false;
     bool grant_option = false;
     bool admin_option = false;
     if (is_revoke)
     {
+        if (ParserKeyword{"IF EXISTS"}.ignore(pos, expected))
+            if_exists = true;
         if (ParserKeyword{"GRANT OPTION FOR"}.ignore(pos, expected))
             grant_option = true;
         else if (ParserKeyword{"ADMIN OPTION FOR"}.ignore(pos, expected))
@@ -297,6 +300,7 @@ bool ParserGrantQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     auto query = std::make_shared<ASTGrantQuery>();
     node = query;
 
+    query->if_exists = if_exists;
     query->is_revoke = is_revoke;
     query->attach_mode = attach_mode;
     // query->cluster = std::move(cluster);
