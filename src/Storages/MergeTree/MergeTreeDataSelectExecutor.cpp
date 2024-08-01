@@ -1885,7 +1885,10 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         std::unique_ptr<IGinDataPartHelper> gin_part_helper = nullptr;
         if (part->getType() == IMergeTreeDataPart::Type::CNCH)
         {
-            gin_part_helper = std::make_unique<GinDataCNCHPartHelper>(part,
+            /// Need to follow the part chain and find the right part with this index
+            String index_version_file_name = index_helper->getFileName() + ".idx";
+            gin_part_helper = std::make_unique<GinDataCNCHPartHelper>(
+                part->getMvccDataPart(index_version_file_name),
                 DiskCacheFactory::instance().get(DiskCacheType::MergeTree));
         }
         else
