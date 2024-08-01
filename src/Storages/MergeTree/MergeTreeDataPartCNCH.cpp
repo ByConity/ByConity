@@ -44,7 +44,6 @@
 #include <Storages/UniqueKeyIndexCache.h>
 #include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
 
-#include "Interpreters/ANNHelper.h"
 
 namespace ProfileEvents
 {
