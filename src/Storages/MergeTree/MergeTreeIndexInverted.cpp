@@ -56,7 +56,7 @@ bool MergeTreeConditionInverted::createFunctionEqualsCondition(
     {
         ChineseTokenExtractor::stringLikeToGinFilter(value, nlp_extractor, *out.gin_filter);
     }
-    
+
     return true;
 }
 #if USE_TSQUERY
@@ -524,7 +524,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             }
             return true;
         }
-        else if (func_name == "hasToken")
+        else if (func_name == "hasToken" || func_name == "hasTokens")
         {
             out.key_column = key_column_num;
             out.function = RPNElement::FUNCTION_EQUALS;
@@ -538,7 +538,11 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             {
                 ChineseTokenExtractor::stringToGinFilter(value, nlp_extractor, *out.gin_filter);
             }
+    
+            LOG_TRACE(&Poco::Logger::get("inverted index"),"search string: {} with token : [ {} ] ", value, out.gin_filter->getTermsInString());
+    
             return true;
+             
         }
         else if (func_name == "startsWith")
         {
@@ -723,8 +727,33 @@ bool MergeTreeIndexInverted::mayBenefitFromIndexForIn(const ASTPtr & node) const
         != std::cend(index.column_names);
 }
 
-MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
+// just a tmp function to fit ce branch, will pick soon
+bool parseWithNewInvertedIndexArguments(const FieldVector& arguments_)
 {
+    return arguments_.size() == 2 && arguments_[0].getType() == Field::Types::String && arguments_[1].getType() == Field::Types::String;
+}
+
+void checkWithNewInvertedIndexArguments(const FieldVector & arguments_)
+{
+    String config_type = arguments_[0].get<String>();
+    String config_value = arguments_[1].get<String>();
+
+    if (config_type != StandardTokenExtractor::getName() || config_value != "{}")
+    {
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unknown config type {} and value should only {} now", config_type);
+    }
+}
+
+MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
+{   
+    // just a tmp code to fit ce branch, will pick soon
+    if (parseWithNewInvertedIndexArguments(index.arguments))
+    {
+        GinFilterParameters params(0, 1.0);
+        auto tokenizer = std::make_unique<StandardTokenExtractor>();
+        return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
+    }
+
     if (index.arguments.size() > 2)
     {
         // String type_name = index.arguments[0].get<String>(); use for select nlp
@@ -764,6 +793,12 @@ void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
 
         if (!data_type.isString() && !data_type.isFixedString())
             throw Exception("Inverted index can be used only with `String`, `FixedString`", ErrorCodes::INCORRECT_QUERY);
+    }
+
+    if (parseWithNewInvertedIndexArguments(index.arguments))
+    {
+        checkWithNewInvertedIndexArguments(index.arguments);
+        return;
     }
 
     if (index.arguments.size() > 2) /// NLP tokenizer [type_name , config_name , density]

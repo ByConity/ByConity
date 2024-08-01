@@ -12,6 +12,11 @@ struct NameHasToken
     static constexpr auto name = "hasToken";
 };
 
+struct NameHasTokens
+{
+    static constexpr auto name = "hasTokens";
+};
+
 struct NameHasTokenOrNull
 {
     static constexpr auto name = "hasTokenOrNull";
@@ -19,13 +24,15 @@ struct NameHasTokenOrNull
 
 using FunctionHasToken
     = FunctionsStringSearch<HasTokenImpl<NameHasToken, Volnitsky, false>>;
+using FunctionHasTokens
+    = FunctionsStringSearch<HasTokenImpl<NameHasTokens, Volnitsky, false, true>>;
 using FunctionHasTokenOrNull
     = FunctionsStringSearch<HasTokenImpl<NameHasTokenOrNull, Volnitsky, false>, ExecutionErrorPolicy::Null>;
 
 REGISTER_FUNCTION(HasToken)
 {
     factory.registerFunction<FunctionHasToken>(FunctionFactory::CaseSensitive);
-
+    factory.registerFunction<FunctionHasTokens>(FunctionFactory::CaseSensitive);
     factory.registerFunction<FunctionHasTokenOrNull>(FunctionFactory::CaseSensitive);
 }
 
