@@ -205,8 +205,20 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
         /// thus here we don't need to check if the message has some error;
         /// Of course, we may get no message, e.g there are no more messages in the topic-partition now.
         auto new_message = consumer->poll(std::chrono::milliseconds(poll_timeout));
-        if (!new_message)
+        if (!new_message || new_message.is_eof())
             continue;
+
+        /// Must continue polling and handling the consumer queue even if the queue is filled with errors;
+        /// or the memory leak occurs because the consumer keeps fetching from brokers and fill the queue
+        if (auto error = new_message.get_error())
+        {
+            ++rdkafka_errors;
+            if (consumer->is_serious_err(error))
+                consumer->setDestroyed();
+
+            rdkafka_errors_buffer.push_back({"poll(): " + error.to_string(), static_cast<UInt64>(Poco::Timestamp().epochTime())});
+            continue;
+        }
 
         /// Get an available message, save it for committing
         current = std::move(new_message);
@@ -276,7 +288,7 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
     }
 
     /// This buffer/consumer has been expired if reached here
-    LOG_DEBUG(log, "Stalled. Polled {} messages", read_messages);
+    LOG_DEBUG(log, "Stalled. Polled {} messages and {} errors", read_messages, rdkafka_errors);
     stalled = true;
     return false;
 }
@@ -292,6 +304,8 @@ void CnchReadBufferFromKafkaConsumer::reset()
     skipped_msgs_in_holes = 0;
     skipped_ofsets_hole.clear();
     skip_messages_by_sample = 0;
+    rdkafka_errors = 0;
+    rdkafka_errors_buffer.clear();
 }
 
 bool CnchReadBufferFromKafkaConsumer::hasExpired()

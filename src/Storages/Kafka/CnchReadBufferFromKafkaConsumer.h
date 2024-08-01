@@ -24,6 +24,7 @@
 
 #include <common/logger_useful.h>
 #include <cppkafka/cppkafka.h>
+#include <boost/circular_buffer.hpp>
 
 namespace DB
 {
@@ -47,6 +48,13 @@ class CnchReadBufferFromKafkaConsumer : public ReadBuffer
     using Message = cppkafka::Message;
 
 public:
+    struct RdkafkaErrorInfo
+    {
+        String text;
+        UInt64 timestamp_usec;
+    };
+    using RdkafkaErrorsBuffer = boost::circular_buffer<RdkafkaErrorInfo>;
+
     CnchReadBufferFromKafkaConsumer(
         ConsumerPtr consumer_,
         const String & logger_name,
@@ -64,6 +72,7 @@ public:
         , run(run_)
         , create_time(time(nullptr))
         , enable_skip_offsets_hole(enable_skip_offsets_hole_)
+        , rdkafka_errors_buffer(ERRORS_DEPTH)
     {
     }
 
@@ -91,6 +100,7 @@ public:
     size_t getSkippedMessagesBySampling() const { return skip_messages_by_sample; }
     size_t getCreateTime() const { return create_time; }
     size_t getAliveTime() const { return alive_time; }
+    auto getRdkafkaErrorsBuffer() const { return rdkafka_errors_buffer; }
 
     // Return values for the message that's being read.
     const Message & currentMessage() const { return current; }
@@ -134,6 +144,12 @@ private:
         std::pair<std::string, std::uint64_t>,
         std::int64_t,
         PairHash> offsets;
+
+    /// The errors from rdkafka should not be diverse;
+    /// so we only need to record the recent ones if they occur
+    size_t rdkafka_errors{0};
+    const size_t ERRORS_DEPTH = 10;
+    RdkafkaErrorsBuffer rdkafka_errors_buffer;
 
     bool nextImpl() override;
     bool hasExpired();
