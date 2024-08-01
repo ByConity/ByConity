@@ -373,6 +373,10 @@ std::string PartitionCommand::typeToString() const
         return "REPLACE PARTITION";
     case PartitionCommand::Type::INGEST_PARTITION:
         return "INGEST PARTITION";
+    case PartitionCommand::Type::RECLUSTER_PARTITION:
+        return "RECLUSTER PARTITION";
+    case PartitionCommand::Type::RECLUSTER_PARTITION_WHERE:
+        return "RECLUSTER PARTITION WHERE";
     default:
         throw Exception("Uninitialized partition command", ErrorCodes::LOGICAL_ERROR);
     }
