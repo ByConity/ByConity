@@ -72,6 +72,7 @@
 #include <Disks/DiskRestartProxy.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/StorageS3.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
@@ -347,6 +348,20 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_DROP_NVM_CACHE);
             system_context->dropNvmCache();
             break;
+        case Type::DROP_SCHEMA_CACHE:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_DROP_SCHEMA_CACHE);
+            std::unordered_set<String> caches_to_drop;
+            if (query.schema_cache_storage.empty())
+                caches_to_drop = {"S3"};
+            else
+                caches_to_drop = {query.schema_cache_storage};
+#if USE_AWS_S3
+            if (caches_to_drop.contains("S3"))
+                StorageS3::getSchemaCache(getContext()).clear();
+#endif
+            break;
+        }
         case Type::DROP_MMAP_CACHE:
             getContext()->checkAccess(AccessType::SYSTEM_DROP_MMAP_CACHE);
             system_context->dropMMappedFileCache();
@@ -546,6 +561,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::SYNC_DEDUP_WORKER:
             executeSyncDedupWorker(system_context);
+            break;
+        case Type::SYNC_REPAIR_TASK:
+            executeSyncRepairTask(system_context);
             break;
         case Type::CLEAN_TRANSACTION:
             cleanTransaction(query.txn_id);
@@ -761,11 +779,26 @@ void InterpreterSystemQuery::executeSyncDedupWorker(ContextMutablePtr & system_c
 
     auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
 
-        auto cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    auto cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
     if (!cnch_storage)
         throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
     cnch_storage->waitForStagedPartsToPublish(system_context);
+}
+
+void InterpreterSystemQuery::executeSyncRepairTask(ContextMutablePtr & system_context) const
+{
+    if (table_id.empty())
+        throw Exception("Table name should be specified for control background task", ErrorCodes::BAD_ARGUMENTS);
+
+    auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
+
+    auto * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    if (!cnch_storage)
+        throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+
+    auto data_checker = std::make_shared<DedupDataChecker>(getContext(), storage->getCnchStorageID().getNameForLogs() + "(data_checker)", *cnch_storage);
+    data_checker->waitForNoDuplication(system_context);
 }
 
 void InterpreterSystemQuery::controlConsume(ASTSystemQuery::Type type)
@@ -1360,6 +1393,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::DROP_COMPILED_EXPRESSION_CACHE: [[fallthrough]];
 #endif
         case Type::DROP_NVM_CACHE: [[fallthrough]];
+        case Type::DROP_SCHEMA_CACHE: [[fallthrough]];
         case Type::DROP_UNCOMPRESSED_CACHE:
         {
             required_access.emplace_back(AccessType::SYSTEM_DROP_CACHE);

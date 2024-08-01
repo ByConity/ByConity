@@ -121,7 +121,7 @@ public:
     void write(const Block & block) override
     {
         storage_snapshot->metadata->check(block, true);
-        
+
         auto flatten_block = block.cloneWithColumns(block.getColumns());
         if (!storage_snapshot->object_columns.empty())
         {
@@ -196,7 +196,7 @@ StorageSnapshotPtr StorageMemory::getStorageSnapshot(const StorageMetadataPtr & 
     auto snapshot_data = std::make_unique<SnapshotData>();
     snapshot_data->blocks = data.get();
 
-    if (!hasDynamicSubcolumns(metadata_snapshot->getColumns()))
+    if (!metadata_snapshot->hasDynamicSubcolumns())
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, ColumnsDescription{}, std::move(snapshot_data));
 
     auto object_columns = getConcreteObjectColumns(

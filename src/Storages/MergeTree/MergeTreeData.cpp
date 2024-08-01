@@ -4726,22 +4726,20 @@ ColumnsDescription MergeTreeData::getConcreteObjectColumns(
 void MergeTreeData::resetObjectColumnsFromActiveParts(const DataPartsLock & /*lock*/)
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    const auto & columns = metadata_snapshot->getColumns();
-    if (!hasDynamicSubcolumns(columns))
+    if (!metadata_snapshot->hasDynamicSubcolumns())
         return;
 
     auto range = getDataPartsStateRange(DataPartState::Committed);
-    object_columns = getConcreteObjectColumns(range, columns);
+    object_columns = getConcreteObjectColumns(range, metadata_snapshot->getColumns());
 }
 
 void MergeTreeData::updateObjectColumns(const DataPartPtr & part, const DataPartsLock & /*lock*/)
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    const auto & columns = metadata_snapshot->getColumns();
-    if (!hasDynamicSubcolumns(columns))
+    if (!metadata_snapshot->hasDynamicSubcolumns())
         return;
 
-    DB::updateObjectColumns(object_columns, columns, part->getColumns());
+    DB::updateObjectColumns(object_columns, metadata_snapshot->getColumns(), part->getColumns());
 }
 
 ColumnsDescription MergeTreeData::getConcreteObjectColumns(

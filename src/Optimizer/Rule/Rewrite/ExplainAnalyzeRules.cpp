@@ -9,9 +9,10 @@
 namespace DB
 {
 
-PatternPtr ExplainAnalyze::getPattern() const
+ConstRefPatternPtr ExplainAnalyze::getPattern() const
 {
-    return Patterns::explainAnalyze().matchingStep<ExplainAnalyzeStep>([](const auto & step) { return !step.hasPlan(); }).result();
+    static auto pattern = Patterns::explainAnalyze().matchingStep<ExplainAnalyzeStep>([](const auto & step) { return !step.hasPlan(); }).result();
+    return pattern;
 }
 
 TransformResult ExplainAnalyze::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

@@ -17,15 +17,17 @@
 #include <Optimizer/Rule/Rules.h>
 
 #include <Optimizer/Rewriter/RemoveApply.h>
+#include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
+#include <Optimizer/Rule/Rewrite/EagerAggregation.h>
 #include <Optimizer/Rule/Rewrite/ExplainAnalyzeRules.h>
 #include <Optimizer/Rule/Rewrite/ExtractBitmapImplicitFilter.h>
 #include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 #include <Optimizer/Rule/Rewrite/ImplementSetOperationRules.h>
 #include <Optimizer/Rule/Rewrite/InlineProjections.h>
 #include <Optimizer/Rule/Rewrite/MergeSetOperationRules.h>
-#include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToMarkDistinct.h>
 #include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToExpandAggregate.h>
+#include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToMarkDistinct.h>
 #include <Optimizer/Rule/Rewrite/OptimizeAggregateRules.h>
 #include <Optimizer/Rule/Rewrite/PullProjectionOnJoinThroughJoin.h>
 #include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
@@ -35,6 +37,7 @@
 #include <Optimizer/Rule/Rewrite/PushPartialStepThroughExchangeRules.h>
 #include <Optimizer/Rule/Rewrite/PushProjectionRules.h>
 #include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
+#include <Optimizer/Rule/Rewrite/PushUnionThroughJoin.h>
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/Rule/Rewrite/SingleDistinctAggregationToGroupBy.h>
@@ -125,9 +128,7 @@ std::vector<RulePtr> Rules::removeRedundantRules()
 
 std::vector<RulePtr> Rules::pushAggRules()
 {
-    return {
-        std::make_shared<PushAggThroughOuterJoin>(),
-        std::make_shared<EagerAggregation>()};
+    return {std::make_shared<PushAggThroughOuterJoin>(), std::make_shared<EagerAggregation>()};
 }
 
 std::vector<RulePtr> Rules::pushDownLimitRules()
@@ -151,7 +152,7 @@ std::vector<RulePtr> Rules::distinctToAggregateRules()
         std::make_shared<SingleDistinctAggregationToGroupBy>(),
         std::make_shared<MultipleDistinctAggregationToMarkDistinct>(),
         std::make_shared<MultipleDistinctAggregationToExpandAggregate>(),
-        };
+    };
 }
 
 std::vector<RulePtr> Rules::pushIntoTableScanRules()
@@ -237,4 +238,12 @@ std::vector<RulePtr> Rules::extractBitmapImplicitFilterRules()
 {
     return {std::make_shared<ExtractBitmapImplicitFilter>()};
 }
+
+std::vector<RulePtr> Rules::pushUnionThroughJoin()
+{
+    return {
+        std::make_shared<PushUnionThroughJoin>(), std::make_shared<PushUnionThroughProjection>()};
+}
+
+
 }

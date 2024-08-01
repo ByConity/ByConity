@@ -65,7 +65,7 @@ public:
     static inline BroadcastStatus sendAndCheckReturnStatus(IBroadcastSender & sender, Chunk chunk)
     {
         BroadcastStatus status = sender.send(std::move(chunk));
-        if (status.is_modifer && status.code > 0)
+        if (status.is_modified_by_operator && status.code > 0)
         {
             if(status.code == BroadcastStatusCode::SEND_TIMEOUT)
             {

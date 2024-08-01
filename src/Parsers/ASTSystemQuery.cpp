@@ -202,6 +202,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DEDUP";
         case Type::SYNC_DEDUP_WORKER:
             return "SYNC DEDUP WORKER";
+        case Type::SYNC_REPAIR_TASK:
+            return "SYNC REPAIR TASK";
         case Type::START_DEDUP_WORKER:
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
@@ -238,6 +240,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP VIEW META";
         case Type::RELEASE_MEMORY_LOCK:
             return "RELEASE MEMORY LOCK";
+        case Type::DROP_SCHEMA_CACHE:
+            return "DROP SCHEMA CACHE";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
@@ -344,6 +348,7 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::RESTART_CONSUME
             || type == Type::RESYNC_MATERIALIZEDMYSQL_TABLE
             || type == Type::SYNC_DEDUP_WORKER
+            || type == Type::SYNC_REPAIR_TASK
             || type == Type::DROP_CNCH_META_CACHE
             || type == Type::DROP_CNCH_PART_CACHE
             || type == Type::DROP_CNCH_DELETE_BITMAP_CACHE
@@ -426,6 +431,11 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             settings.ostr << " OF TXN " << txn_id;
         else
             print_database_table();
+    }
+    else if (type == Type::DROP_SCHEMA_CACHE)
+    {
+        if (!schema_cache_storage.empty())
+            settings.ostr << " FOR " << schema_cache_storage;
     }
 }
 

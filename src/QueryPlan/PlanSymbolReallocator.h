@@ -121,7 +121,7 @@ public:
         {
             mappings.clear();
             for (const auto & output : step->getAssignments())
-                mappings.emplace(output.first, output.first);
+                mappings[output.first] = output.first;
         }
 
         return {plan_node, mappings};
@@ -137,15 +137,20 @@ public:
 
         auto symbol_mapper = symbol_mapper_provider(mappings);
         auto step = symbol_mapper.map(*join.getStep());
-        if (step->getKind() == ASTTableJoin::Kind::Inner && step->getAsofInequality() == ASOF::Inequality::GreaterOrEquals)
+        if (step->getKind() == ASTTableJoin::Kind::Inner && step->getStrictness() != ASTTableJoin::Strictness::Asof)
         {
             for (size_t i = 0; i < step->getLeftKeys().size(); i++)
             {
-                mappings.emplace(step->getRightKeys()[i], step->getLeftKeys()[i]);
+                auto left_key_type = left.plan_node->getCurrentDataStream().header.getByName(step->getLeftKeys()[i]).type;
+                auto right_key_type = right.plan_node->getCurrentDataStream().header.getByName(step->getRightKeys()[i]).type;
+                if (left_key_type->equals(*right_key_type))
+                {
+                    mappings[step->getRightKeys()[i]] = step->getLeftKeys()[i];
+                }
             }
         }
 
-        step->setOutputStream(symbol_mapper.map(join.getCurrentDataStream()));
+        step->setOutputStream(symbol_mapper.map(step->getOutputStream()));
 
         auto plan_node = PlanNodeBase::createPlanNode(
             context->nextNodeId(), step, {left.plan_node, right.plan_node}, symbol_mapper.map(join.getStatistics()));
@@ -153,6 +158,10 @@ public:
         return {plan_node, computeOutputMappings(join, symbol_mapper)};
     }
 
+    /**
+     * IntersectOrExceptNode require input streams are the same.
+     * TODO: remove this restricts for Intersect/Except/IntersectOrExceptNode
+     */
     PlanNodeAndMappings visitIntersectOrExceptNode(IntersectOrExceptNode & intersect, Void & c) override
     {
         auto left = VisitorUtil::accept(intersect.getChildren()[0], *this, c);
@@ -170,14 +179,18 @@ public:
             }
             if (!Utils::isIdentity(assignments))
             {
-                auto projection_step = std::make_shared<ProjectionStep>(right.plan_node->getStep()->getOutputStream(), assignments, name_to_type);
+                auto projection_step
+                    = std::make_shared<ProjectionStep>(right.plan_node->getStep()->getOutputStream(), assignments, name_to_type);
                 right.plan_node = PlanNodeBase::createPlanNode(context->nextNodeId(), projection_step, {right.plan_node});
             }
         }
 
         auto symbol_mapper = symbol_mapper_provider(left.mappings);
         auto plan_node = PlanNodeBase::createPlanNode(
-            context->nextNodeId(), symbol_mapper.map(*intersect.getStep()), {left.plan_node, right.plan_node}, symbol_mapper.map(intersect.getStatistics()));
+            context->nextNodeId(),
+            symbol_mapper.map(*intersect.getStep()),
+            {left.plan_node, right.plan_node},
+            symbol_mapper.map(intersect.getStatistics()));
         return {plan_node, computeOutputMappings(intersect, symbol_mapper)};
     }
 

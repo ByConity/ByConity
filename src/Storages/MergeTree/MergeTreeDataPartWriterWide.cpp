@@ -496,6 +496,11 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
             auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, storage.getCnchStorageID());
             current_log.metric = ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND;
             current_log.event_msg = fmt::format("rows count {} doesn't match unique keys count {}", rows_count, keys_count);
+            TaskInfo log_entry_task_info;
+            log_entry_task_info.task_type = TaskInfo::MERGE_TASK;
+            log_entry_task_info.dedup_gran.partition_id = !storage.getSettings()->partition_level_unique_keys ? ALL_DEDUP_GRAN_PARTITION_ID : data_part->get_info().partition_id;
+            log_entry_task_info.dedup_gran.bucket_number = storage.getSettings()->enable_bucket_level_unique_keys ? data_part->bucket_number : -1;
+            current_log.task_info = std::move(log_entry_task_info);
             unique_table_log->add(current_log);
         }
         throw Exception(ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND, "rows count {} doesn't match unique keys count {}", rows_count, keys_count);

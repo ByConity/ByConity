@@ -38,11 +38,6 @@ public:
 
     PlanNodeStatisticsPtr copy() const
     {
-        std::unordered_map<String, SymbolStatisticsPtr> copy_symbol_statistics;
-        for (const auto & item : symbol_statistics)
-        {
-            copy_symbol_statistics[item.first] = item.second->copy();
-        }
         return std::make_shared<PlanNodeStatistics>(row_count, symbol_statistics);
     }
 
@@ -56,7 +51,7 @@ public:
             {
                 if (symbols_stats.first == other_symbols_stats.first)
                 {
-                    *symbols_stats.second + *other_symbols_stats.second;
+                    *symbols_stats.second += *other_symbols_stats.second;
                 }
             }
         }
@@ -67,7 +62,7 @@ public:
     void setRowCount(UInt64 row_count_) { this->row_count = row_count_; }
 
     std::unordered_map<String, SymbolStatisticsPtr> & getSymbolStatistics() { return symbol_statistics; }
-    SymbolStatisticsPtr getSymbolStatistics(const String & symbol);
+    const SymbolStatisticsPtr & getSymbolStatistics(const String & symbol);
 
     void updateRowCount(UInt64 row_count_) { row_count = row_count_; }
     void updateSymbolStatistics(const String & symbol, SymbolStatisticsPtr stats) { symbol_statistics[symbol] = stats; }

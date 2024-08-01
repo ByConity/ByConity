@@ -22,11 +22,10 @@ const std::vector<RuleType> & CardinalityBasedJoinReorder::blockRules() const
     return block;
 }
 
-PatternPtr CardinalityBasedJoinReorder::getPattern() const
+ConstRefPatternPtr CardinalityBasedJoinReorder::getPattern() const
 {
-    return Patterns::multiJoin()
-        .matchingStep<MultiJoinStep>([&](const MultiJoinStep & s) { return s.getGraph().getNodes().size() > max_join_size; })
-        .result();
+    /* can't make static lambda with capture */
+    return pattern;
 }
 
 struct InterJoinNodeInfo

@@ -292,6 +292,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
         case Type::DROP_CHECKSUMS_CACHE:
         case Type::SYNC_DEDUP_WORKER:
+        case Type::SYNC_REPAIR_TASK:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
         case Type::START_CLUSTER:
@@ -470,6 +471,18 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             }
             else
                 parseDatabaseAndTableName(pos, expected, res->database, res->table);
+            break;
+        }
+
+        case Type::DROP_SCHEMA_CACHE:
+        {
+            if (ParserKeyword{"FOR"}.ignore(pos, expected))
+            {
+                if (ParserKeyword{"S3"}.ignore(pos, expected))
+                    res->schema_cache_storage = "S3";
+                else
+                    return false;
+            }
             break;
         }
 

@@ -105,28 +105,11 @@ size_t computeVirtualPartSize(size_t min_rows_per_vp, size_t index_granularity);
 std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
     const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */, const ContextPtr & context);
 
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithMod(
-    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */);
-
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithConsistentHash(
-    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */);
-
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithBoundedHash(
-    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */);
-
-std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithStrictBoundedHash(
-    const WorkerGroupHandle & worker_group,
-    const ServerDataPartsVector & parts,
-    size_t virtual_part_size /* unit = num marks */,
-    bool strict = false);
-
 void sortByMarksCount(std::vector<HybridPart> & hybrid_parts);
 
 void splitHybridParts(const ServerDataPartsVector & parts, size_t virtual_part_size, std::vector<HybridPart> & hybrid_parts);
 
 void mergeConsecutiveRanges(VirtualPartAssignmentMap & virtual_part_assignment);
-/// Utilities
-void reportHybridAllocStats(ServerAssignmentMap & physical_parts, VirtualPartAssignmentMap & virtual_parts, const String & name);
 
 ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts, std::map<int, std::unique_ptr<MarkRanges>> & parts_entry);
 }

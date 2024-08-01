@@ -721,10 +721,10 @@ public:
         return ss.str();
     }
 
-    static String SQLBindingKey(const String name_space, const String & uuid, const bool & is_re)
+    static String SQLBindingKey(const String name_space, const String & uuid, const String & tenant_id, const bool & is_re)
     {
         std::stringstream ss;
-        ss << escapeString(name_space) << '_' << SQL_BINDING_PREFIX << is_re << '_' << uuid;
+        ss << escapeString(name_space) << '_' << SQL_BINDING_PREFIX << is_re << '_' << uuid << '_' << tenant_id;
         return ss.str();
     }
 
@@ -1221,8 +1221,8 @@ public:
     void updateSQLBinding(const String & name_space, const SQLBindingItemPtr& data);
     SQLBindings getSQLBindings(const String & name_space);
     SQLBindings getReSQLBindings(const String & name_space, const bool & is_re_expression);
-    SQLBindingItemPtr getSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression);
-    void removeSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression);
+    SQLBindingItemPtr getSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression);
+    void removeSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression);
 
     void updateTableStatistics(const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
     // new api

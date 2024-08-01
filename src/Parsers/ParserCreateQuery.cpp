@@ -452,7 +452,8 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     {
         // mysql table_constraints
         if (s_index.checkWithoutMoving(pos, expected) || s_key.checkWithoutMoving(pos, expected) ||
-            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected) || s_unique.checkWithoutMoving(pos, expected))
+            s_cluster_key.checkWithoutMoving(pos, expected) || s_primary_key.checkWithoutMoving(pos, expected) ||
+            s_unique.checkWithoutMoving(pos, expected))
         {
             MySQLParser::ParserDeclareIndex index_p_mysql;
             if (index_p_mysql.parse(pos, new_node, expected))
@@ -482,7 +483,19 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     {
         if (!foreign_key_p.parse(pos, new_node, expected) && !constraint_p.parse(pos, new_node, expected)
             && !unique_p.parse(pos, new_node, expected))
-            return false;
+        {
+            /// mysql case: constraint primary key
+            MySQLParser::ParserDeclareIndex index_p_mysql;
+            if (dt.parse_mysql_ddl && index_p_mysql.parse(pos, new_node, expected))
+            {
+                node = new_node;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
     }
     else if (s_foreign_key.checkWithoutMoving(pos, expected))
     {
@@ -724,6 +737,20 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         break;
     }
 
+    if (engine)
+    {
+        switch (engine_kind)
+        {
+            case EngineKind::TABLE_ENGINE:
+                engine->as<ASTFunction &>().kind = ASTFunction::Kind::TABLE_ENGINE;
+                break;
+
+            case EngineKind::DATABASE_ENGINE:
+                engine->as<ASTFunction &>().kind = ASTFunction::Kind::DATABASE_ENGINE;
+                break;
+        }
+    }
+
     auto storage = std::make_shared<ASTStorage>();
     storage->set(storage->engine, engine);
     storage->set(storage->partition_by, partition_by);
@@ -750,6 +777,7 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ParserKeyword s_broadcast("BROADCAST");
     ParserKeyword s_partition_by("PARTITION BY");
+    ParserKeyword s_partitions("PARTITIONS");
     ParserKeyword s_value("VALUE");
     ParserKeyword s_lifecycle("LIFECYCLE");
     ParserKeyword s_storage_policy("STORAGE_POLICY");
@@ -839,6 +867,8 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
         if (!mysql_partition_by && s_partition_by.ignore(pos, expected))
         {
+            ParserKeyword("KEY").ignore(pos, expected);
+
             if (s_value.ignore(pos, expected) && expression_p.parse(pos, mysql_partition_by, expected))
             {
                 // partition by value(expr) life cycle n
@@ -850,6 +880,12 @@ bool ParserStorageMySQL::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             else if (expression_p.parse(pos, mysql_partition_by, expected))
                 continue;
             else
+                return false;
+        }
+
+        if (dt.parse_mysql_ddl && s_partitions.ignore(pos, expected))
+        {
+            if (!number_parser.ignore(pos, expected))
                 return false;
         }
 
@@ -1073,7 +1109,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserStorage storage_p(dt);
+    ParserStorage storage_p(ParserStorage::TABLE_ENGINE, dt);
     ParserIdentifier name_p;
     ParserTablePropertiesDeclarationList table_properties_p(dt);
     ParserSelectWithUnionQuery select_p(dt);
@@ -1818,7 +1854,7 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserKeyword s_attach("ATTACH");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
-    ParserStorage storage_p(dt);
+    ParserStorage storage_p(ParserStorage::DATABASE_ENGINE, dt);
     ParserIdentifier name_p;
     ParserTableOverridesDeclarationList table_overrides_p;
     ParserIdentifier id_p;
@@ -1979,7 +2015,7 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
-    ParserStorage storage_p(dt);
+    ParserStorage storage_p(ParserStorage::TABLE_ENGINE, dt);
     ParserIdentifier name_p;
     ParserTablePropertiesDeclarationList table_properties_p(dt);
     ParserSelectWithUnionQuery select_p(dt);

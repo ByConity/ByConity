@@ -46,7 +46,7 @@ SELECT '-- information_schema.referential_constraints';
 SELECT * FROM information_schema.referential_constraints;
 
 SELECT '-- information_schema.statistics';
-SELECT * FROM information_schema.statistics;
+SELECT * FROM information_schema.statistics WHERE table_schema = currentDatabase() order by table_name;
 
 SELECT '-- information_schema.events';
 SELECT * FROM information_schema.events;

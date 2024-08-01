@@ -80,7 +80,7 @@ void CnchWorkerClient::submitManipulationTask(
         params.mutation_commands->writeText(write_buf);
     }
 
-    if (hasDynamicSubcolumns(storage.getInMemoryMetadata().columns))
+    if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         request.set_dynamic_object_column_schema(
             storage.getStorageSnapshot(storage.getInMemoryMetadataPtr(), nullptr)->object_columns.toString());
@@ -410,7 +410,7 @@ brpc::CallId CnchWorkerClient::sendResources(
     request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID());
     /// recycle_timeout refers to the time when the session is recycled under abnormal case,
     /// so it should be larger than max_execution_time to make sure the session is not to be destroyed in advance.
-    auto recycle_timeout = max_execution_time ? max_execution_time + 60 : 3600;
+    UInt64 recycle_timeout = max_execution_time > 0 ? max_execution_time + 60UL : 3600;
     request.set_timeout(recycle_timeout);
 
     bool require_worker_info = false;
@@ -433,7 +433,7 @@ brpc::CallId CnchWorkerClient::sendResources(
             {
                 for (auto const & mutation_str : cnch_merge_tree->getPlainMutationEntries())
                 {
-                    LOG_TRACE(&Poco::Logger::get(__func__), "Send mutations to worker: {}", mutation_str);
+                    LOG_TRACE(log, "Send mutations to worker: {}", mutation_str);
                     table_data_parts.add_cnch_mutation_entries(mutation_str);
                 }
             }
@@ -503,7 +503,7 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
-    LOG_TRACE(&Poco::Logger::get("CnchWorkerClient"), "request : {}", request.ShortDebugString());
+    LOG_TRACE(log, "request : {}", request.ShortDebugString());
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
@@ -556,6 +556,22 @@ void CnchWorkerClient::assignHighPriorityDedupPartition(const StorageID & storag
         request.add_partition_id(entry);
 
     stub->assignHighPriorityDedupPartition(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchWorkerClient::assignRepairGran(const StorageID & storage_id, const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time)
+{
+    brpc::Controller cntl;
+    Protos::AssignRepairGranReq request;
+    Protos::AssignRepairGranResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
+    request.set_partition_id(partition_id);
+    request.set_bucket_number(bucket_number);
+    request.set_max_event_time(max_event_time);
+
+    stub->assignRepairGran(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
 }

@@ -67,6 +67,7 @@ namespace
         "tables",
         "columns",
         "mutations",
+        "users",
 
         /// Specific to the current session
         "settings",
@@ -79,7 +80,8 @@ namespace
         "cnch_databases",
         "cnch_tables",
         "cnch_columns",
-        "cnch_parts"
+        "cnch_parts",
+        "data_skipping_indices"
     };
 
     AccessRights mixAccessRightsFromUserAndRoles(const User & user, const EnabledRolesInfo & roles_info)
@@ -216,9 +218,17 @@ namespace
             res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
         }
 
+        if (!manager.doesSelectFromMySQLRequireGrant())
+        {
+            res.grant(AccessType::SELECT, DatabaseCatalog::MYSQL);
+            res.grant(AccessType::SELECT, DatabaseCatalog::MYSQL_UPPERCASE);
+        }
         // information_schema is always visible
         res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA);
         res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
+
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::MYSQL);
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::MYSQL_UPPERCASE);
 
         return res;
     }
@@ -688,14 +698,18 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
             | AccessType::TRUNCATE;
 
         const AccessFlags dictionary_ddl = AccessType::CREATE_DICTIONARY | AccessType::DROP_DICTIONARY;
+        const AccessFlags function_ddl = AccessType::CREATE_FUNCTION | AccessType::DROP_FUNCTION;
+        const AccessFlags binding_ddl = AccessType::CREATE_BINDING | AccessType::DROP_BINDING;
+        const AccessFlags prepared_statement_ddl = AccessType::CREATE_PREPARED_STATEMENT | AccessType::DROP_PREPARED_STATEMENT;
         const AccessFlags table_and_dictionary_ddl = table_ddl | dictionary_ddl;
+        const AccessFlags table_and_dictionary_and_function_ddl_and_binding = table_ddl | dictionary_ddl | function_ddl | binding_ddl | prepared_statement_ddl;
         const AccessFlags write_table_access = AccessType::INSERT | AccessType::OPTIMIZE;
         const AccessFlags write_dcl_access = AccessType::ACCESS_MANAGEMENT - AccessType::SHOW_ACCESS;
 
-        const AccessFlags not_readonly_flags = write_table_access | table_and_dictionary_ddl | write_dcl_access | AccessType::SYSTEM | AccessType::KILL_QUERY;
+        const AccessFlags not_readonly_flags = write_table_access | table_and_dictionary_and_function_ddl_and_binding | write_dcl_access | AccessType::SYSTEM | AccessType::KILL_QUERY;
         const AccessFlags not_readonly_1_flags = AccessType::CREATE_TEMPORARY_TABLE;
 
-        const AccessFlags ddl_flags = table_ddl | dictionary_ddl;
+        const AccessFlags ddl_flags = table_ddl | dictionary_ddl | function_ddl | binding_ddl | prepared_statement_ddl;
         const AccessFlags introspection_flags = AccessType::INTROSPECTION;
     };
     static const PrecalculatedFlags precalc;

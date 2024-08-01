@@ -15,6 +15,7 @@
 
 #include <Columns/Collator.h>
 #include <Parsers/ASTClusterByElement.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <IO/Operators.h>
 
 
@@ -54,6 +55,29 @@ ASTPtr ASTClusterByElement::clone() const
     auto clone = std::make_shared<ASTClusterByElement>(*this);
     clone->cloneChildren();
     return clone;
+}
+
+void ASTClusterByElement::serialize(WriteBuffer & buf) const
+{
+    writeBinary(split_number, buf);
+    writeBinary(is_with_range, buf);
+    writeBinary(is_user_defined_expression, buf);
+    serializeASTs(children, buf);
+}
+
+void ASTClusterByElement::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(split_number, buf);
+    readBinary(is_with_range, buf);
+    readBinary(is_user_defined_expression, buf);
+    children = deserializeASTs(buf);
+}
+
+ASTPtr ASTClusterByElement::deserialize(ReadBuffer & buf)
+{
+    auto element = std::make_shared<ASTClusterByElement>();
+    element->deserializeImpl(buf);
+    return element;
 }
 
 

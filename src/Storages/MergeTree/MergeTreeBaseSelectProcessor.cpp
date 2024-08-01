@@ -36,12 +36,13 @@
 #include <DataTypes/MapHelpers.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <fmt/core.h>
+#include <common/logger_useful.h>
+#include <Processors/IntermediateResult/OwnerInfo.h>
 
 namespace ProfileEvents
 {
 extern const Event PrewhereSelectedRows;
 }
-
 
 namespace DB
 {
@@ -69,6 +70,8 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     , stream_settings(stream_settings_)
     , virt_column_names(virt_column_names_)
     , partition_value_type(storage.getPartitionValueType())
+    , support_intermedicate_result_cache(storage.supportIntermedicateResultCache())
+
 {
     header_without_virtual_columns = getPort().getHeader();
 
@@ -122,6 +125,12 @@ Chunk MergeTreeBaseSelectProcessor::generate()
         if (res.hasRows())
         {
             injectVirtualColumns(res, task.get(), partition_value_type, virt_column_names);
+            if (support_intermedicate_result_cache)
+            {
+                OwnerInfo owner_info{task->data_part->name, static_cast<time_t>(task->data_part->commit_time.toSecond())};
+                res.setOwnerInfo(std::move(owner_info));
+            }
+
             return res;
         }
     }

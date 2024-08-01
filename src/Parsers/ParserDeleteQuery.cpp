@@ -16,8 +16,11 @@ bool ParserDeleteQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_delete("DELETE");
     ParserKeyword s_from("FROM");
     ParserKeyword s_where("WHERE");
+    ParserKeyword s_limit("LIMIT");
     ParserExpression parser_exp_elem;
     ParserKeyword s_settings("SETTINGS");
+
+    ParserNumber number_parser;
 
     if (s_delete.ignore(pos, expected))
     {
@@ -32,6 +35,13 @@ bool ParserDeleteQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         if (!parser_exp_elem.parse(pos, query->predicate, expected))
             return false;
+
+        /// ignore the limit clause from MYSQL delete SQL
+        if (s_limit.ignore(pos, expected))
+        {
+            if (!number_parser.ignore(pos, expected))
+                return false;
+        }
 
         if (s_settings.ignore(pos, expected))
         {

@@ -1,10 +1,13 @@
 #include <DataTypes/Serializations/ISerialization.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ParserPreparedStatement.h>
 #include <Parsers/parseQuery.h>
 #include <Protos/plan_node.pb.h>
+#include <Interpreters/StorageID.h>
+#include "Parsers/IAST_fwd.h"
 
 #include <memory>
 
@@ -18,7 +21,7 @@ namespace ErrorCodes
 }
 void PreparedObject::toProto(Protos::PreparedStatement & proto) const
 {
-    proto.set_query(query);
+    proto.set_query(query->formatForErrorMessage());
 }
 
 void PreparedStatementManager::initialize(ContextMutablePtr context)
@@ -94,7 +97,11 @@ PreparedStatementManager::CacheResultType PreparedStatementManager::getPlanFromC
         for (auto & [database, table_info] : prepared_object.query_detail->query_access_info)
         {
             for (auto & [table, columns] : table_info)
-                context->addQueryAccessInfo(database, table, columns);
+            {
+                auto storage_id = context->tryResolveStorageID(StorageID{database, table});
+                context->checkAccess(AccessType::SELECT, storage_id, columns);
+                context->addQueryAccessInfo(backQuoteIfNeed(storage_id.getDatabaseName()), storage_id.getFullTableName(), columns);
+            }   
         }
     }
 
@@ -105,15 +112,12 @@ PreparedStatementManager::CacheResultType PreparedStatementManager::getPlanFromC
 
 void PreparedStatementManager::addPlanToCache(
     const String & name,
-    const String & query,
+    ASTPtr & query,
     SettingsChanges settings_changes,
     QueryPlanPtr & plan,
     AnalysisPtr analysis,
     PreparedParameterSet prepared_params,
-    ContextMutablePtr & context,
-    bool throw_if_exists,
-    bool or_replace,
-    bool is_persistent)
+    ContextMutablePtr & context)
 {
     PlanNodeId max_id;
     PreparedObject prepared_object{};
@@ -136,12 +140,12 @@ void PreparedStatementManager::addPlanToCache(
         {
             for (const auto & column : it->second)
                 prepared_object.query_detail
-                    ->query_access_info[backQuoteIfNeed(storage_id.getDatabaseName())][storage_id.getFullTableName()]
+                    ->query_access_info[storage_id.getDatabaseName()][storage_id.getTableName()]
                     .emplace_back(column);
         }
     }
-
-    set(name, std::move(prepared_object), throw_if_exists, or_replace, is_persistent);
+    const auto & prepare = query->as<const ASTCreatePreparedStatementQuery &>();
+    set(name, std::move(prepared_object), !prepare.if_not_exists, prepare.or_replace, prepare.is_permanent);
 }
 
 PlanNodePtr PreparedStatementManager::getNewPlanNode(PlanNodePtr node, ContextMutablePtr & context, bool cache_plan, PlanNodeId & max_id)
@@ -230,7 +234,11 @@ void PreparedStatementManager::loadStatementsFromDisk(ContextMutablePtr & contex
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid prepread statement query: {}", statement.second.query());
 
             create_prep_stat->is_permanent = false;
-            InterpreterSelectQueryUseOptimizer interpreter{ast, context, {}};
+            auto query_context = Context::createCopy(context);
+            query_context->setQueryContext(query_context);
+            SettingsChanges settings_changes = InterpreterSetQuery::extractSettingsFromQuery(ast, query_context);
+            query_context->applySettingsChanges(settings_changes);
+            InterpreterSelectQueryUseOptimizer interpreter{ast, query_context, {}};
             interpreter.executeCreatePreparedStatementQuery();
         }
         catch (...)

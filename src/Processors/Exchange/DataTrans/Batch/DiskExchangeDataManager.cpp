@@ -94,7 +94,6 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int TIMEOUT_EXCEEDED;
-    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int CANNOT_UNLINK;
     extern const int FILE_DOESNT_EXIST;
     extern const int BSP_EXCHANGE_DATA_DISK_LIMIT_EXCEEDED;

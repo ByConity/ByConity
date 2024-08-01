@@ -50,6 +50,7 @@
 #include <fmt/format.h>
 #include <common/errnoToString.h>
 #include <Common/HuAllocator.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -586,6 +587,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         {
             new_values["UncompressedCacheBytes"] = uncompressed_cache->weight();
             new_values["UncompressedCacheCells"] = uncompressed_cache->count();
+        }
+    }
+
+    {
+        if (auto intermediate_result_cache = getContext()->getIntermediateResultCache())
+        {
+            new_values["IntermediateResultCacheBytes"] = intermediate_result_cache->weight();
+            new_values["IntermediateResultCacheCells"] = intermediate_result_cache->count();
         }
     }
 

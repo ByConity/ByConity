@@ -172,6 +172,7 @@ public:
     MM(OutfileWrite, outfile_write) \
     MM(OutfileFinish, outfile_finish) \
     MM(LocalExchange, local_exchange) \
+    MM(IntermediateResultCache, intermediate_result_cache) \
     MM(MultiJoin, multi_join)
 
 // macro helpers to convert MM(x, y) to M(x)

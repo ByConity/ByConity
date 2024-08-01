@@ -22,13 +22,13 @@
 #include <QueryPlan/SymbolAllocator.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
-#include <QueryPlan/SymbolAllocator.h>
 
 namespace DB
 {
-PatternPtr PushJoinThroughUnion::getPattern() const
+ConstRefPatternPtr PushJoinThroughUnion::getPattern() const
 {
-    return Patterns::join().with(Patterns::unionn(), Patterns::any()).result();
+    static auto pattern = Patterns::join().with(Patterns::unionn(), Patterns::any()).result();
+    return pattern;
 }
 
 const std::vector<RuleType> & PushJoinThroughUnion::blockRules() const
@@ -61,6 +61,7 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
                 return plan_node_and_mappings.mappings.at(symbol);
             return symbol;
         }};
+
         auto new_join_step = symbol_mapper.map(join);
 
         // build union

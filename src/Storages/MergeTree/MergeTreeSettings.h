@@ -488,6 +488,12 @@ enum StealingCacheMode : UInt64
     M(UInt64, max_staged_part_number_per_task, 100, "", 0) \
     M(UInt64, max_staged_part_rows_per_task, 15000000, "", 0) \
     M(Bool, enable_duplicate_check_while_writing, true, "Whether to check duplicate keys while writing for unique table. Although turning it on may have a certain impact on the tps of writing, it is recommended to enable it by default.", 0) \
+    M(Bool, check_duplicate_key, false, "Whether to check duplicate keys using query. We execute the check query on the server, which may bring certain query overhead.", 0) \
+    M(Bool, check_duplicate_for_big_table, false, "This takes effect when check_duplicate_key=1. Dedup grans will be checked one by one.", 0) \
+    M(String, check_predicate, "", "This takes effect when check_duplicate_key=1. To avoid checking the history partitions multiple times.", 0) \
+    M(Seconds, check_duplicate_key_interval, 3600, "Interval of check duplicate key", 0) \
+    M(Bool, duplicate_auto_repair, false, "Whether to automatically repair duplicate keys. This process is on the worker, but it may affect other writes as the lock is held.", 0) \
+    M(Seconds, duplicate_repair_interval, 600, "Interval of check duplicate key", 0) \
     /**Whether block the actual dedup progress, Attention: set this value to true only in ci **/               \
     M(Bool, disable_dedup_parts, false, "", 0) \
     \

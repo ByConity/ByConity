@@ -199,6 +199,7 @@
 #include <Statistics/AutoStatisticsManager.h>
 #include <fmt/core.h>
 #include <Disks/IO/ThreadPoolRemoteFSReader.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 
 namespace fs = std::filesystem;
 
@@ -354,6 +355,7 @@ struct ContextSharedPart
     mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable QueryCachePtr query_cache;         /// Cache of query results.
+    mutable IntermediateResultCachePtr intermediate_result_cache; /// part cache of queries' results.
     mutable MMappedFileCachePtr
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list; /// Executing queries at the moment.
@@ -551,7 +553,11 @@ struct ContextSharedPart
             cnch_bg_threads_array->shutdown();
 
         if (cnch_txn_coordinator)
+        {
             cnch_txn_coordinator->shutdown();
+            /// Need to reset cnch_txn_coordinator before schedule_pool reset, otherwise it may core.
+            cnch_txn_coordinator.reset();
+        }
 
         if (server_manager)
             server_manager->shutDown();
@@ -926,7 +932,7 @@ DiskExchangeDataManagerPtr Context::getDiskExchangeDataManager() const
         }
         chassert(!id.empty());
         String manager_path = "bsp/" + id + "/v-1.0.0";
-        LOG_DEBUG(&Poco::Logger::get("Context"), "Store exchange data with path {}", manager_path);
+        LOG_DEBUG(shared->log, "Store exchange data with path {}", manager_path);
         DiskExchangeDataManagerOptions options{
             .path = manager_path,
             .storage_policy = bsp_conf.storage_policy,
@@ -1007,8 +1013,7 @@ void Context::enableNamedCnchSessions()
     shared->named_cnch_sessions.emplace();
 }
 
-std::shared_ptr<NamedSession>
-Context::acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const
+std::shared_ptr<NamedSession> Context::acquireNamedSession(const String & session_id, size_t timeout, bool session_check) const
 {
     if (!shared->named_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
@@ -1026,12 +1031,11 @@ Context::acquireNamedSession(const String & session_id, std::chrono::steady_cloc
     return res;
 }
 
-std::shared_ptr<NamedCnchSession>
-Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check, bool return_null_if_not_found) const
+std::shared_ptr<NamedCnchSession> Context::acquireNamedCnchSession(const UInt64 & txn_id, size_t timeout, bool session_check, bool return_null_if_not_found) const
 {
     if (!shared->named_cnch_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
-    LOG_DEBUG(&Poco::Logger::get("acquireNamedCnchSession"), "Trying to acquire session for {}\n", txn_id);
+    LOG_TRACE(shared->log, "Trying to acquire session for {}\n", txn_id);
     return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check, return_null_if_not_found);
 }
 
@@ -1471,13 +1475,12 @@ void Context::setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_sett
 {
     if (shared->vw_customized_settings_ptr)
         LOG_INFO(
-            &Poco::Logger::get("Context"),
-            fmt::format(
-                "VWCustomizedSetting before update:[{}] and after update:[{}]",
-                shared->vw_customized_settings_ptr->toString(),
-                vw_customized_settings_ptr_->toString()));
+            shared->log,
+            "VWCustomizedSetting before update:[{}] and after update:[{}]",
+            shared->vw_customized_settings_ptr->toString(),
+            vw_customized_settings_ptr_->toString());
     else
-        LOG_INFO(&Poco::Logger::get("Context"), fmt::format("VWCustomizedSetting :[{}]", vw_customized_settings_ptr_->toString()));
+        LOG_INFO(shared->log, "VWCustomizedSetting :[{}]", vw_customized_settings_ptr_->toString());
 
     std::lock_guard<std::mutex> lock(shared->vw_customized_settings_update_mutex);
     shared->vw_customized_settings_ptr = vw_customized_settings_ptr_;
@@ -1486,32 +1489,31 @@ void Context::setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_sett
 
 void Context::initResourceGroupManager(const ConfigurationPtr & config)
 {
-    if (!config->has("resource_groups"))
-    {
-        LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
-        return ;
-    }
-    auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
-    if (resource_group_manager_type == "vw")
-    {
-        if (!getResourceManagerClient())
-        {
-            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialized.");
-            return;
-        }
-        shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
-    }
-    else if (resource_group_manager_type == "internal")
-    {
-        if (!CGroupManagerFactory::instance().isInit())
-        {
-            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create Internal Resource Group Manager since cgroup manger is not initialized");
-            return ;
-        }
-        shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
-    }
-    else
-        throw Exception("Unknown Resource Group Manager type", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+    LOG_DEBUG(shared->log, "Skip initialize resource group");
+
+    // if (!config->has("resource_groups"))
+    // {
+    //     LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
+    //     return ;
+    // }
+    // auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
+    // if (resource_group_manager_type == "vw")
+    // {
+    //     if (!getResourceManagerClient())
+    //     {
+    //         LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
+    //         return;
+    //     }
+    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
+    //     shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
+    // }
+    // else if (resource_group_manager_type == "internal")
+    // {
+    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
+    //     shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
+    // }
+    // else
+    //     throw Exception("Unknown Resource Group Manager type", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
 }
 
 void Context::setResourceGroup(const IAST * ast)
@@ -2357,11 +2359,11 @@ void Context::setCurrentDatabase(const String & name, ContextPtr local_context)
     if(use_cnch_catalog){
         current_catalog = "";
         current_database = db_name_with_tenant_id;
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "use cnch catalog, db_name: {}", db_name_with_tenant_id);
+        LOG_TRACE(shared->log, "use cnch catalog, db_name: {}", db_name_with_tenant_id);
     } else {
         current_catalog = catalog_opt.value();
         current_database =  database_opt.value();
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "use external catalog, catalog_name: {}, db_name: {}", current_catalog, current_database);
+        LOG_TRACE(shared->log, "use external catalog, catalog_name: {}, db_name: {}", current_catalog, current_database);
     }
     calculateAccessRights();
 }
@@ -2847,6 +2849,29 @@ void Context::dropQueryCache() const
     auto lock = getLock();
     if (shared->query_cache)
         shared->query_cache->reset();
+}
+
+void Context::setIntermediateResultCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->intermediate_result_cache)
+        throw Exception("Intermediate result cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->intermediate_result_cache = std::make_shared<IntermediateResult::CacheManager>(cache_size_in_bytes);
+}
+
+IntermediateResultCachePtr Context::getIntermediateResultCache() const
+{
+    auto lock = getLock();
+    return shared->intermediate_result_cache;
+}
+
+void Context::dropIntermediateResultCache() const
+{
+    auto lock = getLock();
+    if (shared->intermediate_result_cache)
+        shared->intermediate_result_cache->reset();
 }
 
 void Context::setMMappedFileCache(size_t cache_size_in_num_entries)
@@ -3810,7 +3835,7 @@ void Context::insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element
     if (view_refresh_task_log)
         view_refresh_task_log->add(element);
     else
-        LOG_WARNING(&Poco::Logger::get("Context"), "View Refresh Task Log has not been initialized.");
+        LOG_WARNING(shared->log, "View Refresh Task Log has not been initialized.");
 }
 
 std::shared_ptr<CnchQueryLog> Context::getCnchQueryLog() const
@@ -5003,7 +5028,7 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
 
     if (auto updated_host_port = tryGetTSOLeaderHostPort(); !updated_host_port.empty())
     {
-        LOG_TRACE(&Poco::Logger::get("Context::getCnchTSOClient"), "TSO Leader host-port is: {} ", updated_host_port);
+        LOG_TRACE(shared->log, "TSO Leader host-port is: {} ", updated_host_port);
         return shared->tso_client_pool->get(updated_host_port);
     }
     else
@@ -5395,7 +5420,7 @@ VirtualWarehouseHandle Context::tryGetCurrentVW() const
 
 void Context::initResourceManagerClient()
 {
-    LOG_DEBUG(&Poco::Logger::get("Context"), "Initialising Resource Manager Client");
+    LOG_DEBUG(shared->log, "Initialising Resource Manager Client");
     const auto & root_config = getRootConfig();
     const auto & max_retry_count = root_config.resource_manager.init_client_tries;
     const auto & retry_interval_ms = root_config.resource_manager.init_client_retry_interval_ms;
@@ -5408,7 +5433,7 @@ void Context::initResourceManagerClient()
         {
             auto lock = getLock();
             shared->rm_client = std::make_shared<ResourceManagerClient>(getGlobalContext());
-            LOG_DEBUG(&Poco::Logger::get("Context"), "Initialised Resource Manager Client on try: {}", retry_count);
+            LOG_DEBUG(shared->log, "Initialised Resource Manager Client on try: {}", retry_count);
             return;
         }
         catch (...)
@@ -5460,7 +5485,7 @@ bool Context::getTableReclusterTaskStatus(const StorageID & storage_id) const
     CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
     if (!bg_thread_ptr)
     {
-        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get reclustering manager thread for " + storage_id.getNameForLogs());
+        LOG_DEBUG(shared->log, "Fail to get reclustering manager thread for " + storage_id.getNameForLogs());
         return false;
     }
 
@@ -5478,7 +5503,7 @@ bool Context::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, c
     CnchBGThreadPtr bg_thread_ptr = thread_map->tryGetThread(storage_id);
     if (!bg_thread_ptr)
     {
-        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get merge thread for {}", storage_id.getNameForLogs());
+        LOG_DEBUG(shared->log, "Fail to get merge thread for {}", storage_id.getNameForLogs());
         return false;
     }
 
@@ -5497,7 +5522,7 @@ ClusterTaskProgress Context::getTableReclusterTaskProgress(const StorageID & sto
     ClusterTaskProgress cluster_task_progress;
     if (!bg_thread_ptr)
     {
-        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Fail to get merge thread for " + storage_id.getNameForLogs());
+        LOG_DEBUG(shared->log, "Fail to get merge thread for " + storage_id.getNameForLogs());
         return cluster_task_progress;
     }
 
@@ -5573,7 +5598,7 @@ std::multimap<StorageID, MergeTreeMutationStatus> Context::collectMutationStatus
                 throw;
             }
             else
-                LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Can't get Table by uuid, table maybe already deleted, skip it.");
+                LOG_DEBUG(shared->log, "Can't get Table by uuid, table maybe already deleted, skip it.");
         }
     }
 
@@ -5723,7 +5748,7 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
     if (getConfigRef().has("part_allocation_algorithm"))
     {
         LOG_DEBUG(
-            &Poco::Logger::get(__PRETTY_FUNCTION__),
+            shared->log,
             "Using part allocation algorithm from config: {}.",
             getConfigRef().getInt("part_allocation_algorithm"));
         switch (getConfigRef().getInt("part_allocation_algorithm"))

@@ -214,6 +214,9 @@ public:
     /// Get mutable version (snapshot) of storage metadata. Metadata object is
     /// multiversion, so it can be concurrently changed, but returned copy can be
     /// used without any locks.
+    /// NOTE: this function has significantly higher overhead than getInMemoryMetadataPtr()
+    /// due to the need to copy StorageInMemoryMetadata.
+    /// Prefer use getInMemoryMetadataPtr() if only read access is needed.
     StorageInMemoryMetadata getInMemoryMetadata() const { return *metadata.get(); }
 
     /// Get immutable version (snapshot) of storage metadata. Metadata object is
@@ -258,7 +261,7 @@ public:
 
     /// Return true if there is at least one part containing lightweight deleted mask.
     virtual bool hasLightweightDeletedMask() const { return false; }
-    
+
     /// Return true if storage can execute lightweight delete.
     virtual bool supportsLightweightDelete() const { return false; }
 
@@ -282,6 +285,9 @@ public:
 
     /// Prepare storeage write in plan segment and return allocated table storage id, used in optimizer
     virtual StorageID prepareTableWrite(ContextPtr /*context*/) { return getStorageID(); }
+
+        /// Supports part-level intermedicate result cache for aggregating
+    virtual bool supportIntermedicateResultCache() const { return false; }
 
 protected:
     /// Returns whether the column is virtual - by default all columns are real.

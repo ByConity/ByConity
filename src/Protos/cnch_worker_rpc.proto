@@ -331,6 +331,19 @@ message AssignHighPriorityDedupPartitionResp
   optional string exception = 1;
 }
 
+message AssignRepairGranReq
+{
+  required StorageID table = 1;
+  required string partition_id = 2;
+  required int64 bucket_number = 3;
+  required uint64 max_event_time = 4;
+}
+
+message AssignRepairGranResp
+{
+  optional string exception = 1;
+}
+
 message DropDedupWorkerReq
 {
   required StorageID table = 1;
@@ -569,6 +582,7 @@ service CnchWorkerService
 
   rpc createDedupWorker(CreateDedupWorkerReq) returns (CreateDedupWorkerResp);
   rpc assignHighPriorityDedupPartition(AssignHighPriorityDedupPartitionReq) returns (AssignHighPriorityDedupPartitionResp);
+  rpc assignRepairGran(AssignRepairGranReq) returns (AssignRepairGranResp);
   rpc dropDedupWorker(DropDedupWorkerReq) returns (DropDedupWorkerResp);
   rpc getDedupWorkerStatus(GetDedupWorkerStatusReq) returns (GetDedupWorkerStatusResp);
 

@@ -30,6 +30,30 @@ StorageCloudHive::StorageCloudHive(
     setInMemoryMetadata(metadata);
 }
 
+HiveFiles StorageCloudHive::filterHiveFilesByIntermediateResultCache(SelectQueryInfo & query_info, ContextPtr query_context, HiveFiles & hive_files)
+{
+    auto cache = query_context->getIntermediateResultCache();
+    if(!cache)
+        return hive_files;
+
+    TableScanCacheInfo cache_info = getTableScanCacheInfo(query_info);
+
+    // check enable result cache
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::NO_CACHE)
+        return hive_files;
+
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_DEPENDENT_TABLE)
+    {
+        return hive_files;
+    }
+    auto s_id = getStorageID();
+
+    assert(cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_TABLE);
+    HiveFiles new_files;
+    cache_holder = cache->createCacheHolder(query_context, cache_info.getDigest(), s_id, hive_files, new_files);
+    return new_files;
+}
+
 Pipe StorageCloudHive::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
@@ -53,7 +77,8 @@ Pipe StorageCloudHive::read(
             real_columns.push_back(column);
     }
 
-    HiveFiles hive_files = getHiveFiles();
+    HiveFiles hive_files_before_filter = getHiveFiles();
+    HiveFiles hive_files = filterHiveFilesByIntermediateResultCache(query_info, local_context, hive_files_before_filter);
     selectFiles(local_context, storage_snapshot->metadata, query_info, hive_files, num_streams);
 
     Pipes pipes;
@@ -75,6 +100,8 @@ Pipe StorageCloudHive::read(
     }
     auto pipe = Pipe::unitePipes(std::move(pipes));
     narrowPipe(pipe, num_streams);
+    if (cache_holder)
+        pipe.addCacheHolder(cache_holder);
     return pipe;
 }
 

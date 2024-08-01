@@ -84,6 +84,7 @@ public:
         Names columns_ = {},
         bool require_handle_ = false,
         UInt64 buckets_ = 0,
+        ASTPtr bucket_expr_ = nullptr,
         bool enforce_round_robin_ = true,
         Component component_ = Component::ANY,
         bool exactly_match_ = false,
@@ -92,6 +93,7 @@ public:
         , columns(std::move(columns_))
         , require_handle(require_handle_)
         , buckets(buckets_)
+        , bucket_expr(bucket_expr_)
         , enforce_round_robin(enforce_round_robin_)
         , component(component_)
         , exactly_match(exactly_match_)
@@ -115,6 +117,13 @@ public:
     void setComponent(Component component_) { component = component_; }
     bool isExactlyMatch() const { return exactly_match; }
 
+    bool isPartitionHandle() const { return handle == Handle::BUCKET_TABLE || handle == Handle::FIXED_HASH; }
+
+    bool isExchangeSchema(bool support_bucket_shuffle) const;
+
+    String getHashFunc(String default_func) const;
+    Array getParams() const;
+
     bool isSatisfyWorker() const
     {
         return satisfy_worker;
@@ -137,8 +146,12 @@ public:
     bool operator==(const Partitioning & other) const
     {
         return preferred == other.preferred && handle == other.handle && columns == other.columns && require_handle == other.require_handle && buckets == other.buckets
-            && enforce_round_robin == other.enforce_round_robin;
+            && enforce_round_robin == other.enforce_round_robin && ASTEquality::compareTree(bucket_expr, other.bucket_expr);
     }
+
+    ASTPtr getBucketExpr() const { return bucket_expr; }
+    void setBucketExpr(const ASTPtr & bucket_expr_) { bucket_expr = bucket_expr_; }
+
     String toString() const;
 
     void toProto(Protos::Partitioning & proto) const;
@@ -149,6 +162,7 @@ private:
     Names columns;
     bool require_handle;
     UInt64 buckets;
+    ASTPtr bucket_expr;
     bool enforce_round_robin;
     Component component;
     bool exactly_match;

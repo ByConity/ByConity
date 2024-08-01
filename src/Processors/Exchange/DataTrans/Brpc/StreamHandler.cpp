@@ -109,7 +109,7 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
         {
             String exception_str = getCurrentExceptionMessage(true);
             auto current_status = receiver_ptr->finish(BroadcastStatusCode::RECV_TIMEOUT, exception_str);
-            if (current_status.is_modifer)
+            if (current_status.is_modified_by_operator)
                 LOG_ERROR(log, "on_received_messages:pushReceiveQueue exception happen-" + exception_str);
         }
         catch (...)
@@ -145,7 +145,7 @@ void StreamHandler::on_closed(brpc::StreamId stream_id)
         {
             LOG_DEBUG(log, "Close StreamId: {} , datakey: {} ", stream_id, receiver_ptr->getName());
             auto status = receiver_ptr->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Try close receiver grafully");
-            if (status.is_modifer && status.code == BroadcastStatusCode::ALL_SENDERS_DONE)
+            if (status.is_modified_by_operator && status.code == BroadcastStatusCode::ALL_SENDERS_DONE)
             {
                 LOG_DEBUG(log, "{} will close gracefully ", receiver_ptr->getName());
                 // Push an empty as finish to close receiver gracefully

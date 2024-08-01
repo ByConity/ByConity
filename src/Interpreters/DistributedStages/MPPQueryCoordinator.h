@@ -41,7 +41,7 @@ public:
     SummarizedQueryStatus waitUntilFinish(int error_code, const String & error_msg);
 
     //TODO: redefine RuntimeSegmentsStatus
-    void updateSegmentInstanceStatus(const RuntimeSegmentsStatus & status);
+    void updateSegmentInstanceStatus(const RuntimeSegmentStatus & status);
 
     /// normal progress received from sendProgress rpc
     void onProgress(UInt32 segment_id, UInt32 parallel_index, const Progress & progress_);

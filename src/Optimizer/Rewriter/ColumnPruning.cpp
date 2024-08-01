@@ -462,10 +462,19 @@ PlanNodePtr ColumnPruningVisitor::visitExpandNode(ExpandNode & node, ColumnPruni
     ColumnPruningContext child_column_pruning_context{.name_set = child_require};
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_column_pruning_context);
 
+    Assignments assignments;
+    for (const auto & assignment : step->getAssignments())
+        if (child_require.contains(assignment.first))
+            assignments.emplace_back(assignment.first, assignment.second);
+    NameToType name_to_type;
+    for (const auto & item : step->getNameToType())
+        if (child_require.contains(item.first))
+            name_to_type.emplace(item.first, item.second);
+
     auto expr_step = std::make_shared<ExpandStep>(
         child->getStep()->getOutputStream(),
-        step->getAssignments(),
-        step->getNameToType(),
+        assignments,
+        name_to_type,
         step->getGroupIdSymbol(),
         step->getGroupIdValue(),
         step->getGroupIdNonNullSymbol());
@@ -657,6 +666,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, C
         step->needOverflowRow(),
         step->shouldProduceResultsInOrderOfBucketNumber(),
         step->isNoShuffle(),
+        step->isStreamingForCache(),
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
         step->getHints());
@@ -1100,6 +1110,19 @@ PlanNodePtr ColumnPruningVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode & n
     return node.shared_from_this();
 }
 
+PlanNodePtr ColumnPruningVisitor::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, ColumnPruningContext &)
+{
+    NameSet require;
+    PlanNodePtr child = node.getChildren()[0];
+    for (const auto & item : child->getCurrentDataStream().header)
+        require.insert(item.name);
+
+    ColumnPruningContext column_pruning_context{.name_set = require};
+    PlanNodePtr new_child = VisitorUtil::accept(*child, *this, column_pruning_context);
+    node.replaceChildren({new_child});
+    return node.shared_from_this();
+}
+
 PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & node, ColumnPruningContext & column_pruning_context)
 {
     auto & step_ptr = node.getStep();
@@ -1129,7 +1152,6 @@ PlanNodePtr ColumnPruningVisitor::visitFillingNode(FillingNode & node, ColumnPru
     auto fill_step = std::make_shared<FillingStep>(child->getStep()->getOutputStream(), step->getSortDescription());
     return FillingNode::createPlanNode(context->nextNodeId(), std::move(fill_step), PlanNodes{child}, node.getStatistics());
 }
-
 
 PlanNodePtr ColumnPruningVisitor::visitTableWriteNode(TableWriteNode & node, ColumnPruningContext &)
 {
@@ -1271,6 +1293,19 @@ PlanNodePtr ColumnPruningVisitor::addProjection(PlanNodePtr node, NameSet & requ
     return node;
 }
 
+static std::vector<String> makeDistinct(const std::vector<String>& src) {  
+    std::unordered_set<String> tmp;  
+    std::vector<String> result;  
+  
+    for (const auto& str : src) {  
+        if (tmp.insert(str).second) {  
+            result.push_back(str);  
+        }  
+    }  
+  
+    return result;  
+}
+
 PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node)
 {
     auto * distinct_node = dynamic_cast<DistinctNode *>(node.get());
@@ -1314,8 +1349,12 @@ PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node)
             aggregate_desc.function = AggregateFunctionFactory::instance().get("any", {name_and_type.type}, parameters, properties);
             descriptions.emplace_back(aggregate_desc);
         }
+        // distinct keys
+        auto streams = node->getStep()->getOutputStream();
+        auto columns = makeDistinct(step.getColumns());
+
         auto group_agg_step = std::make_shared<AggregatingStep>(
-            node->getStep()->getOutputStream(), step.getColumns(), NameSet{}, descriptions, GroupingSetsParamsList{}, true);
+            streams, columns, NameSet{}, descriptions, GroupingSetsParamsList{}, true);
         auto group_agg_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(group_agg_step), node->getChildren());
         return group_agg_node;
     }

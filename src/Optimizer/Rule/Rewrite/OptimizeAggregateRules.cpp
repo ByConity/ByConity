@@ -29,13 +29,14 @@ bool OptimizeMemoryEfficientAggregation::isConvertibleToTwoLevel(const Aggregato
     }
 }
 
-PatternPtr OptimizeMemoryEfficientAggregation::getPattern() const
+ConstRefPatternPtr OptimizeMemoryEfficientAggregation::getPattern() const
 {
-    return Patterns::mergingAggregated()
+    static auto pattern = Patterns::mergingAggregated()
         .withSingle(Patterns::exchange().withSingle(Patterns::aggregating().matchingStep<AggregatingStep>([](const AggregatingStep & agg) {
             return agg.isPartial() && !agg.shouldProduceResultsInOrderOfBucketNumber() && isConvertibleToTwoLevel(agg.getParams());
         })))
         .result();
+    return pattern;
 }
 
 TransformResult OptimizeMemoryEfficientAggregation::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)

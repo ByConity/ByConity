@@ -105,7 +105,6 @@ namespace ErrorCodes
     extern const int SUPPORT_IS_DISABLED;
     extern const int UNKNOWN_PROTOCOL;
     extern const int QUERY_WAS_CANCELLED;
-    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int TIMEOUT_EXCEEDED;
 }
 

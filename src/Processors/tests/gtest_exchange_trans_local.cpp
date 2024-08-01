@@ -98,7 +98,7 @@ TEST(ExchangeLocalBroadcast, SendTimeoutTest)
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
     BroadcastStatus timeout_status = local_sender->send(chunk.clone());
     ASSERT_TRUE(timeout_status.code == BroadcastStatusCode::SEND_TIMEOUT);
-    ASSERT_TRUE(timeout_status.is_modifer == true);
+    ASSERT_TRUE(timeout_status.is_modified_by_operator == true);
 }
 
 TEST(ExchangeLocalBroadcast, AllSendDoneTest)
@@ -131,7 +131,7 @@ TEST(ExchangeLocalBroadcast, AllSendDoneTest)
 
     BroadcastStatus & final_status = std::get<BroadcastStatus>(res);
     ASSERT_TRUE(final_status.code == BroadcastStatusCode::ALL_SENDERS_DONE);
-    ASSERT_TRUE(final_status.is_modifer == false);
+    ASSERT_TRUE(final_status.is_modified_by_operator == false);
 }
 
 }

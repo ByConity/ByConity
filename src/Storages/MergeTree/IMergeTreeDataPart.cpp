@@ -804,6 +804,64 @@ IMergeTreeDataPartPtr IMergeTreeDataPart::getMvccDataPart(const String & file_na
     }
 }
 
+void IMergeTreeDataPart::restoreMvccColumns()
+{
+    if (prev_part == nullptr)
+        return;
+    
+    IMergeTreeDataPart * mutable_prev_part = const_cast<IMergeTreeDataPart *>(prev_part.get());
+    mutable_prev_part->restoreMvccColumns();
+
+    NamesAndTypesListPtr prev_part_columns = prev_part->getColumnsPtr();
+    NamesAndTypesList current_columns = getNamesAndTypes();
+    ChecksumsPtr checksums = getChecksums();
+    auto mrk_extension = index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(getType()) : getNonAdaptiveMrkExtension();
+
+    for (const auto & column: *prev_part_columns)
+    {
+        if (current_columns.contains(column.name))
+            continue;
+        
+        /// Files will be removed from checksums if column is dropped.
+        bool all_files_deleted = true;
+        auto check_file_deleted = [&](const String & file_name)
+        {
+            if (checksums->has(file_name))
+                all_files_deleted = false;
+        };
+
+        ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path)
+        {
+            /// Nested columns use shared offset substream, these offset substreams will be droped only after all nested subcolumns droped.
+            if (!ISerialization::isSharedOffsetSubstream(column.getNameInStorage(), substream_path))
+            {
+                const String & stream_name = ISerialization::getFileNameForStream(column, substream_path);
+                check_file_deleted(stream_name + DATA_FILE_EXTENSION);
+            }
+        };
+
+        if (column.type->isByteMap())
+        {
+            auto [curr, end] = getMapColumnRangeFromOrderedFiles(column.name, checksums->files);
+
+            /// If no map keys exists in current part (chain), we will remove it from part columns, since we can't know whether
+            /// it is droped. But anyway, we will always get empty result when reading it.
+            for (; curr != end; curr++)
+                check_file_deleted(curr->first);
+        }
+        else
+        {
+            auto serialization = getSerializationForColumn(column);
+            serialization->enumerateStreams(callback);
+        }
+
+        if (!all_files_deleted)
+            current_columns.push_back(column);
+    }
+
+    setColumns(current_columns);
+}
+
 void IMergeTreeDataPart::addProjectionPart(const String & projection_name, const std::shared_ptr<IMergeTreeDataPart> & projection_part)
 {
     projection_parts.emplace(projection_name, projection_part);
@@ -1592,7 +1650,6 @@ void IMergeTreeDataPart::removeImpl(bool keep_shared_data) const
     }
 }
 
-
 void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_shared_data) const
 {
     auto checksums = getChecksums();
@@ -1656,9 +1713,9 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
             LOG_ERROR(storage.log, "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}", fullPath(disk, to), getCurrentExceptionMessage(false));
 
             disk->removeSharedRecursive(to + "/", keep_shared_data);
-         }
-     }
- }
+        }
+    }
+}
 
 String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix, bool is_detach) const
 {
@@ -2012,8 +2069,7 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
     {
         if (name_type.type->isByteMap())
         {
-            /// need escape map column name first to match filenames in checksums
-            auto [curr, end] = getMapColumnRangeFromOrderedFiles(escapeForFileName(name_type.name), files);
+            auto [curr, end] = getMapColumnRangeFromOrderedFiles(name_type.name, files);
             for (; curr != end; ++curr)
             {
                 auto & filename = curr->first;

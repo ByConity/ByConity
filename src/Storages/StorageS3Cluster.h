@@ -37,27 +37,27 @@ public:
 
 protected:
     StorageS3Cluster(
-        const String & filename_,
-        const String & access_key_id_,
-        const String & secret_access_key_,
+        const String & cluster_name_,
+        const StorageS3::Configuration & configuration_,
         const StorageID & table_id_,
-        String cluster_name_,
-        const String & format_name_,
-        UInt64 max_connections_,
         const ColumnsDescription & columns_,
         const ConstraintsDescription & constraints_,
-        ContextPtr context_,
-        const String & compression_method_);
+        ContextPtr context_);
+    
+    void updateConfigurationIfChanged(ContextPtr local_context);
 
 private:
+
+    // void addColumnsStructureToQuery(ASTPtr & query, const String & structure, const ContextPtr & context) override;
+
+    String cluster_name;
+    StorageS3::Configuration s3_configuration;
+
     /// Connections from initiator to other nodes
     std::vector<std::shared_ptr<Connection>> connections;
-    StorageS3::ClientAuthentication client_auth;
 
-    String filename;
-    String cluster_name;
-    String format_name;
-    String compression_method;
+    NamesAndTypesList virtual_columns;
+    Block virtual_block;
 };
 
 

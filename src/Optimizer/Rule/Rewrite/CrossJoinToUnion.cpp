@@ -22,9 +22,10 @@
 namespace DB
 {
 
-PatternPtr CrossJoinToUnion::getPattern() const
+ConstRefPatternPtr CrossJoinToUnion::getPattern() const
 {
-    return Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) { return s.isCrossJoin() && matchPattern(s); }).result();
+    static auto pattern = Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) { return s.isCrossJoin() && matchPattern(s); }).result();
+    return pattern;
 }
 
 TransformResult CrossJoinToUnion::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

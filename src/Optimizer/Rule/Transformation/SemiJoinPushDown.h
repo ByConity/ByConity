@@ -22,7 +22,7 @@ public:
     RuleType getType() const override { return RuleType::SEMI_JOIN_PUSH_DOWN; }
     String getName() const override { return "SEMI_JOIN_PUSH_DOWN"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_semi_join_push_down; }
-PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -59,7 +59,7 @@ public:
     {
         return context->getSettingsRef().enable_semi_join_push_down;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -96,7 +96,7 @@ public:
     {
         return context->getSettingsRef().enable_semi_join_push_down;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

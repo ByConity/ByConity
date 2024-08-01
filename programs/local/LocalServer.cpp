@@ -36,6 +36,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
+#include <Storages/System/attachMySQLTables.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/loadMetadata.h>
@@ -341,6 +342,8 @@ try
         attachSystemTablesLocal(*createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::SYSTEM_DATABASE));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL_UPPERCASE));
         loadMetadata(global_context);
         DatabaseCatalog::instance().loadDatabases();
         LOG_DEBUG(log, "Loaded metadata.");
@@ -350,6 +353,8 @@ try
         attachSystemTablesLocal(*createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::SYSTEM_DATABASE));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL_UPPERCASE));
     }
 
     processQueries();

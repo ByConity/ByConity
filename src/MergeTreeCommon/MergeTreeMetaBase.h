@@ -415,7 +415,7 @@ public:
     /// Overridden in StorageReplicatedMergeTree
     virtual bool unlockSharedData(const IMergeTreeDataPart &) const { return true; }
 
-    bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
+    bool isBucketTable() const override { return getInMemoryMetadataPtr()->isClusterByKeyDefined(); }
     TableDefinitionHash getTableHashForClusterBy() const override; // to compare table engines efficiently
     bool isTableClustered(ContextPtr context_) const override;
 
@@ -436,8 +436,9 @@ public:
     virtual bool supportsOptimizer() const override { return true; }
 
     bool commitTxnFromWorkerSide(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const;
+    virtual bool supportIntermedicateResultCache() const override { return true; }
 
-     ColumnSize calculateMapColumnSizesImpl(const String & map_implicit_column_name) const;
+    ColumnSize calculateMapColumnSizesImpl(const String & map_implicit_column_name) const;
 
     void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
 

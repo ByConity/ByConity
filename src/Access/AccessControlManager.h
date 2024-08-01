@@ -128,6 +128,9 @@ public:
     void setSelectFromInformationSchemaRequiresGrant(bool enable) { select_from_information_schema_requires_grant = enable; }
     bool doesSelectFromInformationSchemaRequireGrant() const { return select_from_information_schema_requires_grant; }
 
+    void setSelectFromMySQLRequiresGrant(bool enable) { select_from_mysql_requires_grant = enable; }
+    bool doesSelectFromMySQLRequireGrant() const { return select_from_mysql_requires_grant; }
+
     std::shared_ptr<const ContextAccess> getContextAccess(
         const UUID & user_id,
         const std::vector<UUID> & current_roles,
@@ -185,6 +188,7 @@ private:
 
     std::atomic_bool select_from_system_db_requires_grant = false;
     std::atomic_bool select_from_information_schema_requires_grant = false;
+    std::atomic_bool select_from_mysql_requires_grant = false;
 };
 
 }

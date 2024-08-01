@@ -774,7 +774,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoin(
         }
     }
 
-    if (context->getSettings().any_join_distinct_right_table_keys)
+    if (context->getSettingsRef().any_join_distinct_right_table_keys)
     {
         if (table_join.strictness == ASTTableJoin::Strictness::Any && table_join.kind == ASTTableJoin::Kind::Inner)
         {

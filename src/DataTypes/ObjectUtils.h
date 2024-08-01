@@ -57,9 +57,6 @@ DataTypePtr createConcreteEmptyDynamicColumn(const DataTypePtr & type_in_storage
 /// according to @object_columns and adds all tuple's subcolumns if needed.
 void extendObjectColumns(NamesAndTypesList & columns_list, const ColumnsDescription & object_columns, bool with_subcolumns);
 
-/// Checks whether @columns contain any column with dynamic subcolumns.
-bool hasDynamicSubcolumns(const ColumnsDescription & columns);
-
 /// Updates types of objects in @object_columns inplace
 /// according to types in new_columns.
 void updateObjectColumns(

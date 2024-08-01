@@ -443,8 +443,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         /// set client_info.
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
-        auto timeout = std::chrono::seconds(request->timeout());
-        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false);
+        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), request->timeout(), false);
         auto & query_context = session->context;
         // session->context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
 
@@ -495,7 +494,7 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
             request->txn_id());
 
         MergeTreeMutableDataPartsVector data_parts;
-        if (cloud_merge_tree.getInMemoryMetadata().hasUniqueKey())
+        if (cloud_merge_tree.getInMemoryMetadataPtr()->hasUniqueKey())
             data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
                 cloud_merge_tree, request->parts(), request->bitmaps());
         else
@@ -726,8 +725,7 @@ void CnchWorkerServiceImpl::sendResources(
         Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
-        auto timeout = std::chrono::seconds(request->timeout());
-        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false);
+        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), request->timeout(), false);
         auto query_context = session->context;
         query_context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
         auto worker_resource = query_context->getCnchWorkerResource();
@@ -775,7 +773,7 @@ void CnchWorkerServiceImpl::sendResources(
                 else if (!data.server_parts().empty())
                 {
                     MergeTreeMutableDataPartsVector server_parts;
-                    if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
+                    if (cloud_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
                         server_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
                             *cloud_merge_tree, data.server_parts(), data.server_part_bitmaps());
                     else
@@ -805,7 +803,7 @@ void CnchWorkerServiceImpl::sendResources(
                 if (!data.virtual_parts().empty())
                 {
                     MergeTreeMutableDataPartsVector virtual_parts;
-                    if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
+                    if (cloud_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
                         virtual_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
                             *cloud_merge_tree, data.virtual_parts(), data.virtual_part_bitmaps());
                     else
@@ -965,29 +963,28 @@ void CnchWorkerServiceImpl::createDedupWorker(
         rpc_context->setSessionContext(rpc_context);
         rpc_context->setCurrentQueryId(toString(UUIDHelpers::generateV4()));
 
-        ThreadFromGlobalPool([log = this->log, storage_id, query, host_ports = std::move(host_ports), deduper_index, context = std::move(rpc_context)] {
-            try
-            {
-                // CurrentThread::attachQueryContext(*context);
-                context->setSetting("default_database_engine", String("Memory"));
-                executeQuery(query, context, true);
-                LOG_INFO(log, "Created local table {}", storage_id.getFullTableName());
+        /// XXX: We modify asynchronous creation to synchronous one because possible assignHighPriorityDedupPartition/assignRepairGran rpc relies on it
+        try
+        {
+            // CurrentThread::attachQueryContext(*context);
+            rpc_context->setSetting("default_database_engine", String("Memory"));
+            executeQuery(query, rpc_context, true);
+            LOG_INFO(log, "Created local table {}", storage_id.getFullTableName());
 
-                auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-                auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
-                if (!cloud_table)
-                    throw Exception(
-                        "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+            auto storage = DatabaseCatalog::instance().getTable(storage_id, rpc_context);
+            auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+            if (!cloud_table)
+                throw Exception(
+                    "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
 
-                auto * deduper = cloud_table->getDedupWorker();
-                deduper->setServerIndexAndHostPorts(deduper_index, host_ports);
-                LOG_DEBUG(log, "Success to create deduper table: {}", storage->getStorageID().getNameForLogs());
-            }
-            catch (...)
-            {
-                tryLogCurrentException(__PRETTY_FUNCTION__);
-            }
-        }).detach();
+            auto * deduper = cloud_table->getDedupWorker();
+            deduper->setServerIndexAndHostPorts(deduper_index, host_ports);
+            LOG_DEBUG(log, "Success to create deduper table: {}", storage->getStorageID().getNameForLogs());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
     })
 }
 
@@ -1010,6 +1007,25 @@ void CnchWorkerServiceImpl::assignHighPriorityDedupPartition(
         for (const auto & entry : request->partition_id())
             high_priority_dedup_partition.emplace(entry);
         deduper->assignHighPriorityDedupPartition(high_priority_dedup_partition);
+    })
+}
+
+void CnchWorkerServiceImpl::assignRepairGran(
+    [[maybe_unused]] google::protobuf::RpcController * ,
+    [[maybe_unused]] const Protos::AssignRepairGranReq * request,
+    [[maybe_unused]] Protos::AssignRepairGranResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
+{
+    SUBMIT_THREADPOOL({
+        auto storage_id = RPCHelpers::createStorageID(request->table());
+        auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
+
+        auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+        if (!cloud_table)
+            throw Exception("convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+
+        auto * deduper = cloud_table->getDedupWorker();
+        deduper->assignRepairGran(request->partition_id(), request->bucket_number(), request->max_event_time());
     })
 }
 

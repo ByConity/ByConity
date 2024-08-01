@@ -97,6 +97,7 @@ public:
     std::vector<std::pair<String, UInt64>> getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format = true);
 
     virtual void serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files);
+    bool supportIntermedicateResultCache() const override { return true; }
 
 protected:
     void collectResource(ContextPtr local_context, PrepareContextResult & result);

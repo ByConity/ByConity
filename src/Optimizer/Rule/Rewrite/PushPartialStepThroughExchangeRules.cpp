@@ -59,9 +59,10 @@ static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step
     return {false, true};
 }
 
-PatternPtr PushPartialAggThroughExchange::getPattern() const
+ConstRefPatternPtr PushPartialAggThroughExchange::getPattern() const
 {
-    return Patterns::aggregating().withSingle(Patterns::exchange()).result();
+    static auto pattern = Patterns::aggregating().withSingle(Patterns::exchange()).result();
+    return pattern;
 }
 
 TransformResult split(const PlanNodePtr & node, RuleContext & context)
@@ -79,6 +80,7 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
         step->needOverflowRow(),
         false,
         step->isNoShuffle(),
+        step->isStreamingForCache(),
         step->getHints());
 
     auto partial_agg_node
@@ -234,11 +236,12 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         return pushPartial(node, context);
 }
 
-PatternPtr PushPartialAggThroughUnion::getPattern() const
+ConstRefPatternPtr PushPartialAggThroughUnion::getPattern() const
 {
-    return Patterns::aggregating()
+    static auto pattern = Patterns::aggregating()
         .matchingStep<AggregatingStep>([](const AggregatingStep & step) { return step.isPartial(); })
         .withSingle(Patterns::unionn()).result();
+    return pattern;
 }
 
 TransformResult PushPartialAggThroughUnion::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -290,10 +293,11 @@ TransformResult PushPartialAggThroughUnion::transformImpl(PlanNodePtr node, cons
         partials);
 }
 
-PatternPtr PushPartialSortingThroughExchange::getPattern() const
+ConstRefPatternPtr PushPartialSortingThroughExchange::getPattern() const
 {
-    return Patterns::sorting().withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
+    static auto pattern = Patterns::sorting().withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
         [](const ExchangeStep & step) { return step.getExchangeMode() == ExchangeMode::GATHER; })).result();
+    return pattern;
 }
 
 TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -349,10 +353,11 @@ static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
     return !limit.hasPreparedParam() && range.upperBound > limit.getLimitValue() + limit.getOffsetValue();
 }
 
-PatternPtr PushPartialLimitThroughExchange::getPattern() const
+ConstRefPatternPtr PushPartialLimitThroughExchange::getPattern() const
 {
-    return Patterns::limit().withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
+    static auto pattern = Patterns::limit().withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
         [](const ExchangeStep & step) { return step.getExchangeMode() == ExchangeMode::GATHER; })).result();
+    return pattern;
 }
 
 TransformResult PushPartialLimitThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -394,11 +399,12 @@ TransformResult PushPartialLimitThroughExchange::transformImpl(PlanNodePtr node,
     return node;
 }
 
-PatternPtr PushPartialDistinctThroughExchange::getPattern() const
+ConstRefPatternPtr PushPartialDistinctThroughExchange::getPattern() const
 {
-    return Patterns::distinct()
+    static auto pattern = Patterns::distinct()
         .matchingStep<DistinctStep>([](const DistinctStep & step) { return !step.preDistinct(); })
         .withSingle(Patterns::exchange()).result();
+    return pattern;
 }
 
 TransformResult PushPartialDistinctThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

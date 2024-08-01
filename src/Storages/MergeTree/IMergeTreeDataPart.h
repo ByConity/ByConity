@@ -437,6 +437,9 @@ public:
 
     IMergeTreeDataPartPtr getMvccDataPart(const String & file_name) const;
 
+    /// Restore MVCC columns from prev parts. All undeleted columns in prev part chain will be added to columns_ptr.
+    void restoreMvccColumns();
+
     // collect all the visible projection parts' and corresponding checksums from the historical parts into the current visible part (head part)
     // this function must be called when finishing the loading parts
     void gatherProjections();
@@ -621,6 +624,14 @@ public:
     {
         DeleteBitmapReadLock rlock(delete_bitmap_mutex);
         return std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end());
+    }
+
+    UInt64 getDeleteBitmapVersion() const
+    {
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
+        if (delete_bitmap_metas.empty())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap meta is empty for part {}", name);
+        return delete_bitmap_metas.front()->commit_time();
     }
 
     /// Return null if the part doesn't have delete bitmap.

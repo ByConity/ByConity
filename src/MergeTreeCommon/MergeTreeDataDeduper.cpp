@@ -153,7 +153,11 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
                 current_log.event_msg = "Dedup task " + dedup_task->getDedupLevelInfo() + " found duplication";
                 current_log.event_info = "Duplicate key: " + UniqueTable::formatUniqueKey(keys->CurrentKey(), data.getInMemoryMetadataPtr()) +
                     ", part names: [" + parts[potential_duplicate_part_index]->get_name() + ", " + parts[duplicate_part_index]->get_name() + "]";
-                current_log.dedup_task_info = dedup_task->getDedupLevelInfo();
+                TaskInfo log_entry_task_info;
+                log_entry_task_info.task_type = TaskInfo::DEDUP_TASK;
+                log_entry_task_info.dedup_gran.partition_id = dedup_task->partition_id.empty() ? ALL_DEDUP_GRAN_PARTITION_ID : dedup_task->partition_id;
+                log_entry_task_info.dedup_gran.bucket_number = dedup_task->bucket_valid ? dedup_task->bucket_number : -1;
+                current_log.task_info = std::move(log_entry_task_info);
                 unique_table_log->add(current_log);
             }
         }
@@ -302,12 +306,20 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         for (size_t i = 0; i < bitmaps.size(); ++i)
         {
             DeleteBitmapPtr bitmap = bitmaps[i];
-            /// always dump base bitmap for new parts
-            if (!bitmap && i >= visible_parts.size())
-                bitmap = std::make_shared<Roaring>();
+            ImmutableDeleteBitmapPtr base_bitmap;
+            if (i < visible_parts.size())
+                base_bitmap = visible_parts[i]->getDeleteBitmap();
+            else
+                base_bitmap = new_parts[i - visible_parts.size()]->getDeleteBitmap(/*allow_null*/ true);
 
+            /// Make sure part has delete bitmap
             if (!bitmap)
-                continue;
+            {
+                if (base_bitmap)
+                    continue;
+                else
+                    bitmap = std::make_shared<Roaring>();
+            }
 
             if (i < visible_parts.size())
             {
@@ -315,13 +327,13 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                     log,
                     "Preparing bitmap for visible part: {}, base bitmap cardinality: {}, delta bitmap cardinality: {}, txn_id: {}",
                     visible_parts[i]->name,
-                    visible_parts[i]->getDeleteBitmap()->cardinality(),
+                    base_bitmap->cardinality(),
                     bitmap->cardinality(),
                     txn_id.toUInt64());
                 size_t bitmap_meta_depth = visible_parts[i]->getDeleteBitmapMetaDepth();
                 res.emplace_back(LocalDeleteBitmap::createBaseOrDelta(
                     visible_parts[i]->info,
-                    visible_parts[i]->getDeleteBitmap(),
+                    base_bitmap,
                     bitmap,
                     txn_id.toUInt64(),
                     bitmap_meta_depth >= max_delete_bitmap_meta_depth,
@@ -329,7 +341,6 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
             }
             else /// new part
             {
-                auto base_bitmap = new_parts[i - visible_parts.size()]->getDeleteBitmap(/*allow_null*/ true);
                 LOG_DEBUG(
                     log,
                     "Preparing bitmap for new part: {}, base bitmap cardinality: {}, delta bitmap cardinality: {}, txn_id: {}",
@@ -339,14 +350,31 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                     txn_id.toUInt64());
                 if (base_bitmap)
                 {
-                    size_t bitmap_meta_depth = new_parts[i - visible_parts.size()]->getDeleteBitmapMetaDepth();
-                    res.push_back(LocalDeleteBitmap::createBaseOrDelta(
-                        new_parts[i - visible_parts.size()]->info,
-                        base_bitmap,
-                        bitmap,
-                        txn_id.toUInt64(),
-                        bitmap_meta_depth >= max_delete_bitmap_meta_depth,
-                        new_parts[i - visible_parts.size()]->bucket_number));
+                    UInt64 bitmap_version = new_parts[i - visible_parts.size()]->getDeleteBitmapVersion();
+                    if (bitmap_version == txn_id.toUInt64())
+                    {
+                        LOG_TRACE(
+                            log,
+                            "Part {} already have delete bitmap meta in txn_id {} due to delete flag, here must generate a delta bitmap",
+                            new_parts[i - visible_parts.size()]->name,
+                            txn_id);
+                        res.push_back(LocalDeleteBitmap::createDelta(
+                            new_parts[i - visible_parts.size()]->info,
+                            bitmap,
+                            txn_id.toUInt64(),
+                            new_parts[i - visible_parts.size()]->bucket_number));
+                    }
+                    else
+                    {
+                        size_t bitmap_meta_depth = new_parts[i - visible_parts.size()]->getDeleteBitmapMetaDepth();
+                        res.push_back(LocalDeleteBitmap::createBaseOrDelta(
+                            new_parts[i - visible_parts.size()]->info,
+                            base_bitmap,
+                            bitmap,
+                            txn_id.toUInt64(),
+                            bitmap_meta_depth >= max_delete_bitmap_meta_depth,
+                            new_parts[i - visible_parts.size()]->bucket_number));
+                    }
                 }
                 else
                     res.push_back(LocalDeleteBitmap::createBase(

@@ -240,4 +240,8 @@ IMPLEMENT_SETTING_ENUM(RefreshViewTaskType, ErrorCodes::BAD_ARGUMENTS,
      {"PARTITION_BASED_REFRESH", RefreshViewTaskType::PARTITION_BASED_REFRESH},
      {"FULL_REFRESH", RefreshViewTaskType::FULL_REFRESH}})
 
+IMPLEMENT_SETTING_ENUM(SchemaInferenceMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"default", SchemaInferenceMode::DEFAULT},
+     {"union", SchemaInferenceMode::UNION}})
+
 } // namespace DB

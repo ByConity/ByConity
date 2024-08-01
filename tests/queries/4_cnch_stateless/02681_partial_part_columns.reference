@@ -1,0 +1,26 @@
+Case1: Modify unexists columns
+1	VisiblePart
+0	InvisiblePart
+0	InvisiblePart
+0	2025-04-01	\N
+Case2: Attach partial part with modified columns
+1	VisiblePart
+0	InvisiblePart
+0	Tombstone
+0	DroppedPart
+0	DroppedPart
+1	2025-04-01
+Case3: Attach partial part with re-added columns, including normal columns, map, empty map
+1	VisiblePart
+0	InvisiblePart
+0	Tombstone
+0	DroppedPart
+0	DroppedPart
+2	\N	1970-01-01	[]	{}
+Case4: Attach partial part with re-added nested columns
+1	VisiblePart
+0	InvisiblePart
+0	Tombstone
+0	DroppedPart
+0	DroppedPart
+0	[1,2,3]	1	[NULL,NULL,NULL]

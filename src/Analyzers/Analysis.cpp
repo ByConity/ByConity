@@ -121,7 +121,7 @@ ExpressionTypes Analysis::getExpressionTypes()
 {
     ExpressionTypes expression_types;
     for(auto & it : expression_column_with_types)
-        expression_types[it.first] = expression_column_with_types[it.first].type;
+        expression_types[it.first] = it.second.type;
     return expression_types;
 }
 

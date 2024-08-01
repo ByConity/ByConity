@@ -1969,10 +1969,10 @@ void makeAggDescriptionsMinMaxCountCount2(
 }
 
 
-PatternPtr UnnestingWithWindow::getPattern() const
+ConstRefPatternPtr UnnestingWithWindow::getPattern() const
 {
     static NameSet agg_white_list{"count", "sum", "avg", "min", "max"};
-    return Patterns::filter()
+    static auto pattern = Patterns::filter()
         .with(Patterns::apply()
                   .matchingStep<ApplyStep>([](const ApplyStep & s) {
                       return s.getSubqueryType() == ApplyStep::SubqueryType::SCALAR && !s.getCorrelation().empty();
@@ -1981,6 +1981,7 @@ PatternPtr UnnestingWithWindow::getPattern() const
                       return agg.getAggregates().size() == 1 && agg_white_list.count(agg.getAggregates()[0].function->getName());
                   })))
         .result();
+    return pattern;
 }
 
 PlanNodes collectPlanNodes(PlanNodePtr node)
@@ -2357,10 +2358,10 @@ TransformResult UnnestingWithWindow::transformImpl(PlanNodePtr filter_node, cons
 }
 
 
-PatternPtr UnnestingWithProjectionWindow::getPattern() const
+ConstRefPatternPtr UnnestingWithProjectionWindow::getPattern() const
 {
     static NameSet agg_white_list{"count", "sum", "avg", "min", "max"};
-    return Patterns::filter()
+    static auto pattern = Patterns::filter()
         .with(Patterns::apply()
                   .matchingStep<ApplyStep>([](const ApplyStep & s) {
                       return s.getSubqueryType() == ApplyStep::SubqueryType::SCALAR && !s.getCorrelation().empty();
@@ -2371,15 +2372,17 @@ PatternPtr UnnestingWithProjectionWindow::getPattern() const
                           return agg.getAggregates().size() == 1 && agg_white_list.count(agg.getAggregates()[0].function->getName());
                       }))))
         .result();
+    return pattern;
 }
 
-PatternPtr ExistsToSemiJoin::getPattern() const
+ConstRefPatternPtr ExistsToSemiJoin::getPattern() const
 {
-    return Patterns::apply()
+    static auto pattern = Patterns::apply()
         .matchingStep<ApplyStep>([](const ApplyStep & s) {
             return s.supportSemiAnti() && s.getSubqueryType() == ApplyStep::SubqueryType::EXISTS && !s.getCorrelation().empty();
         })
         .result();
+    return pattern;
 }
 
 TransformResult ExistsToSemiJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -2503,13 +2506,14 @@ TransformResult ExistsToSemiJoin::transformImpl(PlanNodePtr node, const Captures
 }
 
 
-PatternPtr InToSemiJoin::getPattern() const
+ConstRefPatternPtr InToSemiJoin::getPattern() const
 {
-    return Patterns::apply()
+     static auto pattern = Patterns::apply()
         .matchingStep<ApplyStep>([](const ApplyStep & s) {
             return s.supportSemiAnti() && s.getSubqueryType() == ApplyStep::SubqueryType::IN && s.getCorrelation().empty();
         })
         .result();
+    return pattern;
 }
 
 TransformResult InToSemiJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

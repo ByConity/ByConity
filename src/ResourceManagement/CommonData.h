@@ -93,11 +93,11 @@ struct VirtualWarehouseSettings
     size_t max_queued_queries{0};
     size_t max_queued_waiting_ms{5000};
     VWScheduleAlgo vw_schedule_algo{VWScheduleAlgo::Random};
-    
+
     /// resource coordinator (auto-sharing & auto-scaling) ///
     size_t max_auto_borrow_links{0};
     size_t max_auto_lend_links{0};
-    
+
     // vw is allowed to create a new shared wg link to other wg(in other vw) if metric > threshold
     size_t cpu_busy_threshold{100};
     size_t mem_busy_threshold{100};
@@ -286,14 +286,9 @@ struct WorkerNodeResourceData
     inline String toDebugString() const
     {
         std::stringstream ss;
-        ss << "{ vw:" << vw_name
-        << ", worker_group:" << worker_group_id
-        << ", id:" << id
-        << ", cpu_usage:" << cpu_usage
-        << ", memory_usage:" << memory_usage
-        << ", memory_available:" << formatReadableSizeWithDecimalSuffix(memory_available)
-        << ", query_num:" << query_num
-        << " }";
+        ss << "{ vw:" << vw_name << ", worker_group:" << worker_group_id << ", id:" << id << ", register_time: " << register_time
+           << ", cpu_usage:" << cpu_usage << ", memory_usage:" << memory_usage
+           << ", memory_available:" << formatReadableSizeWithDecimalSuffix(memory_available) << ", query_num:" << query_num << " }";
         return ss.str();
     }
 };

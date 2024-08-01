@@ -116,7 +116,7 @@ class CnchServerResource
 {
 public:
     explicit CnchServerResource(TxnTimestamp curr_txn_id)
-        : txn_id(curr_txn_id), log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
+        : txn_id(curr_txn_id), log(&Poco::Logger::get("ServerResource"))
     {
     }
 

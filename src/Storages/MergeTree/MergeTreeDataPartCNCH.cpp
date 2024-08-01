@@ -20,6 +20,7 @@
 #include <Common/Priority.h>
 #include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/RowExistsColumnInfo.h>
+#include <Common/escapeForFileName.h>
 #include <Core/Settings.h>
 #include <Core/SettingsEnums.h>
 #include <DataTypes/DataTypeMap.h>
@@ -41,6 +42,8 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
+#include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
+
 
 namespace ProfileEvents
 {
@@ -1062,10 +1065,10 @@ void MergeTreeDataPartCNCH::calculateEachColumnSizes(
 
 #ifndef NDEBUG
         /// Most trivial types
-        if (rows_count != 0 && column.type->isValueRepresentedByNumber() && !column.type->haveSubtypes())
+        if (rows_count != 0 && size.data_uncompressed != 0 && column.type->isValueRepresentedByNumber() && !column.type->haveSubtypes())
         {
             size_t rows_in_column = size.data_uncompressed / column.type->getSizeOfValueInMemory();
-            /// rows_in_column = 0 may indicate that the part don't contains the column 
+            /// rows_in_column = 0 may indicate that the part don't contains the column
             /// (like running mutation task involved new columns on old parts).
             if (rows_in_column != 0 && rows_in_column != rows_count)
             {

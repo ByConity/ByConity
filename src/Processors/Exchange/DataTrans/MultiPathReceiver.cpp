@@ -72,7 +72,7 @@ MultiPathReceiver::~MultiPathReceiver()
     try
     {
         auto status = finish(BroadcastStatusCode::RECV_UNKNOWN_ERROR, "MultiPathReceiver destroyed");
-        if (status.is_modifer && status.code > 0 && status.code != BroadcastStatusCode::RECV_CANCELLED)
+        if (status.is_modified_by_operator && status.code > 0 && status.code != BroadcastStatusCode::RECV_CANCELLED)
         {
             LOG_ERROR(logger, "MultiPathReceiver unexpected error, status.code {} status.message {}", status.code, status.message);
         }
@@ -341,7 +341,7 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
         for (auto & receiver : sub_receivers)
         {
             auto res = receiver->finish(status_code, message);
-            if (res.is_modifer)
+            if (res.is_modified_by_operator)
                 is_modifer = true;
             else if (static_cast<int>(old_status.code) < static_cast<int>(res.code))
             {
@@ -371,7 +371,7 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
         {
             auto res = *new_status_ptr;
             receiver_metrics.finish_code.store(new_status_ptr->code, std::memory_order_relaxed);
-            res.is_modifer = true;
+            res.is_modified_by_operator = true;
             if (old_status.code > 0)
             {
                 String err_status_summary;

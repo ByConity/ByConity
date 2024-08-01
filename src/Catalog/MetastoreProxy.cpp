@@ -2301,7 +2301,7 @@ void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const 
     }
 }
 
-void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindingItemPtr& data)
+void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindingItemPtr & data)
 {
     BatchCommitRequest batch_write;
 
@@ -2311,7 +2311,8 @@ void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindin
     sql_binding.set_pattern(data->pattern);
     sql_binding.set_serialized_ast(data->serialized_ast);
     sql_binding.set_timestamp(data->timestamp);
-    batch_write.AddPut(SinglePutRequest(SQLBindingKey(name_space, UUIDHelpers::UUIDToString(data->uuid), data->is_regular_expression), sql_binding.SerializeAsString()));
+    sql_binding.set_tenant_id(data->tenant_id);
+    batch_write.AddPut(SinglePutRequest(SQLBindingKey(name_space, UUIDHelpers::UUIDToString(data->uuid), data->tenant_id, data->is_regular_expression), sql_binding.SerializeAsString()));
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -2325,7 +2326,7 @@ SQLBindings MetastoreProxy::getSQLBindings(const String & name_space)
     {
         Protos::SQLBinding sql_binding;
         sql_binding.ParseFromString(it->value());
-        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp(), sql_binding.tenant_id());
         res.emplace_back(binding);
     }
 
@@ -2341,17 +2342,17 @@ SQLBindings MetastoreProxy::getReSQLBindings(const String & name_space, const bo
     {
         Protos::SQLBinding sql_binding;
         sql_binding.ParseFromString(it->value());
-        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp(), sql_binding.tenant_id());
         res.emplace_back(binding);
     }
 
     return res;
 }
 
-SQLBindingItemPtr MetastoreProxy::getSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression)
+SQLBindingItemPtr MetastoreProxy::getSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression)
 {
     String value;
-    auto binding_key = SQLBindingKey(name_space, uuid, is_re_expression);
+    auto binding_key = SQLBindingKey(name_space, uuid, tenant_id, is_re_expression);
     metastore_ptr->get(binding_key, value);
 
     if (value.empty())
@@ -2359,14 +2360,14 @@ SQLBindingItemPtr MetastoreProxy::getSQLBinding(const String & name_space, const
 
     Protos::SQLBinding sql_binding;
     sql_binding.ParseFromString(value);
-    SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+    SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp(), sql_binding.tenant_id());
     return binding;
 }
 
-void MetastoreProxy::removeSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression)
+void MetastoreProxy::removeSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression)
 {
     BatchCommitRequest batch_write;
-    batch_write.AddDelete(SQLBindingKey(name_space, uuid, is_re_expression));
+    batch_write.AddDelete(SQLBindingKey(name_space, uuid, tenant_id, is_re_expression));
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }

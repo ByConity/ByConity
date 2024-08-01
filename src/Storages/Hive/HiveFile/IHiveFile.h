@@ -55,6 +55,9 @@ public:
 
     virtual std::optional<size_t> numRows() { return {}; }
 
+    // todo @caoliu impl this seconds
+    UInt64 getLastModifiedTimestamp() { return 0; }
+
     struct ReadParams
     {
         size_t max_block_size;

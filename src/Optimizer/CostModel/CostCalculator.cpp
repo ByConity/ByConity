@@ -224,6 +224,11 @@ PlanNodeCost CostVisitor::visitFillingStep(const FillingStep & step, CostContext
     return visitStep(step, context);
 }
 
+PlanNodeCost CostVisitor::visitIntermediateResultCacheStep(const IntermediateResultCacheStep & step, CostContext & context)
+{
+    return visitStep(step, context);
+}
+
 CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, PlanCostMap & plan_cost_map)
 {
     PlanNodeCost cost;

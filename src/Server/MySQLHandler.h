@@ -85,7 +85,7 @@ protected:
     using QueriesReplacements = std::vector<std::pair<std::string, QueryReplacementFn>>;
     QueriesReplacements queries_replacements;
 
-    using SettingsReplacements = std::unordered_map<std::string, std::string>;
+    using SettingsReplacements = std::vector<std::pair<std::string, std::string>>;
     SettingsReplacements settings_replacements;
 
     std::mutex prepared_statements_mutex;

@@ -24,9 +24,9 @@
 
 namespace DB
 {
-//PatternPtr PushRuntimeFilterBuilderThroughExchange::getPattern() const
+//ConstRefPatternPtr PushRuntimeFilterBuilderThroughExchange::getPattern() const
 //{
-//    return Patterns::project()
+//    static auto pattern = Patterns::project()
 //        ->matchingStep<ProjectionStep>([](const auto & project) { return !project.getRuntimeFilters().empty(); })
 //        ->withSingle(Patterns::exchange());
 //}

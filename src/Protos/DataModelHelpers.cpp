@@ -312,7 +312,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
         part_model.set_columns(part.getColumns().toString());
     }
 
-    if (DB::hasDynamicSubcolumns(storage.getInMemoryMetadata().columns))
+    if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         if (auto commit_time = DB::getColumnsCommitTimeForJSONTable(storage, *(part.getColumnsPtr())))
             part_model.set_columns_commit_time(commit_time);
@@ -403,14 +403,8 @@ void fillPartsModelForSend(
         part_model.set_commit_time(part->getCommitTime());
         part_model.set_virtual_part_size(part->getVirtualPartSize());
 
-        auto table_has_dynamic_subcolumns = hasDynamicSubcolumns(storage.getInMemoryMetadataPtr()->columns);
-        if (table_has_dynamic_subcolumns)
-        {
-            if (part_model.has_columns())
-            {
-                continue;
-            }
-        }
+        if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns() && part_model.has_columns())
+            continue;
 
         if (part_model.has_columns_commit_time() && sent_columns_commit_time.count(part_model.columns_commit_time()) == 0)
         {
@@ -447,14 +441,8 @@ void fillPartsModelForSend(
             ranges_model->Add(range.end);
         }
 
-        auto table_has_dynamic_subcolumns = hasDynamicSubcolumns(storage.getInMemoryMetadataPtr()->columns);
-        if (table_has_dynamic_subcolumns)
-        {
-            if (part_model->has_columns())
-            {
-                continue;
-            }
-        }
+        if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns() && part_model->has_columns())
+            continue;
 
         if (part_model->has_columns_commit_time() && sent_columns_commit_time.count(part_model->columns_commit_time()) == 0)
         {

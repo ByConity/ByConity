@@ -18,6 +18,10 @@
 #    include <iostream>
 #endif
 
+namespace ProfileEvents
+{
+    extern const Event QueryMaskingRulesMatch;
+}
 
 namespace DB
 {
@@ -165,6 +169,10 @@ size_t SensitiveDataMasker::wipeSensitiveData(std::string & data) const
     size_t matches = 0;
     for (const auto & rule : all_masking_rules)
         matches += rule->apply(data);
+
+    if (matches)
+        ProfileEvents::increment(ProfileEvents::QueryMaskingRulesMatch, matches);
+
     return matches;
 }
 
@@ -182,6 +190,27 @@ void SensitiveDataMasker::printStats()
 size_t SensitiveDataMasker::rulesCount() const
 {
     return all_masking_rules.size();
+}
+
+std::string wipeSensitiveDataAndCutToLength(const std::string & str, size_t max_length)
+{
+    std::string res = str;
+
+    if (auto * masker = SensitiveDataMasker::getInstance())
+        masker->wipeSensitiveData(res);
+
+    size_t length = res.length();
+    if (max_length && (length > max_length))
+    {
+        constexpr size_t max_extra_msg_len = sizeof("... (truncated 18446744073709551615 characters)");
+        if (max_length < max_extra_msg_len)
+            return "(removed " + std::to_string(length) + " characters)";
+        max_length -= max_extra_msg_len;
+        res.resize(max_length);
+        res.append("... (truncated " + std::to_string(length - max_length) +  " characters)");
+    }
+
+    return res;
 }
 
 }

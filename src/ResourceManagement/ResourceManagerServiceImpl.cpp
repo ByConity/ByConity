@@ -269,7 +269,9 @@ void ResourceManagerServiceImpl::getAllWorkers(
         auto & resource_tracker = rm_controller.getResourceTracker();
         auto workers = resource_tracker.getAllWorkers();
         for (auto & [name, node] : workers)
+        {
             node->fillProto(*response->add_worker_data());
+        }
     }
     catch (...)
     {

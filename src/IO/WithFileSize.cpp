@@ -41,4 +41,16 @@ bool isBufferWithFileSize(const ReadBuffer & in)
     return dynamic_cast<const WithFileSize *>(&in) != nullptr;
 }
 
+std::optional<size_t> tryGetFileSizeFromReadBuffer(ReadBuffer & in)
+{
+    try
+    {
+        return getFileSizeFromReadBuffer(in);
+    }
+    catch (...)
+    {
+        return std::nullopt;
+    }
+}
+
 }

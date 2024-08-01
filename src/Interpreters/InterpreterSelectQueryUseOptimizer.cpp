@@ -238,7 +238,7 @@ static void blockQueryJSONUseOptimizer(std::set<StorageID> used_storage_ids, Con
     for (const auto & storage_id : used_storage_ids)
     {
         auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-        if (hasDynamicSubcolumns(storage->getInMemoryMetadata().columns))
+        if (storage->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
             throw Exception("JSON query is not supported in Optimizer mode.", ErrorCodes::OPTIMIZER_NONSUPPORT);
     }
 }
@@ -603,7 +603,7 @@ void InterpreterSelectQueryUseOptimizer::resetFinalSampleSize(PlanSegmentTreePtr
                     size_t sample_size = (sample->getSampleSize() + 1) / plan_segment.getPlanSegment()->getParallelSize();
                     sample->setSampleSize(sample_size);
                 }
-                    
+
             }
         }
     }
@@ -693,6 +693,14 @@ void InterpreterSelectQueryUseOptimizer::buildQueryPlan(QueryPlanPtr & query_pla
 
 BlockIO InterpreterSelectQueryUseOptimizer::executeCreatePreparedStatementQuery()
 {
+    const auto & prepare = query_ptr->as<const ASTCreatePreparedStatementQuery &>();
+    AccessRightsElements access_rights_elements;
+    access_rights_elements.emplace_back(AccessType::CREATE_PREPARED_STATEMENT);
+
+    if (prepare.or_replace)
+        access_rights_elements.emplace_back(AccessType::DROP_PREPARED_STATEMENT);
+    context->checkAccess(access_rights_elements);
+
     auto * prep_stat_manager = context->getPreparedStatementManager();
     if (!prep_stat_manager)
         throw Exception("Prepare cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
@@ -703,10 +711,9 @@ BlockIO InterpreterSelectQueryUseOptimizer::executeCreatePreparedStatementQuery(
     String name;
     String formatted_query;
     SettingsChanges settings_changes;
-    const auto & prepare = query_ptr->as<const ASTCreatePreparedStatementQuery &>();
+    ASTPtr prepare_ast = query_ptr->clone();
     {
         name = prepare.getName();
-        formatted_query = prepare.formatForErrorMessage();
         settings_changes = InterpreterSetQuery::extractSettingsFromQuery(query_ptr, context);
     }
 
@@ -717,15 +724,12 @@ BlockIO InterpreterSelectQueryUseOptimizer::executeCreatePreparedStatementQuery(
     CollectPreparedParamsVisitor(prepared_params_collector).visit(query_ptr);
     prep_stat_manager->addPlanToCache(
         name,
-        formatted_query,
+        prepare_ast,
         settings_changes,
         query_plan,
         analysis,
         std::move(prepared_params_collector.prepared_params),
-        context,
-        !prepare.if_not_exists,
-        prepare.or_replace,
-        prepare.is_permanent);
+        context);
     return {};
 }
 

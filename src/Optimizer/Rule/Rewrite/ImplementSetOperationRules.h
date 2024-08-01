@@ -25,7 +25,7 @@ public:
     RuleType getType() const override { return RuleType::IMPLEMENT_EXCEPT; }
     String getName() const override { return "IMPLEMENT_EXCEPT"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_implement_except; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -37,7 +37,7 @@ public:
     RuleType getType() const override { return RuleType::IMPLEMENT_INTERSECT; }
     String getName() const override { return "IMPLEMENT_INTERSECT"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_implement_intersect; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

@@ -84,7 +84,6 @@ namespace zkutil
 class ZooKeeper;
 }
 
-
 namespace DB
 {
 
@@ -92,6 +91,11 @@ namespace IndexFile
 {
     class Cache;
     class RemoteFileCache;
+}
+
+namespace IntermediateResult
+{
+class CacheManager;
 }
 
 struct ContextSharedPart;
@@ -1028,10 +1032,8 @@ public:
 
     void enableNamedCnchSessions();
 
-    std::shared_ptr<NamedSession>
-    acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
-    std::shared_ptr<NamedCnchSession>
-    acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check, bool return_null_if_not_found = false) const;
+    std::shared_ptr<NamedSession> acquireNamedSession(const String & session_id, size_t timeout, bool session_check) const;
+    std::shared_ptr<NamedCnchSession> acquireNamedCnchSession(const UInt64 & txn_id, size_t timeout, bool session_check, bool return_null_if_not_found = false) const;
 
     void initCnchServerResource(const TxnTimestamp & txn_id);
     CnchServerResourcePtr getCnchServerResource() const;
@@ -1216,6 +1218,11 @@ public:
     void updateQueryCacheConfiguration(const Poco::Util::AbstractConfiguration & config);
     std::shared_ptr<QueryCache> getQueryCache() const;
     void dropQueryCache() const;
+
+    /// Create a part level cache of queries of specified size. This can be done only once.
+    void setIntermediateResultCache(size_t cache_size_in_bytes);
+    std::shared_ptr<IntermediateResult::CacheManager> getIntermediateResultCache() const;
+    void dropIntermediateResultCache() const;
 
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.

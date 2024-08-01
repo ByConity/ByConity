@@ -93,7 +93,7 @@ private:
            {"init_connect", {std::make_shared<DataTypeString>(), ""}},
            {"interactive_timeout", {std::make_shared<DataTypeInt32>(), 28800}},
            {"license", {std::make_shared<DataTypeString>(), "GPL"}},
-           {"lower_case_table_names", {std::make_shared<DataTypeInt32>(), 1}},
+           {"lower_case_table_names", {std::make_shared<DataTypeInt32>(), 0}},
            {"net_write_timeout", {std::make_shared<DataTypeInt32>(), 60}},
            {"performance_schema", {std::make_shared<DataTypeInt32>(), 0}},
            {"sql_mode", {std::make_shared<DataTypeString>(), "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"}},

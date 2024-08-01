@@ -69,7 +69,7 @@ public:
         return std::make_shared<SymbolStatistics>(ndv, min, max, null_counts, avg_len, histogram.copy(), type, db_table_column, unknown);
     }
 
-    SymbolStatistics & operator+(const SymbolStatistics & other)
+    SymbolStatistics & operator+=(const SymbolStatistics & other)
     {
         ndv += other.ndv;
         min = min < other.min ? min : other.min;
@@ -154,7 +154,7 @@ public:
     Poco::JSON::Object::Ptr toJson() const;
 
 private:
-    // number of distinct values
+        // number of distinct values
     UInt64 ndv;
 
     // minimum value

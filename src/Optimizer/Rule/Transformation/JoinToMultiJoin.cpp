@@ -11,12 +11,13 @@
 
 namespace DB
 {
-PatternPtr JoinToMultiJoin::getPattern() const
+ConstRefPatternPtr JoinToMultiJoin::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) { return isSupport(s); })
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) { return isSupport(s); })
         .with(Patterns::tree(), Patterns::tree())
         .result();
+    return pattern;
 }
 
 PlanNodes JoinToMultiJoin::createMultiJoin(

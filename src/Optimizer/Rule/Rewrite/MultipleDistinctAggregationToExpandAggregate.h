@@ -1,6 +1,7 @@
 #pragma once
 #include <Optimizer/Rule/Rule.h>
 #include <QueryPlan/CTEInfo.h>
+#include "Optimizer/Rule/Pattern.h"
 
 namespace DB
 {
@@ -84,7 +85,7 @@ public:
     {
         return context->getSettingsRef().enable_expand_distinct_optimization;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

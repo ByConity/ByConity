@@ -102,9 +102,9 @@ TEST_F(PartitionKeyTest, testColocatedJoin)
 
     std::cout << cost_no_partition << ' ' << cost_wrong_partition << ' '
               << cost_arbitrary_partition << ' ' << cost_correct_partition << std::endl;
-    assert(cost_no_partition == cost_wrong_partition);
-    assert(cost_arbitrary_partition == cost_correct_partition);
-    assert(cost_correct_partition < cost_no_partition);
+    EXPECT_EQ(cost_no_partition, cost_wrong_partition);
+    EXPECT_EQ(cost_arbitrary_partition, cost_correct_partition);
+    EXPECT_TRUE(cost_correct_partition < cost_no_partition);
 }
 
 TEST_F(PartitionKeyTest, testMemoBasedAdvise)

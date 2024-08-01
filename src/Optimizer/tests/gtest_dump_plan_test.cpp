@@ -82,7 +82,7 @@ TEST_F(PlanDumpTest, testDumpWithoutStats)
 
     DB::QueryDumper::Query query_elem(query_id, sql, context->getCurrentDatabase());
     auto & workload_query = query_dumper.add(query_elem);
-    workload_query.settings = std::make_shared<DB::Settings>(context->getSettings());
+    workload_query.settings = std::make_shared<DB::Settings>(context->getSettingsRef());
 
     DB::ContextMutablePtr query_context = workload_query.buildQueryContextFrom(context);
     DB::ASTPtr ast = DB::ReproduceUtils::parse(workload_query.query, query_context);

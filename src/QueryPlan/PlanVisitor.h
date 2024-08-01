@@ -50,6 +50,7 @@
 #include <QueryPlan/ReadFromPreparedSource.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
+#include <QueryPlan/IntermediateResultCacheStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <QueryPlan/SortingStep.h>

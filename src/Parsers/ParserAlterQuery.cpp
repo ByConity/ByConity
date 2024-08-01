@@ -86,6 +86,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_materialize_projection("MATERIALIZE PROJECTION");
 
     ParserKeyword s_add("ADD");
+    ParserKeyword s_change("CHANGE");
     ParserKeyword s_drop("DROP");
     ParserKeyword s_suspend("SUSPEND");
     ParserKeyword s_resume("RESUME");
@@ -126,6 +127,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_freeze("FREEZE");
     ParserKeyword s_unfreeze("UNFREEZE");
     ParserKeyword s_partition("PARTITION");
+    ParserKeyword s_preattach_partition("PREATTACH PARTITION");
 
     ParserKeyword s_truncate_partition("TRUNCATE PARTITION");
     ParserKeyword s_all("ALL");
@@ -907,9 +909,9 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                     return false;
 
                 if (ParserKeyword("BUCKETS").ignore(pos, expected))
-                {   
+                {
                     ParserList parser_bucket_num_list(std::make_unique<ParserLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false);
-            
+
                     if (!parser_bucket_num_list.parse(pos, command->buckets, expected))
                         return false;
                 }
@@ -1057,6 +1059,50 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 {
                     return false;
                 }
+            }
+            else if (s_preattach_partition.ignore(pos, expected))
+            {
+                if (!parser_partition.parse(pos, command->partition, expected))
+                    return false;
+
+                command->replace = false;
+                command->type = ASTAlterCommand::PREATTACH_PARTITION;
+            }
+            else if (dt.parse_mysql_ddl && s_change.ignore(pos, expected))
+            {
+                ParserKeyword("COLUMN").ignore(pos, expected);
+
+                if (!parser_name.parse(pos, command->column, expected))
+                    return false;
+
+                Pos old_pos = pos;
+                if (!parser_name.parse(pos, command->rename_to, expected))
+                    return false;
+
+                /// reset the pos as column def parser needs to parse a col name
+                pos = old_pos;
+                if (!parser_modify_col_decl.parse(pos, command->col_decl, expected))
+                    return false;
+
+                tryGetIdentifierNameInto(command->column, command->col_decl->as<ASTColumnDeclaration>()->name);
+
+                if (s_first.ignore(pos, expected))
+                    command->first = true;
+                else if (s_after.ignore(pos, expected))
+                {
+                    if (!parser_name.ignore(pos, expected))
+                        return false;
+                }
+
+                String old_name;
+                String new_name;
+                tryGetIdentifierNameInto(command->column, old_name);
+                tryGetIdentifierNameInto(command->rename_to, new_name);
+                /// TODO(fredwang) fully support change column when the storage level is ready
+                if (old_name == new_name)
+                    command->type = ASTAlterCommand::MODIFY_COLUMN;
+                else
+                    command->type = ASTAlterCommand::RENAME_COLUMN;
             }
             else if (s_modify_column.ignore(pos, expected))
             {
@@ -1312,6 +1358,15 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             {
                 if (!parser_col_decl.parse(pos, command->col_decl, expected))
                     return false;
+
+                if (s_first.ignore(pos, expected))
+                    command->first = true;
+                else if (s_after.ignore(pos, expected))
+                {
+                    if (!parser_name.parse(pos, command->column, expected))
+                        return false;
+                }
+
                 command->type = ASTAlterCommand::ADD_COLUMN;
             }
             else if (s_drop.ignore(pos, expected))

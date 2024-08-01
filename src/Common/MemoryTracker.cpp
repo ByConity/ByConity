@@ -116,8 +116,10 @@ MemoryTracker::LockExceptionInThread::~LockExceptionInThread()
 MemoryTracker total_memory_tracker(nullptr, VariableContext::Global);
 
 
-MemoryTracker::MemoryTracker(VariableContext level_) : parent(&total_memory_tracker), level(level_) {}
-MemoryTracker::MemoryTracker(MemoryTracker * parent_, VariableContext level_) : parent(parent_), level(level_) {}
+MemoryTracker::MemoryTracker(VariableContext level_)
+    : parent(&total_memory_tracker), log(&Poco::Logger::get("MemoryTracker")), level(level_) {}
+MemoryTracker::MemoryTracker(MemoryTracker * parent_, VariableContext level_)
+    : parent(parent_), log(&Poco::Logger::get("MemoryTracker")), level(level_) {}
 
 
 MemoryTracker::~MemoryTracker()
@@ -139,7 +141,7 @@ MemoryTracker::~MemoryTracker()
 void MemoryTracker::logPeakMemoryUsage() const
 {
     const auto * description = description_ptr.load(std::memory_order_relaxed);
-    LOG_DEBUG(&Poco::Logger::get("MemoryTracker"),
+    LOG_DEBUG(log,
         "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), ReadableSize(peak));
 }
 
@@ -151,7 +153,7 @@ void MemoryTracker::setSoftLimit(Int64 value)
 void MemoryTracker::logMemoryUsage(Int64 current) const
 {
     const auto * description = description_ptr.load(std::memory_order_relaxed);
-    LOG_DEBUG(&Poco::Logger::get("MemoryTracker"),
+    LOG_DEBUG(log,
         "Current memory usage{}: {}.", (description ? " " + std::string(description) : ""), ReadableSize(current));
 }
 

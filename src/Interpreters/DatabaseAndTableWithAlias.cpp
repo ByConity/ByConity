@@ -25,6 +25,7 @@
 #include <Interpreters/getTableExpressions.h>
 
 #include <Common/typeid_cast.h>
+#include <DataTypes/MapHelpers.h>
 
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -135,6 +136,16 @@ std::optional<DatabaseAndTableWithAlias> getDatabaseAndTable(const ASTSelectQuer
         return {};
 
     return DatabaseAndTableWithAlias(database_and_table_name);
+}
+
+bool TableWithColumnNamesAndTypes::hasColumn(const String & name) const 
+{  
+    bool exists = names.contains(name);
+    if (!exists && isMapImplicitKey(name))
+    {
+        return names.count(parseMapNameFromImplicitColName(name));
+    }
+    return exists;
 }
 
 }

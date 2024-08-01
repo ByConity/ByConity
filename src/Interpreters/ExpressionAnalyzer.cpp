@@ -214,7 +214,7 @@ void sanitizeDataType(const DataTypePtr & type)
         return;
 
     throw Exception("Invalid type for filter: " + type->getName() + ", must be UInt8 or Nullable(UInt8)",
-                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER); 
+                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
 }
 
 ExpressionAnalyzerData::~ExpressionAnalyzerData() = default;
@@ -239,7 +239,7 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     const StorageMetadataPtr & metadata_snapshot_)
     : WithContext(context_)
     , query(query_)
-    , settings(getContext()->getSettings())
+    , settings(getContext()->getSettingsRef())
     , subquery_depth(subquery_depth_)
     , index_context(std::make_shared<MergeTreeIndexContext>())
     , metadata_snapshot(metadata_snapshot_)
@@ -2460,7 +2460,7 @@ void ExpressionAnalysisResult::finalize(const ExpressionActionsChain & chain, si
                     atomic_predicates[i]->remove_filter_column = can_remove;
                 else if (can_remove)
                     columns_to_remove.insert(name);
-            } 
+            }
         }
         columns_to_remove_after_prewhere = std::move(columns_to_remove);
     }

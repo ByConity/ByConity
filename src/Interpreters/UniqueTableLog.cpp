@@ -1,3 +1,4 @@
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -24,7 +25,7 @@ NamesAndTypesList UniqueTableLogElement::getNamesAndTypes()
         {"event_date",          std::make_shared<DataTypeDate>()},
         {"event_time",          std::make_shared<DataTypeDateTime>()},
         {"txn_id",              std::make_shared<DataTypeUInt64>()},
-        {"dedup_task_info",     std::make_shared<DataTypeString>()},
+        {"task_info",           std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"event_info",          std::make_shared<DataTypeString>()},
 
         {"duration_ms",         std::make_shared<DataTypeUInt64>()},
@@ -46,7 +47,11 @@ void UniqueTableLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(event_time);
     columns[i++]->insert(txn_id);
-    columns[i++]->insert(dedup_task_info);
+
+    Array task_info_details;
+    for (const auto & info_detail : task_info.getTaskInfoDetail())
+        task_info_details.emplace_back(info_detail);
+    columns[i++]->insert(task_info_details);
     columns[i++]->insert(event_info);
 
     columns[i++]->insert(UInt64(duration_ms));
@@ -54,6 +59,26 @@ void UniqueTableLogElement::appendToBlock(MutableColumns & columns) const
 
     columns[i++]->insert(UInt64(has_error));
     columns[i++]->insert(event_msg);
+}
+
+static String toString(TaskInfo::TaskType type)
+{
+   switch (type)
+   {
+        case TaskInfo::DEDUP_TASK:        return "DEDUP_TASK";
+        case TaskInfo::MERGE_TASK:        return "MERGE_TASK";
+        case TaskInfo::DATA_CHECKER_TASK: return "DATA_CHECKER_TASK";
+        default:                          return "UNKNOWN_TASK";
+   }
+}
+
+Names TaskInfo::getTaskInfoDetail() const
+{
+    Names ret;
+    ret.emplace_back(toString(task_type));
+    ret.emplace_back(dedup_gran.partition_id);
+    ret.emplace_back(toString(dedup_gran.bucket_number));
+    return ret;
 }
 
 namespace UniqueTable

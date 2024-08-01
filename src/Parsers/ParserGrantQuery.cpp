@@ -128,6 +128,10 @@ namespace
 
                 String database_name, table_name;
                 bool any_database = false, any_table = false;
+
+                /// mysql allows such statement: grant alter on TABLE mytb to 'hello'
+                ParserKeyword{"TABLE"}.ignore(pos, expected);
+
                 if (!parseDatabaseAndTableNameOrAsterisks(pos, expected, database_name, any_database, table_name, any_table))
                     return false;
 

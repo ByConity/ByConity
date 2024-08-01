@@ -1474,7 +1474,7 @@ static ColumnWithTypeAndName readColumnFromORCColumn(
 
     // special case for lowcard
     if (auto * orc_str_batch = dynamic_cast<const orc::StringVectorBatch *>(orc_column);
-        orc_str_batch && type_hint && type_hint->isLowCardinalityNullable())
+        orc_str_batch && type_hint && (type_hint->isLowCardinalityNullable() || type_hint->lowCardinality()))
     {
         auto inner = removeLowCardinality(type_hint);
         if ((inner->isNullable() && dynamic_cast<const DataTypeNullable *>(inner.get())->getNestedType()->getTypeId() == TypeIndex::String)

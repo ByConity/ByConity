@@ -82,6 +82,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
+#include <Storages/System/attachMySQLTables.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -1249,6 +1250,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getServerType() == ServerType::cnch_server)
         global_context->setQueryCache(config());
 
+    /// Size of cache for intermediate_result. It is not necessary.
+    size_t intermediate_result_cache_size = config().getUInt64("intermediate_result_cache_size", 1000000000);
+    if (intermediate_result_cache_size)
+        global_context->setIntermediateResultCache(intermediate_result_cache_size);
+
     /// Size of delete bitmap for HaMergeTree engine to be cached in memory; default is 1GB
     size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);
     global_context->setDeleteBitmapCache(delete_bitmap_cache_size);
@@ -1484,6 +1490,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         attachSystemTablesServer(*database_catalog.getSystemDatabase(), has_zookeeper);
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA, global_context));
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, global_context));
+        attachMySQL(global_context, *database_catalog.getDatabase(DatabaseCatalog::MYSQL, global_context));
+        attachMySQL(global_context, *database_catalog.getDatabase(DatabaseCatalog::MYSQL_UPPERCASE, global_context));
         /// We load temporary database first, because projections need it.
         database_catalog.initializeAndLoadTemporaryDatabase();
         /// Then, load remaining databases

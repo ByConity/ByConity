@@ -1302,7 +1302,7 @@ namespace Catalog
     void Catalog::initStorageObjectSchema(StoragePtr & res)
     {
         // Load dynamic object column schema
-        if (res && hasDynamicSubcolumns(res->getInMemoryMetadata().getColumns()))
+        if (res && res->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         {
             auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(res);
 
@@ -1362,7 +1362,6 @@ namespace Catalog
                 {
                     cnch_merge_tree->loadMutations();
                 }
-
 
                 /// Try insert the storage into cache.
                 if (res && is_host_server && cache_manager)
@@ -1427,6 +1426,12 @@ namespace Catalog
                 res = createTableFromDataModel(query_context, *table);
 
                 initStorageObjectSchema(res);
+
+                /// TODO: (zuochuang.zema, guanzhe.andy) handle TimeTravel
+                if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(res.get()))
+                {
+                    cnch_merge_tree->loadMutations();
+                }
 
                 /// Try insert the storage into cache.
                 if (res && cache_manager)
@@ -6600,20 +6605,20 @@ namespace Catalog
         return res;
     }
 
-    SQLBindingItemPtr Catalog::getSQLBinding(const String & uuid, const bool & is_re_expression)
+    SQLBindingItemPtr Catalog::getSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression)
     {
         SQLBindingItemPtr res;
         runWithMetricSupport(
-            [&] { res = meta_proxy->getSQLBinding(name_space, uuid, is_re_expression); },
+            [&] { res = meta_proxy->getSQLBinding(name_space, uuid, tenant_id, is_re_expression); },
             ProfileEvents::GetSQLBindingSuccess,
             ProfileEvents::GetSQLBindingFailed);
         return res;
     }
 
-    void Catalog::removeSQLBinding(const String & uuid, const bool & is_re_expression)
+    void Catalog::removeSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->removeSQLBinding(name_space, uuid, is_re_expression); },
+            [&] { meta_proxy->removeSQLBinding(name_space, uuid, tenant_id, is_re_expression); },
             ProfileEvents::RemoveSQLBindingSuccess,
             ProfileEvents::RemoveSQLBindingFailed);
     }

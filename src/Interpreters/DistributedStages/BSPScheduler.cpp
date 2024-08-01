@@ -4,6 +4,7 @@
 #include <CloudServices/CnchServerResource.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
+#include <Common/ErrorCodes.h>
 #include <common/logger_useful.h>
 
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -29,6 +30,9 @@ namespace ErrorCodes
 {
     extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
 }
+
+const size_t MIN_MAJOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 2;
+const size_t MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 3;
 
 /// BSP scheduler logic
 void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
@@ -70,7 +74,7 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
             source_task_index_on_workers[addr]++;
         }
     }
-    triggerDispatch(cluster_nodes.rank_workers);
+    triggerDispatch(cluster_nodes.all_workers);
 }
 
 void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed, bool /*is_canceled*/)
@@ -115,7 +119,7 @@ void BSPScheduler::onQueryFinished()
     }
 }
 
-void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentsStatus & status)
+void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status)
 {
     if (status.is_succeed)
     {
@@ -169,11 +173,10 @@ void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel
     }
 }
 
-const size_t MIN_MAJOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 2;
-const size_t MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 3;
-
-bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
+bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status)
 {
+    if (isUnrecoverableStatus(status))
+        return false;
     auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index)};
     size_t retry_id;
     String rpc_address;
@@ -254,7 +257,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
             // for local no repartion and local may no repartition, schedule to original node
             NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
             // in case all workers except servers are occupied, simply retry at last node
-            failed_workers[segment_id].size() == cluster_nodes.rank_workers.size())
+            failed_workers[segment_id].size() == cluster_nodes.all_workers.size())
         {
             auto available_worker = segment_parallel_locations[segment_id][parallel_index];
             occupied_workers[segment_id].erase(available_worker);
@@ -266,10 +269,42 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
         {
             pending_task_instances.no_prefs.insert({segment_id, parallel_index});
             lk.unlock();
-            triggerDispatch(cluster_nodes.rank_workers);
+            triggerDispatch(cluster_nodes.all_workers);
         }
     }
     return true;
+}
+
+void BSPScheduler::onWorkerRestarted(const WorkerId & id)
+{
+    LOG_WARNING(log, "Worker {} restarted, quit running. In future it should be recovered.", id.ToString());
+    bool contains = false;
+    // TODO(wangtao.vip): it could be more than 1 segment running on this worker.
+    size_t segment_id_on_restarted_worker;
+    // TODO(wangtao.vip): better iteration to find if the worker contains our task.
+    for (auto worker_iter = cluster_nodes.all_workers.begin(); !contains && worker_iter != cluster_nodes.all_workers.end(); worker_iter++)
+    {
+        if (worker_iter->id == id.id)
+        {
+            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+            for (const auto & [segment_id, address_set] : occupied_workers)
+            {
+                if (address_set.contains(worker_iter->address))
+                {
+                    contains = true;
+                    segment_id_on_restarted_worker = segment_id;
+                    break;
+                }
+            }
+        }
+    }
+    if (contains)
+    {
+        stopped.store(true, std::memory_order_relaxed);
+        error_msg = fmt::format("worker {} restarted, segment {} failed", id.ToString(), segment_id_on_restarted_worker);
+        // emplace a fake task.
+        addBatchTask(nullptr);
+    }
 }
 
 const AddressInfo & BSPScheduler::getSegmentParallelLocation(PlanSegmentInstanceId instance_id)
@@ -404,5 +439,22 @@ PlanSegmentExecutionInfo BSPScheduler::generateExecutionInfo(size_t task_id, siz
         execution_info.retry_id = (segment_instance_retry_cnt[{static_cast<UInt32>(task_id), static_cast<UInt32>(index)}]);
     }
     return execution_info;
+}
+
+bool BSPScheduler::isUnrecoverableStatus(const RuntimeSegmentStatus & status)
+{
+    if (unrecoverable_reasons.contains(status.code))
+    {
+        LOG_WARNING(
+            log,
+            "Segment {} parallel index {} in query {} failed with code {} and reason {}, will not retry",
+            status.segment_id,
+            status.parallel_index,
+            status.query_id,
+            ErrorCodes::getName(status.code),
+            status.message);
+        return true;
+    }
+    return false;
 }
 }

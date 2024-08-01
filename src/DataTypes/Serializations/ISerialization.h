@@ -419,6 +419,8 @@ public:
         in_serialization_nullable = true;
     }
 
+    static bool isSharedOffsetSubstream(const String & name_in_storage, const SubstreamPath & path);
+
 protected:
     template <typename State, typename StatePtr>
     State * checkAndGetState(const StatePtr & state) const;

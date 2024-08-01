@@ -120,3 +120,40 @@ Settings: enable_optimizer = 0
 2	3
 3	4
 Do not execute this query.
+Create SQL Binding succeeded
+Create SQL Binding succeeded
+Create SQL Binding succeeded
+Create SQL Binding succeeded
+Create SQL Binding succeeded
+Create SQL Binding succeeded
+***************************1. row ***************************
+Session Binding UUID: 5ebc74a1-9944-b052-9841-e30966b7c0fb
+Pattern:
+select * from test.bindings  order by a ;
+Bound Query:
+SELECT a + 1 FROM `12345.test`.bindings ORDER BY a ASC
+***************************2. row ***************************
+Global Binding UUID: deebc5e0-5a0d-3097-4388-831801dc6c9b
+Pattern: ^explain.*select.*from system\\.one.*
+Settings: enable_execute_query = 0
+Do not execute this query.
+2
+3
+4
+***************************1. row ***************************
+Session Binding UUID: 4917be45-73be-efcb-03d0-834f2b251353
+Pattern:
+select * from test.bindings  order by a ;
+Bound Query:
+SELECT a + 1 FROM test.bindings ORDER BY a ASC
+***************************2. row ***************************
+Tenant Id: 12345
+Session Binding UUID: 5ebc74a1-9944-b052-9841-e30966b7c0fb
+Pattern:
+select * from test.bindings  order by a ;
+Bound Query:
+SELECT a + 1 FROM `12345.test`.bindings ORDER BY a ASC
+***************************3. row ***************************
+Global Binding UUID: 831ac44d-b812-34d5-0d00-8dac0e0575d3
+Pattern: ^select \\* from test\\.bindings.*
+Settings: enable_execute_query = 0

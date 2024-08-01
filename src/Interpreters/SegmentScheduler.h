@@ -53,7 +53,7 @@ struct ExceptionWithCode
     int code;
 };
 
-using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
+using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 // <query_id, <segment_id, set of segment's received status for each instance >>
 using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, std::unordered_set<UInt64>>;
@@ -88,17 +88,19 @@ public:
     AddressInfos getWorkerAddress(const String & query_id, size_t segment_id);
 
     void checkQueryCpuTime(const String & query_id);
-    void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
-    void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
+    void updateSegmentStatus(const RuntimeSegmentStatus & segment_status);
+    void updateQueryStatus(const RuntimeSegmentStatus & segment_status);
 
     void updateReceivedSegmentStatusCounter(
-        const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentsStatus & status);
+        const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentStatus & status);
     // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
-    void onSegmentFinished(const RuntimeSegmentsStatus & status);
+    void onSegmentFinished(const RuntimeSegmentStatus & status);
     std::shared_ptr<BSPScheduler> getBSPScheduler(const String & query_id);
 
     PlanSegmentSet getIOPlanSegmentInstanceIDs(const String & query_id) const;
+
+    void workerRestarted(const WorkerId & id);
 
 private:
     // Protect `query_map`.

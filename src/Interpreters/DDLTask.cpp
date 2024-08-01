@@ -32,7 +32,10 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ASTQueryWithOnCluster.h>
+#include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Databases/DatabaseReplicated.h>
 
@@ -165,6 +168,13 @@ void DDLTaskBase::parseQueryFromEntry(ContextPtr context)
     ParserQuery parser_query(end, ParserSettings::valueOf(context->getSettingsRef()));
     String description;
     query = parseQuery(parser_query, begin, end, description, 0, context->getSettingsRef().max_parser_depth);
+}
+
+void DDLTaskBase::formatRewrittenQuery(ContextPtr context)
+{
+    /// Convert rewritten AST back to string.
+    query_str = queryToString(*query);
+    query_for_logging = query->formatForLogging(context->getSettingsRef().log_queries_cut_to_length);
 }
 
 ContextMutablePtr DDLTaskBase::makeQueryContext(ContextPtr from_context, const ZooKeeperPtr & /*zookeeper*/)
@@ -375,6 +385,7 @@ void DatabaseReplicatedTask::parseQueryFromEntry(ContextPtr context)
         assert(ddl_query->database.empty());
         ddl_query->database = database->getDatabaseName();
     }
+    formatRewrittenQuery(context);
 }
 
 ContextMutablePtr DatabaseReplicatedTask::makeQueryContext(ContextPtr from_context, const ZooKeeperPtr & zookeeper)

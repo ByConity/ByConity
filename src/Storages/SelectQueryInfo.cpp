@@ -54,6 +54,7 @@ void SelectQueryInfo::toProto(Protos::SelectQueryInfo & proto) const
     serializeASTToProto(query, *proto.mutable_query());
     serializeASTToProto(view_query, *proto.mutable_view_query());
     serializeASTToProto(partition_filter, *proto.mutable_partition_filter());
+    cache_info.toProto(*proto.mutable_cache_info());
     if (input_order_info)
         input_order_info->toProto(*proto.mutable_input_order_info());
 }
@@ -64,6 +65,7 @@ void SelectQueryInfo::fillFromProto(const Protos::SelectQueryInfo & proto)
     view_query = deserializeASTFromProto(proto.view_query());
     partition_filter = deserializeASTFromProto(proto.partition_filter());
     input_order_info = proto.has_input_order_info() ? InputOrderInfo::fromProto(proto.input_order_info()) : nullptr;
+    cache_info.fillFromProto(proto.cache_info());
 }
 
 ASTPtr getFilterFromQueryInfo(const SelectQueryInfo & query_info, bool clone)
@@ -147,4 +149,8 @@ void SelectQueryInfo::appendPartitonFilters(ASTs conjuncts)
         partition_filter = std::move(new_partition_filter);
 }
 
+TableScanCacheInfo getTableScanCacheInfo(const SelectQueryInfo & query_info)
+{
+    return query_info.cache_info;
+}
 }

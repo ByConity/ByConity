@@ -129,6 +129,7 @@ public:
         DEDUP_WITH_HIGH_PRIORITY, // dedup with high priority db.table [partition partition_expr]
         DEDUP, // dedup db.table [partition partition_expr] for repair
         SYNC_DEDUP_WORKER,
+        SYNC_REPAIR_TASK, // sync repair task db.table
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
         START_CLUSTER,
@@ -147,6 +148,7 @@ public:
         STOP_VIEW,
         DROP_VIEW_META,
         RELEASE_MEMORY_LOCK, /// RELEASE MEMORY LOCK [db.tb]/[OF TXN xxx]
+        DROP_SCHEMA_CACHE,
         END
     };
 
@@ -190,6 +192,8 @@ public:
     /// for CLEAN TRANSACTION txn_id
     bool specify_txn = false;
     UInt64 txn_id;
+
+    String schema_cache_storage;
 
     String getID(char) const override { return "SYSTEM query"; }
 

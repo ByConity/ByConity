@@ -29,6 +29,8 @@
 #include <Optimizer/Rule/Rule.h>
 #include <QueryPlan/JoinStep.h>
 #include <common/logger_useful.h>
+#include "Interpreters/Context_fwd.h"
+#include "QueryPlan/IQueryPlanStep.h"
 
 #include <algorithm>
 
@@ -107,7 +109,7 @@ void OptimizeExpression::execute()
     {
         pushTask(std::make_shared<ApplyRule>(group_expr, r, context));
         int child_group_idx = 0;
-        auto pattern = r->getPattern();
+        const auto & pattern = r->getPattern();
         for (const auto * child_pattern : pattern->getChildrenPatterns())
         {
             // If child_pattern has any more children (i.e non-leaf), then we will explore the
@@ -161,7 +163,7 @@ void ExploreExpression::execute()
     {
         pushTask(std::make_shared<ApplyRule>(group_expr, r, context, true));
         int child_group_idx = 0;
-        auto pattern = r->getPattern();
+        const auto & pattern = r->getPattern();
         for (const auto * child_pattern : pattern->getChildrenPatterns())
         {
             // Only need to explore non-leaf children before applying rule to the
@@ -183,25 +185,28 @@ void ExploreExpression::execute()
 void ApplyRule::execute()
 {
     // LOG_TRACE(log, "Apply GroupExpr {}", group_expr->getGroupId());
-    Stopwatch stop_watch;
-    stop_watch.start();
+    Stopwatch stop_watch{CLOCK_THREAD_CPUTIME_ID};
+    
+    if (context->getOptimizerContext().isEnableTrace())
+        stop_watch.start();
 
     if (group_expr->hasRuleExplored(rule->getType()))
         return;
 
-    auto pattern = rule->getPattern();
+    const auto & pattern = rule->getPattern();
     GroupExprBindingIterator iterator(context->getMemo(), group_expr, pattern.get(), context);
+
+    bool matched = false;
 
     RuleContext rule_context{
         context->getOptimizerContext().getContext(), context->getOptimizerContext().getCTEInfo(), context, group_expr->getGroupId()};
+    
     while (iterator.hasNext())
     {
         auto before = iterator.next();
-        if (!rule->getPattern()->matches(before))
-        {
-            continue;
-        }
+        assert(rule->getPattern()->matches(before));
 
+        matched = true;
         // Caller frees after
         TransformResult result = rule->transform(before, rule_context);
 
@@ -254,9 +259,15 @@ void ApplyRule::execute()
 
     group_expr->setRuleExplored(rule->getType());
 
-    stop_watch.stop();
+
     if (context->getOptimizerContext().isEnableTrace())
-        context->getOptimizerContext().trace("ApplyRule", group_expr->getGroupId(), rule->getType(), stop_watch.elapsedNanoseconds());
+    {
+        stop_watch.stop();
+        if (matched)
+            context->getOptimizerContext().trace("ApplyRule", group_expr->getGroupId(), rule->getType(), stop_watch.elapsedNanoseconds());
+        else
+            context->getOptimizerContext().trace("ApplyRule-Unmatched", group_expr->getGroupId(), rule->getType(), stop_watch.elapsedNanoseconds());
+    }
 }
 
 void OptimizeInput::execute()
@@ -272,7 +283,7 @@ void OptimizeInput::execute()
         // 1. We can init input cost using non-zero value for pruning
         // 2. We can calculate the current operator cost if we have maintain
         //    logical properties in group (e.g. stats, schema, cardinality)
-        
+
         // Compute the cost of the root operator
         // 1. Collect stats needed and cache them in the group
         // 2. Calculate cost based on children's stats and cache it in the group expression
@@ -341,7 +352,7 @@ void OptimizeInput::execute()
             break;
         }
         auto & input_props = input_properties[cur_prop_pair_idx];
-        
+
         // initial total cost
         if (cur_child_idx == 0)
         {
@@ -410,7 +421,8 @@ void OptimizeInput::execute()
                     single_count++;
             }
 
-            if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Union && single_count > 0 && single_count < group_expr->getChildrenGroups().size())
+            if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Union && single_count > 0
+                && single_count < group_expr->getChildrenGroups().size())
             {
                 auto new_child_requires = input_props;
                 for (auto & new_child : new_child_requires)
@@ -566,6 +578,44 @@ void OptimizeInput::addInputPropertiesForCTE(CTEId cte_id, CTEDescription cte_de
     input_properties.insert(input_properties.end(), new_properties.begin(), new_properties.end());
 }
 
+static PropertySets makeHandleSame(const PropertySet & input_props, const PropertySet & actual_props, const ContextPtr & context)
+{
+    PropertySets result;
+    auto new_child_requires = input_props;
+    for (auto & new_child : new_child_requires)
+    {
+        new_child.getNodePartitioningRef().setRequireHandle(true);
+    }
+    result.emplace_back(new_child_requires);
+
+    if (actual_props[0].getNodePartitioning().isExchangeSchema(context->getSettingsRef().enable_bucket_shuffle)
+        && actual_props[0].getNodePartitioning().getHandle() == Partitioning::Handle::BUCKET_TABLE)
+    {
+        auto other_new_child_requires = new_child_requires;
+        for (auto & new_child : other_new_child_requires)
+        {
+            new_child.getNodePartitioningRef().setHandle(Partitioning::Handle::BUCKET_TABLE);
+            new_child.getNodePartitioningRef().setBuckets(actual_props[0].getNodePartitioning().getBuckets());
+            new_child.getNodePartitioningRef().setBucketExpr(actual_props[0].getNodePartitioning().getBucketExpr());
+        }
+        result.emplace_back(other_new_child_requires);
+    }
+
+    if (actual_props[1].getNodePartitioning().isExchangeSchema(context->getSettingsRef().enable_bucket_shuffle)
+        && actual_props[1].getNodePartitioning().getHandle() == Partitioning::Handle::BUCKET_TABLE)
+    {
+        auto other_new_child_requires = new_child_requires;
+        for (auto & new_child : other_new_child_requires)
+        {
+            new_child.getNodePartitioningRef().setHandle(Partitioning::Handle::BUCKET_TABLE);
+            new_child.getNodePartitioningRef().setBuckets(actual_props[1].getNodePartitioning().getBuckets());
+            new_child.getNodePartitioningRef().setBucketExpr(actual_props[1].getNodePartitioning().getBucketExpr());
+        }
+        result.emplace_back(other_new_child_requires);
+    }
+    return result;
+}
+
 bool OptimizeInput::checkJoinInputProperties(const PropertySet & requried_input_props, const PropertySet & actual_input_props)
 {
     bool all_fix_hash = std::all_of(requried_input_props.begin(), requried_input_props.end(), [](const auto & i_prop) {
@@ -608,6 +658,7 @@ bool OptimizeInput::checkJoinInputProperties(const PropertySet & requried_input_
 
         auto first_handle = first_props.getNodePartitioning().getHandle();
         auto first_bucket_count = first_props.getNodePartitioning().getBuckets();
+        auto first_sharding_expr = first_props.getNodePartitioning().getBucketExpr();
         auto first_partition_column = first_props.getNodePartitioning().normalize(*left_equivalences).getColumns();
 
         for (size_t actual_prop_index = 1; actual_prop_index < actual_input_props.size(); ++actual_prop_index)
@@ -615,7 +666,8 @@ bool OptimizeInput::checkJoinInputProperties(const PropertySet & requried_input_
             auto before_transformed_partition_cols = actual_input_props[actual_prop_index].getNodePartitioning().getColumns();
             auto translated_prop = actual_input_props[actual_prop_index].normalize(*right_equivalences);
             if (translated_prop.getNodePartitioning().getHandle() != first_handle
-                || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count)
+                || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count
+                || !ASTEquality::compareTree(translated_prop.getNodePartitioning().getBucketExpr(), first_sharding_expr))
             {
                 match = false;
                 break;
@@ -639,13 +691,12 @@ bool OptimizeInput::checkJoinInputProperties(const PropertySet & requried_input_
 
     if (!match)
     {
-        auto new_child_requires = requried_input_props;
-        for (auto & new_child : new_child_requires)
+        for (auto & new_child_requires : makeHandleSame(requried_input_props, actual_input_props, context->getOptimizerContext().getContext()))
         {
-            new_child.getNodePartitioningRef().setRequireHandle(true);
+            input_properties.emplace_back(new_child_requires);
         }
-        input_properties.emplace_back(new_child_requires);
     }
+
 
     return match;
 }
@@ -728,7 +779,8 @@ void OptimizeInput::enforcePropertyAndUpdateWinner(
         // increase cost if the cte exists both join side. disable q11 & q74 cte for tpcds.
         if (!it.second && group_expr->getStep()->getType() == IQueryPlanStep::Type::Join)
         {
-            auto coefficient = opt_context->getOptimizerContext().getContext()->getSettingsRef().cost_calculator_cte_weight_for_join_build_side;
+            auto coefficient
+                = opt_context->getOptimizerContext().getContext()->getSettingsRef().cost_calculator_cte_weight_for_join_build_side;
             it.first->second.second = std::max(it.first->second.second, cte_prop.second.second) * coefficient;
         }
     }
@@ -838,7 +890,7 @@ void OptimizeCTE::execute()
     if (context->getOptimizerContext().isEnableTrace())
         context->getOptimizerContext().trace("OptimizeCTE", group_expr->getGroupId(), group_expr->getProduceRule(), elapsed_ns);
 }
-    
+
 OptimizerTask::OptimizerTask(OptContextPtr context_) : context(std::move(context_)), log(context->getOptimizerContext().getLog())
 {
 }

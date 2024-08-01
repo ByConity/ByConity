@@ -1130,7 +1130,8 @@ void CnchMergeMutateThread::waitMutationFinish(UInt64 mutation_commit_time, UInt
         if (shutdown_called)
             throw Exception(ErrorCodes::ABORTED, "Cancel waiting because thread {} is shutting done", log->name());
         if (timeout_ms && watch.elapsedMilliseconds() >= timeout_ms)
-            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout waiting for mutation {} to finish", mutation_commit_time);
+            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout waiting for mutation {} to finish, current MergeMutateThread is {}",
+                mutation_commit_time, toString(getThreadStatus()));
         scheduled_task->schedule();
         sleepForMilliseconds(500);
     }

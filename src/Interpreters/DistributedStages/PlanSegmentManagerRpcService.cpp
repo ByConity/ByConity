@@ -107,7 +107,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
     try
     {
         bool is_cancelled = (request->code() == ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL) || (request->code() == ErrorCodes::QUERY_WAS_CANCELLED);
-        RuntimeSegmentsStatus status{
+        RuntimeSegmentStatus status{
             request->query_id(),
             request->segment_id(),
             request->parallel_index(),
@@ -122,7 +122,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         if (bsp_scheduler && !status.is_succeed && !status.is_cancelled)
         {
             bsp_scheduler->updateSegmentStatusCounter(request->segment_id(), request->parallel_index(), status);
-            if (bsp_scheduler->retryTaskIfPossible(request->segment_id(), request->parallel_index()))
+            if (bsp_scheduler->retryTaskIfPossible(request->segment_id(), request->parallel_index(), status))
                 return;
         }
         scheduler->updateSegmentStatus(status);
@@ -168,7 +168,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             {
                 LOG_INFO(
                     log,
-                    "cant find coordinator for query_id:{} segment_id:{} parallel_index:{}",
+                    "can't find coordinator for query_id:{} segment_id:{} parallel_index:{}",
                     request->query_id(),
                     request->segment_id(),
                     request->parallel_index());
@@ -196,9 +196,9 @@ void PlanSegmentManagerRpcService::reportPlanSegmentError(
 
     try
     {
-        auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
-        if (coodinator)
-            coodinator->tryUpdateRootErrorCause(QueryError{.code = request->code(), .message = request->message()}, false);
+        auto coordinator = MPPQueryManager::instance().getCoordinator(request->query_id());
+        if (coordinator)
+            coordinator->tryUpdateRootErrorCause(QueryError{.code = request->code(), .message = request->message()}, false);
     }
     catch (...)
     {

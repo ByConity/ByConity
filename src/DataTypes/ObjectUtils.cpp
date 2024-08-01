@@ -494,15 +494,6 @@ DataTypePtr createConcreteEmptyDynamicColumn(const DataTypePtr & type_in_storage
     throw Exception(ErrorCodes::LOGICAL_ERROR, "Type {} unexpectedly has dynamic columns", type_in_storage->getName());
 }
 
-bool hasDynamicSubcolumns(const ColumnsDescription & columns)
-{
-    return std::any_of(columns.begin(), columns.end(),
-        [](const auto & column)
-        {
-            return column.type->hasDynamicSubcolumns();
-        });
-}
-
 void extendObjectColumns(NamesAndTypesList & columns_list, const ColumnsDescription & object_columns, bool with_subcolumns)
 {
     NamesAndTypesList subcolumns_list;

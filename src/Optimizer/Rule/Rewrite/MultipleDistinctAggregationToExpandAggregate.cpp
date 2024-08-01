@@ -124,13 +124,14 @@ bool MultipleDistinctAggregationToExpandAggregate::allCountHasAtMostOneArguments
     return true;
 }
 
-PatternPtr MultipleDistinctAggregationToExpandAggregate::getPattern() const
+ConstRefPatternPtr MultipleDistinctAggregationToExpandAggregate::getPattern() const
 {
-    return Patterns::aggregating()
-        .matchingStep<AggregatingStep>([&](const AggregatingStep & s) {
+    static auto pattern = Patterns::aggregating()
+        .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
             return hasNoDistinctWithFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s)) && hasUniqueArgument(s) && allCountHasAtMostOneArguments(s);
         })
         .result();
+    return pattern;
 }
 
 TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -148,11 +149,11 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
     for (const auto & input_column : input)
     {
         DataTypePtr type = input_column.type;
-        type = JoinCommon::tryConvertTypeToNullable(type);
+        // type = JoinCommon::tryConvertTypeToNullable(type);
         name_type[input_column.name] = type;
         assignments.emplace(
             input_column.name,
-            makeASTFunction("cast", std::make_shared<ASTLiteral>(Field()), std::make_shared<ASTLiteral>(type->getName())));
+            makeASTFunction("cast", std::make_shared<ASTLiteral>(type->getDefault()), std::make_shared<ASTLiteral>(type->getName())));
     }
 
     /// append a extra mark field : group_id.
@@ -318,6 +319,7 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
         step.needOverflowRow(),
         step.shouldProduceResultsInOrderOfBucketNumber(),
         step.isNoShuffle(),
+        step.isStreamingForCache(),
         step.getHints());
     auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {mask_node});
 

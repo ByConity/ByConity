@@ -17,20 +17,48 @@ BlockIO InterpreterShowBindingsQuery::execute()
     if (!show)
         throw Exception("Show SQL Binding logical error", ErrorCodes::LOGICAL_ERROR);
 
-    size_t cnt = 0;
+    size_t cnt = 1;
     Block block;
     std::ostringstream out;
+    const auto & tenant_id = context->getTenantId();
+
     auto session_binding_cache_manager = BindingCacheManager::getSessionBindingCacheManager(context);
     auto & session_sql_cache = session_binding_cache_manager->getSqlCacheInstance();
+
+    auto output_sql_bindings = [&](const UUID & key, const Poco::SharedPtr<SQLBindingObject> & sql_binding_ptr, bool is_global) {
+            if (tenant_id.empty() && !sql_binding_ptr->tenant_id.empty())
+                out << SQLBindingUtils::getShowBindingsHeader(cnt) << "Tenant Id: " << sql_binding_ptr->tenant_id << "\n";
+            else if (tenant_id != sql_binding_ptr->tenant_id)
+                return;
+            else
+                out << SQLBindingUtils::getShowBindingsHeader(cnt);
+
+            out << (is_global ? "Global" : "Session") << " Binding UUID: " << UUIDHelpers::UUIDToString(key) << "\n"
+                << "Pattern:\n"
+                << sql_binding_ptr->pattern << ";\n"
+                << "Bound Query:\n"
+                << SQLBindingUtils::getASTStr(sql_binding_ptr->target_ast) << "\n";
+            cnt++;
+          };
+
+    auto output_re_bindings = [&](const UUID & key, const Poco::SharedPtr<SQLBindingObject> & sql_binding_ptr, bool is_global) {
+            if (tenant_id.empty() && !sql_binding_ptr->tenant_id.empty())
+                out << SQLBindingUtils::getShowBindingsHeader(cnt) << "Tenant Id: " << sql_binding_ptr->tenant_id << "\n";
+            else if (tenant_id != sql_binding_ptr->tenant_id)
+                return;
+            else
+                out << SQLBindingUtils::getShowBindingsHeader(cnt);
+
+            out << (is_global ? "Global" : "Session") << " Binding UUID: " << UUIDHelpers::UUIDToString(key) << "\n"
+            << "Pattern: " << sql_binding_ptr->pattern << "\n"
+            << "Settings: " << SQLBindingUtils::getASTStr(sql_binding_ptr->settings) << "\n";
+            cnt++;
+          };
+
     for (const auto & key : session_sql_cache.getAllKeys())
     {
-        cnt++;
         auto sql_binding_ptr = session_sql_cache.get(key);
-        out << SQLBindingUtils::getShowBindingsHeader(cnt) << "Session Binding UUID: " << UUIDHelpers::UUIDToString(key) << "\n"
-            << "Pattern:\n"
-            << sql_binding_ptr->pattern << ";\n"
-            << "Bound Query:\n"
-            << SQLBindingUtils::getASTStr(sql_binding_ptr->target_ast) << "\n";
+        output_sql_bindings(key, sql_binding_ptr, false);
     }
 
     auto & session_re_cache = session_binding_cache_manager->getReCacheInstance();
@@ -38,11 +66,8 @@ BlockIO InterpreterShowBindingsQuery::execute()
     {
         if (!session_re_cache.has(key))
             continue;
-        cnt++;
         const auto & sql_binding_ptr = session_re_cache.get(key);
-        out << SQLBindingUtils::getShowBindingsHeader(cnt) << "Session Binding UUID: " << UUIDHelpers::UUIDToString(key) << "\n"
-            << "Pattern: " << sql_binding_ptr->pattern << "\n"
-            << "Settings: " << SQLBindingUtils::getASTStr(sql_binding_ptr->settings) << "\n";
+        output_re_bindings(key, sql_binding_ptr, false);
     }
 
     auto global_binding_cache_manager = context->getGlobalBindingCacheManager();
@@ -62,13 +87,10 @@ BlockIO InterpreterShowBindingsQuery::execute()
     auto & global_sql_cache = global_binding_cache_manager->getSqlCacheInstance();
     for (const auto & key : global_sql_cache.getAllKeys())
     {
-        cnt++;
+        if (!global_sql_cache.has(key))
+            continue ;
         auto sql_binding_ptr = global_sql_cache.get(key);
-        out << SQLBindingUtils::getShowBindingsHeader(cnt) << "Global Binding UUID: " << UUIDHelpers::UUIDToString(key) << "\n"
-            << "Pattern:\n"
-            << sql_binding_ptr->pattern << ";\n"
-            << "Bound Query:\n"
-            << SQLBindingUtils::getASTStr(sql_binding_ptr->target_ast) << "\n";
+        output_sql_bindings(key, sql_binding_ptr, true);
     }
 
     auto & global_re_cache = global_binding_cache_manager->getReCacheInstance();
@@ -76,11 +98,8 @@ BlockIO InterpreterShowBindingsQuery::execute()
     {
         if (!global_re_cache.has(key))
             continue ;
-        cnt++;
         auto sql_binding_ptr = global_re_cache.get(key);
-        out << SQLBindingUtils::getShowBindingsHeader(cnt) << "Global Binding UUID: " << UUIDHelpers::UUIDToString(key)  << "\n"
-            << "Pattern: " << sql_binding_ptr->pattern << "\n"
-            << "Settings: " << SQLBindingUtils::getASTStr(sql_binding_ptr->settings) << "\n";
+        output_re_bindings(key, sql_binding_ptr, true);
     }
 
     BlockIO res;

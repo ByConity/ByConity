@@ -253,14 +253,15 @@ int DaemonManager::main(const std::vector<std::string> &)
     std::string path = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
     global_context->setPath(path);
 
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
+
     /// Init HDFS3 client config path
-    std::string hdfs_config = global_context->getCnchConfigRef().getString("hdfs3_config", "");
+    std::string hdfs_config = config().getString("hdfs3_config", "");
     if (!hdfs_config.empty())
     {
         setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
     }
 
-    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 
     /// Temporary solution to solve the problem with Disk initialization

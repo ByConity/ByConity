@@ -104,7 +104,7 @@ Constants ConstantsDeriverVisitor::visitJoinStep(const JoinStep & step, Constant
 Constants ConstantsDeriverVisitor::visitProjectionStep(const ProjectionStep & step, ConstantsDeriverContext & context)
 {
     // TODO@lijinzhi.zx: Extract constants from ASTIdentifer to ASTLiteral assigments.
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     std::unordered_map<String, String> revert_identifies;
 

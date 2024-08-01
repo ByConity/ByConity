@@ -1125,6 +1125,8 @@ namespace S3
     {
         auto access_key_id = config.getString(config_elem + ".access_key_id", "");
         auto secret_access_key = config.getString(config_elem + ".secret_access_key", "");
+        auto session_token = config.getString(config_elem + ".session_token", "");
+
         auto region = config.getString(config_elem + ".region", "");
         auto server_side_encryption_customer_key_base64 = config.getString(config_elem + ".server_side_encryption_customer_key_base64", "");
 
@@ -1161,7 +1163,7 @@ namespace S3
 
         return AuthSettings
             {
-                std::move(access_key_id), std::move(secret_access_key),
+                std::move(access_key_id), std::move(secret_access_key), std::move(session_token),
                 std::move(region),
                 std::move(server_side_encryption_customer_key_base64),
                 std::move(headers),
@@ -1182,6 +1184,8 @@ namespace S3
             access_key_id = from.access_key_id;
         if (!from.access_key_secret.empty())
             access_key_secret = from.access_key_secret;
+        if (!from.session_token.empty())
+            session_token = from.session_token;
 
         headers = from.headers;
         region = from.region;

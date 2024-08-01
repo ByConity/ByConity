@@ -22,14 +22,15 @@ namespace
     }
 };
 
-PatternPtr CreateTopNFilteringForAggregating::getPattern() const
+ConstRefPatternPtr CreateTopNFilteringForAggregating::getPattern() const
 {
     // TopN -> Aggregating -> !TopNFiltering
     // by this pattern, we also assume GROUP WITH TOTALS is not matched
-    return Patterns::topN()
+    static auto pattern = Patterns::topN()
         .withSingle(Patterns::aggregating().withSingle(Patterns::any().matching(
-            [](const PlanNodePtr & node, auto &) { return node->getStep()->getType() != IQueryPlanStep::Type::TopNFiltering; })))
+            [](const QueryPlanStepPtr & step, auto &) { return step->getType() != IQueryPlanStep::Type::TopNFiltering; })))
         .result();
+    return pattern;
 }
 
 TransformResult CreateTopNFilteringForAggregating::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -75,9 +76,10 @@ TransformResult CreateTopNFilteringForAggregating::transformImpl(PlanNodePtr nod
     return TransformResult{node};
 }
 
-PatternPtr PushTopNThroughProjection::getPattern() const
+ConstRefPatternPtr PushTopNThroughProjection::getPattern() const
 {
-    return Patterns::topN().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::topN().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult PushTopNThroughProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_ctx)
@@ -116,9 +118,10 @@ TransformResult PushTopNThroughProjection::transformImpl(PlanNodePtr node, const
     return TransformResult{projection};
 }
 
-PatternPtr PushTopNFilteringThroughProjection::getPattern() const
+ConstRefPatternPtr PushTopNFilteringThroughProjection::getPattern() const
 {
-    return Patterns::topNFiltering().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::topNFiltering().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult PushTopNFilteringThroughProjection::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -150,9 +153,10 @@ TransformResult PushTopNFilteringThroughProjection::transformImpl(PlanNodePtr no
     return TransformResult{projection};
 }
 
-PatternPtr PushTopNFilteringThroughUnion::getPattern() const
+ConstRefPatternPtr PushTopNFilteringThroughUnion::getPattern() const
 {
-    return Patterns::topNFiltering().withSingle(Patterns::unionn()).result();
+    static auto pattern = Patterns::topNFiltering().withSingle(Patterns::unionn()).result();
+    return pattern;
 }
 
 TransformResult PushTopNFilteringThroughUnion::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

@@ -19,6 +19,7 @@
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/PlanCheck.h>
 #include <Optimizer/Rewriter/AddBufferForDeadlockCTE.h>
+#include <Optimizer/Rewriter/AddCache.h>
 #include <Optimizer/Rewriter/AddExchange.h>
 #include <Optimizer/Rewriter/AddRuntimeFilters.h>
 #include <Optimizer/Rewriter/BitmapIndexSplitter.h>
@@ -33,8 +34,10 @@
 #include <Optimizer/Rewriter/RemoveRedundantSort.h>
 #include <Optimizer/Rewriter/RemoveUnusedCTE.h>
 #include <Optimizer/Rewriter/ShareCommonExpression.h>
+#include <Optimizer/Rewriter/ShareCommonPlanNode.h>
 #include <Optimizer/Rewriter/SimpleReorderJoin.h>
 #include <Optimizer/Rewriter/SimplifyCrossJoin.h>
+#include <Optimizer/Rewriter/UnaliasSymbolReferences.h>
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rewriter/UseSortingProperty.h>
@@ -88,6 +91,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // normalize plan after predicate push down
         std::make_shared<WindowToSortPruning>(),
         std::make_shared<RemoveRedundantDistinct>(),
+        std::make_shared<UnaliasSymbolReferences>(),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
@@ -117,6 +121,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // add exchange
         std::make_shared<CascadesOptimizer>(false),
 
+        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
         std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
         std::make_shared<RemoveRedundantDistinct>(),
@@ -124,6 +129,8 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // use property
         std::make_shared<SortingOrderedSource>(),
 
+        std::make_shared<OptimizeTrivialCount>(),
+        std::make_shared<UnaliasSymbolReferences>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
@@ -132,8 +139,9 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
-        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
+        std::make_shared<AddCache>(),
+
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
     return simple_rewrites;
@@ -188,7 +196,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::pushIndexProjectionIntoTableScanRules(), "PushIndexProjectionIntoTableScan"),
 
         // rules after subquery removed, DO NOT change !!!.
-
+        std::make_shared<ShareCommonPlanNode>(),
         std::make_shared<RemoveRedundantSort>(),
 
         // subquery remove may generate outer join, make sure data type is correct.
@@ -247,6 +255,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // prepare for cascades
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::pushUnionThroughJoin(), "PushUnionThroughJoin"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<UnifyJoinOutputs>(),
@@ -274,6 +283,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // remove not inlined CTEs
         std::make_shared<RemoveUnusedCTE>(),
+        std::make_shared<AddBufferForDeadlockCTE>(),
 
         // add runtime filters
         std::make_shared<AddRuntimeFilters>(),
@@ -298,6 +308,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         std::make_shared<OptimizeTrivialCount>(),
         // push predicate into storage
+        std::make_shared<UnaliasSymbolReferences>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         // TODO cost-based projection push down
@@ -307,9 +318,10 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
-        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<ImplementJoinAlgorithmHints>(),
+        std::make_shared<AddCache>(),
+
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
 

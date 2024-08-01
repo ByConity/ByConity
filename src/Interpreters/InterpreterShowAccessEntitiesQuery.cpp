@@ -89,8 +89,7 @@ String InterpreterShowAccessEntitiesQuery::getRewrittenQuery() const
         case EntityType::USER:
         {
             origin = "users";
-            expr = tenant_id.empty() ? "name" : "arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name";
-            filter = tenant_id.empty() ? "" : "system.users.name LIKE '" + tenant_id + ".%'";
+            expr = "name";
             order = "name";
             break;
         }

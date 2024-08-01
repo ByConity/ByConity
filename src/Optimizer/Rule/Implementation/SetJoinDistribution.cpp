@@ -23,12 +23,13 @@
 
 namespace DB
 {
-PatternPtr SetJoinDistribution::getPattern() const
+ConstRefPatternPtr SetJoinDistribution::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([](const JoinStep & s) { return s.getDistributionType() == DistributionType::UNKNOWN; })
-        .with(Patterns::any(), Patterns::any())
-        .result();
+    static auto pattern = Patterns::join()
+    .matchingStep<JoinStep>([](const JoinStep & s) { return s.getDistributionType() == DistributionType::UNKNOWN; })
+    .with(Patterns::any(), Patterns::any())
+    .result();
+    return pattern;
 }
 
 TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -39,16 +40,23 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
         return {};
 
     const auto & step = *join_node->getStep();
-    auto repartition_step = std::dynamic_pointer_cast<JoinStep>(node->getStep()->copy(context.context));
-    repartition_step->setDistributionType(DistributionType::REPARTITION);
-
-    auto broadcast_step = std::dynamic_pointer_cast<JoinStep>(node->getStep()->copy(context.context));
-    broadcast_step->setDistributionType(DistributionType::BROADCAST);
 
     auto left_group_id = dynamic_cast<const AnyStep *>(node->getChildren()[0]->getStep().get())->getGroupId();
     auto left_stats = context.optimization_context->getMemo().getGroupById(left_group_id)->getStatistics();
     auto right_group_id = dynamic_cast<const AnyStep *>(node->getChildren()[1]->getStep().get())->getGroupId();
     auto right_stats = context.optimization_context->getMemo().getGroupById(right_group_id)->getStatistics();
+
+    bool need_parallel_hash = false;
+
+    auto construct_renode = [&](DistributionType type) -> PlanNodePtr
+    {
+        auto re_step = std::dynamic_pointer_cast<JoinStep>(node->getStep()->copy(context.context));
+        re_step->setDistributionType(type);
+        if (need_parallel_hash)
+            re_step->setJoinAlgorithm(JoinAlgorithm::PARALLEL_HASH);
+        return {PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(re_step), node->getChildren())};
+    };
+
     if (right_stats)
     {
         double max_ndv = -1;
@@ -62,28 +70,24 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
 
         if (!step.getRightKeys().empty() && right_stats.value()->getRowCount() > context.context->getSettingsRef().parallel_join_threshold)
         {
-            repartition_step->setJoinAlgorithm(JoinAlgorithm::PARALLEL_HASH);
-            broadcast_step->setJoinAlgorithm(JoinAlgorithm::PARALLEL_HASH);
+            need_parallel_hash = true;
         }
 
         if (max_ndv > context.context->getSettingsRef().max_replicate_build_size
             || right_stats.value()->getRowCount() > context.context->getSettingsRef().max_replicate_shuffle_size)
         {
-            return {PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(repartition_step), node->getChildren())};
+            return construct_renode(DistributionType::REPARTITION);
         }
     }
 
-    auto repartition_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(repartition_step), node->getChildren());
     if (step.mustRepartition())
     {
-        return {repartition_node};
+        return {construct_renode(DistributionType::REPARTITION)};
     }
-
-    auto replicate_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(broadcast_step), node->getChildren());
 
     if (step.mustReplicate())
     {
-        return {replicate_node};
+        return {construct_renode(DistributionType::BROADCAST)};
     }
 
     // when statistics exists, enum both repartition-join and replicated-join.
@@ -91,11 +95,11 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
     {
         if (context.context->getSettingsRef().enum_repartition)
         {
-            result.emplace_back(repartition_node);
+            result.emplace_back(construct_renode(DistributionType::REPARTITION));
         }
         if (context.context->getSettingsRef().enum_replicate)
         {
-            result.emplace_back(replicate_node);
+            result.emplace_back(construct_renode(DistributionType::BROADCAST));
         }
     }
     else
@@ -103,11 +107,11 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
     {
         if (context.context->getSettingsRef().enum_replicate_no_stats)
         {
-            result.emplace_back(replicate_node);
+            result.emplace_back(construct_renode(DistributionType::BROADCAST));
         }
         else
         {
-            result.emplace_back(repartition_node);
+            result.emplace_back(construct_renode(DistributionType::REPARTITION));
         }
     }
 

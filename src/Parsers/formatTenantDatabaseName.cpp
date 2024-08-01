@@ -49,7 +49,7 @@ String getCurrentCatalog()
 }
 
 static constexpr std::string_view internal_databases[]
-    = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
+    = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::MYSQL, DatabaseCatalog::MYSQL_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
 
 static bool isInternalDatabaseName(const String & database_name)
 {
@@ -59,6 +59,21 @@ static bool isInternalDatabaseName(const String & database_name)
             return true;
     }
     return false;
+}
+
+//Format pattern {tenant_id}.{name}
+String formatTenantName(const String & name, char separator)
+{
+    auto tenant_id = getCurrentTenantId();
+    if (!tenant_id.empty() &&
+        (name.find(tenant_id) != 0 || name.size() == tenant_id.size() || name[tenant_id.size()] != separator))
+    {
+        String result = tenant_id;
+        result += separator;
+        result += name;
+        return result;
+    }
+    return name;
 }
 
 //Format pattern {tenant_id}.{database_name}
@@ -106,8 +121,10 @@ String formatTenantDatabaseName(const String & database_name)
     }
 }
 
-String appendTenantIdOnly(const String & name)
+String appendTenantIdOnly(const String& name, bool is_datbase_name)
 {
+    if (!is_datbase_name)
+        return formatTenantName(name);
     return formatTenantDatabaseNameImpl(name);
 }
 

@@ -18,14 +18,17 @@
 #include <Functions/FunctionsHashing.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Optimizer/Property/SymbolEquivalencesDeriver.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <Optimizer/Property/Constants.h>
 #include <Optimizer/Property/SymbolEquivalencesDeriver.h>
+#include <Parsers/ASTClusterByElement.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Parsers/queryToString.h>
 #include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/PlanSerDerHelper.h>
+#include <Storages/extractKeyExpressionList.h>
+#include <Common/Exception.h>
+#include "Core/Field.h"
 
 namespace DB
 {
@@ -33,13 +36,11 @@ size_t Partitioning::hash() const
 {
     size_t hash = IntHash64Impl::apply(static_cast<UInt8>(handle));
     hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(preferred));
-    hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(columns.size()));
     for (const auto & column : columns)
         hash = MurmurHash3Impl64::combineHashes(hash, MurmurHash3Impl64::apply(column.c_str(), column.size()));
 
     hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(require_handle));
     hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(buckets));
-    hash = MurmurHash3Impl64::combineHashes(hash, IntHash64Impl::apply(enforce_round_robin));
     return hash;
 }
 
@@ -47,7 +48,7 @@ bool Partitioning::satisfy(const Partitioning & requirement, const Constants & c
 {
     if (requirement.require_handle)
         return getHandle() == requirement.getHandle() && getBuckets() == requirement.getBuckets()
-            && getColumns() == requirement.getColumns();
+            && getColumns() == requirement.getColumns() && ASTEquality::compareTree(bucket_expr, requirement.bucket_expr);
 
     switch (requirement.component)
     {
@@ -76,7 +77,7 @@ bool Partitioning::satisfy(const Partitioning & requirement, const Constants & c
                 || (!requirement.isExactlyMatch() && this->isPartitionOn(requirement, constants));
         default:
             return getHandle() == requirement.getHandle() && getBuckets() == requirement.getBuckets()
-                && getColumns() == requirement.getColumns();
+                && getColumns() == requirement.getColumns() && ASTEquality::compareTree(bucket_expr, requirement.bucket_expr);
     }
 }
 
@@ -108,6 +109,103 @@ bool Partitioning::isPartitionOn(const Partitioning & requirement, const Constan
     return true;
 }
 
+bool Partitioning::isExchangeSchema(bool support_bucket_shuffle) const
+{
+    if (handle == Handle::BUCKET_TABLE)
+    {
+        if (support_bucket_shuffle && bucket_expr)
+        {
+            if (auto * cluster_by_ast_element = bucket_expr->as<ASTClusterByElement>())
+            {
+                if (cluster_by_ast_element->is_user_defined_expression)
+                {
+                    if (!cluster_by_ast_element->getColumns()->as<ASTIdentifier>())
+                        return false;
+                }
+
+                auto expression = extractKeyExpressionList(cluster_by_ast_element->getColumns());
+
+                if (auto * expr_list = expression->as<ASTExpressionList>())
+                {
+                    if (expr_list->children.size() != columns.size())
+                        return false;
+                    for (const auto & col : expr_list->children)
+                    {
+                        if (auto * id = col->as<ASTIdentifier>())
+                        {
+                            if (!id->name().starts_with("$"))
+                                return false;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+String Partitioning::getHashFunc(String default_func) const
+{
+    if (handle == Handle::BUCKET_TABLE)
+    {
+        if (bucket_expr)
+        {
+            if (auto * cluster_by_ast_element = bucket_expr->as<ASTClusterByElement>())
+            {
+                if (cluster_by_ast_element->is_user_defined_expression)
+                    return "toUInt64";
+                return "bucket";
+            }
+        }
+    }
+
+    return default_func;
+}
+
+
+// bucket(function_name,bucket_num，with_range,split_number)(bucket_column)
+Array Partitioning::getParams() const
+{
+    Array result;
+    if (handle == Handle::BUCKET_TABLE)
+    {
+        if (bucket_expr)
+        {
+            if (auto * cluster_by_ast_element = bucket_expr->as<ASTClusterByElement>())
+            {
+                if (cluster_by_ast_element->is_user_defined_expression)
+                    return result;
+                if (cluster_by_ast_element->split_number > 0 && columns.size() == 1)
+                {
+                    result.emplace_back(Field("dtspartition"));
+                }
+                else
+                {
+                    result.emplace_back(Field("sipHashBuitin"));
+                }
+                result.emplace_back(buckets);
+                result.emplace_back(Field(cluster_by_ast_element->is_with_range));
+                result.emplace_back(Field(static_cast<UInt64>(cluster_by_ast_element->split_number)));
+            }
+        }
+    }
+
+    return result;
+}
+
 Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalences) const
 {
     auto mapping = symbol_equivalences.representMap();
@@ -136,8 +234,8 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
         else // note: don't discard column
             translate_columns.emplace_back(column);
     }
-    auto result
-        = Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin, component, exactly_match, satisfy_worker};
+    auto result = Partitioning{
+        handle, translate_columns, require_handle, buckets, bucket_expr, enforce_round_robin, component, exactly_match, satisfy_worker};
     result.setPreferred(preferred);
     return result;
 }
@@ -153,6 +251,7 @@ void Partitioning::toProto(Protos::Partitioning & proto) const
     proto.set_enforce_round_robin(enforce_round_robin);
     proto.set_component(Partitioning::ComponentConverter::toProto(component));
     proto.set_exactly_match(exactly_match);
+    serializeASTToProto(bucket_expr, *proto.mutable_bucket_expr());
 }
 
 Partitioning Partitioning::fromProto(const Protos::Partitioning & proto)
@@ -166,7 +265,10 @@ Partitioning Partitioning::fromProto(const Protos::Partitioning & proto)
     auto enforce_round_robin = proto.enforce_round_robin();
     auto component = Partitioning::ComponentConverter::fromProto(proto.component());
     auto exactly_match = proto.exactly_match();
-    return Partitioning(handle, columns, require_handle, buckets, enforce_round_robin, component, exactly_match);
+    ASTPtr bucket_expr = nullptr;
+    if (proto.has_bucket_expr())
+        bucket_expr = deserializeASTFromProto(proto.bucket_expr());
+    return Partitioning(handle, columns, require_handle, buckets, bucket_expr, enforce_round_robin, component, exactly_match);
 }
 
 String Partitioning::toString() const
@@ -215,7 +317,7 @@ String Partitioning::toString() const
                                   columns[0],
                                   [](String a, const String & b) { return std::move(a) + ", " + b; })
                     + "]";
-                result += " BUCKETS " + std::to_string(getBuckets());
+                result += " " + queryToString(bucket_expr);
                 if (require_handle)
                     result += " H";
                 if (preferred)
@@ -301,8 +403,9 @@ Sorting Sorting::normalize(const SymbolEquivalences & symbol_equivalences) const
 
 String Sorting::toString() const
 {
-    return empty() ? "" : std::accumulate(
-        std::next(begin()), end(), front().toString(), [](std::string a, const auto & b) { return std::move(a) + '-' + b.toString(); });
+    return empty() ? "" : std::accumulate(std::next(begin()), end(), front().toString(), [](std::string a, const auto & b) {
+        return std::move(a) + '-' + b.toString();
+    });
 }
 
 size_t CTEDescriptions::hash() const
@@ -379,7 +482,7 @@ Property Property::normalize(const SymbolEquivalences & symbol_equivalences) con
         node_partitioning.normalize(symbol_equivalences),
         stream_partitioning.normalize(symbol_equivalences),
         sorting.normalize(symbol_equivalences)};
-        result.setCTEDescriptions(cte_descriptions);
+    result.setCTEDescriptions(cte_descriptions);
     return result;
 }
 
@@ -430,7 +533,7 @@ CTEDescription CTEDescription::inlined()
 }
 
 CTEDescription CTEDescription::from(const Property & property)
-    {
+{
     return CTEDescription(false, property.getNodePartitioning());
 }
 

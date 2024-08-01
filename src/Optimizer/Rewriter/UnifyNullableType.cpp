@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -154,6 +155,11 @@ PlanNodePtr UnifyNullableVisitor::visitIntersectOrExceptNode(IntersectOrExceptNo
     return visitPlanNode(node, context);
 }
 
+PlanNodePtr UnifyNullableVisitor::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
 PlanNodePtr UnifyNullableVisitor::visitLocalExchangeNode(LocalExchangeNode & node, ContextMutablePtr & context)
 {
     return visitPlanNode(node, context);
@@ -273,7 +279,7 @@ PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, Con
 {
     PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, context);
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     NameToType set_nullable;
     const auto & input_header = child->getStep()->getOutputStream().header;
     auto type_analyzer = TypeAnalyzer::create(context, input_header.getNamesAndTypes());
@@ -427,6 +433,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, C
         step.needOverflowRow(),
         step.shouldProduceResultsInOrderOfBucketNumber(),
         step.isNoShuffle(),
+        step.isStreamingForCache(),
         step.getHints());
     auto agg_node_set_null
         = AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step_set_null), PlanNodes{child}, node.getStatistics());
@@ -651,5 +658,4 @@ PlanNodePtr UnifyNullableVisitor::visitCTERefNode(CTERefNode & node, ContextMuta
     auto cte_ref_node = CTERefNode::createPlanNode(context->nextNodeId(), std::move(cte_ref_step), PlanNodes{}, node.getStatistics());
     return cte_ref_node;
 }
-
 }

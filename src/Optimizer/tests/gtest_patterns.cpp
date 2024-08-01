@@ -16,6 +16,7 @@
 #include <Optimizer/tests/gtest_optimizer_test_utils.h>
 
 #include <gtest/gtest.h>
+#include "QueryPlan/IQueryPlanStep.h"
 
 using namespace DB;
 using namespace DB::Patterns;
@@ -31,12 +32,12 @@ TEST(OptimizerPatternsTest, GetPatternTargetType)
 
 TEST(OptimizerPatternsTest, PredicateNot)
 {
-    PatternPredicate t = [](const PlanNodePtr &, const Captures &) { return true; };
+    PatternPredicate t = [](const QueryPlanStepPtr &, const Captures &) { return true; };
     PatternPredicate f = predicateNot(t);
-    PlanNodePtr node;
+    PlanNodePtr node = createTableScanNode("db1", "t1", {});
     Captures captures;
-    ASSERT_TRUE(t(node, captures));
-    ASSERT_TRUE(!f(node, captures));
+    ASSERT_TRUE(t(node->getStep(), captures));
+    ASSERT_TRUE(!f(node->getStep(), captures));
 }
 
 TEST(OptimizerPatternsTest, ToString)

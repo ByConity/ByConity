@@ -44,6 +44,9 @@ using StoragePtr = std::shared_ptr<IStorage>;
 
 using OutputPortRawPtrs = std::vector<OutputPort *>;
 
+namespace IntermediateResult { struct CacheHolder; }
+using CacheHolderPtr = std::shared_ptr<IntermediateResult::CacheHolder>;
+
 /// Pipe is a set of processors which represents the part of pipeline.
 /// Pipe contains a list of output ports, with specified port for totals and specified port for extremes.
 /// All output ports have same header.
@@ -145,6 +148,8 @@ public:
     //void addStorageHolder(StoragePtr storage) { holder.storage_holders.emplace_back(std::move(storage)); }
     void addStorageHolder(StoragePtr storage);
     void addQueryIdHolder(std::shared_ptr<QueryIdHolder> query_id_holder) { holder.query_id_holder = std::move(query_id_holder); }
+    void addCacheHolder(CacheHolderPtr cache_holder) { holder.cache_holder = std::move(cache_holder); }
+    CacheHolderPtr getCacheHolder() { return holder.cache_holder; }
     /// For queries with nested interpreters (i.e. StorageDistributed)
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { holder.query_plans.emplace_back(std::move(plan)); }
 
@@ -166,6 +171,7 @@ private:
         std::vector<TableLockHolder> table_locks;
         std::vector<std::unique_ptr<QueryPlan>> query_plans;
         std::shared_ptr<QueryIdHolder> query_id_holder;
+        CacheHolderPtr cache_holder;
     };
 
     Holder holder;

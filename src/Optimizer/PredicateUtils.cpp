@@ -452,7 +452,7 @@ bool PredicateUtils::isInliningCandidate(ConstASTPtr & predicate, ProjectionNode
     }
 
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
 
     bool all_match = true;
     for (auto & dependency : dependencies)

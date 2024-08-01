@@ -143,9 +143,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
         create.to_inner_uuid = UUIDHelpers::Nil;
     }
 
-    WriteBufferFromOwnString buf;
-    formatAST(*create_query, buf, false, false, false, getContext()->getSettingsRef().dialect_type);
-    String res = buf.str();
+    String res = create_query->formatWithHiddenSecrets(/* max_length= */ 0, /* one_line= */ false, /*no_alias*/ false, getContext()->getSettingsRef().dialect_type);
 
     MutableColumnPtr column = ColumnString::create();
     column->insert(res);
@@ -155,7 +153,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
         if ((show_query = query_ptr->as<ASTShowCreateTableQuery>()))
         {
             name_column->insert(show_query->table);
-            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "Table"}, 
+            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "Table"},
                                                                 {std::move(column), std::make_shared<DataTypeString>(), "Create Table"}});
         }
         else if ((show_query = query_ptr->as<ASTShowCreateViewQuery>()))
@@ -166,15 +164,15 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
             // TODO: Replace with actual values
             character_set_client_column->insert("utf8mb4");
             collation_connection_column->insert("utf8mb4_0900_ai_ci");
-            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "View"}, 
-                                                    {std::move(column), std::make_shared<DataTypeString>(), "Create View"}, 
-                                                    {std::move(character_set_client_column), std::make_shared<DataTypeString>(), "character_set_client"}, 
+            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "View"},
+                                                    {std::move(column), std::make_shared<DataTypeString>(), "Create View"},
+                                                    {std::move(character_set_client_column), std::make_shared<DataTypeString>(), "character_set_client"},
                                                     {std::move(collation_connection_column), std::make_shared<DataTypeString>(), "collation_connection"}});
         }
          else if ((show_query = query_ptr->as<ASTShowCreateDatabaseQuery>()))
         {
             name_column->insert(getOriginalDatabaseName(show_query->database));
-            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "Database"}, 
+            return std::make_shared<OneBlockInputStream>(Block{{move(name_column), std::make_shared<DataTypeString>(), "Database"},
                                         {std::move(column), std::make_shared<DataTypeString>(), "Create Database"}});
         }
         // TODO: add more show create that mysql has ...

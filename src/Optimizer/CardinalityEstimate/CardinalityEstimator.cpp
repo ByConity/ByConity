@@ -405,6 +405,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitFillingStep(const FillingStep & ,
     return child_stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitIntermediateResultCacheStep(const IntermediateResultCacheStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
 PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node, CardinalityContext & context)
 {
     static CardinalityVisitor visitor;
@@ -483,7 +489,7 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitCTERefNode(CTERefNode & node,
     for (const auto & item : step->getOutputColumns())
         calculated_symbol_statistics[item.first] = cte_ref_stats->getSymbolStatistics(item.second);
     auto stats = std::make_shared<PlanNodeStatistics>(cte_ref_stats->getRowCount(), calculated_symbol_statistics);
-node.setStatistics(stats ? std::make_optional(stats) : std::nullopt);
+    node.setStatistics(stats ? std::make_optional(stats) : std::nullopt);
     return stats;
 }
 

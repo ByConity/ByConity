@@ -19,7 +19,7 @@ public:
     RuleType getType() const override { return RuleType::JOIN_TO_MULTI_JOIN; }
     String getName() const override { return "JOIN_TO_MULTI_JOIN"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_join_to_multi_join; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
     static bool isSupport(const JoinStep & s) { return s.supportReorder(true) && !s.isSimpleReordered() && !s.isOrdered(); }
 
     static PlanNodes createMultiJoin(

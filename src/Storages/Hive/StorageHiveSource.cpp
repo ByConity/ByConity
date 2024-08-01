@@ -231,7 +231,12 @@ Chunk StorageHiveSource::buildResultChunk(Chunk & chunk) const
         else
             throw Exception{ErrorCodes::THERE_IS_NO_COLUMN, "Column '{}' is not presented in input data.", col.name};
     }
-    return Chunk(std::move(result_columns), num_rows);
+    auto chunk_ret = Chunk(std::move(result_columns), num_rows);
+    OwnerInfo owner_info{hive_file->file_path, 0};
+    // todo caoliu time
+    // OwnerInfo owner_info{file_path, static_cast<time_t>(current_file->getLastModifiedTimestamp())};
+    chunk_ret.setOwnerInfo(std::move(owner_info));
+    return chunk_ret;
 }
 
 }

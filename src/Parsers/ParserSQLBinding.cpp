@@ -16,12 +16,16 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     ParserKeyword s_binding("BINDING");
     ParserKeyword s_using("USING");
     ParserKeyword s_settings("SETTINGS");
+    ParserKeyword s_if_not_exists("IF NOT EXISTS");
+    ParserKeyword s_or_replace("OR REPLACE");
 
     String query_pattern;
     String re_expression;
     ASTPtr pattern;
     ASTPtr target;
     ASTPtr settings;
+    bool if_not_exists = false;
+    bool or_replace = false;
 
     BindingLevel level;
     if (!s_create.ignore(pos, expected))
@@ -36,6 +40,11 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
 
     if (!s_binding.ignore(pos, expected))
         return false;
+
+    if (s_if_not_exists.ignore(pos, expected))
+        if_not_exists = true;
+    else if (s_or_replace.ignore(pos, expected))
+        or_replace = true;
 
     ParserSelectWithUnionQuery select_p(dt);
     const auto * begin = pos->begin;
@@ -79,6 +88,8 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     create_binding_query->pattern = pattern;
     create_binding_query->target = target;
     create_binding_query->settings = settings;
+    create_binding_query->if_not_exists = if_not_exists;
+    create_binding_query->or_replace = or_replace;
 
     node = create_binding_query;
     return true;

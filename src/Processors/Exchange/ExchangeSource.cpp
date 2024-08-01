@@ -140,9 +140,10 @@ void ExchangeSource::onCancel()
 
 void ExchangeSource::checkBroadcastStatus(const BroadcastStatus & status) const
 {
+    // Better fix me. Using `>` is not a good practice to determine next move, as the `BroadcastStatusCode` may be added casually.
     if (status.code > BroadcastStatusCode::RECV_REACH_LIMIT)
     {
-        if (status.is_modifer)
+        if (status.is_modified_by_operator)
         {
             if(status.code == BroadcastStatusCode::RECV_TIMEOUT)
             {
@@ -155,14 +156,15 @@ void ExchangeSource::checkBroadcastStatus(const BroadcastStatus & status) const
             }
             else 
             {
+                // CANCELLED, NOT_READY, UNKNOWN_ERROR
                 throw Exception(
                     ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION,
-                    "Query {} cancel receive data due to unknown reason with code {}, try to find real error in log or query_log. Debug "
-                    "info for source {}: {}",
+                    "Query {} cancels receiving data due to unknown reason with code {} and error message {}. The real error message may "
+                    "be in log or query_log. Exchange source name is {}",
                     CurrentThread::getQueryId(),
                     status.code,
-                    getName(),
-                    status.message);
+                    status.message,
+                    getName());
             }
         }
 
@@ -170,12 +172,12 @@ void ExchangeSource::checkBroadcastStatus(const BroadcastStatus & status) const
         if (status.code != BroadcastStatusCode::RECV_CANCELLED)
             throw Exception(
                 ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL,
-                "Query {} cancel receive data due to unknown reason with code {}, try to find real error in log or query_log. Debug "
-                "info for source {}: {}",
+                "Query {} cancels receiving data due to unknown reason with code {} and error message {}. The real error message may "
+                "be in log or query_log. Exchange source name is {}",
                 CurrentThread::getQueryId(),
                 status.code,
-                getName(),
-                status.message);
+                status.message,
+                getName());
     }
 }
 

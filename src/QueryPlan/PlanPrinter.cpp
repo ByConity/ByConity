@@ -36,6 +36,7 @@
 #include <Poco/JSON/Object.h>
 
 #include <utility>
+#include <vector>
 
 namespace DB
 {
@@ -252,7 +253,8 @@ String PlanPrinter::getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment
                 << " ExchangeId:" << input->exchange_id
                 << " ExchangeMode:" << magic_enum::enum_name(input->mode)
                 << " ExchangeParallelSize:" << input->exchange_parallel_size
-                << " KeepOrder:" << input->keep_order << ")";
+                << " KeepOrder:" << input->keep_order
+                << (input->stable ? " Stable" : "") << ")";
             first = false;
         }
         os << "]\n";
@@ -1129,6 +1131,13 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         if (totals_having->getHavingFilter())
             out << intent.detailIntent() << "Having: " << totals_having->getHavingFilter()->formatForErrorMessage();
     }
+
+    // if (plan->getType() == IQueryPlanStep::Type::IntermediateResultCache)
+    // {
+    //     const auto * cache = dynamic_cast<IntermediateResultCacheStep *>(plan.get());
+    //     out << intent.detailIntent() << "Digest: " << cache->getCacheParam().digest;
+    // }
+
     return out.str();
 }
 
@@ -1783,6 +1792,7 @@ PlanSegmentDescriptionPtr PlanSegmentDescription::getPlanSegmentDescription(Plan
             input_desc.mode = input->getExchangeMode();
             input_desc.exchange_parallel_size = input->getExchangeParallelSize();
             input_desc.keep_order = input->needKeepOrder();
+            input_desc.stable = input->isStable();
             auto input_desc_ptr = std::make_shared<PlanSegmentDescription::InputInfo>(input_desc);
             plan_segment_desc->inputs_desc.emplace_back(input_desc_ptr);
         }

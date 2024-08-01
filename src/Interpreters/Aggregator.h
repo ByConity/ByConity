@@ -89,6 +89,7 @@ class IBlockOutputStream;
   */
 
 using AggregatedDataWithoutKey = AggregateDataPtr;
+using AggregateFuncStats = PODArray<AggregateDataPtr>;
 
 using AggregatedDataWithUInt8Key = FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>;
 using AggregatedDataWithUInt16Key = FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>;
@@ -1163,6 +1164,25 @@ public:
     /// Get data structure of the result.
     Block getHeader(bool final) const;
 
+    void turnOnAggStreaming()
+    {
+        is_agg_streaming = true;
+    }
+    void turnOffAggStreaming()
+    {
+        is_agg_streaming = false;
+    }
+
+    void turnOnAggConvertingForCache()
+    {
+        is_agg_converting_for_cache = true;
+    }
+
+    bool isWithoutKey() const
+    {
+        return method_chosen == AggregatedDataVariants::Type::without_key;
+    }
+
     static void chooseAggregationMethodByOption(
         const ChooseMethodOption & option,
         Sizes & key_sizes,
@@ -1174,8 +1194,14 @@ private:
     friend class ConvertingAggregatedToChunksTransform;
     friend class ConvertingAggregatedToChunksSource;
     friend class AggregatingInOrderTransform;
+    friend class AggregatingStreamingTransform;
+    friend class MergingAggregatedStreamingTransform;
+    friend class PreAggregatingTransform;
 
     Params params;
+
+    bool is_agg_streaming = false;
+    bool is_agg_converting_for_cache = false;
 
     AggregatedDataVariants::Type method_chosen;
     Sizes key_sizes;

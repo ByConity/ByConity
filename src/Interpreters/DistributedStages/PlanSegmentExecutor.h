@@ -57,13 +57,13 @@ public:
     struct ExecutionResult
     {
         AddressInfo coordinator_address;
-        RuntimeSegmentsStatus runtime_segment_status;
+        RuntimeSegmentStatus runtime_segment_status;
         Protos::SenderMetrics sender_metrics;
     };
     std::optional<ExecutionResult> execute();
     BlockIO lazyExecute(bool add_output_processors = false);
 
-    static void registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms);
+    static void registerAllExchangeReceivers(Poco::Logger * log, const QueryPipeline & pipeline, UInt32 register_timeout_ms);
 
 protected:
     void doExecute();

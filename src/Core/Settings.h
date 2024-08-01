@@ -195,6 +195,7 @@ enum PreloadLevelSettings : UInt64
     M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
     M(UInt64, s3_max_list_nums, 1000, "Sets the maximum number of keys returned in the response, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_request_ms, 30000, "Request max timeout ms , now it is just for CnchS3", 0) \
+    M(Bool, s3_skip_empty_files, false, "Allow to skip empty files in s3 table engine", 0) \
     M(Bool, overwrite_current_file, false, "Enable overwrite current file, now it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, insert_new_file, true, "Create new file when write data into the file, now it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.", IMPORTANT) \
@@ -275,7 +276,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_suspicious_fixed_string_types, false, "In CREATE TABLE statement allows creating columns of type FixedString(n) with n > 256. FixedString with length >= 256 is suspicious and most likely indicates misusage", 0) \
     M(Bool, compile_expressions, false, "Compile some scalar functions and operators to native code.", 0) \
     M(UInt64, min_count_to_compile_expression, 3, "The number of identical expressions before they are JIT-compiled", 0) \
-    M(Bool, compile_aggregate_expressions, true, "Compile aggregate functions to native code.", 0) \
+    M(Bool, compile_aggregate_expressions, false, "Compile aggregate functions to native code.", 0) \
     M(UInt64, min_count_to_compile_aggregate_expression, 3, "The number of identical aggregate expressions before they are JIT-compiled", 0) \
     M(UInt64, group_by_two_level_threshold, 100000, "From what number of keys, a two-level aggregation starts. 0 - the threshold is not set.", 0) \
     M(UInt64, group_by_two_level_threshold_bytes, 50000000, "From what size of the aggregation state in bytes, a two-level aggregation begins to be used. 0 - the threshold is not set. Two-level aggregation is used when at least one of the thresholds is triggered.", 0) \
@@ -677,7 +678,8 @@ enum PreloadLevelSettings : UInt64
     \
     M(UInt64, max_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \
-\
+    M(Float, streaming_agg_local_ratio, 0.25, "The ratio of local streaming agg, 0-all streaming, 1-all local merged", 0) \
+    \
     M(UInt64, max_rows_to_group_by, 0, "", 0) \
     M(OverflowModeGroupBy, group_by_overflow_mode, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
     M(UInt64, max_bytes_before_external_group_by, 0, "", 0) \
@@ -1501,6 +1503,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
+    M(Bool, enable_remove_remove_unnecessary_buffer, false, "Whether to only add buffer for cte consumer that may cause deadlock", 0) \
+    M(Int64, max_buffer_size_for_deadlock_cte, 8000000000, "Inline CTE if buffer is oversized, set 0 to inline all cte, set -1 to buffer data for all cte even no stats", 0) \
     M(Bool, enable_add_exchange, true, "Whether to enable AddExchange rule", 0) \
     M(Bool, enable_bitmap_index_splitter, true, "Whether to enable BitMapIndexSplitter", 0) \
     M(Bool, enable_column_pruning, true, "Whether to enable ColumnPruning", 0) \
@@ -1515,6 +1519,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_implement_except, true, "Whether to enable ImplementExceptRule rule", 0) \
     M(Bool, enable_implement_intersect, true, "Whether to enable ImplementIntersectRule rule", 0) \
     M(Bool, enable_inline_projection, true, "Whether to enable InlineProjections rule", 0) \
+    M(Bool, enable_inline_projection_into_join, true, "Whether to enable InlineProjections rule", 0) \
+    M(Bool, enable_inline_projection_on_join_into_join, true, "Whether to enable InlineProjections rule", 0) \
     M(Bool, enable_merge_aggregate, true, "Whether to enable MergeAggregatings rule", 0) \
     M(Bool, enable_merge_union, true, "Whether to enable MergeUnionRule rule", 0) \
     M(Bool, enable_merge_except, true, "Whether to enable MergeExceptRule rule", 0) \
@@ -1530,6 +1536,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_limit_zero_to_read_nothing, true, "Whether to enable LimitZeroToReadNothing rule", 0) \
     M(Bool, enable_push_down_limit_into_window, true, "Whether to enable PushdownLimitIntoWindow rule", 0) \
     M(Bool, enable_push_limit_into_sorting_rule, true, "Whether to enable PushLimitIntoSorting rule", 0) \
+    M(Bool, enable_push_limit_through_buffer, true, "Whether to enable PushLimitThroughBuffer rule", 0) \
     M(Bool, enable_push_down_apply_through_join, true, "Whether to enable PushDownApplyThroughJoin rule", 0) \
     M(Bool, enable_push_storage_filter, true, "Whether to enable PushStorageFilter rule", 0) \
     M(Bool, enable_push_limit_into_table_scan, true, "Whether to enable PushLimitIntoTableScan rule", 0) \
@@ -1537,6 +1544,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_projection_into_table_scan, true, "Whether to enable PushProjectionIntoTableScan rule", 0) \
     M(Bool, enable_push_index_projection_into_table_scan, true, "Whether to enable PushIndexProjectionIntoTableScan rule", 0) \
     M(Bool, enable_push_filter_into_table_scan, true, "Whether to enable PushFilterIntoTableScan rule", 0) \
+    M(Bool, enable_push_union_through_join, true, "Whether to enable PushUnionThroughJoin rule", 0) \
+    M(Bool, enable_push_union_through_projection, true, "Whether to enable PushUnionThroughProjection rule", 0) \
+    M(Bool, enable_push_union_through_agg, false, "Whether to enable PushUnionThroughAgg rule", 0) \
     M(Bool, enable_inner_join_associate, true, "Whether to enable InnerJoinAssociate rule", 0) \
     M(Bool, enable_inner_join_commutation, true, "Whether to enable InnerJoinCommutation rule", 0) \
     M(Bool, enable_join_enum_on_graph, true, "Whether to enable JoinEnumOnGraph rule", 0) \
@@ -1544,10 +1554,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cardinality_based_join_reorder, true, "Whether to enable CardinalityBasedJoinReorder rule", 0) \
     M(Bool, enable_selectivity_based_join_reorder, true, "Whether to enable SelectivityBasedJoinReorder rule", 0) \
     M(Bool, enable_left_join_to_right_join, true, "Whether to enable LeftJoinToRightJoin rule", 0) \
-    M(Bool, enable_magic_set_push_through_projection, true, "Whether to enable MagicSetPushThroughProject rule", 0) \
-    M(Bool, enable_magic_set_push_through_join, true, "Whether to enable MagicSetPushThroughJoin rule", 0) \
-    M(Bool, enable_magic_set_push_through_filter, true, "Whether to enable MagicSetPushThroughFilter rule", 0) \
-    M(Bool, enable_magic_set_push_through_aggregating, true, "Whether to enable MagicSetPushThroughAggregating rule", 0) \
     M(Bool, enable_pull_outer_join, true, "Whether to enable PullOuterJoin rule", 0) \
     M(Bool, enable_push_join_through_union, true, "Whether to enable PushJoinThroughUnion rule", 0) \
     M(Bool, enable_semi_join_push_down, true, "Whether to enable SemiJoinPushDown rule", 0) \
@@ -1656,6 +1662,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_expand_join_key_size, 3, "Whether enable using equivalences when property match", 0) \
     M(UInt64, max_expand_agg_key_size, 3, "Max allowed agg/window keys number when expand powerset when property match", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
+    M(Bool, enable_bucket_shuffle, false, "Whether enable bucket shuffle", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \
     M(UInt64, magic_set_max_search_tree, 2, "The maximum table scans in magic set, used for early pruning", 0) \
@@ -1726,6 +1733,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_use_query_memory_tracker, true, "Use query-level memory tracker", 0) \
+    M(String, exchange_shuffle_method_name, "cityHash64V2", "Shuffle method name used in exchange", 0) \
     M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 2000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
@@ -1835,6 +1843,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
     /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
+    M(Bool, enable_bsp_selector_fallback, false, "If enabled, query will select nodes as mpp mode if anything is wrong. IT WILL BE REMOVED IN FUTURE", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, false, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
@@ -1976,6 +1985,21 @@ enum PreloadLevelSettings : UInt64
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
     M(String, output_format_tsv_null_representation, "\\N", "Custom NULL representation in TSV format", 0) \
     M(Bool, output_format_decimal_trailing_zeros, false, "Output trailing zeros when printing Decimal values. E.g. 1.230000 instead of 1.23.", 0) \
+    M(Bool, input_format_parquet_skip_columns_with_unsupported_types_in_schema_inference, false, "Skip columns with unsupported types while schema inference for format Parquet", 0) \
+    M(SchemaInferenceMode, schema_inference_mode, "default", "Mode of schema inference. 'default' - assume that all files have the same schema and schema can be inferred from any file, 'union' - files can have different schemas and the resulting schema should be the a union of schemas of all files", 0) \
+    M(Bool, schema_inference_make_columns_nullable, true, "If set to true, all inferred types will be Nullable in schema inference for formats without information about nullability.", 0) \
+    M(Bool, schema_inference_use_cache_for_s3, true, "Use cache in schema inference while using s3 table function", 0) \
+    M(UInt64, input_format_max_rows_to_read_for_schema_inference, 25000, "The maximum rows of data to read for automatic schema inference", 0) \
+    M(UInt64, input_format_max_bytes_to_read_for_schema_inference, 32 * 1024 * 1024, "The maximum bytes of data to read for automatic schema inference", 0) \
+    \
+    /** Settings for intermediate result cache */ \
+    M(Bool, enable_intermediate_result_cache, false, "Whether to enable intermediate result cache.", 0) \
+    M(Bool, enable_join_intermediate_result_cache, false, "Whether to enable join intermediate result cache.", 0) \
+    M(Bool, enable_intermediate_result_cache_ignore_partition_filter, true, "Whether to ignore parition filter in intermediate result cache.", 0) \
+    M(Bool, enable_intermediate_result_cache_streaming, false, "Whether to enable streaming agg for intermediate result cache.", 0) \
+    M(Seconds, wait_intermediate_result_cache, 60, "Time to wait for enable intermediate result cache per part, 0 means disable.", 0) \
+    M(UInt64, intermediate_result_cache_max_bytes, 100000000, "Intermediate result cache entry max bytes, 0 means disable.", 0) \
+    M(UInt64, intermediate_result_cache_max_rows, 100000, "Intermediate result cache entry max rows, 0 means disable.", 0) \
     \
     /** Settings for Map */ \
     M(Bool, input_format_parse_null_map_as_empty, true, "Parse null map as empty map. Throw exception if set false.", 0) \

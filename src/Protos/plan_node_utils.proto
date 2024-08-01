@@ -109,6 +109,7 @@ message Partitioning {
   required bool enforce_round_robin = 5;
   required Component.Enum component = 6;
   required bool exactly_match = 7;
+  optional AST bucket_expr = 8;
 }
 
 // possibly nullptr
@@ -198,10 +199,32 @@ message ArrayJoinAction {
   required bool is_left = 2;
 }
 
+message CacheDependentScanInfo {
+  required bytes required_digest = 1;
+  required uint64 table_index = 2;
+}
+
+message TableScanCacheInfo {
+  message Status {
+    enum Enum {
+      CACHE_TABLE = 0;
+      CACHE_DEPENDENT_TABLE = 1;
+      NO_CACHE = 2;
+    }
+  }
+
+  required Status.Enum status = 1;
+  required bytes cache_digest = 2;
+  required uint64 dependent_table_count = 3;
+  repeated CacheDependentScanInfo cache_dependent_info = 4;
+}
+
+
 message SelectQueryInfo {
   required AST query = 1;
   required AST view_query = 2;
   optional AST partition_filter = 3;
+  optional TableScanCacheInfo cache_info = 4;
   optional InputOrderInfo input_order_info = 5;
 }
 
@@ -242,6 +265,7 @@ message PlanSegmentOutput {
   optional string shuffle_hash_function = 2;
   optional uint32 parallel_size = 3;
   optional bool keep_order = 4;
+  optional FieldVector shuffle_function_parameters = 5;
 }
 
 message WindowFrame {
@@ -293,6 +317,14 @@ message WindowDescription {
   repeated SortColumnDescription full_sort_description = 4;
   required WindowFrame frame = 5;
   repeated WindowFunctionDescription window_functions = 6;
+}
+
+message CacheParam {
+  required bytes digest = 1;
+  map<uint64, uint64> output_pos_to_cache_pos = 2;
+  map<uint64, uint64> cache_pos_to_output_pos = 3;
+  required StorageID cached_table = 4;
+  repeated StorageID dependent_tables = 5;
 }
 
 message Edge {

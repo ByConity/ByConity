@@ -30,6 +30,7 @@
 #include <QueryPlan/EnforceSingleRowStep.h>
 #include <QueryPlan/ExceptStep.h>
 #include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/ExplainAnalyzeStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/ExtremesStep.h>
@@ -49,7 +50,6 @@
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/MultiJoinStep.h>
-#include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/OffsetStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
@@ -60,6 +60,7 @@
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
+#include <QueryPlan/IntermediateResultCacheStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <QueryPlan/SortingStep.h>

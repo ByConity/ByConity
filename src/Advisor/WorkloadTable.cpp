@@ -53,8 +53,8 @@ WorkloadTablePtr WorkloadTables::getTable(const QualifiedTableName & table)
 
     // get stats
     WorkloadTableStats stats = WorkloadTableStats::build(context, table.database, table.table);
-//    auto columns = storage->getInMemoryMetadataPtr()->getColumns().getAll();
-//    stats.collectExtendedStats(context, table.database, table.table, columns);
+    //    auto columns = storage->getInMemoryMetadataPtr()->getColumns().getAll();
+    //    stats.collectExtendedStats(context, table.database, table.table, columns);
     auto workload_table = std::make_shared<WorkloadTable>(storage, create_ddl, stats);
     tables.emplace(table, workload_table);
     return workload_table;

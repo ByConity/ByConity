@@ -231,9 +231,8 @@ String ISerialization::getFileNameForStream(const NameAndTypePair & column, cons
 String ISerialization::getFileNameForStream(const String & name_in_storage, const SubstreamPath & path)
 {
     String stream_name;
-    auto nested_storage_name = Nested::extractTableName(name_in_storage);
-    if (name_in_storage != nested_storage_name && (path.size() == 1 && path[0].type == ISerialization::Substream::ArraySizes))
-        stream_name = escapeForFileName(nested_storage_name);
+    if (isSharedOffsetSubstream(name_in_storage, path))
+        stream_name = escapeForFileName(Nested::extractTableName(name_in_storage));
     else
         stream_name = escapeForFileName(name_in_storage);
 
@@ -283,6 +282,12 @@ bool ISerialization::isSpecialCompressionAllowed(const SubstreamPath & path)
             return false;
     }
     return true;
+}
+
+bool ISerialization::isSharedOffsetSubstream(const String & name_in_storage, const SubstreamPath & path)
+{
+    auto nested_storage_name = Nested::extractTableName(name_in_storage);
+    return name_in_storage != nested_storage_name && (path.size() == 1 && path[0].type == ISerialization::Substream::ArraySizes);
 }
 
 void ISerialization::serializeMemComparable(const IColumn &, size_t, WriteBuffer &) const

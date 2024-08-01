@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <string>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 
 #include <Interpreters/DistributedStages/PlanSegment.h>
@@ -26,7 +27,9 @@
 #include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageMemory.h>
+#include <common/defines.h>
 
 namespace DB
 {
@@ -37,7 +40,8 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
     if (plan_segment_context.context->getSettingsRef().distributed_max_parallel_size != 0)
         SetScalable::setScalable(query_plan.getRoot(), query_plan.getCTENodes(), *plan_segment_context.context);
     size_t exchange_id = 0;
-    PlanSegmentVisitorContext split_context{{}, {}, exchange_id};
+    PlanSegmentVisitorContext split_context{
+        {}, {}, exchange_id, plan_segment_context.context->getSettingsRef().exchange_shuffle_method_name};
     visitor.createPlanSegment(query_plan.getRoot(), split_context);
 
     std::unordered_map<size_t, PlanSegmentTree::Node *> plan_mapping;
@@ -99,7 +103,6 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
                 }
             }
         }
-
     }
 
     ParallelSizeChecker checker;
@@ -152,8 +155,14 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
     bool is_add_extremes = false;
     for (auto & child : node->children)
     {
-        PlanSegmentVisitorContext child_context{{}, {}, split_context.exchange_id};
-        auto plan_segment = createPlanSegment(child, child_context);
+        String hash_func = plan_segment_context.context->getSettingsRef().exchange_shuffle_method_name;
+        PlanSegmentVisitorContext child_context{
+            {},
+            {},
+            split_context.exchange_id,
+            step->getSchema().getHashFunc(hash_func),
+            step->getSchema().getParams()};
+        PlanSegment * plan_segment = createPlanSegment(child, child_context);
 
         is_add_totals |= child_context.is_add_totals;
         is_add_extremes |= child_context.is_add_extremes;
@@ -164,6 +173,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
         // TODO: Not support one ExchangeStep with multi children yet(multi children can't share one exchange id), we may need to support it later.
         input->setExchangeId(plan_segment->getPlanSegmentOutputs().back()->getExchangeId());
         input->setKeepOrder(step->needKeepOrder());
+        input->setStable(step->getSchema().getBucketExpr() != nullptr);
         inputs.push_back(input);
 
         if (auto * output = dynamic_cast<PlanSegmentOutput *>(plan_segment->getPlanSegmentOutput().get()))
@@ -196,7 +206,7 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
         if (cte_node->step->getType() == IQueryPlanStep::Type::Exchange)
         {
             exchange_step = dynamic_cast<ExchangeStep *>(cte_node->step.get());
-            PlanSegmentVisitorContext child_context{{}, {}, split_context.exchange_id, split_context.is_add_extremes, split_context.is_add_totals, exchange_step->isScalable()};
+            PlanSegmentVisitorContext child_context{{}, {}, split_context.exchange_id, split_context.hash_func, split_context.params, split_context.is_add_extremes, split_context.is_add_totals, exchange_step->isScalable()};
             plan_segment = createPlanSegment(cte_node->children[0], child_context);
         }
         else
@@ -270,11 +280,15 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
 
     auto plan_segment = std::make_unique<PlanSegment>(segment_id, plan_segment_context.query_id, cluster_name);
     plan_segment->setQueryPlan(std::move(sub_plan));
-    plan_segment->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
+    auto exchange_parallel_size = plan_segment_context.context->getSettingsRef().exchange_parallel_size;
+    plan_segment->setExchangeParallelSize(exchange_parallel_size);
 
     PlanSegmentType output_type = segment_id == 0 ? PlanSegmentType::OUTPUT : PlanSegmentType::EXCHANGE;
 
     auto output = std::make_shared<PlanSegmentOutput>(plan_segment->getQueryPlan().getRoot()->step->getOutputStream().header, output_type);
+
+    output->setShuffleFunctionName(split_context.hash_func);
+    output->setShuffleFunctionParams(split_context.params);
     if (output_type == PlanSegmentType::OUTPUT)
     {
         plan_segment->setParallelSize(1);
@@ -288,15 +302,36 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
         else
             output->setParallelSize(parallel);
     }
-    output->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
+    output->setExchangeParallelSize(exchange_parallel_size);
     output->setExchangeId(split_context.exchange_id++);
     plan_segment->appendPlanSegmentOutput(output);
 
     auto inputs = findInputs(plan_segment->getQueryPlan().getRoot());
     if (inputs.empty())
         inputs.push_back(std::make_shared<PlanSegmentInput>(Block(), PlanSegmentType::UNKNOWN));
-    for (auto & input : inputs)
-        input->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
+    if (unlikely(exchange_parallel_size > 1))
+    {
+        for (auto & input : inputs)
+        {
+            if (input->isStable())
+            {
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "exchange_parallel_size can't be {} when input is stable for segment {} ",
+                    exchange_parallel_size,
+                    plan_segment->getPlanSegmentId());
+            }
+            input->setExchangeParallelSize(exchange_parallel_size);
+        }
+    }
+    else
+    {
+        for (auto & input : inputs)
+        {
+            input->setExchangeParallelSize(exchange_parallel_size);
+        }
+    }
+
 
     if (inputs[0]->getExchangeMode() == ExchangeMode::GATHER)
         plan_segment->setParallelSize(1);

@@ -2199,6 +2199,27 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     }
     addMutationEntry(*mutation_entry);
     LOG_TRACE(log, "Added mutation entry {} to mutations_by_version", mutation_entry->txn_id);
+
+    auto bg_thread = local_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+    if (bg_thread)
+    {
+        /// TODO(shiyuze): check ci 50010_parts_info when calls triggerPartMutate here
+        if (settings.mutations_sync != 0)
+        {
+            try
+            {
+                auto timeout_ms = settings.max_execution_time.totalMilliseconds();
+                auto * merge_mutate_thread = typeid_cast<CnchMergeMutateThread *>(bg_thread.get());
+                merge_mutate_thread->triggerPartMutate(shared_from_this());
+                merge_mutate_thread->waitMutationFinish(mutation_entry->commit_time, timeout_ms);
+            }
+            catch(Exception & e)
+            {
+                e.addMessage("(It will be scheduled in background. Check `system.mutations` and `system.manipulations` for progress)");
+                throw;
+            }
+        }
+    }
 }
 
 void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) const
@@ -3258,23 +3279,24 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
     }
     addMutationEntry(*mutation_entry);
 
-    try
+    auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+    if (bg_thread)
     {
-        auto timeout_ms = query_context->getSettingsRef().max_execution_time.totalMilliseconds();
-        auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
-        if (bg_thread)
+        if (query_context->getSettingsRef().mutations_sync != 0)
         {
-            auto * merge_mutate_thread = typeid_cast<CnchMergeMutateThread *>(bg_thread.get());
-            auto istorage = shared_from_this();
-            merge_mutate_thread->triggerPartMutate(shared_from_this());
-
-            if (query_context->getSettingsRef().mutations_sync != 0)
+            try
+            {
+                auto timeout_ms = query_context->getSettingsRef().max_execution_time.totalMilliseconds();
+                auto * merge_mutate_thread = typeid_cast<CnchMergeMutateThread *>(bg_thread.get());
+                merge_mutate_thread->triggerPartMutate(shared_from_this());
                 merge_mutate_thread->waitMutationFinish(mutation_entry->commit_time, timeout_ms);
+            }
+            catch(Exception & e)
+            {
+                e.addMessage("(It will be scheduled in background. Check `system.mutations` and `system.manipulations` for progress)");
+                throw;
+            }
         }
-    }
-    catch(...)
-    {
-        tryLogCurrentException(log, "Failed to start or wait the mutation. It will be scheduled in background. Check `system.mutations` and `system.manipulations` for progress.");
     }
 }
 

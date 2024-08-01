@@ -24,6 +24,9 @@
 #include <Interpreters/CnchSystemLog.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTPartition.h>
+#include <Parsers/ASTSystemQuery.h>
+#include <Parsers/ParserPartition.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/CnchWorkerTransaction.h>
@@ -67,6 +70,12 @@ CloudMergeTreeDedupWorker::CloudMergeTreeDedupWorker(StorageCloudMergeTree & sto
         /// init current_deduper before iterate
         std::lock_guard lock(current_deduper_mutex);
         current_deduper = std::make_unique<MergeTreeDataDeduper>(storage, context);
+    }
+
+    if (storage.getSettings()->duplicate_auto_repair)
+    {
+        data_repairer = context->getUniqueTableSchedulePool().createTask(log_name, [this] { runDataRepairTask(); });
+        data_repairer->deactivate();
     }
 }
 
@@ -382,6 +391,17 @@ void CloudMergeTreeDedupWorker::assignHighPriorityDedupPartition(const NameSet &
     high_priority_dedup_partition = std::move(high_priority_dedup_partition_);
 }
 
+void CloudMergeTreeDedupWorker::assignRepairGran(const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time)
+{
+    std::lock_guard lock(repair_grans_mutex);
+    DedupGran tmp_repair_gran{partition_id, bucket_number};
+    /// Just return and do nothing if tmp_repair_gran last completion time + duplicate_repair_interval > max_event_time
+    if (history_repair_gran_expiration_time.count(tmp_repair_gran) && history_repair_gran_expiration_time[tmp_repair_gran] > max_event_time)
+        return;
+    if (!count(current_repair_grans.begin(), current_repair_grans.end(), tmp_repair_gran))
+        current_repair_grans.emplace_back(tmp_repair_gran);
+}
+
 DedupWorkerStatus CloudMergeTreeDedupWorker::getDedupWorkerStatus()
 {
     DedupWorkerStatus res;
@@ -463,6 +483,85 @@ void CloudMergeTreeDedupWorker::detachSelf()
         InterpreterDropQuery(drop_query, c).execute();
         LOG_DEBUG(log, "Detached self: {}", s->getStorageID().getNameForLogs());
     }).detach();
+}
+
+void CloudMergeTreeDedupWorker::runDataRepairTask()
+{
+    size_t sleep_ms = 3 * 1000;
+
+    try
+    {
+        auto catalog = context->getCnchCatalog();
+        TxnTimestamp ts = context->getTimestamp();
+        DedupGran repair_gran;
+        {
+            std::lock_guard lock(repair_grans_mutex);
+            /// Check and expire history_repair_gran_expiration_time
+            /// Consistent with the server, need to delay expiration
+            auto check_time = ts.toSecond() - storage.getSettings()->duplicate_repair_interval.totalSeconds();
+            for (auto it = history_repair_gran_expiration_time.begin(); it != history_repair_gran_expiration_time.end();)
+            {
+                if (it->second < check_time)
+                    it = history_repair_gran_expiration_time.erase(it);
+                else
+                    it++;
+            }
+            LOG_TRACE(log, "history_repair_gran_expiration_time size: {}, check time: {}", history_repair_gran_expiration_time.size(), check_time);
+            if (!current_repair_grans.empty())
+                repair_gran = {current_repair_grans.begin()->partition_id, current_repair_grans.begin()->bucket_number};
+        }
+        auto server_client = context->getCnchServerClientPool().get(server_host_ports);
+        if (!repair_gran.empty() && server_client)
+        {
+            LOG_DEBUG(log, "Start to repair gran: {}", repair_gran.getDedupGranDebugInfo());
+            ASTSystemQuery repair_query;
+            ParserPartition parser_partition;
+            if (repair_gran.partition_id != ALL_DEDUP_GRAN_PARTITION_ID)
+            {
+                auto partition = std::make_shared<ASTPartition>();
+                partition->id = repair_gran.partition_id;
+                repair_query.partition = partition;
+            }
+            repair_query.specify_bucket = repair_gran.bucket_number != -1;
+            repair_query.bucket_number = repair_gran.bucket_number;
+
+            /// must use cnch table to construct staged parts
+            auto table = catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(storage.getCnchStorageUUID()), ts);
+            if (!table)
+            {
+                LOG_INFO(log, "table have been dropped, skip");
+                return;
+            }
+            auto *cnch_table = dynamic_cast<StorageCnchMergeTree *>(table.get());
+            if (!cnch_table)
+            {
+                LOG_ERROR(log, "table {} is not cnch merge tree", table->getStorageID().getNameForLogs());
+                return;
+            }
+            /// create repair_context and set txn
+            auto repair_context = Context::createCopy(context);
+            repair_context->setSessionContext(repair_context);
+            CnchWorkerTransactionPtr txn = std::make_shared<CnchWorkerTransaction>(repair_context, server_client);
+            repair_context->setCurrentTransaction(txn);
+            txn->setMainTableUUID(storage.getCnchStorageUUID());
+
+            cnch_table->executeDedupForRepair(repair_query, repair_context);
+            {
+                std::lock_guard lock(repair_grans_mutex);
+                TxnTimestamp complete_time = context->getTimestamp();
+                history_repair_gran_expiration_time[repair_gran] = complete_time.toSecond() + storage.getSettings()->duplicate_repair_interval.totalSeconds();
+                LOG_DEBUG(log, "Repair gran {} next auto repair time: {}", repair_gran.getDedupGranDebugInfo(), history_repair_gran_expiration_time[repair_gran]);
+                auto it = find(current_repair_grans.begin(), current_repair_grans.end(), repair_gran);
+                current_repair_grans.erase(it);
+            }
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
+
+    data_repairer->scheduleAfter(sleep_ms);
 }
 
 }

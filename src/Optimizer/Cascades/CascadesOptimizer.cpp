@@ -249,6 +249,10 @@ CascadesContext::CascadesContext(
     {
         if (context->getSettingsRef().enable_join_reorder)
         {
+            if (context->getSettingsRef().enable_non_equijoin_reorder && max_join_size_ <= context->getSettingsRef().max_graph_reorder_size)
+            {
+                transformation_rules.emplace_back(std::make_shared<InnerJoinAssociate>());
+            }
             transformation_rules.emplace_back(std::make_shared<SemiJoinPushDown>());
             transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
             transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
@@ -256,10 +260,6 @@ CascadesContext::CascadesContext(
                 transformation_rules.emplace_back(std::make_shared<CardinalityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
             transformation_rules.emplace_back(std::make_shared<SelectivityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
             transformation_rules.emplace_back(std::make_shared<JoinToMultiJoin>());
-            if (context->getSettingsRef().enable_non_equijoin_reorder && max_join_size_ <= context->getSettingsRef().max_graph_reorder_size)
-            {
-                transformation_rules.emplace_back(std::make_shared<InnerJoinAssociate>());
-            }
         }
 
         // left join inner join reorder q78, 80
@@ -270,7 +270,6 @@ CascadesContext::CascadesContext(
         transformation_rules.emplace_back(std::make_shared<LeftJoinToRightJoin>());
         transformation_rules.emplace_back(std::make_shared<MagicSetForAggregation>());
         transformation_rules.emplace_back(std::make_shared<MagicSetForProjectionAggregation>());
-
         transformation_rules.emplace_back(std::make_shared<SemiJoinPushDownProjection>());
         transformation_rules.emplace_back(std::make_shared<SemiJoinPushDownAggregate>());
 

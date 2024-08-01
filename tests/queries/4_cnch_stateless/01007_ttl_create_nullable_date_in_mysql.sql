@@ -42,6 +42,9 @@ OPTIMIZE TABLE t_mysql_ttl_nullable_date;
 SELECT '------ TEST SELECT ------';
 SELECT count() FROM t_mysql_ttl_nullable_date;
 
+-- need to start MergeMutateThread before waiting for mutations
+SYSTEM START MERGES t_mysql_ttl_nullable_date;
+
 SELECT '------ TEST ALTER ------';
 ALTER TABLE t_mysql_ttl_nullable_date MODIFY SETTING cnch_merge_enable_batch_select = 1;
 

@@ -51,6 +51,7 @@
 #include <QueryPlan/WindowStep.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <fmt/format.h>
+#include <Common/FieldVisitorToString.h>
 #include <Common/HashTable/Hash.h>
 
 #include <filesystem>
@@ -110,6 +111,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::MarkDistinct, "violet"},
     {IQueryPlanStep::Type::OutfileWrite, "green"},
     {IQueryPlanStep::Type::OutfileFinish, "greenyellow"},
+    {IQueryPlanStep::Type::IntermediateResultCache, "darkolivegreen4"},
 };
 
 static auto escapeSpecialCharacters = [](String content) {
@@ -196,6 +198,7 @@ Void PlanNodePrinter::visitJoinNode(JoinNode & node, PrinterContext & context)
         VisitorUtil::accept(*node.getChildren()[0], *this, context);
         VisitorUtil::accept(*node.getChildren()[1], *this, context);
     }
+
     return Void{};
 }
 
@@ -537,6 +540,15 @@ Void PlanNodePrinter::visitTopNFilteringNode(TopNFilteringNode & node, PrinterCo
     String color{NODE_COLORS[step.getType()]};
     String label{"TopNFilteringNode"};
     printNode(node, label, StepPrinter::printTopNFilteringStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"IntermediateResultCacheNode"};
+    printNode(node, label, StepPrinter::printIntermediateResultCacheStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1141,6 +1153,16 @@ Void PlanSegmentNodePrinter::visitTopNFilteringNode(QueryPlan::Node * node, Prin
     return visitChildren(node, context);
 }
 
+Void PlanSegmentNodePrinter::visitIntermediateResultCacheNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const IntermediateResultCacheStep &>(*step_ptr);
+    String label{"IntermediateResultCacheNode"};
+    String color{NODE_COLORS.at(step_ptr->getType())};
+    printNode(node, label, StepPrinter::printIntermediateResultCacheStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 void PlanSegmentNodePrinter::printNode(
     QueryPlan::Node * node, const String & label, const String & details, const String & color, PrinterContext & context)
 {
@@ -1293,7 +1315,7 @@ String StepPrinter::printExpandStep(const ExpandStep & step, bool)
     }
     std::string result = ss.str();
 
-    details << step.getGroupIdSymbol() << "[" << result <<  "]";
+    details << step.getGroupIdSymbol() << "[" << result << "]";
     details << "|";
     details << "Groups";
     details << "|";
@@ -1587,6 +1609,11 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
         details << "results in order of bucket number";
     }
 
+    if (step.isStreamingForCache())
+    {
+        details << "|";
+        details << "streaming for cache";
+    }
     //    if (step.isTotals())
     //        details << "|"
     //                << "totals";
@@ -1787,6 +1814,8 @@ String StepPrinter::printExchangeStep(const ExchangeStep & step)
         }
     };
     details << f(step.getExchangeMode());
+    details << "|";
+    details << step.getSchema().toString();
 
     if (step.needKeepOrder())
     {
@@ -1963,11 +1992,11 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     {
         ASTSampleRatio * sample = query->sampleSize()->as<ASTSampleRatio>();
         details << "Sample : \\n";
-        details << "Sample Size : " << ASTSampleRatio::toString(sample->ratio)<< "\\n";
+        details << "Sample Size : " << ASTSampleRatio::toString(sample->ratio) << "\\n";
         if (query->sampleOffset())
         {
             ASTSampleRatio * offset = query->sampleOffset()->as<ASTSampleRatio>();
-            details << "Sample Offset : " << ASTSampleRatio::toString(offset->ratio)<< "\\n";
+            details << "Sample Offset : " << ASTSampleRatio::toString(offset->ratio) << "\\n";
         }
         details << "|";
     }
@@ -1981,12 +2010,12 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     //
     //    details << "Block Size : \\n" << step.getMaxBlockSize() << "|";
     //
-    //    details << "Alias: \\n";
-    //    for (const auto & assigment : step.getColumnAlias())
-    //    {
-    //        details << assigment.second << ": " << assigment.first << "\\n";
-    //    }
-    //    details << "|";
+    details << "Alias: \\n";
+    for (const auto & assigment : step.getColumnAlias())
+    {
+        details << assigment.second << ": " << assigment.first << "\\n";
+    }
+    details << "|";
 
     details << "Inline Expressions: \\n";
     for (const auto & assigment : step.getInlineExpressions())
@@ -2601,6 +2630,54 @@ String StepPrinter::printExtremesStep(const ExtremesStep & step)
         details << column.name << ":";
         details << column.type->getName() << "\\n";
     }
+    return details.str();
+}
+
+String StepPrinter::printIntermediateResultCacheStep(const IntermediateResultCacheStep & step)
+{
+    std::stringstream details;
+    auto cache_param = step.getCacheParam();
+    details << "CacheParam\\n";
+    details << "Digest: " << cache_param.digest << "\\n";
+    details << "Slot Mapping:\\n";
+    for (const auto & pair : cache_param.output_pos_to_cache_pos)
+    {
+        details << "output#" << pair.first << ":"
+                << "cache#" << pair.second << "\\n";
+    }
+    details << "Cached Table: " << cache_param.cached_table.getFullNameNotQuoted() << "\\n";
+    details << "Dependent Tables:\\n";
+    for (const auto & table : cache_param.dependent_tables)
+    {
+        details << table.getFullNameNotQuoted() << "\\n";
+    }
+    details << "| Cache Order \\n";
+    for (const auto & column : step.getCacheOrder())
+    {
+        details << column.name << "\\n";
+    }
+    details << "| Runtime Filters \\n";
+    if (const auto & filters = step.getIgnoredRuntimeFilters(); !filters.empty())
+    {
+        details << "ignored runtime filters:";
+        for (const auto & id : filters)
+            details << " " << id;
+        details << "\\n";
+    }
+    if (const auto & filters = step.getIncludedRuntimeFilters(); !filters.empty())
+    {
+        details << "included runtime filters:";
+        for (const auto & id : filters)
+            details << " " << id;
+        details << "\\n";
+    }
+    details << "| Output \\n";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+
     return details.str();
 }
 
@@ -3488,6 +3565,11 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
             out << "keeporder ";
         }
 
+        if (input->isStable())
+        {
+            out << "stable ";
+        }
+
         out << "\n";
     }
     out << "\n";
@@ -3503,6 +3585,14 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
         if (input->needKeepOrder())
         {
             out << "keeporder ";
+        }
+        out << "hash_func:" << input->getShuffleFunctionName();
+
+        auto visitor = FieldVisitorToString();
+        out << " params:";
+        for (auto item : input->getShuffleFunctionParams())
+        {
+            out << " " << applyVisitor(visitor, item);
         }
         out << "\n";
     }
@@ -3632,7 +3722,6 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
         head_step = group.getLogicalExpressions()[0]->getStep().get();
 
     auto fold = [](std::string a, GroupId b) { return std::move(a) + ", " + std::to_string(b); };
-    auto fold_string = [](String a, const String & b) { return std::move(a) + ", " + b; };
 
     auto expr_to_str = [&](const GroupExprPtr & expr) {
         if (!expr)
@@ -3774,55 +3863,9 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
 
     // winners
 
-    auto partition_str = [&](const Partitioning & partitioning) {
-        auto component_str = " ANY";
-        if (partitioning.getComponent() == Partitioning::Component::COORDINATOR)
-            component_str = " COORDINATOR";
-        else if (partitioning.getComponent() == Partitioning::Component::WORKER)
-            component_str = " WORKER";
-
-        if (partitioning.getHandle() == Partitioning::Handle::SINGLE)
-            return String("SINGLE") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::FIXED_BROADCAST)
-            return String("BROADCAST") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::ARBITRARY)
-            return String("ARBITRARY") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::BUCKET_TABLE)
-            return String("BUCKET_TABLE") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::FIXED_ARBITRARY)
-            return String("FIXED_ARBITRARY") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::FIXED_HASH)
-        {
-            if (partitioning.getColumns().empty())
-            {
-                return String("FIXED_HASH[]") + component_str;
-            }
-            else
-            {
-                auto result = String("FIXED_HASH[")
-                    + std::accumulate(
-                                  std::next(partitioning.getColumns().begin()),
-                                  partitioning.getColumns().end(),
-                                  partitioning.getColumns()[0],
-                                  fold_string)
-                    + "]";
-                if (partitioning.isEnforceRoundRobin())
-                {
-                    result += " RoundR";
-                }
-                if (partitioning.isRequireHandle())
-                {
-                    result += " handle";
-                }
-                return result + component_str;
-            }
-        }
-        else
-            return String("UNKNOWN") + component_str;
-    };
     auto property_str = [&](const Property & property) {
         std::stringstream ss;
-        ss << partition_str(property.getNodePartitioning());
+        ss << property.getNodePartitioning().toString();
         ss << " ";
         ss << property.getCTEDescriptions().toString();
         return ss.str();
@@ -3862,7 +3905,7 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
                 if (auto exchange_step = dynamic_cast<const ExchangeStep *>(winner->getRemoteExchange()->getStep().get()))
                 {
                     out << "enforce: ";
-                    out << partition_str(exchange_step->getSchema());
+                    out << exchange_step->getSchema().toString();
                     out << "<BR/>";
                 }
             }

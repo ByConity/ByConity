@@ -60,15 +60,22 @@ protected:
         const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
 
         size_t rows_count = 0;
+        const String & tenant_id = context->getTenantId();
         while (rows_count < max_block_size)
         {
             if (tables_it && !tables_it->isValid())
                 ++database_idx;
 
+            String tenanted_db_name;
             while (database_idx < databases->size() && (!tables_it || !tables_it->isValid()))
             {
                 database_name = databases->getDataAt(database_idx).toString();
-                database = DatabaseCatalog::instance().tryGetDatabase(database_name, context);
+                if (!tenant_id.empty())
+                    tenanted_db_name = formatTenantDatabaseNameWithTenantId(database_name, tenant_id);
+                else
+                    tenanted_db_name = database_name;
+
+                database = DatabaseCatalog::instance().tryGetDatabase(tenanted_db_name, context);
 
                 if (database)
                     break;
@@ -81,12 +88,12 @@ protected:
             if (!tables_it || !tables_it->isValid())
                 tables_it = database->getTablesIterator(context);
 
-            const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, database_name);
+            const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, tenanted_db_name);
 
             for (; rows_count < max_block_size && tables_it->isValid(); tables_it->next())
             {
                 auto table_name = tables_it->name();
-                if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, database_name, table_name))
+                if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, tenanted_db_name, table_name))
                     continue;
 
                 const auto table = tables_it->table();
@@ -172,6 +179,7 @@ Pipe StorageSystemDataSkippingIndices::read(
 
     MutableColumnPtr column = ColumnString::create();
 
+    const String & tenant_id = context->getTenantId();
     const auto databases = DatabaseCatalog::instance().getDatabases(context);
     for (const auto & [database_name, database] : databases)
     {
@@ -181,8 +189,31 @@ Pipe StorageSystemDataSkippingIndices::read(
         /// Lazy database can contain only very primitive tables,
         /// it cannot contain tables with data skipping indices.
         /// Skip it to avoid unnecessary tables loading in the Lazy database.
-        if (database->getEngineName() != "Lazy")
+        if (database->getEngineName() == "Lazy")
+            continue;
+
+        if (!tenant_id.empty())
+        {
+            if (startsWith(database_name, tenant_id + "."))
+            {
+                column->insert(getOriginalDatabaseName(database_name, tenant_id));
+            }
+            else
+            {
+                // Will skip database of other tenants and default user (without tenantid prefix)
+                if (database_name.find(".") != std::string::npos)
+                    continue;
+
+                if (!DatabaseCatalog::isDefaultVisibleSystemDatabase(database_name))
+                    continue;
+
+                column->insert(database_name);
+            }
+        }
+        else
+        {
             column->insert(database_name);
+        }
     }
 
     /// Condition on "database" in a query acts like an index.

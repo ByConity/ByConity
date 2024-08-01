@@ -1,13 +1,19 @@
 #include <atomic>
 #include <cstddef>
 #include <unordered_map>
-#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <unordered_set>
+#include <utility>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
+#include <Common/HostWithPorts.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int QUERY_WAS_CANCELLED;
+}
 
 // Only if the dependencies were executed done, the segment would be scheduled.
 //
@@ -47,11 +53,21 @@ public:
     void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override;
     void onQueryFinished() override;
 
-    void updateSegmentStatusCounter(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentsStatus & status);
+    void updateSegmentStatusCounter(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
     /// retry task if possible, returns whether retry is successful or not
-    bool retryTaskIfPossible(size_t segment_id, UInt64 parallel_index);
+    bool retryTaskIfPossible(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
+    void onWorkerRestarted(const WorkerId & id);
 
     const AddressInfo & getSegmentParallelLocation(PlanSegmentInstanceId instance_id);
+
+    std::pair<String, String> tryGetWorkerGroupName()
+    {
+        if (auto wg = query_context->tryGetCurrentWorkerGroup(); wg)
+        {
+            return std::make_pair(wg->getVWName(), wg->getID());
+        }
+        return std::make_pair("", "");
+    }
 
 private:
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
@@ -59,6 +75,8 @@ private:
     void sendResources(PlanSegment * plan_segment_ptr) override;
     void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size) override;
     PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) override;
+
+    bool isUnrecoverableStatus(const RuntimeSegmentStatus & status);
 
     std::mutex segment_status_counter_mutex;
     std::unordered_map<size_t, std::unordered_set<UInt64>> segment_status_counter;
@@ -76,6 +94,9 @@ private:
     // segment task instance -> <index, total> count in this worker
     std::unordered_map<SegmentTaskInstance, std::pair<size_t, size_t>, SegmentTaskInstance::Hash> source_task_idx;
     std::atomic_size_t retry_count = {0};
+
+    /// Error reasons which can not be recovered by retry. We need quit right now.
+    std::unordered_set<int> unrecoverable_reasons{ErrorCodes::LOGICAL_ERROR, ErrorCodes::QUERY_WAS_CANCELLED};
 };
 
 }

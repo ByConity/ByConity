@@ -13,9 +13,10 @@
 namespace DB
 {
 
-PatternPtr SumIfToCountIf::getPattern() const
+ConstRefPatternPtr SumIfToCountIf::getPattern() const
 {
-    return Patterns::aggregating().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::aggregating().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult SumIfToCountIf::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -147,6 +148,7 @@ TransformResult SumIfToCountIf::transformImpl(PlanNodePtr node, const Captures &
         agg_step.needOverflowRow(),
         agg_step.shouldProduceResultsInOrderOfBucketNumber(),
         agg_step.isNoShuffle(),
+        agg_step.isStreamingForCache(),
         agg_step.getHints());
 
     return PlanNodeBase::createPlanNode(node->getId(), std::move(new_agg_step), {new_projection_node}, node->getStatistics());

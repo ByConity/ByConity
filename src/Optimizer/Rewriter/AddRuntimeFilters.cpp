@@ -16,6 +16,7 @@
 #include <QueryPlan/ITransformingStep.h>
 #include <QueryPlan/PlanNode.h>
 #include <Poco/StringTokenizer.h>
+#include <common/logger_useful.h>
 
 #include <algorithm>
 #include <memory>
@@ -161,6 +162,19 @@ PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(
         if (!is_broadcast && isFixedHashShuffleOrBucketTableShuffle(left.property))
         {
             partition_columns = left.property.getNodePartitioning().getColumns();
+            bool all_contains = std::all_of(
+                partition_columns.begin(), partition_columns.end(), [&](const auto & column) {
+                    return left.plan->getStep()->getOutputStream().header.has(column);
+                });
+            if (!all_contains)
+            {
+                LOG_WARNING(
+                    logger,
+                    "partition columns not found in AddRuntimeFilteres, required: {}, left output: {}",
+                    fmt::join(partition_columns, ", "),
+                    fmt::join(left.plan->getOutputNames(), ", "));
+                break;
+            }
         }
 
         double selectivity;
@@ -669,20 +683,27 @@ PlanNodePtr AddRuntimeFilters::AddExchange::visitJoinNode(JoinNode & node, std::
 }
 
 // fixme: fix buffer step to remove this method
-PlanNodePtr AddRuntimeFilters::AddExchange::visitCTERefNode(CTERefNode & node, std::unordered_set<RuntimeFilterId> & need_exchange)
+PlanNodePtr AddRuntimeFilters::AddExchange::visitBufferNode(BufferNode & node, std::unordered_set<RuntimeFilterId> & need_exchange)
 {
+    auto res = SimplePlanRewriter::visitBufferNode(node, need_exchange);
     if (need_exchange.empty())
-        return SimplePlanRewriter::visitPlanNode(node, need_exchange);
+        return res;
 
     return PlanNodeBase::createPlanNode(
         context->nextNodeId(),
         std::make_unique<ExchangeStep>(
-            DataStreams{node.getCurrentDataStream()},
+            DataStreams{res->getCurrentDataStream()},
             ExchangeMode::LOCAL_NO_NEED_REPARTITION,
             Partitioning{Partitioning::Handle::FIXED_ARBITRARY},
             context->getSettingsRef().enable_shuffle_with_order),
-        PlanNodes{node.shared_from_this()},
-        node.getStatistics());
+        PlanNodes{res},
+        res->getStatistics());
+}
+
+PlanNodePtr AddRuntimeFilters::AddExchange::visitCTERefNode(CTERefNode & node, std::unordered_set<RuntimeFilterId> &)
+{
+    std::unordered_set<RuntimeFilterId> need_exchange;
+    return SimplePlanRewriter::visitCTERefNode(node, need_exchange);
 }
 
 PlanNodePtr AddRuntimeFilters::AddExchange::visitFilterNode(FilterNode & node, std::unordered_set<RuntimeFilterId> & need_exchange)

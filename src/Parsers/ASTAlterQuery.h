@@ -99,6 +99,7 @@ public:
         FREEZE_ALL,
         UNFREEZE_PARTITION,
         UNFREEZE_ALL,
+        PREATTACH_PARTITION,
 
         DROP_PARTITION_WHERE,
         FETCH_PARTITION_WHERE,
@@ -133,7 +134,6 @@ public:
         RENAME_TABLE,
 
         PARTITION_BY,
-
     };
 
     Type type = NO_TYPE;

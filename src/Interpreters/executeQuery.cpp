@@ -339,8 +339,8 @@ static bool needThrowRootCauseError(const Context * context, int & error_code, S
     if (coordinator->getContext().get() != context)
         return false;
 
-    coordinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
-        .query_id = query_id, .segment_id = 0, .is_succeed = false, .message = error_messge, .code = error_code});
+    coordinator->updateSegmentInstanceStatus(
+        RuntimeSegmentStatus{.query_id = query_id, .segment_id = 0, .is_succeed = false, .message = error_messge, .code = error_code});
     if (isAmbiguosError(error_code))
     {
         auto query_status = coordinator->waitUntilFinish(error_code, error_messge);
@@ -1722,7 +1722,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         auto coodinator = MPPQueryManager::instance().getCoordinator(query_id);
                         if (coodinator)
                             coodinator->updateSegmentInstanceStatus(
-                                RuntimeSegmentsStatus{.query_id = query_id, .segment_id = 0, .is_succeed = true});
+                                RuntimeSegmentStatus{.query_id = query_id, .segment_id = 0, .is_succeed = true});
                     };
 
             auto exception_callback = [elem,

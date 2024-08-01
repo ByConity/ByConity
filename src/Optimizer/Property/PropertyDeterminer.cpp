@@ -94,7 +94,7 @@ PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step,
 {
     if (step.isFinalProject() && (ctx.getRequired().getNodePartitioning().getComponent() != Partitioning::Component::WORKER))
         return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     auto translated = ctx.getRequired().translate(identities);
     if (!step.getInputStreams()[0].header)
@@ -120,8 +120,8 @@ PropertySets DeterminerVisitor::visitFilterStep(const FilterStep &, DeterminerCo
 // TODO property expand @jingpeng
 PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerContext & context)
 {
-    Names left_keys = step.getLeftKeys();
-    Names right_keys = step.getRightKeys();
+    const Names & left_keys = step.getLeftKeys();
+    const Names & right_keys = step.getRightKeys();
 
     auto enforce_round_robine = context.getContext().getSettingsRef().enforce_round_robin;
     // process ASOF join, it is different with normal join.
@@ -138,8 +138,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         Partitioning left_stream{Partitioning::Handle::FIXED_HASH, left_keys_asof};
         Partitioning right_stream{Partitioning::Handle::FIXED_HASH, right_keys_asof};
 
-        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, enforce_round_robine}, left_stream};
-        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, false}, right_stream};
+        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, nullptr, enforce_round_robine}, left_stream};
+        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, nullptr, false}, right_stream};
         PropertySet set;
         set.emplace_back(left);
         set.emplace_back(right);
@@ -170,7 +170,7 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
     }
 
     PropertySets result;
-    if (join_key_pairs.size() <= context.getContext().getSettings().max_expand_join_key_size)
+    if (join_key_pairs.size() <= context.getContext().getSettingsRef().max_expand_join_key_size)
     {
         for (auto & set : Utils::powerSet(join_key_pairs))
         {
@@ -184,8 +184,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
 
             Partitioning left_stream{Partitioning::Handle::FIXED_HASH, sub_left_keys};
             Partitioning right_stream{Partitioning::Handle::FIXED_HASH, sub_right_keys};
-            Property left{Partitioning{Partitioning::Handle::FIXED_HASH, sub_left_keys, false, 0, enforce_round_robine}, left_stream};
-            Property right{Partitioning{Partitioning::Handle::FIXED_HASH, sub_right_keys, false, 0, false}, right_stream};
+            Property left{Partitioning{Partitioning::Handle::FIXED_HASH, sub_left_keys, false, 0, nullptr, enforce_round_robine}, left_stream};
+            Property right{Partitioning{Partitioning::Handle::FIXED_HASH, sub_right_keys, false, 0, nullptr, false}, right_stream};
             PropertySet prop_set;
             prop_set.emplace_back(left);
             prop_set.emplace_back(right);
@@ -196,8 +196,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
     {
         Partitioning left_stream{Partitioning::Handle::FIXED_HASH, left_keys};
         Partitioning right_stream{Partitioning::Handle::FIXED_HASH, right_keys};
-        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, enforce_round_robine}, left_stream};
-        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, false}, right_stream};
+        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, nullptr, enforce_round_robine}, left_stream};
+        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, nullptr, false}, right_stream};
         PropertySet prop_set;
         prop_set.emplace_back(left);
         prop_set.emplace_back(right);
@@ -265,7 +265,7 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
                 PropertySet{Property{context.getRequired().getNodePartitioning(), context.getRequired().getStreamPartitioning()}});
     }
 
-    if (keys.size() <= context.getContext().getSettings().max_expand_agg_key_size)
+    if (keys.size() <= context.getContext().getSettingsRef().max_expand_agg_key_size)
     {
         for (const auto & sub_keys : Utils::powerSet(keys))
         {
@@ -284,7 +284,7 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     {
         keys.emplace_back("__grouping_set");
         return {PropertySet{
-            Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys, false, 0, true, Partitioning::Component::ANY, true}}}};
+            Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys, false, 0, nullptr, true, Partitioning::Component::ANY, true}}}};
     }
 
     return sets;
@@ -492,7 +492,7 @@ PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, Determi
         group_bys.emplace_back(key.column_name);
     }
     PropertySets sets;
-    if (keys.size() <= context.getContext().getSettings().max_expand_agg_key_size)
+    if (keys.size() <= context.getContext().getSettingsRef().max_expand_agg_key_size)
     {
         for (const auto & sub_keys : Utils::powerSet(group_bys))
         {
@@ -587,6 +587,11 @@ PropertySets DeterminerVisitor::visitExpandStep(const ExpandStep &, DeterminerCo
     auto require = context.getRequired();
     require.setPreferred(true);
     return {{require}};
+}
+
+PropertySets DeterminerVisitor::visitIntermediateResultCacheStep(const IntermediateResultCacheStep & step, DeterminerContext & ctx)
+{
+    return visitStep(step, ctx);
 }
 
 }

@@ -390,6 +390,7 @@ message SQLBinding {
   required string pattern = 3;
   required string serialized_ast = 4;
   required uint64 timestamp = 5;
+  required string tenant_id = 6;
 }
 
 message VirtualWarehouseSettings {

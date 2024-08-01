@@ -140,6 +140,8 @@
 #include <Storages/System/StorageSystemCnchTablesHistory.h>
 #include <Storages/System/StorageSystemCnchTrashItems.h>
 #include <Storages/System/StorageSystemCnchManifestList.h>
+#include <Storages/System/StorageSystemCnchUserPriv.h>
+#include <Storages/System/StorageSystemCnchDBPriv.h>
 #include <Storages/System/StorageSystemDMBGJobs.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemLockMap.h>
@@ -158,6 +160,7 @@
 #include <Storages/System/StorageSystemMaterializedMySQL.h>
 #include <Storages/System/StorageSystemCnchMaterializedMySQL.h>
 #include <Storages/System/StorageSystemCnchTransactionCleanTasks.h>
+#include <Storages/System/StorageSystemSchemaInferenceCache.h>
 
 namespace DB
 {
@@ -215,6 +218,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
 #endif
     attach<StorageSystemIOSchedulers>(system_database, "io_schedulers");
     attach<StorageSystemIOWorkers>(system_database, "io_workers");
+
 }
 
 void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
@@ -279,6 +283,8 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchViewTables>(system_database, "cnch_view_tables");
     attach<StorageSystemCnchManipulations>(system_database, "cnch_manipulations");
     attach<StorageSystemCnchSnapshots>(system_database, "cnch_snapshots");
+    attach<StorageSystemCnchUserPriv>(system_database, "cnch_user_priv");
+    attach<StorageSystemCnchDBPriv>(system_database, "cnch_db_priv");
     attach<StorageSystemDMBGJobs>(system_database, "dm_bg_jobs");
     attach<StorageSystemPersistentBGJobStatus>(system_database, "persistent_bg_job_status");
     attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");
@@ -301,6 +307,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemExternalTables>(system_database, "external_tables");
 #endif
     attach<StorageSystemCnchTransactionCleanTasks>(system_database, "cnch_transaction_clean_tasks");
+    attach<StorageSystemSchemaInferenceCache>(system_database, "schema_inference_cache");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

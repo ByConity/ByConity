@@ -144,7 +144,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         else
             receive_queue->tryEmplaceUntil(options.max_timeout_ts, getName());
         auto res = *new_status_ptr;
-        res.is_modifer = true;
+        res.is_modified_by_operator = true;
         sender_metrics.finish_code = new_status_ptr->code;
         sender_metrics.is_modifier = 1;
         sender_metrics.message = new_status_ptr->message;

@@ -654,7 +654,7 @@ void TableScanExecutor::prunePartsByIndex(MergeTreeData::DataPartsVector & parts
         copy_select_query.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
         auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
         interpreter->execute();
-        LOG_TRACE(&Poco::Logger::get("TableScanExecutor::prunePartsByIndex"), "Construct partition filter query {}", queryToString(copy_select));
+        LOG_TRACE(log, "Construct partition filter query {}", queryToString(copy_select));
         MergeTreeDataSelectExecutor::filterPartsByPartition(
             parts, part_values, storage_metadata, storage, interpreter->getQueryInfo(), context, max_added_blocks.get(), log, result.index_stats);
     }
@@ -1148,7 +1148,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (is_null_source)
     {
         LOG_DEBUG(log, "Create NullSource from TableScanStep without storage");
-        pipeline.init(Pipe(std::make_shared<NullSource>(output_stream->header))); 
+        pipeline.init(Pipe(std::make_shared<NullSource>(output_stream->header)));
         return;
     }
     auto * query = query_info.query->as<ASTSelectQuery>();
@@ -1203,8 +1203,6 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     bool use_optimizer_projection_selection
         = build_context.context->getSettingsRef().optimizer_projection_support && is_merge_tree && !use_projection_index;
 
-    LOG_WARNING(&Poco::Logger::get("test"), "initTableScan, limit={}, !empty={}", query->limitLength() ? serializeAST(*query->limitLength()) : "nothing", use_projection_index || use_optimizer_projection_selection);
-
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
     /// Rewrite runtime filter
@@ -1233,6 +1231,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     // enable_partition_filter_push_down = 1 to do the stuff
     if (mutable_context->getSettingsRef().remove_partition_filter_on_worker)
         mutable_context->setSetting("enable_partition_filter_push_down", 1U);
+
+    options.cache_info = query_info.cache_info;
     auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, mutable_context, options);
     interpreter->execute(true);
     auto backup_input_order_info = query_info.input_order_info;
@@ -1320,6 +1320,9 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         // flag = Output
         auto pipe = storage->read(
             interpreter->getRequiredColumns(), storage_snapshot, query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
+
+        if (pipe.getCacheHolder())
+            pipeline.addCacheHolder(pipe.getCacheHolder());
 
         QueryPlanStepPtr step;
         if (pipe.empty())
@@ -1645,7 +1648,7 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
 
 std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
 {
-    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context) 
+    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context)
                                                                             : StorageID::fromProto(proto.storage_id(), context);
     NamesWithAliases column_alias;
     for (const auto & proto_element : proto.column_alias())
@@ -1688,7 +1691,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         pushdown_projection,
         pushdown_filter,
         output_stream);
-    
+
     return step;
 }
 

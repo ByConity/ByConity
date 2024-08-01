@@ -1017,11 +1017,50 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
 // Creating CH header by arrow schema. Will be useful in task about inserting
 // data from file without knowing table structure.
 
-// static void checkStatus(const arrow::Status & status, const String & column_name, const String & format_name)
-// {
-//     if (!status.ok())
-//         throw Exception{ErrorCodes::UNKNOWN_EXCEPTION, "Error with a {} column '{}': {}.", format_name, column_name, status.ToString()};
-// }
+static void checkStatus(const arrow::Status & status, const String & column_name, const String & format_name)
+{
+    if (!status.ok())
+        throw Exception{ErrorCodes::UNKNOWN_EXCEPTION, "Error with a {} column '{}': {}.", format_name, column_name, status.ToString()};
+}
+
+Block ArrowColumnToCHColumn::arrowSchemaToCHHeader(
+    const arrow::Schema & schema, const std::string & format_name, bool skip_columns_with_unsupported_types, const Block * hint_header, bool ignore_case)
+{
+    ColumnsWithTypeAndName sample_columns;
+    std::unordered_set<String> nested_table_names;
+    if (hint_header)
+        nested_table_names = Nested::getAllTableNames(*hint_header, ignore_case);
+
+    for (const auto & field : schema.fields())
+    {
+        if (hint_header && !hint_header->has(field->name(), ignore_case)
+            && !nested_table_names.contains(ignore_case ? boost::to_lower_copy(field->name()) : field->name()))
+            continue;
+
+        /// Create empty arrow column by it's type and convert it to ClickHouse column.
+        arrow::MemoryPool * pool = arrow::default_memory_pool();
+        std::unique_ptr<arrow::ArrayBuilder> array_builder;
+        arrow::Status status = MakeBuilder(pool, field->type(), &array_builder);
+        checkStatus(status, field->name(), format_name);
+
+        std::shared_ptr<arrow::Array> arrow_array;
+        status = array_builder->Finish(&arrow_array);
+        checkStatus(status, field->name(), format_name);
+
+        arrow::ArrayVector array_vector = {arrow_array};
+        auto arrow_column = std::make_shared<arrow::ChunkedArray>(array_vector);
+        std::unordered_map<std::string, DictionaryInfo> dict_infos;
+        bool skipped = false;
+        bool allow_null_type = false;
+        if (hint_header && hint_header->has(field->name()) && hint_header->getByName(field->name()).type->isNullable())
+            allow_null_type = true;
+        ColumnWithTypeAndName sample_column = readColumnFromArrowColumn(
+            arrow_column, field->name(), format_name, false, dict_infos, allow_null_type, skip_columns_with_unsupported_types, skipped);
+        if (!skipped)
+            sample_columns.emplace_back(std::move(sample_column));
+    }
+    return Block(std::move(sample_columns));
+}
 
 ArrowColumnToCHColumn::ArrowColumnToCHColumn(
     const Block & header_,

@@ -22,6 +22,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/CollapsingSortedTransform.h>
@@ -392,7 +393,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         {
             if (column.type->isByteMap())
             {
-                auto [curr, end] = getMapColumnRangeFromOrderedFiles(column.name, merged_column_to_size);
+                /// Implicit column names in merged_column_to_size is unescaped, so column.name need keep unescaped either.
+                auto [curr, end] = getFileRangeFromOrderedFilesByPrefix(getMapKeyPrefix(column.name), merged_column_to_size);
                 for (; curr != end; ++curr)
                     gathering_columns.emplace_back(
                         curr->first, dynamic_cast<const DataTypeMap *>(column.type.get())->getValueTypeForImplicitColumn());

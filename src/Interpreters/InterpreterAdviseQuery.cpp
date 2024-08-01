@@ -48,7 +48,7 @@ BlockIO InterpreterAdviseQuery::execute()
 
     auto start_watch = std::chrono::high_resolution_clock::now();
     Advisor advisor(query_ptr->as<const ASTAdviseQuery &>().type);
-    auto advises = advisor.analyze(queries, tables, getContext());
+    auto advises = advisor.analyze(queries, getContext());
     auto stop_watch = std::chrono::high_resolution_clock::now();
 
     LOG_DEBUG(&Poco::Logger::get("InterpreterAdviseQuery"), "Analyze cost: {} ms",
@@ -101,7 +101,6 @@ BlockIO InterpreterAdviseQuery::execute()
                 advise_result_columns[6]->insert("");
             }
         }
-
 
         stop_watch = std::chrono::high_resolution_clock::now();
 

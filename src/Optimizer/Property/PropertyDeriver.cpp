@@ -19,11 +19,14 @@
 
 #include <Core/Names.h>
 #include <Interpreters/StorageID.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/ExpressionRewriter.h>
+#include <Optimizer/ExpressionUtils.h>
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/IAST_fwd.h>
 #include <QueryPlan/ExchangeStep.h>
@@ -31,12 +34,9 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <Poco/StringTokenizer.h>
-#include <Optimizer/ExpressionUtils.h>
-#include <MergeTreeCommon/assignCnchParts.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int OPTIMIZER_NONSUPPORT;
@@ -111,6 +111,31 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, cons
     auto metadata = storage->getInMemoryMetadataPtr();
     Names cluster_by;
     UInt64 buckets = 0;
+
+    auto normalize_ast = [&](ASTPtr sharding_key) -> std::pair<Names, ASTPtr> {
+        static SymbolVisitor visitor;
+        Names partition_keys;
+        SymbolVisitorContext symbol_context;
+        ASTVisitorUtil::accept(sharding_key, visitor, symbol_context);
+
+        ConstASTMap expression_map;
+        size_t index = 0;
+        for (auto symbol : symbol_context.result)
+        {
+            ASTPtr name = std::make_shared<ASTIdentifier>(symbol);
+            ASTPtr id = std::make_shared<ASTIdentifier>("$" + std::to_string(index));
+            if (!expression_map.contains(name))
+            {
+                expression_map[name] = ConstHashAST::make(id);
+                partition_keys.emplace_back(symbol);
+                index++;
+            }
+        }
+
+        return {partition_keys, ExpressionRewriter::rewrite(sharding_key, expression_map)};
+    };
+
+    ASTPtr ast;
     if (storage->isBucketTable())
     {
         bool clustered = storage->isTableClustered(context);
@@ -125,7 +150,9 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, cons
             }
             else
             {
-                cluster_by = metadata->cluster_by_key.column_names;
+                auto [columns, rewritten] = normalize_ast(metadata->cluster_by_key.definition_ast);
+                cluster_by = columns;
+                ast = rewritten;
             }
             buckets = metadata->getBucketNumberFromClusterByKey();
         }
@@ -143,7 +170,16 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, cons
                 }
 #endif
         return Property{
-            Partitioning{Partitioning::Handle::BUCKET_TABLE, cluster_by, true, buckets, true, Partitioning::Component::ANY, false, satisfyBucketWorkerRelation(storage, *context)},
+            Partitioning{
+                Partitioning::Handle::BUCKET_TABLE,
+                cluster_by,
+                true,
+                buckets,
+                ast,
+                true,
+                Partitioning::Component::ANY,
+                false,
+                satisfyBucketWorkerRelation(storage, *context)},
             Partitioning{},
             sorting};
     }
@@ -169,9 +205,11 @@ Property PropertyDeriver::deriveStoragePropertyWhatIfMode(
     Names cluster_by{what_if_table_partitioning.getPartitionKey().column};
     // the bucket number is only used for matching, can be set to anything
     UInt64 buckets = (actual_storage_property.getNodePartitioning().getHandle() == Partitioning::Handle::BUCKET_TABLE)
-        ? actual_storage_property.getNodePartitioning().getBuckets() : context->getSettingsRef().memory_catalog_worker_size;
+        ? actual_storage_property.getNodePartitioning().getBuckets()
+        : context->getSettingsRef().memory_catalog_worker_size;
 
-    Partitioning new_partitioning{Partitioning::Handle::BUCKET_TABLE, cluster_by, true, buckets, true, Partitioning::Component::ANY};
+    Partitioning new_partitioning{
+        Partitioning::Handle::BUCKET_TABLE, cluster_by, true, buckets, nullptr, true, Partitioning::Component::ANY};
     actual_storage_property.setNodePartitioning(new_partitioning);
 
     return actual_storage_property;
@@ -228,9 +266,14 @@ Property DeriverVisitor::visitLocalExchangeStep(const LocalExchangeStep & step, 
     return output.clearSorting();
 }
 
+Property DeriverVisitor::visitIntermediateResultCacheStep(const IntermediateResultCacheStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
 Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, DeriverContext & context)
 {
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
 
     if (!context.getInput()[0].getNodePartitioning().getColumns().empty()
         && context.getContext()->getSettingsRef().enable_injective_in_property)
@@ -363,7 +406,7 @@ Property DeriverVisitor::visitAggregatingStep(const AggregatingStep &, DeriverCo
 
 Property DeriverVisitor::visitMarkDistinctStep(const MarkDistinctStep &, DeriverContext & context)
 {
-        return context.getInput()[0].clearSorting();
+    return context.getInput()[0].clearSorting();
 }
 
 Property DeriverVisitor::visitMergingAggregatedStep(const MergingAggregatedStep &, DeriverContext & context)
@@ -448,6 +491,7 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
                     output_keys,
                     true,
                     first_child_property.getNodePartitioning().getBuckets(),
+                    first_child_property.getNodePartitioning().getBucketExpr(),
                     first_child_property.getNodePartitioning().isEnforceRoundRobin(),
                     first_child_property.getNodePartitioning().getComponent(),
                     false,
@@ -461,6 +505,7 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
                 output_keys,
                 true,
                 first_child_property.getNodePartitioning().getBuckets(),
+                first_child_property.getNodePartitioning().getBucketExpr(),
                 first_child_property.getNodePartitioning().isEnforceRoundRobin(),
                 first_child_property.getNodePartitioning().getComponent(),
                 false,
@@ -531,7 +576,8 @@ Property DeriverVisitor::visitTableScanStep(const TableScanStep & step, DeriverC
         translation.emplace(item.first, item.second);
 
     if (!context.getRequire().getTableLayout().empty())
-        return PropertyDeriver::deriveStoragePropertyWhatIfMode(step.getStorage(), context.getContext(), context.getRequire()).translate(translation);
+        return PropertyDeriver::deriveStoragePropertyWhatIfMode(step.getStorage(), context.getContext(), context.getRequire())
+            .translate(translation);
 
     return PropertyDeriver::deriveStorageProperty(step.getStorage(), context.getRequire(), context.getContext()).translate(translation);
 }
@@ -686,7 +732,7 @@ Property DeriverVisitor::visitMultiJoinStep(const MultiJoinStep &, DeriverContex
     return context.getInput()[0];
 }
 
-Property DeriverVisitor::visitExpandStep(const ExpandStep&, DeriverContext & context)
+Property DeriverVisitor::visitExpandStep(const ExpandStep &, DeriverContext & context)
 {
     return context.getInput()[0];
 }

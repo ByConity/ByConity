@@ -47,6 +47,10 @@ public:
     bool supportsPrewhere() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    bool supportIntermedicateResultCache() const override
+    {
+        return !getInMemoryMetadataPtr()->hasUniqueKey();
+    }
 
     StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
     const String& getRelativeDataPath(StorageLocation location) const override;

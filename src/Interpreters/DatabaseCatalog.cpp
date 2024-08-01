@@ -388,7 +388,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         database = nullptr;
     }
 
-    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+    if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         if (auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(table))
             cnch_table->resetObjectColumns(context_);
@@ -1153,7 +1153,9 @@ bool DatabaseCatalog::isDefaultVisibleSystemDatabase(const String & database_nam
 {
     return database_name == SYSTEM_DATABASE
         || database_name == INFORMATION_SCHEMA
-        || database_name == INFORMATION_SCHEMA_UPPERCASE;
+        || database_name == INFORMATION_SCHEMA_UPPERCASE
+        || database_name == MYSQL
+        || database_name == MYSQL_UPPERCASE;
 }
 
 static DatabasePtr

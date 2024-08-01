@@ -213,7 +213,8 @@ void fillMissingColumns(
     size_t num_rows,
     const NamesAndTypesList & requested_columns,
     StorageMetadataPtr metadata_snapshot,
-    size_t num_bitmap_columns)
+    size_t num_bitmap_columns,
+    std::unordered_map<String, DataTypePtr> * filled_missing_column_types)
 {
     size_t num_columns = requested_columns.size();
 
@@ -250,6 +251,9 @@ void fillMissingColumns(
         }
     }
 
+    if (filled_missing_column_types != nullptr)
+        filled_missing_column_types->clear();
+
     /// insert default values only for columns without default expressions
     requested_column = requested_columns.begin();
     for (size_t i = 0; i < num_columns; ++i, ++requested_column)
@@ -284,6 +288,9 @@ void fillMissingColumns(
                 /// that it is constant everywhere but in some blocks (from other parts) it can be a full column.
                 res_columns[i] = type->createColumnConstWithDefaultValue(num_rows)->convertToFullColumnIfConst();
             }
+
+            if (filled_missing_column_types != nullptr)
+                (*filled_missing_column_types)[name] = type;
         }
     }
 }

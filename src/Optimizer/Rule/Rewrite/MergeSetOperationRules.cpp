@@ -19,9 +19,10 @@
 
 namespace DB
 {
-PatternPtr MergeUnionRule::getPattern() const
+ConstRefPatternPtr MergeUnionRule::getPattern() const
 {
-    return Patterns::unionn().result();
+    static auto pattern = Patterns::unionn().result();
+    return pattern;
 }
 
 TransformResult MergeUnionRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -35,9 +36,10 @@ TransformResult MergeUnionRule::transformImpl(PlanNodePtr node, const Captures &
         return {};
 }
 
-PatternPtr MergeExceptRule::getPattern() const
+ConstRefPatternPtr MergeExceptRule::getPattern() const
 {
-    return Patterns::except().result();
+    static auto pattern = Patterns::except().result();
+    return pattern;
 }
 
 TransformResult MergeExceptRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -56,9 +58,10 @@ TransformResult MergeExceptRule::transformImpl(PlanNodePtr node, const Captures 
         return {};
 }
 
-PatternPtr MergeIntersectRule::getPattern() const
+ConstRefPatternPtr MergeIntersectRule::getPattern() const
 {
-    return Patterns::intersect().result();
+    static auto pattern = Patterns::intersect().result();
+    return pattern;
 }
 
 TransformResult MergeIntersectRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

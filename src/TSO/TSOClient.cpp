@@ -15,6 +15,7 @@
 #include <Common/Configurations.h>
 #include <TSO/TSOClient.h>
 
+#include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Protos/tso.pb.h>
 #include <Protos/RPCHelpers.h>
 #include <TSO/TSOImpl.h>
@@ -28,6 +29,7 @@
 namespace ProfileEvents
 {
     extern const Event TSORequest;
+    extern const Event TSORequestMicroseconds;
     extern const Event TSOError;
 }
 
@@ -86,6 +88,9 @@ GetTimestampsResp TSOClient::getTimestamps(UInt32 size)
 
 UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
 {
+    static auto * log = &Poco::Logger::get("getTSOResponse");
+    ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::TSORequestMicroseconds);
+
     const auto & config = context.getRootConfig();
     int tso_max_retry = config.tso_service.tso_max_retry_count;
 
@@ -130,7 +135,7 @@ UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
             }
 
             LOG_ERROR(
-                &Poco::Logger::get("getTSOResponse"),
+                log,
                 "TSO request: {} failed. Retries: {}/{}, Error message: {}",
                 typeToString(type), tso_max_retry - retry, tso_max_retry, getCurrentExceptionMessage(false));
         }

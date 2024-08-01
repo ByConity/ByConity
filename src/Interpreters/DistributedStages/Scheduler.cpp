@@ -13,6 +13,7 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <Interpreters/sendPlanSegment.h>
 #include <butil/iobuf.h>
+#include <fmt/core.h>
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
 #include <common/types.h>
@@ -144,13 +145,22 @@ void Scheduler::schedule()
         auto curr = time_in_milliseconds(std::chrono::system_clock::now());
         if (stopped.load(std::memory_order_relaxed))
         {
-            LOG_INFO(log, "Schedule interrupted");
-            return;
+            if (error_msg.empty())
+            {
+                LOG_INFO(log, "Schedule interrupted");
+                return;
+            }
+            else
+            {
+                // Now it's only used to handle worker restarting.
+                // TODO(wangtao.vip): In future it might be removed.
+                throw Exception(error_msg, ErrorCodes::LOGICAL_ERROR);
+            }
         }
         else if (curr > query_expiration_ms)
         {
-            LOG_INFO(log, "Schedule timeout current ts:{} expire ts:{}", curr, query_expiration_ms);
-            return;
+            throw Exception(
+                fmt::format("schedule timeout, current ts {} expire ts {}", curr, query_expiration_ms), ErrorCodes::TIMEOUT_EXCEEDED);
         }
         /// nullptr means invalid task
         BatchTaskPtr batch_task;

@@ -25,7 +25,7 @@ public:
     RuleType getType() const override { return RuleType::COMMON_PREDICATE_REWRITE; }
     String getName() const override { return "COMMON_PREDICATE_REWRITE"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_common_predicate_rewrite; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -37,7 +37,7 @@ public:
     RuleType getType() const override { return RuleType::COMMON_JOIN_FILTER_REWRITE; }
     String getName() const override { return "COMMON_JOIN_FILTER_REWRITE"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_common_join_predicate_rewrite; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -51,7 +51,7 @@ public:
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_swap_predicate_rewrite; }    
     bool excludeIfTransformSuccess() const override { return true; }
     bool excludeIfTransformFailure() const override { return true; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -65,7 +65,7 @@ public:
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_simplify_predicate_rewrite; }    
     bool excludeIfTransformSuccess() const override { return true; }
     bool excludeIfTransformFailure() const override { return true; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -80,7 +80,7 @@ public:
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_unwrap_cast_in; }        
     bool excludeIfTransformSuccess() const override { return true; }
     bool excludeIfTransformFailure() const override { return true; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -95,7 +95,7 @@ public:
     bool excludeIfTransformSuccess() const override { return true; }
     bool excludeIfTransformFailure() const override { return true; }
 
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -109,7 +109,7 @@ public:
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_simplify_expression_rewrite; }            
     bool excludeIfTransformSuccess() const override { return true; }
     bool excludeIfTransformFailure() const override { return true; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -124,7 +124,7 @@ public:
     bool excludeIfTransformSuccess() const override { return true; }
     bool excludeIfTransformFailure() const override { return true; }
 
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
