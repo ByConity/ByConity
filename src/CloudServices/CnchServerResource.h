@@ -110,7 +110,7 @@ struct ResourceOption
 struct ResourceStageInfo
 {
     std::unordered_set<UUID> sent_resource;
-    void filterResource(std::optional<ResourceOption> resource_option);
+    void filterResource(std::optional<ResourceOption> & resource_option);
 };
 class CnchServerResource
 {

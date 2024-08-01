@@ -123,7 +123,7 @@ void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
     }
 }
 
-void ResourceStageInfo::filterResource(std::optional<ResourceOption> resource_option)
+void ResourceStageInfo::filterResource(std::optional<ResourceOption> & resource_option)
 {
     if (resource_option)
     {
