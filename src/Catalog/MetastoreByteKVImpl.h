@@ -122,6 +122,9 @@ public:
     // leave some margin
     uint32_t getMaxBatchSize() final { return MAX_BYTEKV_BATCH_SIZE - 1000; }
 
+    // leave some margin
+    uint32_t getMaxKVSize() final { return MAX_BYTEKV_KV_SIZE - 200; }
+
 public:
     std::shared_ptr<ByteKVClient> client;
 

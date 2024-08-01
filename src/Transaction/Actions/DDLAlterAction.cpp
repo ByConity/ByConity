@@ -89,7 +89,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         // updateTsCache(table->getStorageUUID(), commit_time);
         if (!new_schema.empty() && new_schema!=old_schema)
         {
-            catalog->alterTable(global_context, query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_modify_cluster_by);
+            catalog->alterTable(*getContext(), query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_modify_cluster_by);
             LOG_DEBUG(log, "Successfully change schema in catalog.");
         }
         else

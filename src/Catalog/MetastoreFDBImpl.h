@@ -33,7 +33,7 @@ namespace Catalog
 class MetastoreFDBImpl : public IMetaStore
 {
 // Limitations of FDB (in bytes)
-#define MAX_FDB_KV_SIZE 10000
+#define MAX_FDB_KV_SIZE 100000  //Hard limit.Keys cannot exceed 10,000 bytes in size. Values cannot exceed 100,000 bytes in size
 #define MAX_FDB_TRANSACTION_SIZE 10000000
 
 public:
@@ -104,6 +104,9 @@ public:
 
     // leave some margin
     uint32_t getMaxBatchSize() final { return MAX_FDB_TRANSACTION_SIZE - 1000; }
+
+    // leave some margin
+    uint32_t getMaxKVSize() final { return MAX_FDB_KV_SIZE - 200; }
 
 private:
     /// convert metastore specific error code to Clickhouse error code for processing convenience in upper layer.
