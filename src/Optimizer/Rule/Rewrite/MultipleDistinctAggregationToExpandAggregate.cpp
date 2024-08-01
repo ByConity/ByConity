@@ -28,6 +28,9 @@ const std::set<String> MultipleDistinctAggregationToExpandAggregate::distinct_fu
 const std::set<String> MultipleDistinctAggregationToExpandAggregate::distinct_func_with_if{
     "uniqexactif", "countdistinctif", "avgdistinctif", "maxdistinctif", "mindistinctif", "sumdistinctif"};
 
+const std::set<String> MultipleDistinctAggregationToExpandAggregate::non_distinct_func_with_if{
+    "sumif", "countif", "avgif", "maxif", "minif"};
+
 const std::unordered_map<String, String> MultipleDistinctAggregationToExpandAggregate::distinct_func_normal_func{
     {"uniqexact", "countIf"},
     {"countdistinct", "countIf"},
@@ -36,7 +39,9 @@ const std::unordered_map<String, String> MultipleDistinctAggregationToExpandAggr
     {"mindistinct", "minIf"},
     {"sumdistinct", "sumIf"}};
 
-bool MultipleDistinctAggregationToExpandAggregate::hasNoDistinctWithFilterOrMask(const AggregatingStep & step)
+const std::set<String> MultipleDistinctAggregationToExpandAggregate::un_supported_func{"hllsketchestimate"};
+
+bool MultipleDistinctAggregationToExpandAggregate::hasNoFilterOrMask(const AggregatingStep & step)
 {
     const AggregateDescriptions & agg_descs = step.getAggregates();
     for (const auto & agg_desc : agg_descs)
@@ -45,6 +50,9 @@ bool MultipleDistinctAggregationToExpandAggregate::hasNoDistinctWithFilterOrMask
             return false;
 
         if (distinct_func_with_if.contains(Poco::toLower(agg_desc.function->getName())))
+            return false;
+
+        if (non_distinct_func_with_if.contains(Poco::toLower(agg_desc.function->getName())))
             return false;
     }
     return true;
@@ -113,8 +121,19 @@ bool MultipleDistinctAggregationToExpandAggregate::allCountHasAtMostOneArguments
         if (Poco::toLower(agg.function->getName()) == "uniqexact" || Poco::toLower(agg.function->getName()) == "countdistinct")
         {
             if (agg.argument_names.size() > 1)
-                return false;   
+                return false;
         }
+    }
+    return true;
+}
+
+bool MultipleDistinctAggregationToExpandAggregate::hasNoUnSupportedFunc(const AggregatingStep & step)
+{
+    const AggregateDescriptions & agg_descs = step.getAggregates();
+    for (const auto & agg_desc : agg_descs)
+    {
+        if (un_supported_func.contains(Poco::toLower(agg_desc.function->getName())))
+            return false;
     }
     return true;
 }
@@ -122,10 +141,11 @@ bool MultipleDistinctAggregationToExpandAggregate::allCountHasAtMostOneArguments
 ConstRefPatternPtr MultipleDistinctAggregationToExpandAggregate::getPattern() const
 {
     static auto pattern = Patterns::aggregating()
-        .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
-            return hasNoDistinctWithFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s)) && hasUniqueArgument(s) && allCountHasAtMostOneArguments(s);
-        })
-        .result();
+                              .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
+                                  return hasNoFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s))
+                                      && hasUniqueArgument(s) && allCountHasAtMostOneArguments(s) && hasNoUnSupportedFunc(s);
+                              })
+                              .result();
     return pattern;
 }
 
@@ -264,12 +284,12 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
 
     // step 2 : add pre-compute aggregate
     std::set<String> keyset;
-    for(const String & key : step.getKeys()) 
+    for (const String & key : step.getKeys())
     {
         keyset.insert(key);
     }
     keyset.insert(group_id_symbol);
-    for(const String & distinct : distinct_arguments)
+    for (const String & distinct : distinct_arguments)
     {
         keyset.insert(distinct);
     }

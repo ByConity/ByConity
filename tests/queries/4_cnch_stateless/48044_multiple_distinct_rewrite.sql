@@ -532,3 +532,98 @@ SELECT
 FROM aeolus_data_table_8_352783_prod
 WHERE ((p_date >= '2024-06-05') AND (p_date <= '2024-06-05')) AND (auto_audit_status = '3') AND (uid_rank_desc = '1')
 LIMIT 1000;
+
+CREATE TABLE app_instant_partner_shop_di
+(
+    `partner_id` Int64,
+    `partner_name` String,
+    `root_shop_id` Int64,
+    `root_shop_name` String,
+    `shop_logo_uri` String,
+    `ofo_commission_amt` Decimal(38, 6),
+    `ofo_live_commission_amt` Decimal(38, 6),
+    `pay_amt` Decimal(38, 6),
+    `pay_prod_cnt` Int64,
+    `prod_expose_uids` Nullable(SketchBinary),
+    `prod_click_uids` Nullable(SketchBinary),
+    `refund_amt` Decimal(38, 6),
+    `prod_reture_ord_cnt_3d` Int64,
+    `accept_ord_cnt` Int64,
+    `bad_comment_ord_cnt_3d` Int64,
+    `complain_ord_cnt_7d` Int64,
+    `pay_ord_cnt` Int64,
+    `date_type` String,
+    `date` Date
+)
+ENGINE = CnchMergeTree
+PARTITION BY date
+ORDER BY (partner_id, root_shop_id, date_type, intHash64(partner_id));
+
+SELECT
+    sum(ofo_commission_amt + ofo_live_commission_amt) AS commission_amt,
+    sum(pay_amt) AS pay_amt_cnt,
+    sum(pay_prod_cnt) AS pay_prod_cnt,
+    countDistinct(IF(pay_amt > 0, root_shop_id, NULL)) AS has_paid_shop_cnt,
+    hllSketchEstimate(12, 1)(prod_click_uids) / hllSketchEstimate(12, 1)(prod_expose_uids) AS click_expose_rate,
+    sum(refund_amt) AS refund_amt
+FROM app_instant_partner_shop_di
+WHERE ((date >= '2024-05-24') AND (date <= '2024-05-30')) AND (partner_id = 7368703292081193255) AND (date_type = '1d');
+
+CREATE TABLE ads_agroup_24year_brand_stat_df
+(
+    `date_time` String,
+    `brand_id` Int64,
+    `brand_name` Nullable(String),
+    `brand_s_level` Nullable(String),
+    `shop_settle_type` String,
+    `first_mgt_cate` Nullable(String),
+    `second_mgt_cate` Nullable(String),
+    `cate_attribution` Nullable(String),
+    `tier` Nullable(String),
+    `tier_name` Nullable(String),
+    `brand_layer` Nullable(String),
+    `strategy_brand_struct` Nullable(String),
+    `strategy_cate_props` Nullable(String),
+    `strategy_agroup_industry` Nullable(String),
+    `strategy_second_vbline_id` Nullable(Int64),
+    `strategy_cate_attribution` Nullable(String),
+    `strategy_tier` Nullable(String),
+    `is_gmv_task` Int8,
+    `is_mall_shelf_task` Int8,
+    `is_low_brand_task` Int8,
+    `is_high_price_task` Int8,
+    `op_emp_id` Nullable(Int64),
+    `op_emp_name` Nullable(String),
+    `op_emp_email` Nullable(String),
+    `second_vbline_id` Nullable(Int64),
+    `second_vbline_name` Nullable(String),
+    `third_vbline_id` Nullable(Int64),
+    `third_vbline_name` Nullable(String),
+    `fourth_vbline_id` Nullable(Int64),
+    `fourth_vbline_name` Nullable(String),
+    `slice_id` UInt32,
+    `td_gmv` Int64,
+    `gmv` Int64,
+    `history_gmv` Int64,
+    `history_td_gmv` Int64,
+    `p_date` Date,
+    `date_type` String,
+    `platform` Int32,
+    `op_td_gmv` Int64,
+    `strategy_agroup_industry_name` Nullable(String),
+    `strategy_first_vbline_name` Nullable(String),
+    `first_vbline_name` Nullable(String),
+    `first_vbline_id` Nullable(Int64),
+    `strategy_first_vbline_id` Nullable(Int64)
+)
+ENGINE = CnchMergeTree
+PARTITION BY (p_date, date_type, platform)
+CLUSTER BY slice_id INTO 24 BUCKETS SPLIT_NUMBER 96
+ORDER BY (date_time, brand_id, shop_settle_type, slice_id, p_date, date_type, platform, intHash64(slice_id));
+
+SELECT
+    countDistinct(brand_id) AS brand_nums,
+    sumIf(gmv, platform = 1) AS douyin_index,
+    sumIf(gmv, platform IN (2, 4)) AS outer_index
+FROM ads_agroup_24year_brand_stat_df
+WHERE (p_date = '2024-06-06') AND (date_type = 'month') AND ((platform IN (2, 4)) OR (platform = 1)) AND (date_time IN ('20221130', '20221231', '20230131', '20230228', '20230331', '20230430')) AND (brand_layer IN ('0份额品牌', '极劣势品牌', '劣势品牌', '胶着品牌', '优势品牌')) AND (shop_settle_type IN ('旗舰店', '经销商')) AND (strategy_first_vbline_id = 11230509000002) AND isNotNull(strategy_second_vbline_id) AND isNotNull(strategy_agroup_industry_name)
