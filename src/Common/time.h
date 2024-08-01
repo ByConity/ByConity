@@ -31,3 +31,12 @@ inline std::chrono::time_point<std::chrono::system_clock, std::chrono::nanosecon
     return std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds>{
         std::chrono::duration_cast<std::chrono::system_clock::duration>(timespec_to_duration(ts))};
 }
+
+/// return duration in ms from now to timestamp_ms, if now exceeded timestamp_ms, return empty
+inline std::optional<UInt64> duration_ms_from_now(UInt64 timestamp_ms)
+{
+    auto now = time_in_milliseconds(std::chrono::system_clock::now());
+    if (timestamp_ms < now)
+        return {};
+    return timestamp_ms - now;
+}

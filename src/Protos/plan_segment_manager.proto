@@ -116,6 +116,7 @@ message QueryCommon {
   optional TraceMeta trace_meta = 12;
 
   optional bool check_session = 13;
+  optional uint64 query_expiration_timestamp = 14;
 }
 
 message SubmitPlanSegmentRequest {
