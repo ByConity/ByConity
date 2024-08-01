@@ -2075,6 +2075,11 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cnch_engine_conversion, false, "Whether to converse MergeTree engine to CnchMergeTree engine", 0) \
     /** End of BitEngine related settings */ \
     \
+    M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
+    M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
+    /** End of gis related settings */ \
+    \
+
 
 // End of FORMAT_FACTORY_SETTINGS
 

@@ -132,6 +132,15 @@ public:
     void setMaxThreads(size_t max_threads_) { max_threads = max_threads_; }
     size_t getMaxThreads() const { return max_threads; }
 
+    void setShortCircuit(bool short_circuit_)
+    {
+        short_circuit = short_circuit_;
+    }
+    bool isShortCircuit() const
+    {
+        return short_circuit;
+    }
+
     void addInterpreterContext(std::shared_ptr<Context> context);
 
     void serialize(WriteBuffer & buffer) const;
@@ -217,6 +226,8 @@ private:
     std::shared_ptr<UInt32> max_node_id;
     //Whether reset step id in serialize()，use for explain analyze.
     bool reset_step_id = true;
+
+    bool short_circuit = false;
 };
 
 std::string debugExplainStep(const IQueryPlanStep & step);
