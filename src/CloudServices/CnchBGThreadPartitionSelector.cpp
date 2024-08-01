@@ -48,7 +48,7 @@ CnchBGThreadPartitionSelector::CnchBGThreadPartitionSelector(ContextMutablePtr g
             if (!res)
                 break;
 
-            auto * col_uuid = checkAndGetColumn<ColumnUInt128>(*res.getByName("uuid").column);
+            auto * col_uuid = checkAndGetColumn<ColumnUUID>(*res.getByName("uuid").column);
             auto * col_partition = checkAndGetColumn<ColumnString>(*res.getByName("partition_id").column);
             auto * col_insert = checkAndGetColumn<ColumnUInt64>(*res.getByName("insert_parts").column);
             auto * col_insert_time = checkAndGetColumn<ColumnUInt32>(*res.getByName("last_insert_time").column);
