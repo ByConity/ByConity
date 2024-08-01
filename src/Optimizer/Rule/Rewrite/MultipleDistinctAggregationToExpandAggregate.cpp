@@ -34,12 +34,7 @@ const std::unordered_map<String, String> MultipleDistinctAggregationToExpandAggr
     {"avgdistinct", "avgIf"},
     {"maxdistinct", "maxIf"},
     {"mindistinct", "minIf"},
-    {"sumdistinct", "sumIf"},
-    {"count", "anyIf"},
-    {"max", "anyIf"},
-    {"min", "anyIf"},
-    {"avg", "anyIf"},
-    {"sum", "anyIf"}};
+    {"sumdistinct", "sumIf"}};
 
 bool MultipleDistinctAggregationToExpandAggregate::hasNoDistinctWithFilterOrMask(const AggregatingStep & step)
 {
@@ -268,10 +263,20 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
     }
 
     // step 2 : add pre-compute aggregate
+    std::set<String> keyset;
+    for(const String & key : step.getKeys()) 
+    {
+        keyset.insert(key);
+    }
+    keyset.insert(group_id_symbol);
+    for(const String & distinct : distinct_arguments)
+    {
+        keyset.insert(distinct);
+    }
+
+    // make sure keys remove duplicated value.
     Names keys;
-    keys.insert(keys.end(), step.getKeys().begin(), step.getKeys().end());
-    keys.emplace_back(group_id_symbol);
-    keys.insert(keys.end(), distinct_arguments.begin(), distinct_arguments.end());
+    keys.insert(keys.end(), keyset.begin(), keyset.end());
 
     auto pre_agg_step = std::make_shared<AggregatingStep>(
         expand_node->getStep()->getOutputStream(),
@@ -363,7 +368,7 @@ MultipleDistinctAggregationToExpandAggregate::nonDistinctAggWithMask(const Aggre
     Array parameters = agg_desc.function->getParameters();
     AggregateFunctionProperties properties;
 
-    String fun_remove_distinct = distinct_func_normal_func.at(Poco::toLower(agg_desc.function->getName()));
+    String fun = "anyIf";
 
     /// in case count(*), agg_desc.function->getArgumentTypes() returns empty.
     /// anyIf requires 2 arguments
@@ -372,7 +377,7 @@ MultipleDistinctAggregationToExpandAggregate::nonDistinctAggWithMask(const Aggre
         data_types.emplace_back(std::make_shared<DataTypeUInt8>());
     }
 
-    AggregateFunctionPtr new_agg_fun = AggregateFunctionFactory::instance().get(fun_remove_distinct, data_types, parameters, properties);
+    AggregateFunctionPtr new_agg_fun = AggregateFunctionFactory::instance().get(fun, data_types, parameters, properties);
     Names argument_names;
     argument_names.emplace_back(agg_desc.column_name);
     argument_names.emplace_back(mask_column);
