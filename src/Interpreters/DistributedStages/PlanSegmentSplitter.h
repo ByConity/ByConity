@@ -56,6 +56,8 @@ struct PlanSegmentVisitorContext
     PlanSegmentInputs inputs;
     std::vector<PlanSegment *> children;
     size_t & exchange_id;
+    String hash_func;
+    Array params = Array();
     bool is_add_totals = false;
     bool is_add_extremes = false;
     bool scalable = true;

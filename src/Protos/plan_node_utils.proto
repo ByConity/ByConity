@@ -109,6 +109,7 @@ message Partitioning {
   required bool enforce_round_robin = 5;
   required Component.Enum component = 6;
   required bool exactly_match = 7;
+  optional AST bucket_expr = 8;
 }
 
 // possibly nullptr
@@ -264,6 +265,7 @@ message PlanSegmentOutput {
   optional string shuffle_hash_function = 2;
   optional uint32 parallel_size = 3;
   optional bool keep_order = 4;
+  optional FieldVector shuffle_function_parameters = 5;
 }
 
 message WindowFrame {

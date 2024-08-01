@@ -1,4 +1,5 @@
 #include <Core/tests/gtest_protobuf_common.h>
+#include <Protos/plan_node_utils.pb.h>
 #include "Interpreters/DistributedStages/PlanSegment.h"
 
 
@@ -303,6 +304,23 @@ TEST_F(ProtobufTest, PlanSegmentInput)
     // re-serialize to protobuf
     Protos::PlanSegmentInput pb2;
     step2->toProto(pb2);
+    compareProto(pb, pb2);
+}
+
+TEST_F(ProtobufTest, PlanSegmentOutput)
+{
+    std::default_random_engine eng(42);
+    // construct valid step
+    auto output = generatePlanSegmentOutput(eng);
+    // serialize to protobuf
+    Protos::PlanSegmentOutput pb;
+    output->toProto(pb);
+    // deserialize from protobuf
+    auto output2 = std::make_shared<PlanSegmentOutput>();
+    output2->fillFromProto(pb);
+    // re-serialize to protobuf
+    Protos::PlanSegmentOutput pb2;
+    output2->toProto(pb2);
     compareProto(pb, pb2);
 }
 

@@ -51,6 +51,7 @@
 #include <QueryPlan/WindowStep.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <fmt/format.h>
+#include <Common/FieldVisitorToString.h>
 #include <Common/HashTable/Hash.h>
 
 #include <filesystem>
@@ -1314,7 +1315,7 @@ String StepPrinter::printExpandStep(const ExpandStep & step, bool)
     }
     std::string result = ss.str();
 
-    details << step.getGroupIdSymbol() << "[" << result <<  "]";
+    details << step.getGroupIdSymbol() << "[" << result << "]";
     details << "|";
     details << "Groups";
     details << "|";
@@ -1813,6 +1814,8 @@ String StepPrinter::printExchangeStep(const ExchangeStep & step)
         }
     };
     details << f(step.getExchangeMode());
+    details << "|";
+    details << step.getSchema().toString();
 
     if (step.needKeepOrder())
     {
@@ -1989,11 +1992,11 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     {
         ASTSampleRatio * sample = query->sampleSize()->as<ASTSampleRatio>();
         details << "Sample : \\n";
-        details << "Sample Size : " << ASTSampleRatio::toString(sample->ratio)<< "\\n";
+        details << "Sample Size : " << ASTSampleRatio::toString(sample->ratio) << "\\n";
         if (query->sampleOffset())
         {
             ASTSampleRatio * offset = query->sampleOffset()->as<ASTSampleRatio>();
-            details << "Sample Offset : " << ASTSampleRatio::toString(offset->ratio)<< "\\n";
+            details << "Sample Offset : " << ASTSampleRatio::toString(offset->ratio) << "\\n";
         }
         details << "|";
     }
@@ -3562,6 +3565,11 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
             out << "keeporder ";
         }
 
+        if (input->isStable())
+        {
+            out << "stable ";
+        }
+
         out << "\n";
     }
     out << "\n";
@@ -3577,6 +3585,14 @@ void GraphvizPrinter::appendPlanSegmentNode(std::stringstream & out, const PlanS
         if (input->needKeepOrder())
         {
             out << "keeporder ";
+        }
+        out << "hash_func:" << input->getShuffleFunctionName();
+
+        auto visitor = FieldVisitorToString();
+        out << " params:";
+        for (auto item : input->getShuffleFunctionParams())
+        {
+            out << " " << applyVisitor(visitor, item);
         }
         out << "\n";
     }
@@ -3706,7 +3722,6 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
         head_step = group.getLogicalExpressions()[0]->getStep().get();
 
     auto fold = [](std::string a, GroupId b) { return std::move(a) + ", " + std::to_string(b); };
-    auto fold_string = [](String a, const String & b) { return std::move(a) + ", " + b; };
 
     auto expr_to_str = [&](const GroupExprPtr & expr) {
         if (!expr)
@@ -3848,55 +3863,9 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
 
     // winners
 
-    auto partition_str = [&](const Partitioning & partitioning) {
-        auto component_str = " ANY";
-        if (partitioning.getComponent() == Partitioning::Component::COORDINATOR)
-            component_str = " COORDINATOR";
-        else if (partitioning.getComponent() == Partitioning::Component::WORKER)
-            component_str = " WORKER";
-
-        if (partitioning.getHandle() == Partitioning::Handle::SINGLE)
-            return String("SINGLE") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::FIXED_BROADCAST)
-            return String("BROADCAST") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::ARBITRARY)
-            return String("ARBITRARY") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::BUCKET_TABLE)
-            return String("BUCKET_TABLE") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::FIXED_ARBITRARY)
-            return String("FIXED_ARBITRARY") + component_str;
-        else if (partitioning.getHandle() == Partitioning::Handle::FIXED_HASH)
-        {
-            if (partitioning.getColumns().empty())
-            {
-                return String("FIXED_HASH[]") + component_str;
-            }
-            else
-            {
-                auto result = String("FIXED_HASH[")
-                    + std::accumulate(
-                                  std::next(partitioning.getColumns().begin()),
-                                  partitioning.getColumns().end(),
-                                  partitioning.getColumns()[0],
-                                  fold_string)
-                    + "]";
-                if (partitioning.isEnforceRoundRobin())
-                {
-                    result += " RoundR";
-                }
-                if (partitioning.isRequireHandle())
-                {
-                    result += " handle";
-                }
-                return result + component_str;
-            }
-        }
-        else
-            return String("UNKNOWN") + component_str;
-    };
     auto property_str = [&](const Property & property) {
         std::stringstream ss;
-        ss << partition_str(property.getNodePartitioning());
+        ss << property.getNodePartitioning().toString();
         ss << " ";
         ss << property.getCTEDescriptions().toString();
         return ss.str();
@@ -3936,7 +3905,7 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
                 if (auto exchange_step = dynamic_cast<const ExchangeStep *>(winner->getRemoteExchange()->getStep().get()))
                 {
                     out << "enforce: ";
-                    out << partition_str(exchange_step->getSchema());
+                    out << exchange_step->getSchema().toString();
                     out << "<BR/>";
                 }
             }

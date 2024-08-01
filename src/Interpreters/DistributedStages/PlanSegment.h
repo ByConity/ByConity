@@ -172,11 +172,15 @@ public:
 
     void setStorageID(const StorageID & storage_id_) { storage_id = storage_id_;}
 
+    void setStable(bool stable_) { stable = stable_; }
+    bool isStable() const { return stable; }
+
 private:
     size_t parallel_index = std::numeric_limits<size_t>::max(); ///  no longer used
     bool keep_order = false;
     AddressInfos source_addresses;
     std::optional<StorageID> storage_id;
+    bool stable = false;
 };
 
 using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;
@@ -210,10 +214,18 @@ public:
 
     String toString(size_t indent = 0) const override;
 
+    void setShuffleFunctionName(const String & shuffle_function_name_) { shuffle_function_name = shuffle_function_name_; }
+
+    const String & getShuffleFunctionName() { return shuffle_function_name; }
+
+    void setShuffleFunctionParams(const Array & shuffle_func_params_) { shuffle_func_params = shuffle_func_params_; }
+    const Array & getShuffleFunctionParams() { return shuffle_func_params; }
+
 private:
     String shuffle_function_name = "cityHash64";
     size_t parallel_size;
     bool keep_order = false;
+    Array shuffle_func_params;
 };
 
 using PlanSegmentOutputPtr = std::shared_ptr<PlanSegmentOutput>;

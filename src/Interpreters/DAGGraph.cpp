@@ -107,6 +107,13 @@ void SourcePruner::generateUnprunableSegments()
                 unprunable_plan_segments.insert(segment_output->getPlanSegmentId());
             }
         }
+        for (const auto & segment_input : node.getPlanSegment()->getPlanSegmentInputs())
+        {
+            if (segment_input->isStable())
+            {
+                unprunable_plan_segments.insert(node.getPlanSegment()->getPlanSegmentId());
+            }
+        }
     }
 }
 

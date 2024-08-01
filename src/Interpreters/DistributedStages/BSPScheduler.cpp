@@ -70,7 +70,7 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
             source_task_index_on_workers[addr]++;
         }
     }
-    triggerDispatch(cluster_nodes.rank_workers);
+    triggerDispatch(cluster_nodes.all_workers);
 }
 
 void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed, bool /*is_canceled*/)
@@ -254,7 +254,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
             // for local no repartion and local may no repartition, schedule to original node
             NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
             // in case all workers except servers are occupied, simply retry at last node
-            failed_workers[segment_id].size() == cluster_nodes.rank_workers.size())
+            failed_workers[segment_id].size() == cluster_nodes.all_workers.size())
         {
             auto available_worker = segment_parallel_locations[segment_id][parallel_index];
             occupied_workers[segment_id].erase(available_worker);
@@ -266,7 +266,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index)
         {
             pending_task_instances.no_prefs.insert({segment_id, parallel_index});
             lk.unlock();
-            triggerDispatch(cluster_nodes.rank_workers);
+            triggerDispatch(cluster_nodes.all_workers);
         }
     }
     return true;

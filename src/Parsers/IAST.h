@@ -162,7 +162,8 @@ class ReadBuffer;
     M(ASTDropPreparedStatementQuery) \
     M(ASTBitEngineConstraintDeclaration) \
     M(ASTStorageAnalyticalMySQL) \
-    M(ASTCreateQueryAnalyticalMySQL)
+    M(ASTCreateQueryAnalyticalMySQL) \
+    M(ASTClusterByElement)
 #define ENUM_TYPE(ITEM) ITEM,
 
 enum class ASTType : UInt8

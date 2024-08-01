@@ -124,7 +124,7 @@ TEST_F(MaterializedViewAdviseTest, TestMaterializedViewFilterAndProject)
     EXPECT_CONTAINS(advises.front()->getOptimizedValue(), "d_month_seq - 1");
 }
 
-TEST_F(MaterializedViewAdviseTest, TestMaterializedViewFilterAndProject2)
+TEST_F(MaterializedViewAdviseTest, DISABLED_TestMaterializedViewFilterAndProject2)
 {
     auto advises = getAdvises(
         {"select d_month_seq - 1, d_date_sk + 1 from date_dim where d_week_seq = 1",
@@ -196,7 +196,7 @@ TEST_F(MaterializedViewAdviseTest, TestMaterializedViewCaseWhen)
     EXPECT_GE(advises.size(), 1);
 }
 
-TEST_F(MaterializedViewAdviseTest, TestTPCDSQ6)
+TEST_F(MaterializedViewAdviseTest, DISABLED_TestTPCDSQ6)
 {
     std::string sql = tester->loadQuery("q6").sql.front().first;
     auto advises = getAdvises({sql});

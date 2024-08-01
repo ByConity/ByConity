@@ -829,7 +829,11 @@ Processors PlanSegmentExecutor::buildRepartitionExchangeSink(
         arguments.emplace_back(plan_segment_outputs[output_index]->getHeader().getByName(column_name));
         argument_numbers.emplace_back(plan_segment_outputs[output_index]->getHeader().getPositionByName(column_name));
     }
-    auto repartition_func = RepartitionTransform::getDefaultRepartitionFunction(arguments, context);
+    auto repartition_func = RepartitionTransform::getRepartitionHashFunction(
+        plan_segment_outputs[output_index]->getShuffleFunctionName(),
+        arguments,
+        context,
+        plan_segment_outputs[output_index]->getShuffleFunctionParams());
     size_t partition_num = senders.size();
 
     if (keep_order && context->getSettingsRef().exchange_enable_keep_order_parallel_shuffle && partition_num > 1)
