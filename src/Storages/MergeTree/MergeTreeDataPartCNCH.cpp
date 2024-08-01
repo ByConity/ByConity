@@ -20,7 +20,6 @@
 #include <Common/Priority.h>
 #include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/RowExistsColumnInfo.h>
-#include <Common/Trace/TracerCommon.h>
 #include <Common/escapeForFileName.h>
 #include <Core/Settings.h>
 #include <Core/SettingsEnums.h>
