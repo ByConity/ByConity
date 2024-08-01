@@ -514,14 +514,15 @@ Status OrcChunkReader::initBlock()
     bool allow_missing_columns = format_settings.orc.allow_missing_columns;
     bool null_as_default = format_settings.null_as_default;
     bool case_insenstive = format_settings.orc.case_insensitive_column_matching;
+    bool allow_out_of_range = format_settings.date_time_overflow_behavior == FormatSettings::DateTimeOverflowBehavior::Saturate ? true : false;
 
     //TODO fix this.
     active_orc_column_to_ch_column
-        = std::make_unique<ORCColumnToCHColumn>(active_block, allow_missing_columns, null_as_default, case_insenstive);
+        = std::make_unique<ORCColumnToCHColumn>(active_block, allow_missing_columns, null_as_default, case_insenstive, allow_out_of_range);
     lazy_orc_column_to_ch_column
-        = std::make_unique<ORCColumnToCHColumn>(lazy_block, allow_missing_columns, null_as_default, case_insenstive);
+        = std::make_unique<ORCColumnToCHColumn>(lazy_block, allow_missing_columns, null_as_default, case_insenstive, allow_out_of_range);
     orc_column_to_ch_column
-        = std::make_unique<ORCColumnToCHColumn>(chunk_reader_params.header, allow_missing_columns, null_as_default, case_insenstive);
+        = std::make_unique<ORCColumnToCHColumn>(chunk_reader_params.header, allow_missing_columns, null_as_default, case_insenstive, allow_out_of_range);
 
     return Status::OK();
 }

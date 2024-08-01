@@ -412,4 +412,6 @@ enum class SchemaInferenceMode
 
 DECLARE_SETTING_ENUM(SchemaInferenceMode)
 
+DECLARE_SETTING_ENUM_WITH_RENAME(DateTimeOverflowBehavior, FormatSettings::DateTimeOverflowBehavior)
+
 }
