@@ -418,33 +418,13 @@ StepAndOutputOrder StepNormalizer::visitJoinStep(const JoinStep & step, StepsAnd
     DataStreams normal_input_streams = processInputStreams(step.getInputStreams(), inputs, symbol_mapping, cumulative_pos);
     createOutputSymbolMapping(step.getOutputStream().header, symbol_mapping, cumulative_pos);
     SymbolMapper symbol_mapper = SymbolMapper::simpleMapper(symbol_mapping);
-    QueryPlanStepPtr normal_step = symbol_mapper.map(step);
+    auto normal_step = symbol_mapper.map(step);
 
     auto output_header = normal_step->getOutputStream().header.getColumnsWithTypeAndName();
     ExpressionReorderNormalizer::reorder(output_header);
     // replace the input_stream & output_stream because of reordering
-    normal_step = std::make_shared<JoinStep>(
-        normal_input_streams,
-        DataStream{output_header},
-        step.getKind(),
-        step.getStrictness(),
-        step.getMaxStreams(),
-        step.getKeepLeftReadInOrder(),
-        step.getLeftKeys(),
-        step.getRightKeys(),
-        step.getFilter(),
-        step.isHasUsing(),
-        step.getRequireRightKeys(),
-        step.getAsofInequality(),
-        step.getDistributionType(),
-        step.getJoinAlgorithm(),
-        step.isMagic(),
-        step.isOrdered(),
-        step.isSimpleReordered(),
-        // step.isParallel(),
-        // step.isBucket(),
-        step.getRuntimeFilterBuilders(),
-        step.getHints());
+    normal_step->setInputStreams(normal_input_streams);
+    normal_step->setOutputStream(DataStream{output_header});
 
     Block output_order = getOutputOrder(step, *normal_step, symbol_mapper);
     return StepAndOutputOrder{normal_step, std::move(output_order)};

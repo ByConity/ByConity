@@ -43,17 +43,8 @@ Projection Est. 100 rows
                   │  │           │        │           Where: Runtime Filters: {d_date}
                   │  │           │        │           Outputs: d_date_sk_1:=d_date_sk, d_date_3:=d_date
                   │  │           │        └─ Broadcast Exchange Est. 20 rows
-                  │  │           │           └─ Left Semi Join Est. 20 rows
-                  │  │           │              │     Condition: d_week_seq_2 == d_week_seq_3
-                  │  │           │              │     Runtime Filters Builder: {d_week_seq_3}
-                  │  │           │              ├─ Filter Est. 73049 rows
-                  │  │           │              │  │     Condition: Runtime Filters: {d_week_seq_2}
-                  │  │           │              │  └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                  │  │           │              │           Where: Runtime Filters: {d_week_seq}
-                  │  │           │              │           Outputs: d_date_4:=d_date, d_week_seq_2:=d_week_seq
-                  │  │           │              └─ Broadcast Exchange Est. 3 rows
-                  │  │           │                 └─ Buffer Est. 3 rows
-                  │  │           │                    └─ CTERef[1] Est. 3 rows
+                  │  │           │           └─ Buffer Est. 20 rows
+                  │  │           │              └─ CTERef[1] Est. 20 rows
                   │  │           └─ Filter Est. 300000 rows
                   │  │              │     Condition: Runtime Filters: {i_item_id_1}
                   │  │              └─ TableScan tpcds1000_sample.item Est. 300000 rows
@@ -85,17 +76,8 @@ Projection Est. 100 rows
                   │              │        │           Where: Runtime Filters: {d_date}
                   │              │        │           Outputs: [d_date_sk, d_date]
                   │              │        └─ Broadcast Exchange Est. 20 rows
-                  │              │           └─ Left Semi Join Est. 20 rows
-                  │              │              │     Condition: d_week_seq == d_week_seq_1
-                  │              │              │     Runtime Filters Builder: {d_week_seq_1}
-                  │              │              ├─ Filter Est. 73049 rows
-                  │              │              │  │     Condition: Runtime Filters: {d_week_seq}
-                  │              │              │  └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                  │              │              │           Where: Runtime Filters: {d_week_seq}
-                  │              │              │           Outputs: [d_week_seq], d_date_1:=d_date
-                  │              │              └─ Broadcast Exchange Est. 3 rows
-                  │              │                 └─ Buffer Est. 3 rows
-                  │              │                    └─ CTERef[1] Est. 3 rows
+                  │              │           └─ Buffer Est. 20 rows
+                  │              │              └─ CTERef[1] Est. 20 rows
                   │              └─ Filter Est. 300000 rows
                   │                 │     Condition: Runtime Filters: {i_item_id}
                   │                 └─ TableScan tpcds1000_sample.item Est. 300000 rows
@@ -127,28 +109,28 @@ Projection Est. 100 rows
                               │        │           Where: Runtime Filters: {d_date}
                               │        │           Outputs: d_date_sk_2:=d_date_sk, d_date_6:=d_date
                               │        └─ Broadcast Exchange Est. 20 rows
-                              │           └─ Left Semi Join Est. 20 rows
-                              │              │     Condition: d_week_seq_4 == d_week_seq_5
-                              │              │     Runtime Filters Builder: {d_week_seq_5}
-                              │              ├─ Filter Est. 73049 rows
-                              │              │  │     Condition: Runtime Filters: {d_week_seq_4}
-                              │              │  └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                              │              │           Where: Runtime Filters: {d_week_seq}
-                              │              │           Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
-                              │              └─ Broadcast Exchange Est. 3 rows
-                              │                 └─ Buffer Est. 3 rows
-                              │                    └─ CTERef[1] Est. 3 rows
+                              │           └─ Buffer Est. 20 rows
+                              │              └─ CTERef[1] Est. 20 rows
                               └─ TableScan tpcds1000_sample.item Est. 300000 rows
                                        Outputs: i_item_sk_2:=i_item_sk, i_item_id_2:=i_item_id
 CTEDef [1]
-   Repartition Exchange Est. 3 rows
-   │     Partition by: {d_week_seq_1}
-   └─ Projection Est. 3 rows
-      │     Expressions: [d_week_seq_1]
-      └─ Filter Est. 3 rows
-         │     Condition: d_date_2 IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
-         └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                  Where: d_date IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
-                  Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
-note: Runtime Filter is applied for 12 times.
+   Repartition Exchange Est. 20 rows
+   │     Partition by: {d_date_1}
+   └─ Left Semi Join Est. 20 rows
+      │     Condition: d_week_seq == d_week_seq_1
+      │     Runtime Filters Builder: {d_week_seq_1}
+      ├─ Filter Est. 73049 rows
+      │  │     Condition: Runtime Filters: {d_week_seq}
+      │  └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+      │           Where: Runtime Filters: {d_week_seq}
+      │           Outputs: [d_week_seq], d_date_1:=d_date
+      └─ Broadcast Exchange Est. 3 rows
+         └─ Projection Est. 3 rows
+            │     Expressions: [d_week_seq_1]
+            └─ Filter Est. 3 rows
+               │     Condition: d_date_2 IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+               └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                        Where: d_date IN (cast(11138, 'Date32'), cast(11227, 'Date32'), cast(11278, 'Date32'))
+                        Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
+note: Runtime Filter is applied for 10 times.
 note: CTE(Common Table Expression) is applied for 3 times.
