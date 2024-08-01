@@ -237,8 +237,8 @@ void CnchBGThreadsMap::cleanup()
 
 CnchBGThreadsMapArray::CnchBGThreadsMapArray(ContextPtr global_context_) : WithContext(global_context_)
 {
-    for (auto i = size_t(CnchBGThreadType::ServerMinType); i <= size_t(CnchBGThreadType::ServerMaxType); ++i)
-        threads_array[i] = std::make_unique<CnchBGThreadsMap>(global_context_, CnchBGThreadType(i));
+    for (auto i = CnchBGThread::ServerMinType; i <= CnchBGThread::ServerMaxType; ++i)
+        threads_array[i] = std::make_unique<CnchBGThreadsMap>(global_context_, static_cast<CnchBGThreadType>(i));
 
     if (global_context_->getServerType() == ServerType::cnch_worker && global_context_->getResourceManagerClient())
     {
@@ -263,9 +263,9 @@ CnchBGThreadsMapArray::~CnchBGThreadsMapArray()
 
 void CnchBGThreadsMapArray::shutdown()
 {
-    ThreadPool pool(size_t(CnchBGThreadType::ServerMaxType) - size_t(CnchBGThreadType::ServerMinType) + 1);
+    ThreadPool pool(CnchBGThread::ServerMaxType - CnchBGThread::ServerMinType + 1);
 
-    for (auto i = size_t(CnchBGThreadType::ServerMinType); i <= size_t(CnchBGThreadType::ServerMaxType); ++i)
+    for (auto i = CnchBGThread::ServerMinType; i <= CnchBGThread::ServerMaxType; ++i)
     {
         if (auto * t = threads_array[i].get())
             pool.scheduleOrThrowOnError([t] { t->stopAll(); });
@@ -285,7 +285,7 @@ void CnchBGThreadsMapArray::cleanThread()
 {
     try
     {
-        for (auto i = size_t(CnchBGThreadType::ServerMinType); i <= size_t(CnchBGThreadType::ServerMaxType); ++i)
+        for (auto i = CnchBGThread::ServerMinType; i <= CnchBGThread::ServerMaxType; ++i)
             threads_array[i]->cleanup();
     }
     catch (...)
