@@ -22,7 +22,6 @@
 #include <CloudServices/DedupWorkerStatus.h>
 #include <Common/Stopwatch.h>
 #include <Common/Configurations.h>
-#include <Common/Trace/BRPCCarrierV2.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>

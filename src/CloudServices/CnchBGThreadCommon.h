@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <Common/Exception.h>
+#include <common/defines.h>
 
 namespace DB
 {
