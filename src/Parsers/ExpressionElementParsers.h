@@ -642,4 +642,15 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+/** The Execute Value is one of: an expression in parentheses, an array of literals, a literal, a function.
+  */
+class ParserExecuteValue : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "element of execute value"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 }
