@@ -52,15 +52,14 @@ public:
         PreparedObject prepared_object,
         bool throw_if_exists = true,
         bool or_replace = false,
-        bool is_persistent = true);
+        bool is_persistent = true,
+        ContextMutablePtr context = nullptr);
     PreparedObject getObject(const String & name) const;
     SettingsChanges getSettings(const String & name) const;
-    void remove(const String & name, bool throw_if_not_exists);
+    void remove(const String & name, bool throw_if_not_exists, ContextMutablePtr context = nullptr);
     void clearCache();
     Strings getNames() const;
     bool has(const String & name) const;
-    NamesAndPreparedStatements getAllStatementsFromDisk(ContextMutablePtr & context);
-
     struct CacheResultType
     {
         QueryPlanPtr plan;
@@ -79,13 +78,11 @@ public:
         PreparedParameterSet prepared_params,
         ContextMutablePtr & context);
 
-    static void loadStatementsFromDisk(ContextMutablePtr & context);
+    static void loadStatementsFromCatalog(ContextMutablePtr & context);
 
 private:
     CacheType cache;
     mutable std::shared_mutex mutex;
-
-    std::unique_ptr<PreparedStatementLoaderFromDisk> prepared_statement_loader;
 
     bool hasUnsafe(const String & name) const
     {

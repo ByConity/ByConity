@@ -393,6 +393,11 @@ message SQLBinding {
   required string tenant_id = 6;
 }
 
+message PreparedStatementItem {
+  required string name = 1;
+  required string create_statement = 2;
+}
+
 message VirtualWarehouseSettings {
   /// basic information ///
   // {READ, WRITE, TASK}
