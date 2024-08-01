@@ -810,6 +810,7 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData()
         {
             InterpreterSelectQueryUseOptimizer interpreter(query_ptr, contxt, SelectQueryOptions());
             interpreter.buildQueryPlan(query_plan, analysis, !metadata_settings.lineage_use_optimizer);
+            query_ptr = interpreter.getQuery();
         }
         catch (...)
         {

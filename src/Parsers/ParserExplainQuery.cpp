@@ -110,6 +110,10 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 explain_query->format = std::make_shared<ASTIdentifier>("JSON");
                 setIdentifierSpecial(explain_query->format);
             }
+
+            auto * ignore_format = settings_ast.changes.tryGet("ignore_format");
+            if (ignore_format && ignore_format->toString() == "1")
+                explain_query->ignore_format = true;
             explain_query->setSettings(std::move(settings));
         }
         else

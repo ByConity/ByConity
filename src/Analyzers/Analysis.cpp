@@ -344,6 +344,14 @@ FieldDescriptions & Analysis::getOutputDescription(IAST & ast)
     MAP_GET(output_descriptions, &ast);
 }
 
+bool Analysis::hasOutputDescription(IAST & ast)
+{
+    if (auto * subquery = ast.as<ASTSubquery>())
+        return hasOutputDescription(*subquery->children[0]);
+
+    return output_descriptions.contains(&ast);
+}
+
 void Analysis::setRegisteredWindow(ASTSelectQuery & select_query, const String & name, ResolvedWindowPtr & window)
 {
     MAP_SET(registered_windows[&select_query], name, window);
