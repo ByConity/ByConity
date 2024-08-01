@@ -14,7 +14,7 @@ String formatTenantDatabaseName(const String & database_name);
 
 // name -> tenant_id.name
 // no catalog information will be attached.
-String appendTenantIdOnly(const String & name);
+String appendTenantIdOnly(const String & name, bool is_datbase_name = true);
 
 String formatTenantConnectDefaultDatabaseName(const String & database_name);
 
@@ -31,6 +31,8 @@ bool isTenantMatchedEntityName(const String & tenant_entity_name, const String &
 String getOriginalDatabaseName(const String & tenant_database_name);
 
 String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id);
+
+String formatTenantName(const String & name, char separator = '.');
 
 void pushTenantId(const String &tenant_id);
 

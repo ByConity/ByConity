@@ -61,6 +61,21 @@ static bool isInternalDatabaseName(const String & database_name)
     return false;
 }
 
+//Format pattern {tenant_id}.{name}
+String formatTenantName(const String & name, char separator)
+{
+    auto tenant_id = getCurrentTenantId();
+    if (!tenant_id.empty() &&
+        (name.find(tenant_id) != 0 || name.size() == tenant_id.size() || name[tenant_id.size()] != separator))
+    {
+        String result = tenant_id;
+        result += separator;
+        result += name;
+        return result;
+    }
+    return name;
+}
+
 //Format pattern {tenant_id}.{database_name}
 static String formatTenantDatabaseNameImpl(const String & database_name, char separator = '.')
 {
@@ -106,8 +121,10 @@ String formatTenantDatabaseName(const String & database_name)
     }
 }
 
-String appendTenantIdOnly(const String & name)
+String appendTenantIdOnly(const String& name, bool is_datbase_name)
 {
+    if (!is_datbase_name)
+        return formatTenantName(name);
     return formatTenantDatabaseNameImpl(name);
 }
 

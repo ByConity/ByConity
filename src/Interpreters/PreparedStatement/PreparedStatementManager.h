@@ -29,7 +29,7 @@ struct PreparedObject
         std::unordered_map<String, std::unordered_map<String, std::vector<String>>> query_access_info;
     };
 
-    String query;
+    ASTPtr query;
     SettingsChanges settings_changes;
     PreparedParameterSet prepared_params;
     std::shared_ptr<QueryAccessInfo> query_detail;
@@ -72,15 +72,12 @@ public:
     // TODO @wangtao: extract common logic with InterpreterSelectQueryUseOptimizer::addPlanToCache
     void addPlanToCache(
         const String & name,
-        const String & query,
+        ASTPtr & query,
         SettingsChanges settings_changes,
         QueryPlanPtr & plan,
         AnalysisPtr analysis,
         PreparedParameterSet prepared_params,
-        ContextMutablePtr & context,
-        bool throw_if_exists,
-        bool or_replace,
-        bool is_persistent);
+        ContextMutablePtr & context);
 
     static void loadStatementsFromDisk(ContextMutablePtr & context);
 

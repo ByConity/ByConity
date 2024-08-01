@@ -7,9 +7,10 @@
 #include <Parsers/ParserPreparedStatement.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserSetQuery.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 namespace DB
-{
+{  
 bool ParserCreatePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_create("CREATE");
@@ -39,7 +40,14 @@ bool ParserCreatePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
 
     ParserCompoundIdentifier name_p;
     ASTPtr identifier;
-    if (!name_p.parse(pos, identifier, expected))
+    if (name_p.parse(pos, identifier, expected))
+    {
+        auto * name_node = identifier->as<ASTIdentifier>();
+        if (name_node->nameParts().size() > 2
+            || (name_node->nameParts().size() == 2 && (!getCurrentTenantId().empty() || getCurrentTenantId() == name_node->nameParts()[0])))
+            return false;
+    }
+    else
         return false;
 
     String cluster_str;
@@ -48,7 +56,6 @@ bool ParserCreatePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
         if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
             return false;
     }
-
 
     if (!s_as.parse(pos, identifier, expected))
         return false;
@@ -66,7 +73,10 @@ bool ParserCreatePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     prepare->if_not_exists = if_not_exists;
     prepare->or_replace = or_replace;
     prepare->query = query;
+    prepare->name_ast = identifier;
+    prepare->children.push_back(prepare->name_ast);
     prepare->children.push_back(prepare->query);
+    prepare->rewriteNamesWithTenant(pos.getContext());
 
     node = prepare;
     return true;
@@ -83,7 +93,14 @@ bool ParserExecutePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Ex
     ParserCompoundIdentifier name_p;
     ASTPtr identifier;
 
-    if (!name_p.parse(pos, identifier, expected))
+    if (name_p.parse(pos, identifier, expected))
+    {
+        auto * name_node = identifier->as<ASTIdentifier>();
+        if (name_node->nameParts().size() > 2
+            || (name_node->nameParts().size() == 2 && (!getCurrentTenantId().empty() || getCurrentTenantId() == name_node->nameParts()[0])))
+            return false;
+    }
+    else
         return false;
 
     ASTPtr settings;
@@ -104,6 +121,7 @@ bool ParserExecutePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Ex
     tryGetIdentifierNameInto(identifier, execute->name);
 
     execute->values = settings;
+    execute->rewriteNamesWithTenant();
     node = execute;
     return true;
 }
@@ -127,8 +145,15 @@ bool ParserShowPreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
             create = true;
             if (!s_prepared_statement.ignore(pos, expected))
                 return false;
-            if (!name_p.parse(pos, identifier, expected))
+        if (name_p.parse(pos, identifier, expected))
+        {
+            auto * name_node = identifier->as<ASTIdentifier>();
+            if (name_node->nameParts().size() > 2
+                || (name_node->nameParts().size() == 2 && (!getCurrentTenantId().empty() || getCurrentTenantId() == name_node->nameParts()[0])))
                 return false;
+        }
+        else
+            return false;
         }
         else if (s_prepared_statements.ignore(pos, expected))
         {
@@ -141,7 +166,14 @@ bool ParserShowPreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
         explain = true;
         if (!s_prepared_statement.ignore(pos, expected))
             return false;
-        if (!name_p.parse(pos, identifier, expected))
+        if (name_p.parse(pos, identifier, expected))
+        {
+            auto * name_node = identifier->as<ASTIdentifier>();
+            if (name_node->nameParts().size() > 2
+                || (name_node->nameParts().size() == 2 && (!getCurrentTenantId().empty() || getCurrentTenantId() == name_node->nameParts()[0])))
+                return false;
+        }
+        else
             return false;
     }
     else
@@ -152,6 +184,7 @@ bool ParserShowPreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
         tryGetIdentifierNameInto(identifier, show_prepare->name);
     show_prepare->show_create = create;
     show_prepare->show_explain = explain;
+    show_prepare->rewriteNamesWithTenant();
     node = show_prepare;
     return true;
 }
@@ -172,7 +205,14 @@ bool ParserDropPreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
 
     ParserCompoundIdentifier name_p;
     ASTPtr identifier;
-    if (!name_p.parse(pos, identifier, expected))
+    if (name_p.parse(pos, identifier, expected))
+    {
+        auto * name_node = identifier->as<ASTIdentifier>();
+        if (name_node->nameParts().size() > 2
+            || (name_node->nameParts().size() == 2 && (!getCurrentTenantId().empty() || getCurrentTenantId() == name_node->nameParts()[0])))
+            return false;
+    }
+    else
         return false;
 
     String cluster_str;
@@ -186,6 +226,7 @@ bool ParserDropPreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
     tryGetIdentifierNameInto(identifier, drop->name);
     drop->cluster = std::move(cluster_str);
     drop->if_exists = if_exists;
+    drop->rewriteNamesWithTenant();
     node = drop;
     return true;
 }

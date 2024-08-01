@@ -12,6 +12,7 @@ class ASTCreatePreparedStatementQuery : public IAST, public ASTQueryWithOnCluste
 {
 public:
     String name;
+    ASTPtr name_ast;
     ASTPtr query;
 
     bool if_not_exists = false;
@@ -44,6 +45,9 @@ public:
     {
         return removeOnCluster<ASTCreatePreparedStatementQuery>(clone());
     }
+
+    void rewriteNamesWithTenant(const Context* context = nullptr);
+    void rewriteNamesWithoutTenant();
 
 protected:
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
@@ -78,6 +82,9 @@ public:
         return values;
     }
 
+    void rewriteNamesWithTenant(const Context* context = nullptr);
+    void rewriteNamesWithoutTenant();
+
 protected:
     void formatQueryImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
 };
@@ -102,6 +109,9 @@ public:
     }
 
     ASTPtr clone() const override;
+
+    void rewriteNamesWithTenant(const Context* context = nullptr);
+    void rewriteNamesWithoutTenant();
 
 protected:
     void formatQueryImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
@@ -131,6 +141,9 @@ public:
     {
         return removeOnCluster<ASTDropPreparedStatementQuery>(clone());
     }
+
+    void rewriteNamesWithTenant(const Context* context = nullptr);
+    void rewriteNamesWithoutTenant();
 
 protected:
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
