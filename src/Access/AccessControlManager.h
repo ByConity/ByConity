@@ -131,7 +131,7 @@ public:
     void setSelectFromMySQLRequiresGrant(bool enable) { select_from_mysql_requires_grant = enable; }
     bool doesSelectFromMySQLRequireGrant() const { return select_from_mysql_requires_grant; }
 
-    std::shared_ptr<const ContextAccess> getContextAccess(
+    ContextAccessParams getContextAccessParams(
         const UUID & user_id,
         const std::vector<UUID> & current_roles,
         bool use_default_roles,

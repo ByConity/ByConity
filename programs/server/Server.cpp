@@ -595,7 +595,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initCnchConfig(config());
     global_context->setBlockPrivilegedOp(config().getBool("restrict_tenanted_users_to_privileged_operations", false));
     global_context->initRootConfig(config());
-    global_context->initPreloadThrottler();
     const auto & root_config = global_context->getRootConfig();
 
 
