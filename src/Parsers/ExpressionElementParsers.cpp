@@ -181,15 +181,18 @@ bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    /// Identifier in backquotes or in double quotes
-    if (pos->type == TokenType::BackQuotedIdentifier || pos->type == TokenType::DoubleQuotedIdentifier)
+    /// Identifier in backquotes or in double quotes or single quotes
+    if (pos->type == TokenType::BackQuotedIdentifier || pos->type == TokenType::DoubleQuotedIdentifier
+            || (allow_single_quoted_identifier && pos->type == TokenType::StringLiteral))
     {
         ReadBufferFromMemory buf(pos->begin, pos->size());
         String s;
 
         if (*pos->begin == '`')
             readBackQuotedStringWithSQLStyle(s, buf);
-        else
+        else if (*pos->begin == '\'')
+            readQuotedStringWithSQLStyle(s, buf);
+        else if (*pos->begin == '"')
             readDoubleQuotedStringWithSQLStyle(s, buf);
 
         if (s.empty())    /// Identifiers "empty string" are not allowed.
@@ -2272,7 +2275,7 @@ const char * ParserAlias::restricted_keywords[] =
 bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_as("AS");
-    ParserIdentifier id_p;
+    ParserIdentifier id_p(false, allow_single_quoted_identifier);
 
     bool has_as_word = s_as.ignore(pos, expected);
     if (!allow_alias_without_as_keyword && !has_as_word)
@@ -2707,7 +2710,7 @@ bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
                 allow_alias_without_as_keyword_now = false;
 
     ASTPtr alias_node;
-    if (ParserAlias(allow_alias_without_as_keyword_now).parse(pos, alias_node, expected))
+    if (ParserAlias(allow_alias_without_as_keyword_now, dt.parse_mysql_ddl).parse(pos, alias_node, expected))
     {
         /// FIXME: try to prettify this cast using `as<>()`
         if (auto * ast_with_alias = dynamic_cast<ASTWithAlias *>(node.get()))
