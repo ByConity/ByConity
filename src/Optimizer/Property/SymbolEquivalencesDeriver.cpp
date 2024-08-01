@@ -69,26 +69,15 @@ SymbolEquivalencesDeriverVisitor::visitProjectionStep(const ProjectionStep & ste
 {
     const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
-    std::unordered_map<String, String> revert_identifies;
-
     for (auto & item : identities)
-    {
-        revert_identifies[item.second] = item.first;
-    }
-
-    auto equivalences = context[0]->translate(revert_identifies);
-    for (auto & item : identities)
-    {
-        equivalences->add(item.second, item.first);
-    }
-    return equivalences;
+        context[0]->add(item.second, item.first);
+    return context[0];
 }
 
 SymbolEquivalencesPtr
-SymbolEquivalencesDeriverVisitor::visitAggregatingStep(const AggregatingStep & step, std::vector<SymbolEquivalencesPtr> & context)
+SymbolEquivalencesDeriverVisitor::visitAggregatingStep(const AggregatingStep &, std::vector<SymbolEquivalencesPtr> & context)
 {
-    NameSet set{step.getKeys().begin(), step.getKeys().end()};
-    return context[0]->translate(set);
+    return context[0];
 }
 SymbolEquivalencesPtr
 SymbolEquivalencesDeriverVisitor::visitExchangeStep(const ExchangeStep &, std::vector<SymbolEquivalencesPtr> & context)
@@ -99,10 +88,12 @@ SymbolEquivalencesDeriverVisitor::visitExchangeStep(const ExchangeStep &, std::v
 SymbolEquivalencesPtr
 SymbolEquivalencesDeriverVisitor::visitCTERefStep(const CTERefStep & step, std::vector<SymbolEquivalencesPtr> & context)
 {
-    auto mapping = step.getReverseOutputColumns();
     if (!context.empty() && context[0])
     {
-        context[0]->translate(mapping);
+        auto mappings = step.getOutputColumns();
+        for (const auto & mapping : mappings)
+            context[0]->add(mapping.first, mapping.second);
+        return context[0];
     }
     return std::make_shared<SymbolEquivalences>();
 }

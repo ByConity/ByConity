@@ -52,7 +52,8 @@ Projection
                   │  │           │              │           Where: Runtime Filters: {d_week_seq}
                   │  │           │              │           Outputs: d_date_4:=d_date, d_week_seq_2:=d_week_seq
                   │  │           │              └─ Broadcast Exchange
-                  │  │           │                 └─ CTERef[1]
+                  │  │           │                 └─ Buffer
+                  │  │           │                    └─ CTERef[1]
                   │  │           └─ Filter
                   │  │              │     Condition: Runtime Filters: {i_item_id_1}
                   │  │              └─ TableScan tpcds1000.item
@@ -93,7 +94,8 @@ Projection
                   │              │              │           Where: Runtime Filters: {d_week_seq}
                   │              │              │           Outputs: [d_week_seq], d_date_1:=d_date
                   │              │              └─ Broadcast Exchange
-                  │              │                 └─ CTERef[1]
+                  │              │                 └─ Buffer
+                  │              │                    └─ CTERef[1]
                   │              └─ Filter
                   │                 │     Condition: Runtime Filters: {i_item_id}
                   │                 └─ TableScan tpcds1000.item
@@ -134,7 +136,8 @@ Projection
                               │              │           Where: Runtime Filters: {d_week_seq}
                               │              │           Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
                               │              └─ Broadcast Exchange
-                              │                 └─ CTERef[1]
+                              │                 └─ Buffer
+                              │                    └─ CTERef[1]
                               └─ TableScan tpcds1000.item
                                        Outputs: i_item_sk_2:=i_item_sk, i_item_id_2:=i_item_id
 CTEDef [1]

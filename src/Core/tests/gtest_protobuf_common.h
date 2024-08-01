@@ -261,7 +261,7 @@ public:
 
     static Block generateBlock(std::default_random_engine & eng, bool arr = false)
     {
-        std::vector<std::string> columns = {"a", "b", "c"};
+        std::vector<std::string> columns = {"a", "b", "c", "col_0", "col_1", "col_3"};
         size_t rows = 10;
         size_t stride = 1;
         size_t start = 0;
@@ -400,7 +400,7 @@ public:
         return res;
     }
 
-    static AggregateDescription generateAggregateDescription(std::default_random_engine & eng)
+    static AggregateDescription generateAggregateDescription(std::default_random_engine & /*eng*/, int i)
     {
         AggregateDescription res;
         AggregateFunctionProperties properties;
@@ -412,7 +412,7 @@ public:
         // generate Names
         // for (int i = 0; i < 10; ++i)
         // res.argument_names.emplace_back(fmt::format("text{}", eng() % 100));
-        res.column_name = std::vector{"a", "b"}[eng() % 2];
+        res.column_name = "col_" + std::to_string(i);
         res.mask_column = res.column_name;
         return res;
     }
@@ -426,7 +426,7 @@ public:
             keys.emplace_back(eng() % 3);
         AggregateDescriptions aggregates;
         for (int i = 0; i < 2; ++i)
-            aggregates.emplace_back(generateAggregateDescription(eng));
+            aggregates.emplace_back(generateAggregateDescription(eng, i));
         auto overflow_row = eng() % 2 == 1;
         auto max_rows_to_group_by = eng() % 1000;
         auto group_by_overflow_mode = static_cast<OverflowMode>(eng() % 3);

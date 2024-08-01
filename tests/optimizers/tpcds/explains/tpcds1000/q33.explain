@@ -66,7 +66,8 @@ Projection Est. 100 rows
                   │                 │     └─ TableScan tpcds1000.item Est. 300000 rows
                   │                 │              Where: Runtime Filters: {i_manufact_id}
                   │                 │              Outputs: [i_item_sk, i_manufact_id]
-                  │                 └─ CTERef[1] Est. 29887 rows
+                  │                 └─ Buffer Est. 29887 rows
+                  │                    └─ CTERef[1] Est. 29887 rows
                   ├─ MergingAggregated Est. 99 rows
                   │  └─ Repartition Exchange Est. 99 rows
                   │     │     Partition by: {i_manufact_id_2}
@@ -119,7 +120,8 @@ Projection Est. 100 rows
                   │                 │     └─ TableScan tpcds1000.item Est. 300000 rows
                   │                 │              Where: Runtime Filters: {i_manufact_id}
                   │                 │              Outputs: i_item_sk_1:=i_item_sk, i_manufact_id_2:=i_manufact_id
-                  │                 └─ CTERef[1] Est. 29887 rows
+                  │                 └─ Buffer Est. 29887 rows
+                  │                    └─ CTERef[1] Est. 29887 rows
                   └─ MergingAggregated Est. 99 rows
                      └─ Repartition Exchange Est. 99 rows
                         │     Partition by: {i_manufact_id_4}
@@ -172,7 +174,8 @@ Projection Est. 100 rows
                                     │     └─ TableScan tpcds1000.item Est. 300000 rows
                                     │              Where: Runtime Filters: {i_manufact_id}
                                     │              Outputs: i_item_sk_2:=i_item_sk, i_manufact_id_4:=i_manufact_id
-                                    └─ CTERef[1] Est. 29887 rows
+                                    └─ Buffer Est. 29887 rows
+                                       └─ CTERef[1] Est. 29887 rows
 CTEDef [1]
    Repartition Exchange Est. 29887 rows
    │     Partition by: {i_manufact_id_1}

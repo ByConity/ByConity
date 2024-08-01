@@ -192,7 +192,7 @@ TEST_F(ProtobufTest, AggregateDescription)
 {
     std::default_random_engine eng(42);
     // construct valid object
-    auto obj = generateAggregateDescription(eng);
+    auto obj = generateAggregateDescription(eng, 6);
     // serialize to protobuf
     Protos::AggregateDescription pb;
     obj.toProto(pb);

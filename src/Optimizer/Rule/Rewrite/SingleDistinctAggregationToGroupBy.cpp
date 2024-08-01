@@ -82,14 +82,19 @@ TransformResult SingleDistinctAggregationToGroupBy::transformImpl(PlanNodePtr no
     const auto & step = dynamic_cast<const AggregatingStep &>(*step_ptr);
 
     // insert a extra Group-by Aggregate, perform distinct operation
-    auto symbols = step.getAggregates()[0].argument_names;
-    auto group_by = step.getKeys();
-    symbols.insert(symbols.begin(), group_by.begin(), group_by.end());
+    NameSet distinct_keys;
+    Names keys;
+    for (const auto & symbol : step.getKeys())
+        if (distinct_keys.emplace(symbol).second)
+            keys.emplace_back(symbol);
+    for (const auto & symbol : step.getAggregates()[0].argument_names)
+        if (distinct_keys.emplace(symbol).second)
+            keys.emplace_back(symbol);
 
     AggregateDescriptions aggregate_descriptions;
     auto group_by_step = std::make_shared<AggregatingStep>(
         node->getChildren()[0]->getStep()->getOutputStream(),
-        symbols,
+        keys,
         step.getKeysNotHashed(),
         aggregate_descriptions,
         GroupingSetsParamsList{},
@@ -110,7 +115,7 @@ TransformResult SingleDistinctAggregationToGroupBy::transformImpl(PlanNodePtr no
 
     auto remove_distinct_agg_step = std::make_shared<AggregatingStep>(
         group_by_node->getStep()->getOutputStream(),
-        group_by,
+        step.getKeys(),
         step.getKeysNotHashed(),
         remove_distinct_agg_descs,
         GroupingSetsParamsList{},

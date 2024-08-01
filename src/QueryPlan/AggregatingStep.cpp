@@ -29,6 +29,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
 #include <Processors/QueryPipeline.h>
@@ -41,11 +42,12 @@
 #include <Processors/Transforms/RollupTransform.h>
 #include <Processors/Transforms/RollupWithGroupingTransform.h>
 #include <QueryPlan/PlanSerDerHelper.h>
-#include <common/logger_useful.h>
-#include "Core/SettingsEnums.h"
-#include <DataStreams/IBlockInputStream.h>
+#include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Processors/IntermediateResult/CacheManager.h>
+#include <common/logger_useful.h>
+
+#include <algorithm>
+#include <unordered_set>
 
 namespace DB
 {
@@ -232,11 +234,11 @@ AggregatingStep::createParams(Block header_before_aggregation, AggregateDescript
 
 
     return Aggregator::Params(
-        header_before_aggregation, keys, aggregates, overflow_row, 0, OverflowMode::THROW, 
-        0, 
-        0, 
-        0, 
-        false, 
+        header_before_aggregation, keys, aggregates, overflow_row, 0, OverflowMode::THROW,
+        0,
+        0,
+        0,
+        false,
         10485760,
         false, nullptr, 0, 0, false, 0);
 }
@@ -322,6 +324,15 @@ AggregatingStep::AggregatingStep(
     , no_shuffle(no_shuffle_)
 
 {
+    NameSet output_names;
+    for (const auto & key : keys)
+        if (!output_names.emplace(key).second)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "duplicate group by key: {}", key);
+
+    for (const auto & aggregate : params.aggregates)
+        if (!output_names.emplace(aggregate.column_name).second)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "duplicate aggreagte function output name: {}", aggregate.column_name);
+
     //    final = final && !totals && !cube & !rollup;
     setInputStreams(input_streams);
 }

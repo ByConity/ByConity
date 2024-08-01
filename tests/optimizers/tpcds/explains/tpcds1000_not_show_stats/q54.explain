@@ -123,7 +123,8 @@ Projection
                                              │                       │     Group by: {expr#plus(d_month_seq, 1)}
                                              │                       └─ Projection
                                              │                          │     Expressions: expr#plus(d_month_seq, 1):=d_month_seq_1 + 1
-                                             │                          └─ CTERef[1]
+                                             │                          └─ Buffer
+                                             │                             └─ CTERef[1]
                                              └─ Broadcast Exchange
                                                 └─ EnforceSingleRow
                                                    └─ Gather Exchange
@@ -136,7 +137,8 @@ Projection
                                                                   │     Group by: {expr#plus(d_month_seq, 3)}
                                                                   └─ Projection
                                                                      │     Expressions: expr#plus(d_month_seq, 3):=d_month_seq_2 + 3
-                                                                     └─ CTERef[1]
+                                                                     └─ Buffer
+                                                                        └─ CTERef[1]
 CTEDef [1]
    Projection
    │     Expressions: [d_month_seq_1]

@@ -85,30 +85,36 @@ Projection Est. ? rows
                         └─ TableScan test.t40047_y Est. ? rows
                                  Outputs: [c]
 Projection Est. ? rows
-│     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
+│     Expressions: _subquery1:=`expr#max(c)_7`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
 └─ Gather Exchange Est. ? rows
    └─ Projection Est. ? rows
-      │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=`expr#max(y2.c)_1` + 1
+      │     Expressions: [expr#max(c)_7], expr#plus(_subquery2, 1):=`expr#max(c)_9` + 1
       └─ Inner Join Est. ? rows
          │     Condition: 
          ├─ Inner Join Est. ? rows
          │  │     Condition: 
          │  ├─ TableScan test.t40047_x Est. ? rows
          │  │        Outputs: [a]
-         │  └─ CTERef[1] Est. ? rows
-         └─ CTERef[1] Est. ? rows
-CTEDef [1]
-   Broadcast Exchange Est. ? rows
-   └─ Projection Est. ? rows
-      │     Expressions: expr#max(c)_1:=cast(`expr#max(c)`, \'Nullable(Int32)\')
-      └─ MergingAggregated Est. ? rows
-         └─ Gather Exchange Est. ? rows
-            └─ Aggregating Est. ? rows
-               │     Group by: {}
-               │     Aggregates: expr#max(c):=AggNull(max)(c)
-               └─ TableScan test.t40047_y Est. ? rows
-                        Outputs: [c]
-note: CTE(Common Table Expression) is applied for 2 times.
+         │  └─ Broadcast Exchange Est. ? rows
+         │     └─ Projection Est. ? rows
+         │        │     Expressions: expr#max(c)_7:=cast(`expr#max(c)_6`, \'Nullable(Int32)\')
+         │        └─ MergingAggregated Est. ? rows
+         │           └─ Gather Exchange Est. ? rows
+         │              └─ Aggregating Est. ? rows
+         │                 │     Group by: {}
+         │                 │     Aggregates: expr#max(c)_6:=AggNull(max)(c_4)
+         │                 └─ TableScan test.t40047_y Est. ? rows
+         │                          Outputs: c_4:=c
+         └─ Broadcast Exchange Est. ? rows
+            └─ Projection Est. ? rows
+               │     Expressions: expr#max(c)_9:=cast(`expr#max(c)_8`, \'Nullable(Int32)\')
+               └─ MergingAggregated Est. ? rows
+                  └─ Gather Exchange Est. ? rows
+                     └─ Aggregating Est. ? rows
+                        │     Group by: {}
+                        │     Aggregates: expr#max(c)_8:=AggNull(max)(c_5)
+                        └─ TableScan test.t40047_y Est. ? rows
+                                 Outputs: c_5:=c
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
 └─ Gather Exchange Est. ? rows

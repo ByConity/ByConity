@@ -50,7 +50,8 @@ Projection Est. 100 rows
                      │           │                    Where: d_year = 2000
                      │           │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                      │           └─ Broadcast Exchange Est. 45 rows
-                     │              └─ CTERef[1] Est. 45 rows
+                     │              └─ Buffer Est. 45 rows
+                     │                 └─ CTERef[1] Est. 45 rows
                      └─ Broadcast Exchange Est. 45 rows
                         └─ Inner Join Est. 45 rows
                            │     Condition: sr_store_sk_4 == s_store_sk
@@ -89,10 +90,12 @@ Projection Est. 100 rows
                            │                       │                    Where: d_year = 2000
                            │                       │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
                            │                       └─ Broadcast Exchange Est. 45 rows
-                           │                          └─ CTERef[1] Est. 45 rows
+                           │                          └─ Buffer Est. 45 rows
+                           │                             └─ CTERef[1] Est. 45 rows
                            └─ Repartition Exchange Est. 45 rows
                               │     Partition by: {s_store_sk}
-                              └─ CTERef[1] Est. 45 rows
+                              └─ Buffer Est. 45 rows
+                                 └─ CTERef[1] Est. 45 rows
 CTEDef [1]
    Projection Est. 45 rows
    │     Expressions: [s_store_sk]

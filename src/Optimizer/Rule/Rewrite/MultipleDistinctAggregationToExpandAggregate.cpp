@@ -149,11 +149,11 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
     for (const auto & input_column : input)
     {
         DataTypePtr type = input_column.type;
-        type = JoinCommon::tryConvertTypeToNullable(type);
+        // type = JoinCommon::tryConvertTypeToNullable(type);
         name_type[input_column.name] = type;
         assignments.emplace(
             input_column.name,
-            makeASTFunction("cast", std::make_shared<ASTLiteral>(Field()), std::make_shared<ASTLiteral>(type->getName())));
+            makeASTFunction("cast", std::make_shared<ASTLiteral>(type->getDefault()), std::make_shared<ASTLiteral>(type->getName())));
     }
 
     /// append a extra mark field : group_id.
