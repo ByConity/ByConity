@@ -88,12 +88,13 @@ namespace ErrorCodes
 }
 
 InterpreterInsertQuery::InterpreterInsertQuery(
-    const ASTPtr & query_ptr_, ContextPtr context_, bool allow_materialized_, bool no_squash_, bool no_destination_)
+    const ASTPtr & query_ptr_, ContextPtr context_, bool allow_materialized_, bool no_squash_, bool no_destination_, AccessType access_type_)
     : WithContext(context_)
     , query_ptr(query_ptr_)
     , allow_materialized(allow_materialized_)
     , no_squash(no_squash_)
     , no_destination(no_destination_)
+    , access_type(access_type_)
 {
     checkStackSize();
 }
@@ -311,7 +312,7 @@ BlockIO InterpreterInsertQuery::execute()
 
     auto query_sample_block = getSampleBlock(insert_query, table, metadata_snapshot);
     if (!insert_query.table_function)
-        getContext()->checkAccess(AccessType::INSERT, insert_query.table_id, query_sample_block.getNames());
+        getContext()->checkAccess(access_type, insert_query.table_id, query_sample_block.getNames());
 
     bool is_distributed_insert_select = false;
 

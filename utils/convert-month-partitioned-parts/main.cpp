@@ -122,7 +122,7 @@ void run(String part_path, String date_column, String dest_path)
 
     MergeTreePartition partition(yyyymm);
     partition.store(partition_key_sample, disk, new_tmp_part_path_str, checksums);
-    String partition_id = partition.getID(partition_key_sample);
+    String partition_id = partition.getID(partition_key_sample, /*extract_nullable_date_value*/false);
 
     Poco::File(new_tmp_part_path_str + "checksums.txt").setWriteable();
     WriteBufferFromFile checksums_out(new_tmp_part_path_str + "checksums.txt", 4096);

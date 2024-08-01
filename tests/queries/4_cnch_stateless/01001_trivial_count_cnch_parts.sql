@@ -16,3 +16,12 @@ SELECT sum(rows), sum(delete_rows) FROM system.cnch_parts WHERE database = curre
 
 DROP TABLE t_delete_rows;
 DROP TABLE t_delete_rows_u;
+
+DROP TABLE IF EXISTS t_trivial_count_ttl;
+CREATE TABLE t_trivial_count_ttl (p DateTime, k Int32) ENGINE = CnchMergeTree() PARTITION BY toDate(p) ORDER BY k TTL toDate(p) + INTERVAL 10 DAY;
+INSERT INTO t_trivial_count_ttl VALUES (now() - INTERVAL 3 DAY, 1), (now() - INTERVAL 5 DAY, 1), (now(), 1);
+SELECT count() FROM t_trivial_count_ttl;
+ALTER TABLE t_trivial_count_ttl MODIFY TTL toDate(p) + INTERVAL 1 DAY;
+SELECT count() FROM t_trivial_count_ttl;
+DROP TABLE t_trivial_count_ttl;
+

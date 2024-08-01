@@ -87,7 +87,14 @@ BlockIO InterpreterDeleteQuery::execute()
             0,
             DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
-        InterpreterInsertQuery insert_interpreter(insert_ast, getContext());
+        InterpreterInsertQuery insert_interpreter(
+            insert_ast,
+            getContext(),
+            /*allow_materialized_*/false,
+            /*no_squash_*/false,
+            /*no_destination_*/false,
+            AccessType::ALTER_DELETE);
+
         return insert_interpreter.execute();
     }
     else
