@@ -167,7 +167,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     if (!partition_commands.empty())
     {
         table->checkAlterPartitionIsPossible(partition_commands, metadata_snapshot, getContext()->getSettingsRef());
-        auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
+        auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext(), query_ptr);
         if (!partition_commands_pipe.empty())
             res.pipeline.init(std::move(partition_commands_pipe));
         table->setUpdateTimeNow();

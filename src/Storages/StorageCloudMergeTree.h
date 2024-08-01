@@ -91,7 +91,8 @@ public:
     Pipe alterPartition(
         const StorageMetadataPtr & /* metadata_snapshot */,
         const PartitionCommands & /* commands */,
-        ContextPtr /* context */) override;
+        ContextPtr /* context */,
+        const ASTPtr & query = nullptr) override;
 
     Pipe ingestPartition(const StorageMetadataPtr &, const PartitionCommand & command, ContextPtr local_context);
 

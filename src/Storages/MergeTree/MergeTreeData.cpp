@@ -2893,7 +2893,8 @@ void MergeTreeData::repairPartition(const ASTPtr & , bool , const String & , Con
 Pipe MergeTreeData::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
-    ContextPtr query_context)
+    ContextPtr query_context,
+    const ASTPtr & /* query */)
 {
     PartitionCommandsResultInfo result;
     for (const PartitionCommand & command : commands)
