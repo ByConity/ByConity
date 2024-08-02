@@ -129,7 +129,8 @@ public:
     Pipe alterPartition(
             const StorageMetadataPtr & metadata_snapshot,
             const PartitionCommands & commands,
-            ContextPtr context) override
+            ContextPtr context,
+            const ASTPtr & /* query */) override
     {
         return getNested()->alterPartition(metadata_snapshot, commands, context);
     }
@@ -182,4 +183,3 @@ public:
 
 
 }
-

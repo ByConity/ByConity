@@ -12,9 +12,13 @@
 #include <QueryPlan/ITransformingStep.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Common/RpcClientPool.h>
+#include "QueryPlan/IQueryPlanStep.h"
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Processors/Transforms/SquashingChunksTransform.h>
+#include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Processors/Transforms/ProcessorToOutputStream.h>
 
 namespace DB
 {
@@ -29,9 +33,18 @@ static ITransformingStep::Traits getTraits()
         {.preserves_number_of_rows = true}};
 }
 
-TableWriteStep::TableWriteStep(const DataStream & input_stream_, TargetPtr target_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits()), target(target_)
+TableWriteStep::TableWriteStep(const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_)
+    : ITransformingStep(input_stream_, {}, getTraits())
+    , target(target_)
+    , insert_select_with_profiles(insert_select_with_profiles_)
 {
+    if (insert_select_with_profiles)
+    {
+        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        output_stream = DataStream{.header = std::move(new_header)};
+    }
+    else
+        output_stream = {input_stream_.header};
 }
 
 Block TableWriteStep::getHeader(const NamesAndTypes & input_columns)
@@ -158,13 +171,29 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
             pipeline.resize(out_streams.size());
             LOG_INFO(&Poco::Logger::get("TableWriteStep"), fmt::format("pipeline size: {}, out streams size {}", pipeline.getNumStreams(), out_streams.size()));
 
-            pipeline.addSimpleTransform(
-                [&]([[maybe_unused]] const Block & in_header) -> ProcessorPtr {
+            if (insert_select_with_profiles)
+            {
+                pipeline.addSimpleTransform([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr
+                {
+                    if (type != QueryPipeline::StreamType::Main)
+                        return nullptr;
+
                     auto stream = std::move(out_streams.back());
                     out_streams.pop_back();
-                    return std::make_shared<TableWriteTransform>(stream, insert_target_header, insert_target->getStorage(), settings.context);}
-                );
-            break;
+
+                    return std::make_shared<ProcessorToOutputStream>(std::move(stream));
+                });
+            }
+            else
+            {
+                pipeline.addSimpleTransform(
+                    [&]([[maybe_unused]] const Block & in_header) -> ProcessorPtr {
+                        auto stream = std::move(out_streams.back());
+                        out_streams.pop_back();
+                        return std::make_shared<TableWriteTransform>(stream, insert_target_header, insert_target->getStorage(), settings.context);}
+                    );
+                break;
+            }
         }
     }
 }
@@ -172,12 +201,18 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
 void TableWriteStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
-    output_stream = DataStream{.header = std::move((input_streams_[0].header))};
+    if (insert_select_with_profiles)
+    {
+        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        output_stream = DataStream{.header = std::move(new_header)};
+    }
+    else
+        output_stream = DataStream{.header = std::move((input_streams_[0].header))};
 }
 
 std::shared_ptr<IQueryPlanStep> TableWriteStep::copy(ContextPtr) const
 {
-    return std::make_shared<TableWriteStep>(input_streams[0], target);
+    return std::make_shared<TableWriteStep>(input_streams[0], target, insert_select_with_profiles);
 }
 
 void TableWriteStep::toProto(Protos::TableWriteStep & proto, bool) const
@@ -187,13 +222,15 @@ void TableWriteStep::toProto(Protos::TableWriteStep & proto, bool) const
     if (!target)
         throw Exception("Target cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
     target->toProto(*proto.mutable_target());
+    proto.set_insert_select_with_profiles(insert_select_with_profiles);
 }
 
 std::shared_ptr<TableWriteStep> TableWriteStep::fromProto(const Protos::TableWriteStep & proto, ContextPtr context)
 {
     auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     auto target = TableWriteStep::Target::fromProto(proto.target(), context);
-    auto step = std::make_shared<TableWriteStep>(base_input_stream, target);
+    bool insert_select_with_profiles = proto.has_insert_select_with_profiles() ? proto.insert_select_with_profiles() : context->getSettingsRef().insert_select_with_profiles;
+    auto step = std::make_shared<TableWriteStep>(base_input_stream, target, insert_select_with_profiles);
     step->setStepDescription(step_description);
     return step;
 }

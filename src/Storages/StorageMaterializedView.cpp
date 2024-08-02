@@ -1163,7 +1163,10 @@ void StorageMaterializedView::checkMutationIsPossible(const MutationCommands & c
 }
 
 Pipe StorageMaterializedView::alterPartition(
-    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr local_context)
+    const StorageMetadataPtr & metadata_snapshot,
+    const PartitionCommands & commands,
+    ContextPtr local_context,
+    const ASTPtr & /* query */)
 {
     checkStatementCanBeForwarded();
     return getTargetTable()->alterPartition(metadata_snapshot, commands, local_context);

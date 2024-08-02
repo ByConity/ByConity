@@ -20,6 +20,7 @@
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/ASTCheckQuery.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTColumnsTransformers.h>
@@ -31,8 +32,8 @@
 #include <Parsers/ASTCreateRowPolicyQuery.h>
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
 #include <Parsers/ASTCreateUserQuery.h>
-#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDataType.h>
+#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDictionary.h>
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
@@ -112,7 +113,6 @@
 
 namespace DB
 {
-
 ASTPtr createWithASTType(ASTType type, ReadBuffer & buf)
 {
     switch (type)

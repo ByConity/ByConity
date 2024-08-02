@@ -476,7 +476,7 @@ TEST_F(CacheManagerTest, getAndSetStatus) {
     EXPECT_EQ(cache_manager->getTableClusterStatus(storage_1->getStorageUUID()), true);
 
     // Catalog is not initialized, but the value would still set.
-    EXPECT_THROW({ cache_manager->setTableClusterStatus(storage_1->getStorageUUID(), false); }, Exception);
+    EXPECT_NO_THROW({ cache_manager->setTableClusterStatus(storage_1->getStorageUUID(), false, storage_1->getTableHashForClusterBy()); });
 
     EXPECT_EQ(cache_manager->getTableClusterStatus(storage_1->getStorageUUID()), false);
 

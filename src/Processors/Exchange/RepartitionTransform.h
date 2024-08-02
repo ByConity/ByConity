@@ -25,6 +25,7 @@
 #include <Processors/Chunk.h>
 #include <Processors/ISimpleTransform.h>
 #include <Poco/Logger.h>
+#include <Core/Field.h>
 #include <Interpreters/Context_fwd.h>
 
 namespace DB
@@ -64,6 +65,8 @@ public:
         const DataTypePtr & result_type);
 
     static ExecutableFunctionPtr getDefaultRepartitionFunction(const ColumnsWithTypeAndName & arguments, ContextPtr context);
+
+    static ExecutableFunctionPtr getRepartitionHashFunction(const String & func_name, const ColumnsWithTypeAndName & arguments, ContextPtr context, const Array & params = {});
 
 protected:
     void transform(Chunk & chunk) override;

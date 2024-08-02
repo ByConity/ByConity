@@ -13,13 +13,9 @@ namespace SchedulePool
     enum Type
     {
         Consume,
-        Restart,
-        HaLog,
-        Mutation,
         Local,
         MergeSelect,
         UniqueTable,
-        MemoryTable,
         CNCHTopology,
         PartsMetrics,
         BspGC,

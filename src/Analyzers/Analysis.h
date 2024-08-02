@@ -401,6 +401,7 @@ struct Analysis
     std::unordered_map<IAST *, FieldDescriptions> output_descriptions;
     void setOutputDescription(IAST & ast, const FieldDescriptions & field_descs);
     FieldDescriptions & getOutputDescription(IAST & ast);
+    bool hasOutputDescription(IAST & ast);
 
     /// Sub column optimization
     std::unordered_map<ASTPtr, SubColumnReference> sub_column_references;

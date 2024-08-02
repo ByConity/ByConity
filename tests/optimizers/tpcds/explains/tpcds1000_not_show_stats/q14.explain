@@ -56,9 +56,11 @@ Projection
                         │        │              │     │                    Outputs: [d_date_sk, d_year, d_moy]
                         │        │              │     └─ TableScan tpcds1000.item
                         │        │              │              Outputs: [i_item_sk, i_brand_id, i_class_id, i_category_id]
-                        │        │              └─ CTERef[0]
+                        │        │              └─ Buffer
+                        │        │                 └─ CTERef[0]
                         │        └─ Broadcast Exchange
-                        │           └─ CTERef[2]
+                        │           └─ Buffer
+                        │              └─ CTERef[2]
                         ├─ Aggregating
                         │  │     Group by: {expr#'catalog', i_brand_id_7, i_class_id_7, i_category_id_7}
                         │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(cs_quantity, cs_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count()_1)
@@ -99,9 +101,11 @@ Projection
                         │        │              │     │                    Outputs: d_date_sk_7:=d_date_sk, d_year_7:=d_year, d_moy_1:=d_moy
                         │        │              │     └─ TableScan tpcds1000.item
                         │        │              │              Outputs: i_item_sk_6:=i_item_sk, i_brand_id_7:=i_brand_id, i_class_id_7:=i_class_id, i_category_id_7:=i_category_id
-                        │        │              └─ CTERef[0]
+                        │        │              └─ Buffer
+                        │        │                 └─ CTERef[0]
                         │        └─ Broadcast Exchange
-                        │           └─ CTERef[2]
+                        │           └─ Buffer
+                        │              └─ CTERef[2]
                         └─ Aggregating
                            │     Group by: {expr#'web', i_brand_id_8, i_class_id_8, i_category_id_8}
                            │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(ws_quantity, ws_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count()_2)
@@ -142,9 +146,11 @@ Projection
                                  │              │     │                    Outputs: d_date_sk_8:=d_date_sk, d_year_8:=d_year, d_moy_2:=d_moy
                                  │              │     └─ TableScan tpcds1000.item
                                  │              │              Outputs: i_item_sk_8:=i_item_sk, i_brand_id_8:=i_brand_id, i_class_id_8:=i_class_id, i_category_id_8:=i_category_id
-                                 │              └─ CTERef[0]
+                                 │              └─ Buffer
+                                 │                 └─ CTERef[0]
                                  └─ Broadcast Exchange
-                                    └─ CTERef[2]
+                                    └─ Buffer
+                                       └─ CTERef[2]
 CTEDef [0]
    Repartition Exchange
    │     Partition by: {i_item_sk_1}
@@ -358,9 +364,11 @@ Projection
                │     │              │                          └─ TableScan tpcds1000.date_dim
                │     │              │                                   Where: (d_year = cast(2000, 'UInt32')) AND (d_moy = 12) AND (d_dom = 11)
                │     │              │                                   Outputs: [d_dom], d_week_seq_1:=d_week_seq, d_year_30:=d_year, d_moy_3:=d_moy
-               │     │              └─ CTERef[0]
+               │     │              └─ Buffer
+               │     │                 └─ CTERef[0]
                │     └─ Broadcast Exchange
-               │        └─ CTERef[3]
+               │        └─ Buffer
+               │           └─ CTERef[3]
                └─ Projection
                   │     Expressions: [expr#count()_5, expr#sum(multiply(ss_quantity, ss_list_price))_3, i_brand_id_29, i_category_id_29, i_class_id_29], expr#'store'_3:='store'
                   └─ Inner Join
@@ -409,9 +417,11 @@ Projection
                      │              │                          └─ TableScan tpcds1000.date_dim
                      │              │                                   Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
                      │              │                                   Outputs: d_week_seq_4:=d_week_seq, d_year_37:=d_year, d_moy_4:=d_moy, d_dom_1:=d_dom
-                     │              └─ CTERef[0]
+                     │              └─ Buffer
+                     │                 └─ CTERef[0]
                      └─ Broadcast Exchange
-                        └─ CTERef[3]
+                        └─ Buffer
+                           └─ CTERef[3]
 CTEDef [0]
    Repartition Exchange
    │     Partition by: {i_item_sk_18}

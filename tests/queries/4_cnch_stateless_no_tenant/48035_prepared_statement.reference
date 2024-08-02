@@ -19,3 +19,56 @@ CREATE PREPARED STATEMENT IF NOT EXISTS prep1 AS SELECT count() FROM (SELECT num
 444444
 prep3
 prep2
+prep1
+Projection
+│     Expressions: count():=`expr#count()`
+└─ Aggregating
+   │     Group by: {}
+   │     Aggregates: expr#count():=AggNull(count)()
+   └─ Filter
+      │     Condition: number < [x:UInt32]
+      └─ Limit
+         │     Limit: 8
+         └─ TableScan system.numbers
+                  Limit: 8
+                  Outputs: [number]
+prep1
+12345.prep1
+CREATE PREPARED STATEMENT IF NOT EXISTS `12345.prep1` AS SELECT count() FROM (SELECT number FROM system.numbers LIMIT 8) WHERE number < [x:UInt32]
+CREATE PREPARED STATEMENT IF NOT EXISTS prep1 AS SELECT count() FROM (SELECT number FROM system.numbers LIMIT 9) WHERE number < [x:UInt32]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ Aggregating
+   │     Group by: {}
+   │     Aggregates: expr#count():=AggNull(count)()
+   └─ Filter
+      │     Condition: number < [x:UInt32]
+      └─ Limit
+         │     Limit: 8
+         └─ TableScan system.numbers
+                  Limit: 8
+                  Outputs: [number]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ Aggregating
+   │     Group by: {}
+   │     Aggregates: expr#count():=AggNull(count)()
+   └─ Filter
+      │     Condition: number < [x:UInt32]
+      └─ Limit
+         │     Limit: 9
+         └─ TableScan system.numbers
+                  Limit: 9
+                  Outputs: [number]
+prep1
+prep4
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

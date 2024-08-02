@@ -24,6 +24,8 @@
 #include <Catalog/CatalogFactory.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/StringHelper.h>
+#include <Catalog/LargeKVHandler.h>
+#include <Catalog/CatalogBackgroundTask.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryToString.h>
@@ -112,6 +114,14 @@ namespace ProfileEvents
     extern const Event GetSQLBindingsFailed;
     extern const Event RemoveSQLBindingSuccess;
     extern const Event RemoveSQLBindingFailed;
+    extern const Event UpdatePreparedStatementSuccess;
+    extern const Event UpdatePreparedStatementFailed;
+    extern const Event GetPreparedStatementSuccess;
+    extern const Event GetPreparedStatementFailed;
+    extern const Event GetPreparedStatementsSuccess;
+    extern const Event GetPreparedStatementsFailed;
+    extern const Event RemovePreparedStatementSuccess;
+    extern const Event RemovePreparedStatementFailed;
     extern const Event CreateDatabaseSuccess;
     extern const Event CreateDatabaseFailed;
     extern const Event GetDatabaseSuccess;
@@ -557,6 +567,9 @@ namespace Catalog
                     topology_key = name_space;
                 else
                     topology_key = name_space + "_" + config.topology_key;
+
+                // Add background task to do some GC job for Catalog.
+                bg_task = std::make_shared<CatalogBackgroundTask>(Context::createCopy(context.shared_from_this()), meta_proxy->getMetastore(), name_space);
             },
             ProfileEvents::CatalogConstructorSuccess,
             ProfileEvents::CatalogConstructorFailed);
@@ -957,7 +970,11 @@ namespace Catalog
                 return;
             }
 
-            auto storage = tryGetTableByUUID(context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+            StoragePtr storage;
+            if (auto query_context = CurrentThread::getGroup()->query_context.lock())
+                storage = tryGetTableByUUID(*query_context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+            else
+                storage = tryGetTableByUUID(context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
 
             if (auto pcm = context.getPartCacheManager(); pcm && storage)
             {
@@ -1145,7 +1162,7 @@ namespace Catalog
 
                 // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
                 if (is_modify_cluster_by)
-                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy().getDeterminHash());
+                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy());
 
                 if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                 {
@@ -2381,7 +2398,7 @@ namespace Catalog
                     {
                         if (!part->deleted && !table_definition_hash.match(part->table_definition_hash))
                         {
-                            setTableClusterStatus(storage->getStorageUUID(), false, table_definition_hash.getDeterminHash());
+                            setTableClusterStatus(storage->getStorageUUID(), false, table_definition_hash);
                             break;
                         }
                     }
@@ -3462,7 +3479,7 @@ namespace Catalog
                     {
                         if (!part->deleted && !table_definition_hash.match(part->table_definition_hash))
                         {
-                            setTableClusterStatus(table->getStorageUUID(), false, table_definition_hash.getDeterminHash());
+                            setTableClusterStatus(table->getStorageUUID(), false, table_definition_hash);
                             break;
                         }
                     }
@@ -5169,6 +5186,7 @@ namespace Catalog
 
     void Catalog::createMutation(const StorageID & storage_id, const String & mutation_name, const String & mutate_text)
     {
+        LOG_TRACE(log, "createMutation: {}, {}", storage_id.getNameForLogs(), mutation_name);
         runWithMetricSupport(
             [&] { meta_proxy->createMutation(name_space, UUIDHelpers::UUIDToString(storage_id.uuid), mutation_name, mutate_text); },
             ProfileEvents::CreateMutationSuccess,
@@ -5177,6 +5195,7 @@ namespace Catalog
 
     void Catalog::removeMutation(const StorageID & storage_id, const String & mutation_name)
     {
+        LOG_TRACE(log, "removeMutation: {}, {}", storage_id.getNameForLogs(), mutation_name);
         runWithMetricSupport(
             [&] { meta_proxy->removeMutation(name_space, UUIDHelpers::UUIDToString(storage_id.uuid), mutation_name); },
             ProfileEvents::RemoveMutationSuccess,
@@ -5223,14 +5242,15 @@ namespace Catalog
         }
     }
 
-    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash)
+    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered, const TableDefinitionHash & table_definition_hash)
     {
+        LOG_TRACE(log, "setTableClusterStatus: {} to {}", UUIDHelpers::UUIDToString(table_uuid), clustered);
         runWithMetricSupport(
             [&] {
-                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered, table_definition_hash);
+                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered, table_definition_hash.getDeterminHash());
                 /// keep the cache status up to date.
                 if (context.getPartCacheManager())
-                    context.getPartCacheManager()->setTableClusterStatus(table_uuid, clustered);
+                    context.getPartCacheManager()->setTableClusterStatus(table_uuid, clustered, table_definition_hash);
             },
             ProfileEvents::SetTableClusterStatusSuccess,
             ProfileEvents::SetTableClusterStatusFailed);
@@ -6230,7 +6250,12 @@ namespace Catalog
         for (const String & dependency : dependencies)
             batch_write.AddDelete(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid()));
 
-        batch_write.AddPut(SinglePutRequest(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString()));
+        addPotentialLargeKVToBatchwrite(
+            meta_proxy->getMetastore(),
+            batch_write,
+            name_space,
+            MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()),
+            table.SerializeAsString());
         // use database name and table name in table_id is required because it may different with that in table data model.
         batch_write.AddPut(SinglePutRequest(
             MetastoreProxy::tableTrashKey(name_space, table_id.database(), table_id.name(), ts.toUInt64()), table_id.SerializeAsString()));
@@ -6621,6 +6646,42 @@ namespace Catalog
             [&] { meta_proxy->removeSQLBinding(name_space, uuid, tenant_id, is_re_expression); },
             ProfileEvents::RemoveSQLBindingSuccess,
             ProfileEvents::RemoveSQLBindingFailed);
+    }
+
+    void Catalog::updatePreparedStatement(const PreparedStatementItemPtr & data)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->updatePreparedStatement(name_space, data); },
+            ProfileEvents::UpdatePreparedStatementSuccess,
+            ProfileEvents::UpdatePreparedStatementFailed);
+    }
+
+    PreparedStatements Catalog::getPreparedStatements()
+    {
+        PreparedStatements res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getPreparedStatements(name_space); },
+            ProfileEvents::GetPreparedStatementSuccess,
+            ProfileEvents::GetPreparedStatementFailed);
+        return res;
+    }
+
+    PreparedStatementItemPtr Catalog::getPreparedStatement(const String & name)
+    {
+        PreparedStatementItemPtr res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getPreparedStatement(name_space, name); },
+            ProfileEvents::GetPreparedStatementSuccess,
+            ProfileEvents::GetPreparedStatementFailed);
+        return res;
+    }
+
+    void Catalog::removePreparedStatement(const String & name)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->removePreparedStatement(name_space, name); },
+            ProfileEvents::RemovePreparedStatementSuccess,
+            ProfileEvents::RemovePreparedStatementFailed);
     }
 
     void Catalog::setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const

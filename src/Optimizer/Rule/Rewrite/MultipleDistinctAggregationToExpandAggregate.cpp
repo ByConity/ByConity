@@ -28,20 +28,20 @@ const std::set<String> MultipleDistinctAggregationToExpandAggregate::distinct_fu
 const std::set<String> MultipleDistinctAggregationToExpandAggregate::distinct_func_with_if{
     "uniqexactif", "countdistinctif", "avgdistinctif", "maxdistinctif", "mindistinctif", "sumdistinctif"};
 
+const std::set<String> MultipleDistinctAggregationToExpandAggregate::non_distinct_func_with_if{
+    "sumif", "countif", "avgif", "maxif", "minif"};
+
 const std::unordered_map<String, String> MultipleDistinctAggregationToExpandAggregate::distinct_func_normal_func{
     {"uniqexact", "countIf"},
     {"countdistinct", "countIf"},
     {"avgdistinct", "avgIf"},
     {"maxdistinct", "maxIf"},
     {"mindistinct", "minIf"},
-    {"sumdistinct", "sumIf"},
-    {"count", "anyIf"},
-    {"max", "anyIf"},
-    {"min", "anyIf"},
-    {"avg", "anyIf"},
-    {"sum", "anyIf"}};
+    {"sumdistinct", "sumIf"}};
 
-bool MultipleDistinctAggregationToExpandAggregate::hasNoDistinctWithFilterOrMask(const AggregatingStep & step)
+const std::set<String> MultipleDistinctAggregationToExpandAggregate::un_supported_func{"hllsketchestimate"};
+
+bool MultipleDistinctAggregationToExpandAggregate::hasNoFilterOrMask(const AggregatingStep & step)
 {
     const AggregateDescriptions & agg_descs = step.getAggregates();
     for (const auto & agg_desc : agg_descs)
@@ -50,6 +50,9 @@ bool MultipleDistinctAggregationToExpandAggregate::hasNoDistinctWithFilterOrMask
             return false;
 
         if (distinct_func_with_if.contains(Poco::toLower(agg_desc.function->getName())))
+            return false;
+
+        if (non_distinct_func_with_if.contains(Poco::toLower(agg_desc.function->getName())))
             return false;
     }
     return true;
@@ -118,8 +121,19 @@ bool MultipleDistinctAggregationToExpandAggregate::allCountHasAtMostOneArguments
         if (Poco::toLower(agg.function->getName()) == "uniqexact" || Poco::toLower(agg.function->getName()) == "countdistinct")
         {
             if (agg.argument_names.size() > 1)
-                return false;   
+                return false;
         }
+    }
+    return true;
+}
+
+bool MultipleDistinctAggregationToExpandAggregate::hasNoUnSupportedFunc(const AggregatingStep & step)
+{
+    const AggregateDescriptions & agg_descs = step.getAggregates();
+    for (const auto & agg_desc : agg_descs)
+    {
+        if (un_supported_func.contains(Poco::toLower(agg_desc.function->getName())))
+            return false;
     }
     return true;
 }
@@ -127,10 +141,11 @@ bool MultipleDistinctAggregationToExpandAggregate::allCountHasAtMostOneArguments
 ConstRefPatternPtr MultipleDistinctAggregationToExpandAggregate::getPattern() const
 {
     static auto pattern = Patterns::aggregating()
-        .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
-            return hasNoDistinctWithFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s)) && hasUniqueArgument(s) && allCountHasAtMostOneArguments(s);
-        })
-        .result();
+                              .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
+                                  return hasNoFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s))
+                                      && hasUniqueArgument(s) && allCountHasAtMostOneArguments(s) && hasNoUnSupportedFunc(s);
+                              })
+                              .result();
     return pattern;
 }
 
@@ -149,11 +164,11 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
     for (const auto & input_column : input)
     {
         DataTypePtr type = input_column.type;
-        type = JoinCommon::tryConvertTypeToNullable(type);
+        // type = JoinCommon::tryConvertTypeToNullable(type);
         name_type[input_column.name] = type;
         assignments.emplace(
             input_column.name,
-            makeASTFunction("cast", std::make_shared<ASTLiteral>(Field()), std::make_shared<ASTLiteral>(type->getName())));
+            makeASTFunction("cast", std::make_shared<ASTLiteral>(type->getDefault()), std::make_shared<ASTLiteral>(type->getName())));
     }
 
     /// append a extra mark field : group_id.
@@ -268,10 +283,20 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
     }
 
     // step 2 : add pre-compute aggregate
+    std::set<String> keyset;
+    for (const String & key : step.getKeys())
+    {
+        keyset.insert(key);
+    }
+    keyset.insert(group_id_symbol);
+    for (const String & distinct : distinct_arguments)
+    {
+        keyset.insert(distinct);
+    }
+
+    // make sure keys remove duplicated value.
     Names keys;
-    keys.insert(keys.end(), step.getKeys().begin(), step.getKeys().end());
-    keys.emplace_back(group_id_symbol);
-    keys.insert(keys.end(), distinct_arguments.begin(), distinct_arguments.end());
+    keys.insert(keys.end(), keyset.begin(), keyset.end());
 
     auto pre_agg_step = std::make_shared<AggregatingStep>(
         expand_node->getStep()->getOutputStream(),
@@ -363,7 +388,7 @@ MultipleDistinctAggregationToExpandAggregate::nonDistinctAggWithMask(const Aggre
     Array parameters = agg_desc.function->getParameters();
     AggregateFunctionProperties properties;
 
-    String fun_remove_distinct = distinct_func_normal_func.at(Poco::toLower(agg_desc.function->getName()));
+    String fun = "anyIf";
 
     /// in case count(*), agg_desc.function->getArgumentTypes() returns empty.
     /// anyIf requires 2 arguments
@@ -372,7 +397,7 @@ MultipleDistinctAggregationToExpandAggregate::nonDistinctAggWithMask(const Aggre
         data_types.emplace_back(std::make_shared<DataTypeUInt8>());
     }
 
-    AggregateFunctionPtr new_agg_fun = AggregateFunctionFactory::instance().get(fun_remove_distinct, data_types, parameters, properties);
+    AggregateFunctionPtr new_agg_fun = AggregateFunctionFactory::instance().get(fun, data_types, parameters, properties);
     Names argument_names;
     argument_names.emplace_back(agg_desc.column_name);
     argument_names.emplace_back(mask_column);

@@ -183,7 +183,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
                 getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
                 meta_loaded = true;
             }
-            meta_ptr->table_definition_hash = storage.getTableHashForClusterBy().getDeterminHash();
+            meta_ptr->table_definition_hash = storage.getTableHashForClusterBy();
             /// Needs make sure no other thread force reload
             UInt32 loading = CacheStatus::LOADING;
             meta_ptr->cache_status.compare_exchange_strong(loading, CacheStatus::LOADED);
@@ -399,16 +399,14 @@ UInt64 PartCacheManager::getTableLastUpdateTime(const UUID & uuid)
     return last_update_time;
 }
 
-void PartCacheManager::setTableClusterStatus(const UUID & uuid, const bool clustered)
+void PartCacheManager::setTableClusterStatus(const UUID & uuid, const bool clustered, const TableDefinitionHash & table_definition_hash)
 {
     TableMetaEntryPtr table_entry = getTableMeta(uuid);
     if (table_entry)
     {
         auto lock = table_entry->writeLock();
         table_entry->is_clustered = clustered;
-        auto table = getContext()->getCnchCatalog()->getTableByUUID(*getContext(), UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
-        if (table)
-            table_entry->table_definition_hash = table->getTableHashForClusterBy().getDeterminHash();
+        table_entry->table_definition_hash = table_definition_hash;
     }
 }
 

@@ -74,6 +74,7 @@ namespace
         "current_roles",
         "enabled_roles",
         "quota_usage",
+        "processes",
 
         /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
         /// For IDE tools to get schema info
@@ -700,15 +701,16 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
         const AccessFlags dictionary_ddl = AccessType::CREATE_DICTIONARY | AccessType::DROP_DICTIONARY;
         const AccessFlags function_ddl = AccessType::CREATE_FUNCTION | AccessType::DROP_FUNCTION;
         const AccessFlags binding_ddl = AccessType::CREATE_BINDING | AccessType::DROP_BINDING;
+        const AccessFlags prepared_statement_ddl = AccessType::CREATE_PREPARED_STATEMENT | AccessType::DROP_PREPARED_STATEMENT;
         const AccessFlags table_and_dictionary_ddl = table_ddl | dictionary_ddl;
-        const AccessFlags table_and_dictionary_and_function_ddl_and_binding = table_ddl | dictionary_ddl | function_ddl | binding_ddl;
+        const AccessFlags table_and_dictionary_and_function_ddl_and_binding = table_ddl | dictionary_ddl | function_ddl | binding_ddl | prepared_statement_ddl;
         const AccessFlags write_table_access = AccessType::INSERT | AccessType::OPTIMIZE;
         const AccessFlags write_dcl_access = AccessType::ACCESS_MANAGEMENT - AccessType::SHOW_ACCESS;
 
         const AccessFlags not_readonly_flags = write_table_access | table_and_dictionary_and_function_ddl_and_binding | write_dcl_access | AccessType::SYSTEM | AccessType::KILL_QUERY;
         const AccessFlags not_readonly_1_flags = AccessType::CREATE_TEMPORARY_TABLE;
 
-        const AccessFlags ddl_flags = table_ddl | dictionary_ddl | function_ddl | binding_ddl;
+        const AccessFlags ddl_flags = table_ddl | dictionary_ddl | function_ddl | binding_ddl | prepared_statement_ddl;
         const AccessFlags introspection_flags = AccessType::INTROSPECTION;
     };
     static const PrecalculatedFlags precalc;
@@ -944,5 +946,10 @@ void ContextAccess::checkAdminOption(const UUID & role_id, const std::unordered_
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids) const { checkAdminOptionImpl<true>(role_ids); }
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids, const Strings & names_of_roles) const { checkAdminOptionImpl<true>(role_ids, names_of_roles); }
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids, const std::unordered_map<UUID, String> & names_of_roles) const { checkAdminOptionImpl<true>(role_ids, names_of_roles); }
+
+bool ContextAccessParams::dependsOnSettingName(std::string_view setting_name)
+{
+    return (setting_name == "readonly") || (setting_name == "allow_ddl") || (setting_name == "allow_introspection_functions");
+}
 
 }

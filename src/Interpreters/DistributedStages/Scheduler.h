@@ -33,12 +33,12 @@ enum class TaskStatus : uint8_t
 /// Indicates a plan segment.
 struct SegmentTask
 {
-    explicit SegmentTask(size_t task_id_, bool is_source_ = false) : task_id(task_id_), is_source(is_source_)
+    explicit SegmentTask(size_t task_id_, bool has_table_scan_ = false) : task_id(task_id_), has_table_scan(has_table_scan_)
     {
     }
     // plan segment id.
     size_t task_id;
-    bool is_source;
+    bool has_table_scan;
 };
 
 /// Indicates a plan segment instance.
@@ -110,7 +110,7 @@ public:
         , local_address(getLocalAddress(*query_context))
         , log(&Poco::Logger::get("Scheduler"))
     {
-        cluster_nodes.rank_workers.emplace_back(local_address, NodeType::Local, "");
+        cluster_nodes.all_workers.emplace_back(local_address, NodeType::Local, "");
         timespec query_expiration_ts = query_context->getQueryExpirationTimeStamp();
         query_expiration_ms = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
     }
@@ -153,7 +153,7 @@ protected:
     std::atomic<bool> stopped{false};
 
     void genTopology();
-    void genSourceTasks();
+    void genLeafTasks();
     bool getBatchTaskToSchedule(BatchTaskPtr & task);
     virtual void sendResources(PlanSegment * plan_segment_ptr)
     {

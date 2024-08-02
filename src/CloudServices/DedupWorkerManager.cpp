@@ -163,7 +163,7 @@ void DedupWorkerManager::initialize(StoragePtr & storage, StorageCnchMergeTree &
     }
 }
 
-void DedupWorkerManager::createDeduperOnWorker(StoragePtr & storage, StorageCnchMergeTree & cnch_table, DeduperInfoPtr & info, std::unique_lock<std::mutex> & info_lock)
+void DedupWorkerManager::createDeduperOnWorker(StoragePtr & storage, StorageCnchMergeTree & cnch_table, DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock)
 {
     if (info->worker_client)
         return;
@@ -200,7 +200,7 @@ void DedupWorkerManager::createDeduperOnWorker(StoragePtr & storage, StorageCnch
     }
 }
 
-void DedupWorkerManager::selectDedupWorker(StorageCnchMergeTree & cnch_table, DeduperInfoPtr & info, std::unique_lock<std::mutex> &  /*info_lock*/)
+void DedupWorkerManager::selectDedupWorker(StorageCnchMergeTree & cnch_table, DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> &  /*info_lock*/)
 {
     auto vw_handle = getContext()->getVirtualWarehousePool().get(cnch_table.getSettings()->cnch_vw_write);
     HostWithPorts history_dedup_worker = dedup_scheduler->tryPickWorker(info->index);
@@ -216,13 +216,13 @@ void DedupWorkerManager::selectDedupWorker(StorageCnchMergeTree & cnch_table, De
     }
 }
 
-void DedupWorkerManager::markDedupWorker(DeduperInfoPtr & info, std::unique_lock<std::mutex> &  /*info_lock*/)
+void DedupWorkerManager::markDedupWorker(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> &  /*info_lock*/)
 {
     dedup_scheduler->markIndexDedupWorker(info->index, info->worker_client->getHostWithPorts());
     info->is_running = true;
 }
 
-void DedupWorkerManager::assignHighPriorityDedupPartition(DeduperInfoPtr & info, const Names & high_priority_partition, std::unique_lock<std::mutex> & /*info_lock*/)
+void DedupWorkerManager::assignHighPriorityDedupPartition(DeduperInfoPtr & info, const Names & high_priority_partition, std::unique_lock<bthread::Mutex> & /*info_lock*/)
 {
     if (!info->worker_client)
         return;
@@ -230,13 +230,13 @@ void DedupWorkerManager::assignHighPriorityDedupPartition(DeduperInfoPtr & info,
     info->worker_client->assignHighPriorityDedupPartition(info->worker_storage_id, high_priority_partition);
 }
 
-void DedupWorkerManager::unsetWorkerClient(DeduperInfoPtr & info, std::unique_lock<std::mutex> &  /*info_lock*/)
+void DedupWorkerManager::unsetWorkerClient(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> &  /*info_lock*/)
 {
     info->worker_client = nullptr;
     info->is_running = false;
 }
 
-void DedupWorkerManager::assignRepairGran(DeduperInfoPtr & info, const DedupGran & dedup_gran, const UInt64 & max_event_time, std::unique_lock<std::mutex> & /*info_lock*/)
+void DedupWorkerManager::assignRepairGran(DeduperInfoPtr & info, const DedupGran & dedup_gran, const UInt64 & max_event_time, std::unique_lock<bthread::Mutex> & /*info_lock*/)
 {
     if (!info->worker_client)
         return;
@@ -265,7 +265,7 @@ void DedupWorkerManager::stopDeduperWorker(DeduperInfoPtr & info)
     unsetWorkerClient(info, info_lock);
 }
 
-String DedupWorkerManager::getDedupWorkerDebugInfo(DeduperInfoPtr & info, std::unique_lock<std::mutex> &  /*info_lock*/)
+String DedupWorkerManager::getDedupWorkerDebugInfo(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> &  /*info_lock*/)
 {
     if (!info->worker_client)
         return "dedup worker is not assigned.";
@@ -273,7 +273,7 @@ String DedupWorkerManager::getDedupWorkerDebugInfo(DeduperInfoPtr & info, std::u
         + info->worker_client->getHostWithPorts().toDebugString();
 }
 
-bool DedupWorkerManager::checkDedupWorkerStatus(DeduperInfoPtr & info, std::unique_lock<std::mutex> & info_lock)
+bool DedupWorkerManager::checkDedupWorkerStatus(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock)
 {
     if (!info->worker_client)
         return false;
@@ -340,8 +340,8 @@ void DedupWorkerManager::dedupWithHighPriority(const ASTPtr & partition, const C
 
 DedupWorkerHeartbeatResult DedupWorkerManager::reportHeartbeat(const String & worker_table_name)
 {
-    std::lock_guard lock(deduper_infos_mutex);
     LOG_TRACE(log, "Report heartbeat of dedup worker: worker table name is {}", worker_table_name);
+    std::lock_guard lock(deduper_infos_mutex);
     for (const auto & info : deduper_infos)
     {
         std::lock_guard info_lock(info->mutex);

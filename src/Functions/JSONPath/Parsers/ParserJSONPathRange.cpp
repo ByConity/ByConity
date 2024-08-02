@@ -43,6 +43,10 @@ namespace ErrorCodes
  */
 bool ParserJSONPathRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
+    if (pos->type == TokenType::Dot)
+    {
+        ++pos;
+    }
 
     if (pos->type != TokenType::OpeningSquareBracket)
     {

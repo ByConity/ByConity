@@ -161,9 +161,16 @@ PlanNodePtr ColumnPruningVisitor::visitOffsetNode(OffsetNode & node, ColumnPruni
     return visitDefault<false>(node, column_pruning_context);
 }
 
-PlanNodePtr ColumnPruningVisitor::visitTableFinishNode(TableFinishNode & node, ColumnPruningContext & column_pruning_context)
+PlanNodePtr ColumnPruningVisitor::visitTableFinishNode(TableFinishNode & node, ColumnPruningContext &)
 {
-    return visitPlanNode(node, column_pruning_context);
+    NameSet require;
+    PlanNodePtr child = node.getChildren()[0];
+    for (const auto & item : child->getCurrentDataStream().header)
+        require.insert(item.name);
+    ColumnPruningContext child_column_pruning_context{.name_set = require};
+    PlanNodePtr new_child = VisitorUtil::accept(*child, *this, child_column_pruning_context);
+    node.replaceChildren({new_child});
+    return node.shared_from_this();
 }
 
 PlanNodePtr ColumnPruningVisitor::visitOutfileFinishNode(OutfileFinishNode & node, ColumnPruningContext & column_pruning_context)
@@ -462,10 +469,19 @@ PlanNodePtr ColumnPruningVisitor::visitExpandNode(ExpandNode & node, ColumnPruni
     ColumnPruningContext child_column_pruning_context{.name_set = child_require};
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_column_pruning_context);
 
+    Assignments assignments;
+    for (const auto & assignment : step->getAssignments())
+        if (child_require.contains(assignment.first))
+            assignments.emplace_back(assignment.first, assignment.second);
+    NameToType name_to_type;
+    for (const auto & item : step->getNameToType())
+        if (child_require.contains(item.first))
+            name_to_type.emplace(item.first, item.second);
+
     auto expr_step = std::make_shared<ExpandStep>(
         child->getStep()->getOutputStream(),
-        step->getAssignments(),
-        step->getNameToType(),
+        assignments,
+        name_to_type,
         step->getGroupIdSymbol(),
         step->getGroupIdValue(),
         step->getGroupIdNonNullSymbol());

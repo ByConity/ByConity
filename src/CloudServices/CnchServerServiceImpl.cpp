@@ -567,39 +567,40 @@ void CnchServerServiceImpl::reportTaskHeartbeat(
 }
 
 void CnchServerServiceImpl::reportDeduperHeartbeat(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController *,
     const Protos::ReportDeduperHeartbeatReq * request,
     Protos::ReportDeduperHeartbeatResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
-        auto cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
-
-        if (auto bg_thread = getContext()->tryGetDedupWorkerManager(cnch_storage_id))
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
         {
-            auto worker_table_name = request->worker_table_name();
-            auto & manager = static_cast<DedupWorkerManager &>(*bg_thread);
+            auto cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
 
-            auto ret = manager.reportHeartbeat(worker_table_name);
+            if (auto bg_thread = gc->tryGetDedupWorkerManager(cnch_storage_id))
+            {
+                const auto & worker_table_name = request->worker_table_name();
+                auto & manager = static_cast<DedupWorkerManager &>(*bg_thread);
 
-            // NOTE: here we send a response back to let the worker know the result.
-            response->set_code(static_cast<UInt32>(ret));
-            return;
+                auto ret = manager.reportHeartbeat(worker_table_name);
+
+                // NOTE: here we send a response back to let the worker know the result.
+                response->set_code(static_cast<UInt32>(ret));
+                return;
+            }
+            else
+            {
+                LOG_WARNING(log, "Failed to get background thread");
+            }
         }
-        else
+        catch (...)
         {
-            LOG_WARNING(log, "Failed to get background thread");
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
         }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-    response->set_code(static_cast<UInt32>(DedupWorkerHeartbeatResult::Kill));
+        response->set_code(static_cast<UInt32>(DedupWorkerHeartbeatResult::Kill));
+    });
 }
 
 void CnchServerServiceImpl::fetchDataParts(
@@ -777,18 +778,8 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
 
             try
             {
-                std::map<StorageID, CnchBGThreadStatus> res;
-
-                auto type = CnchBGThreadType(request->type());
-                if (type >= CnchBGThreadType::ServerMinType && type <= CnchBGThreadType::ServerMaxType)
-                {
-                    auto threads = global_context->getCnchBGThreadsMap(type);
-                    res = threads->getStatusMap();
-                }
-                else
-                {
-                    throw Exception("Not support type " + toString(int(request->type())), ErrorCodes::NOT_IMPLEMENTED);
-                }
+                auto type = toServerBGThreadType(request->type());
+                std::map<StorageID, CnchBGThreadStatus> res = global_context->getCnchBGThreadsMap(type)->getStatusMap();
 
                 for (const auto & [storage_id, status] : res)
                 {
@@ -831,8 +822,9 @@ void CnchServerServiceImpl::controlCnchBGThread(
                 StorageID storage_id = StorageID::createEmpty();
                 if (!request->storage_id().table().empty())
                     storage_id = RPCHelpers::createStorageID(request->storage_id());
-                auto type = CnchBGThreadType(request->type());
-                auto action = CnchBGThreadAction(request->action());
+
+                auto type = toServerBGThreadType(request->type());
+                auto action = toCnchBGThreadAction(request->action());
                 auto & controller = static_cast<brpc::Controller &>(*cntl);
                 LOG_DEBUG(log, "Received controlBGThread for {} type {} action {} from {}",
                     storage_id.empty() ? "empty storage" : storage_id.getNameForLogs(),
@@ -1836,7 +1828,8 @@ void CnchServerServiceImpl::notifyTableCreated(
         catch (...)
         {
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            RPCHelpers::handleException(response->mutable_exception());
+            (void)response;
+            //RPCHelpers::handleException(response->mutable_exception());
         }
     });
 }

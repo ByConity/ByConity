@@ -107,7 +107,7 @@ public:
     /// it's a no-op because in CNCH, projection parts are uploaded to parent part's data file
     virtual void projectionRemove(const String &, bool) const override { }
 
-    void preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const;
+    void preload(UInt64 preload_level, UInt64 submit_ts) const;
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
     void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override {columns_ptr = new_columns_ptr;}
@@ -126,7 +126,7 @@ private:
     void loadIndex() override;
     IndexPtr loadIndexFromStorage() const;
 
-    MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
+    MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter(size_t & out_file_size) const;
 
     ChecksumsPtr loadChecksums(bool require) override;
     ChecksumsPtr loadChecksumsFromRemote(bool follow_part_chain);

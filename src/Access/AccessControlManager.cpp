@@ -437,8 +437,7 @@ void AccessControlManager::checkSettingNameIsAllowed(const std::string_view & se
     custom_settings_prefixes->checkSettingNameIsAllowed(setting_name);
 }
 
-
-std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
+ContextAccessParams AccessControlManager::getContextAccessParams(
     const UUID & user_id,
     const std::vector<UUID> & current_roles,
     bool use_default_roles,
@@ -474,8 +473,7 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
         boost::trim(last_forwarded_address);
         params.forwarded_address = last_forwarded_address;
     }
-
-    return getContextAccess(params);
+    return params;
 }
 
 

@@ -42,6 +42,7 @@
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rewriter/UseSortingProperty.h>
 #include <Optimizer/Rule/Rules.h>
+#include <Optimizer/ShortCircuitPlanner.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/Hints/HintsPropagator.h>
 #include <QueryPlan/Hints/ImplementJoinAlgorithmHints.h>
@@ -121,6 +122,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // add exchange
         std::make_shared<CascadesOptimizer>(false),
 
+        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
         std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
         std::make_shared<RemoveRedundantDistinct>(),
@@ -138,7 +140,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
-        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<AddCache>(),
 
@@ -280,6 +281,10 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),
 
+        // remove not inlined CTEs
+        std::make_shared<RemoveUnusedCTE>(),
+        std::make_shared<AddBufferForDeadlockCTE>(),
+
         // add runtime filters
         std::make_shared<AddRuntimeFilters>(),
 
@@ -313,7 +318,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<AddProjectionPruning>(),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
-        std::make_shared<AddBufferForDeadlockCTE>(),
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<ImplementJoinAlgorithmHints>(),
         std::make_shared<AddCache>(),
@@ -322,6 +326,18 @@ const Rewriters & PlanOptimizer::getFullRewriters()
     };
 
     return full_rewrites;
+}
+
+const Rewriters & PlanOptimizer::getShortCircuitRewriters()
+{
+    static Rewriters short_circuit_rewriters = {
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
+        std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
+        std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
+    };
+    return short_circuit_rewriters;
 }
 
 void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
@@ -335,7 +351,13 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     Stopwatch rule_watch, total_watch;
     total_watch.start();
 
-    if (PlanPattern::isSimpleQuery(plan))
+    if (ShortCircuitPlanner::isShortCircuitPlan(plan, context))
+    {
+        plan.setShortCircuit(true);
+        optimize(plan, context, getShortCircuitRewriters());
+        ShortCircuitPlanner::addExchangeIfNeeded(plan, context);
+    }
+    else if (PlanPattern::isSimpleQuery(plan))
     {
         optimize(plan, context, getSimpleRewriters());
     }

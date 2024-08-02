@@ -24,6 +24,7 @@
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTTableColumnReference.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Common/SipHash.h>
 
 namespace DB::ASTEquality
@@ -55,6 +56,13 @@ bool compareNode(const ASTWindowDefinition & left, const ASTWindowDefinition & r
         left.frame_end_type == right.frame_end_type&&
         compareTree(left.frame_end_offset, right.frame_end_offset, comparator) &&
         left.frame_end_preceding == right.frame_end_preceding;
+}
+
+bool compareNode(const ASTClusterByElement & left, const ASTClusterByElement & right)
+{
+    return left.split_number == right.split_number &&
+        left.is_with_range == right.is_with_range &&
+        left.is_user_defined_expression == right.is_user_defined_expression;
 }
 
 bool compareNode(const ASTSubquery & left, const ASTSubquery & right)
@@ -143,6 +151,9 @@ bool compareTree(const ASTPtr & left, const ASTPtr & right, const SubtreeCompara
             break;
         case ASTType::ASTTableIdentifier:
             node_equals = compareNode(left->as<ASTTableIdentifier &>(), right->as<ASTTableIdentifier &>());
+            break;
+        case ASTType::ASTClusterByElement:
+            node_equals = compareNode(left->as<ASTClusterByElement &>(), right->as<ASTClusterByElement &>());
             break;
         default:
             node_equals = left->getID() == right->getID(); // align with ScopeAwareHash

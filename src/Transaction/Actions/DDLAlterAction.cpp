@@ -89,13 +89,13 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         // updateTsCache(table->getStorageUUID(), commit_time);
         if (!new_schema.empty() && new_schema!=old_schema)
         {
-            catalog->alterTable(global_context, query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_modify_cluster_by);
+            catalog->alterTable(*getContext(), query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_modify_cluster_by);
             LOG_DEBUG(log, "Successfully change schema in catalog.");
         }
         else
         {
             LOG_DEBUG(log, "Skip change table schema because {}",
-                new_schema.empty() ? "new shema is empty." : ("new shema is the same as old one : " + old_schema));
+                new_schema.empty() ? "new schema is empty." : ("new schema is the same as old one : " + old_schema));
         }
     }
     catch (...)

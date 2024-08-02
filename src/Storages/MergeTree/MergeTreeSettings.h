@@ -365,6 +365,7 @@ enum StealingCacheMode : UInt64
       0) \
     M(String, storage_policy, "default", "Name of storage disk policy", 0) \
     M(Bool, allow_nullable_key, false, "Allow Nullable types as primary keys.", 0) \
+    M(Bool, extract_partition_nullable_date, false, "Extract date value from Nullable Date column when allow_nullable_key is true", 0) \
     M(Bool, allow_remote_fs_zero_copy_replication, false, "Allow Zero-copy replication over remote fs", 0) \
     M(Bool, remove_empty_parts, true, "Remove empty parts after they were pruned by TTL, mutation, or collapsing merge algorithm", 0) \
     M(Bool, assign_part_uuids, false, "Generate UUIDs for parts. Before enabling check that all replicas support new format.", 0) \
@@ -510,7 +511,6 @@ enum StealingCacheMode : UInt64
     M(UInt64, parts_preload_level, 0, "0=close preload;1=preload meta;2=preload data;3=preload meta&data", 0) \
     M(Bool, enable_parts_sync_preload, 0, "Enable sync preload parts", 0) \
     M(Bool, enable_gc_evict_disk_cache, false, "Enable gc evict disk cache", 0)      \
-    M(MaxThreads, cnch_parallel_preloading, 0, "Max threads when worker preload parts", 0) \
     M(UInt64, disk_cache_stealing_mode, 0, "Read/write remote vw local disk cache if cur local disk cache empty, 0: close; 1: read 2: write 3: read&write", 0) \
     \
     /* Renamed settings - cannot be ignored */\
@@ -567,6 +567,7 @@ enum StealingCacheMode : UInt64
     /** JSON related settings start*/ \
     M(UInt64, json_subcolumns_threshold, 1000, "Max number of json sub columns", 0) \
     M(UInt64, json_partial_schema_assemble_batch_size, 100, "Batch size to assemble dynamic object column schema", 0) \
+    M(Int64, cnch_part_allocation_algorithm, -1, "Part allocation algorithm, -1: disable table setting and use query setting, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent hashing.", 0) \
     /** JSON related settings end*/ \
     \
     /// Settings that should not change after the creation of a table.

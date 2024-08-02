@@ -40,7 +40,7 @@ namespace ErrorCodes
 
 std::unique_ptr<ThreadPool> IDiskCache::local_disk_cache_thread_pool;
 std::unique_ptr<ThreadPool> IDiskCache::local_disk_cache_evict_thread_pool;
-
+std::unique_ptr<ThreadPool> IDiskCache::local_disk_cache_preload_thread_pool;
 
 void IDiskCache::init(const Context & global_context)
 {
@@ -62,6 +62,11 @@ void IDiskCache::init(const Context & global_context)
             settings.local_disk_cache_evict_thread_pool_size,
             settings.local_disk_cache_evict_thread_pool_size,
             settings.local_disk_cache_evict_thread_pool_size * 100);
+    
+    local_disk_cache_preload_thread_pool = std::make_unique<ThreadPool>(
+            settings.cnch_parallel_preloading,
+            settings.cnch_parallel_preloading,
+            settings.cnch_parallel_preloading * 100);
 }
 
 void IDiskCache::close()
@@ -70,6 +75,8 @@ void IDiskCache::close()
         local_disk_cache_thread_pool.reset();
     if (local_disk_cache_evict_thread_pool)
         local_disk_cache_evict_thread_pool.reset();
+    if (local_disk_cache_preload_thread_pool)
+        local_disk_cache_preload_thread_pool.reset();
 }
 
 ThreadPool & IDiskCache::getThreadPool()
@@ -84,6 +91,13 @@ ThreadPool & IDiskCache::getEvictPool()
     if (!local_disk_cache_evict_thread_pool)
         throw Exception("Uninitialized disk cache thread pool", ErrorCodes::CANNOT_SCHEDULE_TASK);
     return *local_disk_cache_evict_thread_pool;
+}
+
+ThreadPool & IDiskCache::getPreloadPool()
+{
+    if (!local_disk_cache_preload_thread_pool)
+        throw Exception("Uninitialized disk cache thread pool", ErrorCodes::CANNOT_SCHEDULE_TASK);
+    return *local_disk_cache_preload_thread_pool;
 }
 
 

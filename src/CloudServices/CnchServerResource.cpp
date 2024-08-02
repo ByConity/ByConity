@@ -123,7 +123,7 @@ void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
     }
 }
 
-void ResourceStageInfo::filterResource(std::optional<ResourceOption> resource_option)
+void ResourceStageInfo::filterResource(std::optional<ResourceOption> & resource_option)
 {
     if (resource_option)
     {
@@ -433,7 +433,6 @@ void CnchServerResource::allocateResource(
                         leftover_server_parts.size());
                     ProfileEvents::increment(ProfileEvents::CnchPartAllocationSplits);
                 }
-
                 // If the # of parts over vw size is not zero,
                 // only go through hybrid allocation logic when that is smaller than a configurable ratio
                 if ((context->getSettingsRef().enable_hybrid_allocation || cnch_table->getSettings()->enable_hybrid_allocation)
@@ -451,7 +450,7 @@ void CnchServerResource::allocateResource(
                 }
                 else
                 {
-                    assigned_map = assignCnchParts(worker_group, leftover_server_parts, context);
+                    assigned_map = assignCnchParts(worker_group, leftover_server_parts, context, cnch_table->getSettings());
                 }
                 moveBucketTablePartsToAssignedParts(
                     assigned_map, bucket_parts, worker_group->getWorkerIDVec(), required_bucket_numbers, replicated);

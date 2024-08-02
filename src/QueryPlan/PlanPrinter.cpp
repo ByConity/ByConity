@@ -34,6 +34,7 @@
 #include <Poco/JSON/Object.h>
 #include <magic_enum.hpp>
 #include <Poco/JSON/Object.h>
+#include "Parsers/ASTCreateQuery.h"
 
 #include <utility>
 #include <vector>
@@ -153,6 +154,11 @@ String PlanPrinter::textLogicalPlan(
         output += ".";
     }
 
+    if (plan.isShortCircuit())
+    {
+        output += "note: Short Circuit is applied.\n";
+    }
+
     return output;
 }
 
@@ -253,7 +259,8 @@ String PlanPrinter::getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment
                 << " ExchangeId:" << input->exchange_id
                 << " ExchangeMode:" << magic_enum::enum_name(input->mode)
                 << " ExchangeParallelSize:" << input->exchange_parallel_size
-                << " KeepOrder:" << input->keep_order << ")";
+                << " KeepOrder:" << input->keep_order
+                << (input->stable ? " Stable" : "") << ")";
             first = false;
         }
         os << "]\n";
@@ -1791,6 +1798,7 @@ PlanSegmentDescriptionPtr PlanSegmentDescription::getPlanSegmentDescription(Plan
             input_desc.mode = input->getExchangeMode();
             input_desc.exchange_parallel_size = input->getExchangeParallelSize();
             input_desc.keep_order = input->needKeepOrder();
+            input_desc.stable = input->isStable();
             auto input_desc_ptr = std::make_shared<PlanSegmentDescription::InputInfo>(input_desc);
             plan_segment_desc->inputs_desc.emplace_back(input_desc_ptr);
         }
@@ -1861,6 +1869,18 @@ String PlanPrinter::jsonMetaData(
     for (const auto & setting : settings_changes)
         query_used_settings->set(setting.name, setting.value.toString());
     metadata_json->set("UsedSettings", query_used_settings);
+
+    Poco::JSON::Array output_descs;
+    ASTPtr & select_ast = query;
+    if (auto * insert_query = query->as<ASTInsertQuery>())
+        select_ast = insert_query->select;
+
+    if (analysis->hasOutputDescription(*select_ast))
+    {
+        for (const auto & desc : analysis->getOutputDescription(*select_ast))
+            output_descs.add(desc.name);
+    }
+    metadata_json->set("OutputDescriptions", output_descs);
 
     // get InsertInfo
     Poco::JSON::Object::Ptr insert_table_info = new Poco::JSON::Object(true);

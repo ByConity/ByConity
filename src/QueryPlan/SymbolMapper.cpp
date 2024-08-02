@@ -64,7 +64,7 @@ SymbolMapper SymbolMapper::symbolMapper(std::unordered_map<Symbol, Symbol> & map
         while (it != mapping.end() && it->second != symbol)
         {
             if (++lookup > MAX_LOOKUP_TIMES)
-                    throw Exception("endless loop in SymbolMapper", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("endless loop in SymbolMapper", ErrorCodes::LOGICAL_ERROR);
             symbol = it->second;
             it = mapping.find(symbol);
         }
@@ -82,7 +82,7 @@ SymbolMapper SymbolMapper::symbolReallocator(std::unordered_map<Symbol, Symbol> 
             while (it != mapping.end() && it->second != symbol)
             {
                 if (++lookup > MAX_LOOKUP_TIMES)
-                        throw Exception("endless loop in SymbolMapper", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("endless loop in SymbolMapper", ErrorCodes::LOGICAL_ERROR);
                 symbol = it->second;
                 it = mapping.find(symbol);
             }
@@ -214,6 +214,7 @@ Partitioning SymbolMapper::map(const Partitioning & partition)
         map(partition.getColumns()),
         partition.isRequireHandle(),
         partition.getBuckets(),
+        partition.getBucketExpr(),
         partition.isEnforceRoundRobin(),
         partition.getComponent()};
 }
@@ -404,10 +405,10 @@ SortDescription SymbolMapper::map(const SortDescription & sort_desc)
     return res;
 }
 
-std::map<Int32, Names> SymbolMapper::map(const std::map<Int32, Names> & group_id_non_null_symbol) 
+std::map<Int32, Names> SymbolMapper::map(const std::map<Int32, Names> & group_id_non_null_symbol)
 {
     std::map<Int32, Names> res;
-    for(const auto & entry : group_id_non_null_symbol)
+    for (const auto & entry : group_id_non_null_symbol)
     {
         res[entry.first] = map(entry.second);
     }
@@ -506,11 +507,11 @@ std::shared_ptr<FinalSampleStep> SymbolMapper::map(const FinalSampleStep & final
 std::shared_ptr<FinishSortingStep> SymbolMapper::map(const FinishSortingStep & finish_sorting)
 {
     return std::make_shared<FinishSortingStep>(
-    map(finish_sorting.getInputStreams()[0]),
-    SortDescription{map(finish_sorting.getPrefixDescription())},
-    SortDescription{map(finish_sorting.getResultDescription())},
-    finish_sorting.getMaxBlockSize(),
-    finish_sorting.getLimit());
+        map(finish_sorting.getInputStreams()[0]),
+        SortDescription{map(finish_sorting.getPrefixDescription())},
+        SortDescription{map(finish_sorting.getResultDescription())},
+        finish_sorting.getMaxBlockSize(),
+        finish_sorting.getLimit());
 }
 
 std::shared_ptr<IntersectStep> SymbolMapper::map(const IntersectStep & intersect)
@@ -545,7 +546,8 @@ std::shared_ptr<TableScanStep> SymbolMapper::map(const TableScanStep & scan)
     // order matters as symbol mapper should traverse plan nodes bottom-up
     std::shared_ptr<FilterStep> mapped_filter = scan.getPushdownFilterCast() ? map(*scan.getPushdownFilterCast()) : nullptr;
     std::shared_ptr<ProjectionStep> mapped_projection = scan.getPushdownProjectionCast() ? map(*scan.getPushdownProjectionCast()) : nullptr;
-    std::shared_ptr<AggregatingStep> mapped_aggregation = scan.getPushdownAggregationCast() ? map(*scan.getPushdownAggregationCast()) : nullptr;
+    std::shared_ptr<AggregatingStep> mapped_aggregation
+        = scan.getPushdownAggregationCast() ? map(*scan.getPushdownAggregationCast()) : nullptr;
 
     auto mapped_scan = std::make_shared<TableScanStep>(
         std::move(mapped_output_stream),
@@ -690,7 +692,11 @@ std::shared_ptr<ReadNothingStep> SymbolMapper::map(const ReadNothingStep & read_
 
 std::shared_ptr<RemoteExchangeSourceStep> SymbolMapper::map(const RemoteExchangeSourceStep & remote_exchange)
 {
-    return std::make_shared<RemoteExchangeSourceStep>(remote_exchange.getInput(), map(remote_exchange.getInputStreams()[0]), remote_exchange.isAddTotals(), remote_exchange.isAddExtremes());
+    return std::make_shared<RemoteExchangeSourceStep>(
+        remote_exchange.getInput(),
+        map(remote_exchange.getInputStreams()[0]),
+        remote_exchange.isAddTotals(),
+        remote_exchange.isAddExtremes());
 }
 
 
@@ -754,7 +760,12 @@ std::shared_ptr<CTERefStep> SymbolMapper::map(const CTERefStep & cte_ref)
 std::shared_ptr<ExplainAnalyzeStep> SymbolMapper::map(const ExplainAnalyzeStep & step)
 {
     return std::make_shared<ExplainAnalyzeStep>(
-        map(step.getInputStreams()[0]), map(step.getOutputName()), step.getKind(), step.getContext(), step.getQueryPlan(), step.getSetting());
+        map(step.getInputStreams()[0]),
+        map(step.getOutputName()),
+        step.getKind(),
+        step.getContext(),
+        step.getQueryPlan(),
+        step.getSetting());
 }
 
 std::shared_ptr<LocalExchangeStep> SymbolMapper::map(const LocalExchangeStep & step)
@@ -764,7 +775,7 @@ std::shared_ptr<LocalExchangeStep> SymbolMapper::map(const LocalExchangeStep & s
 
 std::shared_ptr<TableWriteStep> SymbolMapper::map(const TableWriteStep & step)
 {
-    return std::make_shared<TableWriteStep>(map(step.getInputStreams()[0]), step.getTarget());
+    return std::make_shared<TableWriteStep>(map(step.getInputStreams()[0]), step.getTarget(), step.isOutputProfiles());
 }
 
 std::shared_ptr<OutfileWriteStep> SymbolMapper::map(const OutfileWriteStep & step)
@@ -790,7 +801,8 @@ std::shared_ptr<BufferStep> SymbolMapper::map(const BufferStep & step)
 
 std::shared_ptr<TableFinishStep> SymbolMapper::map(const TableFinishStep & step)
 {
-    return std::make_shared<TableFinishStep>(map(step.getInputStreams()[0]), step.getTarget(), step.getOutputAffectedRowCountSymbol(), step.getQuery());
+    return std::make_shared<TableFinishStep>(
+        map(step.getInputStreams()[0]), step.getTarget(), step.getOutputAffectedRowCountSymbol(), step.getQuery(), step.isOutputProfiles());
 }
 
 std::shared_ptr<IntermediateResultCacheStep> SymbolMapper::map(const IntermediateResultCacheStep & step)
@@ -805,29 +817,31 @@ std::shared_ptr<MultiJoinStep> SymbolMapper::map(const MultiJoinStep & step)
 
 std::shared_ptr<TotalsHavingStep> SymbolMapper::map(const TotalsHavingStep & step)
 {
-    return std::make_shared<TotalsHavingStep>(map(step.getInputStreams()[0]), step.isOverflowRow(), map(step.getHavingFilter()), step.getTotalsMode(), step.getAutoIncludeThreshols(), step.isFinal());
+    return std::make_shared<TotalsHavingStep>(
+        map(step.getInputStreams()[0]),
+        step.isOverflowRow(),
+        map(step.getHavingFilter()),
+        step.getTotalsMode(),
+        step.getAutoIncludeThreshols(),
+        step.isFinal());
 }
 
 std::shared_ptr<ExpandStep> SymbolMapper::map(const ExpandStep & step)
 {
     return std::make_shared<ExpandStep>(
-        map(step.getOutputStream()), 
+        map(step.getOutputStream()),
         map(step.getAssignments()),
-        map(step.getNameToType()), 
+        map(step.getNameToType()),
         map(step.getGroupIdSymbol()),
         step.getGroupIdValue(),
-        map(step.getGroupIdNonNullSymbol())
-        );
+        map(step.getGroupIdNonNullSymbol()));
 }
 
 class SymbolMapper::SymbolMapperVisitor : public StepVisitor<QueryPlanStepPtr, SymbolMapper>
 {
 protected:
 #define VISITOR_DEF(TYPE) \
-    QueryPlanStepPtr visit##TYPE##Step(const TYPE##Step & step, SymbolMapper & mapper) override \
-    { \
-        return mapper.map(step); \
-    }
+    QueryPlanStepPtr visit##TYPE##Step(const TYPE##Step & step, SymbolMapper & mapper) override { return mapper.map(step); }
     APPLY_STEP_TYPES(VISITOR_DEF)
 #undef VISITOR_DEF
 };

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <optional>
 #include <Storages/StorageCnchMergeTree.h>
 
 #include <Catalog/Catalog.h>
@@ -421,7 +422,7 @@ Strings StorageCnchMergeTree::getPartitionsByPredicate(const ASTPtr & predicate,
         LOG_TRACE(log, "Return all partitions by predicate");
         Names all_partition_ids;
         for (const auto & partition : partition_list)
-            all_partition_ids.emplace_back(partition->getID(partition_key_sample));
+            all_partition_ids.emplace_back(partition->getID(partition_key_sample, extractNullableForPartitionID()));
         return all_partition_ids;
     }
 
@@ -459,7 +460,7 @@ Strings StorageCnchMergeTree::getPartitionsByPredicate(const ASTPtr & predicate,
     for (size_t i = 0; i < partition_list.size(); ++i)
     {
         if (res_column->getBool(i))
-            filtered_partition_ids.emplace_back(partition_list[i]->getID(partition_key_sample));
+            filtered_partition_ids.emplace_back(partition_list[i]->getID(partition_key_sample, extractNullableForPartitionID()));
     }
 
     LOG_TRACE(log, fmt::format("Return partitions by predicate:{}", fmt::join(filtered_partition_ids, ",")));
@@ -563,6 +564,9 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 
     if (column->size() > 1)
         throw Exception("Cannot get TTL value from table ttl ast since there are multiple ttl value", ErrorCodes::LOGICAL_ERROR);
+
+    if (column->isNullable())
+        column = static_cast<const ColumnNullable *>(column)->getNestedColumnPtr().get();
 
     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
     {
@@ -1077,7 +1081,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     std::mutex mutex;
     CheckResults results;
 
-    auto assignment = assignCnchParts(worker_group, parts, local_context);
+    auto assignment = assignCnchParts(worker_group, parts, local_context, getSettings());
 
     ThreadPool allocate_pool(std::min<UInt64>(local_context->getSettingsRef().parts_preallocate_pool_size, num_of_workers));
 
@@ -1983,7 +1987,7 @@ void StorageCnchMergeTree::checkAlterPartitionIsPossible(
 }
 
 Pipe StorageCnchMergeTree::alterPartition(
-    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context)
+    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context, const ASTPtr & query)
 {
     if (unlikely(!query_context->getCurrentTransaction()))
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
@@ -2074,7 +2078,7 @@ void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, 
     mutation_commands.emplace_back(mutation_command);
     mutation_entry.commands = mutation_commands;
     mutation_entry.txn_id = query_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
-    mutation_entry.commit_time = commit_time;
+    mutation_entry.commit_time = query_context->getTimestamp();
     mutation_entry.columns_commit_time = commit_time;
     query_context->getCnchCatalog()->createMutation(getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
 }
@@ -2126,7 +2130,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
+    auto action = txn->createActionWithLocalContext<DDLAlterAction>(local_context, shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(mutation_commands);
 
@@ -2255,8 +2259,8 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "parts_preload_level",
         "cnch_parallel_prefetching",
         "enable_prefetch_checksums",
-        "cnch_parallel_preloading",
         "disk_cache_stealing_mode",
+        "cnch_part_allocation_algorithm",
 
         "enable_addition_bg_task",
         "max_addition_bg_task_num",
@@ -3151,17 +3155,44 @@ String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
 
 std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_context) const
 {
+    const auto & metadata_snapshot = getInMemoryMetadataPtr();
+    auto partition_sample_block = getInMemoryMetadataPtr()->getPartitionKey().sample_block;
+
+    /// Prune partitions by partition level TTL even there is no WHERE condition.
+    std::optional<NameSet> partition_ids = std::nullopt;
+    if (canFilterPartitionByTTL())
+    {
+        partition_ids = std::make_optional<NameSet>();
+        auto partition_list = query_context->getCnchCatalog()->getPartitionList(shared_from_this(), query_context.get());
+        if (partition_list.empty())
+            return 0;
+        auto num_total_partition = partition_list.size();
+        
+        filterPartitionByTTL(partition_list, query_context->tryGetCurrentTransactionID().toSecond());
+        if (partition_list.empty())
+            return 0;
+        partition_ids->reserve(partition_list.size());
+
+        for (const auto & p : partition_list)
+            partition_ids->insert(p->getID(partition_sample_block, extractNullableForPartitionID()));
+
+        LOG_TRACE(log, "[TrivialCount] after filter partition by TTL {}/{}", partition_ids->size(), num_total_partition);
+    }
+
     auto parts_with_dbm = getAllPartsWithDBM(query_context);
     if (parts_with_dbm.first.empty())
         return 0;
-    const auto & metadata_snapshot = getInMemoryMetadataPtr();
     if (metadata_snapshot->hasUniqueKey())
         getDeleteBitmapMetaForServerParts(parts_with_dbm.first, parts_with_dbm.second);
     size_t rows = 0;
     for (const auto & part : parts_with_dbm.first)
+    {
+        if (partition_ids.has_value() && !partition_ids->contains(part->partition().getID(partition_sample_block, extractNullableForPartitionID())))
+            continue;
         rows += part->rowsCount() - part->deletedRowsCount(*this);
+    }
 
-    LOG_TRACE(log, "Shortcut: calculate total_rows from metadata {}", rows);
+    LOG_TRACE(log, "[TrivialCount] calculate total_rows from metadata {}", rows);
     return rows;
 }
 
@@ -3262,6 +3293,16 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
 {
     if (commands.empty())
         return;
+
+    /// Check whether PARTITION (ID) is valid. Will throw exception if partition is an invalid value.
+    for (const auto & c : commands)
+    {
+        if (c.partition)
+        {
+            auto p = getPartitionIDFromQuery(c.partition, query_context);
+            LOG_TRACE(log, "Extract partition id from command: {}", p);
+        }
+    }
 
     auto txn = query_context->getCurrentTransaction();
     auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef(), query_context->getCurrentQueryId());

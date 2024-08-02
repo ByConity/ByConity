@@ -148,21 +148,25 @@ Projection Est. ? rows
                   │  ├─ TableScan test_distinct.unique_3 Est. ? rows
                   │  │        Outputs: [id3]
                   │  └─ Projection Est. ? rows
-                  │     │     Expressions: expr#divide(sum(avg_id), 25)_1:=cast(`expr#sum(avg_id)` / 25, \'Nullable(Float64)\')
-                  │     └─ CTERef[1] Est. ? rows
+                  │     │     Expressions: expr#divide(sum(avg_id), 25)_1:=cast(`expr#sum(avg_id)_4` / 25, \'Nullable(Float64)\')
+                  │     └─ Broadcast Exchange Est. ? rows
+                  │        └─ MergingAggregated Est. ? rows
+                  │           └─ Gather Exchange Est. ? rows
+                  │              └─ Aggregating Est. ? rows
+                  │                 │     Group by: {}
+                  │                 │     Aggregates: expr#sum(avg_id)_4:=AggNull(sum)(id_6)
+                  │                 └─ TableScan test_distinct.unique_1 Est. ? rows
+                  │                          Outputs: id_6:=id
                   └─ Projection Est. ? rows
-                     │     Expressions: expr#divide(sum(avg_id), 20)_1:=cast(`expr#sum(avg_id)_1` / 20, \'Nullable(Float64)\')
-                     └─ CTERef[1] Est. ? rows
-CTEDef [1]
-   Broadcast Exchange Est. ? rows
-   └─ MergingAggregated Est. ? rows
-      └─ Gather Exchange Est. ? rows
-         └─ Aggregating Est. ? rows
-            │     Group by: {}
-            │     Aggregates: expr#sum(avg_id):=AggNull(sum)(id_3)
-            └─ TableScan test_distinct.unique_1 Est. ? rows
-                     Outputs: id_3:=id
-note: CTE(Common Table Expression) is applied for 2 times.
+                     │     Expressions: expr#divide(sum(avg_id), 20)_1:=cast(`expr#sum(avg_id)_5` / 20, \'Nullable(Float64)\')
+                     └─ Broadcast Exchange Est. ? rows
+                        └─ MergingAggregated Est. ? rows
+                           └─ Gather Exchange Est. ? rows
+                              └─ Aggregating Est. ? rows
+                                 │     Group by: {}
+                                 │     Aggregates: expr#sum(avg_id)_5:=AggNull(sum)(id_7)
+                                 └─ TableScan test_distinct.unique_1 Est. ? rows
+                                          Outputs: id_7:=id
 ---------test cte2
 Projection Est. ? rows
 │     Expressions: id:=id_3

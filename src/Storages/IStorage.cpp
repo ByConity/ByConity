@@ -179,7 +179,7 @@ void IStorage::read(
 }
 
 Pipe IStorage::alterPartition(
-    const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */)
+    const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */, const ASTPtr & /* query */)
 {
     throw Exception("Partition operations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -273,8 +273,11 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
         {
             Names required_columns;
             const auto & select_query = view->getInMemoryMetadataPtr()->select.inner_query;
-            if (auto * select = select_query->as<ASTSelectWithUnionQuery>(); select->list_of_selects->children.size() == 1)
-                required_columns = InterpreterSelectQuery(select->list_of_selects->children.at(0)->clone(), context, SelectQueryOptions{}.noModify()).getRequiredColumns();
+            if (auto * select = select_query->as<ASTSelectWithUnionQuery>())
+            {
+                if (select->list_of_selects->children.size() == 1)
+                    required_columns = InterpreterSelectQuery(select->list_of_selects->children.at(0)->clone(), context, SelectQueryOptions{}.noModify()).getRequiredColumns();
+            }
             else if (select_query->as<ASTSelectQuery>())
                 required_columns = InterpreterSelectQuery(select_query->clone(), context, SelectQueryOptions{}.noModify()).getRequiredColumns();
             for (const auto & col_name : required_columns)

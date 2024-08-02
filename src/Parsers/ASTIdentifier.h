@@ -91,7 +91,7 @@ public:
 
     virtual void appendCatalogName(const std::string& catalog_name);
 
-    virtual void appendTenantId(const Context * context);
+    virtual void appendTenantId(const Context * context, bool is_datbase_name);
 
     String full_name;
     std::vector<String> name_parts;
@@ -143,7 +143,7 @@ public:
     // void rewriteCnchDatabaseOrCatalog(const Context *context) override;
     void rewriteCnchDatabaseName(const Context * context = nullptr) override;
     virtual void appendCatalogName(const std::string& catalog_name) override;
-    virtual void appendTenantId(const Context * context) override;
+    virtual void appendTenantId(const Context * context, bool is_datbase_name) override;
 
 };
 

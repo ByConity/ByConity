@@ -14,11 +14,15 @@ namespace ErrorCodes
 
 BlockIO InterpreterDropPreparedStatementQuery::execute()
 {
+    auto current_context = getContext();
+    AccessRightsElements access_rights_elements;
+    access_rights_elements.emplace_back(AccessType::DROP_PREPARED_STATEMENT);
+    current_context->checkAccess(access_rights_elements);
+
     const auto * drop = query_ptr->as<const ASTDropPreparedStatementQuery>();
     if (!drop || drop->name.empty())
         throw Exception("Drop Prepare logical error", ErrorCodes::LOGICAL_ERROR);
 
-    auto current_context = getContext();
     // if (!drop->cluster.empty())
     //     return executeDDLQueryOnCluster(query_ptr, current_context);
 
@@ -28,7 +32,7 @@ BlockIO InterpreterDropPreparedStatementQuery::execute()
     if (!prepared_manager)
         throw Exception("Prepare cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
 
-    prepared_manager->remove(drop->name, !drop->if_exists);
+    prepared_manager->remove(drop->name, !drop->if_exists, current_context);
     return {};
 }
 }

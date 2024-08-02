@@ -30,7 +30,7 @@ PlanNodeCost ExchangeCost::calculate(const ExchangeStep & step, CostContext & co
     if (!step.getSchema().getColumns().empty()
         && (step.getSchema().getHandle() == Partitioning::Handle::FIXED_HASH
             || step.getSchema().getHandle() == Partitioning::Handle::BUCKET_TABLE))
-        base_cost += 1.0 / step.getSchema().getColumns().size();
+        base_cost += 1.0 / (step.getSchema().getColumns().size() + 1);
 
     if (step.getSchema().getHandle() == Partitioning::Handle::BUCKET_TABLE)
         base_cost *= 1.1;

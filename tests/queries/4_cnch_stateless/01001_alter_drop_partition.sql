@@ -55,3 +55,14 @@ TRUNCATE TABLE t_truncate;
 SELECT count() FROM t_truncate; -- 0
 
 DROP TABLE t_truncate;
+
+SELECT '------ TRUNCATE CHECK PARTITION ------';
+CREATE TABLE t_truncate_nullable_partition(p Nullable(DateTime), k Int32, m Int32)
+ENGINE = CnchMergeTree() PARTITION BY (toDate(p), k) ORDER BY m
+SETTINGS allow_nullable_key = 1, extract_partition_nullable_date = 1;
+
+INSERT INTO t_truncate_nullable_partition VALUES ('2024-01-01 10:00:00', 1, 1), (NULL, 1, 1);
+SELECT count() FROM t_truncate_nullable_partition; -- 2
+SELECT _partition_id FROM t_truncate_nullable_partition ORDER BY _partition_id;
+TRUNCATE TABLE t_truncate_nullable_partition PARTITION '20240101-1';
+SELECT count() FROM t_truncate_nullable_partition; -- 1

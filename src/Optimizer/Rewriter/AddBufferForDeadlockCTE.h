@@ -43,10 +43,9 @@ namespace DB
 /// the rewriter will output:
 ///           Join
 ///          /     \
-///       Buffer  Buffer
-///         |       |
-///     CTERef[0] CTERef[0]
-/// TODO: add buffer step only on left table side
+///       Buffer  CTERef[0]
+///         |
+///     CTERef[0]
 ///
 ///
 /// Currently the algorithm will add buffer step aggresively to solve cyclic deadlock ctes.

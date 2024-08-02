@@ -163,6 +163,8 @@ void prepareQueryCommonBuf(
     query_common.set_check_session(!context->getSettingsRef().bsp_mode && !context->getSettingsRef().enable_prune_empty_resource);
     query_common.set_txn_id(context->getCurrentTransactionID().toUInt64());
     query_common.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
+    auto query_expiration_ts = context->getQueryExpirationTimeStamp();
+    query_common.set_query_expiration_timestamp(query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000);
     const String & quota_key = client_info.quota_key;
     if (!client_info.quota_key.empty())
         query_common.set_quota(quota_key);

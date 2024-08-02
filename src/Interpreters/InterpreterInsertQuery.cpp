@@ -29,6 +29,7 @@
 #include <DataStreams/CheckConstraintsFilterBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/LockHoldBlockInputStream.h>
+#include <Processors/Transforms/ProcessorToOutputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/OwningBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
@@ -87,12 +88,13 @@ namespace ErrorCodes
 }
 
 InterpreterInsertQuery::InterpreterInsertQuery(
-    const ASTPtr & query_ptr_, ContextPtr context_, bool allow_materialized_, bool no_squash_, bool no_destination_)
+    const ASTPtr & query_ptr_, ContextPtr context_, bool allow_materialized_, bool no_squash_, bool no_destination_, AccessType access_type_)
     : WithContext(context_)
     , query_ptr(query_ptr_)
     , allow_materialized(allow_materialized_)
     , no_squash(no_squash_)
     , no_destination(no_destination_)
+    , access_type(access_type_)
 {
     checkStackSize();
 }
@@ -310,7 +312,7 @@ BlockIO InterpreterInsertQuery::execute()
 
     auto query_sample_block = getSampleBlock(insert_query, table, metadata_snapshot);
     if (!insert_query.table_function)
-        getContext()->checkAccess(AccessType::INSERT, insert_query.table_id, query_sample_block.getNames());
+        getContext()->checkAccess(access_type, insert_query.table_id, query_sample_block.getNames());
 
     bool is_distributed_insert_select = false;
 
@@ -571,15 +573,32 @@ BlockIO InterpreterInsertQuery::execute()
         res.pipeline.addSimpleTransform(
             [&](const Block & in_header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(in_header, actions); });
 
-        res.pipeline.setSinks([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr {
-            if (type != QueryPipeline::StreamType::Main)
-                return nullptr;
+        if (settings.insert_select_with_profiles)
+        {
+            res.pipeline.addSimpleTransform([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr
+            {
+                if (type != QueryPipeline::StreamType::Main)
+                    return nullptr;
 
-            auto stream = std::move(out_streams.back());
-            out_streams.pop_back();
+                auto stream = std::move(out_streams.back());
+                out_streams.pop_back();
 
-            return std::make_shared<SinkToOutputStream>(std::move(stream));
-        });
+                return std::make_shared<ProcessorToOutputStream>(std::move(stream));
+            });
+        }
+        else
+        {
+            res.pipeline.setSinks([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr
+            {
+                if (type != QueryPipeline::StreamType::Main)
+                    return nullptr;
+
+                auto stream = std::move(out_streams.back());
+                out_streams.pop_back();
+
+                return std::make_shared<SinkToOutputStream>(std::move(stream));
+            });
+        }
 
         if (!allow_materialized)
         {

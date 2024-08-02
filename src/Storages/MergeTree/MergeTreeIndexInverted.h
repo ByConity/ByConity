@@ -212,6 +212,8 @@ public:
 
     bool mayBenefitFromIndexForIn(const ASTPtr & node) const override;
 
+    bool isInvertedIndex() const override { return true; }
+
     GinFilterParameters params;
     /// Function for selecting next token.
     std::unique_ptr<ITokenExtractor> token_extractor;

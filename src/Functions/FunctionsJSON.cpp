@@ -177,6 +177,7 @@ REGISTER_FUNCTION(JSON)
     factory.registerFunction<JSONOverloadResolver<NameJSONExtractKeys, JSONExtractKeysImpl>>();
     factory.registerFunction<JSONOverloadResolver<NameJSONUnquote, JSONUnquoteImpl>>();
     factory.registerFunction<JSONOverloadResolver<NameGetJSONObject, GetJsonObjectImpl>>(FunctionFactory::CaseSensitiveness::CaseInsensitive);
+    factory.registerAlias("JSON_UNQUOTE", "JSONUnquote", FunctionFactory::CaseInsensitive);
 }
 
 }

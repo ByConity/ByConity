@@ -1,10 +1,14 @@
 #include <DataTypes/Serializations/ISerialization.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ParserPreparedStatement.h>
 #include <Parsers/parseQuery.h>
 #include <Protos/plan_node.pb.h>
+#include <Interpreters/StorageID.h>
+#include "Interpreters/PreparedStatement/PreparedStatementCatalog.h"
+#include "Parsers/IAST_fwd.h"
 
 #include <memory>
 
@@ -18,7 +22,7 @@ namespace ErrorCodes
 }
 void PreparedObject::toProto(Protos::PreparedStatement & proto) const
 {
-    proto.set_query(query);
+    proto.set_query(query->formatForErrorMessage());
 }
 
 void PreparedStatementManager::initialize(ContextMutablePtr context)
@@ -26,17 +30,13 @@ void PreparedStatementManager::initialize(ContextMutablePtr context)
     if (!context->getPreparedStatementManager())
     {
         auto manager_instance = std::make_unique<PreparedStatementManager>();
-        const auto & config = context->getConfigRef();
-        String default_path = fs::path{context->getPath()} / "prepared_statement/";
-        String path = config.getString("prepared_statement_path", default_path);
-        manager_instance->prepared_statement_loader = std::make_unique<PreparedStatementLoaderFromDisk>(path);
         context->setPreparedStatementManager(std::move(manager_instance));
-        loadStatementsFromDisk(context);
+        loadStatementsFromCatalog(context);
     }
 }
 
 void PreparedStatementManager::set(
-    const String & name, PreparedObject prepared_object, bool throw_if_exists, bool or_replace, bool is_persistent)
+    const String & name, PreparedObject prepared_object, bool throw_if_exists, bool or_replace, bool is_persistent, ContextMutablePtr context)
 {
     std::unique_lock lock(mutex);
 
@@ -44,10 +44,12 @@ void PreparedStatementManager::set(
     {
         if (is_persistent)
         {
+            if (!context)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Context is nullptr");
             Protos::PreparedStatement proto;
-            prepared_object.toProto(proto);
-            throw_if_exists = throw_if_exists && !or_replace;
-            prepared_statement_loader->storeObject(name, proto, throw_if_exists, or_replace);
+            PreparedStatementCatalogManager catalog(context);
+            PreparedStatementItemPtr prepared = std::make_shared<PreparedStatementItem>(name, prepared_object.query->formatForErrorMessage());
+            catalog.updatePreparedStatement(prepared);
         }
         cache[name] = std::move(prepared_object);
     }
@@ -67,11 +69,15 @@ SettingsChanges PreparedStatementManager::getSettings(const String & name) const
     return getUnsafe(name).settings_changes;
 }
 
-void PreparedStatementManager::remove(const String & name, bool throw_if_not_exists)
+void PreparedStatementManager::remove(const String & name, bool throw_if_not_exists, ContextMutablePtr context)
 {
     std::unique_lock lock(mutex);
+    if (context)
+    {
+        PreparedStatementCatalogManager catalog(context);
+        catalog.removePreparedStatement(name);
+    }
 
-    prepared_statement_loader->removeObject(name, false);
     if (hasUnsafe(name))
         cache.erase(name);
     else if (throw_if_not_exists)
@@ -94,7 +100,11 @@ PreparedStatementManager::CacheResultType PreparedStatementManager::getPlanFromC
         for (auto & [database, table_info] : prepared_object.query_detail->query_access_info)
         {
             for (auto & [table, columns] : table_info)
-                context->addQueryAccessInfo(database, table, columns);
+            {
+                auto storage_id = context->tryResolveStorageID(StorageID{database, table});
+                context->checkAccess(AccessType::SELECT, storage_id, columns);
+                context->addQueryAccessInfo(backQuoteIfNeed(storage_id.getDatabaseName()), storage_id.getFullTableName(), columns);
+            }   
         }
     }
 
@@ -105,15 +115,12 @@ PreparedStatementManager::CacheResultType PreparedStatementManager::getPlanFromC
 
 void PreparedStatementManager::addPlanToCache(
     const String & name,
-    const String & query,
+    ASTPtr & query,
     SettingsChanges settings_changes,
     QueryPlanPtr & plan,
     AnalysisPtr analysis,
     PreparedParameterSet prepared_params,
-    ContextMutablePtr & context,
-    bool throw_if_exists,
-    bool or_replace,
-    bool is_persistent)
+    ContextMutablePtr & context)
 {
     PlanNodeId max_id;
     PreparedObject prepared_object{};
@@ -136,12 +143,12 @@ void PreparedStatementManager::addPlanToCache(
         {
             for (const auto & column : it->second)
                 prepared_object.query_detail
-                    ->query_access_info[backQuoteIfNeed(storage_id.getDatabaseName())][storage_id.getFullTableName()]
+                    ->query_access_info[storage_id.getDatabaseName()][storage_id.getTableName()]
                     .emplace_back(column);
         }
     }
-
-    set(name, std::move(prepared_object), throw_if_exists, or_replace, is_persistent);
+    const auto & prepare = query->as<const ASTCreatePreparedStatementQuery &>();
+    set(name, std::move(prepared_object), !prepare.if_not_exists, prepare.or_replace, prepare.is_permanent, context);
 }
 
 PlanNodePtr PreparedStatementManager::getNewPlanNode(PlanNodePtr node, ContextMutablePtr & context, bool cache_plan, PlanNodeId & max_id)
@@ -205,39 +212,39 @@ void PreparedStatementManager::clearCache()
     cache.clear();
 }
 
-NamesAndPreparedStatements PreparedStatementManager::getAllStatementsFromDisk(ContextMutablePtr & context)
-{
-    return prepared_statement_loader->getAllObjects(context);
-}
-
-void PreparedStatementManager::loadStatementsFromDisk(ContextMutablePtr & context)
+void PreparedStatementManager::loadStatementsFromCatalog(ContextMutablePtr & context)
 {
     if (!context->getPreparedStatementManager())
         throw Exception("PreparedStatement cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
 
     auto * manager = context->getPreparedStatementManager();
     manager->clearCache();
-    auto statements = manager->getAllStatementsFromDisk(context);
+    PreparedStatementCatalogManager catalog(context);
+    auto statements = catalog.getPreparedStatements();
     for (auto & statement : statements)
     {
         try
         {
             ParserCreatePreparedStatementQuery parser(ParserSettings::valueOf(context->getSettingsRef()));
-            auto ast = parseQuery(parser, statement.second.query(), "", 0, context->getSettings().max_parser_depth);
+            auto ast = parseQuery(parser, statement->create_statement, "", 0, context->getSettings().max_parser_depth);
             auto * create_prep_stat = ast->as<ASTCreatePreparedStatementQuery>();
 
             if (!create_prep_stat)
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid prepread statement query: {}", statement.second.query());
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid prepread statement query: {}", statement->create_statement);
 
             create_prep_stat->is_permanent = false;
-            InterpreterSelectQueryUseOptimizer interpreter{ast, context, {}};
+            auto query_context = Context::createCopy(context);
+            query_context->setQueryContext(query_context);
+            SettingsChanges settings_changes = InterpreterSetQuery::extractSettingsFromQuery(ast, query_context);
+            query_context->applySettingsChanges(settings_changes);
+            InterpreterSelectQueryUseOptimizer interpreter{ast, query_context, {}};
             interpreter.executeCreatePreparedStatementQuery();
         }
         catch (...)
         {
             tryLogWarningCurrentException(
                 &Poco::Logger::get("PreparedStatementManager"),
-                fmt::format("while build prepared statement {} plan", backQuote(statement.first)));
+                fmt::format("while build prepared statement {} plan", backQuote(statement->name)));
             continue;
         }
     }

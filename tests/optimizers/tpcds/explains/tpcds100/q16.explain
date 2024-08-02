@@ -10,13 +10,13 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#uniqExact(cs_order_number):=AggNull(countIf)(cs_order_number,group_id_mask), expr#sum(cs_ext_ship_cost):=AggNull(anyIf)(expr#sum(cs_ext_ship_cost),group_id_mask_1), expr#sum(cs_net_profit):=AggNull(anyIf)(expr#sum(cs_net_profit),group_id_mask_1)
-               └─ Projection Est. 19547 rows
+               └─ Projection Est. 21719 rows
                   │     Expressions: [cs_order_number, expr#sum(cs_ext_ship_cost), expr#sum(cs_net_profit)], group_id_mask:=group_id = 1, group_id_mask_1:=group_id = 0
-                  └─ MergingAggregated Est. 19547 rows
-                     └─ Repartition Exchange Est. 19547 rows
-                        │     Partition by: {group_id, cs_order_number}
-                        └─ Aggregating Est. 19547 rows
-                           │     Group by: {group_id, cs_order_number}
+                  └─ MergingAggregated Est. 21719 rows
+                     └─ Repartition Exchange Est. 21719 rows
+                        │     Partition by: {cs_order_number, group_id}
+                        └─ Aggregating Est. 21719 rows
+                           │     Group by: {cs_order_number, group_id}
                            │     Aggregates: expr#sum(cs_ext_ship_cost):=AggNull(sum)(cs_ext_ship_cost), expr#sum(cs_net_profit):=AggNull(sum)(cs_net_profit)
                            └─ Expand Est. 21719 rows
                               └─ Right Semi Join Est. 21719 rows

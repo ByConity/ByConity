@@ -121,7 +121,7 @@ void checkTTLExpression(const ExpressionActionsPtr & ttl_expression, const Strin
         if (!allow_nullable_type)
         {
             throw Exception(ErrorCodes::BAD_TTL_EXPRESSION,
-                "TTL expression result type is {} but allow_nullable_type is false.", result_type->getName());
+                "TTL expression result type is {} but allow_nullable_key is false.", result_type->getName());
         }
 
         auto nested_type = static_cast<const DataTypeNullable *>(result_type)->getNestedType();

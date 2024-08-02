@@ -68,6 +68,7 @@
 #include <Parsers/queryToString.h>
 #include <boost/algorithm/string.hpp>
 #include "ASTColumnsMatcher.h"
+#include "Parsers/parseDatabaseAndTableName.h"
 
 #include <Interpreters/StorageID.h>
 #include <Parsers/formatTenantDatabaseName.h>
@@ -181,15 +182,18 @@ bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    /// Identifier in backquotes or in double quotes
-    if (pos->type == TokenType::BackQuotedIdentifier || pos->type == TokenType::DoubleQuotedIdentifier)
+    /// Identifier in backquotes or in double quotes or single quotes
+    if (pos->type == TokenType::BackQuotedIdentifier || pos->type == TokenType::DoubleQuotedIdentifier
+            || (allow_single_quoted_identifier && pos->type == TokenType::StringLiteral))
     {
         ReadBufferFromMemory buf(pos->begin, pos->size());
         String s;
 
         if (*pos->begin == '`')
             readBackQuotedStringWithSQLStyle(s, buf);
-        else
+        else if (*pos->begin == '\'')
+            readQuotedStringWithSQLStyle(s, buf);
+        else if (*pos->begin == '"')
             readDoubleQuotedStringWithSQLStyle(s, buf);
 
         if (s.empty())    /// Identifiers "empty string" are not allowed.
@@ -1079,7 +1083,7 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 if (!isOneOf<TokenType::OpeningSquareBracket, TokenType::OpeningRoundBracket, TokenType::Comma, TokenType::Minus>(last_token))
                     return false;
             }
-            else if (isOneOf<TokenType::StringLiteral, TokenType::Minus, TokenType::BackQuotedIdentifier>(pos->type))
+            else if (isOneOf<TokenType::StringLiteral, TokenType::Minus, TokenType::DoubleQuotedIdentifier>(pos->type))
             {
                 if (!isOneOf<TokenType::OpeningSquareBracket, TokenType::OpeningRoundBracket, TokenType::Comma>(last_token))
                     return false;
@@ -2272,7 +2276,7 @@ const char * ParserAlias::restricted_keywords[] =
 bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_as("AS");
-    ParserIdentifier id_p;
+    ParserIdentifier id_p(false, allow_single_quoted_identifier);
 
     bool has_as_word = s_as.ignore(pos, expected);
     if (!allow_alias_without_as_keyword && !has_as_word)
@@ -2707,7 +2711,7 @@ bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
                 allow_alias_without_as_keyword_now = false;
 
     ASTPtr alias_node;
-    if (ParserAlias(allow_alias_without_as_keyword_now).parse(pos, alias_node, expected))
+    if (ParserAlias(allow_alias_without_as_keyword_now, dt.parse_mysql_ddl).parse(pos, alias_node, expected))
     {
         /// FIXME: try to prettify this cast using `as<>()`
         if (auto * ast_with_alias = dynamic_cast<ASTWithAlias *>(node.get()))
@@ -3130,6 +3134,31 @@ bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     return true;
 }
 
+/// a.col = _expression_  or col = _expression_
+/// Reuse `parseDatabaseAndTableName` for extracting table alias and column name.
+bool ParserAssignmentWithAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    auto assignment = std::make_shared<ASTAssignment>();
+    node = assignment;
+
+    ParserToken s_equals(TokenType::Equals);
+    ParserExpression p_expression(dt);
+
+    parseDatabaseAndTableName(pos, expected, assignment->table_name, assignment->column_name);
+
+    if (!s_equals.ignore(pos, expected))
+        return false;
+
+    ASTPtr expression;
+    if (!p_expression.parse(pos, expression, expected))
+        return false;
+
+    if (expression)
+        assignment->children.push_back(expression);
+
+    return true;
+}
+
 bool ParserEscapeExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserStringLiteral escape_exp(dt);
@@ -3147,6 +3176,13 @@ bool ParserEscapeExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         return false;
 
     return true;
+}
+
+bool ParserExecuteValue::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    return ParserTupleOfLiterals(dt).parse(pos, node, expected)
+        || ParserArrayOfLiterals(dt).parse(pos, node, expected)
+        || ParserLiteral(dt).parse(pos, node, expected);
 }
 
 }

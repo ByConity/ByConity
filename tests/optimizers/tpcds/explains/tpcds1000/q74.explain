@@ -9,7 +9,7 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_customer_id_7 ASC NULLS LAST, c_customer_id_7 ASC NULLS LAST, c_customer_id_7 ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner (PARALLEL_HASH) Join Est. 7798070 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 7769526 rows
                │     Condition: ss_customer_sk_5 == c_customer_sk_2
                │     Filter: multiIf(`expr#sum(ss_net_paid)_4` > 0, `expr#sum(ss_net_paid)_5` / `expr#sum(ss_net_paid)_4`, NULL) > multiIf(`expr#sum(ss_net_paid)_2` > 0, `expr#sum(ss_net_paid)_3` / `expr#sum(ss_net_paid)_2`, NULL)
                ├─ Inner (PARALLEL_HASH) Join Est. 4840036 rows
@@ -28,7 +28,7 @@ Projection Est. 100 rows
                │        └─ Local Exchange Est. 10726288 rows
                │           └─ Buffer Est. 10726288 rows
                │              └─ CTERef[0] Est. 10726288 rows
-               └─ Inner (PARALLEL_HASH) Join Est. 4813622 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 4796003 rows
                   │     Condition: ss_customer_sk_3 == c_customer_sk_2
                   ├─ Projection Est. 2681572 rows
                   │  │     Expressions: [expr#sum(ss_net_paid)_3, ss_customer_sk_3]

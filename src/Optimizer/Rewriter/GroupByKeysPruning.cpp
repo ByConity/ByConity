@@ -4,6 +4,7 @@
 #include <Optimizer/Rewriter/GroupByKeysPruning.h>
 #include <Poco/Format.h>
 #include <common/logger_useful.h>
+#include <Parsers/ASTFunction.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Core/Names.h>
 #include <Interpreters/AggregateDescription.h>
@@ -12,6 +13,7 @@
 #include <Optimizer/Property/ConstantsDeriver.h>
 #include <Parsers/ASTLiteral.h>
 #include <QueryPlan/AggregatingStep.h>
+#include <Optimizer/LiteralEncoder.h>
 
 namespace DB
 {
@@ -178,7 +180,10 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
         }
         for (const auto & [name, literal] : constants_values)
         {
-            new_assignments.emplace(name, std::make_shared<ASTLiteral>(literal.value));
+            // date/datetime should make a cast function
+            // but nullable(UInt64) shouldn't make a cast function
+            auto literal_ast = LiteralEncoder::encodeForComparisonExpr(literal.value, literal.type, context);
+            new_assignments.emplace(name, std::move(literal_ast));
             new_name_to_type[name] = literal.type;
         }
 

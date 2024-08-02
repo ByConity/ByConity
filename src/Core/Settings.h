@@ -506,42 +506,15 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_join_on_1_equals_1, false, "Enable join on 1=1.", 0) \
     \
     M(UInt64, preferred_block_size_bytes, 1000000, "", 0) \
-\
-    M(UInt64, \
-      max_replica_delay_for_distributed_queries, \
-      300, \
-      "If set, distributed queries of Replicated tables will choose servers with replication delay in seconds less than the specified " \
-      "value (not inclusive). Zero means do not take delay into account.", \
-      0) \
-    M(Bool, \
-      fallback_to_stale_replicas_for_distributed_queries, \
-      1, \
-      "Suppose max_replica_delay_for_distributed_queries is set and all replicas for the queried table are stale. If this setting is " \
-      "enabled, the query will be performed anyway, otherwise the error will be reported.", \
-      0) \
-    M(UInt64, \
-      preferred_max_column_in_block_size_bytes, \
-      0, \
-      "Limit on max column size in block while reading. Helps to decrease cache misses count. Should be close to L2 cache size.", \
-      0) \
-\
-    M(Bool, \
-      insert_distributed_sync, \
-      false, \
-      "If setting is enabled, insert query into distributed waits until data will be sent to all nodes in cluster.", \
-      0) \
-    M(UInt64, \
-      insert_distributed_timeout, \
-      0, \
-      "Timeout for insert query into distributed. Setting is used only with insert_distributed_sync enabled. Zero value means no " \
-      "timeout.", \
-      0) \
-    M(Int64, \
-      distributed_ddl_task_timeout, \
-      180, \
-      "Timeout for DDL query responses from all hosts in cluster. If a ddl request has not been performed on all hosts, a response will " \
-      "contain a timeout error and a request will be executed in an async mode. Negative value means infinite. Zero means async mode.", \
-      0) \
+    \
+    M(UInt64, max_replica_delay_for_distributed_queries, 300, "If set, distributed queries of Replicated tables will choose servers with replication delay in seconds less than the specified value (not inclusive). Zero means do not take delay into account.", 0) \
+    M(Bool, fallback_to_stale_replicas_for_distributed_queries, 1, "Suppose max_replica_delay_for_distributed_queries is set and all replicas for the queried table are stale. If this setting is enabled, the query will be performed anyway, otherwise the error will be reported.", 0) \
+    M(UInt64, preferred_max_column_in_block_size_bytes, 0, "Limit on max column size in block while reading. Helps to decrease cache misses count. Should be close to L2 cache size.", 0) \
+    \
+    M(Bool, insert_select_with_profiles, false, "If setting is enabled, return the total inserted (selected) rows.", 0) \
+    M(Bool, insert_distributed_sync, false, "If setting is enabled, insert query into distributed waits until data will be sent to all nodes in cluster.", 0) \
+    M(UInt64, insert_distributed_timeout, 0, "Timeout for insert query into distributed. Setting is used only with insert_distributed_sync enabled. Zero value means no timeout.", 0) \
+    M(Int64, distributed_ddl_task_timeout, 180, "Timeout for DDL query responses from all hosts in cluster. If a ddl request has not been performed on all hosts, a response will contain a timeout error and a request will be executed in an async mode. Negative value means infinite. Zero means async mode.", 0) \
     M(Milliseconds, stream_flush_interval_ms, 7500, "Timeout for flushing data from streaming storages.", 0) \
     M(Milliseconds, stream_poll_timeout_ms, 500, "Timeout for polling data from/to streaming storages.", 0) \
 \
@@ -1314,7 +1287,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
     M(Bool, enable_local_disk_cache, 1, "enable global local disk cache", 0) \
     M(UInt64, parts_preload_level, 1, "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for table auto preload, 0 will disable all table preload, > 0 will use table preload setting", 0) \
-    M(UInt64, parts_preload_throttler, 0, "used for max preload rpc concurrent count", 0) \
+    M(MaxThreads, cnch_parallel_preloading, 0, "Max threads when worker preload parts", 0) \
+    M(UInt64, preload_send_rpc_max_ms, 3000, "Max rpc ms when send preload parts reqeust", 0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
@@ -1503,6 +1477,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
+    M(Bool, enable_remove_remove_unnecessary_buffer, false, "Whether to only add buffer for cte consumer that may cause deadlock", 0) \
+    M(Int64, max_buffer_size_for_deadlock_cte, 8000000000, "Inline CTE if buffer is oversized, set 0 to inline all cte, set -1 to buffer data for all cte even no stats", 0) \
     M(Bool, enable_add_exchange, true, "Whether to enable AddExchange rule", 0) \
     M(Bool, enable_bitmap_index_splitter, true, "Whether to enable BitMapIndexSplitter", 0) \
     M(Bool, enable_column_pruning, true, "Whether to enable ColumnPruning", 0) \
@@ -1655,6 +1631,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_expand_join_key_size, 3, "Whether enable using equivalences when property match", 0) \
     M(UInt64, max_expand_agg_key_size, 3, "Max allowed agg/window keys number when expand powerset when property match", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
+    M(Bool, enable_bucket_shuffle, false, "Whether enable bucket shuffle", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \
     M(UInt64, magic_set_max_search_tree, 2, "The maximum table scans in magic set, used for early pruning", 0) \
@@ -1725,6 +1702,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_use_query_memory_tracker, true, "Use query-level memory tracker", 0) \
+    M(String, exchange_shuffle_method_name, "cityHash64V2", "Shuffle method name used in exchange", 0) \
     M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 2000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
@@ -1847,6 +1825,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
     M(Bool, throw_exception_when_mysql_connection_failed, false, "For mysql database engine, whether throw exception when mysql connection failed. If it is set to true, clickhouse may shutdown during restarting due to mysql connection failure", 0) \
     /** for inverted index*/ \
+    M(Bool, enable_inverted_index, true, "Enable inverted index", 0) \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
     M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
     /** materialized view async refresh related settings */ \
@@ -1965,6 +1944,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_parquet_coalesce_read, true, "Merge small IO ranges, See arrow::ReadRangeCache", 0) \
     M(Bool, input_format_parquet_use_lazy_io_cache, true, "Lazy caching will trigger io requests when they are requested for the first time. See arrow::ReadRangeCache", 0) \
     M(Bool, input_format_orc_filter_push_down, true, "When reading Orc files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
+    M(DateTimeOverflowBehavior, date_time_overflow_behavior, "ignore", "Overflow mode for Date, Date32, DateTime, DateTime64 types. Possible values: 'ignore', 'throw', 'saturate'.", 0) \
     \
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_arrow_import_nested, false, "Allow to insert array of structs into Nested table in Arrow input format.", 0) \
@@ -2095,6 +2075,11 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cnch_engine_conversion, false, "Whether to converse MergeTree engine to CnchMergeTree engine", 0) \
     /** End of BitEngine related settings */ \
     \
+    M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
+    M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
+    /** End of gis related settings */ \
+    \
+
 
 // End of FORMAT_FACTORY_SETTINGS
 

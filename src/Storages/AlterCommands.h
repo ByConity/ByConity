@@ -203,7 +203,7 @@ struct AlterCommand
 
     static std::optional<AlterCommand> parse(const ASTAlterCommand * command, ContextPtr context);
 
-    void apply(StorageInMemoryMetadata & metadata, ContextPtr context) const;
+    void apply(StorageInMemoryMetadata & metadata, ContextPtr context, bool allow_nullable_key = false) const;
 
     /// Check that alter command require data modification (mutation) to be
     /// executed. For example, cast from Date to UInt16 type can be executed

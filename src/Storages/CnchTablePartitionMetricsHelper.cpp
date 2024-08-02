@@ -217,30 +217,18 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
         return;
     auto cnch_catalog = getContext()->getCnchCatalog();
 
-    /// Recalculate table level `is_fully_clustered` and `load_parts_by_partition`.
+    /// Recalculate table level `load_parts_by_partition`.
     {
-        auto is_fully_clustered = true;
         {
             size_t total_parts_number{0};
-            // store table TDH used for comparison with part TDH as it table TDH may change during comparison
-            UInt64 current_table_definition_hash = table_meta_ptr->table_definition_hash.load();
             auto & meta_partitions = table_meta_ptr->partitions;
             for (auto it = meta_partitions.begin(); it != meta_partitions.end(); it++)
             {
                 auto & partition_info_ptr = *it;
                 if (partition_info_ptr == nullptr || partition_info_ptr->metrics_ptr == nullptr)
                     continue;
-
                 auto metrics_data = partition_info_ptr->metrics_ptr->read();
                 total_parts_number += metrics_data.total_parts_number;
-                if (!metrics_data.is_deleted)
-                {
-                    auto is_partition_clustered = (metrics_data.is_single_table_definition_hash
-                                                   && metrics_data.table_definition_hash == current_table_definition_hash)
-                        && !metrics_data.has_bucket_number_neg_one;
-                    if (!is_partition_clustered)
-                        is_fully_clustered = false;
-                }
             }
             {
                 auto lock = table_meta_ptr->writeLock();
@@ -248,16 +236,7 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
                 /// reset load_parts_by_partition if parts number of current table is less than 5 million;
                 if (table_meta_ptr->load_parts_by_partition && total_parts_number < 5000000)
                     table_meta_ptr->load_parts_by_partition = false;
-
-                if (is_fully_clustered)
-                {
-                    if (table_meta_ptr->is_clustered || current_table_definition_hash != table_meta_ptr->table_definition_hash)
-                        is_fully_clustered = false;
-                }
             }
-            if (is_fully_clustered)
-                cnch_catalog->setTableClusterStatus(
-                    UUIDHelpers::toUUID(table_meta_ptr->table_uuid), is_fully_clustered, current_table_definition_hash);
         }
     }
 

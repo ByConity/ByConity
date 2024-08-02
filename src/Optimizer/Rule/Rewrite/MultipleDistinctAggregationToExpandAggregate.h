@@ -93,10 +93,13 @@ protected:
 private:
     static const std::set<String> distinct_func;
     static const std::set<String> distinct_func_with_if;
+    static const std::set<String> non_distinct_func_with_if;
+    static const std::set<String> un_supported_func;
     static const std::unordered_map<String, String> distinct_func_normal_func;
-    static bool hasNoDistinctWithFilterOrMask(const AggregatingStep & step);
+    static bool hasNoFilterOrMask(const AggregatingStep & step);
     static bool hasMultipleDistincts(const AggregatingStep & step);
     static bool hasMixedDistinctAndNonDistincts(const AggregatingStep & step);
+    static bool hasNoUnSupportedFunc(const AggregatingStep & step);
 
     /**
      * Distinct/Non-distinct aggregate function's arguments must unique.

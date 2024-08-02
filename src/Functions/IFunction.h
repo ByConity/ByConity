@@ -163,7 +163,16 @@ public:
 
     /// Do preparations and return executable.
     /// sample_columns should contain data types of arguments and values of constants, if relevant.
-    virtual ExecutableFunctionPtr prepare(const ColumnsWithTypeAndName & arguments) const = 0;
+    virtual ExecutableFunctionPtr prepare(const ColumnsWithTypeAndName & /*arguments*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "prepare is not implemented for function {}", getName());
+    }
+
+    /// Do preparations with extra parameters and return executable.
+    virtual ExecutableFunctionPtr prepareWithParameters(const ColumnsWithTypeAndName & /*arguments*/, const Array & /*parameters*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "prepare with extra parameters is not implemented for function {}", getName());
+    }
 
 #if USE_EMBEDDED_COMPILER
 

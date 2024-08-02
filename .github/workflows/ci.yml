@@ -2,9 +2,9 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "master" , "release/0.4.x" ]
+    branches: [ "master" , "release/1.0.x" ]
   pull_request:
-    branches: [ "master" , "release/0.4.x" ]
+    branches: [ "master" , "release/1.0.x" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

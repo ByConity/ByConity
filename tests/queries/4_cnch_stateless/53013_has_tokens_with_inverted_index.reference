@@ -1,0 +1,58 @@
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+true
+-----
+0	begin-first-second-thrid-end
+-----
+2	end-begin
+-----
+0	begin-first-second-thrid-end
+1	begin-second-first-thrid-end
+-----
+0	begin-first-second-thrid-end
+1	begin-second-first-thrid-end
+2	end-begin
+3	begin-second-thrid-end
+false
+without index
+0	begin-first-second-thrid-end
+4	abc你好ABC
+0	begin-first-second-thrid-end
+0	begin-first-second-thrid-end
+use index
+has value
+0	begin-first-second-thrid-end
+0	begin-first-second-thrid-end
+true
+-----
+0	begin-first-second-thrid-end
+-----
+2	end-begin
+-----
+0	begin-first-second-thrid-end
+1	begin-second-first-thrid-end
+-----
+0	begin-first-second-thrid-end
+1	begin-second-first-thrid-end
+2	end-begin
+3	begin-second-thrid-end
+false
+without index
+0	begin-first-second-thrid-end
+0	begin-first-second-thrid-end
+0	begin-first-second-thrid-end
+4	abc你好ABC
+use index
+has value
+0	begin-first-second-thrid-end
+0	begin-first-second-thrid-end
+0	begin-first-second-thrid-end
+4	abc你好ABC

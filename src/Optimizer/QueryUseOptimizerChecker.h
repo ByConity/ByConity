@@ -39,6 +39,7 @@ struct QueryUseOptimizerContext
     NameSet ctes;
     Tables external_tables;
     bool disallow_with_totals = false;
+    bool disallow_subquery = false;
 };
 
 class QueryUseOptimizerVisitor : public ASTVisitor<bool, QueryUseOptimizerContext>

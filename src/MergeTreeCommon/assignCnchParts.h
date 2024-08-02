@@ -48,7 +48,7 @@ FilePartsAssignMap assignCnchFileParts(const WorkerGroupHandle & worker_group, c
 HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts);
 
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context);
+std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & context, MergeTreeSettingsPtr settings);
 
 /**
  * splitCnchParts will split server parts into bucketed parts and leftover server parts.

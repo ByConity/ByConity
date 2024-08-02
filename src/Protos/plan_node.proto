@@ -207,6 +207,7 @@ message TableWriteStep {
 
   required ITransformingStep query_plan_base = 1;
   required Target target = 2;
+  optional bool insert_select_with_profiles = 3;
 }
 
 message TableFinishStep {

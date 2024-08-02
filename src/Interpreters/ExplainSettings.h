@@ -19,6 +19,7 @@ struct QueryMetadataSettings
     bool lineage = false;
     bool format_json = false;
     bool lineage_use_optimizer = false;
+    bool ignore_format = false;
 
     constexpr static char name[] = "METADATA";
 
@@ -27,7 +28,8 @@ struct QueryMetadataSettings
         {"json", json},
         {"lineage", lineage},
         {"lineage_use_optimizer", lineage_use_optimizer},
-        {"format_json", format_json}
+        {"format_json", format_json},
+        {"ignore_format", ignore_format}
     };
 };
 

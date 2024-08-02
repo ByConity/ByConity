@@ -117,6 +117,11 @@ public:
      * get limitations of the kv store
     */
     virtual uint32_t getMaxBatchSize() = 0;
+
+    /***
+     * get limitation single a KV size
+    */
+    virtual uint32_t getMaxKVSize() = 0;
 };
 
 }
