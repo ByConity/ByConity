@@ -52,6 +52,9 @@ function gen_revision_author {
 		VERSION_DATE=$(git show -s --format="%cd" --date=format:'%Y-%m-%d' $git_hash)
 		git_describe="${VERSION_BRANCH}-${VERSION_STRING}.${VERSION_REVISION}-${git_hash:0:8}-${BUILD_DATE}-${BUILD_SCM}"
 
+		# NOTE: To make CNCH compatible to community release version, pin it to this version.
+		VERSION_STRING=21.8.7.1
+
 		sed -i -e "s/SET(VERSION_REVISION [^) ]*/SET(VERSION_REVISION $VERSION_REVISION/g;" \
 			-e "s/SET(VERSION_DESCRIBE [^) ]*/SET(VERSION_DESCRIBE ${git_describe//\//\\\/}/g;" \
 			-e "s/SET(VERSION_GITHASH [^) ]*/SET(VERSION_GITHASH $git_hash/g;" \
