@@ -124,6 +124,7 @@ void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNdvBucketsExtend(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNothing(AggregateFunctionFactory & factory);
 void registerAggregateFunctionHllSketchEstimate(AggregateFunctionFactory &);
+void registerAggregateFunctionThetaSketchEstimate(AggregateFunctionFactory &);
 void registerAggregateFunctionAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionFastAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionFastAuc2(AggregateFunctionFactory &);
@@ -259,6 +260,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionNdvBucketsExtend(factory);
         registerAggregateFunctionNothing(factory);
         registerAggregateFunctionHllSketchEstimate(factory);
+        registerAggregateFunctionThetaSketchEstimate(factory);
         registerAggregateFunctionAuc(factory);
         registerAggregateFunctionFastAuc(factory);
         registerAggregateFunctionFastAuc2(factory);
