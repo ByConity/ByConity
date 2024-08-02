@@ -23,6 +23,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -68,8 +69,9 @@ static bool trySetVirtualWarehouseFromStorageID(const StorageID table_id, Contex
 
         LOG_DEBUG(
             &Poco::Logger::get("trySetVirtualWarehouse"),
-            "try get warehouse from {}, type is WRITE {}",
+            "set vw to {} from cnch table {}, type is WRITE {}",
             vw_name,
+            table_id.getNameForLogs(),
             VirtualWarehouseType::Write == vw_type);
         setVirtualWarehouseByName(vw_name, context);
         return true;
@@ -111,8 +113,9 @@ static bool trySetVirtualWarehouseFromStorageID(const StorageID table_id, Contex
 
         LOG_DEBUG(
             &Poco::Logger::get("trySetVirtualWarehouse"),
-            "try get warehouse from {}, type is WRITE {}",
+            "set vw to {} from nested cnch table {}, type is WRITE {}",
             nested_vw_name,
+            nested_table->getStorageID().getNameForLogs(),
             VirtualWarehouseType::Write == vw_type);
         setVirtualWarehouseByName(nested_vw_name, context);
         return true;
@@ -293,6 +296,12 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
 
             if (trySetVirtualWarehouseFromTable(database, refresh_mv->table, context))
                 return true;
+        }
+        else if (auto * create = ast->as<ASTCreateQuery>())
+        {
+            /// No need to set vw for create query.
+            /// For CTAS, the data filling work is implemented as ASTInsertQuery (insert select)
+            return false;
         }
 
     } while (false);

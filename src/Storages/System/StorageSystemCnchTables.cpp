@@ -174,7 +174,7 @@ Pipe StorageSystemCnchTables::read(
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
 
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
-        throw Exception("Table system.cnch_tables_history only support cnch_server", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Table system.cnch_tables only support cnch_server", ErrorCodes::LOGICAL_ERROR);
 
     bool require_key_columns = false;
     bool require_storage = false;

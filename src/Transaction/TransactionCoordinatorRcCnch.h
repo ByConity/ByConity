@@ -168,6 +168,12 @@ public:
         return active_txn_list;
     }
 
+    auto getActiveXIDsPerTable() const
+    {
+        std::lock_guard lock(min_ts_mutex);
+        return table_to_timestamps;
+    }
+
     void shutdown()
     {
         scan_active_txns_task->deactivate();
