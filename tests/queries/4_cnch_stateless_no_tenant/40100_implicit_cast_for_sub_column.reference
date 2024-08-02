@@ -1,0 +1,11 @@
+Projection
+│     Expressions: c:=`__string_params__\'ff\'_3`
+└─ Gather Exchange
+   └─ Union
+      │     OutputToInputs: __string_params__\'ff\'_3 = [__string_params__\'ff\'_2,__string_params__\'ff\'_1]
+      ├─ Projection
+      │  │     Expressions: __string_params__\'ff\'_2:=cast(`__string_params__\'ff\'`, \'Nullable(String)\')
+      │  └─ TableScan default.t40100_imp_cast_1
+      │           Outputs: [__string_params__\'ff\']
+      └─ TableScan default.t40100_imp_cast_2
+               Outputs: __string_params__\'ff\'_1:=__string_params__\'ff\'

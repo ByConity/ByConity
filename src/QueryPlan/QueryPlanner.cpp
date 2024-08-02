@@ -24,6 +24,7 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/WindowDescription.h>
@@ -2251,7 +2252,13 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     if (sub_plans.size() == 1)
         return sub_plans.front();
 
+    std::vector<NameToType> sub_plan_types;
+    for (const auto & sub_plan : sub_plans)
+        sub_plan_types.emplace_back(sub_plan.getRoot()->getOutputNamesToTypes());
+
     FieldSubColumnIDs sub_column_positions;
+    DataTypes sub_column_type_coercions;
+
     // compute common subcolumns for each field
     if (enable_subcolumn_optimization_through_union)
     {
@@ -2274,6 +2281,24 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
             for (const auto & sub_col_id : common_sub_col_ids)
                 sub_column_positions.emplace_back(field_id, sub_col_id);
         }
+
+        if (enable_implicit_type_conversion)
+        {
+            for (const auto & field_sub_col_id : sub_column_positions)
+            {
+                DataTypes sub_col_types;
+                for (size_t select_id = 0; select_id < selects.size(); ++select_id)
+                {
+                    auto sub_col_symbol = sub_plans[select_id]
+                                              .getFieldSymbolInfos()
+                                              .at(field_sub_col_id.first)
+                                              .sub_column_symbols.at(field_sub_col_id.second);
+                    sub_col_types.push_back(sub_plan_types[select_id].at(sub_col_symbol));
+                }
+                sub_column_type_coercions.emplace_back(
+                    getLeastSupertype(sub_col_types, context->getSettingsRef().allow_extended_type_conversion));
+            }
+        }
     }
 
     // 2. prepare sub plan & collect input info
@@ -2284,6 +2309,7 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     {
         auto & select = selects[select_id];
         auto & sub_plan = sub_plans[select_id];
+        const auto & name_to_type = sub_plan_types[select_id];
         // prune invisible columns, copy duplicated columns, sort columns by a specific order(primary columns + sub columns)
         sub_plan = projectFieldSymbols(sub_plan, sub_column_positions);
 
@@ -2291,20 +2317,37 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
         auto column_names1 = sub_plan.getRoot()->getOutputNames();
 #endif
         // coerce to common type
-        if (enable_implicit_type_conversion && analysis.hasRelationTypeCoercion(*select))
+        if (enable_implicit_type_conversion)
         {
-            auto field_symbol_infos = sub_plan.getFieldSymbolInfos();
-            const auto & target_types = analysis.getRelationTypeCoercion(*select);
-            assert(target_types.size() == field_symbol_infos.size());
             NameToType symbols_and_types;
+            auto field_symbol_infos = sub_plan.getFieldSymbolInfos();
 
-            for (size_t i = 0; i < target_types.size(); ++i)
+            if (analysis.hasRelationTypeCoercion(*select))
             {
-                auto target_type = target_types[i];
-                if (target_type)
-                    symbols_and_types.emplace(field_symbol_infos[i].getPrimarySymbol(), target_type);
+                const auto & target_types = analysis.getRelationTypeCoercion(*select);
+                assert(target_types.size() == field_symbol_infos.size());
+
+                for (size_t i = 0; i < target_types.size(); ++i)
+                {
+                    auto target_type = target_types[i];
+                    if (target_type)
+                        symbols_and_types.emplace(field_symbol_infos[i].getPrimarySymbol(), target_type);
+                }
             }
 
+            if (!sub_column_type_coercions.empty())
+            {
+                for (size_t pos = 0; pos < sub_column_type_coercions.size(); ++pos)
+                {
+                    const auto & field_sub_col_id = sub_column_positions.at(pos);
+                    const auto & sub_col_symbol
+                        = field_symbol_infos.at(field_sub_col_id.first).sub_column_symbols.at(field_sub_col_id.second);
+                    auto sub_col_type = name_to_type.at(sub_col_symbol);
+                    auto target_type = sub_column_type_coercions[pos];
+                    if (!target_type->equals(*sub_col_type))
+                        symbols_and_types.emplace(sub_col_symbol, target_type);
+                }
+            }
             auto coercion_result = coerceTypesForSymbols(sub_plan.getRoot(), symbols_and_types, true);
             mapFieldSymbolInfos(field_symbol_infos, coercion_result.mappings, false);
             sub_plan = RelationPlan{coercion_result.plan, field_symbol_infos};
