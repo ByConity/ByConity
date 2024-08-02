@@ -49,6 +49,7 @@
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <Common/CurrentThread.h>
 #include <Common/typeid_cast.h>
+#include "Processors/Transforms/TableFinishTransform.h"
 
 #include <sys/eventfd.h>
 
@@ -578,6 +579,8 @@ void QueryPipeline::setProgressCallback(const ProgressCallback & callback)
     {
         if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
             source->setProgressCallback(callback);
+        if (auto * finish_transform = dynamic_cast<TableFinishTransform *>(processor.get()))
+            finish_transform->setProgressCallback(callback);
     }
 }
 
@@ -603,6 +606,8 @@ void QueryPipeline::setProcessListElement(QueryStatus * elem)
     {
         if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
             source->setProcessListElement(elem);
+        if (auto * finish_transform = dynamic_cast<TableFinishTransform *>(processor.get()))
+            finish_transform->setProcessListElement(elem);
     }
 }
 
