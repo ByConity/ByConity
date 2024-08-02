@@ -130,7 +130,7 @@ private:
     const DiskStats keep_free_disk_stats;
 
     UInt64 reserved_bytes = 0;
-    UInt64 reserved_inodes = 0;
+    UInt64 reserved_inodes = 0; // TODO: placeholder and not implemented yet
     UInt64 reservation_count = 0;
 
     static std::mutex reservation_mutex;

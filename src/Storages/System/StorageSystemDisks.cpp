@@ -43,9 +43,11 @@ StorageSystemDisks::StorageSystemDisks(const StorageID & table_id_)
         {"free_space", std::make_shared<DataTypeUInt64>()},
         {"total_space", std::make_shared<DataTypeUInt64>()},
         {"keep_free_space", std::make_shared<DataTypeUInt64>()},
+        {"unreserved_space", std::make_shared<DataTypeUInt64>()},
         {"free_inodes", std::make_shared<DataTypeUInt64>()},
         {"total_inodes", std::make_shared<DataTypeUInt64>()},
         {"keep_free_inodes", std::make_shared<DataTypeUInt64>()},
+        {"unreserved_inode", std::make_shared<DataTypeUInt64>()},
         {"type", std::make_shared<DataTypeString>()},
     }));
     setInMemoryMetadata(storage_metadata);
@@ -68,9 +70,11 @@ Pipe StorageSystemDisks::read(
     MutableColumnPtr col_free_bytes = ColumnUInt64::create();
     MutableColumnPtr col_total_bytes = ColumnUInt64::create();
     MutableColumnPtr col_keep_bytes = ColumnUInt64::create();
+    MutableColumnPtr col_unreserved_bytes = ColumnUInt64::create();
     MutableColumnPtr col_free_inodes = ColumnUInt64::create();
     MutableColumnPtr col_total_inodes = ColumnUInt64::create();
     MutableColumnPtr col_keep_inodes = ColumnUInt64::create();
+    MutableColumnPtr col_unreserved_inodes = ColumnUInt64::create();
     MutableColumnPtr col_type = ColumnString::create();
 
     for (const auto & [disk_name, disk_ptr] : context->getDisksMap())
@@ -81,9 +85,11 @@ Pipe StorageSystemDisks::read(
         col_free_bytes->insert(disk_ptr->getAvailableSpace().bytes);
         col_total_bytes->insert(disk_ptr->getTotalSpace().bytes);
         col_keep_bytes->insert(disk_ptr->getKeepingFreeSpace().bytes);
+        col_unreserved_bytes->insert(disk_ptr->getUnreservedSpace().bytes);
         col_free_inodes->insert(disk_ptr->getAvailableSpace().inodes);
         col_total_inodes->insert(disk_ptr->getTotalSpace().inodes);
         col_keep_inodes->insert(disk_ptr->getKeepingFreeSpace().inodes);
+        col_unreserved_inodes->insert(disk_ptr->getUnreservedSpace().inodes);
         col_type->insert(DiskType::toString(disk_ptr->getType()));
     }
 
@@ -94,9 +100,11 @@ Pipe StorageSystemDisks::read(
     res_columns.emplace_back(std::move(col_free_bytes));
     res_columns.emplace_back(std::move(col_total_bytes));
     res_columns.emplace_back(std::move(col_keep_bytes));
+    res_columns.emplace_back(std::move(col_unreserved_bytes));
     res_columns.emplace_back(std::move(col_free_inodes));
     res_columns.emplace_back(std::move(col_total_inodes));
     res_columns.emplace_back(std::move(col_keep_inodes));
+    res_columns.emplace_back(std::move(col_unreserved_inodes));
     res_columns.emplace_back(std::move(col_type));
 
     UInt64 num_rows = res_columns.at(0)->size();

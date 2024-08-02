@@ -136,16 +136,33 @@ bool DiskLocal::tryReserve(UInt64 bytes)
     }
 
     auto available_space = getAvailableSpace();
-    auto unreserved_space = available_space - DiskStats{std::min(available_space.bytes, reserved_bytes), std::min(available_space.inodes, reserved_inodes)};
+    auto unreserved_space
+        = available_space - DiskStats{std::min(available_space.bytes, reserved_bytes), std::min(available_space.inodes, reserved_inodes)};
     if (!unreserved_space.isEmpty())
     {
-        LOG_DEBUG(log, "Reserving {} on disk {}, having unreserved {}({}).",
-            ReadableSize(bytes), backQuote(name), ReadableSize(unreserved_space.bytes), unreserved_space.inodes);
+        LOG_TRACE(
+            log,
+            "Reserving {} on disk {}(free {}({})), having unreserved {}({}).",
+            ReadableSize(bytes),
+            backQuote(name),
+            ReadableSize(available_space.bytes),
+            available_space.inodes,
+            ReadableSize(unreserved_space.bytes),
+            unreserved_space.inodes);
         ++reservation_count;
         reserved_bytes += bytes;
-        reserved_inodes += 1;
         return true;
     }
+
+    LOG_WARNING(
+        log,
+        "Can't reserving {} on disk {}(free {}({})), having unreserved {}({}).",
+        ReadableSize(bytes),
+        backQuote(name),
+        ReadableSize(available_space.bytes),
+        available_space.inodes,
+        ReadableSize(unreserved_space.bytes),
+        unreserved_space.inodes);
     return false;
 }
 
