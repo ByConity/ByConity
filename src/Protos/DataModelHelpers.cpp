@@ -35,6 +35,7 @@
 #include "common/logger_useful.h"
 #include <Common/Exception.h>
 #include <common/JSON.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <DataTypes/ObjectUtils.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
@@ -525,6 +526,15 @@ ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage
 }
 
 ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & storage, const MergeTreeDataPartsCNCHVector & parts)
+{
+    ServerDataPartsVector res;
+    res.reserve(parts.size());
+    for (const auto & part : parts)
+        res.push_back(createServerPartFromDataPart(storage, part));
+    return res;
+}
+
+ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts)
 {
     ServerDataPartsVector res;
     res.reserve(parts.size());

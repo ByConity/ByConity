@@ -349,6 +349,7 @@ ServerDataPartsVector
 createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
 
 ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & storage, const MergeTreeDataPartsCNCHVector & parts);
+ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts);
 
 IMergeTreeDataPartsVector createPartVectorFromServerParts(
     const MergeTreeMetaBase & storage,

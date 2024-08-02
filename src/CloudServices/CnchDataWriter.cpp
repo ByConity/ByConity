@@ -717,8 +717,8 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
 {
     const auto & settings = context->getSettingsRef();
 
-    if (!settings.parts_preload_level || !storage.getSettings()->parts_preload_level || !storage.getSettings()->enable_local_disk_cache
-        || !storage.getSettings()->enable_preload_parts)
+    if (!settings.parts_preload_level || (!storage.getSettings()->parts_preload_level && !storage.getSettings()->enable_preload_parts)
+        || !storage.getSettings()->enable_local_disk_cache)
         return;
 
     try
@@ -727,7 +727,7 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
         auto server_client = context->getCnchServerClientPool().get();
         MutableMergeTreeDataPartsCNCHVector preload_parts;
         std::copy_if(dumped_parts.begin(), dumped_parts.end(), std::back_inserter(preload_parts), [](const auto & part) {
-            return !part->deleted && !part->isPartial();
+            return !part->deleted;
         });
 
         if (!preload_parts.empty())

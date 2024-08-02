@@ -139,7 +139,7 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
             String data_path = data_part->getFullRelativePath() + "data";
             auto disk = data_part->volume->getDisk();
             auto source_buffer = std::make_unique<CompressedReadBufferFromFile>(
-                disk->readFile(data_path, merge_tree_reader_settings.read_settings), stream_file_pos.file_offset,
+                disk->readFile(data_path, merge_tree_reader_settings.read_settings), false, stream_file_pos.file_offset,
                 stream_file_pos.file_size, true);
 
             const auto & right_mark_pos = marks_loader.getMark(right_mark);
