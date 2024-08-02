@@ -454,7 +454,7 @@ void registerDiskLocal(DiskFactory & factory)
             config.getUInt64(config_prefix + ".keep_free_space_inodes", 0), config.getUInt64("global_keep_free_space_inodes", 0));
         double ratio = std::max(
             config.getDouble(config_prefix + ".keep_free_space_ratio", 0),
-            config.getDouble(config_prefix + "global_keep_free_space_ratio", 0.05));
+            config.getDouble("global_keep_free_space_ratio", 0.05));
 
         if (ratio < 0 || ratio > 1)
             throw Exception("'keep_free_space_ratio' have to be between 0 and 1", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
