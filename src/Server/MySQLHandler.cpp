@@ -175,7 +175,9 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
         server_capabilities |= CLIENT_SSL;
 
     static constexpr const char SHOW_CHARSET[] = "SELECT 'utf8mb4' AS charset, 'UTF-8 Unicode' AS Description, 'utf8mb4_0900_ai_ci' AS `Default collation`, 4 AS Maxlen";
-    static constexpr const char SHOW_COLLATION[] = "SELECT 'utf8mb4_0900_ai_ci' AS collation, 'utf8mb4' AS Charset, '255' AS Id, 'Yes' AS Default, 'Yes' AS Compiled, 0 AS Sortlen, 'NO PAD' AS Pad_attribute";
+    static constexpr const char SHOW_COLLATION[] = "SELECT 'utf8_general_ci' AS collation, 'utf8' AS charset, 33 AS id, 'Yes' AS default, 'Yes' AS Compiled, 1 AS Sortlen, 'NO PAD' AS Pad_attribute "
+                                                   "UNION SELECT 'binary' AS collation, 'binary' AS charset, 63 AS id, 'Yes' AS default, 'Yes' AS Compiled, 1 AS Sortlen, 'NO PAD' AS Pad_attribute "
+                                                   "UNION SELECT 'utf8mb4_0900_ai_ci' AS collation, 'utf8mb4' AS Charset, '255' AS Id, 'Yes' AS Default, 'Yes' AS Compiled, 0 AS Sortlen, 'NO PAD' AS Pad_attribute";
     static constexpr const char SHOW_ENGINES[] = "SELECT name AS Engine, 'Yes' AS Support, concat(name, ' engine') AS Comment, 'NO' AS Transcations,  'NO' AS XA, 'NO' AS Savepoints FROM system.table_engines";
 
     static constexpr const char SHOW_PRIVILEGES[] = "SELECT '' AS Privilege, '' AS Context, '' AS Comment";

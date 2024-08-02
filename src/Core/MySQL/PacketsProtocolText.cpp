@@ -158,68 +158,89 @@ void ColumnDefinition::writePayloadImpl(WriteBuffer & buffer) const
 ColumnDefinition getColumnDefinition(const String & column_name, const DataTypePtr & data_type)
 {
     ColumnType column_type;
+    /// max column length after serialize into text
+    /// however, this func is called before serializing data.
+    /// we therefore do not have the exact max length
+    /// if set to 0, power BI would treat the column as null and reports error
+    /// to avoid that, we return the theoretical max length based on data type
+    uint32_t column_length = 0;
     CharacterSet charset = CharacterSet::binary;
     int flags = 0;
     uint8_t decimals = 0;
+    if (!data_type->isNullable())
+        flags = ColumnDefinitionFlags::NOT_NULL_FLAG;
     DataTypePtr normalized_data_type = removeLowCardinalityAndNullable(data_type);
     TypeIndex type_index = normalized_data_type->getTypeId();
     switch (type_index)
     {
         case TypeIndex::UInt8:
             column_type = ColumnType::MYSQL_TYPE_TINY;
+            column_length = 3; // max val 255
             flags = ColumnDefinitionFlags::BINARY_FLAG | ColumnDefinitionFlags::UNSIGNED_FLAG;
             break;
         case TypeIndex::UInt16:
             column_type = ColumnType::MYSQL_TYPE_SHORT;
+            column_length = 5;
             flags = ColumnDefinitionFlags::BINARY_FLAG | ColumnDefinitionFlags::UNSIGNED_FLAG;
             break;
         case TypeIndex::UInt32:
             column_type = ColumnType::MYSQL_TYPE_LONG;
+            column_length = 10;
             flags = ColumnDefinitionFlags::BINARY_FLAG | ColumnDefinitionFlags::UNSIGNED_FLAG;
             break;
         case TypeIndex::UInt64:
             column_type = ColumnType::MYSQL_TYPE_LONGLONG;
+            column_length = 20;
             flags = ColumnDefinitionFlags::BINARY_FLAG | ColumnDefinitionFlags::UNSIGNED_FLAG;
             break;
         case TypeIndex::Int8:
             column_type = ColumnType::MYSQL_TYPE_TINY;
+            column_length = 4; // min val -127
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             break;
         case TypeIndex::Int16:
             column_type = ColumnType::MYSQL_TYPE_SHORT;
+            column_length = 6;
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             break;
         case TypeIndex::Int32:
             column_type = ColumnType::MYSQL_TYPE_LONG;
+            column_length = 11;
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             break;
         case TypeIndex::Int64:
             column_type = ColumnType::MYSQL_TYPE_LONGLONG;
+            column_length = 21;
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             break;
         case TypeIndex::Float32:
             column_type = ColumnType::MYSQL_TYPE_FLOAT;
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             decimals = 31;
+            column_length = 14;
             break;
         case TypeIndex::Float64:
             column_type = ColumnType::MYSQL_TYPE_DOUBLE;
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             decimals = 31;
+            column_length = 24;
             break;
         case TypeIndex::Date:
         case TypeIndex::Date32:
             column_type = ColumnType::MYSQL_TYPE_DATE;
+            column_length = 10; // e.g., 2020-12-12
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             break;
         case TypeIndex::DateTime:
         case TypeIndex::DateTime64:
             column_type = ColumnType::MYSQL_TYPE_DATETIME;
+            column_length = 26; // e.g., 2020-12-12 11:11:11.123456
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             break;
         case TypeIndex::Decimal32:
         case TypeIndex::Decimal64:
             column_type = ColumnType::MYSQL_TYPE_DECIMAL;
+            column_length = 20; // 18 (precision) + 1 (sign) + 1 (point)
             flags = ColumnDefinitionFlags::BINARY_FLAG;
             break;
         case TypeIndex::Decimal128: {
@@ -237,14 +258,16 @@ ColumnDefinition getColumnDefinition(const String & column_name, const DataTypeP
                 column_type = ColumnType::MYSQL_TYPE_DECIMAL;
                 flags = ColumnDefinitionFlags::BINARY_FLAG;
             }
+            column_length = 67; // 65 + 1 (sign) + 1 (point)
             break;
         }
         default:
-            column_type = ColumnType::MYSQL_TYPE_STRING;
+            column_type = ColumnType::MYSQL_TYPE_VAR_STRING;
+            column_length = 65535; // max mysql var string len
             charset = CharacterSet::utf8_general_ci;
             break;
     }
-    return ColumnDefinition(column_name, charset, 0, column_type, flags, decimals);
+    return ColumnDefinition(column_name, charset, column_length, column_type, flags, decimals);
 }
 
 }

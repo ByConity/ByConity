@@ -60,10 +60,10 @@ static constexpr std::string_view schemata = R"(
 static constexpr std::string_view tables = R"(
     ATTACH VIEW tables
     (
-        `table_catalog` Nullable(String),
-        `table_schema` Nullable(String),
-        `table_name` Nullable(String),
-        `table_type` Nullable(String),
+        `table_catalog` String,
+        `table_schema` String,
+        `table_name` String,
+        `table_type` String,
         `engine` Nullable(String),
         `version` Nullable(String),
         `row_format` Nullable(String),
@@ -79,12 +79,12 @@ static constexpr std::string_view tables = R"(
         `check_time` Nullable(DateTime),
         `checksum` Nullable(UInt64),
         `table_collation` Nullable(String),
-        `table_comment` Nullable(String),
+        `table_comment` String,
         `create_options` Nullable(String),
-        `TABLE_CATALOG` Nullable(String),
-        `TABLE_SCHEMA` Nullable(String),
-        `TABLE_NAME` Nullable(String),
-        `TABLE_TYPE` Nullable(String),
+        `TABLE_CATALOG` String,
+        `TABLE_SCHEMA` String,
+        `TABLE_NAME` String,
+        `TABLE_TYPE` String,
         `ENGINE` Nullable(String),
         `VERSION` Nullable(String),
         `ROW_FORMAT` Nullable(String),
@@ -100,11 +100,11 @@ static constexpr std::string_view tables = R"(
         `CHECK_TIME` Nullable(DateTime),
         `CHECKSUM` Nullable(UInt64),
         `TABLE_COLLATION` Nullable(String),
-        `TABLE_COMMENT` Nullable(String),
+        `TABLE_COMMENT` String,
         `CREATE_OPTIONS` Nullable(String)
     ) AS
     SELECT
-        T.database             AS table_catalog,
+        'def'             AS table_catalog,
         T.database             AS table_schema,
         T.name                 AS table_name,
         multiIf(any(T.is_temporary), 'LOCAL TEMPORARY',
@@ -153,7 +153,7 @@ static constexpr std::string_view tables = R"(
     FROM system.tables as T
     LEFT OUTER JOIN (select * from system.cnch_parts where visible = 1) as P
         on T.database = P.database and T.name = P.table
-    GROUP BY table_catalog, table_name
+    GROUP BY table_schema, table_name
     SETTINGS enable_multiple_tables_for_cnch_parts=1, join_use_nulls=1;
 )";
 
@@ -190,7 +190,7 @@ static constexpr std::string_view views = R"(
         `IS_TRIGGER_INSERTABLE_INTO` Enum8('NO' = 0, 'YES' = 1)
     ) AS
     SELECT
-        database AS table_catalog,
+        'def' AS table_catalog,
         database AS table_schema,
         name AS table_name,
         as_select AS view_definition,
@@ -281,7 +281,7 @@ static constexpr std::string_view columns = R"(
         `PRIVILEGES` Nullable(String)
     ) AS
     SELECT
-        database AS table_catalog,
+        'def' AS table_catalog,
         database AS table_schema,
         table AS table_name,
         name AS column_name,
@@ -488,7 +488,7 @@ static constexpr std::string_view statistics = R"(
         `EXPRESSION` Nullable(String)
     ) AS
     SELECT
-        ''            AS table_catalog,
+        'def'            AS table_catalog,
         database      AS table_schema,
         name          AS table_name,
         1             AS non_unique,
@@ -537,7 +537,7 @@ static constexpr std::string_view statistics = R"(
         )
     UNION ALL
     SELECT
-        ''            AS table_catalog,
+        'def'            AS table_catalog,
         database      AS table_schema,
         table         AS table_name,
         1             AS non_unique,
@@ -963,7 +963,7 @@ static constexpr std::string_view partitions = R"(
         `TABLESPACE_NAME` Nullable(String)
     ) AS
     SELECT
-        system.cnch_parts.database AS table_catalog,
+        'def' AS table_catalog,
         system.cnch_parts.database AS table_schema,
         system.cnch_parts.table AS table_name,
         partition AS partition_name,
