@@ -145,9 +145,10 @@ void OutfileTarget::getRawBuffer()
     else if (scheme == "tos")
     {
         if (out_uri.getQueryParameters().empty())
-        {
             throw Exception("Missing access key, please check configuration.", ErrorCodes::BAD_ARGUMENTS);
-        }
+        if (compression_method != CompressionMethod::None)
+            throw Exception("Compression is not supported for tos outfile", ErrorCodes::BAD_ARGUMENTS);
+
         out_buf_raw = std::make_unique<WriteBufferFromOwnString>();
     }
 #if USE_HDFS
@@ -291,7 +292,10 @@ void OutfileTarget::flushFile()
             ConnectionTimeouts timeouts(settings.http_connection_timeout, settings.http_send_timeout, settings.http_receive_timeout);
 
             HTTPSender http_sender(tos_uri, Poco::Net::HTTPRequest::HTTP_PUT, timeouts, http_headers);
-            http_sender.send((*out_tos_buf).str());
+            String res = (*out_tos_buf).str();
+            if (res.empty())
+                res = "\n";
+            http_sender.send(res);
             http_sender.handleResponse();
         }
         catch (...)
