@@ -27,6 +27,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/ThreadPool.h>
 #include <common/getFQDNOrHostName.h>
+#include "Transaction/TxnTimestamp.h"
 #include <Interpreters/Context.h>
 // #include <MergeTreeCommon/CnchWorkerClientPools.h>
 
@@ -272,21 +273,16 @@ void TransactionCoordinatorRcCnch::eraseActiveTimestamp(const TransactionCnchPtr
 std::optional<TxnTimestamp> TransactionCoordinatorRcCnch::getMinActiveTimestamp(const StorageID & storage_id)
 {
     const UInt64 expired_interval = getContext()->getRootConfig().cnch_transaction_ts_expire_time; // default 2h
-    auto now = UInt64(time(nullptr)) * 1000;
 
     std::lock_guard<std::mutex> lock(min_ts_mutex);
     auto timestamps_it = table_to_timestamps.find(storage_id.uuid);
     if (timestamps_it == table_to_timestamps.end() || timestamps_it->second.empty())
         return std::nullopt;
 
-    if (now - last_time_clean_timestamps < expired_interval)
-        return *(timestamps_it->second.begin());
-
     try
     {
         /// Try to clean all outdated Txns.
-        last_time_clean_timestamps = now;
-        TxnTimestamp cur_ts = getContext()->getTimestamp();
+        TxnTimestamp cur_ts = TxnTimestamp::fromUnixTimestamp(static_cast<UInt64>(time(nullptr)));
         for (auto it = timestamps_it->second.begin(); it != timestamps_it->second.end();)
         {
             if ((cur_ts.toMillisecond() - it->toMillisecond()) > expired_interval)
