@@ -2071,6 +2071,7 @@ enum PreloadLevelSettings : UInt64
     \
     /** End of gis related settings */ \
     \
+    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

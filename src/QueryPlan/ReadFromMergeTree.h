@@ -42,6 +42,15 @@ using MergeTreeDataSelectAnalysisResultPtr = std::shared_ptr<MergeTreeDataSelect
 namespace IntermediateResult { struct CacheHolder; }
 using CacheHolderPtr = std::shared_ptr<IntermediateResult::CacheHolder>;
 
+/// Contains delayed skip index information which should execute
+/// on pipeline execution stage
+struct DelayedSkipIndex
+{
+    std::unordered_map<String, std::pair<MergeTreeIndexPtr, MergeTreeIndexConditionPtr>> indices;
+};
+using MarkRangesFilterCallback = std::function<MarkRanges(const MergeTreeData::DataPartPtr, const MarkRanges&)>;
+
+
 /// This step is created to read from MergeTree* table.
 /// For now, it takes a list of parts and creates source from it.
 class ReadFromMergeTree final : public ISourceStep
@@ -96,6 +105,7 @@ public:
         IndexStats index_stats;
         Names column_names_to_read;
         ReadFromMergeTree::ReadType read_type = ReadFromMergeTree::ReadType::Default;
+        std::shared_ptr<DelayedSkipIndex> delayed_indices = std::make_shared<DelayedSkipIndex>();
         UInt64 total_parts = 0;
         UInt64 parts_before_pk = 0;
         UInt64 selected_parts = 0;
@@ -196,12 +206,12 @@ private:
     UInt64 selected_rows = 0;
     UInt64 selected_marks = 0;
 
-    Pipe read(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache);
+    Pipe read(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache, const std::shared_ptr<DelayedSkipIndex> & delayed_index);
     Pipe readFromPool(RangesInDataParts parts_with_ranges, Names required_columns, size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache);
-    Pipe readInOrder(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, bool use_uncompressed_cache);
+    Pipe readInOrder(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, bool use_uncompressed_cache, const std::shared_ptr<DelayedSkipIndex> & delayed_index);
 
     template<typename TSource>
-    ProcessorPtr createSource(const RangesInDataPart & part, const Names & required_columns,const MergeTreeStreamSettings & stream_settings);
+    ProcessorPtr createSource(const RangesInDataPart & part, const Names & required_columns,const MergeTreeStreamSettings & stream_settings, const MarkRangesFilterCallback & range_filter_callback);
 
     Pipe spreadMarkRangesAmongStreams(
         RangesInDataParts && parts_with_ranges,
@@ -214,14 +224,16 @@ private:
         ActionsDAGPtr & out_projection,
         const InputOrderInfoPtr & input_order_info,
         size_t num_streams,
-        bool need_preliminary_merge);
+        bool need_preliminary_merge,
+        const std::shared_ptr<DelayedSkipIndex> & delayed_index);
 
     Pipe spreadMarkRangesAmongStreamsWithPartitionOrder(
         RangesInDataParts && parts_with_ranges,
         const Names & column_names,
         const ActionsDAGPtr & sorting_key_prefix_expr,
         ActionsDAGPtr & out_projection,
-        const InputOrderInfoPtr & input_order_info);
+        const InputOrderInfoPtr & input_order_info,
+        const std::shared_ptr<DelayedSkipIndex> & delayed_index);
 
     Pipe spreadMarkRangesAmongStreamsFinal(
         RangesInDataParts && parts,
