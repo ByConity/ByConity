@@ -133,6 +133,7 @@ public:
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
         , enable_subcolumn_optimization_through_union(context->getSettingsRef().enable_subcolumn_optimization_through_union)
+        , enable_implicit_arg_type_convert(context->getSettingsRef().enable_implicit_arg_type_convert)
     {
     }
 
@@ -145,6 +146,7 @@ private:
     const bool enable_implicit_type_conversion;
     const bool allow_extended_conversion;
     const bool enable_subcolumn_optimization_through_union;
+    const bool enable_implicit_arg_type_convert; // MySQL implicit cast rules
 
     Poco::Logger * logger = &Poco::Logger::get("QueryAnalyzerVisitor");
 
@@ -204,6 +206,7 @@ private:
     void rewriteSelectInANSIMode(ASTSelectQuery & select_query, const Aliases & aliases, const NameSet & source_columns_set);
     void normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr);
     void normalizeAliases(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
+    DataTypePtr getCommonType(const DataTypes & types);
 };
 
 static NameSet collectNames(ScopePtr scope);
@@ -448,10 +451,7 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
 
             DataTypePtr output_type;
             // promote output type to super type if necessary
-            if (context->getSettingsRef().enable_implicit_arg_type_convert)
-                output_type = getLeastSupertype<LeastSupertypeOnError::String>(elem_types, true);
-            else
-                output_type = getLeastSupertype(elem_types, allow_extended_conversion);
+            output_type = getCommonType(elem_types);
             output_desc.emplace_back(
                 first_input_desc[column_idx].name,
                 output_type,
@@ -919,7 +919,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
             {
                 try
                 {
-                    output_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_conversion);
+                    output_type = getCommonType(DataTypes{left_type, right_type});
                 }
                 catch (DB::Exception & ex)
                 {
@@ -1014,7 +1014,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
             {
                 try
                 {
-                    output_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_conversion);
+                    output_type = getCommonType(DataTypes{left_type, right_type});
                 }
                 catch (DB::Exception & ex)
                 {
@@ -1233,7 +1233,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
                             {
                                 try
                                 {
-                                    super_type = getLeastSupertype(DataTypes{left_type, right_type}, allow_extended_conversion);
+                                    super_type = getCommonType(DataTypes{left_type, right_type});
                                 }
                                 catch (DB::Exception & ex)
                                 {
@@ -2179,6 +2179,14 @@ void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, const Aliases & alias
         nullptr, /* metadata_snapshot */
         false /* rewrite_map_col */);
     QueryNormalizer(normalizer_data).visit(expr);
+}
+
+DataTypePtr QueryAnalyzerVisitor::getCommonType(const DataTypes & types)
+{
+    if (enable_implicit_arg_type_convert)
+        return getLeastSupertype<LeastSupertypeOnError::String>(types, true);
+    else
+        return getLeastSupertype(types, allow_extended_conversion);
 }
 
 NameSet collectNames(ScopePtr scope)
