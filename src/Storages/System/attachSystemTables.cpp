@@ -125,6 +125,7 @@
 #include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
 #include <Storages/System/StorageSystemCnchSnapshots.h>
+#include <Storages/System/StorageSystemCnchTransactions.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemCnchParts.h>
 #include <Storages/System/StorageSystemCnchPartsColumns.h>

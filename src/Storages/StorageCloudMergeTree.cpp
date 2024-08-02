@@ -755,36 +755,4 @@ std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() c
     return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
 }
 
-void StorageCloudMergeTree::prepareDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)
-{
-    Stopwatch watch;
-
-    std::lock_guard<std::mutex> lock(server_data_mutex);
-
-    if (!has_server_part_to_load)
-        return;
-
-    auto partition_list = getAllPartitions();
-
-    if (partition_list.empty())
-        return;
-
-    Strings required_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names, local_context);
-
-    SCOPE_EXIT({
-        ProfileEvents::increment(ProfileEvents::PrunedPartitions, required_partitions.size());
-        ProfileEvents::increment(ProfileEvents::PreparePartsForReadMilliseconds, watch.elapsedMilliseconds());
-    });
-
-    size_t loaded_parts_count = loadFromServerPartsInPartition(required_partitions);
-
-    /// data part only need to be loaded once
-    has_server_part_to_load = false;
-
-    LOG_TRACE(log, "Loaded {} data parts in {} partitions elapsed {}ms.",
-        loaded_parts_count,
-        required_partitions.size(),
-        watch.elapsedMilliseconds());
-}
-
 }
