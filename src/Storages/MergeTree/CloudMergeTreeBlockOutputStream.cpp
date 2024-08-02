@@ -568,7 +568,7 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
     res.filter.assign(block_size, UInt8(1));
 
     ColumnWithTypeAndName delete_flag_column;
-    if (version_column && block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
+    if (block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
         delete_flag_column = block.getByName(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME);
 
     auto is_delete_row = [&](int rowid) { return delete_flag_column.column && delete_flag_column.column->getBool(rowid); };
