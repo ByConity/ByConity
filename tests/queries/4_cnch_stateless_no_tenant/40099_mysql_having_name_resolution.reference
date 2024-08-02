@@ -96,3 +96,10 @@ Projection Est. ? rows
                               Outputs: [b], a_1:=a
 -- "b" is ambiguous as there are 2 items with name "b" in GROUP BY
 SELECT t40099_x.b, t40099_y.b, sum(c) as b FROM t40099_x JOIN t40099_y ON t40099_x.a = t40099_y.a GROUP BY t40099_x.b, t40099_y.b HAVING b = 10; -- { serverError 179 }
+-- prefer source column under aggregation
+SELECT sum(b) as b FROM t40099_x HAVING b = 10;
+10
+SELECT sum(b) as b FROM t40099_x HAVING sum(b) = 10;
+10
+SELECT sum(b) as b FROM t40099_x HAVING floor(b) = 10;
+10
