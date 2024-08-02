@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <utility>
 #include <QueryPlan/FilterStep.h>
 
 #include <IO/Operators.h>
@@ -30,6 +31,7 @@
 #include <Common/JSONBuilder.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <Processors/Port.h>
+#include <Parsers/ASTFunction.h>
 
 namespace DB
 {
@@ -210,4 +212,66 @@ void FilterStep::prepare(const PreparedStatementContext & prepared_context)
 {
     prepared_context.prepare(filter);
 }
+
+std::pair<ConstASTPtr, ConstASTPtr> FilterStep::splitLargeInValueList(const ConstASTPtr & filter, UInt64 limit)
+{
+    std::vector<ConstASTPtr> removed_large_in_value_list;
+    std::vector<ConstASTPtr> large_in_value_list;
+    for (auto & predicate : PredicateUtils::extractConjuncts(filter))
+    {
+        LOG_DEBUG(&Poco::Logger::get("FilterStep"), " predicate : {}", predicate->formatForErrorMessage());
+
+        if (predicate->as<ASTFunction>() &&
+            (predicate->as<const ASTFunction &>().name == "in" ||
+             predicate->as<const ASTFunction &>().name == "globalIn" ||
+             predicate->as<const ASTFunction &>().name == "notIn" ||
+             predicate->as<const ASTFunction &>().name == "globalNotIn"))
+        {
+            const auto & function = predicate->as<const ASTFunction &>();
+            if (function.arguments->getChildren()[1]->as<ASTFunction>())
+            {
+                ASTFunction & tuple = function.arguments->getChildren()[1]->as<ASTFunction &>();
+                size_t size = tuple.arguments->getChildren().size();
+                if (size > limit)
+                {
+                    large_in_value_list.emplace_back(predicate);
+                    continue;
+                }
+            }
+        }
+        removed_large_in_value_list.emplace_back(predicate);
+    }
+
+    return std::make_pair(
+        PredicateUtils::combineConjuncts(removed_large_in_value_list), PredicateUtils::combineConjuncts(large_in_value_list));
+}
+
+std::vector<ConstASTPtr> FilterStep::removeLargeInValueList(const std::vector<ConstASTPtr> & filters, UInt64 limit)
+{
+    std::vector<ConstASTPtr> removed_large_in_value_list;
+    for (const auto & predicate : filters)
+    {
+        if (predicate->as<ASTFunction>() &&
+           (predicate->as<const ASTFunction &>().name == "in" ||
+            predicate->as<const ASTFunction &>().name == "globalIn" ||
+            predicate->as<const ASTFunction &>().name == "notIn" ||
+            predicate->as<const ASTFunction &>().name == "globalNotIn")
+        )
+        {
+            const auto & function = predicate->as<const ASTFunction &>();
+            if (function.arguments->getChildren()[1]->as<ASTFunction>())
+            {
+                ASTFunction & tuple = function.arguments->getChildren()[1]->as<ASTFunction &>();
+                size_t size = tuple.arguments->getChildren().size();
+                if (size > limit)
+                {
+                    continue;
+                }
+            }
+        }
+        removed_large_in_value_list.emplace_back(predicate);
+    }
+    return removed_large_in_value_list;
+}
+
 }
