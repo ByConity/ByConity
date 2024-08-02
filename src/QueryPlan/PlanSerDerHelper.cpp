@@ -367,23 +367,23 @@ bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b)
 }
 
 template <typename StepType, typename ProtoType>
-UInt64 hashPlanStepImpl(const IQueryPlanStep & raw_step)
+UInt64 hashPlanStepImpl(const IQueryPlanStep & raw_step, bool ignore_output_stream)
 {
     const auto & step = reinterpret_cast<const StepType &>(raw_step);
     ProtoType proto;
-    step.toProto(proto, true);
+    step.toProto(proto, ignore_output_stream);
 
     auto res = sipHash64Protobuf(proto);
     return res;
 }
 
-UInt64 hashPlanStep(const IQueryPlanStep & step)
+UInt64 hashPlanStep(const IQueryPlanStep & step, bool ignore_output_stream)
 {
     switch (step.getType())
     {
 #define CASE_DEF(TYPE, VAR_NAME) \
     case IQueryPlanStep::Type::TYPE: { \
-        return hashPlanStepImpl<TYPE##Step, Protos::TYPE##Step>(step); \
+        return hashPlanStepImpl<TYPE##Step, Protos::TYPE##Step>(step, ignore_output_stream); \
     }
 
         APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(CASE_DEF)

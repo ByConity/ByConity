@@ -282,9 +282,9 @@ String IQueryPlanStep::toString(Type type)
     return "Unknown";
 }
 
-size_t IQueryPlanStep::hash() const
+size_t IQueryPlanStep::hash(bool ignore_output_stream) const
 {
-    return hashPlanStep(*this);
+    return hashPlanStep(*this, ignore_output_stream);
 }
 
 }

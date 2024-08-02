@@ -57,12 +57,12 @@ public:
                 auto cte_id = cte.first;
 
                 auto forward_order = plan_signature_output_orders.at(node_ptr);
-                auto reserve_order = plan_signature_output_orders.at(cte.second);
+                auto reverse_order = plan_signature_output_orders.at(cte.second);
 
                 std::unordered_map<String, String> output_columns;
                 for (const auto & output : node.getOutputNames())
                 {
-                    auto input_column = reserve_order.getByPosition(forward_order.getPositionByName(output)).name;
+                    auto input_column = reverse_order.getByPosition(forward_order.getPositionByName(output)).name;
                     output_columns.emplace(output, input_column);
                 }
                 return PlanNodeBase::createPlanNode(

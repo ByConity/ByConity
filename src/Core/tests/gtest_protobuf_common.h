@@ -202,8 +202,8 @@ public:
     {
         auto is_equal = isPlanStepEqual(*a, *b);
         ASSERT_TRUE(is_equal);
-        auto ha = hashPlanStep(*a);
-        auto hb = hashPlanStep(*b);
+        auto ha = hashPlanStep(*a, true);
+        auto hb = hashPlanStep(*b, true);
         ASSERT_EQ(ha, hb);
     }
 
