@@ -30,6 +30,7 @@
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/MapHelpers.h>
+#include <Functions/IFunction.h>
 #include <common/logger_useful.h>
 #include <Common/JSONBuilder.h>
 #include <Common/escapeForFileName.h>
@@ -161,6 +162,98 @@ static Array extractMapColumnKeys(const MergeTreeMetaBase & data, const MergeTre
     }
 
     return res;
+}
+
+static bool isSamePartition(const RangesInDataPart & lhs, const RangesInDataPart & rhs)
+{
+    return lhs.data_part->partition.value == rhs.data_part->partition.value;
+}
+
+static bool canReadInPartitionOrder(
+    const StorageInMemoryMetadata & metadata,
+    const InputOrderInfo & input_order_info,
+    const ASTSelectQuery & select)
+{
+    if (!metadata.isPartitionKeyDefined() || !metadata.isSortingKeyDefined())
+        return false;
+
+    const auto & partition_key = metadata.getPartitionKey();
+    Names minmax_columns = partition_key.expression->getRequiredColumns();
+    /// for simplicity, only support table with one partition key
+    if (partition_key.column_names.size() != 1 || minmax_columns.size() != 1)
+        return false;
+
+    String partition_column = minmax_columns[0];
+    Names sorting_columns = metadata.getSortingKeyColumns();
+    chassert(sorting_columns.size() >= input_order_info.order_key_prefix_descr.size());
+    /// optimizer guarantees that order_key_prefix is a prefix of sorting columns
+    sorting_columns.resize(input_order_info.order_key_prefix_descr.size());
+
+    /// sorting columns should contain partition column
+    auto partition_column_it = std::find(sorting_columns.begin(), sorting_columns.end(), partition_column);
+    if (partition_column_it == sorting_columns.end())
+        return false;
+
+    /// Allow table "partition by c order by (a, b, c)" for query "where a={} and b={} order by c",
+    /// where all sorting columns before partition column match single value,
+    /// note that in this case, input order is (a, b, c)
+    if (partition_column_it != sorting_columns.begin())
+    {
+        NameSet single_value_columns;
+        auto collect = [&](const ASTPtr & filter)
+        {
+            if (!filter)
+                return;
+
+            for (const auto & conjunct : PredicateUtils::extractConjuncts(filter->clone()))
+            {
+                const auto * func = conjunct->as<ASTFunction>();
+                if (!func || func->name != "equals")
+                    continue;
+                const auto * column = func->arguments->children[0]->as<ASTIdentifier>();
+                const auto * literal = func->arguments->children[1]->as<ASTLiteral>();
+                if (column && literal)
+                    single_value_columns.insert(column->name());
+            }
+        };
+        collect(select.where());
+        collect(select.prewhere());
+        auto match_single_value = [&](const String & name) { return single_value_columns.count(name); };
+        if (!std::all_of(sorting_columns.begin(), partition_column_it, match_single_value))
+            return false;
+    }
+
+    /// fast path for: order by sort_column partition by sort_column
+    if (partition_key.column_names.front() == *partition_column_it)
+        return true;
+
+    /// Allow "partition by func(x) order by (x)" where func is monotonic nondecreasing
+    IFunction::Monotonicity monotonicity;
+    for (const auto & action : partition_key.expression->getActions())
+    {
+        if (action.node->type != ActionsDAG::ActionType::FUNCTION)
+        {
+            continue;
+        }
+
+        /// Allow only one simple monotonic functions with one argument
+        if (monotonicity.is_monotonic)
+        {
+            monotonicity.is_monotonic = false;
+            break;
+        }
+
+        if (action.node->children.size() != 1 || action.node->children.at(0)->result_name != *partition_column_it)
+            break;
+
+        const auto & func = *action.node->function_base;
+        if (!func.hasInformationAboutMonotonicity())
+            break;
+
+        monotonicity = func.getMonotonicityForRange(*func.getArgumentTypes().at(0), {}, {});
+    }
+
+    return monotonicity.is_monotonic && monotonicity.is_positive;
 }
 
 ReadFromMergeTree::ReadFromMergeTree(
@@ -495,12 +588,75 @@ static ActionsDAGPtr createProjection(const Block & header)
     return projection;
 }
 
-Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
+namespace
+{
+template <bool ascend>
+struct PartitionValueComparator
+{
+    bool operator()(const RangesInDataPart & lhs, const RangesInDataPart & rhs) const
+    {
+        const auto & l = lhs.data_part->partition.value[0];
+        const auto & r = rhs.data_part->partition.value[0];
+        if constexpr (ascend)
+            return l < r;
+        else
+            return l > r;
+    }
+};
+} // anonymouse namespace
+
+Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
     RangesInDataParts && parts_with_ranges,
     const Names & column_names,
     const ActionsDAGPtr & sorting_key_prefix_expr,
     ActionsDAGPtr & out_projection,
     const InputOrderInfoPtr & input_order_info)
+{
+    chassert(!parts_with_ranges.empty());
+
+    /// sort parts by partition value
+    if (input_order_info->direction > 0)
+        std::sort(parts_with_ranges.begin(), parts_with_ranges.end(), PartitionValueComparator<true>{});
+    else
+        std::sort(parts_with_ranges.begin(), parts_with_ranges.end(), PartitionValueComparator<false>{});
+
+    Pipes pipes;
+    auto prev = parts_with_ranges.begin();
+    auto end = parts_with_ranges.end();
+
+    while (prev != end)
+    {
+        auto curr = std::next(prev);
+        while (curr != end && isSamePartition(*prev, *curr))
+            ++curr;
+
+        auto pipe = spreadMarkRangesAmongStreamsWithOrder(
+            {std::make_move_iterator(prev), std::make_move_iterator(curr)},
+            column_names,
+            sorting_key_prefix_expr,
+            out_projection,
+            input_order_info,
+            // for the result pipe to output ordered tuples for this partition
+            1 /*num_streams*/, true /*need_preliminary_merge*/);
+
+        pipes.emplace_back(std::move(pipe));
+        prev = curr;
+    }
+
+    auto res = Pipe::unitePipes(std::move(pipes));
+    if (res.numOutputPorts() > 1)
+        res.addTransform(std::make_shared<ConcatProcessor>(res.getHeader(), res.numOutputPorts()));
+    return res;
+}
+
+Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
+    RangesInDataParts && parts_with_ranges,
+    const Names & column_names,
+    const ActionsDAGPtr & sorting_key_prefix_expr,
+    ActionsDAGPtr & out_projection,
+    const InputOrderInfoPtr & input_order_info,
+    size_t num_streams,
+    bool need_preliminary_merge)
 {
     const auto & settings = context->getSettingsRef();
     const auto data_settings = data.getSettings();
@@ -558,12 +714,11 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
         return new_ranges;
     };
 
-    const size_t min_marks_per_stream = (info.sum_marks - 1) / requested_num_streams + 1;
-    bool need_preliminary_merge = (parts_with_ranges.size() > settings.read_in_order_two_level_merge_threshold);
+    const size_t min_marks_per_stream = (info.sum_marks - 1) / num_streams + 1;
 
     Pipes pipes;
 
-    for (size_t i = 0; i < requested_num_streams && !parts_with_ranges.empty(); ++i)
+    for (size_t i = 0; i < num_streams && !parts_with_ranges.empty(); ++i)
     {
         size_t need_marks = min_marks_per_stream;
         RangesInDataParts new_parts;
@@ -630,10 +785,10 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
                        : ReadFromMergeTree::ReadType::InReverseOrder;
 
         pipes.emplace_back(read(std::move(new_parts), column_names, read_type,
-                           requested_num_streams, info.min_marks_for_concurrent_read, info.use_uncompressed_cache));
+                           num_streams, info.min_marks_for_concurrent_read, info.use_uncompressed_cache));
     }
 
-    if (need_preliminary_merge)
+    if (need_preliminary_merge && !pipes.empty())
     {
         SortDescription sort_description;
         for (size_t j = 0; j < input_order_info->order_key_prefix_descr.size(); ++j)
@@ -644,9 +799,6 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
 
         for (auto & pipe : pipes)
         {
-            /// Drop temporary columns, added by 'sorting_key_prefix_expr'
-            out_projection = createProjection(pipe.getHeader());
-
             pipe.addSimpleTransform([sorting_key_expr](const Block & header)
             {
                 return std::make_shared<ExpressionTransform>(header, sorting_key_expr);
@@ -662,6 +814,12 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
 
                 pipe.addTransform(std::move(transform));
             }
+        }
+
+        if (!out_projection)
+        {
+            /// Drop temporary columns, added by 'sorting_key_prefix_expr'
+            out_projection = createProjection(pipes.front().getHeader());
         }
     }
 
@@ -1154,12 +1312,14 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     size_t sum_marks = 0;
     size_t sum_ranges = 0;
     size_t sum_rows = 0;
+    NameSet partition_ids;
 
     for (const auto & part : result.parts_with_ranges)
     {
         sum_ranges += part.ranges.size();
         sum_marks += part.getMarksCount();
         sum_rows += part.getRowsCount();
+        partition_ids.insert(part.data_part->info.partition_id);
     }
 
     result.total_parts = total_parts;
@@ -1170,6 +1330,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     result.selected_marks_pk = sum_marks_pk;
     result.total_marks_pk = total_marks_pk;
     result.selected_rows = sum_rows;
+    result.selected_partitions = partition_ids.size();
 
     const auto & input_order_info = query_info.input_order_info
         ? query_info.input_order_info
@@ -1249,6 +1410,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
     Pipe pipe;
 
     const auto & settings = context->getSettingsRef();
+    bool can_read_in_partition_order = false;
 
     if (select.final())
     {
@@ -1278,12 +1440,30 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         auto syntax_result = TreeRewriter(context).analyze(order_key_prefix_ast, metadata_for_reading->getColumns().getAllPhysical());
         auto sorting_key_prefix_expr = ExpressionAnalyzer(order_key_prefix_ast, syntax_result, context).getActionsDAG(false);
 
-        pipe = spreadMarkRangesAmongStreamsWithOrder(
-            std::move(result.parts_with_ranges),
-            column_names_to_read,
-            sorting_key_prefix_expr,
-            result_projection,
-            input_order_info);
+        can_read_in_partition_order = (settings.optimize_read_in_partition_order || settings.force_read_in_partition_order)
+            && canReadInPartitionOrder(*metadata_for_reading, *input_order_info, query_info.query->as<ASTSelectQuery &>());
+
+        if (can_read_in_partition_order && result.selected_partitions > 1)
+        {
+            pipe = spreadMarkRangesAmongStreamsWithPartitionOrder(
+                std::move(result.parts_with_ranges),
+                column_names_to_read,
+                sorting_key_prefix_expr,
+                result_projection,
+                input_order_info);
+        }
+        else
+        {
+            bool need_preliminary_merge = (result.parts_with_ranges.size() > settings.read_in_order_two_level_merge_threshold);
+            pipe = spreadMarkRangesAmongStreamsWithOrder(
+                std::move(result.parts_with_ranges),
+                column_names_to_read,
+                sorting_key_prefix_expr,
+                result_projection,
+                input_order_info,
+                requested_num_streams,
+                need_preliminary_merge);
+        }
     }
     else
     {
@@ -1291,6 +1471,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
             std::move(result.parts_with_ranges),
             column_names_to_read);
     }
+
+    if (settings.force_read_in_partition_order && !can_read_in_partition_order)
+        throw Exception(ErrorCodes::INDEX_NOT_USED, "Cannot read in partition order but 'force_read_in_partition_order' is set");
 
     if (pipe.empty())
     {

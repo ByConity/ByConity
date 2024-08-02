@@ -27,4 +27,14 @@ Constants Constants::normalize(const SymbolEquivalences & symbol_equivalences) c
     return translate(mapping);
 }
 
+String Constants::toString() const
+{
+    std::stringstream output;
+    output << "{";
+    for (const auto & item : values)
+        output << " " << item.first << "=" << item.second.value.toString();
+    output << "}";
+    return output.str();
+}
+
 }

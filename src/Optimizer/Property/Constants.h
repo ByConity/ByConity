@@ -26,6 +26,7 @@ public:
 
     Constants translate(const std::unordered_map<String, String> & identities) const;
     Constants normalize(const SymbolEquivalences & symbol_equivalences) const;
+    String toString() const;
 
 private:
     std::map<String, FieldWithType> values{};
