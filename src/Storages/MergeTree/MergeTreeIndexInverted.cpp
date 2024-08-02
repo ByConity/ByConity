@@ -740,7 +740,7 @@ void checkWithNewInvertedIndexArguments(const FieldVector & arguments_)
 
     if (config_type != StandardTokenExtractor::getName() || config_value != "{}")
     {
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unknown config type {} and value should only {} now", config_type);
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unknown config type {} and value should only {{}} now", config_type);
     }
 }
 
