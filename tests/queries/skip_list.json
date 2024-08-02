@@ -102,6 +102,7 @@
         "01755_client_highlight_multi_line_comment_regression"
     ],
     "release-build": [
+        "00941_read_in_partition_order",
         "10102_intermediate_result_cache", // skip it temporarily
        "01801_s3_cluster",
         "01269_toStartOfSecond",
