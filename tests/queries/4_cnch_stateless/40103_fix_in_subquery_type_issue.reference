@@ -1,0 +1,41 @@
+-- { echoOn }
+/* test incompatible types */
+select k, i1 in (select s1 from t40103) from t40103 order by k;
+1	1
+2	0
+3	1
+-- bsp mode generate different output
+-- select k, s1 in (select i1 from t40103) from t40103 order by k;
+
+/* test null */
+select k, i1 in (select i2 from t40103) from t40103 order by k;
+1	1
+2	1
+3	0
+-- slightly different
+-- select k, i2 in (select i1 from t40103) from t40103 order by k;
+
+-- select k, i2 in (select i2 from t40103) from t40103 order by k;
+
+-- select k, i2 in (select i2 from t40103) from t40103 order by k settings transform_null_in=1;
+
+/* test tuple */
+select k, (i1, i1) in (select s1, s1 from t40103) from t40103 order by k;
+1	1
+2	0
+3	1
+select k, (s1, s1) in (select i1, i1 from t40103) from t40103 order by k;
+1	1
+2	0
+3	1
+-- slightly different
+-- select k, (i1, i2) in (select s1, s2 from t40103) from t40103 order by k;
+
+select k, (i1, i1) in (select i2, i2 from t40103) from t40103 order by k;
+1	1
+2	1
+3	0
+select k, (i2, i2) in (select i1, i1 from t40103) from t40103 order by k;
+1	1
+2	1
+3	0

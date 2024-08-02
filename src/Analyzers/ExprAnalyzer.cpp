@@ -693,7 +693,23 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
     {
         DataTypePtr super_type = nullptr;
         if (enable_implicit_type_conversion)
-            super_type = getLeastSupertype(DataTypes{lhs_type, rhs_type}, allow_extended_conversion);
+        {
+            if (context->getSettingsRef().convert_to_right_type_for_in_subquery)
+            {
+                if (const auto * type_tuple = typeid_cast<const DataTypeTuple *>(rhs_type.get()))
+                {
+                    DataTypes elem_types = type_tuple->getElements();
+                    std::transform(elem_types.begin(), elem_types.end(), elem_types.begin(), &JoinCommon::convertTypeToNullable);
+                    super_type = std::make_shared<DataTypeTuple>(elem_types, type_tuple->getElementNames());
+                }
+                else
+                {
+                    super_type = JoinCommon::convertTypeToNullable(rhs_type);
+                }
+            }
+            else
+                super_type = getLeastSupertype(DataTypes{lhs_type, rhs_type}, allow_extended_conversion);
+        }
         if (!super_type)
             throw Exception("Incompatible types for IN prediacte", ErrorCodes::TYPE_MISMATCH);
         if (!lhs_type->equals(*super_type))
