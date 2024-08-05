@@ -201,6 +201,7 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
     queries_replacements.emplace_back("SHOW GLOBAL VARIABLES", showVariableReplacementQuery);
     queries_replacements.emplace_back("SHOW INDEXES", showIndexReplacementQuery);
     queries_replacements.emplace_back("SHOW INDEX", showIndexReplacementQuery);
+    queries_replacements.emplace_back("SHOW KEYS", showIndexReplacementQuery);
     queries_replacements.emplace_back("SHOW PLUGINS", selectEmptyReplacementQuery);
     queries_replacements.emplace_back("SHOW PRIVILEGES", ReplaceWith<SHOW_PRIVILEGES>::fn);
     queries_replacements.emplace_back("SHOW PROCEDURE STATUS", selectEmptySetQuery);
