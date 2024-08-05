@@ -135,7 +135,7 @@ AutoStatisticsManager::AutoStatisticsManager(ContextPtr context_)
 
 static String timeToString(Time time)
 {
-    auto & lut = DateLUT::instance();
+    auto & lut = DateLUT::serverTimezoneInstance();
     auto hr = lut.toHour(time);
     auto min = lut.toMinute(time);
     return fmt::format("{:02d}:{:02d}", hr, min);
@@ -434,7 +434,7 @@ AutoStatisticsManager * AutoStatisticsManager::tryGetInstance()
 bool AutoStatisticsManager::isNowValidTimeRange()
 {
     auto current_time = time(nullptr);
-    auto current_time_point = DateLUT::instance().toTime(current_time);
+    auto current_time_point = DateLUT::serverTimezoneInstance().toTime(current_time);
 
     if (betweenTime(current_time_point, internal_config.begin_time, internal_config.end_time))
     {

@@ -1320,7 +1320,7 @@ namespace
             else if (std::is_same_v<DataType, DataTypeDateTime64> || std::is_same_v<DataType, DataTypeDateTime>)
                 time_zone_tmp = &extractTimeZoneFromFunctionArguments(arguments, 2, 0);
             else
-                time_zone_tmp = &DateLUT::instance();
+                time_zone_tmp = &DateLUT::sessionInstance();
 
             const DateLUTImpl & time_zone = *time_zone_tmp;
             const auto & vec = times->getData();

@@ -102,6 +102,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/8_cnch_S3_only queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           # We need skip-list to skip some tests.
           cp $GITHUB_WORKSPACE/tests/queries/skip_list.json queries/

@@ -1970,7 +1970,7 @@ namespace
         const DateLUTImpl & getTimeZone(const ColumnsWithTypeAndName & arguments) const
         {
             if (arguments.size() < 3)
-                return DateLUT::instance();
+                return DateLUT::sessionInstance();
 
             const auto * col = checkAndGetColumnConst<ColumnString>(arguments[2].column.get());
             if (!col)

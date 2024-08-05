@@ -46,9 +46,8 @@ private:
     unsigned char m_month;
     unsigned char m_day;
 
-    void init(time_t time)
+    void init(time_t time, const DateLUTImpl & date_lut)
     {
-        const auto & date_lut = DateLUT::instance();
         const auto & values = date_lut.getValues(time);
 
         m_year = values.year;
@@ -78,22 +77,19 @@ private:
     }
 
 public:
-    explicit LocalDate(time_t time)
-    {
-        init(time);
-    }
+    explicit LocalDate(time_t time, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance()) { init(time, time_zone); }
 
-    LocalDate(DayNum day_num)
+    LocalDate(DayNum day_num, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance()) /// NOLINT
     {
-        const auto & values = DateLUT::instance().getValues(day_num);
+        const auto & values = time_zone.getValues(day_num);
         m_year  = values.year;
         m_month = values.month;
         m_day   = values.day_of_month;
     }
 
-    explicit LocalDate(ExtendedDayNum day_num)
+    explicit LocalDate(ExtendedDayNum day_num, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
     {
-        const auto & values = DateLUT::instance().getValues(day_num);
+        const auto & values = time_zone.getValues(day_num);
         m_year  = values.year;
         m_month = values.month;
         m_day   = values.day_of_month;
@@ -121,16 +117,14 @@ public:
     LocalDate(const LocalDate &) noexcept = default;
     LocalDate & operator= (const LocalDate &) noexcept = default;
 
-    DayNum getDayNum() const
+    DayNum getDayNum(const DateLUTImpl & lut = DateLUT::serverTimezoneInstance()) const
     {
-        const auto & lut = DateLUT::instance();
         return DayNum(lut.makeDayNum(m_year, m_month, m_day).toUnderType());
     }
 
-    ExtendedDayNum getExtendedDayNum() const
+    ExtendedDayNum getExtendedDayNum(const DateLUTImpl & lut = DateLUT::serverTimezoneInstance()) const
     {
-        const auto & lut = DateLUT::instance();
-        return ExtendedDayNum (lut.makeDayNum(m_year, m_month, m_day).toUnderType());
+        return ExtendedDayNum(lut.makeDayNum(m_year, m_month, m_day).toUnderType());
     }
 
     operator DayNum() const
@@ -138,10 +132,7 @@ public:
         return getDayNum();
     }
 
-    operator time_t() const
-    {
-        return DateLUT::instance().makeDate(m_year, m_month, m_day);
-    }
+    operator time_t() const { return DateLUT::serverTimezoneInstance().makeDate(m_year, m_month, m_day); }
 
     unsigned short year() const { return m_year; }
     unsigned char month() const { return m_month; }

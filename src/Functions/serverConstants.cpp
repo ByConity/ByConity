@@ -59,16 +59,26 @@ namespace
         explicit FunctionTcpPort(ContextPtr context) : FunctionConstantBase(context->getTCPPort(), context->isDistributed()) {}
     };
 
-
-    /// Returns the server time zone.
+    /// Returns timezone for current session.
     class FunctionTimezone : public FunctionConstantBase<FunctionTimezone, String, DataTypeString>
     {
     public:
         static constexpr auto name = "timezone";
         static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionTimezone>(context); }
-        explicit FunctionTimezone(ContextPtr context) : FunctionConstantBase(String{DateLUT::instance().getTimeZone()}, context->isDistributed()) {}
+        explicit FunctionTimezone(ContextPtr context) : FunctionConstantBase(DateLUT::sessionInstance().getTimeZone(), context->isDistributed()) {}
     };
 
+    /// Returns the server time zone (timezone in which server runs).
+    class FunctionServerTimezone : public FunctionConstantBase<FunctionServerTimezone, String, DataTypeString>
+    {
+    public:
+        static constexpr auto name = "serverTimezone";
+        static FunctionPtr create(ContextPtr context) { return std::make_shared<FunctionServerTimezone>(context); }
+        explicit FunctionServerTimezone(ContextPtr context)
+            : FunctionConstantBase(DateLUT::serverTimezoneInstance().getTimeZone(), context->isDistributed())
+        {
+        }
+    };
 
     /// Returns server uptime in seconds.
     class FunctionUptime : public FunctionConstantBase<FunctionUptime, UInt32, DataTypeUInt32>
@@ -144,6 +154,12 @@ REGISTER_FUNCTION(Timezone)
 {
     factory.registerFunction<FunctionTimezone>();
     factory.registerAlias("timeZone", "timezone");
+}
+
+REGISTER_FUNCTION(ServerTimezone)
+{
+    factory.registerFunction<FunctionServerTimezone>();
+    factory.registerAlias("serverTimeZone", "serverTimezone");
 }
 
 REGISTER_FUNCTION(Uptime)

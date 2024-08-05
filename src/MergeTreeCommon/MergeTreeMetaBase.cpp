@@ -2111,7 +2111,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
 
         if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
         {
-            const auto & date_lut = DateLUT::instance();
+            const auto & date_lut = DateLUT::serverTimezoneInstance();
             for (size_t index = 0; index < column->size(); index++)
             {
                 auto ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
@@ -2136,7 +2136,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
         //     time_t ttl_value = 0;
         //     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
         //     {
-        //         const auto & date_lut = DateLUT::instance();
+        //         const auto & date_lut = DateLUT::serverTimezoneInstance();
         //         ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
         //     }
         //     else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))

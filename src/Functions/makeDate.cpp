@@ -131,7 +131,7 @@ namespace
             auto res_column = Traits::ReturnDataType::ColumnType::create(input_rows_count);
             auto & result_data = res_column->getData();
 
-            const auto & date_lut = DateLUT::instance();
+            const auto & date_lut = DateLUT::sessionInstance();
             const Int32 max_days_since_epoch = date_lut.makeDayNum(Traits::MAX_DATE[0], Traits::MAX_DATE[1], Traits::MAX_DATE[2]);
 
             if (is_year_month_day_variant)
@@ -573,7 +573,7 @@ namespace
             const auto & minute_data = typeid_cast<const ColumnFloat32 &>(*converted_arguments[1]).getData();
             const auto & second_data = typeid_cast<const ColumnFloat32 &>(*converted_arguments[2]).getData();
 
-            const auto & date_lut = DateLUT::instance();
+            const auto & date_lut = DateLUT::sessionInstance();
             const auto max_fraction = pow(10, precision) - 1;
             const auto min_time = minTime(date_lut);
             const auto max_time = maxTime(date_lut);

@@ -145,7 +145,7 @@ static time_t roundTimeToPrecision(const DateLUTImpl & date_lut, time_t time, UI
 
 IMergingAlgorithm::Status GraphiteRollupSortedAlgorithm::merge()
 {
-    const DateLUTImpl & date_lut = DateLUT::instance();
+    const DateLUTImpl & date_lut = DateLUT::serverTimezoneInstance();
 
     /// Take rows in needed order and put them into `merged_data` until we get `max_block_size` rows.
     ///

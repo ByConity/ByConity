@@ -101,7 +101,7 @@ public:
 
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName &, const DataTypePtr &) const override
     {
-        return std::make_unique<FunctionBaseToday>(DayNum(DateLUT::instance().toDayNum(time(nullptr)).toUnderType()));
+        return std::make_unique<FunctionBaseToday>(DayNum(DateLUT::sessionInstance().toDayNum(time(nullptr)).toUnderType()));
     }
 };
 

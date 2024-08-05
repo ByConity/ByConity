@@ -576,7 +576,7 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 
     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
     {
-        const auto & date_lut = DateLUT::instance();
+        const auto & date_lut = DateLUT::serverTimezoneInstance();
         return date_lut.fromDayNum(DayNum(column_date->getElement(0)));
     }
     else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
