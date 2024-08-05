@@ -92,5 +92,6 @@ Projection Est. 10 rows, cost 2.740000e+00
                            └─ Filter Est. ? rows, cost 0.000000e+00
                               │     Condition: (block_number > 10000000) AND (block_number < 20000000)
                               └─ TableScan test.polygon_tx_v87 Est. ? rows, cost 0.000000e+00
+                                       Input Order Info: {block_number ASC ANY}
                                        Where: (block_number > 10000000) AND (block_number < 20000000)
                                        Outputs: [block_number, gas, gas_price]

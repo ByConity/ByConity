@@ -2239,6 +2239,11 @@ String StepPrinter::printSortingStep(const SortingStep & step)
         details << "|";
         details << "partial";
     }
+    if (step.getStage() == SortingStep::Stage::PARTIAL_NO_MERGE)
+    {
+        details << "|";
+        details << "partial no merge";
+    }
     details << "|";
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)

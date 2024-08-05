@@ -32,10 +32,10 @@ public:
         const Context & context, const Partitioning & required, const Partitioning & actual, const SymbolEquivalences & equivalences = {}, const Constants & constants = {}, bool match_local_exchange = true);
 
     static Sorting
-    matchSorting(const Context & context, const Sorting & required, const Sorting & actual, const SymbolEquivalences & equivalences = {});
+    matchSorting(const Context & context, const Sorting & required, const Sorting & actual, const SymbolEquivalences & equivalences = {}, const Constants & constants = {});
 
     static Sorting matchSorting(
-        const Context & context, const SortDescription & required, const Sorting & actual, const SymbolEquivalences & equivalences = {});
+        const Context & context, const SortDescription & required, const Sorting & actual, const SymbolEquivalences & equivalences = {}, const Constants & constants = {});
 
     static Property compatibleCommonRequiredProperty(const std::unordered_set<Property, PropertyHash> & properties);
 };

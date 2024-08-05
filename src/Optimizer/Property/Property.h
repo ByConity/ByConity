@@ -205,7 +205,8 @@ public:
                 return SortOrder::ASC_NULLS_LAST;
             else if (nulls_direction == -1)
                 return SortOrder::ASC_NULLS_FIRST;
-            // else if (nulls_direction == 0) // no need, this case should return ASC_NULLS_LAST.
+            else if (nulls_direction == 0)
+                return SortOrder::ASC_ANY;
         }
         else if (direction == -1)
         {
@@ -213,9 +214,14 @@ public:
                 return SortOrder::DESC_NULLS_LAST;
             else if (nulls_direction == -1)
                 return SortOrder::DESC_NULLS_FIRST;
+            else if (nulls_direction == 0)
+                return SortOrder::DESC_ANY;
         }
+        else if (direction == 0 && nulls_direction == 0)
+            return SortOrder::ANY;
         return SortOrder::UNKNOWN;
     }
+    static SortOrder toReverseOrder(SortOrder sort_order);
 
     SortColumn(String name_, SortOrder order_) : name(std::move(name_)), order(order_) { }
     explicit SortColumn(const SortColumnDescription & sort_column_description) : name(sort_column_description.column_name)
@@ -225,6 +231,7 @@ public:
 
     const String & getName() const { return name; }
     SortOrder getOrder() const { return order; }
+    SortColumn toReverseOrder() const { return SortColumn{name, toReverseOrder(order)}; }
 
     SortColumnDescription toSortColumnDesc() const
     {
@@ -306,6 +313,8 @@ public:
         }
         return res;
     }
+
+    Sorting toReverseOrder() const;
 
     size_t hash() const;
     String toString() const;

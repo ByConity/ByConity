@@ -1934,9 +1934,16 @@ void TableScanStep::setQuotaAndLimits(QueryPipeline & pipeline, const SelectQuer
 void TableScanStep::setReadOrder(SortDescription read_order)
 {
     if (!read_order.empty())
-    {
         query_info.input_order_info = std::make_shared<InputOrderInfo>(read_order, read_order[0].direction);
-    }
+    else
+        query_info.input_order_info = nullptr;
+}
+
+SortDescription TableScanStep::getReadOrder() const
+{
+    if (query_info.input_order_info)
+        return query_info.input_order_info->order_key_prefix_descr;
+    return SortDescription{};
 }
 
 Names TableScanStep::getRequiredColumns(GetFlags flags) const

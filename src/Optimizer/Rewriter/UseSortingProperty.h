@@ -5,13 +5,23 @@
 #include <Interpreters/prepared_statement.h>
 #include <Optimizer/Property/Equivalences.h>
 #include <Optimizer/Property/Property.h>
+#include <Optimizer/Property/Constants.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SimplePlanVisitor.h>
+#include <Poco/Logger.h>
 
 namespace DB
 {
+
+struct PlanAndPropConstants
+{
+    PlanNodePtr plan;
+    Property property;
+    Constants constants;
+};
+
 class SortingOrderedSource : public Rewriter
 {
 public:
@@ -25,39 +35,51 @@ private:
     class Rewriter;
 };
 
-class SortingOrderedSource::Rewriter : public PlanNodeVisitor<PlanAndProp, Void>
+class SortingOrderedSource::Rewriter : public PlanNodeVisitor<PlanAndPropConstants, SortDescription>
 {
 public:
     Rewriter(ContextMutablePtr context_, CTEInfo & cte_info_) : context(context_), cte_helper(cte_info_) { }
-    PlanAndProp visitPlanNode(PlanNodeBase &, Void &) override;
-    PlanAndProp visitSortingNode(SortingNode &, Void &) override;
-    PlanAndProp visitAggregatingNode(AggregatingNode &, Void &) override;
-    PlanAndProp visitWindowNode(WindowNode &, Void &) override;
-    PlanAndProp visitCTERefNode(CTERefNode & node, Void &) override;
-    PlanAndProp visitTopNFilteringNode(TopNFilteringNode & node, Void &) override;
+
+    PlanAndPropConstants visitPlanNode(PlanNodeBase &, SortDescription & required) override;
+    PlanAndPropConstants visitSortingNode(SortingNode &, SortDescription & required) override;
+    PlanAndPropConstants visitAggregatingNode(AggregatingNode &, SortDescription & required) override;
+    PlanAndPropConstants visitWindowNode(WindowNode &, SortDescription & required) override;
+    PlanAndPropConstants visitTopNFilteringNode(TopNFilteringNode & node, SortDescription & required) override;
+
+    PlanAndPropConstants visitCTERefNode(CTERefNode & node, SortDescription & required) override;
+    PlanAndPropConstants visitProjectionNode(ProjectionNode & node, SortDescription & required) override;
+    PlanAndPropConstants visitFilterNode(FilterNode & node, SortDescription & required) override;
+    PlanAndPropConstants visitTableScanNode(TableScanNode & node, SortDescription & required) override;
 
 private:
     ContextMutablePtr context;
-    SimpleCTEVisitHelper<PlanAndProp> cte_helper;
+    SimpleCTEVisitHelper<PlanAndPropConstants> cte_helper;
 };
-
 
 struct SortInfo
 {
     SortDescription sort_desc;
-    SizeOrVariable limit;
+    SizeOrVariable limit = 0ul;
 };
 
-class PushSortingInfoRewriter : public SimplePlanRewriter<SortInfo>
+class PruneSortingInfoRewriter : public SimplePlanRewriter<SortInfo>
 {
 public:
-    PushSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_)
+    PruneSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_)
+        : SimplePlanRewriter(context_, cte_info_), logger(&Poco::Logger::get("PruneSortingInfoRewriter"))
     {
     }
+
+    PlanNodePtr visitPlanNode(PlanNodeBase & node, SortInfo & required) override;
     PlanNodePtr visitSortingNode(SortingNode &, SortInfo &) override;
     PlanNodePtr visitAggregatingNode(AggregatingNode &, SortInfo &) override;
     PlanNodePtr visitWindowNode(WindowNode &, SortInfo &) override;
-    PlanNodePtr visitTableScanNode(TableScanNode &, SortInfo &) override;
+    PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, SortInfo &) override;
+    PlanNodePtr visitProjectionNode(ProjectionNode & node, SortInfo & required) override;
+    PlanNodePtr visitTableScanNode(TableScanNode &, SortInfo & required) override;
+
+private:
+    Poco::Logger * logger;
 };
 
 }

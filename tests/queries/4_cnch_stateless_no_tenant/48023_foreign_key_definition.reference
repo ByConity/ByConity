@@ -7,9 +7,11 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {id ASC NULLS LAST}
+         │     Prefix Order: {id}
          └─ Filter Est. ? rows
             │     Condition: isNotNull(parent_id)
             └─ TableScan test.child Est. ? rows
+                     Input Order Info: {id ASC NULLS FIRST}
                      Where: isNotNull(parent_id)
                      Outputs: [id, parent_id, description]
 1	1	CHILD ONE

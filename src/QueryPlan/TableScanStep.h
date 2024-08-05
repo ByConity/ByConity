@@ -138,6 +138,7 @@ public:
     }
 
     void setReadOrder(SortDescription read_order);
+    SortDescription getReadOrder() const;
 
     void formatOutputStream(ContextPtr context);
 
