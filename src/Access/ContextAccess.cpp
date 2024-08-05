@@ -40,6 +40,15 @@ namespace ErrorCodes
 
 namespace
 {
+    /* must be synced with the Level definition in AccessRights.cpp */
+    enum Level
+    {
+        GLOBAL_LEVEL,
+        DATABASE_LEVEL,
+        TABLE_LEVEL,
+        COLUMN_LEVEL,
+    };
+
     static const std::unordered_set<std::string_view> always_accessible_tables {
         /// Constant tables
         "one",
@@ -388,7 +397,8 @@ void ContextAccess::calculateAccessRights() const
         }
         LOG_TRACE(trace_log, "Settings: readonly={}, allow_ddl={}, allow_introspection_functions={}", params.readonly, params.allow_ddl, params.allow_introspection);
         LOG_TRACE(trace_log, "List of all grants: {}", access->toString());
-        LOG_TRACE(trace_log, "List of all sensitive grants: {}", sensitive_access->toString());
+        if (params.enable_sensitive_permission)
+            LOG_TRACE(trace_log, "List of all sensitive grants: {}", sensitive_access->toString());
         LOG_TRACE(trace_log, "List of all grants including implicit: {}", access_with_implicit->toString());
     }
 }
@@ -514,7 +524,7 @@ std::shared_ptr<const SensitiveAccessRights> ContextAccess::getSensitiveAccessRi
     return nothing_granted;
 }
 
-bool ContextAccess::isSensitiveImpl(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table = {}, const std::vector<std::string_view> & columns = {}) const
+int ContextAccess::isSensitiveImpl(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table = {}, const std::vector<std::string_view> & columns = {}) const
 {
     auto sensitive_resource = manager->sensitive_resource_getter(formatTenantDatabaseName(std::string(database)));
     if (!sensitive_resource)
@@ -537,7 +547,7 @@ bool ContextAccess::isSensitiveImpl(std::unordered_set<std::string_view> & cols,
             }
 
             if (!cols.empty())
-                    return true;
+                    return COLUMN_LEVEL;
         }
     }
 
@@ -545,33 +555,21 @@ bool ContextAccess::isSensitiveImpl(std::unordered_set<std::string_view> & cols,
     {
         for (auto & sensitive_table : sensitive_resource->tables())
         {
-            if (sensitive_table.table() == table)
-                return sensitive_table.is_sensitive();
+            if (sensitive_table.table() != table)
+                    continue;
+
+            if (sensitive_table.is_sensitive())
+                return TABLE_LEVEL;
         }
     }
 
     if (!database.empty())
     {
-        return sensitive_resource->is_sensitive();
+        if (sensitive_resource->is_sensitive())
+            return DATABASE_LEVEL;
     }
 
-    return false;
-}
-
-template <typename... Args>
-bool ContextAccess::checkSensitivePermissions(std::unordered_set<std::string_view> & cols, const Args &... args) const
-{
-    auto tenant_id = getCurrentTenantId();
-
-    // Only apply sensitive permission checks on tenanted users only
-    if (tenant_id.empty())
-        return false;
-
-    // Only enable sensitive permission check for selected tenants
-    if (!params.enable_sensitive_permission)
-        return false;
-
-    return isSensitive(cols, args...);
+    return GLOBAL_LEVEL;
 }
 
 template <bool throw_if_denied, typename... Args>
@@ -658,20 +656,41 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
     auto acs = getAccessRightsWithImplicit();
     bool granted;
     bool check_sensitive_permissions = false;
-    std::unordered_set<std::string_view> sensitive_columns;
 
     if constexpr (grant_option)
         granted = acs->hasGrantOption(flags, args...);
-    else if (checkSensitivePermissions(sensitive_columns, args...))
-    {
-        check_sensitive_permissions = true;
-        granted = getSensitiveAccessRights()->isGranted(sensitive_columns, flags, args...);
-    }
     else
         granted = acs->isGranted(flags, args...);
 
     if (granted)
         granted = checkTenantsAccess<throw_if_denied>(args...);
+
+    while (granted)
+    {
+        auto tenant_id = getCurrentTenantId();
+
+        // Only apply sensitive permission checks on tenanted users only
+        if (tenant_id.empty())
+            break;
+
+        // Only enable sensitive permission check for selected tenants
+        if (!params.enable_sensitive_permission)
+            break;
+
+        if (roles_info->is_admin)
+            break;
+
+        std::unordered_set<std::string_view> sensitive_columns;
+        int sensitive_level = isSensitive(sensitive_columns, args...);
+
+        if (sensitive_level != GLOBAL_LEVEL)
+        {
+            check_sensitive_permissions = true;
+            //std::vector<std::string_view> cols{sensitive_columns.begin(), sensitive_columns.end()};
+            granted = getSensitiveAccessRights()->isGranted(sensitive_level, sensitive_columns, flags, args...);
+        }
+        break;
+    }
 
     if (!granted)
     {
@@ -687,7 +706,7 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
 
         return access_denied(
             "Not enough privileges. To execute this query it's necessary to have grant"
-                + (check_sensitive_permissions && !grant_option ? std::string("(sensitive) ") : std::string(" "))
+                + (check_sensitive_permissions && !grant_option ? std::string(" SENSITIVE ") : std::string(" "))
                 + AccessRightsElement{flags, args...}.toStringWithoutOptions() + (grant_option ? " WITH GRANT OPTION" : ""),
             ErrorCodes::ACCESS_DENIED);
     }
@@ -800,12 +819,12 @@ bool ContextAccess::checkAccessImpl(const AccessRightsElements & elements) const
     return true;
 }
 
-bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & /*cols*/) const { return false; }
-bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database) const { return isSensitiveImpl(cols, database); }
-bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table) const { return isSensitiveImpl(cols, database, table); }
-bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::string_view & column) const { return isSensitiveImpl(cols, database, table, {column}); }
-bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const { return isSensitiveImpl(cols, database, table, columns); }
-bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const Strings & columns) const { return isSensitiveImpl(cols, database, table, {columns.begin(), columns.end()}); }
+int ContextAccess::isSensitive(std::unordered_set<std::string_view> & /*cols*/) { return GLOBAL_LEVEL; }
+int ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database) const { return isSensitiveImpl(cols, database); }
+int ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table) const { return isSensitiveImpl(cols, database, table); }
+int ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::string_view & column) const { return isSensitiveImpl(cols, database, table, {column}); }
+int ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const { return isSensitiveImpl(cols, database, table, columns); }
+int ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const Strings & columns) const { return isSensitiveImpl(cols, database, table, {columns.begin(), columns.end()}); }
 
 bool ContextAccess::isGranted(const AccessFlags & flags) const { return checkAccessImpl<false, false>(flags); }
 bool ContextAccess::isGranted(const AccessFlags & flags, const std::string_view & database) const { return checkAccessImpl<false, false>(flags, database); }

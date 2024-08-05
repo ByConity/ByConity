@@ -132,6 +132,7 @@ namespace
         std::shared_ptr<Quota> quota;
         std::shared_ptr<SettingsProfile> profile;
         AccessEntityPtr res;
+        bool sensitive_tenant = false;
 
         for (const auto & query : queries)
         {
@@ -172,12 +173,16 @@ namespace
             }
             else if (auto * grant_query = query->as<ASTGrantQuery>())
             {
+                /* sensitive permissions were serialized first */
+                if (grant_query->is_sensitive)
+                    sensitive_tenant = true;
+
                 if (!user && !role)
                     throw Exception("A user or role should be attached before grant in sql: " + create_sql, ErrorCodes::INCORRECT_ACCESS_ENTITY_DEFINITION);
                 if (user)
-                    InterpreterGrantQuery::updateUserFromQuery(*user, *grant_query);
+                    InterpreterGrantQuery::updateUserFromQuery(*user, *grant_query, sensitive_tenant);
                 else
-                    InterpreterGrantQuery::updateRoleFromQuery(*role, *grant_query);
+                    InterpreterGrantQuery::updateRoleFromQuery(*role, *grant_query, sensitive_tenant);
             }
             else
                 throw Exception("No interpreter found for query " + query->getID(), ErrorCodes::INCORRECT_ACCESS_ENTITY_DEFINITION);
@@ -197,7 +202,11 @@ namespace
         ASTs queries;
         queries.push_back(InterpreterShowCreateAccessEntityQuery::getAttachQuery(entity));
         if ((entity.getType() == EntityType::USER) || (entity.getType() == EntityType::ROLE))
-            boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity));
+        {
+            /* The true/false order must be kept, to be used for detecting sensitive tenant in KVAccessStorage.cpp */
+            boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity, true));
+            boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity, false));
+        }
 
         /// Serialize the list of ATTACH queries to a string.
         WriteBufferFromOwnString buf;
@@ -211,7 +220,10 @@ namespace
 
     class ConcurrentAccessGuard {
     public:
-        ConcurrentAccessGuard(const UUID &uuid)
+        ConcurrentAccessGuard & operator=(const ConcurrentAccessGuard &) = delete;
+        ConcurrentAccessGuard(const ConcurrentAccessGuard &) = delete;
+        ConcurrentAccessGuard() = delete;
+        explicit ConcurrentAccessGuard(const UUID &uuid)
         {
             {
                 std::scoped_lock lock(map_mtx);
@@ -554,9 +566,9 @@ void KVAccessStorage::updateImpl(const UUID & uuid, const UpdateFunc & update_fu
         if (new_entity_model.commit_time() < entry->commit_time)
             throw Exception("Concurrent rbac update, model had been overwritten by another server",  ErrorCodes::CONCURRENT_RBAC_UPDATE);
 
-        entry->entity = new_entity;
+        entry->entity = std::move(new_entity);
         entry->commit_time = new_entity_model.commit_time();
-        entry->entity_model = new_entity_model;
+        entry->entity_model = std::move(new_entity_model);
 
         if (name_changed)
         {

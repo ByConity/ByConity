@@ -108,6 +108,12 @@ void ASTGrantQuery::formatImpl(const FormatSettings & settings, FormatState &, F
     settings.ostr << (settings.hilite ? IAST::hilite_keyword : "") << (attach_mode ? "ATTACH " : "") << (is_revoke ? "REVOKE" : "GRANT")
                   << (settings.hilite ? IAST::hilite_none : "");
 
+    if (is_sensitive)
+    {
+        settings.ostr << (settings.hilite ? IAST::hilite_keyword : "") << (" SENSITIVE")
+                      << (settings.hilite ? IAST::hilite_none : "");
+    }
+
     if (!access_rights_elements.sameOptions())
         throw Exception("Elements of an ASTGrantQuery are expected to have the same options", ErrorCodes::LOGICAL_ERROR);
     if (!access_rights_elements.empty() &&  access_rights_elements[0].is_partial_revoke && !is_revoke)
@@ -118,6 +124,8 @@ void ASTGrantQuery::formatImpl(const FormatSettings & settings, FormatState &, F
 
     if (is_revoke)
     {
+        if (if_exists)
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " IF EXISTS" << (settings.hilite ? hilite_none : "");
         if (grant_option)
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " GRANT OPTION FOR" << (settings.hilite ? hilite_none : "");
         else if (admin_option)
@@ -180,7 +188,7 @@ void ASTGrantQuery::rewriteNamesWithTenant(const Context *)
         }
 
         tenant_rewritten = true;
-    }  
+    }
 }
 
 void ASTGrantQuery::rewriteNamesWithoutTenant(const Context *)

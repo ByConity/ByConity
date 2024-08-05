@@ -20,6 +20,7 @@ struct EnabledRolesInfo
     AccessRights access;
     SensitiveAccessRights sensitive_access;
     SettingsProfileElements settings_from_enabled_roles;
+    bool is_admin = false;
 
     Strings getCurrentRolesNames() const;
     Strings getEnabledRolesNames() const;

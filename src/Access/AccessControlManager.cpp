@@ -148,6 +148,20 @@ AccessControlManager::AccessControlManager()
 {
 }
 
+bool AccessControlManager::isSensitiveGrantee(const String & grantee) const
+{
+    auto pos = grantee.find('.');
+
+    if (pos == String::npos || pos == 0)
+        return false;
+
+    return isSensitiveTenant(grantee.substr(0, pos));
+}
+
+bool AccessControlManager::isSensitiveTenant(const String & tenant) const
+{
+    return sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
+}
 
 bool AccessControlManager::isSensitiveTenant(const String & tenant) const
 {
@@ -445,6 +459,7 @@ ContextAccessParams AccessControlManager::getContextAccessParams(
     const String & current_database,
     const ClientInfo & client_info,
     const String & tenant,
+    bool has_tenant_id_in_username,
     bool load_roles) const
 {
     ContextAccessParams params;
@@ -459,8 +474,9 @@ ContextAccessParams AccessControlManager::getContextAccessParams(
     params.http_method = client_info.http_method;
     params.address = client_info.current_address.host();
     params.quota_key = client_info.quota_key;
-    params.has_tenant_id_in_username = !tenant.empty();
-    params.enable_sensitive_permission = sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
+    params.has_tenant_id_in_username = has_tenant_id_in_username;
+    params.enable_sensitive_permission =
+        has_tenant_id_in_username ? isSensitiveTenant(tenant) : false;
     params.load_roles = load_roles;
 
     /// Extract the last entry from comma separated list of X-Forwarded-For addresses.

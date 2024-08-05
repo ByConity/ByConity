@@ -56,6 +56,7 @@ namespace
             if (!current_query)
             {
                 current_query = std::make_shared<ASTGrantQuery>();
+                current_query->is_sensitive = sensitive_mode;
                 current_query->grantees = grantees;
                 current_query->attach_mode = attach_mode;
                 if (element.is_partial_revoke)
@@ -65,6 +66,9 @@ namespace
 
             current_query->access_rights_elements.emplace_back(std::move(element));
         }
+
+        if (sensitive_mode)
+            return res;
 
         for (const auto & element : grantee.granted_roles.getElements())
         {
@@ -167,15 +171,19 @@ ASTs InterpreterShowGrantsQuery::getGrantQueries() const
 
     ASTs grant_queries;
     for (const auto & entity : entities)
-        boost::range::push_back(grant_queries, getGrantQueries(*entity, access_control));
+    {
+        /* The true/false order must be kept, to be used for detecting sensitive tenant in KVAccessStorage.cpp */
+        boost::range::push_back(grant_queries, getGrantQueries(*entity, access_control, true));
+        boost::range::push_back(grant_queries, getGrantQueries(*entity, access_control, false));
+    }
 
     return grant_queries;
 }
 
 
-ASTs InterpreterShowGrantsQuery::getGrantQueries(const IAccessEntity & user_or_role, const AccessControlManager & access_control)
+ASTs InterpreterShowGrantsQuery::getGrantQueries(const IAccessEntity & user_or_role, const AccessControlManager & access_control, bool sensitive_mode)
 {
-    return getGrantQueriesImpl(user_or_role, &access_control, false);
+    return getGrantQueriesImpl(user_or_role, &access_control, false, sensitive_mode);
 }
 
 
