@@ -1,6 +1,7 @@
 #pragma once
 #include <Optimizer/Rule/Rule.h>
 #include <QueryPlan/CTEInfo.h>
+#include "Interpreters/Context_fwd.h"
 #include "Optimizer/Rule/Pattern.h"
 
 namespace DB
@@ -110,10 +111,9 @@ private:
      */
     static bool hasUniqueArgument(const AggregatingStep & step);
 
-    // All Count Aggregate Functions must have at most one argument.
-    static bool allCountHasAtMostOneArguments(const AggregatingStep & step);
+    static AggregateDescription distinctAggWithMask(
+        const AggregateDescription & agg_desc, String & mask_column, Assignments & new_argument_assignments, ContextMutablePtr context);
 
-    static AggregateDescription distinctAggWithMask(const AggregateDescription & agg_desc, String & mask_column);
     static AggregateDescription nonDistinctAggWithMask(const AggregateDescription & agg_desc, String & mask_column);
 
     static PlanNodePtr makeUnionNode(
