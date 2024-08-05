@@ -2471,7 +2471,10 @@ private:
 
     static void showClientVersion()
     {
-        std::cout << R"(
+        #define RESET_   "\033[0m"
+        #define LIGHT_CYAN_ "\033[96m"
+
+        std::cout << LIGHT_CYAN_ << R"(
             ______       _       _   _
             | ___ \     | |     | | | |
             | |_/ /_   _| |_ ___| |_| | ___  _   _ ___  ___
@@ -2480,7 +2483,7 @@ private:
             \____/ \__, |\__\___\_| |_/\___/ \__,_|___/\___|
                     __/ |
                     |___/
-            )" << std::endl;
+            )" << RESET_ << std::endl;
 
         std::cout << VERSION_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
     }
