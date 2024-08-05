@@ -765,9 +765,12 @@ void CnchWorkerServiceImpl::sendResources(
             for (int i = 0; i < request->create_queries_size(); i++)
             {
                 auto create_query = request->create_queries().at(i);
-                auto object_columns = request->dynamic_object_column_schema().at(i);
 
-                worker_resource->executeCreateQuery(context_for_create, create_query, false, ColumnsDescription::parse(object_columns));
+                ColumnsDescription object_columns;
+                if (i < request->dynamic_object_column_schema_size())
+                    object_columns = ColumnsDescription::parse(request->dynamic_object_column_schema().at(i));
+
+                worker_resource->executeCreateQuery(context_for_create, create_query, false, object_columns);
             }
             for (int i = 0; i < request->cacheable_create_queries_size(); i++)
             {
