@@ -291,7 +291,7 @@ public:
 
     virtual std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const = 0;
 
-    size_t hash() const;
+    size_t hash(bool ignore_output_stream = true) const;
 
     bool operator==(const IQueryPlanStep & r) const
     {
