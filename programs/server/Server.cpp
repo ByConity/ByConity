@@ -1021,27 +1021,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
             #if USE_HUALLOC
             if (config->getBool("hualloc_numa_aware", false))
             {
-                size_t max_numa_node = SystemUtils::getMaxNumaNode();
-                std::vector<cpu_set_t> numa_nodes_cpu_mask = SystemUtils::getNumaNodesCpuMask();
-                bool hualloc_enable_mbind = config->getBool("hualloc_enable_mbind", false);
-                int mbind_mode = config->getInt("hualloc_mbind_mode", 1);
+                static std::once_flag numa_aware_init_flag;
+                std::call_once(numa_aware_init_flag, [&]()
+                {
+                    size_t max_numa_node = SystemUtils::getMaxNumaNode();
+                    std::vector<cpu_set_t> numa_nodes_cpu_mask = SystemUtils::getNumaNodesCpuMask();
+                    bool hualloc_enable_mbind = config->getBool("hualloc_enable_mbind", false);
+                    int mbind_mode = config->getInt("hualloc_mbind_mode", 1);
 
-                /*
-                *mbind mode
-                    #define MPOL_DEFAULT     0
-                    #define MPOL_PREFERRED   1
-                    #define MPOL_BIND        2
-                    #define MPOL_INTERLEAVE  3
-                    #define MPOL_LOCAL       4
-                    #define MPOL_MAX         5
-                */
-                huallocSetNumaInfo(
-                    max_numa_node,
-                    numa_nodes_cpu_mask,
-                    hualloc_enable_mbind,
-                    mbind_mode,
-                    huallocLogPrint
-                );
+                    /*
+                    *mbind mode
+                        #define MPOL_DEFAULT     0
+                        #define MPOL_PREFERRED   1
+                        #define MPOL_BIND        2
+                        #define MPOL_INTERLEAVE  3
+                        #define MPOL_LOCAL       4
+                        #define MPOL_MAX         5
+                    */
+                    huallocSetNumaInfo(
+                        max_numa_node,
+                        numa_nodes_cpu_mask,
+                        hualloc_enable_mbind,
+                        mbind_mode,
+                        huallocLogPrint
+                    );
+                });
             }
 
             double default_hualloc_cache_ratio = config->getDouble("hualloc_cache_ratio", 0.25);

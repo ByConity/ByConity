@@ -71,7 +71,7 @@ void* ReclaimThread(void *args)
 {
     // keep & max can be separate for large & segment spaces
     const char * sleep_second = std::getenv("HUALLOC_CLAIM_INTERVAL");
-    int sleep = 3;
+    int sleep = 1;
     try
     {
         if (sleep_second && std::strlen(sleep_second) > 0)
@@ -79,7 +79,7 @@ void* ReclaimThread(void *args)
     }
     catch(...)
     {
-        sleep = 3;
+        sleep = 1;
     }
 
     yint cached = *(yint *) args;

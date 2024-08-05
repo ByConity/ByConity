@@ -1843,7 +1843,7 @@ static void DumpLocalAllocMasksLocked(char *segment)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 static yint ReclaimKeepSize = 1 * 1024 * (1ull << 20);
-static yint ReclaimMaxReclaim = 512 * (1ull << 20);
+static yint ReclaimMaxReclaim = 1* 1024 * (1ull << 20);
 
 static void hu_init()
 {

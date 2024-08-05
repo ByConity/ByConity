@@ -121,12 +121,16 @@ public:
 
     static void InitHuAlloc(size_t cached)
     {
-        hu_check_init_w();
-        pthread_t tid;
-        size_t use_cache = cached / 2;
-        if (use_cache <= 0)
-            use_cache = 1024 * (1ull << 20); /// If not set properly use 1G as default
-        pthread_create(&tid, nullptr, ReclaimThread, &use_cache);
+        static std::once_flag hualloc_init_flag;
+        std::call_once(hualloc_init_flag, [&]()
+        {
+            hu_check_init_w();
+            pthread_t tid;
+            size_t use_cache = cached / 2;
+            if (use_cache <= 0)
+                use_cache = 1024 * (1ull << 20); /// If not set properly use 1G as default
+            pthread_create(&tid, nullptr, ReclaimThread, &use_cache);
+        });
     }
 
 protected:
