@@ -75,8 +75,9 @@ struct ManipulationTaskParams
     void assignParts(MergeTreeMutableDataPartsVector parts, const std::function<UInt64()> & ts_getter);
 
 private:
-    template <class Vec>
-    void assignSourcePartsImpl(const Vec & parts, UInt64 ts = 0);
+    /// Calculate new part names based on source parts.
+    /// `parts` should be visible parts (not flattened).
+    template <class Vec> void calcNewPartNames(const Vec & parts, UInt64 ts = 0);
 };
 
 }

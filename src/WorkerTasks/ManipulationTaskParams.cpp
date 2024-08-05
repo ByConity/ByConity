@@ -27,6 +27,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOG_ERROR;
+    extern const int MERGE_BAD_PART_NAME;
 }
 
 String ManipulationTaskParams::toDebugString() const
@@ -74,7 +75,16 @@ String ManipulationTaskParams::toDebugString() const
 }
 
 template <class Vec>
-void ManipulationTaskParams::assignSourcePartsImpl(const Vec & parts, UInt64 ts)
+static String toPartNames(const Vec & parts)
+{
+    WriteBufferFromOwnString wb;
+    for (const auto & p : parts)
+        wb << p->get_name() << ", ";
+    return wb.str();
+}
+
+template <class Vec>
+void ManipulationTaskParams::calcNewPartNames(const Vec & parts, UInt64 ts)
 {
     if (unlikely(type == Type::Empty))
         throw Exception("Expected non-empty manipulate type", ErrorCodes::LOGICAL_ERROR);
@@ -114,14 +124,25 @@ void ManipulationTaskParams::assignSourcePartsImpl(const Vec & parts, UInt64 ts)
         part_info.min_block = (*left)->get_info().min_block;
         part_info.max_block = (*std::prev(right))->get_info().max_block;
         part_info.level = (*left)->get_info().level + 1;
-
-        // TODO: Double check any issue: previously the mutation is set to max part's mutation, now set mutation to current txn id.
-        // part_info.mutation = (*std::prev(right))->info.mutation;
         part_info.mutation = txn_id;
 
         for (auto it = left; it != right; ++it)
         {
             part_info.level = std::max(part_info.level, (*it)->get_info().level + 1);
+        }
+
+        /// If merged_part's name is same with some source part, it means there will be duplicate part names in result parts
+        /// (merged_part and some tombstone part). It's undefined behavior when committing such parts to KV.
+        /// So check the part name before executing.
+        /// Skip the check for single-part merge (parts.size == 1), as it acquire new block id on worker.
+        if (type == ManipulationType::Merge && parts.size() > 1)
+        {
+            for (const auto & p : parts)
+            {
+                if (p->get_info().min_block == part_info.min_block && p->get_info().max_block == part_info.max_block)
+                    throw Exception(ErrorCodes::MERGE_BAD_PART_NAME,
+                        "Merged part has the same part name with some source part: {}", toPartNames(parts));
+            }
         }
 
         new_part_names.push_back(part_info.getPartName());
@@ -133,24 +154,29 @@ void ManipulationTaskParams::assignSourcePartsImpl(const Vec & parts, UInt64 ts)
 /// For server (CnchMergeMutateThread)
 void ManipulationTaskParams::assignSourceParts(ServerDataPartsVector parts)
 {
-    assignSourcePartsImpl(parts);
+    /// Make sure there are only visible parts when doing calculating new part names.
+    calcNewPartNames(parts);
+    /// Then, flatten parts so that the RPC request contains all parts.
+    CnchPartsHelper::flattenPartsVector(parts);
     source_parts = std::move(parts);
 }
 
 /// For part merger
 void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
 {
-    assignSourcePartsImpl(parts);
+    calcNewPartNames(parts);
+    /// Do we need flatten parts for part merger?
     source_data_parts = std::move(parts);
 }
 
-/// For worker
+/// For worker. The input parts are flattened.
 void ManipulationTaskParams::assignParts(MergeTreeMutableDataPartsVector parts, const std::function<UInt64()> & ts_getter)
 {
     for (auto & part: parts)
         all_parts.emplace_back(std::move(part));
+    /// Make sure there are only visible parts when doing calculating new part names.
     source_data_parts = CnchPartsHelper::calcVisibleParts(all_parts, false);
-    assignSourcePartsImpl(source_data_parts, (source_data_parts.size() == 1 && type == Type::Merge) ? ts_getter() : 0);
+    calcNewPartNames(source_data_parts, (source_data_parts.size() == 1 && type == Type::Merge) ? ts_getter() : 0);
 }
 
 }
