@@ -898,6 +898,10 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
             {
                 /// A packet was received requesting to stop execution of the request.
                 executor.cancel();
+                if (state.io.coordinator && state.is_cancelled)
+                {
+                    throw Exception("Cancelled by client.", ErrorCodes::QUERY_WAS_CANCELLED);
+                }
                 break;
             }
 
