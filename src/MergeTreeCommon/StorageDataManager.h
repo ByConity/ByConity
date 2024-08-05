@@ -13,7 +13,11 @@ class StorageDataManager : public WithContext
 public:
     StorageDataManager(const ContextPtr context, const UUID & uuid_, const WGWorkerInfoPtr & worker_info_);
 
-    void loadDataPartsWithDBM(const MergeTreeMetaBase & storage, const UInt64 & version, ServerDataPartsWithDBM & server_parts);
+    void loadDataPartsWithDBM(
+        const MergeTreeMetaBase & storage,
+        const UInt64 & version,
+        std::unordered_map<String, ServerDataPartsWithDBM> & server_parts,
+        std::vector<std::shared_ptr<MergeTreePartition>> & partitions);
 
     WGWorkerInfoPtr getWorkerInfo() const { return worker_info; }
 
@@ -33,6 +37,8 @@ private:
     WGWorkerInfoPtr worker_info;
     std::shared_mutex mutex;
     std::map<UInt64, TableVersionPtr> versions;
+
+    Poco::Logger * log = &Poco::Logger::get("StorageDataManager");
 };
 
 using StorageDataManagerPtr = std::shared_ptr<StorageDataManager>;

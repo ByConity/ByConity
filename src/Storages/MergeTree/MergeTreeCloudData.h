@@ -49,6 +49,9 @@ public:
     /// DO NOT check reference count of parts.
     void unloadOldPartsByTimestamp(Int64 expired_ts);
 
+    /// set data description in sendResource stage if query with table version
+    void setDataDescription(WGWorkerInfoPtr && worker_info_, UInt64 data_version_);
+    void prepareVersionedPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names);
 protected:
     void addPreparedPart(MutableDataPartPtr & part, DataPartsLock &);
 
@@ -62,7 +65,7 @@ protected:
 
     void deactivateOutdatedParts();
 
-    size_t loadFromServerPartsInPartition(const Strings & required_partitions);
+    size_t loadFromServerPartsInPartition(const Strings & required_partitions, std::unordered_map<String, ServerDataPartsWithDBM> & server_parts_by_partition);
 
     void loadDataPartsInParallel(MutableDataPartsVector & parts);
 
@@ -79,6 +82,14 @@ protected:
         std::unique_ptr<MergeTreeSettings> settings_);
 
     ~MergeTreeCloudData() override = default;
+
+    /// guard for loading received data_parts and virtual_data_parts.
+    std::mutex load_data_parts_mutex;
+    bool data_parts_loaded{false};
+
+    // data description for query with table version;
+    WGWorkerInfoPtr worker_info;
+    UInt64 data_version {0};
 };
 
 }
