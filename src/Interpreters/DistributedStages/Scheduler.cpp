@@ -34,7 +34,11 @@ bool Scheduler::addBatchTask(BatchTaskPtr batch_task)
 
 bool Scheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
 {
-    return queue.tryPop(task, query_expiration_ms);
+    auto now = time_in_milliseconds(std::chrono::system_clock::now());
+    if (query_expiration_ms <= now)
+        return false;
+    else
+        return queue.tryPop(task, query_expiration_ms - now);
 }
 
 void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
