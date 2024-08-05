@@ -377,6 +377,7 @@ enum PreloadLevelSettings : UInt64
       0) \
 \
     M(Bool, log_queries, 1, "Log requests and write the log to the system table.", 0) \
+    M(Bool, log_query_plan, 0, "Log json format query plan to the system query_log table.", 0) \
     M(Bool, log_max_io_thread_queries, 1, "Log max io time thread requests and write the log to the system table", 0) \
     M(LogQueriesType, \
       log_queries_min_type, \
