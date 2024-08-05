@@ -69,6 +69,7 @@ public:
     using TransactionRecords = std::vector<TransactionRecord>;
 
 private:
+    String start_key;
     void cleanTxnRecords(const TransactionRecords & records);
     void cleanUndoBuffers(const TransactionRecords & records);
     void cleanTxnRecord(const TransactionRecord & record, TxnTimestamp current_time, std::vector<TxnTimestamp> & cleanTxnIds, TxnGCLog & summary);

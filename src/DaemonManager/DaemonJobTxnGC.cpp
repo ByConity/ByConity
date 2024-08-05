@@ -39,8 +39,10 @@ bool DaemonJobTxnGC::executeImpl()
 {
 
     const Context & context = *getContext();
-    auto txn_records
-        = context.getCnchCatalog()->getTransactionRecordsForGC(context.getConfigRef().getInt("cnch_txn_clean_batch_size", 200000));
+    String last_start_key = start_key;
+    auto txn_records = context.getCnchCatalog()->getTransactionRecordsForGC(
+        start_key, context.getConfigRef().getInt("cnch_txn_clean_batch_size", 200000));
+    LOG_DEBUG(log, "start_key changed from: {} to {}", last_start_key, start_key);
     if (!txn_records.empty())
     {
         cleanTxnRecords(txn_records);
