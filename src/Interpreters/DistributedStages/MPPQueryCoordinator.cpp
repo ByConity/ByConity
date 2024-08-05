@@ -6,17 +6,18 @@
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
-#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <Interpreters/DistributedStages/MPPQueryStatus.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
-#include <common/logger_useful.h>
-#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/sendPlanSegment.h>
+#include <common/logger_useful.h>
+#include "Interpreters/DistributedStages/ProgressManager.h"
 
 
 #include <boost/msm/front/euml/common.hpp>
@@ -208,7 +209,13 @@ BlockIO MPPQueryCoordinator::execute()
             process_list_elem_ptr->get().updateProgressIn(p);
     });
 
-    scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
+    {
+        /// only send progress before executing final plan segment,
+        /// working thread will join when this tcp progress sender is destroyed
+        auto sender = std::make_unique<TCPProgressSender>(
+            query_context->getSendTCPProgress(), query_context->getSettingsRef().interactive_delay / 1000);
+        scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
+    }
 
     if (scheduler_status && !scheduler_status->exception.empty())
     {

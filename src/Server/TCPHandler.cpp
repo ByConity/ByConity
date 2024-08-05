@@ -396,6 +396,12 @@ void TCPHandler::runImpl()
                 interpretSettings(ast, query_context);
             }
 
+            if (query_context->getSettingsRef().bsp_mode)
+            {
+                /// for bsp mode, progress needs to be sent during scheduling.
+                query_context->setSendTCPProgress([&]() { this->sendProgress(); });
+            }
+
             auto * insert_query = ast->as<ASTInsertQuery>();
             if (!(insert_query && insert_query->data) && query_context->isAsyncMode())
             {
@@ -2110,12 +2116,9 @@ void TCPHandler::updateProgress(const Progress & value)
 void TCPHandler::sendProgress()
 {
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
-    if (!increment.empty())
-    {
-        writeVarUInt(Protocol::Server::Progress, *out);
-        increment.write(*out, client_tcp_protocol_version);
-        out->next();
-    }
+    writeVarUInt(Protocol::Server::Progress, *out);
+    increment.write(*out, client_tcp_protocol_version);
+    out->next();
 }
 
 void TCPHandler::sendLogs()

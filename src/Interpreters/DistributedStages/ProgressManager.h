@@ -1,12 +1,33 @@
 #pragma once
 
+#include <condition_variable>
+#include <memory>
 #include <IO/Progress.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
+#include <Common/ThreadPool.h>
 
 namespace DB
 {
+
+// send progress repeatedly
+class TCPProgressSender
+{
+public:
+    TCPProgressSender(std::function<void()> send_tcp_progress_, size_t interval_);
+    ~TCPProgressSender();
+
+private:
+    Poco::Logger * logger;
+    std::atomic_bool shutdown = {false};
+    std::mutex mu;
+    std::condition_variable var;
+    std::function<void()> send_tcp_progress;
+    std::unique_ptr<ThreadFromGlobalPool> thread;
+    size_t interval;
+};
+
 class ProgressManager
 {
 public:
