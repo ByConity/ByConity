@@ -56,10 +56,7 @@ public:
     }
 
 protected:
-    virtual PlanSignature computeStepHash(PlanNodePtr node)
-    {
-        return normalizer.computeNormalStep(node)->hash();
-    }
+    virtual PlanSignature computeStepHash(PlanNodePtr node) { return normalizer.computeNormalStep(node)->hash(false); }
 
     static size_t combine(const std::vector<size_t> & hashes);
 

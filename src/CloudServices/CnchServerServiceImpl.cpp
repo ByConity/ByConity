@@ -38,6 +38,7 @@
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
+#include <CloudServices/CnchDedupHelper.h>
 #include <DataTypes/ObjectUtils.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <IO/ReadBufferFromString.h>
@@ -189,14 +190,18 @@ void CnchServerServiceImpl::commitParts(
                 CnchDataWriter cnch_writer(
                     *cnch,
                     rpc_context,
-                    ManipulationType(req->type()),
+                    static_cast<ManipulationType>(req->type()),
                     req->task_id(),
                     std::move(consumer_group),
                     tpl,
                     binlog,
                     peak_memory_usage);
 
-                cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
+                auto dedup_mode = static_cast<CnchDedupHelper::DedupMode>(req->dedup_mode());
+                cnch_writer.setDedupMode(dedup_mode);
+
+                cnch_writer.commitPreparedCnchParts(
+                    DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts), dedup_mode});
             }
             catch (...)
             {
@@ -738,6 +743,13 @@ void CnchServerServiceImpl::fetchPartitions(
             session_context->setCurrentDatabase(request->database());
             ReadBufferFromString rb(request->predicate());
             ASTPtr query_ptr = deserializeAST(rb);
+            /// We should to add `database` into AST before calling `buildSelectQueryInfoForQuery`.
+            {
+                ASTSelectQuery * select_query = query_ptr->as<ASTSelectQuery>();
+                if (!select_query)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected AST type found in buildSelectQueryInfoForQuery");
+                select_query->replaceDatabaseAndTable(request->database(), request->table());
+            }
             SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
@@ -1729,6 +1741,17 @@ void CnchServerServiceImpl::executeOptimize(
 
                 auto & database_catalog = DatabaseCatalog::instance();
                 auto istorage = database_catalog.getTable(storage_id, global_context);
+
+                if (istorage && istorage->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
+                {
+                    if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(istorage.get()))
+                    {
+                        LOG_TRACE(
+                            log,
+                            "Object schema snapshot:{}",
+                            cnch_table->getStorageSnapshot(cnch_table->getInMemoryMetadataPtr(), nullptr)->object_columns.toString());
+                    }
+                }
 
                 auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
                 auto task_id = merge_mutate_thread->triggerPartMerge(istorage, partition_id, false, enable_try, false);

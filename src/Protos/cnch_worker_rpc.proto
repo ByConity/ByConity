@@ -490,19 +490,38 @@ message TableDataParts
   optional uint64 table_version = 11;
 }
 
+// Send original (cnch) table definition and override to worker, in order to
+// 1. remove server's parsing & formatting overhead
+//   before
+//     server: parse(create query) -> rewrite(ast) -> format(ast) -> send(new create query)
+//     worker: parse(new create query) -> create table(ast)
+//   after
+//     server: send(create query, override)
+//     worker: parse(create query) -> rewrite(ast) -> create table(ast, override)
+// 2. be able to cache table template at worker
+message CacheableTableDefinition
+{
+  required StorageID storage_id = 1;
+  required string definition = 2;
+  optional string dynamic_object_column_schema = 3; // present if not empty
+  required uint32 local_engine_type = 4; // WorkerEngineType
+  required string local_table_name = 5;
+  optional string local_underlying_dictionary_tables = 6; // for bitengine
+}
+
 message SendResourcesReq
 {
   required uint64 txn_id = 1;
   required uint64 primary_txn_id = 2;
   required uint64 timeout = 3;
-  /// create queries
   repeated string create_queries = 4;
-  /// data parts
   repeated TableDataParts data_parts = 5;
   optional string disk_cache_mode = 6;
   repeated UDFInfo udf_infos = 7;
   repeated string dynamic_object_column_schema = 8;
   optional WorkerInfo worker_info = 9;
+  // can coexist with `create_queries'
+  repeated CacheableTableDefinition cacheable_create_queries = 10;
 }
 
 message SendResourcesResp
@@ -551,6 +570,28 @@ message CheckMySQLSyncThreadStatusResp
   optional bool is_running = 2;
 }
 
+message ExecuteDedupTaskReq
+{
+  required uint64 txn_id = 1;
+  required uint32 rpc_port = 2;
+  required UUID table_uuid = 3;
+  repeated DataModelPart new_parts = 4;
+  repeated string new_parts_paths = 5;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_new_parts = 6;
+  repeated DataModelPart staged_parts = 7;
+  repeated string staged_parts_paths = 8;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_staged_parts = 9;
+  repeated DataModelPart visible_parts = 10;
+  repeated string visible_parts_paths = 11;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_visible_parts = 12;
+  required uint32 dedup_mode = 13;
+}
+
+message ExecuteDedupTaskResp
+{
+  optional string exception = 1;
+}
+
 service CnchWorkerService
 {
   rpc executeSimpleQuery(ExecuteSimpleQueryReq) returns (ExecuteSimpleQueryResp);
@@ -596,4 +637,5 @@ service CnchWorkerService
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
   rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
   rpc dropPartDiskCache(DropPartDiskCacheReq) returns (DropPartDiskCacheResp);
+  rpc executeDedupTask(ExecuteDedupTaskReq) returns (ExecuteDedupTaskResp);
 }

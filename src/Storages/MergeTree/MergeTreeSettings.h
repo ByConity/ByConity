@@ -476,7 +476,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, dedup_worker_max_heartbeat_interval, 16, "", 0) \
     M(Bool, partition_level_unique_keys, true, "", 0) \
     M(UInt64, staged_part_lifetime_threshold_ms_to_block_kafka_consume, 10000, "", 0) \
-    M(Seconds, unique_acquire_write_lock_timeout, 300, "", 0) \
+    M(Seconds, unique_acquire_write_lock_timeout, 300, "It has lower priority than session setting. Only when session setting is zero, use this setting", 0) \
     M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
     M(MaxThreads, unique_table_dedup_threads, 8, "", 0) \
     M(Seconds, dedup_worker_progress_log_interval, 120, "", 0) \

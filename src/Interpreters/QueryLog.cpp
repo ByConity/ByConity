@@ -150,7 +150,8 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"fallback_reason", std::make_shared<DataTypeString>()},
         {"segment_profiles", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"virtual_warehouse", std::make_shared<DataTypeString>()},
-        {"worker_group", std::make_shared<DataTypeString>()}
+        {"worker_group", std::make_shared<DataTypeString>()},
+        {"query_plan", std::make_shared<DataTypeString>()}
     };
 
 }
@@ -353,6 +354,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
 
     columns[i++]->insert(virtual_warehouse);
     columns[i++]->insert(worker_group);
+    columns[i++]->insert(query_plan);
 }
 
 void QueryLogElement::appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i)

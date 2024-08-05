@@ -30,7 +30,6 @@ PARTITION BY toDate(event_time)
 PRIMARY KEY s
 ORDER BY (s, id)
 UNIQUE KEY id
-SETTINGS cnch_temporary_table = 1
 )#";
     EXPECT_EQ(res, expected);
 }
@@ -55,7 +54,6 @@ PARTITION BY toDate(event_time)
 PRIMARY KEY s
 ORDER BY (s, id)
 UNIQUE KEY id
-SETTINGS cnch_temporary_table = 1
 )#";
     EXPECT_EQ(res, expected);
 }
@@ -76,7 +74,6 @@ TEST(test_create_query_for_cloud_table, version_collapse)
 )
 ENGINE = CloudVersionedCollapsingMergeTree(db1, tb1, Sign, Version)
 ORDER BY UserID
-SETTINGS cnch_temporary_table = 1
 )#";
     EXPECT_EQ(res, expected);
 }
@@ -94,7 +91,6 @@ TEST(test_create_query_for_cloud_table, s3)
     `age` String
 )
 ENGINE = CloudS3(db1, tb1, `http://some_link/some_path/some_file.csv`, CSV, none, AKkkkkkkkkk, sKkkkkkkkkkkkkkkkkkkk)
-SETTINGS cnch_temporary_table = 1
 )#";
     EXPECT_EQ(res, expected);
 }
@@ -118,7 +114,6 @@ ENGINE = CloudMergeTree(db1, tb1)
 PARTITION BY toDate(event_time)
 PRIMARY KEY s
 ORDER BY (s, id)
-SETTINGS cnch_temporary_table = 1
 )#";
     EXPECT_EQ(res, expected);
 }

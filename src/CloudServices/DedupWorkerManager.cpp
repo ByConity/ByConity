@@ -169,7 +169,8 @@ void DedupWorkerManager::createDeduperOnWorker(StoragePtr & storage, StorageCnch
         return;
     try
     {
-        info->worker_storage_id = {storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName()};
+        auto cnch_storage_id = storage->getStorageID();
+        info->worker_storage_id = {cnch_storage_id.getDatabaseName(), cnch_storage_id.getTableName()};
         selectDedupWorker(cnch_table, info, info_lock);
 
         /// create a unique table suffix
@@ -177,14 +178,15 @@ void DedupWorkerManager::createDeduperOnWorker(StoragePtr & storage, StorageCnch
         info->worker_storage_id.table_name = storage_id.table_name + deduper_table_suffix;
 
         auto create_ast = getASTCreateQueryFromStorage(*storage, getContext());
-        replaceCnchWithCloud(
-            *create_ast, info->worker_storage_id.table_name, storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName());
-        modifyOrAddSetting(*create_ast, "cloud_enable_dedup_worker", Field(UInt64(1)));
-        modifyOrAddSetting(*create_ast, "allow_nullable_key", Field(UInt64(1)));
+        auto & create = *create_ast;
+        create.table =  info->worker_storage_id.table_name;
+        replaceCnchWithCloud(create.storage, cnch_storage_id.getDatabaseName(), cnch_storage_id.getTableName());
+        modifyOrAddSetting(create, "cloud_enable_dedup_worker", Field(UInt64(1)));
+        modifyOrAddSetting(create, "allow_nullable_key", Field(UInt64(1)));
         /// Set cnch uuid for CloudMergeTree to commit data on worker side
-        modifyOrAddSetting(*create_ast, "cnch_table_uuid", Field(static_cast<String>(UUIDHelpers::UUIDToString(create_ast->uuid))));
+        modifyOrAddSetting(create, "cnch_table_uuid", Field(static_cast<String>(UUIDHelpers::UUIDToString(create_ast->uuid))));
         /// It's not allowed to create multi tables with same uuid on Cnch-Worker side now
-        create_ast->uuid = UUIDHelpers::Nil;
+        create.uuid = UUIDHelpers::Nil;
         String create_query = getTableDefinitionFromCreateQuery(static_pointer_cast<IAST>(create_ast), false);
         LOG_TRACE(log, "Create table query of dedup worker: {}", create_query);
 

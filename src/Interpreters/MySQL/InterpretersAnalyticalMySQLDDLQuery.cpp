@@ -283,61 +283,6 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, Names
     return std::make_tuple(non_nullable_primary_keys_names_and_types, getNames(*unique_keys, context, columns), getNames(*keys, context, columns), getNames(*cluster_keys, context, columns));
 }
 
-static ASTPtr getPartitionPolicy(const NamesAndTypesList & primary_keys)
-{
-    const auto & numbers_partition = [&](const String & column_name, size_t type_max_size) -> ASTPtr
-    {
-        if (type_max_size <= 1000)
-            return std::make_shared<ASTIdentifier>(column_name);
-
-        return makeASTFunction("intDiv", std::make_shared<ASTIdentifier>(column_name),
-           std::make_shared<ASTLiteral>(UInt64(type_max_size / 1000)));
-    };
-
-    ASTPtr best_partition;
-    size_t best_size = 0;
-    for (const auto & primary_key : primary_keys)
-    {
-        DataTypePtr type = primary_key.type;
-        WhichDataType which(type);
-
-        if (which.isNullable())
-            throw Exception("LOGICAL ERROR: MySQL primary key must be not null, it is a bug.", ErrorCodes::LOGICAL_ERROR);
-
-        if (which.isDate() || which.isDate32() || which.isDateTime() || which.isDateTime64())
-        {
-            /// In any case, date or datetime is always the best partitioning key
-            return makeASTFunction("toYYYYMM", std::make_shared<ASTIdentifier>(primary_key.name));
-        }
-
-        if (type->haveMaximumSizeOfValue() && (!best_size || type->getSizeOfValueInMemory() < best_size))
-        {
-            if (which.isInt8() || which.isUInt8())
-            {
-                best_size = type->getSizeOfValueInMemory();
-                best_partition = numbers_partition(primary_key.name, std::numeric_limits<UInt8>::max());
-            }
-            else if (which.isInt16() || which.isUInt16())
-            {
-                best_size = type->getSizeOfValueInMemory();
-                best_partition = numbers_partition(primary_key.name, std::numeric_limits<UInt16>::max());
-            }
-            else if (which.isInt32() || which.isUInt32())
-            {
-                best_size = type->getSizeOfValueInMemory();
-                best_partition = numbers_partition(primary_key.name, std::numeric_limits<UInt32>::max());
-            }
-            else if (which.isInt64() || which.isUInt64())
-            {
-                best_size = type->getSizeOfValueInMemory();
-                best_partition = numbers_partition(primary_key.name, std::numeric_limits<UInt64>::max());
-            }
-        }
-    }
-
-    return best_partition;
-}
-
 static ASTPtr getOrderByPolicy(
     const NamesAndTypesList & primary_keys,  const NamesAndTypesList & keys = NamesAndTypesList(), const NamesAndTypesList & cluster_keys = NamesAndTypesList())
 {
@@ -551,7 +496,6 @@ void InterpreterCreateAnalyticMySQLImpl::validate(const InterpreterCreateAnalyti
             validateTTLExpression(mysql_storage->ttl_table->ptr());
         }
 
-
         if (mysql_storage->engine)
         {
             auto upper_name = Poco::toUpper(mysql_storage->engine->name);
@@ -615,7 +559,7 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         engine_name = Poco::toUpper(mysql_storage->mysql_engine->as<ASTLiteral>()->value.get<String>());
         if (engine_names.find(engine_name) == engine_names.end())
         {
-            throw Exception ("Unsupported String Engine Name, please remove quotes", ErrorCodes::MYSQL_SYNTAX_ERROR);
+            throw Exception ("Unsupported Engine Name", ErrorCodes::MYSQL_SYNTAX_ERROR);
         }
     }
 
@@ -625,6 +569,7 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         return query;
     }
 
+    // table
     if (has_table_definition)
     {
         NamesAndTypesList columns_name_and_type = getColumnsList(create_defines->columns);
@@ -633,15 +578,6 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         setNotNullModifier(create_defines->columns, primary_keys);
         convertDecimal(create_defines->columns, primary_keys);
 
-        /// The `partition by` expression must use primary keys, otherwise the primary keys will not be merge.
-        if (mysql_storage->mysql_partition_by)
-        {
-            storage->set(storage->partition_by, mysql_storage->mysql_partition_by->clone());
-        }
-        else if (ASTPtr partition_expression = getPartitionPolicy(primary_keys))
-            storage->set(storage->partition_by, partition_expression);
-
-        /// The `order by` expression must use primary keys, otherwise the primary keys will not be merge.
         if (ASTPtr order_by_expression = getOrderByPolicy(primary_keys, keys, cluster_keys))
         {
             auto & list = order_by_expression->as<ASTFunction>()->arguments;
@@ -660,46 +596,41 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         rewritten_query->columns_list->mysql_indices = nullptr;
     }
 
-    if (!storage->engine || engine_names.find(Poco::toUpper(storage->engine->name)) != engine_names.end())
-        storage->set(storage->engine, makeASTFunction("CnchMergeTree"));
-    if (!storage->order_by)
-        storage->set(storage->order_by, makeASTFunction("tuple"));
-    if (!storage->unique_key)
+    // storage
     {
-        if (storage->primary_key)
-        {
-            storage->set(storage->unique_key, storage->primary_key->clone());
-            storage->primary_key = nullptr;
-        }
-        else
-        {
-            storage->set(storage->unique_key, makeASTFunction("tuple"));
-        }
-    }
+        if (!storage->engine || engine_names.find(Poco::toUpper(storage->engine->name)) != engine_names.end())
+            storage->set(storage->engine, makeASTFunction("CnchMergeTree"));
 
-    if (mysql_storage->distributed_by)
-    {
-        // distributed by hash(col) -> cluster by col
-        const String vw_name = "vw_default";
-        auto vw = context->getVirtualWarehousePool().get(vw_name);
-        // context->setCurrentVW(std::move(vw_handle));
-        // auto vw = context->tryGetCurrentVW();
-        int total_bucket_number = vw ? vw->getNumWorkers() : 1;
-        auto cluster_by_ast = std::make_shared<ASTClusterByElement>(mysql_storage->distributed_by->clone(), std::make_shared<ASTLiteral>(total_bucket_number), 0, false, false);
-        storage->set(storage->cluster_by, cluster_by_ast);
-    }
-    else if (mysql_storage->cluster_by)
-    {
-        storage->set(storage->cluster_by, mysql_storage->cluster_by->clone());
-    }
+        if (!storage->order_by)
+            storage->set(storage->order_by, makeASTFunction("tuple"));
 
-    {
+        if (!storage->unique_key)
+        {
+            // clickhouse syntax for primary key
+            if (storage->primary_key)
+            {
+                storage->set(storage->unique_key, storage->primary_key->clone());
+                storage->primary_key = nullptr;
+            }
+            else
+            {
+                storage->set(storage->unique_key, makeASTFunction("tuple"));
+            }
+        }
+
+        if (mysql_storage->mysql_partition_by)
+        {
+            storage->set(storage->partition_by, mysql_storage->mysql_partition_by->clone());
+        }
+
         // settings
         ASTPtr settings = std::make_shared<ASTSetQuery>();
         auto *settings_ast = settings->as<ASTSetQuery>();
         settings_ast->is_standalone = false;
         bool has_index_granularity_setting = false;
         bool has_partition_level_unique_keys_setting = false;
+        bool has_enable_bucket_level_unique_keys = false;
+        bool has_enable_bucket_for_distribute = context->getSettingsRef().enable_bucket_for_distribute;
         if (auto *const mysql_settings = mysql_storage->settings->as<ASTSetQuery>())
         {
             for (const auto & change: mysql_settings->changes)
@@ -708,16 +639,39 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
                     has_index_granularity_setting = true;
                 if (change.name == "partition_level_unique_keys")
                     has_partition_level_unique_keys_setting = true;
+                if (change.name == "enable_bucket_level_unique_keys")
+                    has_enable_bucket_level_unique_keys = true;
             }
         }
-        // It's not recommended to mix mysql and clickhosue dialects
-        // but we have to provide this in case of fall back
+
+        // block_size -> index_granularity
         if (mysql_storage->block_size && !has_index_granularity_setting)
-            // block_size -> index_granularity
             settings_ast->changes.push_back({"index_granularity", mysql_storage->block_size->as<ASTLiteral>()->value.get<Int64>()});
 
+        // distributed by hash(col) -> cluster by col
+        if (mysql_storage->distributed_by && has_enable_bucket_for_distribute)
+        {
+            const String vw_name = "vw_default";
+            auto vw = context->getVirtualWarehousePool().get(vw_name);
+
+            int total_bucket_number = vw ? vw->getNumWorkers() : 1;
+            auto cluster_by_ast = std::make_shared<ASTClusterByElement>(mysql_storage->distributed_by->clone(), std::make_shared<ASTLiteral>(total_bucket_number), 0, false, false);
+            storage->set(storage->cluster_by, cluster_by_ast);
+
+            // distribute by must contain unique key
+            if (!has_enable_bucket_level_unique_keys)
+                settings_ast->changes.push_back({"enable_bucket_level_unique_keys", 1});
+        }
+        else if (mysql_storage->cluster_by)
+        {
+            // clickhouse cluster by syntax
+            storage->set(storage->cluster_by, mysql_storage->cluster_by->clone());
+        }
+
+        // storage settings for mysql behavior
         if (!has_partition_level_unique_keys_setting)
             settings_ast->changes.push_back({"partition_level_unique_keys", 0});
+
         if (const auto mysql_settings = mysql_storage->settings->as<ASTSetQuery>())
             settings_ast->changes.insert(settings_ast->changes.end(), mysql_settings->changes.begin(), mysql_settings->changes.end());
 

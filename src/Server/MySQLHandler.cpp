@@ -201,6 +201,7 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
     queries_replacements.emplace_back("SHOW GLOBAL VARIABLES", showVariableReplacementQuery);
     queries_replacements.emplace_back("SHOW INDEXES", showIndexReplacementQuery);
     queries_replacements.emplace_back("SHOW INDEX", showIndexReplacementQuery);
+    queries_replacements.emplace_back("SHOW KEYS", showIndexReplacementQuery);
     queries_replacements.emplace_back("SHOW PLUGINS", selectEmptyReplacementQuery);
     queries_replacements.emplace_back("SHOW PRIVILEGES", ReplaceWith<SHOW_PRIVILEGES>::fn);
     queries_replacements.emplace_back("SHOW PROCEDURE STATUS", selectEmptySetQuery);
@@ -559,6 +560,8 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
         query_context->setSetting("mysql_map_fixed_string_to_text_in_show_columns", 1);
         /// TODO(fredwang) change it to a smaller threshold?
         query_context->setSetting("max_execution_time", 18000);
+        /// required by quickbi, otherwise it would fail to get table info
+        query_context->setSetting("allow_mysql_having_name_resolution", 1);
         CurrentThread::QueryScope query_scope{query_context};
 
         std::atomic<size_t> affected_rows {0};

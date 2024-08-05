@@ -1,4 +1,5 @@
 #include <Processors/ResizeProcessor.h>
+#include <common/logger_useful.h>
 #include <iostream>
 
 namespace DB
@@ -263,6 +264,8 @@ IProcessor::Status ResizeProcessor::prepare(const PortNumbers & updated_inputs, 
 
 IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_inputs, const PortNumbers & updated_outputs)
 {
+    static auto * logger = &Poco::Logger::get("MultiPartitionExchangeSink");
+
     if (!initialized)
     {
         initialized = true;
@@ -320,8 +323,15 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
             {
                 input.status = InputStatus::Finished;
                 ++num_finished_inputs;
-
-                waiting_outputs.push(input.waiting_output);
+                /// Avoid pushing data to outputs which are already hasDate or finished
+                auto & output = output_ports[input.waiting_output];
+                if (!output.port->isFinished() && output.port->canPush())
+                {
+                    /// reset status to avoid error: Invalid status NotActive for associated output
+                    /// for example, if output with NotActive status is pushed to waiting_outputs and then assign to another input.
+                    output.status = OutputStatus::NeedData;
+                    waiting_outputs.push(input.waiting_output);
+                }
             }
             continue;
         }
@@ -347,10 +357,8 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
 
         auto & waiting_output = output_ports[input_with_data.waiting_output];
 
-        if (waiting_output.status == OutputStatus::NotActive)
-            throw Exception("Invalid status NotActive for associated output.", ErrorCodes::LOGICAL_ERROR);
-
-        if (waiting_output.status != OutputStatus::Finished)
+        /// Output status could be NotActive when abandoned_chunks are pushed to it.
+        if (waiting_output.status == OutputStatus::NeedData)
         {
             waiting_output.port->pushData(input_with_data.port->pullData(/* set_not_needed = */ true));
             waiting_output.status = OutputStatus::NotActive;
@@ -367,7 +375,8 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
             disabled_input_ports.push(input_number);
     }
 
-    if (num_finished_inputs == inputs.size())
+    /// Losing abandoned chunks if not judge empty.
+    if (num_finished_inputs == inputs.size() && abandoned_chunks.empty())
     {
         for (auto & output : outputs)
             output.finish();
@@ -380,11 +389,17 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
     {
         auto & waiting_output = output_ports[waiting_outputs.front()];
         waiting_outputs.pop();
-
-        waiting_output.port->pushData(std::move(abandoned_chunks.back()));
-        abandoned_chunks.pop_back();
-
-        waiting_output.status = OutputStatus::NotActive;
+        // push chunk to finished port will lose it
+        if (waiting_output.status == OutputStatus::NeedData)
+        {
+            waiting_output.port->pushData(std::move(abandoned_chunks.back()));
+            abandoned_chunks.pop_back();
+            waiting_output.status = OutputStatus::NotActive;
+        }
+        else
+        {
+            LOG_WARNING(logger, "One output in waiting_outputs is finished");
+        }
     }
 
     /// Enable more inputs if needed.
@@ -406,9 +421,19 @@ IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_in
        auto & output = output_ports[waiting_outputs.front()];
        waiting_outputs.pop();
 
+       if (output.status != OutputStatus::Finished)
+            ++num_finished_outputs;
+
        output.status = OutputStatus::Finished;
        output.port->finish();
-       ++num_finished_outputs;
+    }
+
+    if (num_finished_outputs == outputs.size())
+    {
+       for (auto & input : inputs)
+            input.close();
+
+       return Status::Finished;
     }
 
     if (disabled_input_ports.empty())

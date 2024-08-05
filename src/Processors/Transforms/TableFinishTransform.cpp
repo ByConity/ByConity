@@ -99,18 +99,10 @@ void TableFinishTransform::consume(Chunk chunk)
 
 void TableFinishTransform::onFinish()
 {
-    if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
-        cnch_table && cnch_table->commitTxnFromWorkerSide(cnch_table->getInMemoryMetadataPtr(), context))
-    {
-        /// for unique table, insert select|infile is committed from worker side
-        /// TODO: should also commit in server side
-    }
-    else
-    {
-        TransactionCnchPtr txn = context->getCurrentTransaction();
-        txn->setMainTableUUID(storage->getStorageUUID());
-        txn->commitV2();
-    }
+    TransactionCnchPtr txn = context->getCurrentTransaction();
+    txn->setMainTableUUID(storage->getStorageUUID());
+    txn->commitV2();
+
     /// Make sure locks are release after transaction commit
     if (!lock_holders.empty())
         lock_holders.clear();

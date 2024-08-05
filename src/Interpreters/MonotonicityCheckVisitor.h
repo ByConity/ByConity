@@ -69,6 +69,12 @@ public:
             if (!pos)
                 return false;
 
+            /// It is possible that tables list is empty.
+            /// IdentifierSemantic get the position from AST, and it can be not valid to use it.
+            /// One example is `fetchPartitions` from 02147_order_by_optimizations.sql
+            if (*pos >= tables.size())
+                return false;
+
             if (auto data_type_and_name = tables[*pos].columns.tryGetByName(identifier->shortName()))
             {
                 arg_data_type = data_type_and_name->type;

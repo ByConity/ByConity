@@ -47,7 +47,7 @@
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
 #include <Storages/AlterCommands.h>
-#include <Storages/StorageDictCloudMergeTree.h>  
+#include <Storages/StorageDictCloudMergeTree.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
@@ -141,9 +141,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     {
         try
         {
-
             checkPartitionKeyAndInitMinMax(metadata_.partition_key);
-            setProperties(metadata_, metadata_, false);
             if (minmax_idx_date_column_pos == -1)
                 throw Exception("Could not find Date column", ErrorCodes::BAD_TYPE_OF_FIELD);
         }
@@ -158,39 +156,18 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     {
         is_custom_partitioned = true;
         checkPartitionKeyAndInitMinMax(metadata_.partition_key);
-        setProperties(metadata_, metadata_, false);
     }
 
-    format_version = MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING;
+    storage_address = fmt::format("{}", fmt::ptr(this));
 
     /// NOTE: using the same columns list as is read when performing actual merges.
-    merging_params.check(metadata_, metadata_.hasUniqueKey());
-
-    if (merging_params.partitionValueAsVersion())
-    {
-        if (metadata_.partition_key.sample_block.columns() == 0)
-            throw Exception("Table is not partitioned, can't use partition value as version", ErrorCodes::BAD_ARGUMENTS);
-        if (metadata_.partition_key.sample_block.columns() > 1)
-            throw Exception("Partition key contains more than one column, can't use it as version", ErrorCodes::BAD_ARGUMENTS);
-        auto partition_key_type = metadata_.partition_key.sample_block.getDataTypes()[0];
-        if (!partition_key_type->canBeUsedAsVersion())
-            throw Exception("Partition key has type " + partition_key_type->getName() + ", can't be used as version", ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    if (metadata_.hasUniqueKey() && !attach_)
-        checkVersionColumnConstraint();
+    merging_params.check(metadata_, attach_);
 
     if (metadata_.sampling_key.definition_ast != nullptr)
     {
         /// This is for backward compatibility.
         checkSampleExpression(metadata_, getSettings()->compatibility_allow_sampling_expression_not_in_primary_key);
     }
-
-    checkTTLExpressions(metadata_, metadata_);
-
-    storage_address = fmt::format("{}", fmt::ptr(this));
-
-    setServerVwName(getSettings()->cnch_server_vw);
 }
 
 StoragePolicyPtr MergeTreeMetaBase::getStoragePolicy(StorageLocation location) const
@@ -213,7 +190,7 @@ const String& MergeTreeMetaBase::getRelativeDataPath(StorageLocation location) c
     return relative_data_path;
 }
 
-void MergeTreeMetaBase::setRelativeDataPath(StorageLocation location, const String& rel_path)
+void MergeTreeMetaBase::setRelativeDataPath(StorageLocation location, const String & rel_path)
 {
     if (unlikely(location == StorageLocation::AUXILITY))
     {
@@ -1434,22 +1411,9 @@ MergeTreeMetaBase::DataPartPtr MergeTreeMetaBase::getAnyPartInPartition(
     return nullptr;
 }
 
-void MergeTreeMetaBase::checkVersionColumnConstraint()
+void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & metadata, bool attach) const
 {
-    if (merging_params.partitionValueAsVersion())
-    {
-        auto partition_types = getInMemoryMetadataPtr()->partition_key.sample_block.getDataTypes();
-        if (partition_types.size() >= 1)
-        {
-            auto & type = partition_types[0];
-            if (TypeIndex::UInt64 < type->getTypeId() && type->getTypeId() <= TypeIndex::Int256)
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "The type of version column is {}, it is not compatible with UInt64", type->getName());
-        }
-    }
-}
-
-void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & metadata, bool has_unique_key) const
-{
+    const bool has_unique_key = metadata.hasUniqueKey();
     const auto columns = metadata.getColumns().getAllPhysical();
 
     if (!sign_column.empty() && mode != MergingParams::Collapsing && mode != MergingParams::VersionedCollapsing)
@@ -1553,8 +1517,31 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
         }
     }
 
-    if (has_unique_key && !partitionValueAsVersion())
-        check_version_column(true, "Unique Key");
+
+    if (has_unique_key)
+    {
+        if (partitionValueAsVersion())
+        {
+            if (metadata.partition_key.sample_block.columns() == 0)
+                throw Exception("Table is not partitioned, can't use partition value as version", ErrorCodes::BAD_ARGUMENTS);
+            if (metadata.partition_key.sample_block.columns() > 1)
+                throw Exception("Partition key contains more than one column, can't use it as version", ErrorCodes::BAD_ARGUMENTS);
+            auto partition_key_type = metadata.partition_key.sample_block.getDataTypes()[0];
+            if (!partition_key_type->canBeUsedAsVersion())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Partition key has type {}, can't be used as version", partition_key_type->getName());
+            // singed integer and types larger than 64 bits are not supported currently
+            if (!attach && TypeIndex::UInt64 < partition_key_type->getTypeId() && partition_key_type->getTypeId() <= TypeIndex::Int256)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Partition key has type {}, can't be used as version", partition_key_type->getName());
+        }
+        else
+        {
+            check_version_column(true, "Unique Key");
+        }
+    }
+    else if (partitionValueAsVersion())
+    {
+        throw Exception("Table doesn't have UNIQUE KEY, can't use partition value as version", ErrorCodes::BAD_ARGUMENTS);
+    }
 
     if (mode == MergingParams::Replacing)
         check_version_column(true, "ReplacingMergeTree");
@@ -1919,15 +1906,6 @@ void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns,
         if (column.name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
             throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
     }
-}
-
-bool MergeTreeMetaBase::commitTxnFromWorkerSide(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const
-{
-    if (!metadata_snapshot->hasUniqueKey())
-        return false;
-    bool enable_staging_area = query_context->getSettingsRef().enable_staging_area_for_write || getSettings()->cloud_enable_staging_area;
-    bool enable_append_mode = query_context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
-    return !enable_append_mode && !enable_staging_area;
 }
 
 ColumnSize MergeTreeMetaBase::getMapColumnSizes(const DataPartPtr & part, const String & map_implicit_column_name) const
@@ -2387,8 +2365,17 @@ void MergeTreeMetaBase::getDeleteBitmapMetaForServerParts(const ServerDataPartsV
                 }
             }
         }
-        
+
     }
+}
+
+void MergeTreeMetaBase::getDeleteBitmapMetaForCnchParts(MutableMergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & all_bitmaps, bool force_found)
+{
+    MergeTreeDataPartsCNCHVector cnch_parts;
+    cnch_parts.reserve(parts.size());
+    for (auto & part : parts)
+        cnch_parts.emplace_back(const_pointer_cast<const MergeTreeDataPartCNCH>(part));
+    getDeleteBitmapMetaForCnchParts(cnch_parts, all_bitmaps, force_found);
 }
 
 void MergeTreeMetaBase::getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & all_bitmaps, bool force_found)

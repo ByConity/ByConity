@@ -72,7 +72,6 @@ protected:
 
     MergeTreeCloudData(
         const StorageID & table_id_,
-        const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata_,
         ContextMutablePtr context_,
         const String & date_column_name_,

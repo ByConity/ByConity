@@ -123,6 +123,7 @@ class ManipulationList;
 class ReplicatedFetchList;
 class Cluster;
 class Compiler;
+class CloudTableDefinitionCache;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
@@ -648,6 +649,8 @@ class Context : public ContextData, public std::enable_shared_from_this<Context>
 private:
     /// ContextData mutex
     mutable SharedMutex mutex;
+
+    String query_plan;
 
     Context();
     Context(const Context &);
@@ -1188,6 +1191,13 @@ public:
 
     UInt32 getZooKeeperSessionUptime() const;
 
+    void addQueryPlanInfo(String & query_plan_) 
+    {
+        this->query_plan = query_plan_;
+    }
+
+    String getQueryPlan() {return query_plan;}
+
 #if USE_NURAFT
     std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
 #endif
@@ -1225,6 +1235,9 @@ public:
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
+
+    /// result maybe nullptr
+    std::shared_ptr<CloudTableDefinitionCache> tryGetCloudTableDefinitionCache() const;
 
     /// Create a cache of mapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     void setMMappedFileCache(size_t cache_size_in_num_entries);

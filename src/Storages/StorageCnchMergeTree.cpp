@@ -195,6 +195,10 @@ StorageCnchMergeTree::StorageCnchMergeTree(
         [](const String &) {})
     , CnchStorageCommonHelper(table_id_, getDatabaseName(), getTableName())
 {
+    setServerVwName(getSettings()->cnch_server_vw);
+    setProperties(metadata_, metadata_, false);
+    checkTTLExpressions(metadata_, metadata_);
+
     String relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)
                                      ->getAnyDisk()
                                      ->getTableRelativePathOnDisk(UUIDHelpers::UUIDToString(table_id_.uuid));
@@ -1330,8 +1334,11 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTSystemQuery & query, C
         scope = CnchDedupHelper::DedupScope::TableDedupWithBucket(buckets);
     }
 
-    auto cnch_lock = txn->createLockHolder(CnchDedupHelper::getLocksToAcquire(
-        scope, txn->getTransactionID(), *this, getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
+    auto cnch_lock = std::make_shared<CnchLockHolder>(
+        local_context,
+        CnchDedupHelper::getLocksToAcquire(
+            scope, txn->getTransactionID(), *this, CnchDedupHelper::getWriteLockTimeout(*this, local_context)));
+    txn->appendLockHolder(cnch_lock);
     cnch_lock->lock();
 
     TxnTimestamp ts = local_context->getTimestamp();
@@ -1405,13 +1412,22 @@ void StorageCnchMergeTree::collectResource(
     const String & local_table_name,
     const std::set<Int64> & required_bucket_numbers,
     const StorageSnapshotPtr & storage_snapshot,
-    WorkerEngineType /*engine_type*/,
+    WorkerEngineType engine_type,
     bool replicated)
 {
     auto cnch_resource = local_context->getCnchServerResource();
-    auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
+    if (local_context->getSettingsRef().send_cacheable_table_definitions)
+    {
+        String local_dictionary_tables;
+        cnch_resource->addCacheableCreateQuery(shared_from_this(), local_table_name, engine_type, local_dictionary_tables);
+    }
+    else
+    {
+        auto create_table_query = getCreateQueryForCloudTable(
+            getCreateTableSql(), local_table_name, local_context, false, std::nullopt, {}, {}, engine_type);
+        cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
+    }
 
-    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
 
     // if (local_context.getSettingsRef().enable_virtual_part)
     //     setVirtualPartSize(local_context, parts, worker_group->getReadWorkers().size());
@@ -2439,7 +2455,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(
         }
         /// else { lock all partitions }
         Stopwatch lock_watch;
-        auto cnch_lock = cur_txn->createLockHolder({std::move(partition_lock)});
+        auto cnch_lock = std::make_shared<CnchLockHolder>(local_context, std::move(partition_lock));
         cnch_lock->lock();
         LOG_DEBUG(log, "DROP PARTITION acquired lock in {} ms", lock_watch.elapsedMilliseconds());
 
@@ -3167,7 +3183,7 @@ std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_c
         if (partition_list.empty())
             return 0;
         auto num_total_partition = partition_list.size();
-        
+
         filterPartitionByTTL(partition_list, query_context->tryGetCurrentTransactionID().toSecond());
         if (partition_list.empty())
             return 0;
@@ -3344,6 +3360,7 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
 void StorageCnchMergeTree::resetObjectColumns(ContextPtr query_context)
 {
     object_columns = object_schemas.assembleSchema(query_context, getInMemoryMetadataPtr());
+    LOG_TRACE(log, "Global object schema snapshot:" + object_columns.toString());
 }
 
 void StorageCnchMergeTree::appendObjectPartialSchema(const TxnTimestamp & txn_id, ObjectPartialSchema partial_schema)

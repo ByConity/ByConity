@@ -26,6 +26,7 @@
 #include <Catalog/Catalog.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageDictionary.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMaterializedView.h>
@@ -188,7 +189,8 @@ StoragePtr DatabaseWithOwnTablesBase::detachTableUnlocked(const String & table_n
     auto table_id = res->getStorageID();
     if (table_id.hasUUID())
     {
-        assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil || ((res->getName() == "CloudMergeTree") && (getEngineName() == "Memory")));
+        [[maybe_unused]] bool is_cloud = dynamic_cast<StorageCloudMergeTree *>(res.get()) != nullptr;
+        assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil || (is_cloud && (getEngineName() == "Memory")));
         DatabaseCatalog::instance().removeUUIDMapping(table_id.uuid);
     }
 

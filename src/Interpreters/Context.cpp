@@ -126,6 +126,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/MergeTree/CloudTableDefinitionCache.h>
 #include <Storages/MergeTree/GinIndexStore.h>
 #include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
@@ -265,6 +266,7 @@ namespace ErrorCodes
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
     extern const int DATABASE_ACCESS_DENIED;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -359,6 +361,10 @@ struct ContextSharedPart
     mutable IntermediateResultCachePtr intermediate_result_cache; /// part cache of queries' results.
     mutable MMappedFileCachePtr
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
+    mutable OnceFlag cloud_table_definition_cache_initialized;
+    /// Cache of CloudMergeTree objects to speed up table creation during query execution.
+    /// Used when send_cacheable_table_definitions is enabled
+    mutable CloudTableDefinitionCachePtr cloud_table_definition_cache;
     ProcessList process_list; /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
     ExchangeStatusTrackerPtr exchange_data_tracker;
@@ -1846,11 +1852,15 @@ ASTPtr Context::getRowPolicyCondition(const String & database, const String & ta
 
 void Context::setInitialRowPolicy()
 {
+    String initial_user_copy;
+    {
+        auto lock = getLocalLock();
+        initial_user_copy = client_info.initial_user;
+    }
+    auto initial_user_id = getAccessControlManager().find<User>(initial_user_copy);
+    auto initial_row_policy_local = initial_user_id ? getAccessControlManager().getEnabledRowPolicies(*initial_user_id, {}) : nullptr;
     auto lock = getLocalLock();
-    auto initial_user_id = getAccessControlManager().find<User>(client_info.initial_user);
-    initial_row_policy = nullptr;
-    if (initial_user_id)
-        initial_row_policy = getAccessControlManager().getEnabledRowPolicies(*initial_user_id, {});
+    initial_row_policy = initial_row_policy_local;
 }
 
 
@@ -2493,6 +2503,9 @@ void Context::killCurrentQuery()
     {
         process_list_elem->cancelQuery(true, false);
     }
+    getSegmentScheduler()->cancelPlanSegmentsFromCoordinator(
+        client_info.initial_query_id, ErrorCodes::QUERY_WAS_CANCELLED, "Cancelled by Client.", shared_from_this());
+    getPlanSegmentProcessList().tryCancelPlanSegmentGroup(client_info.initial_query_id);
 };
 
 String Context::getDefaultFormat() const
@@ -2857,6 +2870,17 @@ void Context::dropMarkCache() const
     auto lock = getLock(); // checked
     if (shared->mark_cache)
         shared->mark_cache->reset();
+}
+
+std::shared_ptr<CloudTableDefinitionCache> Context::tryGetCloudTableDefinitionCache() const
+{
+    callOnce(shared->cloud_table_definition_cache_initialized, [&] {
+        const Poco::Util::AbstractConfiguration & config = getConfigRef();
+        auto cache_size = config.getUInt(".cloud_table_definition_cache_size", 50000);
+        if (getServerType() == ServerType::cnch_worker && cache_size)
+            shared->cloud_table_definition_cache = std::make_shared<CloudTableDefinitionCache>(cache_size);
+    });
+    return shared->cloud_table_definition_cache;
 }
 
 void Context::setQueryCache(const Poco::Util::AbstractConfiguration & config)

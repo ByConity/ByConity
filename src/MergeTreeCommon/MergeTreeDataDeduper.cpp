@@ -22,6 +22,7 @@
 #include <Storages/IndexFile/IndexFileMergeIterator.h>
 #include <Storages/UniqueKeyIndex.h>
 #include <Common/Coding.h>
+#include <CloudServices/CnchDedupHelper.h>
 
 namespace DB
 {
@@ -37,8 +38,9 @@ namespace ErrorCodes
 using IndexFileIteratorPtr = std::unique_ptr<IndexFile::Iterator>;
 using IndexFileIterators = std::vector<IndexFileIteratorPtr>;
 
-MergeTreeDataDeduper::MergeTreeDataDeduper(const MergeTreeMetaBase & data_, ContextPtr context_)
-    : data(data_), context(context_), log(&Poco::Logger::get(data_.getLogName() + " (Deduper)"))
+MergeTreeDataDeduper::MergeTreeDataDeduper(
+    const MergeTreeMetaBase & data_, ContextPtr context_, const CnchDedupHelper::DedupMode & dedup_mode_)
+    : data(data_), context(context_), log(&Poco::Logger::get(data_.getLogName() + " (Deduper)")), dedup_mode(dedup_mode_)
 {
     if (data.merging_params.hasExplicitVersionColumn())
         version_mode = VersionMode::ExplicitVersion;
@@ -46,6 +48,12 @@ MergeTreeDataDeduper::MergeTreeDataDeduper(const MergeTreeMetaBase & data_, Cont
         version_mode = VersionMode::PartitionValueAsVersion;
     else
         version_mode = VersionMode::NoVersion;
+
+    if (dedup_mode == CnchDedupHelper::DedupMode::APPEND)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Dedup mode in dedup process is APPEND for table {}, it's a bug!",
+            data.getCnchStorageID().getNameForLogs());
 }
 
 namespace
@@ -108,8 +116,7 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
     const IMergeTreeDataPartsVector & parts,
     DeleteBitmapVector & delta_bitmaps,
     DedupTaskProgressReporter reporter,
-    DedupTaskPtr & dedup_task,
-    DedupKeyMode dedup_key_mode)
+    DedupTaskPtr & dedup_task)
 {
     const IndexFile::Comparator * comparator = IndexFile::BytewiseComparator();
 
@@ -209,7 +216,7 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
         else
         {
             exact_match = true;
-            if (dedup_key_mode == DedupKeyMode::THROW)
+            if (dedup_mode == CnchDedupHelper::DedupMode::THROW)
                 throw Exception("Found duplication when insert with setting dedup_key_mode=DedupKeyMode::THROW", ErrorCodes::INCORRECT_DATA);
         }
 
@@ -442,20 +449,22 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
             size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(visible_parts, new_parts, bitmaps);
             LOG_DEBUG(
                 log,
-                "Dedup {} in {} ms, visible parts={}, new parts={}, result bitmaps={}, txn_id: {}",
+                "Dedup {} in {} ms, visible parts={}, new parts={}, result bitmaps={}, txn_id: {}, dedup mode: {}",
                 dedup_task_local->getDedupLevelInfo(),
                 sub_task_watch.elapsedMilliseconds(),
                 visible_parts.size(),
                 new_parts.size(),
                 num_bitmaps_to_dump,
-                txn_id.toUInt64());
+                txn_id.toUInt64(),
+                CnchDedupHelper::typeToString(dedup_mode));
         });
     }
     dedup_pool.wait();
 
     LOG_DEBUG(
         log,
-        "Dedup {} tasks in {} ms, thread pool={}, visible parts={}, staged parts={}, uncommitted_parts = {}, result bitmaps={}, txn_id: {}",
+        "Dedup {} tasks in {} ms, thread pool={}, visible parts={}, staged parts={}, uncommitted_parts = {}, result bitmaps={}, txn_id: "
+        "{}, dedup mode: {}",
         dedup_tasks.size(),
         watch.elapsedMilliseconds(),
         dedup_pool_size,
@@ -463,7 +472,8 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         all_staged_parts.size(),
         all_uncommitted_parts.size(),
         res.size(),
-        txn_id.toUInt64());
+        txn_id.toUInt64(),
+        CnchDedupHelper::typeToString(dedup_mode));
     return res;
 }
 
@@ -722,7 +732,7 @@ MergeTreeDataDeduper::dedupImpl(const IMergeTreeDataPartsVector & visible_parts,
         return os.str();
     };
 
-    dedupKeysWithParts(dedup_task->iter, visible_parts, res, task_progress_reporter, dedup_task, context->getSettings().dedup_key_mode);
+    dedupKeysWithParts(dedup_task->iter, visible_parts, res, task_progress_reporter, dedup_task);
     return res;
 }
 

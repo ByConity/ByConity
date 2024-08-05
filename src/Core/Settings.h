@@ -377,6 +377,7 @@ enum PreloadLevelSettings : UInt64
       0) \
 \
     M(Bool, log_queries, 1, "Log requests and write the log to the system table.", 0) \
+    M(Bool, log_query_plan, 0, "Log json format query plan to the system query_log table.", 0) \
     M(Bool, log_max_io_thread_queries, 1, "Log max io time thread requests and write the log to the system table", 0) \
     M(LogQueriesType, \
       log_queries_min_type, \
@@ -646,6 +647,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_experimental_data_skipping_indices, true, "Emulate data skipping indices", 0) \
     M(Bool, enable_predicate_pushdown, false, "Where to push down predicate", 0) \
     M(Bool, dict_table_full_mode, false, "If encode / decode table is not bucket table, try to dispatch dict to all workers, if false, throw exception instead", 0) \
+    M(UInt64, max_in_value_list_to_pushdown, 10000, "Max size of in value list in filter", 0) \
     M(UInt64, pathgraph_threshold_y, 0, "maximum point number in each level", 0) \
     M(Bool, to_string_extra_arguments, true, "Whether to allow an extra argument in toString Function", 0) \
     \
@@ -1069,6 +1071,7 @@ enum PreloadLevelSettings : UInt64
       0) \
 \
     M(Bool, handle_division_by_zero, false, "If set true, return null for division by zero (MySQL Behavior)", 0) \
+    M(Bool, enable_bucket_for_distribute, true, "If set true, enable distribute by keyword by replacing with distribute", 0) \
     \
     M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
@@ -1317,6 +1320,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
     M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND. THROW mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
     M(Seconds, unique_sleep_seconds_after_acquire_lock, 0, "Only for test", 0) \
+    M(Seconds, unique_acquire_write_lock_timeout, 0, "It has higher priority than table setting. Only when it's zero, use table setting", 0) \
+    M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \
+    M(UInt64, max_dedup_retry_time, 1, "Dedup task retry num", 0) \
     \
     /** Settings for Map */ \
     M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
@@ -1404,6 +1410,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
     M(Bool, enable_prune_empty_resource, false, "Whether prune resource sending", 0) \
     M(Bool, enable_prune_compute_plan_segment, false, "Whether prune compute plan segment", 0) \
+    M(Bool, send_cacheable_table_definitions, false, "Whether to send cacheable table definitions to worker, which reduces parsing overhead and is particularly beneficial for high concurrency workload", 0) \
     M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
@@ -1856,6 +1863,7 @@ enum PreloadLevelSettings : UInt64
     MAKE_OBSOLETE(M, UInt64, exchange_local_no_repartition_extra_threads, 32) \
     MAKE_OBSOLETE(M, UInt64, filtered_ratio_to_use_skip_read, 0) \
     MAKE_OBSOLETE(M, Bool, enable_two_stages_prewhere, false) \
+    MAKE_OBSOLETE(M, Bool, funnel_old_rule, false) \
     /** End of OBSOLETE_SETTINGS */ \
 
 #define FORMAT_FACTORY_SETTINGS(M) \

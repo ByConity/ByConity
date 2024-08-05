@@ -8,6 +8,8 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/Serializations/ISerialization.h>
+#include <Interpreters/Context.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToExpandAggregate.h>
 #include <QueryPlan/AggregatingStep.h>
@@ -17,7 +19,6 @@
 #include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
-#include "Interpreters/join_common.h"
 
 namespace DB
 {
@@ -114,19 +115,6 @@ bool MultipleDistinctAggregationToExpandAggregate::hasUniqueArgument(const Aggre
     return true;
 }
 
-bool MultipleDistinctAggregationToExpandAggregate::allCountHasAtMostOneArguments(const AggregatingStep & s)
-{
-    for (const auto & agg : s.getAggregates())
-    {
-        if (Poco::toLower(agg.function->getName()) == "uniqexact" || Poco::toLower(agg.function->getName()) == "countdistinct")
-        {
-            if (agg.argument_names.size() > 1)
-                return false;
-        }
-    }
-    return true;
-}
-
 bool MultipleDistinctAggregationToExpandAggregate::hasNoUnSupportedFunc(const AggregatingStep & step)
 {
     const AggregateDescriptions & agg_descs = step.getAggregates();
@@ -143,7 +131,7 @@ ConstRefPatternPtr MultipleDistinctAggregationToExpandAggregate::getPattern() co
     static auto pattern = Patterns::aggregating()
                               .matchingStep<AggregatingStep>([](const AggregatingStep & s) {
                                   return hasNoFilterOrMask(s) && (hasMultipleDistincts(s) || hasMixedDistinctAndNonDistincts(s))
-                                      && hasUniqueArgument(s) && allCountHasAtMostOneArguments(s) && hasNoUnSupportedFunc(s);
+                                      && hasUniqueArgument(s) && hasNoUnSupportedFunc(s);
                               })
                               .result();
     return pattern;
@@ -199,6 +187,9 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
     AggregateDescriptions aggs_with_mask;
 
     String non_distinct_agg_group_id_mask;
+
+    Assignments new_argument_assignments;
+
     for (const auto & agg_desc : agg_descs)
     {
         String group_id_mask;
@@ -222,7 +213,7 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
                 makeASTFunction(
                     "equals", std::make_shared<ASTIdentifier>(group_id_symbol), std::make_shared<ASTLiteral>(distinct_group_id)));
 
-            aggs_with_mask.emplace_back(distinctAggWithMask(agg_desc, group_id_mask));
+            aggs_with_mask.emplace_back(distinctAggWithMask(agg_desc, group_id_mask, new_argument_assignments, rule_context.context));
             distinct_group_id++;
         }
         else
@@ -329,11 +320,27 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
     }
 
     auto mask_step = std::make_shared<ProjectionStep>(pre_agg_node->getStep()->getOutputStream(), mask_assignments, mask_null_name_to_type);
-    auto mask_node = std::make_shared<ProjectionNode>(rule_context.context->nextNodeId(), std::move(mask_step), PlanNodes{pre_agg_node});
+    child = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(mask_step), PlanNodes{pre_agg_node});
+
+    if (!new_argument_assignments.empty())
+    {
+        NameToType name_to_type;
+        for (const auto & assignment : new_argument_assignments)
+            name_to_type.emplace(assignment.first, std::make_shared<DataTypeUInt8>());
+
+        for (const auto & input_column : child->getStep()->getOutputStream().header)
+        {
+            new_argument_assignments.emplace(input_column.name, makeASTIdentifier(input_column.name));
+            name_to_type.emplace(input_column.name, input_column.type);
+        }
+        auto new_argument_projection_step
+            = std::make_shared<ProjectionStep>(child->getStep()->getOutputStream(), new_argument_assignments, name_to_type);
+        child = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(new_argument_projection_step), {child});
+    }
 
     // step 4 : final aggregate
     auto count_agg_step = std::make_shared<AggregatingStep>(
-        mask_node->getStep()->getOutputStream(),
+        child->getStep()->getOutputStream(),
         step.getKeys(),
         step.getKeysNotHashed(),
         aggs_with_mask,
@@ -346,25 +353,46 @@ TransformResult MultipleDistinctAggregationToExpandAggregate::transformImpl(Plan
         step.isNoShuffle(),
         step.isStreamingForCache(),
         step.getHints());
-    auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {mask_node});
+    auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {child});
 
     return count_agg_node;
 }
 
-AggregateDescription
-MultipleDistinctAggregationToExpandAggregate::distinctAggWithMask(const AggregateDescription & agg_desc, String & mask_column)
+AggregateDescription MultipleDistinctAggregationToExpandAggregate::distinctAggWithMask(
+    const AggregateDescription & agg_desc, String & mask_column, Assignments & new_argument_assignments, ContextMutablePtr context)
 {
-    DataTypes data_types = agg_desc.function->getArgumentTypes();
+    String fun_remove_distinct = distinct_func_normal_func.at(Poco::toLower(agg_desc.function->getName()));
+    Names argument_names;
+    DataTypes data_types;
+    if (fun_remove_distinct == "countIf" && agg_desc.argument_names.size() > 1)
+    {
+        // countDistinct(arg1, arg2) cannot convert to count(arg1, arg2), because clickhousedon't support count multi arguments.
+        // As an alternative we can rewrite it to count(IF(arg1 is null, null, arg2 is null, null, 1)),
+        // or sum((arg1 is not null) AND (arg2 is not null))
+        fun_remove_distinct = "sumIf";
+
+        ASTs argument_functions;
+        for (const auto & argument : agg_desc.argument_names)
+            argument_functions.emplace_back(makeASTFunction("isNotNull", makeASTIdentifier(argument)));
+        auto new_argument = PredicateUtils::combineConjuncts(argument_functions);
+        auto new_argument_name = context->getSymbolAllocator()->newSymbol(new_argument);
+        new_argument_assignments.emplace_back(new_argument_name, new_argument);
+
+        argument_names.emplace_back(new_argument_name);
+        data_types.emplace_back(std::make_shared<DataTypeUInt8>());
+    }
+    else
+    {
+        argument_names = agg_desc.argument_names;
+        data_types = agg_desc.function->getArgumentTypes();
+    }
+
+    argument_names.emplace_back(mask_column);
     data_types.emplace_back(std::make_shared<DataTypeUInt8>());
 
     Array parameters = agg_desc.function->getParameters();
     AggregateFunctionProperties properties;
-
-    String fun_remove_distinct = distinct_func_normal_func.at(Poco::toLower(agg_desc.function->getName()));
     AggregateFunctionPtr new_agg_fun = AggregateFunctionFactory::instance().get(fun_remove_distinct, data_types, parameters, properties);
-    Names argument_names = agg_desc.argument_names;
-
-    argument_names.emplace_back(mask_column);
 
     AggregateDescription agg_with_mask;
 

@@ -1,0 +1,188 @@
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Left Join
+            │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+            ├─ Projection
+            │  │     Expressions: [ad_plan_id]
+            │  └─ Filter
+            │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (ad_plan_id IN (\'131061\', \'131078\', \'154808\', \'154810\', \'154811\', \'89270\', \'89272\', \'89274\', \'89275\')) AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+            │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+            │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (ad_plan_id IN (\'131061\', \'131078\', \'154808\', \'154810\', \'154811\', \'89270\', \'89272\', \'89274\', \'89275\')) AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+            │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+            └─ Broadcast Exchange
+               └─ Projection
+                  │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                  └─ Filter
+                     │     Condition: CAST(apid, \'text\') IN (\'131061\', \'131078\', \'154808\', \'154810\', \'154811\', \'89270\', \'89272\', \'89274\', \'89275\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Where: CAST(apid, \'text\') IN (\'131061\', \'131078\', \'154808\', \'154810\', \'154811\', \'89270\', \'89272\', \'89274\', \'89275\')
+                              Outputs: [apid]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Left Join
+            │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+            ├─ Projection
+            │  │     Expressions: [ad_plan_id]
+            │  └─ Filter
+            │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\')) AND (ad_plan_id GLOBAL IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\'))
+            │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+            │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\')) AND (ad_plan_id GLOBAL IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\'))
+            │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+            └─ Broadcast Exchange
+               └─ Projection
+                  │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                  └─ Filter
+                     │     Condition: CAST(apid, \'text\') GLOBAL IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Where: CAST(apid, \'text\') GLOBAL IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+                              Outputs: [apid]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Left Join
+            │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+            ├─ Projection
+            │  │     Expressions: [ad_plan_id]
+            │  └─ Filter
+            │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\')) AND (ad_plan_id NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\'))
+            │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+            │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\')) AND (ad_plan_id NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\'))
+            │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+            └─ Broadcast Exchange
+               └─ Projection
+                  │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                  └─ Filter
+                     │     Condition: CAST(apid, \'text\') NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Where: CAST(apid, \'text\') NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+                              Outputs: [apid]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Left Join
+            │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+            ├─ Projection
+            │  │     Expressions: [ad_plan_id]
+            │  └─ Filter
+            │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\')) AND (ad_plan_id GLOBAL NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\'))
+            │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+            │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\')) AND (ad_plan_id GLOBAL NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\'))
+            │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+            └─ Broadcast Exchange
+               └─ Projection
+                  │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                  └─ Filter
+                     │     Condition: CAST(apid, \'text\') GLOBAL NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Where: CAST(apid, \'text\') GLOBAL NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+                              Outputs: [apid]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Filter
+            │     Condition: ad_plan_id IN (\'131061\', \'131078\', \'154808\', \'154810\', \'154811\', \'89270\', \'89272\', \'89274\', \'89275\')
+            └─ Left Join
+               │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+               ├─ Projection
+               │  │     Expressions: [ad_plan_id]
+               │  └─ Filter
+               │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+               │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+               └─ Broadcast Exchange
+                  └─ Projection
+                     │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Outputs: [apid]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Filter
+            │     Condition: ad_plan_id GLOBAL IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+            └─ Left Join
+               │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+               ├─ Projection
+               │  │     Expressions: [ad_plan_id]
+               │  └─ Filter
+               │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+               │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+               └─ Broadcast Exchange
+                  └─ Projection
+                     │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Outputs: [apid]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Filter
+            │     Condition: ad_plan_id NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+            └─ Left Join
+               │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+               ├─ Projection
+               │  │     Expressions: [ad_plan_id]
+               │  └─ Filter
+               │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+               │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+               └─ Broadcast Exchange
+                  └─ Projection
+                     │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Outputs: [apid]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Filter
+            │     Condition: ad_plan_id GLOBAL NOT IN (\'131078\', \'131061\', \'89270\', \'154810\', \'89272\', \'154811\', \'89275\', \'154808\', \'89274\')
+            └─ Left Join
+               │     Condition: ad_plan_id == expr#CAST(apid, \'text\')
+               ├─ Projection
+               │  │     Expressions: [ad_plan_id]
+               │  └─ Filter
+               │     │     Condition: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │     └─ TableScan 48095_test.dws_ad_logs_rt_not_distinct
+               │              Where: (ymd = cast(19901, \'Date\')) AND (recv_timestamp >= \'2024-06-27 00:00:00\') AND (recv_timestamp <= \'2024-06-27 23:59:59\') AND (kind = \'\') AND (dsp_id = \'1000001\') AND (uid IN (\'4f640b0110e647668df11478573dab9b\', \'534757bd6e5340309cc119e54f23d4d7\', \'67921ae675474d49b96f982ea6936363\'))
+               │              Outputs: [kind, dsp_id, ad_plan_id, uid, recv_timestamp, ymd]
+               └─ Broadcast Exchange
+                  └─ Projection
+                     │     Expressions: expr#CAST(apid, \'text\'):=CAST(apid, \'text\')
+                     └─ TableScan 48095_test.platform_ad_plan
+                              Outputs: [apid]

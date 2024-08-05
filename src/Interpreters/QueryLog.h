@@ -104,6 +104,7 @@ struct QueryLogElement
 
     String virtual_warehouse;
     String worker_group;
+    String query_plan;
 
     static std::string name() { return "QueryLog"; }
 

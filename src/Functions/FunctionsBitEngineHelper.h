@@ -138,8 +138,9 @@ StorageCloudMergeTree * loadDictsForCnchServer(
         const auto & dicts_mapping = storage_bitengine_cnch->getUnderlyDictionaryTables();
         for (const auto & entry : dicts_mapping)
         {
+            StorageID dict_table_id{entry.second.first, entry.second.second};
             auto storage_underlying_dict
-                = DatabaseCatalog::instance().tryGetTable(StorageID{entry.second.first, entry.second.second}, local_context);
+                = DatabaseCatalog::instance().tryGetTable(dict_table_id, local_context);
             StorageCnchMergeTree * storage_underlying_dict_cnch = dynamic_cast<StorageCnchMergeTree *>(storage_underlying_dict.get());
             if (storage_underlying_dict_cnch)
             {
@@ -158,7 +159,7 @@ StorageCloudMergeTree * loadDictsForCnchServer(
 
                 /// try find dict_cloud_table first, maybe it's created already, like insert into select DecodeBitmap()
                 auto storage_underlying_dict_cloud
-                    = worker_resource->getTable(StorageID{storage_bitengine_cnch->getDatabaseName(), dict_table_name_cloud});
+                    = worker_resource->getTable(StorageID{dict_table_id.getDatabaseName(), dict_table_name_cloud});
 
                 bool dict_cloud_already_exists{true};
                 if (!storage_underlying_dict_cloud)
@@ -169,7 +170,7 @@ StorageCloudMergeTree * loadDictsForCnchServer(
 
                 /// after dict_cloud_table created, now get and load parts
                 storage_underlying_dict_cloud
-                    = worker_resource->getTable(StorageID{storage_bitengine_cnch->getDatabaseName(), dict_table_name_cloud});
+                    = worker_resource->getTable(StorageID{dict_table_id.getDatabaseName(), dict_table_name_cloud});
                 auto * underlying_dict_cloud_table = dynamic_cast<StorageDictCloudMergeTree *>(storage_underlying_dict_cloud.get());
 
                 if (!underlying_dict_cloud_table)
@@ -177,7 +178,7 @@ StorageCloudMergeTree * loadDictsForCnchServer(
                     throw Exception(
                         fmt::format(
                             "In decoding, cannot get DictCloudMergeTree for table:<`{}`.`{}`>",
-                            storage_bitengine_cnch->getDatabaseName(),
+                            dict_table_id.getDatabaseName(),
                             dict_table_name_cloud),
                         ErrorCodes::UNKNOWN_TABLE);
                 }

@@ -768,6 +768,16 @@ void interpretSettings(ASTPtr ast, ContextMutablePtr context)
             }
         }
     }
+    else if (const auto * create_select_query = ast->as<ASTCreateQuery>(); create_select_query && create_select_query->select)
+    {
+        const auto * select_in_query = create_select_query->select->as<ASTSelectWithUnionQuery>();
+        if (select_in_query && !select_in_query->list_of_selects->children.empty())
+        {
+            const auto * last_select = select_in_query->list_of_selects->children.back()->as<ASTSelectQuery>();
+            if (last_select && last_select->settings())
+                InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
+        }
+    }
     else if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
     {
         if (query_with_output->settings_ast)
@@ -1440,6 +1450,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     }
                 }
 
+                if (settings.log_query_plan) 
+                {
+                    elem.query_plan = context->getQueryContext()->getQueryPlan();
+                }
+            
                 interpreter->extendQueryLogElem(elem, ast, context, query_database, query_table);
 
                 if (settings.log_query_settings)

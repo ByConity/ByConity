@@ -1610,13 +1610,39 @@ private:
         if (const ColumnNullable * nullable = typeid_cast<const ColumnNullable *>(column))
         {
             const IColumn * nullable_column = &nullable->getNestedColumn();
-            executeAny<first>(key, nullable_type, nullable_column, vec_to);
             const auto & null_map_data = nullable->getNullMapData();
             auto s = nullable_column->size();
-            /// Use fixed data for nulls.
-            for (size_t row = 0; row < s; ++row)
-                if (null_map_data[row])
-                    vec_to[row] = value;
+            if (first)
+            {
+                executeAny<first>(key, nullable_type, nullable_column, vec_to);
+                /// Use fixed data for nulls.
+                for (size_t row = 0; row < s; ++row)
+                    if (null_map_data[row])
+                        vec_to[row] = value;
+            }
+            else
+            {
+                std::vector<size_t> null_list;
+                std::vector<ToType> null_list_value_before;
+                null_list.reserve(s);
+                null_list_value_before.reserve(s);
+                for (size_t row = 0; row < s; ++row)
+                {
+                    if (null_map_data[row])
+                    {
+                        null_list.push_back(row);
+                        null_list_value_before.push_back(vec_to[row]);
+                    }
+                }
+                executeAny<first>(key, nullable_type, nullable_column, vec_to);
+
+                for (size_t i = 0; i < null_list.size(); ++i)
+                {
+                    size_t row = null_list[i];
+                    ToType value_before = null_list_value_before[i];
+                    vec_to[row] = value_before;
+                }
+            }
         }
         // else if (const ColumnNullable * nullable_const = checkAndGetColumnConstData<ColumnNullable>(column))
         // {

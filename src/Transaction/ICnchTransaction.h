@@ -50,6 +50,8 @@ namespace DB
 {
 struct TxnCleanTask;
 class CnchLockHolder;
+using CnchLockHolderPtr = std::shared_ptr<CnchLockHolder>;
+using CnchLockHolderPtrs = std::vector<CnchLockHolderPtr>;
 
 namespace ErrorCodes
 {
@@ -217,7 +219,7 @@ public:
     // Clean intermediate parts synchronously
     virtual void removeIntermediateData() { }
 
-    std::shared_ptr<CnchLockHolder> createLockHolder(std::vector<LockInfoPtr> && elems);
+    void appendLockHolder(CnchLockHolderPtr & lock_holder);
 
     bool force_clean_by_dm = false;
 
@@ -237,7 +239,6 @@ protected:
     void setStatus(CnchTransactionStatus status);
     void setTransactionRecord(TransactionRecord record);
     void assertLockAcquired() const;
-    void setLockHolder(std::shared_ptr<CnchLockHolder> p) { lock_holder = p; }
 
     /// Clean CurrentlyMergingPartsTagger for merge txn after the txn finished.
     void tryCleanMergeTagger();
@@ -263,7 +264,7 @@ protected:
 #endif
 
     InsertionLabelPtr insertion_label;
-    std::weak_ptr<CnchLockHolder> lock_holder;
+    CnchLockHolderPtrs lock_holders; /// Currently it only serve for unique dedup stage
 
     std::vector<TransFunction> extern_commit_functions;
 
