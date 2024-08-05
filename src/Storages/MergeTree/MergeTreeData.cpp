@@ -177,6 +177,9 @@ MergeTreeData::MergeTreeData(
     , replicated_sends_throttler(
           std::make_shared<Throttler>(getSettings()->max_replicated_sends_network_bandwidth, getContext()->getReplicatedSendsThrottler()))
 {
+    setProperties(metadata_, metadata_, false);
+    checkTTLExpressions(metadata_, metadata_);
+
     const auto settings = getSettings();
     enable_metastore = settings->enable_metastore;
 

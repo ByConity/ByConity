@@ -35,6 +35,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/PartCacheManager.h>
+#include <Storages/MergeTree/CloudTableDefinitionCache.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UniqueKeyIndexCache.h>
@@ -573,6 +574,13 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
     /// This is also a good indicator of system responsiveness.
     new_values["Jitter"] = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - update_time).count() / 1e9;
+
+    {
+        if (auto cloud_table_definition_cache = getContext()->tryGetCloudTableDefinitionCache())
+        {
+            new_values["CloudTableDefinitionCacheCells"] = cloud_table_definition_cache->count();
+        }
+    }
 
     {
         if (auto mark_cache = getContext()->getMarkCache())

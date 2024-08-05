@@ -1410,6 +1410,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
     M(Bool, enable_prune_empty_resource, false, "Whether prune resource sending", 0) \
     M(Bool, enable_prune_compute_plan_segment, false, "Whether prune compute plan segment", 0) \
+    M(Bool, send_cacheable_table_definitions, false, "Whether to send cacheable table definitions to worker, which reduces parsing overhead and is particularly beneficial for high concurrency workload", 0) \
     M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \

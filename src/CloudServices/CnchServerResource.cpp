@@ -55,13 +55,12 @@ AssignedResource::AssignedResource(const StoragePtr & storage_) : storage(storag
 AssignedResource::AssignedResource(AssignedResource && resource)
 {
     storage = resource.storage;
-    worker_table_name = resource.worker_table_name;
-    create_table_query = resource.create_table_query;
+    table_version = resource.table_version;
+    table_definition = resource.table_definition;
     sent_create_query = resource.sent_create_query;
     bucket_numbers = resource.bucket_numbers;
     replicated = resource.replicated;
 
-    table_version = resource.table_version;
     server_parts = std::move(resource.server_parts);
     hive_parts = std::move(resource.hive_parts);
     file_parts = std::move(resource.file_parts);
@@ -223,8 +222,35 @@ void CnchServerResource::addCreateQuery(
     if (it == assigned_table_resource.end())
         it = assigned_table_resource.emplace(storage->getStorageUUID(), AssignedResource{storage}).first;
 
-    it->second.create_table_query = create_query;
-    it->second.worker_table_name = worker_table_name;
+    it->second.table_definition.definition = create_query;
+    it->second.table_definition.local_table_name = worker_table_name;
+    it->second.table_definition.cacheable = false;
+}
+
+void CnchServerResource::addCacheableCreateQuery(
+    const StoragePtr & storage,
+    const String & worker_table_name,
+    WorkerEngineType engine_type,
+    String underlying_dictionary_tables)
+{
+    auto uuid = storage->getStorageUUID();
+    if (uuid == UUIDHelpers::Nil)
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
+            "Cannot add definition for {} : UUID is empty", storage->getStorageID().getNameForLogs());
+
+    auto lock = getLock();
+
+    auto it = assigned_table_resource.find(uuid);
+    if (it == assigned_table_resource.end())
+        it = assigned_table_resource.emplace(uuid, AssignedResource{storage}).first;
+
+    it->second.table_definition = TableDefinitionResource {
+        storage->getCreateTableSql(),
+        worker_table_name,
+        /*cacheable=*/ true,
+        engine_type,
+        underlying_dictionary_tables
+    };
 }
 
 void CnchServerResource::setTableVersion(const UUID & storage_uuid, const UInt64 table_version)
@@ -578,8 +604,7 @@ void CnchServerResource::allocateResource(
                 worker_resource.addDataParts(assigned_file_parts);
                 worker_resource.sent_create_query = resource.sent_create_query;
                 worker_resource.table_version = resource.table_version;
-                worker_resource.create_table_query = resource.create_table_query;
-                worker_resource.worker_table_name = resource.worker_table_name;
+                worker_resource.table_definition = resource.table_definition;
                 worker_resource.object_columns = resource.object_columns;
             }
         }

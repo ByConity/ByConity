@@ -15,12 +15,15 @@
 
 #include <CloudServices/CnchCreateQueryHelper.h>
 
+#include <Common/StringUtils/StringUtils.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTForeignKeyDeclaration.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/IStorage.h>
@@ -31,6 +34,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int DUPLICATE_COLUMN;
+    extern const int INCORRECT_QUERY;
+}
 
 std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query, const ContextPtr & context)
 {
@@ -51,6 +60,77 @@ std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & st
     return getASTCreateQueryFromString(storage.getCreateTableSql(), context);
 }
 
+StoragePtr createStorageFromQuery(ASTCreateQuery & create_query, ContextMutablePtr context)
+{
+    ColumnsDescription columns;
+    IndicesDescription indices;
+    ConstraintsDescription constraints;
+    ForeignKeysDescription foreign_keys;
+    UniqueNotEnforcedDescription unique_not_enforced;
+
+    if (create_query.columns_list)
+    {
+        if (create_query.columns_list->columns)
+        {
+            // Set attach = true to avoid making columns nullable due to ANSI settings, because the dialect change
+            // should NOT affect existing tables.
+            columns = InterpreterCreateQuery::getColumnsDescription(*create_query.columns_list->columns, context, /* attach= */ true);
+        }
+
+        if (create_query.columns_list->indices)
+            for (const auto & index : create_query.columns_list->indices->children)
+                indices.push_back(IndexDescription::getIndexFromAST(index->clone(), columns, context));
+
+        if (create_query.columns_list->constraints)
+            for (const auto & constraint : create_query.columns_list->constraints->children)
+                constraints.constraints.push_back(std::dynamic_pointer_cast<ASTConstraintDeclaration>(constraint->clone()));
+
+        if (create_query.columns_list->foreign_keys)
+            for (const auto & foreign_key : create_query.columns_list->foreign_keys->children)
+                foreign_keys.foreign_keys.push_back(std::dynamic_pointer_cast<ASTForeignKeyDeclaration>(foreign_key->clone()));
+
+        if (create_query.columns_list->unique)
+            for (const auto & unique : create_query.columns_list->unique->children)
+                unique_not_enforced.unique.push_back(std::dynamic_pointer_cast<ASTUniqueNotEnforcedDeclaration>(unique->clone()));
+    }
+    else
+        throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
+
+    /// Even if query has list of columns, canonicalize it (unfold Nested columns).
+    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(columns, ParserSettings::valueOf(context->getSettingsRef()));
+    ASTPtr new_indices = InterpreterCreateQuery::formatIndices(indices);
+    ASTPtr new_constraints = InterpreterCreateQuery::formatConstraints(constraints);
+    ASTPtr new_foreign_keys = InterpreterCreateQuery::formatForeignKeys(foreign_keys);
+    ASTPtr new_unique_not_enforced = InterpreterCreateQuery::formatUnique(unique_not_enforced);
+
+    if (create_query.columns_list->columns)
+        create_query.columns_list->replace(create_query.columns_list->columns, new_columns);
+
+    if (create_query.columns_list->indices)
+        create_query.columns_list->replace(create_query.columns_list->indices, new_indices);
+
+    if (create_query.columns_list->constraints)
+        create_query.columns_list->replace(create_query.columns_list->constraints, new_constraints);
+
+    if (create_query.columns_list->foreign_keys)
+        create_query.columns_list->replace(create_query.columns_list->foreign_keys, new_foreign_keys);
+
+    if (create_query.columns_list->unique)
+        create_query.columns_list->replace(create_query.columns_list->unique, new_unique_not_enforced);
+
+    /// Check for duplicates
+    std::set<String> all_columns;
+    for (const auto & column : columns)
+    {
+        if (!all_columns.emplace(column.name).second)
+            throw Exception("Column " + backQuoteIfNeed(column.name) + " already exists", ErrorCodes::DUPLICATE_COLUMN);
+    }
+
+    /// Table constructing
+    return StorageFactory::instance().get(create_query, "", context, context->getGlobalContext(), columns, constraints, foreign_keys, unique_not_enforced, false);
+}
+
+/// TODO: impl based on createStorageFromQuery(create_query, context) ?
 StoragePtr createStorageFromQuery(const String & query, const ContextPtr & context)
 {
     auto ast = getASTCreateQueryFromString(query, context);
@@ -90,23 +170,35 @@ StoragePtr createStorageFromQuery(const String & query, const ContextPtr & conte
         false /*has_force_restore_data_flag*/);
 }
 
-void replaceCnchWithCloud(ASTCreateQuery & create_query, const String & new_table_name, const String & cnch_db, const String & cnch_table)
+void replaceCnchWithCloud(
+    ASTStorage * storage,
+    const String & cnch_database,
+    const String & cnch_table,
+    WorkerEngineType engine_type,
+    const Strings & engine_args)
 {
-    if (!new_table_name.empty())
-        create_query.table = new_table_name;
-
-    auto * storage = create_query.storage;
+    if (!startsWith(storage->engine->name, "Cnch"))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Expect Cnch-family Engine but got {}", storage->engine->name);
 
     auto engine = std::make_shared<ASTFunction>();
-    if (auto pos = storage->engine->name.find("Cnch"); pos != std::string::npos)
-        engine->name = String(storage->engine->name).replace(pos, strlen("Cnch"), "Cloud");
-
+    engine->name = storage->engine->name.replace(0, strlen("Cnch"), toString(engine_type));
     engine->arguments = std::make_shared<ASTExpressionList>();
-    engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(cnch_db));
-    engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(cnch_table));
-    if (storage->unique_key && storage->engine->arguments && storage->engine->arguments->children.size())
-        /// NOTE: Used to pass the version column for unique table here.
-        engine->arguments->children.push_back(storage->engine->arguments->children[0]);
+    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_database));
+    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_table));
+    if (!engine_args.empty())
+    {
+        for (const auto & arg : engine_args)
+        {
+            engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(arg));
+        }
+    }
+    else if (storage->engine->arguments)
+    {
+        for (const auto & arg : storage->engine->arguments->children)
+        {
+            engine->arguments->children.push_back(arg);
+        }
+    }
     storage->set(storage->engine, engine);
 }
 

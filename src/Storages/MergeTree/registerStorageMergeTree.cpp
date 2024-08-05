@@ -865,7 +865,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             if (storage_settings->storage_dialect_type.value != DialectType::CLICKHOUSE && !args.storage_def->settings->changes.tryGet("storage_dialect_type"))
             {
                 args.storage_def->settings->changes.push_back(SettingChange(
-                    "storage_dialect_type", 
+                    "storage_dialect_type",
                     SettingFieldDialectTypeTraits::toString(storage_settings->storage_dialect_type.value)));
             }
         }
@@ -1000,7 +1000,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             args.table_id,
             cnch_database_name,
             cnch_table_name,
-            "", /// Do NOT set relative path for CloudMergeTree args.relative_data_path,
             metadata,
             args.getContext(),
             date_column_name,

@@ -19,6 +19,7 @@
 #include <mutex>
 #include <Catalog/Catalog.h>
 #include <IO/WriteBuffer.h>
+#include <Transaction/Actions/InsertAction.h>
 #include <Transaction/TransactionCleaner.h>
 #include <Transaction/TransactionCommon.h>
 #include <Common/Exception.h>

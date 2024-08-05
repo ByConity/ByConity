@@ -317,6 +317,11 @@
     M(PerfJoinElapsedMicroseconds, "") \
     M(PerfFilterElapsedMicroseconds, "") \
 \
+    M(QueryCreateTablesMicroseconds, "") \
+    M(QuerySendResourcesMicroseconds, "") \
+    M(CloudTableDefinitionCacheHits, "") \
+    M(CloudTableDefinitionCacheMisses, "") \
+\
     M(CreatedHTTPConnections, "Total amount of created HTTP connections (closed or opened).") \
     \
     M(ThreadPoolReaderTaskMicroseconds, "Time spent getting the data in asynchronous reading") \
