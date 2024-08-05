@@ -100,8 +100,16 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
     txn->force_clean_by_dm = opt.force_clean_by_dm;
     txn->async_post_commit = opt.async_post_commit;
 
-    ProfileEvents::increment((opt.read_only ? ProfileEvents::CnchTxnReadTxnCreated : ProfileEvents::CnchTxnWriteTxnCreated));
-    LOG_DEBUG(log, "Created txn {}", txn->getTransactionRecord().toString());
+    if (opt.read_only)
+    {
+        ProfileEvents::increment(ProfileEvents::CnchTxnReadTxnCreated);
+        LOG_DEBUG(log, "Created read-only txn {}", txn->getTransactionRecord().toString());
+    }
+    else
+    {
+        ProfileEvents::increment(ProfileEvents::CnchTxnWriteTxnCreated);
+        LOG_DEBUG(log, "Created write txn {}", txn->getTransactionRecord().toString());
+    }
     return txn;
 }
 
