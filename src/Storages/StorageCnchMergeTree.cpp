@@ -223,16 +223,17 @@ void StorageCnchMergeTree::loadMutations()
     {
         getContext()->getCnchCatalog()->fillMutationsByStorage(getStorageID(), mutations_by_version);
 
-        auto mutations_debug_str = [&]() -> String {
+        auto print_mutations_debug_str = [&]() -> void {
             String res;
             for (auto const & [_, mutation] : mutations_by_version)
             {
                 res += mutation.toString() + "\n";
             }
-            return res;
+            if (!mutations_by_version.empty())
+                LOG_TRACE(log, "All mutations:\n{}", res);
         };
 
-        LOG_TRACE(log, "All mutations:\n{}", mutations_debug_str());
+        print_mutations_debug_str();
     }
     catch(...)
     {

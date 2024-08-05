@@ -30,6 +30,7 @@
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
+#include <string_view>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Core/SettingsEnums.h>
@@ -40,6 +41,7 @@ namespace ErrorCodes
 {
     extern const int ABORTED;
     extern const int CNCH_LOCK_ACQUIRE_FAILED;
+    extern const int INCORRECT_DATA;
     extern const int INSERTION_LABEL_ALREADY_EXISTS;
     extern const int LOGICAL_ERROR;
     extern const int UNIQUE_KEY_STRING_SIZE_LIMIT_EXCEEDED;
@@ -70,10 +72,8 @@ void CloudMergeTreeBlockOutputStream::checkAndInit()
 
         if (dedup_parameters.enable_staging_area)
         {
-            if (dedup_parameters.enable_append_mode)
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "In APPEND dedup key mode, can't write to staging area.");
-            if (context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed");
+            if (context->getSettings().dedup_key_mode != DedupKeyMode::REPLACE)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Only UPSERT mode can write to staging area.");
             LOG_DEBUG(log, "enable staging area for write");
         }
         else
@@ -94,6 +94,11 @@ void CloudMergeTreeBlockOutputStream::checkAndInit()
                     /// case 4(unique table with sync insert): In commit stage, acquire the necessary locks to avoid write-write conflicts and then remove duplicate keys between visible parts and temp parts.
                     cnch_writer.setDedupMode(CnchDedupHelper::DedupMode::UPSERT);
                     LOG_TRACE(log, "enable upsert dedup mode");
+                    break;
+                case DedupKeyMode::IGNORE:
+                    /// case 5(unique table with sync insert, when there has same keys, only keep the first occurrences of the row and ignore subsequent occurrences rows)
+                    cnch_writer.setDedupMode(CnchDedupHelper::DedupMode::IGNORE);
+                    LOG_TRACE(log, "enable insert ignore dedup mode");
                     break;
                 default:
                     throw Exception(
@@ -405,15 +410,25 @@ namespace
 
         bool operator()(size_t lhs, size_t rhs) const
         {
-            for (auto & key : keys)
-            {
-                int cmp = key.column->compareAt(lhs, rhs, *key.column, /*nan_direction_hint=*/1);
-                if (cmp < 0)
-                    return true;
-                if (cmp > 0)
+            for (const auto & key : keys)
+                if (key.column->compareAt(lhs, rhs, *key.column, /*nan_direction_hint=*/1))
                     return false;
-            }
-            return false;
+            return true;
+        }
+    };
+
+    struct BlockUniqueKeyHasher
+    {
+        const ColumnsWithTypeAndName & keys;
+        explicit BlockUniqueKeyHasher(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
+
+        size_t operator()(size_t rowid) const
+        {
+            size_t hash_value{0};
+            std::hash<std::string_view> hash_function;
+            for (const auto & key : keys)
+                hash_value ^= hash_function(key.column.get()->getDataAt(rowid).toView());
+            return hash_value;
         }
     };
 }
@@ -441,8 +456,10 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
     }
 
     BlockUniqueKeyComparator comparator(keys);
-    /// first rowid of key -> rowid of the last occurrence of the same key
-    std::map<size_t, size_t, decltype(comparator)> index(comparator);
+    BlockUniqueKeyHasher hasher(keys);
+    /// first rowid of key -> rowid of the last occurrence of the same key in replace/append/throw mode;
+    /// first rowid of key -> rowid of the first occurrence of the same key in insert ignore mode.
+    phmap::flat_hash_map<size_t, size_t, decltype(hasher), decltype(comparator)> index(keys[0].column->size(), hasher, comparator);
 
     auto block_size = block_copy.rows();
     FilterInfo res;
@@ -468,16 +485,36 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
             /// Otherwise use value from version column
             size_t old_pos = it->second;
             size_t new_pos = rowid;
-            if (version_column && !delete_ignore_version(rowid)
-                && version_column->column->getUInt(old_pos) > version_column->column->getUInt(new_pos))
-                std::swap(old_pos, new_pos);
 
-            res.filter[old_pos] = 0;
-            it->second = new_pos;
-            res.num_filtered++;
+            if (context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
+            {
+                /// In insert throw mode, when multiple records with the same unique key are found,
+                /// we will not consider the delete flag column, instead, we will immediately throw an exception.
+                throw Exception("Found duplication in the block when insert with setting dedup_key_mode=DedupKeyMode::THROW", ErrorCodes::INCORRECT_DATA);
+            }
+            else if (context->getSettings().dedup_key_mode == DedupKeyMode::REPLACE || context->getSettings().dedup_key_mode == DedupKeyMode::APPEND)
+            {
+                if (version_column && !delete_ignore_version(rowid) && version_column->column->getUInt(old_pos) > version_column->column->getUInt(new_pos))
+                    std::swap(old_pos, new_pos);
+                res.filter[old_pos] = 0;
+                it->second = new_pos;
+                res.num_filtered++;
+            }
+            else
+            {
+                /// In insert ignore mode, when multiple records with the same unique key are found,
+                /// we will ignore version column, and save the first row(not deleted) of duplicated keys.
+                if (is_delete_row(old_pos))
+                    std::swap(old_pos, new_pos);
+                res.filter[new_pos] = 0;
+                it->second = old_pos;
+                res.num_filtered++;
+            }
         }
         else
+        {
             index[rowid] = rowid;
+        }
 
         /// Check the length limit for string type.
         size_t unique_string_keys_size = 0;

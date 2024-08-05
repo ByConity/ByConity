@@ -506,7 +506,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
         nullptr,
         write_location);
 
-    LOG_DEBUG(log, "Writing temp part to {}...\n", new_data_part->getFullRelativePath());
+    LOG_DEBUG(log, "Writing temp part to {}", new_data_part->getFullRelativePath());
 
     if (data.storage_settings.get()->assign_part_uuids)
         new_data_part->uuid = UUIDHelpers::generateV4();

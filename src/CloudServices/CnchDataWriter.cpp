@@ -16,7 +16,7 @@
 #include <atomic>
 #include <memory>
 #include <CloudServices/CnchDataWriter.h>
-
+#include <common/scope_guard_safe.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
@@ -223,7 +223,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     auto txn_id = curr_txn->getTransactionID();
 
     /// Write undo buffer first before dump to vfs
-    std::vector<UndoResource> undo_resources;
+    UndoResources undo_resources;
     undo_resources.reserve(temp_parts.size() + temp_bitmaps.size() + temp_staged_parts.size());
     /// For local parts and stage parts, the remote parts can be at different disk,
     /// so we record the disk name of each part in the undo buffer.
@@ -287,33 +287,74 @@ DumpedData CnchDataWriter::dumpCnchParts(
     MergeTreeCNCHDataDumper dumper(storage, part_generator_id);
 
     watch.restart();
-    ThreadPool dump_pool(std::min(
-        static_cast<size_t>(storage.getSettings()->cnch_parallel_dumping_threads), std::max(temp_staged_parts.size(), temp_parts.size())));
+    size_t pool_size = std::min(static_cast<size_t>(storage.getSettings()->cnch_parallel_dumping_threads), std::max(temp_staged_parts.size(), temp_parts.size()));
+    /// make sure pool_size >= 1
+    pool_size = pool_size >= 1 ? pool_size : 1;
     result.parts.resize(temp_parts.size());
-    /// TODO: only use pool if > 1 parts
-    for (size_t i = 0; i < temp_parts.size(); ++i)
-    {
-        dump_pool.scheduleOrThrowOnError([&, i]() {
+    /// parallel dump delete bitmaps
+    // TODO: dump all bitmaps to one file to avoid creating too many small files on vfs
+    result.bitmaps = dumpDeleteBitmaps(storage, temp_bitmaps);
+    result.staged_parts.resize(temp_staged_parts.size());
+
+    auto dump_parts = [&, this](size_t i) -> void {
+        for (; i < temp_parts.size(); i += pool_size)
+        {
             const auto & temp_part = temp_parts[i];
             auto dumped_part = dumper.dumpTempPart(temp_part, part_disks[i]);
             LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
             result.parts[i] = std::move(dumped_part);
-        });
-    }
-    dump_pool.wait();
-    // TODO: dump all bitmaps to one file to avoid creating too many small files on vfs
-    result.bitmaps = dumpDeleteBitmaps(storage, temp_bitmaps);
-    result.staged_parts.resize(temp_staged_parts.size());
-    for (size_t i = 0; i < temp_staged_parts.size(); ++i)
-    {
-        dump_pool.scheduleOrThrowOnError([&, i]() {
+        }
+    };
+
+    auto dump_staged_parts = [&, this](size_t i) -> void {
+        for (; i < temp_staged_parts.size(); i += pool_size)
+        {
             const auto & temp_staged_part = temp_staged_parts[i];
             auto staged_part = dumper.dumpTempPart(temp_staged_part, part_disks[i + temp_parts.size()]);
             LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
             result.staged_parts[i] = std::move(staged_part);
-        });
+        }
+    };
+
+    if (pool_size > 1)
+    {
+        ThreadPool dump_pool(pool_size);
+        for (size_t thread_id = 1; thread_id <= pool_size; thread_id++)
+        {
+            dump_pool.scheduleOrThrowOnError([&dump_parts, i = thread_id - 1, thread_group = CurrentThread::getGroup()]
+            {
+                SCOPE_EXIT_SAFE({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachTo(thread_group);
+                dump_parts(i);
+            });
+        }
+        dump_pool.wait();
+
+        for (size_t thread_id = 1; thread_id <= pool_size; thread_id++)
+        {
+            dump_pool.scheduleOrThrowOnError([&dump_staged_parts, i = thread_id - 1, thread_group = CurrentThread::getGroup()]
+            {
+                SCOPE_EXIT_SAFE({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachTo(thread_group);
+                dump_staged_parts(i);
+            });
+        }
+        dump_pool.wait();
     }
-    dump_pool.wait();
+    else
+    {
+        assert(pool_size == 1);
+        dump_parts(0);
+        dump_staged_parts(0);
+    }
 
     LOG_DEBUG(
         storage.getLogger(),
@@ -382,11 +423,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
         throw;
     }
 
-    if (auto part_log = context->getPartLog(storage.getDatabaseName()))
-    {
-        // for (auto & dumped_part : dumped_parts)
-            // part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
-    }
+    /// part log will be written in InsertAction::postCommit
 
     LOG_DEBUG(
         storage.getLogger(),
@@ -704,7 +741,7 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
 
     /// prepare undo resources
     /// setMetadata() return reference, so need to cast move
-    std::vector<UndoResource> undo_resources;
+    UndoResources undo_resources;
     for (auto & part : items.parts)
         undo_resources.emplace_back(
             std::move(UndoResource(txn_id, UndoResourceType::Part, part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
