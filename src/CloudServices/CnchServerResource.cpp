@@ -62,6 +62,7 @@ AssignedResource::AssignedResource(AssignedResource && resource)
     replicated = resource.replicated;
 
     server_parts = std::move(resource.server_parts);
+    virtual_parts = std::move(resource.virtual_parts);
     hive_parts = std::move(resource.hive_parts);
     file_parts = std::move(resource.file_parts);
     part_names = resource.part_names; // don't call move here
