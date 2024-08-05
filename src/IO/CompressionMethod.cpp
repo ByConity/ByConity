@@ -49,6 +49,27 @@ std::string toContentEncodingName(CompressionMethod method)
     __builtin_unreachable();
 }
 
+std::string getFileSuffix(CompressionMethod method)
+{
+    switch (method)
+    {
+        case CompressionMethod::Gzip:
+            return "gz";
+        case CompressionMethod::Zlib:
+            return "deflate";
+        case CompressionMethod::Brotli:
+            return "br";
+        case CompressionMethod::Xz:
+            return "xz";
+        case CompressionMethod::Zstd:
+            return "zstd";
+        case CompressionMethod::Snappy:
+            return "snappy";
+        case CompressionMethod::None:
+            return "";
+    }
+}
+
 CompressionMethod chooseCompressionMethod(const std::string & path, const std::string & hint)
 {
     std::string file_extension;
