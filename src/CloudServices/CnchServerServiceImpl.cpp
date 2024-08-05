@@ -738,6 +738,13 @@ void CnchServerServiceImpl::fetchPartitions(
             session_context->setCurrentDatabase(request->database());
             ReadBufferFromString rb(request->predicate());
             ASTPtr query_ptr = deserializeAST(rb);
+            /// We should to add `database` into AST before calling `buildSelectQueryInfoForQuery`.
+            {
+                ASTSelectQuery * select_query = query_ptr->as<ASTSelectQuery>();
+                if (!select_query)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected AST type found in buildSelectQueryInfoForQuery");
+                select_query->replaceDatabaseAndTable(request->database(), request->table());
+            }
             SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
