@@ -379,8 +379,6 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         for (const auto & part : source_data_parts)
             part->accumulateColumnSizes(merged_column_to_size);
 
-        column_sizes = ColumnSizeEstimator(merged_column_to_size, merging_column_names, gathering_column_names);
-
         tmp_disk = context->getTemporaryVolume()->getDisk();
         rows_sources_file = createTemporaryFile(tmp_disk->getPath());
         rows_sources_uncompressed_write_buf = std::make_unique<WriteBufferFromFile>(rows_sources_file->path());
@@ -396,8 +394,12 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                 /// Implicit column names in merged_column_to_size is unescaped, so column.name need keep unescaped either.
                 auto [curr, end] = getFileRangeFromOrderedFilesByPrefix(getMapKeyPrefix(column.name), merged_column_to_size);
                 for (; curr != end; ++curr)
+                {
+                    /// Treat map implicit columns as ordinary columns, need add to ColumnSizeEstimator to get the right total size.
+                    gathering_column_names.emplace_back(curr->first);
                     gathering_columns.emplace_back(
                         curr->first, dynamic_cast<const DataTypeMap *>(column.type.get())->getValueTypeForImplicitColumn());
+                }
             }
             else
             {
@@ -405,6 +407,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             }
         }
         gathering_columns.sort(); /// It gains better performance if gathering by sorted columns
+        column_sizes = ColumnSizeEstimator(merged_column_to_size, merging_column_names, gathering_column_names);
     }
     else
     {
