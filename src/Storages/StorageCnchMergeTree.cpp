@@ -3344,6 +3344,7 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
 void StorageCnchMergeTree::resetObjectColumns(ContextPtr query_context)
 {
     object_columns = object_schemas.assembleSchema(query_context, getInMemoryMetadataPtr());
+    LOG_TRACE(log, "Global object schema snapshot:" + object_columns.toString());
 }
 
 void StorageCnchMergeTree::appendObjectPartialSchema(const TxnTimestamp & txn_id, ObjectPartialSchema partial_schema)

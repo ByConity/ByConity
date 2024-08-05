@@ -263,7 +263,15 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         if (!data)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not CloudMergeTree", storage->getStorageID().getNameForLogs());
         if (request->has_dynamic_object_column_schema())
+        {
+            LOG_TRACE(
+                log,
+                "Received table:{}.{} with dynamic object column schema:{}.",
+                data->getCnchDatabase(),
+                data->getCnchTable(),
+                request->dynamic_object_column_schema());
             data->resetObjectColumns(ColumnsDescription::parse(request->dynamic_object_column_schema()));
+        }
 
         auto params = ManipulationTaskParams(storage);
         params.type = static_cast<ManipulationType>(request->type());
