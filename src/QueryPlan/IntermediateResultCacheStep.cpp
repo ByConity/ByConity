@@ -42,6 +42,14 @@ QueryPipelinePtr IntermediateResultCacheStep::processCacheTransform(
     if (!cache)
         return std::move(pipelines[0]);
 
+    LOG_DEBUG(
+        log,
+        "process cache transform for digest:{}, write:{}, read:{}, all_part_in_cache:{}",
+        cache_param.digest,
+        cache_holder->write_cache.size(),
+        cache_holder->read_cache.size(),
+        cache_holder->all_part_in_cache);
+
     const auto & settings = build_settings.context->getSettingsRef();
     // write cache or skip pipeline
     if (!cache_holder->write_cache.empty() || cache_holder->all_part_in_cache)
