@@ -28,8 +28,8 @@
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include <Storages/CheckResults.h>
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
-#include "Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h"
+#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/DataPart_fwd.h>
 
 #include <unordered_set>
@@ -48,6 +48,11 @@ namespace Protos
 namespace IngestColumnCnch
 {
     struct IngestPartitionParam;
+}
+
+namespace CnchDedupHelper
+{
+    struct DedupTask;
 }
 
 class MergeTreeMetaBase;
@@ -117,14 +122,14 @@ public:
         UInt64 parts_preload_level,
         UInt64 submit_ts);
 
-        brpc::CallId dropPartDiskCache(
-            const ContextPtr & context,
-            const TxnTimestamp & txn_id,
-            const IStorage & storage,
-            const String & create_local_table_query,
-            const ServerDataPartsVector & parts,
-            bool sync,
-            bool drop_vw_disk_cache);
+    brpc::CallId dropPartDiskCache(
+        const ContextPtr & context,
+        const TxnTimestamp & txn_id,
+        const IStorage & storage,
+        const String & create_local_table_query,
+        const ServerDataPartsVector & parts,
+        bool sync,
+        bool drop_vw_disk_cache);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,
@@ -139,6 +144,15 @@ public:
         const ExceptionHandlerWithFailedInfoPtr & handler,
         const WorkerId & worker_id,
         bool with_mutations = false);
+
+    brpc::CallId executeDedupTask(
+        const ContextPtr & context,
+        const TxnTimestamp & txn_id,
+        UInt16 rpc_port,
+        const IStorage & storage,
+        const CnchDedupHelper::DedupTask & dedup_task,
+        const ExceptionHandlerPtr & handler,
+        std::function<void(bool)> funcOnCallback);
 
     brpc::CallId removeWorkerResource(TxnTimestamp txn_id, ExceptionHandlerPtr handler);
 

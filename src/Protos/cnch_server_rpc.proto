@@ -114,6 +114,7 @@ message CommitPartsReq {
   // Binlog will be committed with parts while sync MaterializedMySQL
   optional MySQLBinlogModel binlog = 14;
   optional uint64 peak_memory_usage = 15;
+  optional uint32 dedup_mode = 16;
 };
 
 message CommitPartsResp {

@@ -19,6 +19,7 @@
 #include <MergeTreeCommon/ReplacingSortedKeysIterator.h>
 #include <Transaction/TxnTimestamp.h>
 #include <common/logger_useful.h>
+#include <CloudServices/CnchDedupHelper.h>
 
 namespace DB
 {
@@ -34,7 +35,10 @@ public:
     using RowPos = ReplacingSortedKeysIterator::RowPos;
     using DeleteCallback = ReplacingSortedKeysIterator::DeleteCallback;
 
-    MergeTreeDataDeduper(const MergeTreeMetaBase & data_, ContextPtr context_);
+    MergeTreeDataDeduper(
+        const MergeTreeMetaBase & data_,
+        ContextPtr context_,
+        const CnchDedupHelper::DedupMode & dedup_mode_ = CnchDedupHelper::DedupMode::UPSERT);
 
     /// Remove duplicate keys among visible, staged, and uncommitted parts.
     /// Assumes that
@@ -102,8 +106,7 @@ private:
         const IMergeTreeDataPartsVector & parts,
         DeleteBitmapVector & delta_bitmaps,
         DedupTaskProgressReporter reporter,
-        DedupTaskPtr & dedup_task,
-        DedupKeyMode dedup_key_mode = DedupKeyMode::REPLACE);
+        DedupTaskPtr & dedup_task);
 
     /// Convert dedup task into multiple sub dedup tasks. If valid_bucket_table is true, it will split dedup task into bucket granule.
     DedupTasks convertIntoSubDedupTasks(
@@ -124,6 +127,7 @@ private:
     ContextPtr context;
     Poco::Logger * log;
     VersionMode version_mode;
+    CnchDedupHelper::DedupMode dedup_mode;
 };
 
 }

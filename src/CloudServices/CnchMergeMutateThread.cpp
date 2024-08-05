@@ -820,14 +820,14 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
     auto txn_id = transaction->getTransactionID();
     Strings res;
     std::for_each(partitions.begin(), partitions.end(),
-        [& res, & transaction, txn_id, this] (const String & partition)
+        [& res, txn_id, this] (const String & partition)
         {
             LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
             partition_lock->setMode(LockMode::X);
             partition_lock->setUUIDAndPrefix(getStorageID().uuid, LockInfo::task_domain);
             partition_lock->setPartition(partition);
 
-            auto cnch_lock = transaction->createLockHolder({std::move(partition_lock)});
+            auto cnch_lock = std::make_shared<CnchLockHolder>(getContext(), std::move(partition_lock));
             if (cnch_lock->tryLock())
             {
                 LOG_TRACE(log, "partition {} is not lock", partition);
@@ -897,7 +897,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
         }
     }
 
-    auto cnch_lock = transaction->createLockHolder({std::move(partition_lock)});
+    auto cnch_lock = std::make_shared<CnchLockHolder>(getContext(), std::move(partition_lock));
 
     if (type == ManipulationType::Merge || type == ManipulationType::Mutate || type == ManipulationType::Clustering)
         cnch_lock->lock();

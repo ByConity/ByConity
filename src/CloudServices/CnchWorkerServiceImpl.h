@@ -133,6 +133,12 @@ public:
         Protos::GetDedupWorkerStatusResp * response,
         google::protobuf::Closure * done) override;
 
+    void executeDedupTask(
+        google::protobuf::RpcController *,
+        const Protos::ExecuteDedupTaskReq * request,
+        Protos::ExecuteDedupTaskResp * response,
+        google::protobuf::Closure * done) override;
+
 #if USE_RDKAFKA
     void submitKafkaConsumeTask(
         google::protobuf::RpcController * cntl,

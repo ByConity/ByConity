@@ -272,7 +272,7 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         if (locks_to_acquire.size() != 1)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Merge task {} acquires more than one lock.", params.task_id);
         String lock_debug_info = locks_to_acquire[0]->toDebugString();
-        cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
+        cnch_lock = std::make_shared<CnchLockHolder>(getContext(), std::move(locks_to_acquire));
         while (num_try--)
         {
             LOG_TRACE(log, "Try lock: {}", lock_debug_info);
@@ -318,6 +318,8 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
 
     if (!lock_success)
         throw Exception("Failed to acquire lock for merge task " + params.task_id, ErrorCodes::ABORTED);
+
+    txn->appendLockHolder(cnch_lock);
 
     lock_watch.restart();
 

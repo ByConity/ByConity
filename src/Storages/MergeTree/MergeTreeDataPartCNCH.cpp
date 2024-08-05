@@ -457,7 +457,14 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUnique
                 DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
                 std::forward_list<DataModelDeleteBitmapPtr> to_reads; /// store meta in ascending order of commit time
 
-                if (cached_version > target_version)
+                bool skip_cache = false;
+                if (delete_flag && target_version == 0)
+                {
+                    /// case: insert with _delete_flag_ & sync dedup
+                    skip_cache = true;
+                }
+
+                if (cached_version > target_version || skip_cache)
                 {
                     /// case: querying an older version than the cached version
                     /// then cached bitmap can't be used and we need to build the bitmap from all metas
@@ -475,8 +482,13 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUnique
                         {
                             to_reads.insert_after(to_reads.before_begin(), meta);
                         }
-                        else if (meta->commit_time() == cached_version)
+                        else if (hit_cache && meta->commit_time() == cached_version)
                         {
+                            /// Make sure that cached bitmap is not nullptr
+                            if (!cached_bitmap)
+                                throw Exception(
+                                    ErrorCodes::LOGICAL_ERROR, "Cached bitmap is nullptr at version: {}, part: {}", cached_version, name);
+
                             *bitmap = *cached_bitmap; /// copy the cached bitmap as the base
                             break;
                         }
@@ -504,19 +516,20 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUnique
                     combineWithRowExists(bitmap);
 
                 delete_bitmap = std::move(bitmap);
-                if (target_version > cached_version)
+                if (target_version > cached_version && !skip_cache)
                 {
                     cache->insert(cache_key, target_version, delete_bitmap);
                 }
 
                 LOG_DEBUG(
                     storage.log,
-                    "Loaded delete bitmap for unique table part {} in {} ms, commit_time: {}, bitmap cardinality: {}, generated in txn: {}",
+                    "Loaded delete bitmap for unique table part {} in {} ms, commit_time: {}, bitmap cardinality: {}, generated in txn: {}{}",
                     name,
                     watch.elapsedMilliseconds(),
                     target_version,
                     delete_bitmap->cardinality(),
-                    txn_id);
+                    txn_id,
+                    skip_cache ? ", skip cache": "");
             }
         }
 

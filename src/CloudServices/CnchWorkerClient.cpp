@@ -28,6 +28,9 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Transaction/ICnchTransaction.h>
+#include <CloudServices/DedupWorkerStatus.h>
+#include <CloudServices/CnchServerResource.h>
+#include <CloudServices/CnchDedupHelper.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include "Storages/Hive/HiveFile/IHiveFile.h"
@@ -512,6 +515,81 @@ brpc::CallId CnchWorkerClient::sendResources(
     auto * response = new Protos::SendResourcesResp();
     stub->sendResources(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
 
+    return call_id;
+}
+
+static void onDedupTaskDone(Protos::ExecuteDedupTaskResp * response, brpc::Controller * cntl, ExceptionHandlerPtr handler, std::function<void(bool)> funcOnCallback)
+{
+    try
+    {
+        std::unique_ptr<Protos::ExecuteDedupTaskResp> response_guard(response);
+        std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+        RPCHelpers::assertController(*cntl);
+        RPCHelpers::checkResponse(*response);
+        funcOnCallback(/*success*/ true);
+    }
+    catch (...)
+    {
+        handler->setException(std::current_exception());
+        funcOnCallback(/*success*/ false);
+    }
+}
+
+brpc::CallId CnchWorkerClient::executeDedupTask(
+    const ContextPtr & context,
+    const TxnTimestamp & txn_id,
+    UInt16 rpc_port,
+    const IStorage & storage,
+    const CnchDedupHelper::DedupTask & dedup_task,
+    const ExceptionHandlerPtr & handler,
+    std::function<void(bool)> funcOnCallback)
+{
+    Protos::ExecuteDedupTaskReq request;
+    request.set_txn_id(txn_id);
+    request.set_rpc_port(rpc_port);
+    RPCHelpers::fillUUID(dedup_task.storage_id.uuid, *request.mutable_table_uuid());
+    request.set_dedup_mode(static_cast<UInt32>(dedup_task.dedup_mode));
+    /// New parts
+    for (const auto & new_part : dedup_task.new_parts)
+    {
+        fillPartModel(storage, *new_part, *request.add_new_parts());
+        request.add_new_parts_paths()->assign(new_part->relative_path);
+    }
+    for (const auto & delete_bitmap : dedup_task.delete_bitmaps_for_new_parts)
+    {
+        auto * new_bitmap = request.add_delete_bitmaps_for_new_parts();
+        new_bitmap->CopyFrom(*(delete_bitmap->getModel()));
+    }
+
+    /// Staged parts
+    for (const auto & staged_part : dedup_task.staged_parts)
+    {
+        fillPartModel(storage, *staged_part, *request.add_staged_parts());
+        request.add_staged_parts_paths()->assign(staged_part->relative_path);
+    }
+    for (const auto & delete_bitmap : dedup_task.delete_bitmaps_for_staged_parts)
+    {
+        auto * new_bitmap = request.add_delete_bitmaps_for_staged_parts();
+        new_bitmap->CopyFrom(*(delete_bitmap->getModel()));
+    }
+
+    /// Visible parts
+    for (const auto & visible_part : dedup_task.visible_parts)
+    {
+        fillPartModel(storage, *visible_part, *request.add_visible_parts());
+        request.add_visible_parts_paths()->assign(visible_part->relative_path);
+    }
+    for (const auto & delete_bitmap : dedup_task.delete_bitmaps_for_visible_parts)
+    {
+        auto * new_bitmap = request.add_delete_bitmaps_for_visible_parts();
+        new_bitmap->CopyFrom(*(delete_bitmap->getModel()));
+    }
+
+    auto * cntl = new brpc::Controller;
+    cntl->set_timeout_ms(context->getSettingsRef().max_dedup_execution_time.totalMilliseconds());
+    const auto call_id = cntl->call_id();
+    auto * response = new Protos::ExecuteDedupTaskResp;
+    stub->executeDedupTask(cntl, &request, response, brpc::NewCallback(onDedupTaskDone, response, cntl, handler, funcOnCallback));
     return call_id;
 }
 

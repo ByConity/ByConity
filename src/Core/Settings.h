@@ -1320,6 +1320,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
     M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND. THROW mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
     M(Seconds, unique_sleep_seconds_after_acquire_lock, 0, "Only for test", 0) \
+    M(Seconds, unique_acquire_write_lock_timeout, 0, "It has higher priority than table setting. Only when it's zero, use table setting", 0) \
+    M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \
+    M(UInt64, max_dedup_retry_time, 1, "Dedup task retry num", 0) \
     \
     /** Settings for Map */ \
     M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
