@@ -163,11 +163,6 @@ bool AccessControlManager::isSensitiveTenant(const String & tenant) const
     return sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
 }
 
-bool AccessControlManager::isSensitiveTenant(const String & tenant) const
-{
-    return sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
-}
-
 AccessControlManager::~AccessControlManager() = default;
 
 void AccessControlManager::setUsersConfig(const Poco::Util::AbstractConfiguration & users_config_)
