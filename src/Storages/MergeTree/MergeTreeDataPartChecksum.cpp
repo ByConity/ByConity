@@ -455,6 +455,7 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
         // writeBinary(sum.is_encrypted, out);
         writeBinary(sum.is_deleted, out);
     }
+    out.finalize();
 }
 
 void MergeTreeDataPartChecksums::addFile(const String & file_name, UInt64 file_size, MergeTreeDataPartChecksum::uint128 file_hash)
