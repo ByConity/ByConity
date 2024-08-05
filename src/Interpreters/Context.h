@@ -1195,7 +1195,7 @@ public:
 
     UInt32 getZooKeeperSessionUptime() const;
 
-    void addQueryPlanInfo(String & query_plan_) 
+    void addQueryPlanInfo(String & query_plan_)
     {
         this->query_plan = query_plan_;
     }
