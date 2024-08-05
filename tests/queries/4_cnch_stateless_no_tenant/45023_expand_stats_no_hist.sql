@@ -40,6 +40,7 @@ insert into tb select * from tb;
 insert into tb select * from tb;
 insert into tb select * from tb;
 
+set statistics_expand_to_current=0;
 create stats tb;
 show stats tb;
 explain stats=1, verbose=0 select id from tb where date > toDate('2024-05-13') - 5;
@@ -58,6 +59,7 @@ explain stats=1, verbose=0 select id from tb where old_datetime64 > toDateTime('
 
 
 set statistics_expand_to_current=1;
+set statistics_expand_to_current_histogram_ratio=1;
 show stats tb;
 explain stats=1, verbose=0 select id from tb where date > toDate('2024-05-13') - 5;
 explain stats=1, verbose=0 select id from tb where date = toDate('2024-05-13');

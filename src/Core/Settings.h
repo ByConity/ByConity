@@ -1589,9 +1589,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
-    M(Bool, statistics_expand_to_current, false, "Expand Date/Date32/DateTime/DateTime64 columns stats to current timestamp", 0) \
+    M(Bool, statistics_expand_to_current, true, "Expand Date/Date32/DateTime/DateTime64 columns stats to current timestamp", 0) \
     M(UInt64, statistics_current_timestamp, 0, "Timestamp used for statistics_expand_to_current, 0 to use now(), for testing purpose", 0) \
     M(UInt64, statistics_expand_to_current_threshold_days, 31, "If abs(stats_timestamp - stats_column_max) is within this threshold, we will expand this column", 0) \
+    M(Float, statistics_expand_to_current_histogram_ratio, 0.10, "For histogram, only expand last buckets containing rows with this ratio", 0) \
     M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
     M(Bool, statistics_query_cnch_parts_for_row_count, true, "Use cnch parts instead of count(*) for row count to speed up test", 0) \
     /** Optimizer relative settings, cost model and estimation */ \
