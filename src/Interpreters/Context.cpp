@@ -1846,11 +1846,15 @@ ASTPtr Context::getRowPolicyCondition(const String & database, const String & ta
 
 void Context::setInitialRowPolicy()
 {
+    String initial_user_copy;
+    {
+        auto lock = getLocalLock();
+        initial_user_copy = client_info.initial_user;
+    }
+    auto initial_user_id = getAccessControlManager().find<User>(initial_user_copy);
+    auto initial_row_policy_local = initial_user_id ? getAccessControlManager().getEnabledRowPolicies(*initial_user_id, {}) : nullptr;
     auto lock = getLocalLock();
-    auto initial_user_id = getAccessControlManager().find<User>(client_info.initial_user);
-    initial_row_policy = nullptr;
-    if (initial_user_id)
-        initial_row_policy = getAccessControlManager().getEnabledRowPolicies(*initial_user_id, {});
+    initial_row_policy = initial_row_policy_local;
 }
 
 
