@@ -355,7 +355,10 @@ namespace S3
             validateBucket(bucket, uri);
             if (uri.getPath().length() <= 1)
                 throw Exception("Invalid S3 URI: no key: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
-            key = uri.getPath().substr(1);
+            if (!uri.getQuery().empty())
+                key = uri.getPathAndQuery().substr(1);
+            else
+                key = uri.getPath().substr(1);
             is_virtual_hosted_style = false;
             return;
         }
@@ -691,6 +694,59 @@ namespace S3
             }
             throw S3Exception(outcome.GetError());
         }
+    }
+
+    S3Util::S3ListResult S3Util::listObjectsWithDelimiter(const String & prefix, String delimiter, bool include_delimiter) const
+    {
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
+        Aws::S3::Model::ListObjectsV2Request request;
+        request.SetBucket(bucket);
+        request.SetPrefix(prefix);
+        request.SetDelimiter(delimiter);
+
+        S3Util::S3ListResult result;
+
+        while (result.has_more)
+        {
+            if (result.token)
+                request.SetContinuationToken(result.token.value());
+
+            Aws::S3::Model::ListObjectsV2Outcome outcome = client->ListObjectsV2(request);
+
+            if (outcome.IsSuccess())
+            {
+                const auto & list_result = outcome.GetResult();
+                result.has_more = outcome.GetResult().GetIsTruncated();
+                result.token = outcome.GetResult().GetNextContinuationToken();
+
+                size_t reserver_size = result.object_names.size() + list_result.GetContents().size() + list_result.GetCommonPrefixes().size();
+                result.object_names.reserve(reserver_size);
+                result.object_sizes.reserve(reserver_size);
+                result.is_common_prefix.reserve(reserver_size);
+                for (const auto & content : list_result.GetContents())
+                {
+                    result.object_names.push_back(content.GetKey());
+                    result.object_sizes.push_back(content.GetSize());
+                    result.is_common_prefix.push_back(false);
+                }
+                for (const auto & common_prefix : list_result.GetCommonPrefixes())
+                {
+                    String prefix_path = common_prefix.GetPrefix();
+                    if (!include_delimiter)
+                        prefix_path.erase(prefix_path.find_last_of(delimiter), delimiter.size());
+
+                    result.object_names.push_back(prefix_path);
+                    result.object_sizes.push_back(0);
+                    result.is_common_prefix.push_back(true);
+                }
+                return result;
+            }
+            else
+            {
+                throw S3Exception(outcome.GetError(), fmt::format("Could not list objects in bucket {} with prefix {}", bucket, prefix));
+            }
+        }
+        return result;
     }
 
     S3Util::S3ListResult S3Util::listObjectsWithPrefix(const String & prefix, const std::optional<String> & token, int limit) const
