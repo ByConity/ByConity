@@ -105,6 +105,7 @@ extern const Event PrunePartsTime;
 extern const Event TotalPartitions;
 extern const Event PrunedPartitions;
 extern const Event SelectedParts;
+extern const Event PreloadSubmitTotalOps;
 }
 
 namespace DB
@@ -1464,6 +1465,9 @@ void StorageCnchMergeTree::collectResourceWithTableVersion(
 
 void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level, UInt64 ts)
 {
+    ProfileEvents::increment(ProfileEvents::PreloadSubmitTotalOps, 1, Metrics::MetricType::Rate);
+    Stopwatch timer;
+
     auto worker_group = getWorkerGroupForTable(*this, local_context);
     local_context->setCurrentWorkerGroup(worker_group);
 
@@ -1505,11 +1509,12 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
             ids.emplace_back(id);
             LOG_TRACE(
                 log,
-                "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}, submit_ts = {}",
+                "send preload data parts size = {}, enable_parts_sync_preload = {}, parts_preload_level = {}, submit_ts = {}, time_ms = {}",
                 resource.server_parts.size(),
                 enable_parts_sync_preload,
                 parts_preload_level,
-                ts);
+                ts,
+                timer.elapsedMilliseconds());
         }
         return ids;
     });
