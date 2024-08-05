@@ -613,11 +613,11 @@ std::optional<NameAndTypePair> ColumnsDescription::tryGetMapImplicitColumn(const
 {
     if (isMapImplicitKey(column_name))
     {
-        auto ordinary_columns = getOrdinary();
-        for (auto & nt : ordinary_columns)
+        const String & map_name = parseMapNameFromImplicitColName(column_name);
+        if (auto map_col = tryGetColumn(GetColumnsOptions::Ordinary, map_name))
         {
-            if (nt.type->isByteMap() && isMapImplicitKeyOfSpecialMapName(column_name, nt.name))
-                return NameAndTypePair(column_name, typeid_cast<const DataTypeMap &>(*nt.type).getValueTypeForImplicitColumn());
+            if (map_col->type->isByteMap())
+                return NameAndTypePair(column_name, typeid_cast<const DataTypeMap &>(*map_col->type).getValueTypeForImplicitColumn());
         }
     }
     return {};
