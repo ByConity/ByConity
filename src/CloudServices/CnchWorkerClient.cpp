@@ -221,6 +221,7 @@ void CnchWorkerClient::sendCreateQueries(
     for (const auto & cnch_table_create_query : cnch_table_create_queries)
         *request.mutable_cnch_table_create_queries()->Add() = cnch_table_create_query;
 
+    cntl.set_timeout_ms(settings.send_plan_segment_timeout_ms.totalMilliseconds());
     stub->sendCreateQuery(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
