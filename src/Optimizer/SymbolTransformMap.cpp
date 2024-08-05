@@ -181,7 +181,7 @@ String SymbolTransformMap::toString() const
 bool SymbolTransformMap::addSymbolMapping(const String & symbol, ConstASTPtr expr)
 {
     for (const auto & symbol_in_expr : SymbolsExtractor::extract(expr))
-        if (symbol_to_expressions.contains(symbol_in_expr))
+        if (symbol == symbol_in_expr || symbol_to_expressions.contains(symbol_in_expr))
             return false;
     return symbol_to_expressions.emplace(symbol, std::move(expr)).second;
 }
