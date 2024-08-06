@@ -114,7 +114,7 @@ jobs:
           export TENANT_HTTP_DEFAULT_DB_PREFIX="${TENANT_ID}%60"
           find ./queries  -name *.sql |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
           find ./queries  -name *.reference |xargs -I {}  sed -i "s/\${TENANT_DB_PREFIX}/$TENANT_DB_PREFIX/" {}
-          ./clickhouse-test 00001_regex_infile_s3  --s3 --use-skip-list --tenant_id $TENANT_ID -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=$TENANT_ID 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./clickhouse-test --s3 --use-skip-list --tenant_id $TENANT_ID -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} tenant_id=$TENANT_ID 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_s3_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           cd ..
           rm -rf ci_stateless_without_optimizer_s3
