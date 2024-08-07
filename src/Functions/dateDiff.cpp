@@ -444,7 +444,7 @@ public:
             */
             // Note: It is impossible to take the civil-time diff of 2 different timezones to mysql's timestampdiff.
             // Because, mysql will convert both absolute times to the same timezone given by the session time_zone variable.
-            const DateLUTImpl & date_lut = DateLUT::instance();
+            const DateLUTImpl & date_lut = DateLUT::sessionInstance();
             bool should_swap = seconds_x > seconds_y;
             struct DateTimeComponents {
                 const DateLUTImpl::Values & values;
@@ -803,13 +803,13 @@ public:
         {
             auto res = ColumnTime::create(rows, 0);
 
-            impl.dispatchForColumns<Second>(x, y, DateLUT::instance(), DateLUT::instance(), res->getData());
+            impl.dispatchForColumns<Second>(x, y, DateLUT::sessionInstance(), DateLUT::sessionInstance(), res->getData());
             return res;
         } else
         {
             auto res = ColumnInt64::create(rows);
 
-            impl.dispatchForColumns<Second>(x, y, DateLUT::instance(), DateLUT::instance(), res->getData());
+            impl.dispatchForColumns<Second>(x, y, DateLUT::sessionInstance(), DateLUT::sessionInstance(), res->getData());
             return res;
         }
     }

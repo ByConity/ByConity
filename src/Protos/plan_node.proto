@@ -89,6 +89,7 @@ message SortingStep {
         FULL = 0;
         MERGE = 1;
         PARTIAL = 2;
+        PARTIAL_NO_MERGE = 3;
     }
   }
 

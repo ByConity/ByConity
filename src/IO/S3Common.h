@@ -226,7 +226,9 @@ public:
         std::optional<String> token;
         Strings object_names;
         std::vector<size_t> object_sizes;
+        std::vector<bool> is_common_prefix;
     };
+    S3ListResult listObjectsWithDelimiter(const String & prefix, String delimiter = "/", bool include_delimiter = false) const;
     S3ListResult listObjectsWithPrefix(const String & prefix, const std::optional<String> & token, int limit = 1000) const;
 
     // Write object

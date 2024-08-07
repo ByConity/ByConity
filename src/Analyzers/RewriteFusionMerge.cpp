@@ -88,12 +88,12 @@ namespace
         UInt64 field_time = timestamp.safeGet<UInt64>();
         if (field_time > mills_test)
         {
-            String date = DateLUT::instance().dateToString(field_time / 1000);
+            String date = DateLUT::serverTimezoneInstance().dateToString(field_time / 1000);
             return std::make_shared<ASTLiteral>(Field(date));
         }
         else
         {
-            String date = DateLUT::instance().dateToString(field_time);
+            String date = DateLUT::serverTimezoneInstance().dateToString(field_time);
             return std::make_shared<ASTLiteral>(Field(date));
         }
     }

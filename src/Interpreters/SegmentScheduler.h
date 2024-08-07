@@ -62,6 +62,11 @@ using SegmentStatusMap = std::unordered_map<String, std::unordered_map<size_t, R
 using BspSchedulerMap = std::unordered_map<String, std::shared_ptr<BSPScheduler>>;
 enum class OverflowMode;
 
+struct SegmentSchedulerOptions
+{
+    std::function<void()> send_progress_callback;
+};
+
 class SegmentScheduler
 {
 public:

@@ -142,7 +142,9 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
         || type() == UndoResourceType::S3DetachDeleteBitmap || type() == UndoResourceType::S3AttachDeleteBitmap)
     {
         const auto & resource_relative_path = type() == UndoResourceType::S3AttachDeleteBitmap ? placeholders(4) : placeholders(1);
-        String rel_path = storage->getRelativeDataPath(IStorage::StorageLocation::MAIN) + resource_relative_path;
+        /// For HDFS, rel_path is {table_uuid} / {part_id}.
+        /// For S3, as storage->getRelativeDataPath returns "", rel_path is just {part_id}
+        String rel_path = fs::path(storage->getRelativeDataPath(IStorage::StorageLocation::MAIN)) / resource_relative_path;
         if (disk->exists(rel_path))
         {
             if ((type() == UndoResourceType::Part || type() == UndoResourceType::StagedPart)
@@ -226,7 +228,7 @@ void UndoResource::commit(const Context & context) const
         DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
         model_ptr->ParseFromString(former_bitmap_meta);
         const auto & relative_path = DeleteBitmapMeta::deleteBitmapFileRelativePath(*model_ptr);
-        String rel_path = storage->getRelativeDataPath(IStorage::StorageLocation::MAIN) + relative_path;
+        String rel_path = fs::path(storage->getRelativeDataPath(IStorage::StorageLocation::MAIN)) / relative_path;
         if (disk->exists(rel_path))
         {
             LOG_DEBUG(log, "Will remove Disk {} undo path {}", disk->getPath(), rel_path);

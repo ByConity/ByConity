@@ -5,6 +5,7 @@
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rewriter/RemoveUnusedCTE.h>
 #include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
+#include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/BufferStep.h>
 #include <QueryPlan/CTEInfo.h>
@@ -393,6 +394,7 @@ void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr contex
                std::make_shared<ColumnPruning>(),
                std::make_shared<PredicatePushdown>(false, true),
                std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+               std::make_shared<UnifyNullableType>(),
                std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
                std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
                std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),

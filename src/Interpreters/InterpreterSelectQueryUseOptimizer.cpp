@@ -554,7 +554,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::readFromQueryCache(ContextPtr local_
 
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
-    if (auto * create_prepared = query_ptr->as<ASTCreatePreparedStatementQuery>())
+    if (query_ptr && query_ptr->as<ASTCreatePreparedStatementQuery>())
     {
         // if (!create_prepared->cluster.empty())
         //     return executeDDLQueryOnCluster(query_ptr, context);

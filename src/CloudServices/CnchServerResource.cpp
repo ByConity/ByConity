@@ -62,6 +62,7 @@ AssignedResource::AssignedResource(AssignedResource && resource)
     replicated = resource.replicated;
 
     server_parts = std::move(resource.server_parts);
+    virtual_parts = std::move(resource.virtual_parts);
     hive_parts = std::move(resource.hive_parts);
     file_parts = std::move(resource.file_parts);
     part_names = resource.part_names; // don't call move here
@@ -536,7 +537,7 @@ void CnchServerResource::allocateResource(
                     LOG_TRACE(
                         log,
                         "Send {} virtual data part (hybrid_allocation) to worker {} for table {}",
-                        assigned_parts.size(),
+                        assigned_virtual_parts.size(),
                         host_ports.toDebugString(),
                         storage->getStorageID().getNameForLogs());
                 }

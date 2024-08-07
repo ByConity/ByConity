@@ -1049,33 +1049,6 @@ MergeTreeMetaBase::getDataPartsVectorInPartition(MergeTreeMetaBase::DataPartStat
         data_parts_by_state_and_info.lower_bound(state_with_partition), data_parts_by_state_and_info.upper_bound(state_with_partition));
 }
 
-ServerDataPartsVector MergeTreeMetaBase::getServerDataPartsInPartitions(const Strings & required_partitions)
-{
-    ServerDataPartsVector server_parts;
-    DeleteBitmapMetaPtrVector delete_bitmaps;
-    {
-        auto lock = lockPartsRead();
-        for (const String & partition_id : required_partitions)
-        {
-            const auto & parts_with_dbm = server_data_parts[partition_id];
-            server_parts.insert(server_parts.end(), parts_with_dbm.first.begin(), parts_with_dbm.first.end());
-            delete_bitmaps.insert(delete_bitmaps.end(), parts_with_dbm.second.begin(), parts_with_dbm.second.end());
-        }
-    }
-    auto visible_server_parts = CnchPartsHelper::calcVisibleParts(server_parts, false, CnchPartsHelper::LoggingOption::DisableLogging, true);
-
-    if (getInMemoryMetadataPtr()->hasUniqueKey() && !visible_server_parts.empty())
-        getDeleteBitmapMetaForServerParts(visible_server_parts, delete_bitmaps);
-
-    return visible_server_parts;
-}
-
-MergeTreeMetaBase::MergeTreePartitions MergeTreeMetaBase::getAllPartitions() const
-{
-    auto lock = lockPartsRead();
-    return data_partitions;
-}
-
 MergeTreeMetaBase::DataParts MergeTreeMetaBase::getDataParts() const
 {
     return getDataParts({DataPartState::Committed});
@@ -2138,7 +2111,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
 
         if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
         {
-            const auto & date_lut = DateLUT::instance();
+            const auto & date_lut = DateLUT::serverTimezoneInstance();
             for (size_t index = 0; index < column->size(); index++)
             {
                 auto ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
@@ -2163,7 +2136,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
         //     time_t ttl_value = 0;
         //     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
         //     {
-        //         const auto & date_lut = DateLUT::instance();
+        //         const auto & date_lut = DateLUT::serverTimezoneInstance();
         //         ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
         //     }
         //     else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))

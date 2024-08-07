@@ -44,7 +44,8 @@ enum class DedupMode : unsigned int
 {
     APPEND = 0,
     UPSERT,
-    THROW
+    THROW,
+    IGNORE
 };
 
 inline String typeToString(DedupMode type)
@@ -57,6 +58,8 @@ inline String typeToString(DedupMode type)
             return "UPSERT";
         case DedupMode::THROW:
             return "THROW";
+        case DedupMode::IGNORE:
+            return "IGNORE";
         default:
             return "Unknown";
     }
@@ -66,13 +69,13 @@ class DedupScope
 {
 public:
 
-    enum class DedupMode
+    enum class DedupLevel
     {
         TABLE,
         PARTITION,
     };
 
-    enum class LockMode
+    enum class LockLevel
     {
         NORMAL, /// For NORMAL lock mode, if dedup mode is table, it's table level. Otherwise, it's partition level.
         BUCKET, /// BUCKET level lock mode.
@@ -91,35 +94,35 @@ public:
 
     static DedupScope TableDedup()
     {
-        static DedupScope table_scope{DedupMode::TABLE};
+        static DedupScope table_scope{DedupLevel::TABLE};
         return table_scope;
     }
 
     static DedupScope TableDedupWithBucket(const BucketSet & buckets_)
     {
-        DedupScope table_scope{DedupMode::TABLE, LockMode::BUCKET};
+        DedupScope table_scope{DedupLevel::TABLE, LockLevel::BUCKET};
         table_scope.buckets = buckets_;
         return table_scope;
     }
 
     static DedupScope PartitionDedup(const NameOrderedSet & partitions_)
     {
-        DedupScope partition_scope{DedupMode::PARTITION};
+        DedupScope partition_scope{DedupLevel::PARTITION};
         partition_scope.partitions = partitions_;
         return partition_scope;
     }
 
     static DedupScope PartitionDedupWithBucket(const BucketWithPartitionSet & bucket_with_partition_set_)
     {
-        DedupScope partition_scope{DedupMode::PARTITION, LockMode::BUCKET};
+        DedupScope partition_scope{DedupLevel::PARTITION, LockLevel::BUCKET};
         partition_scope.bucket_with_partition_set = bucket_with_partition_set_;
         for (const auto & bucket_with_partition : partition_scope.bucket_with_partition_set)
             partition_scope.partitions.insert(bucket_with_partition.first);
         return partition_scope;
     }
 
-    bool isTableDedup() const { return dedup_mode == DedupMode::TABLE; }
-    bool isBucketLock() const { return lock_mode == LockMode::BUCKET; }
+    bool isTableDedup() const { return dedup_level == DedupLevel::TABLE; }
+    bool isBucketLock() const { return lock_level == LockLevel::BUCKET; }
 
     const NameOrderedSet & getPartitions() const { return partitions; }
 
@@ -131,10 +134,10 @@ public:
     void filterParts(MergeTreeDataPartsCNCHVector & parts) const;
 
 private:
-    DedupScope(DedupMode dedup_mode_, LockMode lock_mode_ = LockMode::NORMAL) : dedup_mode(dedup_mode_), lock_mode(lock_mode_) { }
+    DedupScope(DedupLevel dedup_level_, LockLevel lock_level_ = LockLevel::NORMAL) : dedup_level(dedup_level_), lock_level(lock_level_) { }
 
-    DedupMode dedup_mode;
-    LockMode lock_mode;
+    DedupLevel dedup_level;
+    LockLevel lock_level;
 
     NameOrderedSet partitions;
     BucketSet buckets;

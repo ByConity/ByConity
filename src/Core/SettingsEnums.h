@@ -381,6 +381,7 @@ enum class DedupKeyMode
     REPLACE,
     THROW,
     APPEND,
+    IGNORE,
 };
 
 DECLARE_SETTING_ENUM(DedupKeyMode)

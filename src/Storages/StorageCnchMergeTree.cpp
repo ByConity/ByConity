@@ -105,6 +105,7 @@ extern const Event PrunePartsTime;
 extern const Event TotalPartitions;
 extern const Event PrunedPartitions;
 extern const Event SelectedParts;
+extern const Event PreloadSubmitTotalOps;
 }
 
 namespace DB
@@ -222,16 +223,17 @@ void StorageCnchMergeTree::loadMutations()
     {
         getContext()->getCnchCatalog()->fillMutationsByStorage(getStorageID(), mutations_by_version);
 
-        auto mutations_debug_str = [&]() -> String {
+        auto print_mutations_debug_str = [&]() -> void {
             String res;
             for (auto const & [_, mutation] : mutations_by_version)
             {
                 res += mutation.toString() + "\n";
             }
-            return res;
+            if (!mutations_by_version.empty())
+                LOG_TRACE(log, "All mutations:\n{}", res);
         };
 
-        LOG_TRACE(log, "All mutations:\n{}", mutations_debug_str());
+        print_mutations_debug_str();
     }
     catch(...)
     {
@@ -574,7 +576,7 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 
     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
     {
-        const auto & date_lut = DateLUT::instance();
+        const auto & date_lut = DateLUT::serverTimezoneInstance();
         return date_lut.fromDayNum(DayNum(column_date->getElement(0)));
     }
     else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
@@ -1464,6 +1466,9 @@ void StorageCnchMergeTree::collectResourceWithTableVersion(
 
 void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level, UInt64 ts)
 {
+    ProfileEvents::increment(ProfileEvents::PreloadSubmitTotalOps, 1, Metrics::MetricType::Rate);
+    Stopwatch timer;
+
     auto worker_group = getWorkerGroupForTable(*this, local_context);
     local_context->setCurrentWorkerGroup(worker_group);
 
@@ -1505,11 +1510,12 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
             ids.emplace_back(id);
             LOG_TRACE(
                 log,
-                "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}, submit_ts = {}",
+                "send preload data parts size = {}, enable_parts_sync_preload = {}, parts_preload_level = {}, submit_ts = {}, time_ms = {}",
                 resource.server_parts.size(),
                 enable_parts_sync_preload,
                 parts_preload_level,
-                ts);
+                ts,
+                timer.elapsedMilliseconds());
         }
         return ids;
     });

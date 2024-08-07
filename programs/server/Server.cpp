@@ -852,8 +852,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize DateLUT early, to not interfere with running time of first query.
     LOG_DEBUG(log, "Initializing DateLUT.");
-    DateLUT::instance();
-    LOG_TRACE(log, "Initialized DateLUT with time zone '{}'.", DateLUT::instance().getTimeZone());
+    DateLUT::serverTimezoneInstance();
+    LOG_TRACE(log, "Initialized DateLUT with time zone '{}'.", DateLUT::serverTimezoneInstance().getTimeZone());
 
     /// Storage with temporary data for processing of heavy queries.
     {
@@ -1021,27 +1021,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
             #if USE_HUALLOC
             if (config->getBool("hualloc_numa_aware", false))
             {
-                size_t max_numa_node = SystemUtils::getMaxNumaNode();
-                std::vector<cpu_set_t> numa_nodes_cpu_mask = SystemUtils::getNumaNodesCpuMask();
-                bool hualloc_enable_mbind = config->getBool("hualloc_enable_mbind", false);
-                int mbind_mode = config->getInt("hualloc_mbind_mode", 1);
+                static std::once_flag numa_aware_init_flag;
+                std::call_once(numa_aware_init_flag, [&]()
+                {
+                    size_t max_numa_node = SystemUtils::getMaxNumaNode();
+                    std::vector<cpu_set_t> numa_nodes_cpu_mask = SystemUtils::getNumaNodesCpuMask();
+                    bool hualloc_enable_mbind = config->getBool("hualloc_enable_mbind", false);
+                    int mbind_mode = config->getInt("hualloc_mbind_mode", 1);
 
-                /*
-                *mbind mode
-                    #define MPOL_DEFAULT     0
-                    #define MPOL_PREFERRED   1
-                    #define MPOL_BIND        2
-                    #define MPOL_INTERLEAVE  3
-                    #define MPOL_LOCAL       4
-                    #define MPOL_MAX         5
-                */
-                huallocSetNumaInfo(
-                    max_numa_node,
-                    numa_nodes_cpu_mask,
-                    hualloc_enable_mbind,
-                    mbind_mode,
-                    huallocLogPrint
-                );
+                    /*
+                    *mbind mode
+                        #define MPOL_DEFAULT     0
+                        #define MPOL_PREFERRED   1
+                        #define MPOL_BIND        2
+                        #define MPOL_INTERLEAVE  3
+                        #define MPOL_LOCAL       4
+                        #define MPOL_MAX         5
+                    */
+                    huallocSetNumaInfo(
+                        max_numa_node,
+                        numa_nodes_cpu_mask,
+                        hualloc_enable_mbind,
+                        mbind_mode,
+                        huallocLogPrint
+                    );
+                });
             }
 
             double default_hualloc_cache_ratio = config->getDouble("hualloc_cache_ratio", 0.25);
@@ -1222,8 +1226,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// A cache for gin index store
     GinIndexStoreCacheSettings ginindex_store_cache_settings;
     ginindex_store_cache_settings.lru_max_size = config().getUInt64("ginindex_store_cache_size", 5368709120); //5GB
-    ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 5000); //5000
-    ginindex_store_cache_settings.cache_shard_num = config().getUInt64("ginindex_store_cache_shard", 8); //8
+    ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 1000); //1000
+    ginindex_store_cache_settings.cache_shard_num = config().getUInt64("ginindex_store_cache_shard", 2); //2
     ginindex_store_cache_settings.lru_update_interval = config().getUInt64("ginindex_store_cache_lru_update_interval", 60); //60 seconds
     global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
 

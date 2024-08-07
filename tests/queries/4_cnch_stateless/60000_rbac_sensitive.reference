@@ -1,17 +1,8 @@
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
-Not enough privileges
+-- drop db
+-- drop table
+-- select table
+-- select column
+-- select denied
 "1234.my_user",\N,"SELECT","1234.db",\N,\N,0
 "1234.my_user",\N,"SELECT","1234.db","tb",\N,0
 "1234.my_user",\N,"SELECT","1234.db","tb","id",1

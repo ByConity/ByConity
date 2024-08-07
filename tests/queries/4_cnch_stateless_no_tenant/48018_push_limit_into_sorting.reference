@@ -8,6 +8,7 @@ Projection Est. 3 rows, cost 1.502000e+00
       └─ Gather Exchange Est. 7 rows, cost 1.280000e+00
          └─ Sorting Est. 7 rows, cost 0.000000e+00
             │     Order by: {a ASC NULLS FIRST}
+            │     Prefix Order: {a}
             │     Limit: 7
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {a ASC NULLS FIRST}
@@ -22,8 +23,10 @@ Projection Est. 3 rows, cost 1.502000e+00
       └─ Gather Exchange Est. 7 rows, cost 1.280000e+00
          └─ Sorting Est. 7 rows, cost 0.000000e+00
             │     Order by: {a ASC NULLS LAST}
+            │     Prefix Order: {a}
             │     Limit: 7
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+                     Input Order Info: {a ASC NULLS FIRST}
                      Outputs: [k, a, b, c]
 Projection Est. 10 rows, cost 2.500000e+00
 │     Expressions: [a]
@@ -35,8 +38,10 @@ Projection Est. 10 rows, cost 2.500000e+00
       └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {a ASC NULLS LAST}
+            │     Prefix Order: {a}
             │     Limit: 10
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+                     Input Order Info: {a ASC NULLS FIRST}
                      Outputs: [a]
 Projection Est. 3 rows, cost 1.502000e+00
 │     Expressions: [b, c, k]
@@ -48,9 +53,10 @@ Projection Est. 3 rows, cost 1.502000e+00
       └─ Gather Exchange Est. 7 rows, cost 1.280000e+00
          └─ Sorting Est. 7 rows, cost 0.000000e+00
             │     Order by: {b ASC NULLS FIRST}
+            │     Prefix Order: {b}
             │     Limit: 7
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
-                     Input Order Info: {b ASC NULLS FIRST}
+                     Input Order Info: {b ASC ANY}
                      Outputs: [k, b, c]
 Projection Est. 3 rows, cost 1.502000e+00
 │     Expressions: [b, c, k]
@@ -62,9 +68,10 @@ Projection Est. 3 rows, cost 1.502000e+00
       └─ Gather Exchange Est. 7 rows, cost 1.280000e+00
          └─ Sorting Est. 7 rows, cost 0.000000e+00
             │     Order by: {b ASC NULLS LAST}
+            │     Prefix Order: {b}
             │     Limit: 7
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
-                     Input Order Info: {b ASC NULLS LAST}
+                     Input Order Info: {b ASC ANY}
                      Outputs: [k, b, c]
 Projection Est. 3 rows, cost 1.502000e+00
 │     Expressions: [c, k]
@@ -76,6 +83,7 @@ Projection Est. 3 rows, cost 1.502000e+00
       └─ Gather Exchange Est. 7 rows, cost 1.280000e+00
          └─ Sorting Est. 7 rows, cost 0.000000e+00
             │     Order by: {c ASC NULLS FIRST}
+            │     Prefix Order: {c}
             │     Limit: 7
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {c ASC NULLS FIRST}
@@ -90,6 +98,8 @@ Projection Est. 3 rows, cost 1.502000e+00
       └─ Gather Exchange Est. 7 rows, cost 1.280000e+00
          └─ Sorting Est. 7 rows, cost 0.000000e+00
             │     Order by: {c ASC NULLS LAST}
+            │     Prefix Order: {c}
             │     Limit: 7
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+                     Input Order Info: {c ASC NULLS FIRST}
                      Outputs: [k, c]

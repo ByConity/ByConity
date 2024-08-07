@@ -30,9 +30,12 @@ protected:
             if (!chunk.empty())
             {
                 size_t num_columns = chunk.getNumColumns();
-                auto columns = chunk.detachColumns();
+                size_t num_rows = chunk.getNumRows();
+                auto cache_columns = chunk.detachColumns();
+                Columns output_columns(num_columns);
                 for (size_t i = 0; i < num_columns; ++i)
-                    chunk.addColumn(std::move(columns[cache_pos_to_output_pos[i]]));
+                    output_columns[cache_pos_to_output_pos[i]] = std::move(cache_columns[i]);
+                chunk.setColumns(std::move(output_columns), num_rows);
                 return chunk;
             }
             else

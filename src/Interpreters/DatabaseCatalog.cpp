@@ -1216,7 +1216,7 @@ DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name, Co
         return res;
     res = getDatabaseFromCnchOrHiveCatalog(
         database_name,
-        getContext(),
+        local_context,
         txn ? txn->getStartTime() : TxnTimestamp::maxTS(),
         local_context->getSettingsRef().enable_three_part_identifier);
     if (res && txn)

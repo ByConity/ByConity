@@ -1126,7 +1126,11 @@
     M(OrcIOSharedBytes, "") \
     M(OrcIODirectCount, "") \
     M(OrcIODirectBytes, "") \
-    M(PreparePartsForReadMilliseconds, "The time spend on loading CNCH part from ServerPart on worker when query with table version")
+    M(PreparePartsForReadMilliseconds, "The time spend on loading CNCH part from ServerPart on worker when query with table version") \
+    M(LoadedServerParts, "Total server parts loaded from storage manager by version") \
+    M(LoadServerPartsMilliseconds, "The time spend on loading server parts by version from storage data manager.") \
+    M(LoadManifestPartsCacheHits, "Cache(disk) hit count of loading parts from manifest") \
+    M(LoadManifestPartsCacheMisses, "Cache(disk) miss count of loading parts from manifest")
 
 namespace ProfileEvents
 {

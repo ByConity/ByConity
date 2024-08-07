@@ -221,6 +221,7 @@ void CnchWorkerClient::sendCreateQueries(
     for (const auto & cnch_table_create_query : cnch_table_create_queries)
         *request.mutable_cnch_table_create_queries()->Add() = cnch_table_create_query;
 
+    cntl.set_timeout_ms(settings.send_plan_segment_timeout_ms.totalMilliseconds());
     stub->sendCreateQuery(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
@@ -414,6 +415,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     /// so it should be larger than max_execution_time to make sure the session is not to be destroyed in advance.
     UInt64 recycle_timeout = max_execution_time > 0 ? max_execution_time + 60UL : 3600;
     request.set_timeout(recycle_timeout);
+    if (!settings.session_timezone.value.empty())
+        request.set_session_timezone(settings.session_timezone.value);
 
     bool require_worker_info = false;
     for (const auto & resource: resources_to_send)

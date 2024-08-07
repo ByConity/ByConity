@@ -224,7 +224,7 @@ void MergeTreeDataDeduper::dedupKeysWithParts(
         {
             RowPos lhs = ReplacingSortedKeysIterator::decodeCurrentRowPos(base_iter, version_mode, parts, base_implicit_versions);
             const RowPos & rhs = keys->CurrentRowPos();
-            if (keys->IsCurrentLowPriority())
+            if (keys->IsCurrentLowPriority() || dedup_mode == CnchDedupHelper::DedupMode::IGNORE)
                 addRowIdToBitmap(delta_bitmaps[rhs.child + parts.size()], rhs.rowid);
             else
             {

@@ -221,32 +221,14 @@ void TCPHandler::runImpl()
     /// When connecting, the default database can be specified.
     if (!default_database.empty())
     {
-        //CNCH multi-tenant default database pattern from gateway client: {tenant_id}`{default_database}
-        if (auto pos = default_database.find('`'); pos != String::npos)
-        {
-            connection_context->setSetting("tenant_id", String(default_database.c_str(), pos)); /// {tenant_id}`*
-            connection_context->setTenantId(String(default_database.c_str(), pos));
-            if (pos + 1 != default_database.size()) ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
-            {
-                auto sub_str = default_database.substr(pos + 1);
-                if (sub_str == "default" || sub_str == "system")
-                    default_database = std::move(sub_str);
-                else
-                    default_database[pos] = '.';
-            }
-            else /// {tenant_id}`
-                default_database.clear();
-        }
-
-        if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context)))
+        if (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context))
         {
             Exception e("Database " + backQuote(default_database) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);
             LOG_ERROR(log, "Code: {}, e.displayText() = {}, Stack trace:\n\n{}", e.code(), e.displayText(), e.getStackTraceString());
             sendException(e, connection_context->getSettingsRef().calculate_text_stack_trace);
             return;
         }
-        if (!default_database.empty())
-            connection_context->setCurrentDatabase(default_database);
+        connection_context->setCurrentDatabase(default_database);
     }
 
     UInt64 idle_connection_timeout = connection_settings.idle_connection_timeout;
@@ -367,6 +349,7 @@ void TCPHandler::runImpl()
                 /// Send block to the client - input storage structure.
                 state.input_header = metadata_snapshot->getSampleBlock();
                 sendData(state.input_header);
+                sendTimezone();
             });
 
             query_context->setInputBlocksReaderCallback([&connection_settings, this](ContextPtr context) -> Block {
@@ -412,6 +395,12 @@ void TCPHandler::runImpl()
                 ast = parseQuery(
                     parser, begin, end, "", query_context->getSettings().max_query_size, query_context->getSettings().max_parser_depth);
                 interpretSettings(ast, query_context);
+            }
+
+            if (query_context->getSettingsRef().bsp_mode)
+            {
+                /// for bsp mode, progress needs to be sent during scheduling.
+                query_context->setSendTCPProgress([&]() { this->sendProgress(); });
             }
 
             auto * insert_query = ast->as<ASTInsertQuery>();
@@ -1064,6 +1053,19 @@ void TCPHandler::sendExtremes(const Block & extremes)
     }
 }
 
+void TCPHandler::sendTimezone()
+{
+    if (client_tcp_protocol_version < DBMS_MIN_PROTOCOL_VERSION_WITH_TIMEZONE_UPDATES)
+        return;
+
+    const String & tz = query_context->getSettingsRef().session_timezone.value;
+
+    LOG_DEBUG(log, "TCPHandler::sendTimezone(): {}", tz);
+    writeVarUInt(Protocol::Server::TimezoneUpdate, *out);
+    writeStringBinary(tz, *out);
+    out->next();
+}
+
 bool TCPHandler::receiveProxyHeader()
 {
     if (in->eof())
@@ -1179,26 +1181,52 @@ void TCPHandler::receiveHello()
         throw NetException("Unexpected packet from client (no user in Hello package)", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
 
     String tenant_id_from_db;
-    String tenant_id_from_user;
+
+    /* need to support below cases:
+    tenanted user + tenanted db: gateway 2.0 user access
+    tenanted user + db: internal dictionary access
+    user + tenanted db: 2.0 server backwards compatible user access
+    user + db: devops/developers
+    */
+
+    if (auto pos = default_database.find('`'); pos != String::npos)
+    {
+        tenant_id_from_db = String(default_database.c_str(), pos);
+        connection_context->setSetting("tenant_id", tenant_id_from_db); /// {tenant_id}`*
+        connection_context->setTenantId(tenant_id_from_db);
+        ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
+        if (pos + 1 != default_database.size())
+        {
+            auto sub_str = default_database.substr(pos + 1);
+            if (sub_str == "default" || sub_str == "system")
+                default_database = std::move(sub_str);
+            else
+                default_database[pos] = '.';
+        }
+        else /// {tenant_id}`
+        {
+            default_database.clear();
+        }
+    }
+
     if (auto pos = user.find('`'); pos != String::npos)
-        tenant_id_from_user = String(user.c_str(), pos);
-
-    if (!default_database.empty())
     {
-        if (auto pos = default_database.find('`'); pos != String::npos)
-            tenant_id_from_db = String(default_database.c_str(), pos);
-    }
+        String tenant_id_from_user = String(user.c_str(), pos);
 
-    if (!tenant_id_from_user.empty() && tenant_id_from_db.empty())
-    {
-        default_database = formatTenantDatabaseNameWithTenantId(default_database, tenant_id_from_user, '`');
-        if (auto pos = user.find('`'); pos != String::npos) // remove tenant id for server and worker communication
+        if (tenant_id_from_db.empty())
+        {
+            /// internal dictionary access
             user = user.substr(pos + 1);
+
+            if (!default_database.empty())
+                default_database = formatTenantDatabaseNameWithTenantId(default_database, tenant_id_from_user, '`');
+        }
+        else
+        {
+            if (!tenant_id_from_user.empty() && tenant_id_from_user != tenant_id_from_db)
+                throw NetException("Tenant ID of user and default database are not matching", ErrorCodes::LOGICAL_ERROR);
+        }
     }
-    // else if (tenant_id_from_user.empty() && !tenant_id_from_db.empty())
-    //     user = tenant_id_from_db + '`' + user;
-    else if (!tenant_id_from_user.empty() && !tenant_id_from_db.empty() && tenant_id_from_user != tenant_id_from_db)
-        throw NetException("Tenant ID of user and default database are not matching", ErrorCodes::LOGICAL_ERROR);
 
     LOG_DEBUG(
         log,
@@ -1248,7 +1276,7 @@ void TCPHandler::sendHello()
     writeVarUInt(VERSION_MINOR, *out);
     writeVarUInt(DBMS_TCP_PROTOCOL_VERSION, *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
-        writeStringBinary(DateLUT::instance().getTimeZone(), *out);
+        writeStringBinary(DateLUT::serverTimezoneInstance().getTimeZone(), *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
         writeStringBinary(server_display_name, *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
@@ -2102,12 +2130,9 @@ void TCPHandler::updateProgress(const Progress & value)
 void TCPHandler::sendProgress()
 {
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
-    if (!increment.empty())
-    {
-        writeVarUInt(Protocol::Server::Progress, *out);
-        increment.write(*out, client_tcp_protocol_version);
-        out->next();
-    }
+    writeVarUInt(Protocol::Server::Progress, *out);
+    increment.write(*out, client_tcp_protocol_version);
+    out->next();
 }
 
 void TCPHandler::sendLogs()

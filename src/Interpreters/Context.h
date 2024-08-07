@@ -452,6 +452,7 @@ protected:
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
+    std::function<void()> send_tcp_progress{nullptr};
 
     using FileProgressCallback = std::function<void(const FileProgress & progress)>;
     FileProgressCallback file_progress_callback; /// Callback for tracking progress of file loading.
@@ -1104,6 +1105,9 @@ public:
     void setProgressCallback(ProgressCallback callback);
     /// Used in InterpreterSelectQuery to pass it to the IBlockInputStream.
     ProgressCallback getProgressCallback() const;
+    void setSendTCPProgress(std::function<void()> callback);
+    /// Used in InterpreterSelectQuery to pass it to the IBlockInputStream.
+    std::function<void()> getSendTCPProgress() const;
 
     void setFileProgressCallback(FileProgressCallback && callback) { file_progress_callback = callback; }
     FileProgressCallback getFileProgressCallback() const { return file_progress_callback; }
@@ -1191,7 +1195,7 @@ public:
 
     UInt32 getZooKeeperSessionUptime() const;
 
-    void addQueryPlanInfo(String & query_plan_) 
+    void addQueryPlanInfo(String & query_plan_)
     {
         this->query_plan = query_plan_;
     }
@@ -1686,6 +1690,10 @@ public:
         HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE = 4
     };
     HybridPartAllocator getHybridPartAllocationAlgo() const;
+
+    // If session timezone is specified, some cache which involves creating table/storage can't be used.
+    // Because it may use wrong timezone for DateTime column, which leads to incorrect result.
+    bool hasSessionTimeZone() const;
 
     String getDefaultCnchPolicyName() const;
     String getCnchAuxilityPolicyName() const;

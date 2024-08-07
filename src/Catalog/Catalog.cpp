@@ -1344,7 +1344,6 @@ namespace Catalog
                     throw Exception("Table not found: " + database + "." + name, ErrorCodes::UNKNOWN_TABLE);
                 }
 
-
                 auto cache_manager = context.getPartCacheManager();
                 bool is_host_server = false;
                 const auto host_server = context.getCnchTopologyMaster()->getTargetServer(table_id->uuid(), getServerVwNameFrom(*table_id), true);
@@ -1352,7 +1351,7 @@ namespace Catalog
                 if (!host_server.empty())
                     is_host_server = isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort()));
 
-                if (is_host_server && cache_manager)
+                if (is_host_server && cache_manager && !query_context.hasSessionTimeZone())
                 {
                     auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version);
                     if (cached_storage && cached_storage->commit_time <= ts && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
@@ -4184,7 +4183,7 @@ namespace Catalog
         return getTransactionRecords(std::vector<TxnTimestamp>(txn_ids.begin(), txn_ids.end()), 100000);
     }
 
-    std::vector<TransactionRecord> Catalog::getTransactionRecordsForGC(size_t max_result_number)
+    std::vector<TransactionRecord> Catalog::getTransactionRecordsForGC(String & start_key, size_t max_result_number)
     {
         std::vector<TransactionRecord> res;
         /// if exception occurs during get txn record, just return the partial result;
@@ -4193,9 +4192,20 @@ namespace Catalog
             [&] {
                 try
                 {
-                    auto it = meta_proxy->getAllTransactionRecord(name_space, max_result_number);
+                    auto it = meta_proxy->getAllTransactionRecord(name_space, start_key, max_result_number);
 
-                    while (it->next())
+                    if (!it->next())
+                    {
+                        if (start_key.empty())
+                            return;
+
+                        start_key.clear();
+                        auto it = meta_proxy->getAllTransactionRecord(name_space, start_key, max_result_number);
+                        if (!it->next())
+                            return;
+                    }
+
+                    do
                     {
                         auto record = TransactionRecord::deserialize(it->value());
                         if (record.isSecondary())
@@ -4222,7 +4232,15 @@ namespace Catalog
                             }
                             res.push_back(std::move(record));
                         }
-                    }
+
+                    } while (it->next());
+
+                    // Save key so we can resume iteration in the next call.
+                    if (!res.empty())
+                        start_key = meta_proxy->transactionRecordKey(name_space, res.back().txnID());
+
+                    if (res.size() < max_result_number || max_result_number == 0)
+                        start_key.clear();
                 }
                 catch (...)
                 {

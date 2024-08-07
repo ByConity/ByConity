@@ -37,9 +37,13 @@ void ReplicatedMergeTreeMutationEntry::readText(ReadBuffer & in)
 
     LocalDateTime create_time_dt;
     in >> "create time: " >> create_time_dt >> "\n";
-    create_time = DateLUT::instance().makeDateTime(
-        create_time_dt.year(), create_time_dt.month(), create_time_dt.day(),
-        create_time_dt.hour(), create_time_dt.minute(), create_time_dt.second());
+    create_time = DateLUT::serverTimezoneInstance().makeDateTime(
+        create_time_dt.year(),
+        create_time_dt.month(),
+        create_time_dt.day(),
+        create_time_dt.hour(),
+        create_time_dt.minute(),
+        create_time_dt.second());
 
     in >> "source replica: " >> source_replica >> "\n";
 

@@ -238,12 +238,12 @@ public:
         switch (base_type->getTypeId())
         {
             case TypeIndex::Date: {
-                const auto & time_zone = DateLUT::instance();
+                const auto & time_zone = DateLUT::sessionInstance();
                 executeInternal<ColumnDate, ColumnDateTime64>(base_col, delta_arg, result_col.get(), time_zone, 0);
                 break;
             }
             case TypeIndex::Date32: {
-                const auto & time_zone = DateLUT::instance();
+                const auto & time_zone = DateLUT::sessionInstance();
                 executeInternal<ColumnDate32, ColumnDateTime64>(base_col, delta_arg, result_col.get(), time_zone, 0);
                 break;
             }
@@ -260,7 +260,7 @@ public:
             }
             case TypeIndex::Time: {
                 const auto & t = assert_cast<const DataTypeTime &>(*arguments[0].type);
-                const auto & time_zone = DateLUT::instance();
+                const auto & time_zone = DateLUT::sessionInstance();
                 executeInternal<ColumnTime, ColumnTime>(base_col, delta_arg, result_col.get(), time_zone, t.getScale());
                 break;
             }

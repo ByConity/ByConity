@@ -305,6 +305,7 @@ Packet MultiplexedConnections::drain()
         case Protocol::Server::Totals:
         case Protocol::Server::Extremes:
         case Protocol::Server::EndOfStream:
+        case Protocol::Server::TimezoneUpdate:
             break;
 
         case Protocol::Server::ProfileInfo:
@@ -383,6 +384,7 @@ Packet MultiplexedConnections::receivePacketUnlocked(AsyncCallback async_callbac
         case Protocol::Server::Totals:
         case Protocol::Server::Extremes:
         case Protocol::Server::Log:
+        case Protocol::Server::TimezoneUpdate:
             break;
 
         case Protocol::Server::EndOfStream:

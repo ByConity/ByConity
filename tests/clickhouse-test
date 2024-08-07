@@ -973,7 +973,7 @@ def collect_build_flags(client):
 
 
 def do_run_tests(jobs, suite, suite_dir, suite_tmp_dir, all_tests, parallel_tests, sequential_tests, parallel):
-    if jobs > 1 and len(parallel_tests) > 0:
+    if jobs > 1 and len(parallel_tests) > 1:
         print("Found", len(parallel_tests), "parallel tests and", len(sequential_tests), "sequential tests")
         run_n, run_total = parallel.split('/')
         run_n = float(run_n)

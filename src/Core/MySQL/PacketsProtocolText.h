@@ -24,6 +24,7 @@ enum CharacterSet
 // https://dev.mysql.com/doc/dev/mysql-server/latest/group__group__cs__column__definition__flags.html
 enum ColumnDefinitionFlags
 {
+    NOT_NULL_FLAG = 1,
     UNSIGNED_FLAG = 32,
     BINARY_FLAG = 128
 };

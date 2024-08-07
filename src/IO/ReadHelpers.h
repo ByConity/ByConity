@@ -738,7 +738,7 @@ inline void convertToDayNum(DayNum & date, ExtendedDayNum & from)
 }
 
 template <typename ReturnType = void>
-inline ReturnType readDateTextImpl(DayNum & date, ReadBuffer & buf)
+inline ReturnType readDateTextImpl(DayNum & date, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
@@ -749,13 +749,13 @@ inline ReturnType readDateTextImpl(DayNum & date, ReadBuffer & buf)
     else if (!readDateTextImpl<ReturnType>(local_date, buf))
         return false;
 
-    ExtendedDayNum ret = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day());
-    convertToDayNum(date,ret);
+    ExtendedDayNum ret = date_lut.makeDayNum(local_date.year(), local_date.month(), local_date.day());
+    convertToDayNum(date, ret);
     return ReturnType(true);
 }
 
 template <typename ReturnType = void>
-inline ReturnType readDateTextImpl(ExtendedDayNum & date, ReadBuffer & buf)
+inline ReturnType readDateTextImpl(ExtendedDayNum & date, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
@@ -765,8 +765,8 @@ inline ReturnType readDateTextImpl(ExtendedDayNum & date, ReadBuffer & buf)
         readDateTextImpl<ReturnType>(local_date, buf);
     else if (!readDateTextImpl<ReturnType>(local_date, buf))
         return false;
-    /// When the parameter is out of rule or out of range, Date32 uses 1925-01-01 as the default value (-DateLUT::instance().getDayNumOffsetEpoch(), -16436) and Date uses 1970-01-01.
-    date = DateLUT::instance().makeDayNum(local_date.year(), local_date.month(), local_date.day(), -static_cast<Int32>(DateLUT::instance().getDayNumOffsetEpoch()));
+    /// When the parameter is out of rule or out of range, Date32 uses 1925-01-01 as the default value (-DateLUT::serverTimezoneInstance().getDayNumOffsetEpoch(), -16436) and Date uses 1970-01-01.
+    date = date_lut.makeDayNum(local_date.year(), local_date.month(), local_date.day(), -static_cast<Int32>(date_lut.getDayNumOffsetEpoch()));
     return ReturnType(true);
 }
 
@@ -776,14 +776,14 @@ inline void readDateText(LocalDate & date, ReadBuffer & buf)
     readDateTextImpl<void>(date, buf);
 }
 
-inline void readDateText(DayNum & date, ReadBuffer & buf)
+inline void readDateText(DayNum & date, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::serverTimezoneInstance())
 {
-    readDateTextImpl<void>(date, buf);
+    readDateTextImpl<void>(date, buf, date_lut);
 }
 
-inline void readDateText(ExtendedDayNum & date, ReadBuffer & buf)
+inline void readDateText(ExtendedDayNum & date, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::serverTimezoneInstance())
 {
-    readDateTextImpl<void>(date, buf);
+    readDateTextImpl<void>(date, buf, date_lut);
 }
 
 inline bool tryReadDateText(LocalDate & date, ReadBuffer & buf)
@@ -791,14 +791,14 @@ inline bool tryReadDateText(LocalDate & date, ReadBuffer & buf)
     return readDateTextImpl<bool>(date, buf);
 }
 
-inline bool tryReadDateText(DayNum & date, ReadBuffer & buf)
+inline bool tryReadDateText(DayNum & date, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::serverTimezoneInstance())
 {
-    return readDateTextImpl<bool>(date, buf);
+    return readDateTextImpl<bool>(date, buf, date_lut);
 }
 
-inline bool tryReadDateText(ExtendedDayNum & date, ReadBuffer & buf)
+inline bool tryReadDateText(ExtendedDayNum & date, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::serverTimezoneInstance())
 {
-    return readDateTextImpl<bool>(date, buf);
+    return readDateTextImpl<bool>(date, buf, date_lut);
 }
 
 template <typename ReturnType = void>
@@ -1277,12 +1277,13 @@ inline ReturnType readTimeTextImpl(Decimal64 & time, UInt32 scale, ReadBuffer & 
     return ReturnType(true);
 }
 
-inline void readDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+inline void readDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
 {
     readDateTimeTextImpl<void>(datetime, buf, time_zone);
 }
 
-inline void readDateTime64Text(DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::instance())
+inline void readDateTime64Text(
+    DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::serverTimezoneInstance())
 {
     readDateTimeTextImpl<void>(datetime64, scale, buf, date_lut);
 }
@@ -1297,12 +1298,13 @@ inline bool tryReadTimeText(Decimal64 & time, UInt32 scale, ReadBuffer & buf)
     return readTimeTextImpl<bool>(time, scale, buf);
 }
 
-inline bool tryReadDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+inline bool tryReadDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
 {
     return readDateTimeTextImpl<bool>(datetime, buf, time_zone);
 }
 
-inline bool tryReadDateTime64Text(DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::instance())
+inline bool tryReadDateTime64Text(
+    DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::serverTimezoneInstance())
 {
     return readDateTimeTextImpl<bool>(datetime64, scale, buf, date_lut);
 }
@@ -1505,8 +1507,14 @@ tryReadText(T & x, ReadBuffer & buf) { return tryReadFloatText(x, buf); }
 
 inline void readText(bool & x, ReadBuffer & buf) { readBoolText(x, buf); }
 inline void readText(String & x, ReadBuffer & buf) { readEscapedString(x, buf); }
-inline void readText(DayNum & x, ReadBuffer & buf) { readDateText(x, buf); }
-inline void readText(ExtendedDayNum & x, ReadBuffer & buf) { readDateText(x, buf); }
+inline void readText(DayNum & x, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
+{
+    readDateText(x, buf, time_zone);
+}
+inline void readText(ExtendedDayNum & x, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
+{
+    readDateText(x, buf, time_zone);
+}
 inline void readText(LocalDate & x, ReadBuffer & buf) { readDateText(x, buf); }
 inline void readText(LocalDateTime & x, ReadBuffer & buf) { readDateTimeText(x, buf); }
 inline void readText(UUID & x, ReadBuffer & buf) { readUUIDText(x, buf); }

@@ -55,10 +55,10 @@
 #include <Common/Configurations.h>
 #include <Storages/ColumnsDescription.h>
 #include <Common/Exception.h>
-#include <MergeTreeCommon/GlobalDataManager.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Core/SettingsEnums.h>
+#include <MergeTreeCommon/GlobalDataManager.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -143,7 +143,10 @@ CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
             RPCHelpers::handleException(response->mutable_exception()); \
         } \
     }; \
-    THREADPOOL_SCHEDULE(_func);
+    Stopwatch watch; \
+    THREADPOOL_SCHEDULE(_func); \
+    UInt64 milliseconds = watch.elapsedMilliseconds(); \
+    if (milliseconds > 100) LOG_DEBUG(log, "CnchWorkerService rpc request threadpool schedule cost : {} ", milliseconds);
 
 
 void CnchWorkerServiceImpl::executeSimpleQuery(
@@ -752,6 +755,10 @@ void CnchWorkerServiceImpl::sendResources(
         auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), request->timeout(), false);
         auto query_context = session->context;
         query_context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
+        if (request->has_session_timezone())
+            query_context->setSetting("session_timezone", request->session_timezone());
+
+        CurrentThread::QueryScope query_scope(query_context);
         auto worker_resource = query_context->getCnchWorkerResource();
 
         /// store cloud tables in cnch_session_resource.
@@ -762,9 +769,12 @@ void CnchWorkerServiceImpl::sendResources(
             for (int i = 0; i < request->create_queries_size(); i++)
             {
                 auto create_query = request->create_queries().at(i);
-                auto object_columns = request->dynamic_object_column_schema().at(i);
 
-                worker_resource->executeCreateQuery(context_for_create, create_query, false, ColumnsDescription::parse(object_columns));
+                ColumnsDescription object_columns;
+                if (i < request->dynamic_object_column_schema_size())
+                    object_columns = ColumnsDescription::parse(request->dynamic_object_column_schema().at(i));
+
+                worker_resource->executeCreateQuery(context_for_create, create_query, false, object_columns);
             }
             for (int i = 0; i < request->cacheable_create_queries_size(); i++)
             {
@@ -796,17 +806,8 @@ void CnchWorkerServiceImpl::sendResources(
                 {
                     WGWorkerInfoPtr worker_info = RPCHelpers::createWorkerInfo(request->worker_info());
                     UInt64 version = data.table_version();
-                    ServerDataPartsWithDBM server_parts_with_dbms;
-                    query_context->getGlobalDataManager()->loadDataPartsWithDBM(*cloud_merge_tree, cloud_merge_tree->getStorageUUID(), version, worker_info, server_parts_with_dbms);
-                    size_t server_part_size = server_parts_with_dbms.first.size();
-                    size_t delete_bitmap_size = server_parts_with_dbms.second.size();
-                    cloud_merge_tree->loadServerDataPartsWithDBM(std::move(server_parts_with_dbms));
-
-                    LOG_DEBUG(
-                        log,
-                        "Loaded {} server parts and {} delete bitmap for table {} with version {}",
-                        server_part_size,
-                        delete_bitmap_size,
+                    cloud_merge_tree->setDataDescription(std::move(worker_info), version);
+                    LOG_DEBUG(log, "Received table {} with data version {}",
                         cloud_merge_tree->getStorageID().getNameForLogs(),
                         version);
                 }

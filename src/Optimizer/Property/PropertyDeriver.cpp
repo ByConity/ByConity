@@ -89,7 +89,7 @@ static String getClusterByHint(const StoragePtr & storage)
     return "";
 }
 
-Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, const Property &, ContextMutablePtr & context)
+Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, const Property & required, ContextMutablePtr & context)
 {
     if (storage->getDatabaseName() == "system")
     {
@@ -108,12 +108,18 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, cons
             sorting.emplace_back(SortColumn(descs.column_names[i], SortOrder::ASC_NULLS_FIRST));
     }
 
+    bool use_reverse_sorting = !required.getSorting().empty()
+        && (required.getSorting()[0].getOrder() == SortOrder::DESC_ANY || required.getSorting()[0].getOrder() == SortOrder::DESC_NULLS_FIRST
+            || required.getSorting()[0].getOrder() == SortOrder::DESC_NULLS_LAST);
+    if (use_reverse_sorting)
+        sorting = sorting.toReverseOrder();
+
     auto metadata = storage->getInMemoryMetadataPtr();
     Names cluster_by;
     UInt64 buckets = 0;
 
     auto normalize_ast = [&](ASTPtr sharding_key) -> std::pair<Names, ASTPtr> {
-        static SymbolVisitor visitor;
+        SymbolVisitor visitor;
         Names partition_keys;
         SymbolVisitorContext symbol_context;
         ASTVisitorUtil::accept(sharding_key, visitor, symbol_context);

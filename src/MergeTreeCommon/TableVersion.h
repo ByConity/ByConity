@@ -59,6 +59,8 @@ private:
     std::shared_mutex mutex;
     DataModelPartWrapperVector data_parts;
     DeleteBitmapMetaPtrVector delete_bitmaps;
+
+    Poco::Logger * log = &Poco::Logger::get("TableVersion");
 };
 
 using TableVersionPtr = std::shared_ptr<TableVersion>;

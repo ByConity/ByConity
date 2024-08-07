@@ -1233,11 +1233,6 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
 {
     Stopwatch watch;
     String full_path = getFullPath();
-    if (isPartial())
-    {
-        LOG_WARNING(storage.log, "Preload partial parts in invalid: {}", full_path);
-        return;
-    }
 
     String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
     if (!volume->getDisk()->fileExists(part_path))

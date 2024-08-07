@@ -460,46 +460,19 @@ enum PreloadLevelSettings : UInt64
     M(String, count_distinct_implementation, "uniqExact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
 \
     M(Bool, add_http_cors_header, false, "Write add http CORS header.", 0) \
-\
-    M(UInt64, \
-      max_http_get_redirects, \
-      0, \
-      "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server " \
-      "to redirect your requests to unexpected services.", \
-      0) \
-\
-    M(Bool, \
-      use_client_time_zone, \
-      false, \
-      "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", \
-      0) \
-\
-    M(Bool, \
-      send_progress_in_http_headers, \
-      false, \
-      "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python " \
-      "requests in particular), so it is disabled by default.", \
-      0) \
-\
-    M(UInt64, \
-      http_headers_progress_interval_ms, \
-      100, \
-      "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", \
-      0) \
-\
-    M(Bool, \
-      fsync_metadata, \
-      1, \
-      "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with " \
-      "high load of DDL queries and high load of disk subsystem.", \
-      0) \
-\
-    M(Bool, \
-      join_use_nulls, \
-      1, \
-      "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding " \
-      "columns data type.", \
-      IMPORTANT) \
+    \
+    M(UInt64, max_http_get_redirects, 0, "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server to redirect your requests to unexpected services.", 0) \
+    \
+    M(Bool, use_client_time_zone, false, "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", 0) \
+    M(Timezone, session_timezone, "", "The default timezone for current session or query. The default value is server default timezone if empty.", 0) \
+    \
+    M(Bool, send_progress_in_http_headers, false, "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python requests in particular), so it is disabled by default.", 0) \
+    \
+    M(UInt64, http_headers_progress_interval_ms, 100, "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", 0) \
+    \
+    M(Bool, fsync_metadata, 1, "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with high load of DDL queries and high load of disk subsystem.", 0) \
+    \
+    M(Bool, join_use_nulls, 1, "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding columns data type.", IMPORTANT) \
     M(Bool, join_using_null_safe, 0, "Force null safe equal comparison for USING keys except the last key of ASOF join", 0) \
     \
     M(JoinStrictness, join_default_strictness, JoinStrictness::ALL, "Set default strictness in JOIN query. Possible values: empty string, 'ANY', 'ALL'. If empty, query without strictness will throw exception.", 0) \
@@ -869,6 +842,8 @@ enum PreloadLevelSettings : UInt64
       "longest one.", \
       0) \
     M(Bool, optimize_read_in_order, true, "Enable ORDER BY optimization for reading data in corresponding order in MergeTree tables.", 0) \
+    M(Bool, optimize_read_in_partition_order, false, "In optimize_read_in_order mode, whether to read parts partition-by-partition if applicable", 0) \
+    M(Bool, force_read_in_partition_order, 0, "Similar to optimize_read_in_partition_order, but throw an exception if it cannot be applied to the query, mainly for testing", 0) \
     M(Bool, optimize_aggregation_in_order, false, "Enable GROUP BY optimization for aggregating data in corresponding order in MergeTree tables.", 0) \
     M(UInt64, read_in_order_two_level_merge_threshold, 100, "Minimal number of parts to read to run preliminary merge step during multithread reading in order of primary key.", 0) \
     M(Bool, low_cardinality_allow_in_native_format, true, "Use LowCardinality type in Native format. Otherwise, convert LowCardinality columns to ordinary for select query, and convert ordinary columns to required LowCardinality for insert query.", 0) \
@@ -1240,6 +1215,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, rewrite_unknown_left_join_identifier, true, "Whether to rewrite unknown left join identifier, this is a deprecated feature but Aeolus SQL depends on it", 0) \
     M(Bool, allow_mysql_having_name_resolution, false, "Whether to use MySQL special name resolution rules for HAVING clauses ", 0) \
     M(String, access_table_names, "", "Session level restricted tables query can access", 0) \
+    M(String, accessible_table_names, "", "Session level restricted tables query can access", 0) \
     \
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
@@ -1318,7 +1294,7 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partition for unique key", 0) \
     M(Bool, enable_unique_table_attach_without_dedup, false, "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", 0) \
     M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
-    M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND. THROW mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
+    M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND, IGNORE. THROW mode and IGNORE mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
     M(Seconds, unique_sleep_seconds_after_acquire_lock, 0, "Only for test", 0) \
     M(Seconds, unique_acquire_write_lock_timeout, 0, "It has higher priority than table setting. Only when it's zero, use table setting", 0) \
     M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \
@@ -1431,6 +1407,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
     /** */ \
     M(Bool, late_materialize_aggressive_push_down, false, "When table use early materialize strategy, this setting enable aggressively moving predicates to read chain w/o considering other factor like columns size or number of columns in the query", 0) \
+    M(Bool, convert_to_right_type_for_in_subquery, true, "For IN subquery, whether convert arguments to the right type", 0) \
     /** Optimizer relative settings, Plan build and RBO */ \
     M(Bool, enable_auto_prepared_statement, false, "Whether to enable automatic prepared statement", 0) \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
@@ -1545,6 +1522,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_agg_through_exchange, true, "Whether to enable PushPartialAggThroughExchange rules", 0) \
     M(Bool, enable_push_partial_agg_through_union, true, "Whether to enable PushPartialAggThroughUnion rules", 0) \
     M(Bool, enable_push_partial_sorting_through_exchange, true, "Whether to enable PushPartialSortingThroughExchange rules", 0) \
+    M(Bool, enable_push_partial_sorting_through_union, true, "Whether to enable PushPartialSortingThroughUnion rules", 0) \
     M(Bool, enable_push_partial_limit_through_exchange, true, "Whether to enable PushPartialLimitThroughExchange rules", 0) \
     M(Bool, enable_push_partial_distinct_through_exchange, true, "Whether to enable PushPartialDistinctThroughExchange rules", 0) \
     M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
@@ -1585,9 +1563,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
-    M(Bool, statistics_expand_to_current, false, "Expand Date/Date32/DateTime/DateTime64 columns stats to current timestamp", 0) \
+    M(Bool, statistics_expand_to_current, true, "Expand Date/Date32/DateTime/DateTime64 columns stats to current timestamp", 0) \
     M(UInt64, statistics_current_timestamp, 0, "Timestamp used for statistics_expand_to_current, 0 to use now(), for testing purpose", 0) \
     M(UInt64, statistics_expand_to_current_threshold_days, 31, "If abs(stats_timestamp - stats_column_max) is within this threshold, we will expand this column", 0) \
+    M(Float, statistics_expand_to_current_histogram_ratio, 0.10, "For histogram, only expand last buckets containing rows with this ratio", 0) \
     M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
     M(Bool, statistics_query_cnch_parts_for_row_count, true, "Use cnch parts instead of count(*) for row count to speed up test", 0) \
     /** Optimizer relative settings, cost model and estimation */ \

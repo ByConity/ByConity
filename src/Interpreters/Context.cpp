@@ -1620,9 +1620,11 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
             client_info.current_password = basic_credentials->getPassword();
         //#endif
 
+        String tenant = getTenantId();
         params = getAccessControlManager().getContextAccessParams(
             new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "",
+            tenant,
+            has_tenant_id_in_username,
             getServerType() != ServerType::cnch_server);
     }
 
@@ -1737,7 +1739,7 @@ void Context::calculateAccessRightsWithLock(const std::unique_lock<SharedMutex> 
     {
         auto params = getAccessControlManager().getContextAccessParams(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "", false);
+            tenant_id, has_tenant_id_in_username, false);
         access = getAccessControlManager().getContextAccess(params);
     }
 }
@@ -1824,9 +1826,13 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
 
 void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
 {
-    String table_names = this->getSettingsRef().access_table_names;
+    String table_names = getSettingsRef().access_table_names;
     if (table_names.empty())
-        return;
+    {
+        table_names = getSettingsRef().accessible_table_names;
+        if (table_names.empty())
+            return;
+    }
     std::vector<String> tables;
     boost::split(tables, table_names, boost::is_any_of(" ,"));
     /// avoid check temporary table.
@@ -2703,6 +2709,16 @@ void Context::setProgressCallback(ProgressCallback callback)
 ProgressCallback Context::getProgressCallback() const
 {
     return progress_callback;
+}
+
+void Context::setSendTCPProgress(std::function<void()> callback)
+{
+    send_tcp_progress = callback;
+}
+
+std::function<void()> Context::getSendTCPProgress() const
+{
+    return send_tcp_progress;
 }
 
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)
@@ -5766,7 +5782,7 @@ Context::PartAllocator Context::getPartAllocationAlgo(MergeTreeSettingsPtr table
     auto algorithm = table_settings->cnch_part_allocation_algorithm >= 0 ? table_settings->cnch_part_allocation_algorithm : settings.cnch_part_allocation_algorithm;
     LOG_DEBUG(shared->log, "Send query with cnch_part_allocation_algorithm = {}, system setting = {}, table setting = {}", algorithm, settings.cnch_part_allocation_algorithm, table_settings->cnch_part_allocation_algorithm);
 
-    switch (settings.cnch_part_allocation_algorithm)
+    switch (algorithm)
     {
         case 0:
             return PartAllocator::JUMP_CONSISTENT_HASH;
@@ -5792,6 +5808,11 @@ Context::HybridPartAllocator Context::getHybridPartAllocationAlgo() const
         case 4: return HybridPartAllocator::HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE;
         default: return HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH;
     }
+}
+
+bool Context::hasSessionTimeZone() const
+{
+    return !settings.session_timezone.value.empty();
 }
 
 void Context::createPlanNodeIdAllocator(int max_id)
