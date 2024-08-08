@@ -68,6 +68,22 @@ jobs:
           docker tag byconity/byconity:${{ github.ref_name }} byconity/byconity:stable
           docker push byconity/byconity:stable
           docker image rm -f byconity/byconity:stable
+      - name: Login to Volcano Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: byconity-cn-beijing.cr.volces.com
+          username: ${{ secrets.VOLC_CR_USER }}
+          password: ${{ secrets.VOLC_CR_PASS }}
+      - name: Push Dockers to Volcano CR
+        run: |
+          docker tag  byconity/byconity:${{ github.ref_name }} byconity-cn-beijing.cr.volces.com/byconity/byconity:${{ github.ref_name}}
+          docker push byconity-cn-beijing.cr.volces.com/byconity/byconity:${{ github.ref_name }}
+      - name: Tag as Stable then push to Volcano CR
+        if: "!github.event.release.prerelease"
+        run: |
+          docker tag byconity/byconity:${{ github.ref_name }} byconity-cn-beijing.cr.volces.com/byconity/byconity:stable
+          docker push byconity-cn-beijing.cr.volces.com/byconity/byconity:stable
+          docker image rm -f byconity-cn-beijing.cr.volces.com/byconity/byconity:stable
       - name: Cleanup Data.
         if: always()
         run: |
