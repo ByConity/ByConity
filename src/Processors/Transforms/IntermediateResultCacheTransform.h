@@ -31,8 +31,7 @@ public:
         CacheParam & cache_param_,
         UInt64 cache_max_bytes_,
         UInt64 cache_max_rows_,
-        std::unordered_set<IntermediateResult::CacheKey> & write_cache_,
-        bool all_part_in_cache_);
+        CacheHolderPtr cache_holder_);
 
     String getName() const override
     {
@@ -48,8 +47,7 @@ private:
     CacheParam cache_param;
     UInt64 cache_max_bytes = 0;
     UInt64 cache_max_rows = 0;
-    std::unordered_set<IntermediateResult::CacheKey> write_cache;
-    bool all_part_in_cache = false;
+    CacheHolderPtr cache_holder;
     std::unordered_map<IntermediateResult::CacheKey, IntermediateResult::CacheValuePtr> uncompleted_cache;
     Poco::Logger * log;
 };

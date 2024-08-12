@@ -286,7 +286,16 @@ CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String 
     if (segment_group.get())
     {
         if (coordinator_address.empty() || segment_group->coordinator_address == coordinator_address)
+        {
             found = segment_group->tryCancel(true);
+            LOG_DEBUG(
+                logger,
+                "Try cancel for distributed query[{}@{}@{}] from PlanSegmentProcessList, result is {}",
+                initial_query_id,
+                coordinator_address,
+                segment_group->initial_query_start_time_ms,
+                found);
+        }
         else
         {
             LOG_WARNING(

@@ -10,7 +10,10 @@
 namespace DB
 {
 // for test assert, see more 10102_intermediate_result_cache
-static const std::unordered_set<std::string> IGNORED_SETTINGS{"max_bytes_to_read", "max_rows_to_read"};
+static const std::unordered_set<std::string> IGNORED_SETTINGS{
+    "max_bytes_to_read", "max_rows_to_read", "load_balancing", "prefer_localhost_replica", "send_logs_level", "max_execution_time"};
+
+#define CHECK_IGNORED_SETTINGS(name) ((name).find("timeout") != std::string::npos || IGNORED_SETTINGS.contains(name))
 
 size_t PlanSignatureProvider::combine(const std::vector<size_t> & hashes)
 {
@@ -35,7 +38,7 @@ PlanSignature PlanSignatureProvider::combineSettings(PlanSignature signature, co
     size_t size = 0;
     for (const auto & item : settings)
     {
-        if (IGNORED_SETTINGS.contains(item.name))
+        if (CHECK_IGNORED_SETTINGS(item.name))
             continue;
         size += 1;
     }
@@ -43,7 +46,7 @@ PlanSignature PlanSignatureProvider::combineSettings(PlanSignature signature, co
     hash.update(size);
     for (const auto & item : settings)
     {
-        if (IGNORED_SETTINGS.contains(item.name))
+        if (CHECK_IGNORED_SETTINGS(item.name))
             continue;
         hash.update(sipHash64(item.name));
         applyVisitor(FieldVisitorHash(hash), item.value);
