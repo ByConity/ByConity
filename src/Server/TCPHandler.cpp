@@ -1435,23 +1435,6 @@ void TCPHandler::receiveQuery()
     /// Set fields, that are known apriori.
     client_info.interface = ClientInfo::Interface::TCP;
 
-    /** @aeolus
-     *  Make the current_user and initial_user identical so that any INITIAL_QUERY
-     *  could cancel a SECONDARY_QUERY when their initial_query_id(s) are same.
-     *
-     *  What if current_user is not modified? The current_user will still be `default`
-     *  due to multiplexed connections (or global connection pool). And a initial_query
-     *  requested by a specific user couldn't cancel the queries of `default` user.
-     *  # See the ProcessList.cpp about query cancellation.
-     *
-     *  NOTE: query_context will be restored to connection_context before received
-     *  a new query. The only thing modified is the current_user of this (current) query.
-     */
-    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
-    {
-        client_info.current_user = client_info.initial_user;
-    }
-
     /// Per query settings are also passed via TCP.
     /// We need to check them before applying due to they can violate the settings constraints.
     auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
