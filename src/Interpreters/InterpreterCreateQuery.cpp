@@ -91,16 +91,15 @@
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 
-#include <TableFunctions/TableFunctionFactory.h>
-#include <common/logger_useful.h>
+#include <DataStreams/BlockIO.h>
 #include <DataTypes/ObjectUtils.h>
-#include <Parsers/queryToString.h>
-#include <Interpreters/executeQuery.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/executeSubQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
-#include <IO/NullWriteBuffer.h>
-#include <IO/ReadBufferFromString.h>
+#include <Parsers/ASTForeignKeyDeclaration.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
+#include <Parsers/queryToString.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
@@ -1692,45 +1691,11 @@ BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
         }
         else
         {
-            String insert_query_id = fmt::format("{}_insert", getContext()->getCurrentQueryId());
-            auto insert_context = Context::createCopy(getContext());
-            insert_context->makeSessionContext();
-            insert_context->makeQueryContext();
-            insert_context->setCurrentTransaction(nullptr, false);
-            insert_context->setCurrentVW(nullptr);
-            insert_context->setCurrentWorkerGroup(nullptr);
-            insert_context->setCurrentQueryId(insert_query_id);
+            auto insert_context = createContextForSubQuery(getContext(), "insert");
             if (!insert_context->getSettingsRef().enable_optimizer_for_create_select)
                 insert_context->setSetting("enable_optimizer", false);
 
-            /// Execute INSERT in a separate thread so that it has a clean ThreadStatus attached to its local context
-            /// Pros: a) supports running INSERT in both optimizer and non-optimizer mode (not all inserts are supported by optimizer)
-            ///       b) ThreadStatus for the outer query won't get polutated
-            /// Cons: a) user facing query (CTAS) cannot get progress update
-            ///       b) cancel CTAS won't affect INSERT
-            ///       c) we'll have two process list items (CTAS & INSERT) for the query which might be confusing
-            std::exception_ptr exception;
-            auto thread = ThreadFromGlobalPool([insert_context = std::move(insert_context), &exception, &insert]() {
-                try
-                {
-                    CurrentThread::QueryScope query_scope {insert_context};
-                    ReadBufferFromOwnString in(insert->formatForErrorMessage());
-                    NullWriteBuffer out;
-                    executeQuery(in, out, /*allow_into_outfile=*/false, insert_context, /*set_result_details=*/{});
-                }
-                catch (...)
-                {
-                    exception = std::current_exception();
-                }
-
-            });
-            thread.join();
-
-            if (exception)
-                std::rethrow_exception(exception);
-
-            /// NOTE: cannot return BlockIO from the inner query because fields like process_list_entry
-            /// and finish_callback will be overwrite by the outer executeQuery, which leads to subtle bugs
+            executeSubQueryWithoutResult(insert->formatForErrorMessage(), insert_context, false);
             return {};
         }
     }

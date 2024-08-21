@@ -16,8 +16,7 @@
 #include <Analyzers/Analysis.h>
 
 #include <DataStreams/materializeBlock.h>
-#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
-#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Interpreters/executeSubQuery.h>
 
 namespace DB
 {
@@ -453,27 +452,20 @@ const Block & Analysis::getScalarSubqueryResult(const ASTPtr & subquery, Context
 
     if (!executed_scalar_subqueries.count(hash_str))
     {
-        // ContextMutablePtr subquery_context = Context::createCopy(context);
-        // Settings subquery_settings = context->getSettings();
-        // subquery_settings.max_result_rows = 1;
-        // subquery_settings.extremes = false;
-        // subquery_context->setSettings(subquery_settings);
-        SelectQueryOptions subquery_options;
         auto & ast_subquery = subquery->as<ASTSubquery &>();
         auto & inner_query = ast_subquery.children.front();
-        if (!inner_query->as<ASTSelectWithUnionQuery>())
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Unrecognized query type '{}' when executing subquery {}",
-                inner_query->getID(),
-                inner_query->formatForErrorMessage());
-        InterpreterSelectQueryUseOptimizer interpreter{inner_query, std::const_pointer_cast<Context>(context), subquery_options};
-        auto io = interpreter.execute();
-        PullingAsyncPipelineExecutor executor(io.pipeline);
-        Block block;
 
-        while (block.rows() == 0 && executor.pull(block))
-            ;
+        DataTypes types;
+        auto pre_execute
+            = [&types](InterpreterSelectQueryUseOptimizer & interpreter) { types = interpreter.getSampleBlock().getDataTypes(); };
+
+        auto query_context = createContextForSubQuery(context);
+        SettingsChanges changes;
+        changes.emplace_back("max_result_rows", 1);
+        changes.emplace_back("result_overflow_mode", "throw");
+        changes.emplace_back("extremes", false);
+        query_context->applySettingsChanges(changes);
+        auto block = executeSubPipelineWithOneRow(inner_query, query_context, pre_execute);
 
         if (block.rows() > 1)
             throw Exception(
@@ -483,7 +475,6 @@ const Block & Analysis::getScalarSubqueryResult(const ASTPtr & subquery, Context
 
         if (block.rows() == 0)
         {
-            auto types = interpreter.getSampleBlock().getDataTypes();
             if (types.size() != 1)
                 types = {std::make_shared<DataTypeTuple>(types)};
 
@@ -528,16 +519,6 @@ const Block & Analysis::getScalarSubqueryResult(const ASTPtr & subquery, Context
                 ctn.column = ColumnTuple::create(block.getColumns());
                 block = Block{ctn};
             }
-
-            Block tmp_block;
-            while (tmp_block.rows() == 0 && executor.pull(tmp_block))
-                ;
-
-            if (tmp_block.rows() > 0)
-                throw Exception(
-                    ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY,
-                    "Scalar subquery returned more than one row: {}",
-                    subquery->formatForErrorMessage());
         }
 
         executed_scalar_subqueries.emplace(hash_str, std::move(block));
@@ -553,30 +534,16 @@ SetPtr Analysis::getInSubqueryResult(const ASTPtr & subquery, ContextPtr context
 
     if (!executed_in_subqueries.count(hash_str))
     {
-        // ContextMutablePtr subquery_context = Context::createCopy(context);
-        SelectQueryOptions subquery_options;
         auto & ast_subquery = subquery->as<ASTSubquery &>();
         auto & inner_query = ast_subquery.children.front();
-        if (!inner_query->as<ASTSelectWithUnionQuery>())
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Unrecognized query type '{}' when executing subquery {}",
-                inner_query->getID(),
-                inner_query->formatForErrorMessage());
-        InterpreterSelectQueryUseOptimizer interpreter{inner_query, std::const_pointer_cast<Context>(context), subquery_options};
-        BlockIO io = interpreter.execute();
-        PullingAsyncPipelineExecutor executor(io.pipeline);
+
         SizeLimits limites(context->getSettingsRef().max_rows_in_set, context->getSettingsRef().max_bytes_in_set, OverflowMode::THROW);
         SetPtr set = std::make_shared<Set>(limites, true, context->getSettingsRef().transform_null_in);
-        set->setHeader(interpreter.getSampleBlock());
-        Block block;
+        auto pre_execute = [&set](InterpreterSelectQueryUseOptimizer & interpreter) { set->setHeader(interpreter.getSampleBlock()); };
+        auto proc_block = [&set](Block & block) { set->insertFromBlock(block); };
 
-        while (executor.pull(block))
-        {
-            if (block.rows() == 0)
-                continue;
-            set->insertFromBlock(block);
-        }
+        auto query_context = createContextForSubQuery(context);
+        executeSubPipeline(inner_query, query_context, pre_execute, proc_block);
 
         set->finishInsert();
         executed_in_subqueries.emplace(hash_str, set);

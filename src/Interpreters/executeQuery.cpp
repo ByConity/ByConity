@@ -329,7 +329,7 @@ void tryQueueQuery(ContextMutablePtr context, ASTPtr & query_ast)
     }
 }
 
-static bool needThrowRootCauseError(const Context * context, int & error_code, String & error_messge)
+bool needThrowRootCauseError(const Context * context, int & error_code, String & error_messge)
 {
     const String & query_id = context->getCurrentQueryId();
     auto coordinator = MPPQueryManager::instance().getCoordinator(query_id);
@@ -1110,7 +1110,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         // disable optimizer for internal query
         if (internal)
-            context->setSetting("enable_optimizer", Field(0));
+        {
+            // support optimizer if isInternalQuery is true
+            if (!context->isInternalQuery())
+                context->setSetting("enable_optimizer", Field(0));
+        }
 
         auto * insert_query = ast->as<ASTInsertQuery>();
         if (insert_query && insert_query->select)

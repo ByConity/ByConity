@@ -120,6 +120,10 @@ message QueryCommon {
 
   optional bool check_session = 13;
   optional uint64 query_expiration_timestamp = 14;
+
+  // support subquery
+  optional string parent_query_id = 15;// ?
+  optional bool is_internal_query = 16;
 }
 
 message SubmitPlanSegmentRequest {
