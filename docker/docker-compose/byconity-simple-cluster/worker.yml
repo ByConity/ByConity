@@ -49,7 +49,7 @@ service_discovery:
     headless_service: cnch-server-headless
     node:
       host: server-0
-      hostname: server
+      hostname: server-0
       ports:
         port:
         -

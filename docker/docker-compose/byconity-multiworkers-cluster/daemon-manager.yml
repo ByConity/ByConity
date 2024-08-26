@@ -104,6 +104,10 @@ daemon_manager:
       name: DEDUP_WORKER
       interval: 3000
       disable: 0
+    - 
+      name: TXN_GC
+      interval: 3000
+      disable: 0
 
 hdfs_addr: "hdfs://hdfs-namenode:9000"
 cnch_config: "/config/cnch-config.yml"

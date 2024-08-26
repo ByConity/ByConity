@@ -16,12 +16,12 @@
 #include <ServiceDiscovery/ServiceDiscoveryLocal.h>
 
 #include <IO/ReadHelpers.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Common/DNSResolver.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Poco/Util/AbstractConfiguration.h>
-#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
-#include <ServiceDiscovery/ServiceDiscoveryHelper.h>
 
 #include <sstream>
 
@@ -63,6 +63,20 @@ HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, Componen
         {
             if (type == ComponentType::WORKER && !vw_name.empty() && ep.virtual_warehouse != vw_name)
                 continue;
+
+            // We need to resolve hostname to ip,
+            // because we will use ip to set `TransactionRecord`.
+            try
+            {
+                auto ip = DNSResolver::instance().resolveHost(ep.host).toString();
+                if (!ip.empty())
+                {
+                    ep.host = ip;
+                }
+            }
+            catch (...)
+            {
+            }
 
             HostWithPorts host_with_ports{ep.host};
             host_with_ports.id = ep.hostname;
