@@ -844,6 +844,7 @@ void HTTPHandler::processQuery(
 
     /// Send HTTP headers with code 200 if no exception happened and the data is still not sent to
     /// the client.
+    used_output.out_maybe_compressed->finalize();
     used_output.out->finalize();
 }
 
