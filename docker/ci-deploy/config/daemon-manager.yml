@@ -35,6 +35,10 @@ daemon_manager:
       name: DEDUP_WORKER
       interval: 3000
       disable: 0
+    - 
+      name: TXN_GC
+      interval: 3000
+      disable: 0
 
 hdfs_addr: "hdfs://COMPOSE_PROJECT_NAME-hdfs-namenode:9000"
 storage_configuration:
