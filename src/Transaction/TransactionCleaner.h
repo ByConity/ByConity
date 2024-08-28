@@ -78,6 +78,14 @@ public:
 
     void cleanTransaction(const TransactionCnchPtr & txn);
     void cleanTransaction(const TransactionRecord & txn_record);
+    /**
+     * @brief Clean undo buffers on current server (will not dispatch another RPC).
+     * This Method must be execute synchronously since we want to
+     * guarantee undo buffers are cleaned before txn record is cleaned.
+     *
+     * @return Cleaned size.
+     */
+    UInt64 cleanUndoBuffers(const TransactionRecord & txn_record, bool & clean_fs_lock_by_scan);
 
     using TxnCleanTasksMap = std::unordered_map<UInt64, TxnCleanTask>;
     const TxnCleanTasksMap & getAllTasksUnLocked() const {return clean_tasks;}
@@ -99,7 +107,40 @@ private:
         return !shutdown && clean_tasks.try_emplace(txn_id.toUInt64(), txn_id, std::forward<Args>(args)...).second;
     }
 
+    /// ┌────┐                      ┌───────────────────────────────────────┐
+    /// │ DM ├─────────────────────►│ Server1(cleanUndoBuffersWithDispatch) │
+    /// └─▲──┘ 1. CleanCommittedTxn └───┬───────────────────────────────────┘
+    ///   │                             │ 2. CleanUndoBuffers (optional)
+    /// ┌─┴──┐                      ┌───▼───────────────────────────────────┐
+    /// │ KV │                      │ Server2(cleanUndoBuffersWithDispatch) │
+    /// └────┘                      └───────────────────────────────────────┘
+    ///
+    /// - DM will scan KV to get txns that need be cleaned.
+    /// - In most cases, a single server can delete all undo buffer for the txn. (like server 1)
+    /// - If a txn involves multiple tables, each table need to set commit time for parts (in cache).
+    ///   Thus server will dispatch additional RPC call to target server. (like server 2)
+
+    /**
+     * @brief Clean committed transaction.
+     */
     void cleanCommittedTxn(const TransactionRecord & txn_record);
+    /**
+     * @brief Inner call to clean undo buffers.
+     * This function serves as both in non-dispatch mode or dispatch mode, called by `cleanCommittedTxn`.
+     *
+     * @param callee If true, then it will ignore the non-host table, otherwise, it will send RPC calls to target servers.
+     * @param clean_fs_lock_by_scan If fs lock needs to be cleaned.
+     * @param deleted_keys If `dispatched` is `true`, then `deleted_keys` contains the undo buffer keys to be deleted.
+     * @param dispatched If any dispatch happened in this call. `false` means all undo buffers belong to this server.
+     * Then caller can safely remove them via prefix.
+     * @return cleaned size.
+     */
+    UInt64 cleanUndoBuffersWithDispatch(
+        const TransactionRecord & txn_record,
+        bool callee,
+        bool & clean_fs_lock_by_scan,
+        std::vector<String> & deleted_keys,
+        bool & dispatched);
     void cleanAbortedTxn(const TransactionRecord & txn_record);
 
     void removeTask(const TxnTimestamp & txn_id);

@@ -704,6 +704,10 @@
     M(GetAllUndoBufferFailed, "") \
     M(GetUndoBufferIteratorSuccess, "") \
     M(GetUndoBufferIteratorFailed, "") \
+    M(GetUndoBuffersWithKeysSuccess, "") \
+    M(GetUndoBuffersWithKeysFailed, "") \
+    M(ClearUndoBuffersByKeysSuccess, "") \
+    M(ClearUndoBuffersByKeysFailed, "") \
     M(GetTransactionRecordsSuccess, "") \
     M(GetTransactionRecordsFailed, "") \
     M(GetTransactionRecordsTxnIdsSuccess, "") \

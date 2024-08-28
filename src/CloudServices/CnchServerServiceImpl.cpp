@@ -937,6 +937,33 @@ void CnchServerServiceImpl::cleanTransaction(
         }
     );
 }
+void CnchServerServiceImpl::cleanUndoBuffers(
+    google::protobuf::RpcController *,
+    const Protos::CleanUndoBuffersReq * request,
+    Protos::CleanUndoBuffersResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request, response, done, gc = getContext(), this] {
+        brpc::ClosureGuard done_guard(done);
+
+        auto & txn_cleaner = gc->getCnchTransactionCoordinator().getTxnCleaner();
+        TransactionRecord txn_record{request->txn_record()};
+
+        try
+        {
+            /// Will be re-init in side the `cleanUndoBuffers`.
+            bool clean_fs_lock_by_scan = false;
+            response->set_clean_size(txn_cleaner.cleanUndoBuffers(txn_record, clean_fs_lock_by_scan));
+            response->set_clean_fs_lock_by_scan(clean_fs_lock_by_scan) ;
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Clean txn record {} failed.", txn_record.toString());
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
 void CnchServerServiceImpl::acquireLock(
     google::protobuf::RpcController * cntl,
     const Protos::AcquireLockReq * request,

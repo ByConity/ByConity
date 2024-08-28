@@ -185,6 +185,12 @@ public:
         Protos::CleanTransactionResp * response,
         google::protobuf::Closure * done) override;
 
+    void cleanUndoBuffers(
+        google::protobuf::RpcController * cntl,
+        const Protos::CleanUndoBuffersReq * request,
+        Protos::CleanUndoBuffersResp * response,
+        google::protobuf::Closure * done) override;
+
     void acquireLock(
         google::protobuf::RpcController * cntl,
         const Protos::AcquireLockReq * request,
