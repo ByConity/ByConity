@@ -675,7 +675,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
     if (pipeline.getNumStreams() > 1)
     {
         /// Add resize transform to uniformly distribute data between aggregating streams.
-        if (!storage_has_evenly_distributed_read)
+        if (!storage_has_evenly_distributed_read && !can_streaming_agg)
             pipeline.resize(pipeline.getNumStreams(), true, true);
         if (can_streaming_agg)
         {
