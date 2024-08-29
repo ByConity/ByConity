@@ -27,7 +27,7 @@
 #include <Catalog/CatalogUtils.h>
 #include <Access/IAccessEntity.h>
 #include <Statistics/AutoStatisticsHelper.h>
-#include "Storages/MergeTree/MarkRange.h"
+#include <Storages/MergeTree/MarkRange.h>
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
 
 namespace DB
@@ -42,6 +42,7 @@ class CnchServerTransaction;
 using CnchServerTransactionPtr = std::shared_ptr<CnchServerTransaction>;
 struct PrunedPartitions;
 class StorageCloudMergeTree;
+struct DumpedData;
 
 class CnchServerClient : public RpcClientBase
 {
@@ -58,7 +59,7 @@ public:
     std::pair<TxnTimestamp, TxnTimestamp> createTransactionForKafka(const StorageID & storage_id, const size_t consumer_index);
     TxnTimestamp commitTransaction(
         const ICnchTransaction & txn, const StorageID & kafka_storage_id = StorageID::createEmpty(), const size_t consumer_index = 0);
-    void precommitTransaction(const TxnTimestamp & txn_id, const UUID & uuid = UUIDHelpers::Nil);
+    void precommitTransaction(const ContextPtr & context, const TxnTimestamp & txn_id, const UUID & uuid = UUIDHelpers::Nil);
     TxnTimestamp rollbackTransaction(const TxnTimestamp & txn_id);
     void finishTransaction(const TxnTimestamp & txn_id);
 
@@ -138,9 +139,7 @@ public:
         const TxnTimestamp & txn_id,
         ManipulationType type,
         MergeTreeMetaBase & storage,
-        const MutableMergeTreeDataPartsCNCHVector & parts,
-        const DeleteBitmapMetaPtrVector & delete_bitmaps,
-        const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+        const DumpedData & dumped_data,
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},
@@ -153,9 +152,7 @@ public:
         const TxnTimestamp & txn_id,
         ManipulationType type,
         MergeTreeMetaBase & storage,
-        const MutableMergeTreeDataPartsCNCHVector & parts,
-        const DeleteBitmapMetaPtrVector & delete_bitmaps,
-        const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+        const DumpedData & dumped_data,
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},

@@ -218,7 +218,7 @@ void CloudMergeTreeDedupWorker::iterate()
         std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
             scope, txn->getTransactionID(), *cnch_table, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
         lock_watch.restart();
-        cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
+        cnch_lock = std::make_shared<CnchLockHolder>(context, std::move(locks_to_acquire));
         if (!cnch_lock->tryLock())
         {
             if (auto unique_table_log = context->getCloudUniqueTableLog())
@@ -260,6 +260,8 @@ void CloudMergeTreeDedupWorker::iterate()
         LOG_INFO(log, "no more staged parts after acquired the locks, they may have been processed by other thread");
         return;
     }
+
+    txn->appendLockHolder(cnch_lock);
 
     /// Sorts by commit time
     std::sort(staged_parts.begin(), staged_parts.end(), [](auto & lhs, auto & rhs) {

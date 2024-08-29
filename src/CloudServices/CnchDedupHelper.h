@@ -20,6 +20,8 @@
 #include <Core/Block.h>
 #include <Columns/IColumn.h>
 #include <Common/PODArray.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/StorageID.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Transaction/LockRequest.h>
@@ -28,11 +30,37 @@ namespace DB
 {
 class MergeTreeMetaBase;
 class StorageCnchMergeTree;
+class DeleteBitmapMeta;
+using DeleteBitmapMetaPtr = std::shared_ptr<DeleteBitmapMeta>;
+using DeleteBitmapMetaPtrVector = std::vector<DeleteBitmapMetaPtr>;
+class CnchServerTransaction;
 }
 
 
 namespace DB::CnchDedupHelper
 {
+
+enum class DedupMode : unsigned int
+{
+    APPEND = 0,
+    UPSERT,
+    THROW
+};
+
+inline String typeToString(DedupMode type)
+{
+    switch (type)
+    {
+        case DedupMode::APPEND:
+            return "APPEND";
+        case DedupMode::UPSERT:
+            return "UPSERT";
+        case DedupMode::THROW:
+            return "THROW";
+        default:
+            return "Unknown";
+    }
+}
 
 class DedupScope
 {
@@ -140,5 +168,49 @@ bool checkBucketParts(
     MergeTreeMetaBase & storage,
     const MergeTreeDataPartsCNCHVector & visible_parts,
     const MergeTreeDataPartsCNCHVector & staged_parts);
+
+struct DedupTask
+{
+    DedupMode dedup_mode;
+    StorageID storage_id;
+    MutableMergeTreeDataPartsCNCHVector new_parts;
+    DeleteBitmapMetaPtrVector delete_bitmaps_for_new_parts;
+
+    MutableMergeTreeDataPartsCNCHVector staged_parts;
+    DeleteBitmapMetaPtrVector delete_bitmaps_for_staged_parts;
+
+    MutableMergeTreeDataPartsCNCHVector visible_parts;
+    DeleteBitmapMetaPtrVector delete_bitmaps_for_visible_parts;
+
+    struct Statistics
+    {
+        /// Record time cost for each stage(ms)
+        UInt64 acquire_lock_cost = 0;
+        UInt64 get_metadata_cost = 0;
+        UInt64 execute_task_cost = 0;
+        UInt64 other_cost = 0;
+        UInt64 total_cost = 0;
+
+        String toString()
+        {
+            return fmt::format(
+                "[acquire lock cost {} ms, get metadata cost {} ms, execute task cost {} ms, other cost {} ms, total cost {} ms]",
+                acquire_lock_cost,
+                get_metadata_cost,
+                execute_task_cost,
+                other_cost,
+                total_cost);
+        }
+    } statistics;
+
+    explicit DedupTask(const DedupMode & dedup_mode_, const StorageID & storage_id_) : dedup_mode(dedup_mode_), storage_id(storage_id_) { }
+};
+using DedupTaskPtr = std::shared_ptr<DedupTask>;
+
+UInt64 getWriteLockTimeout(StorageCnchMergeTree & cnch_table, ContextPtr local_context);
+
+void acquireLockAndFillDedupTask(StorageCnchMergeTree & cnch_table, DedupTask & dedup_task, CnchServerTransaction & txn, ContextPtr local_context);
+
+void executeDedupTask(StorageCnchMergeTree & cnch_table, DedupTask & dedup_task, const TxnTimestamp & txn_id, ContextPtr local_context);
 
 }

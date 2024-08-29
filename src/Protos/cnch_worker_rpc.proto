@@ -551,6 +551,40 @@ message CheckMySQLSyncThreadStatusResp
   optional bool is_running = 2;
 }
 
+message DropMemoryDictCacheReq
+{
+  optional uint64 txn_id = 1;
+  optional string create_table_query = 2;
+  repeated string uuid_list = 3;
+}
+
+message DropMemoryDictCacheResp
+{
+  optional string exception = 1;
+}
+
+message ExecuteDedupTaskReq
+{
+  required uint64 txn_id = 1;
+  required uint32 rpc_port = 2;
+  required UUID table_uuid = 3;
+  repeated DataModelPart new_parts = 4;
+  repeated string new_parts_paths = 5;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_new_parts = 6;
+  repeated DataModelPart staged_parts = 7;
+  repeated string staged_parts_paths = 8;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_staged_parts = 9;
+  repeated DataModelPart visible_parts = 10;
+  repeated string visible_parts_paths = 11;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_visible_parts = 12;
+  required uint32 dedup_mode = 13;
+}
+
+message ExecuteDedupTaskResp
+{
+  optional string exception = 1;
+}
+
 service CnchWorkerService
 {
   rpc executeSimpleQuery(ExecuteSimpleQueryReq) returns (ExecuteSimpleQueryResp);
@@ -596,4 +630,10 @@ service CnchWorkerService
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
   rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
   rpc dropPartDiskCache(DropPartDiskCacheReq) returns (DropPartDiskCacheResp);
+<<<<<<< HEAD
+=======
+  rpc dropMemoryDictCache(DropMemoryDictCacheReq) returns (DropMemoryDictCacheResp);
+
+  rpc executeDedupTask(ExecuteDedupTaskReq) returns (ExecuteDedupTaskResp);
+>>>>>>> 329e77b1a6 (Merge branch 'lta@ETL_perf_optimize4cnch-dev' into 'cnch-dev')
 }

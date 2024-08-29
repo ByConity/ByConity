@@ -24,6 +24,7 @@
 #include <Protos/auto_statistics.pb.h>
 #include <common/types.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <CloudServices/CnchDataWriter.h>
 
 
 namespace DB
@@ -90,10 +91,10 @@ CnchServerClient::commitTransaction(const ICnchTransaction & txn, const StorageI
     return response.commit_ts();
 }
 
-void CnchServerClient::precommitTransaction(const TxnTimestamp & txn_id, const UUID & uuid)
+void CnchServerClient::precommitTransaction(const ContextPtr & context, const TxnTimestamp & txn_id, const UUID & uuid)
 {
     brpc::Controller cntl;
-    cntl.set_timeout_ms(10 * 1000);
+    cntl.set_timeout_ms(context->getSettingsRef().max_dedup_execution_time.totalMilliseconds());
 
     Protos::PrecommitTransactionReq request;
     Protos::PrecommitTransactionResp response;
@@ -514,9 +515,7 @@ void CnchServerClient::commitParts(
     const TxnTimestamp & txn_id,
     ManipulationType type,
     MergeTreeMetaBase & storage,
-    const MutableMergeTreeDataPartsCNCHVector & parts,
-    const DeleteBitmapMetaPtrVector & delete_bitmaps,
-    const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+    const DumpedData & dumped_data,
     const String & task_id,
     const bool from_server,
     const String & consumer_group,
@@ -525,6 +524,10 @@ void CnchServerClient::commitParts(
     const UInt64 peak_memory_usage)
 {
     /// TODO: check txn_id & start_ts
+
+    const auto & parts = dumped_data.parts;
+    const auto & delete_bitmaps = dumped_data.bitmaps;
+    const auto & staged_parts = dumped_data.staged_parts;
 
     brpc::Controller cntl;
     cntl.set_timeout_ms(storage.getSettings()->cnch_meta_rpc_timeout_ms);
@@ -605,6 +608,8 @@ void CnchServerClient::commitParts(
         new_bitmap->CopyFrom(*(delete_bitmap->getModel()));
     }
 
+    request.set_dedup_mode(static_cast<UInt32>(dumped_data.dedup_mode));
+
     stub->commitParts(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
@@ -617,9 +622,7 @@ void CnchServerClient::precommitParts(
     const TxnTimestamp & txn_id,
     ManipulationType type,
     MergeTreeMetaBase & storage,
-    const MutableMergeTreeDataPartsCNCHVector & parts,
-    const DeleteBitmapMetaPtrVector & delete_bitmaps,
-    const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+    const DumpedData & dumped_data,
     const String & task_id,
     const bool from_server,
     const String & consumer_group,
@@ -628,6 +631,9 @@ void CnchServerClient::precommitParts(
     const UInt64 peak_memory_usage)
 {
     const UInt64 batch_size = context->getSettingsRef().catalog_max_commit_size;
+    const auto & parts = dumped_data.parts;
+    const auto & delete_bitmaps = dumped_data.bitmaps;
+    const auto & staged_parts = dumped_data.staged_parts;
 
     // Precommit parts in batches {batch_begin, batch_end}
     const size_t max_size = std::max({parts.size(), delete_bitmaps.size(), staged_parts.size()});
@@ -646,7 +652,7 @@ void CnchServerClient::precommitParts(
         LOG_DEBUG(
             log,
             "Precommit: parts in batch: [{} ~  {}] of total:  {}; delete_bitmaps in batch [{} ~ {}] of total {}; staged parts in batch [{} "
-            "~ {}] of total {}.",
+            "~ {}] of total {}; dedup mode is {}",
             part_batch_begin,
             part_batch_end,
             parts.size(),
@@ -655,15 +661,20 @@ void CnchServerClient::precommitParts(
             delete_bitmaps.size(),
             staged_part_batch_begin,
             staged_part_batch_end,
-            staged_parts.size());
+            staged_parts.size(),
+            typeToString(dumped_data.dedup_mode));
+
+        DumpedData new_dumped_data;
+        new_dumped_data.parts = {parts.begin() + part_batch_begin, parts.begin() + part_batch_end};
+        new_dumped_data.bitmaps = {delete_bitmaps.begin() + bitmap_batch_begin, delete_bitmaps.begin() + bitmap_batch_end};
+        new_dumped_data.staged_parts = {staged_parts.begin() + staged_part_batch_begin, staged_parts.begin() + staged_part_batch_end};
+        new_dumped_data.dedup_mode = dumped_data.dedup_mode;
 
         commitParts(
             txn_id,
             type,
             storage,
-            {parts.begin() + part_batch_begin, parts.begin() + part_batch_end},
-            {delete_bitmaps.begin() + bitmap_batch_begin, delete_bitmaps.begin() + bitmap_batch_end},
-            {staged_parts.begin() + staged_part_batch_begin, staged_parts.begin() + staged_part_batch_end},
+            new_dumped_data,
             task_id,
             from_server,
             consumer_group,

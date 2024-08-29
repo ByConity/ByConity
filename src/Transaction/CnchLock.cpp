@@ -122,6 +122,14 @@ private:
     CnchServerClientPtr server_client;
 };
 
+CnchLockHolder::CnchLockHolder(const ContextPtr & context_, LockInfoPtr && elem) : WithContext(context_)
+{
+    txn_id = elem->txn_id;
+    assert(txn_id);
+    elem->setLockID(context_->getTimestamp());
+    cnch_locks.push_back(std::make_unique<CnchLock>(context_, elem));
+}
+
 CnchLockHolder::CnchLockHolder(const ContextPtr & context_, std::vector<LockInfoPtr> && elems) : WithContext(context_)
 {
     assert(!elems.empty());

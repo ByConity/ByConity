@@ -26,6 +26,7 @@
 #include <WorkerTasks/ManipulationType.h>
 #include <cppkafka/cppkafka.h>
 #include <cppkafka/topic_partition_list.h>
+#include <CloudServices/CnchDedupHelper.h>
 
 namespace DB
 {
@@ -36,7 +37,9 @@ struct DumpedData
     MutableMergeTreeDataPartsCNCHVector parts;
     DeleteBitmapMetaPtrVector bitmaps;
     MutableMergeTreeDataPartsCNCHVector staged_parts;
+    CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
 
+    bool isEmpty();
     void extend(DumpedData && data);
 };
 
@@ -87,6 +90,12 @@ public:
 
     void setPeakMemoryUsage(UInt64 peak_memory_usage_) { peak_memory_usage = peak_memory_usage_; }
 
+    void setDedupMode(CnchDedupHelper::DedupMode dedup_mode_)
+    {
+        dedup_mode = dedup_mode_;
+        res.dedup_mode = dedup_mode;
+    }
+
     DumpedData res;
 
 private:
@@ -108,6 +117,8 @@ private:
     PlanSegmentInstanceId instance_id{};
 
     UInt64 peak_memory_usage;
+
+    CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
 
     UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp);
 };

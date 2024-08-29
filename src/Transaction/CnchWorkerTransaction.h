@@ -84,6 +84,8 @@ public:
         throw Exception("abort is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    void setIsInitiator(bool is_initiator_) { is_initiator = is_initiator_; }
+
 private:
     void checkServerClient() const;
 

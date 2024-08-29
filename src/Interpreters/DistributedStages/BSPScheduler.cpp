@@ -197,13 +197,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
     {
         if (auto step = std::dynamic_pointer_cast<TableWriteStep>(node.step))
         {
-            if (auto cnch_table = step->getTarget()->getStorage())
-            {
-                // unique table can't support retry
-                if (cnch_table->getInMemoryMetadataPtr()->hasUniqueKey())
-                    return false;
-                is_table_write = true;
-            }
+            is_table_write = true;
         }
         else if (node.step->getType() == IQueryPlanStep::Type::TableFinish)
             return false;
