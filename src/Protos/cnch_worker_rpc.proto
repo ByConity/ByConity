@@ -638,5 +638,7 @@ service CnchWorkerService
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
   rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
   rpc dropPartDiskCache(DropPartDiskCacheReq) returns (DropPartDiskCacheResp);
+  rpc dropMemoryDictCache(DropMemoryDictCacheReq) returns (DropMemoryDictCacheResp);
+
   rpc executeDedupTask(ExecuteDedupTaskReq) returns (ExecuteDedupTaskResp);
 }
