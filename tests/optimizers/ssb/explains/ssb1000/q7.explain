@@ -1,49 +1,49 @@
-Projection Est. 12170 rows
+Projection Est. 1218037 rows
 │     Expressions: [C_NATION, S_NATION], d_year:=`expr#toYear(LO_ORDERDATE)`, revenue:=`expr#sum(LO_REVENUE)`
-└─ Sorting Est. 12170 rows
+└─ Sorting Est. 1218037 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-   └─ Gather Exchange Est. 12170 rows
-      └─ Sorting Est. 12170 rows
+   └─ Gather Exchange Est. 1218037 rows
+      └─ Sorting Est. 1218037 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-         └─ MergingAggregated Est. 12170 rows
-            └─ Repartition Exchange Est. 12170 rows
+         └─ MergingAggregated Est. 1218037 rows
+            └─ Repartition Exchange Est. 1218037 rows
                │     Partition by: {C_NATION, S_NATION, expr#toYear(LO_ORDERDATE)}
-               └─ Aggregating Est. 12170 rows
+               └─ Aggregating Est. 1218037 rows
                   │     Group by: {C_NATION, S_NATION, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 240115283 rows
+                  └─ Projection Est. 90443777 rows
                      │     Expressions: [C_NATION, LO_REVENUE, S_NATION], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join Est. 240115283 rows
-                        │     Condition: LO_SUPPKEY == S_SUPPKEY
-                        │     Runtime Filters Builder: {S_SUPPKEY}
-                        ├─ Repartition Exchange Est. 300115040 rows
-                        │  │     Partition by: {LO_SUPPKEY}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 300115040 rows
-                        │     │     Condition: LO_CUSTKEY == C_CUSTKEY
-                        │     │     Runtime Filters Builder: {C_CUSTKEY}
+                     └─ Inner (PARALLEL_HASH) Join Est. 90443777 rows
+                        │     Condition: LO_CUSTKEY == C_CUSTKEY
+                        │     Runtime Filters Builder: {C_CUSTKEY}
+                        ├─ Repartition Exchange Est. 300028092 rows
+                        │  │     Partition by: {LO_CUSTKEY}
+                        │  └─ Inner Join Est. 300028092 rows
+                        │     │     Condition: LO_SUPPKEY == S_SUPPKEY
+                        │     │     Runtime Filters Builder: {S_SUPPKEY}
                         │     ├─ Repartition Exchange Est. 1499997453 rows
-                        │     │  │     Partition by: {LO_CUSTKEY}
+                        │     │  │     Partition by: {LO_SUPPKEY}
                         │     │  └─ Filter Est. 1499997453 rows
                         │     │     │     Condition: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │     │     └─ TableScan ssb1000.lineorder Est. 5999989813 rows
                         │     │              Where: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │     │              Outputs: [LO_CUSTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
-                        │     └─ Repartition Exchange Est. 6002311 rows
-                        │        │     Partition by: {C_CUSTKEY}
-                        │        └─ Projection Est. 6002311 rows
-                        │           │     Expressions: [C_CUSTKEY, C_NATION]
-                        │           └─ Filter Est. 6002311 rows
-                        │              │     Condition: C_REGION = 'ASIA'
-                        │              └─ TableScan ssb1000.customer Est. 30000000 rows
-                        │                       Where: C_REGION = 'ASIA'
-                        │                       Outputs: [C_CUSTKEY, C_NATION, C_REGION]
-                        └─ Repartition Exchange Est. 400039 rows
-                           │     Partition by: {S_SUPPKEY}
-                           └─ Projection Est. 400039 rows
-                              │     Expressions: [S_NATION, S_SUPPKEY]
-                              └─ Filter Est. 400039 rows
-                                 │     Condition: S_REGION = 'ASIA'
-                                 └─ TableScan ssb1000.supplier Est. 2000000 rows
-                                          Where: S_REGION = 'ASIA'
-                                          Outputs: [S_SUPPKEY, S_NATION, S_REGION]
+                        │     └─ Repartition Exchange Est. 400039 rows
+                        │        │     Partition by: {S_SUPPKEY}
+                        │        └─ Projection Est. 400039 rows
+                        │           │     Expressions: [S_NATION, S_SUPPKEY]
+                        │           └─ Filter Est. 400039 rows
+                        │              │     Condition: S_REGION = 'ASIA'
+                        │              └─ TableScan ssb1000.supplier Est. 2000000 rows
+                        │                       Where: S_REGION = 'ASIA'
+                        │                       Outputs: [S_SUPPKEY, S_NATION, S_REGION]
+                        └─ Repartition Exchange Est. 6002311 rows
+                           │     Partition by: {C_CUSTKEY}
+                           └─ Projection Est. 6002311 rows
+                              │     Expressions: [C_CUSTKEY, C_NATION]
+                              └─ Filter Est. 6002311 rows
+                                 │     Condition: C_REGION = 'ASIA'
+                                 └─ TableScan ssb1000.customer Est. 30000000 rows
+                                          Where: C_REGION = 'ASIA'
+                                          Outputs: [C_CUSTKEY, C_NATION, C_REGION]
 note: Runtime Filter is applied for 2 times.

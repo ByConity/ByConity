@@ -36,10 +36,10 @@ Projection Est. 100 rows
                   │                 │  │  │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                   │                 │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk}
                   │                 │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_ticket_number, ss_coupon_amt, ss_net_profit]
-                  │                 │  │  └─ Broadcast Exchange Est. 156 rows
-                  │                 │  │     └─ Projection Est. 156 rows
+                  │                 │  │  └─ Broadcast Exchange Est. 157 rows
+                  │                 │  │     └─ Projection Est. 157 rows
                   │                 │  │        │     Expressions: [d_date_sk]
-                  │                 │  │        └─ Filter Est. 156 rows
+                  │                 │  │        └─ Filter Est. 157 rows
                   │                 │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dow = 1)
                   │                 │  │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                   │                 │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dow = 1)

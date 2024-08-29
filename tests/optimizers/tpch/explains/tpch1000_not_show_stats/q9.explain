@@ -19,10 +19,14 @@ Projection
                         │  │     Partition by: {l_suppkey}
                         │  └─ Inner (PARALLEL_HASH) Join
                         │     │     Condition: o_orderkey == l_orderkey
+                        │     │     Runtime Filters Builder: {l_orderkey}
                         │     ├─ Repartition Exchange
                         │     │  │     Partition by: {o_orderkey}
-                        │     │  └─ TableScan tpch1000.orders
-                        │     │           Outputs: [o_orderkey, o_orderdate]
+                        │     │  └─ Filter
+                        │     │     │     Condition: Runtime Filters: {o_orderkey}
+                        │     │     └─ TableScan tpch1000.orders
+                        │     │              Where: Runtime Filters: {o_orderkey}
+                        │     │              Outputs: [o_orderkey, o_orderdate]
                         │     └─ Repartition Exchange
                         │        │     Partition by: {l_orderkey}
                         │        └─ Inner (PARALLEL_HASH) Join
@@ -59,4 +63,4 @@ Projection
                                  └─ Broadcast Exchange
                                     └─ TableScan tpch1000.nation
                                              Outputs: [n_nationkey, n_name]
-note: Runtime Filter is applied for 1 times.
+note: Runtime Filter is applied for 2 times.

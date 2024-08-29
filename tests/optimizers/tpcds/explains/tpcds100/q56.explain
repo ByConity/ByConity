@@ -5,19 +5,19 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#sum(total_sales) ASC NULLS LAST, i_item_id_6 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 8244 rows
+      └─ Gather Exchange Est. 16473 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#sum(total_sales) ASC NULLS LAST, i_item_id_6 ASC NULLS LAST}
             │     Limit: 100
-            └─ Aggregating Est. 8244 rows
+            └─ Aggregating Est. 16473 rows
                │     Group by: {i_item_id_6}
                │     Aggregates: expr#sum(total_sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)_1)
-               └─ Union Est. 8244 rows
+               └─ Union Est. 16473 rows
                   │     OutputToInputs: expr#sum(ss_ext_sales_price)_1 = [expr#sum(ss_ext_sales_price),expr#sum(cs_ext_sales_price),expr#sum(ws_ext_sales_price)], i_item_id_6 = [i_item_id,i_item_id_2,i_item_id_4]
-                  ├─ MergingAggregated Est. 2748 rows
-                  │  └─ Repartition Exchange Est. 2748 rows
+                  ├─ MergingAggregated Est. 5491 rows
+                  │  └─ Repartition Exchange Est. 5491 rows
                   │     │     Partition by: {i_item_id}
-                  │     └─ Aggregating Est. 2748 rows
+                  │     └─ Aggregating Est. 5491 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                   │        └─ Inner Join Est. 237959 rows
@@ -66,10 +66,10 @@ Projection Est. 100 rows
                   │                       │              Outputs: [i_item_sk, i_item_id]
                   │                       └─ Buffer Est. 5491 rows
                   │                          └─ CTERef[1] Est. 5491 rows
-                  ├─ MergingAggregated Est. 2748 rows
-                  │  └─ Repartition Exchange Est. 2748 rows
+                  ├─ MergingAggregated Est. 5491 rows
+                  │  └─ Repartition Exchange Est. 5491 rows
                   │     │     Partition by: {i_item_id_2}
-                  │     └─ Aggregating Est. 2748 rows
+                  │     └─ Aggregating Est. 5491 rows
                   │        │     Group by: {i_item_id_2}
                   │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
                   │        └─ Inner Join Est. 118136 rows
@@ -118,10 +118,10 @@ Projection Est. 100 rows
                   │                       │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
                   │                       └─ Buffer Est. 5491 rows
                   │                          └─ CTERef[1] Est. 5491 rows
-                  └─ MergingAggregated Est. 2748 rows
-                     └─ Repartition Exchange Est. 2748 rows
+                  └─ MergingAggregated Est. 5491 rows
+                     └─ Repartition Exchange Est. 5491 rows
                         │     Partition by: {i_item_id_4}
-                        └─ Aggregating Est. 2748 rows
+                        └─ Aggregating Est. 5491 rows
                            │     Group by: {i_item_id_4}
                            │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
                            └─ Inner Join Est. 59491 rows

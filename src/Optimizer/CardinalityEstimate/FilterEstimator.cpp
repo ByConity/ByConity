@@ -53,14 +53,14 @@ PlanNodeStatisticsPtr FilterEstimator::estimate(
     if (!is_on_base_table)
     {
         // Prefer default selectivity when is_on_base_table flag is false.
-        UInt64 row_count = filter_stats->getRowCount() * default_selectivity;
+        UInt64 row_count = std::round(filter_stats->getRowCount() * default_selectivity);
 
         // make row count at least 1.
         row_count = row_count > 1 ? row_count : 1;
         filter_stats->updateRowCount(row_count);
         for (auto & symbol_stats : filter_stats->getSymbolStatistics())
         {
-            symbol_stats.second = symbol_stats.second->applySelectivity(default_selectivity);
+            symbol_stats.second = symbol_stats.second->applySelectivity(default_selectivity, symbol_stats.second->getNdv() > opt_child_stats->getRowCount() * 0.8 ? default_selectivity : 1);
             // NDV must less or equals to row count
             symbol_stats.second->setNdv(std::min(filter_stats->getRowCount(), symbol_stats.second->getNdv()));
         }
@@ -87,7 +87,7 @@ PlanNodeStatisticsPtr FilterEstimator::estimate(
         selectivity = 0;
     }
 
-    UInt64 filtered_row_count = filter_stats->getRowCount() * selectivity;
+    UInt64 filtered_row_count = std::round(filter_stats->getRowCount() * selectivity);
     // make row count at least 1.
     filter_stats->updateRowCount(filtered_row_count > 0 ? filtered_row_count : std::min(UInt64(1), opt_child_stats->getRowCount()));
     std::unordered_map<String, SymbolStatisticsPtr> & symbol_statistics_in_filter = result.second;
@@ -100,7 +100,7 @@ PlanNodeStatisticsPtr FilterEstimator::estimate(
         }
         else
         {
-            symbol_statistics.second = symbol_statistics.second->applySelectivity(selectivity);
+            symbol_statistics.second = symbol_statistics.second->applySelectivity(selectivity, symbol_statistics.second->getNdv() > opt_child_stats->getRowCount() * 0.8 ? selectivity : 1);
             // NDV must less or equals to row count
             symbol_statistics.second->setNdv(std::min(filter_stats->getRowCount(), symbol_statistics.second->getNdv()));
             symbol_statistics.second->getHistogram().clear();

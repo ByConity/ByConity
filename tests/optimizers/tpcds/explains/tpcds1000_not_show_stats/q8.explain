@@ -75,14 +75,10 @@ Projection
                                                             │     Aggregates: expr#count():=AggNull(count)()
                                                             └─ Inner (PARALLEL_HASH) Join
                                                                │     Condition: ca_address_sk == c_current_addr_sk
-                                                               │     Runtime Filters Builder: {c_current_addr_sk}
                                                                ├─ Repartition Exchange
                                                                │  │     Partition by: {ca_address_sk}
-                                                               │  └─ Filter
-                                                               │     │     Condition: Runtime Filters: {ca_address_sk}
-                                                               │     └─ TableScan tpcds1000.customer_address
-                                                               │              Where: Runtime Filters: {ca_address_sk}
-                                                               │              Outputs: [ca_address_sk], ca_zip_1:=ca_zip
+                                                               │  └─ TableScan tpcds1000.customer_address
+                                                               │           Outputs: [ca_address_sk], ca_zip_1:=ca_zip
                                                                └─ Repartition Exchange
                                                                   │     Partition by: {c_current_addr_sk}
                                                                   └─ Projection
@@ -92,4 +88,4 @@ Projection
                                                                         └─ TableScan tpcds1000.customer
                                                                                  Where: c_preferred_cust_flag = 'Y'
                                                                                  Outputs: [c_current_addr_sk, c_preferred_cust_flag]
-note: Runtime Filter is applied for 2 times.
+note: Runtime Filter is applied for 1 times.

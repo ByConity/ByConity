@@ -1,17 +1,17 @@
-Projection Est. 1360 rows
+Projection Est. 1007090 rows
 │     Expressions: c_first_name:=c_first_name_5, c_last_name:=c_last_name_5, paid:=`expr#sum(netpaid)`, s_store_name:=s_store_name_5
-└─ Sorting Est. 1360 rows
+└─ Sorting Est. 1007090 rows
    │     Order by: {c_last_name_5 ASC NULLS LAST, c_first_name_5 ASC NULLS LAST, s_store_name_5 ASC NULLS LAST}
-   └─ Gather Exchange Est. 1360 rows
-      └─ Sorting Est. 1360 rows
+   └─ Gather Exchange Est. 1007090 rows
+      └─ Sorting Est. 1007090 rows
          │     Order by: {c_last_name_5 ASC NULLS LAST, c_first_name_5 ASC NULLS LAST, s_store_name_5 ASC NULLS LAST}
-         └─ Inner Join Est. 1360 rows
+         └─ Inner Join Est. 1007090 rows
             │     Condition: 
             │     Filter: `expr#sum(netpaid)` > `expr#multiply('0.05', avg(netpaid))`
-            ├─ MergingAggregated Est. 2721 rows
-            │  └─ Repartition Exchange Est. 5807249 rows
+            ├─ MergingAggregated Est. 2014180 rows
+            │  └─ Repartition Exchange Est. 185304517 rows
             │     │     Partition by: {c_last_name_5, c_first_name_5, s_store_name_5}
-            │     └─ Aggregating Est. 5807249 rows
+            │     └─ Aggregating Est. 185304517 rows
             │        │     Group by: {c_last_name_5, c_first_name_5, s_store_name_5}
             │        │     Aggregates: expr#sum(netpaid):=AggNull(sum)(expr#sum(ss_net_paid)_5)
             │        └─ MergingAggregated Est. 185304517 rows
@@ -125,20 +125,20 @@ Projection Est. 1360 rows
                                                    └─ TableScan tpcds1000.customer_address Est. 6000000 rows
                                                             Outputs: ca_address_sk_6:=ca_address_sk, ca_state_6:=ca_state, ca_zip_5:=ca_zip, ca_country_4:=ca_country
 note: Runtime Filter is applied for 3 times.
-Projection Est. 1360 rows
+Projection Est. 1007090 rows
 │     Expressions: c_first_name:=c_first_name_12, c_last_name:=c_last_name_12, paid:=`expr#sum(netpaid)_1`, s_store_name:=s_store_name_12
-└─ Sorting Est. 1360 rows
+└─ Sorting Est. 1007090 rows
    │     Order by: {c_last_name_12 ASC NULLS LAST, c_first_name_12 ASC NULLS LAST, s_store_name_12 ASC NULLS LAST}
-   └─ Gather Exchange Est. 1360 rows
-      └─ Sorting Est. 1360 rows
+   └─ Gather Exchange Est. 1007090 rows
+      └─ Sorting Est. 1007090 rows
          │     Order by: {c_last_name_12 ASC NULLS LAST, c_first_name_12 ASC NULLS LAST, s_store_name_12 ASC NULLS LAST}
-         └─ Inner Join Est. 1360 rows
+         └─ Inner Join Est. 1007090 rows
             │     Condition: 
             │     Filter: `expr#sum(netpaid)_1` > `expr#multiply('0.05', avg(netpaid))_1`
-            ├─ MergingAggregated Est. 2721 rows
-            │  └─ Repartition Exchange Est. 5807249 rows
+            ├─ MergingAggregated Est. 2014180 rows
+            │  └─ Repartition Exchange Est. 185304517 rows
             │     │     Partition by: {c_last_name_12, c_first_name_12, s_store_name_12}
-            │     └─ Aggregating Est. 5807249 rows
+            │     └─ Aggregating Est. 185304517 rows
             │        │     Group by: {c_last_name_12, c_first_name_12, s_store_name_12}
             │        │     Aggregates: expr#sum(netpaid)_1:=AggNull(sum)(expr#sum(ss_net_paid)_12)
             │        └─ MergingAggregated Est. 185304517 rows
@@ -177,7 +177,7 @@ Projection Est. 1360 rows
             │                    │        │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
             │                    │        │           Where: Runtime Filters: {sr_item_sk}
             │                    │        │           Outputs: sr_item_sk_22:=sr_item_sk, sr_ticket_number_28:=sr_ticket_number
-            │                    │        └─ Filter Est. 6628 rows
+            │                    │        └─ Filter Est. 6629 rows
             │                    │           │     Condition: i_color_12 = 'saddle'
             │                    │           └─ TableScan tpcds1000.item Est. 300000 rows
             │                    │                    Where: i_color = 'saddle'

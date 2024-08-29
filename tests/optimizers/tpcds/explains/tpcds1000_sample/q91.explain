@@ -31,8 +31,8 @@ Projection Est. 9289 rows
                         │     │  │  │  └─ TableScan tpcds1000_sample.catalog_returns Est. 143996756 rows
                         │     │  │  │           Where: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
                         │     │  │  │           Outputs: [cr_returned_date_sk, cr_returning_customer_sk, cr_call_center_sk, cr_net_loss]
-                        │     │  │  └─ Broadcast Exchange Est. 59903 rows
-                        │     │  │     └─ Inner Join Est. 59903 rows
+                        │     │  │  └─ Broadcast Exchange Est. 59904 rows
+                        │     │  │     └─ Inner Join Est. 59904 rows
                         │     │  │        │     Condition: ca_address_sk == c_current_addr_sk
                         │     │  │        │     Runtime Filters Builder: {c_current_addr_sk}
                         │     │  │        ├─ Repartition Exchange Est. 652402 rows
@@ -54,16 +54,16 @@ Projection Est. 9289 rows
                         │     │  │              │  └─ TableScan tpcds1000_sample.customer Est. 12000000 rows
                         │     │  │              │           Where: Runtime Filters: {c_current_cdemo_sk, c_current_hdemo_sk}
                         │     │  │              │           Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk]
-                        │     │  │              └─ Broadcast Exchange Est. 59903 rows
-                        │     │  │                 └─ Filter Est. 59903 rows
+                        │     │  │              └─ Broadcast Exchange Est. 59904 rows
+                        │     │  │                 └─ Filter Est. 59904 rows
                         │     │  │                    │     Condition: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
                         │     │  │                    └─ TableScan tpcds1000_sample.customer_demographics Est. 1920800 rows
                         │     │  │                             Where: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
                         │     │  │                             Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
-                        │     │  └─ Broadcast Exchange Est. 29 rows
-                        │     │     └─ Projection Est. 29 rows
+                        │     │  └─ Broadcast Exchange Est. 30 rows
+                        │     │     └─ Projection Est. 30 rows
                         │     │        │     Expressions: [d_date_sk]
-                        │     │        └─ Filter Est. 29 rows
+                        │     │        └─ Filter Est. 30 rows
                         │     │           │     Condition: (d_moy = 11) AND (d_year = 1998)
                         │     │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                         │     │                    Where: (d_moy = 11) AND (d_year = 1998)

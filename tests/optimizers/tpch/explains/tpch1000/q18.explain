@@ -5,48 +5,44 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 2350431780 rows
+      └─ Gather Exchange Est. 1499997424 rows
          └─ Sorting Est. 100 rows
             │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 100
-            └─ Aggregating Est. 2350431780 rows
+            └─ Aggregating Est. 1499997424 rows
                │     Group by: {c_name, o_custkey, l_orderkey, o_orderdate, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
-               └─ Inner (PARALLEL_HASH) Join Est. 2350431780 rows
-                  │     Condition: l_orderkey == o_orderkey
-                  │     Runtime Filters Builder: {o_orderkey}
-                  ├─ Repartition Exchange Est. 5999989709 rows
-                  │  │     Partition by: {l_orderkey}
-                  │  └─ Filter Est. 5999989709 rows
-                  │     │     Condition: Runtime Filters: {l_orderkey}
-                  │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                  │              Where: Runtime Filters: {l_orderkey}
-                  │              Outputs: [l_orderkey, l_quantity]
-                  └─ Repartition Exchange Est. 375000000 rows
-                     │     Partition by: {o_orderkey}
-                     └─ Inner (PARALLEL_HASH) Join Est. 375000000 rows
-                        │     Condition: o_custkey == c_custkey
-                        ├─ Repartition Exchange Est. 375000000 rows
-                        │  │     Partition by: {o_custkey}
-                        │  └─ Left Semi (PARALLEL_HASH) Join Est. 375000000 rows
-                        │     │     Condition: o_orderkey == l_orderkey_1
-                        │     │     Runtime Filters Builder: {l_orderkey_1}
-                        │     ├─ Filter Est. 1500000000 rows
-                        │     │  │     Condition: Runtime Filters: {o_orderkey}
-                        │     │  └─ TableScan tpch1000.orders Est. 1500000000 rows
-                        │     │           Where: Runtime Filters: {o_orderkey}
-                        │     │           Outputs: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
-                        │     └─ Projection Est. 269353210 rows
-                        │        │     Expressions: [l_orderkey_1]
-                        │        └─ Filter Est. 269353210 rows
-                        │           │     Condition: `expr#sum(l_quantity)` > '300'
-                        │           └─ Aggregating Est. 1077412840 rows
-                        │              │     Group by: {l_orderkey_1}
-                        │              │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
-                        │              └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                        │                       Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
-                        └─ Repartition Exchange Est. 150000000 rows
-                           │     Partition by: {c_custkey}
-                           └─ TableScan tpch1000.customer Est. 150000000 rows
-                                    Outputs: [c_custkey, c_name]
+               └─ Inner (PARALLEL_HASH) Join Est. 1499997424 rows
+                  │     Condition: o_custkey == c_custkey
+                  ├─ Repartition Exchange Est. 1499997424 rows
+                  │  │     Partition by: {o_custkey}
+                  │  └─ Inner (PARALLEL_HASH) Join Est. 1499997424 rows
+                  │     │     Condition: l_orderkey == o_orderkey
+                  │     │     Runtime Filters Builder: {o_orderkey}
+                  │     ├─ Filter Est. 5999989709 rows
+                  │     │  │     Condition: Runtime Filters: {l_orderkey}
+                  │     │  └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                  │     │           Where: Runtime Filters: {l_orderkey}
+                  │     │           Outputs: [l_orderkey, l_quantity]
+                  │     └─ Left Semi (PARALLEL_HASH) Join Est. 378000373 rows
+                  │        │     Condition: o_orderkey == l_orderkey_1
+                  │        │     Runtime Filters Builder: {l_orderkey_1}
+                  │        ├─ Filter Est. 1500000000 rows
+                  │        │  │     Condition: Runtime Filters: {o_orderkey}
+                  │        │  └─ TableScan tpch1000.orders Est. 1500000000 rows
+                  │        │           Where: Runtime Filters: {o_orderkey}
+                  │        │           Outputs: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
+                  │        └─ Projection Est. 378000373 rows
+                  │           │     Expressions: [l_orderkey_1]
+                  │           └─ Filter Est. 378000373 rows
+                  │              │     Condition: `expr#sum(l_quantity)` > '300'
+                  │              └─ Aggregating Est. 1512001491 rows
+                  │                 │     Group by: {l_orderkey_1}
+                  │                 │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
+                  │                 └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                  │                          Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
+                  └─ Repartition Exchange Est. 150000000 rows
+                     │     Partition by: {c_custkey}
+                     └─ TableScan tpch1000.customer Est. 150000000 rows
+                              Outputs: [c_custkey, c_name]
 note: Runtime Filter is applied for 2 times.

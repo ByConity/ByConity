@@ -11,18 +11,22 @@ Projection Est. 54134 rows
                └─ Aggregating Est. 54134 rows
                   │     Group by: {n_name, expr#toYear(o_orderdate)}
                   │     Aggregates: expr#sum(amount):=AggNull(sum)(expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)))
-                  └─ Projection Est. 5655342554 rows
+                  └─ Projection Est. 2881297096 rows
                      │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
-                     └─ Inner (PARALLEL_HASH) Join Est. 5655342554 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 2881297096 rows
                         │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-                        ├─ Repartition Exchange Est. 1252999480 rows
+                        ├─ Repartition Exchange Est. 906311435 rows
                         │  │     Partition by: {l_suppkey}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 1252999480 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 906311435 rows
                         │     │     Condition: o_orderkey == l_orderkey
+                        │     │     Runtime Filters Builder: {l_orderkey}
                         │     ├─ Repartition Exchange Est. 1500000000 rows
                         │     │  │     Partition by: {o_orderkey}
-                        │     │  └─ TableScan tpch1000.orders Est. 1500000000 rows
-                        │     │           Outputs: [o_orderkey, o_orderdate]
+                        │     │  └─ Filter Est. 1500000000 rows
+                        │     │     │     Condition: Runtime Filters: {o_orderkey}
+                        │     │     └─ TableScan tpch1000.orders Est. 1500000000 rows
+                        │     │              Where: Runtime Filters: {o_orderkey}
+                        │     │              Outputs: [o_orderkey, o_orderdate]
                         │     └─ Repartition Exchange Est. 899998486 rows
                         │        │     Partition by: {l_orderkey}
                         │        └─ Inner (PARALLEL_HASH) Join Est. 899998486 rows
@@ -59,4 +63,4 @@ Projection Est. 54134 rows
                                  └─ Broadcast Exchange Est. 25 rows
                                     └─ TableScan tpch1000.nation Est. 25 rows
                                              Outputs: [n_nationkey, n_name]
-note: Runtime Filter is applied for 1 times.
+note: Runtime Filter is applied for 2 times.

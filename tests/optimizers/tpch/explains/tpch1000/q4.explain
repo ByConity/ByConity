@@ -1,17 +1,17 @@
-Projection Est. 1 rows
+Projection Est. 5 rows
 │     Expressions: [o_orderpriority], order_count:=`expr#count()`
-└─ Sorting Est. 1 rows
+└─ Sorting Est. 5 rows
    │     Order by: {o_orderpriority ASC NULLS LAST}
-   └─ Gather Exchange Est. 1 rows
-      └─ Sorting Est. 1 rows
+   └─ Gather Exchange Est. 5 rows
+      └─ Sorting Est. 5 rows
          │     Order by: {o_orderpriority ASC NULLS LAST}
-         └─ MergingAggregated Est. 1 rows
-            └─ Repartition Exchange Est. 1 rows
+         └─ MergingAggregated Est. 5 rows
+            └─ Repartition Exchange Est. 5 rows
                │     Partition by: {o_orderpriority}
-               └─ Aggregating Est. 1 rows
+               └─ Aggregating Est. 5 rows
                   │     Group by: {o_orderpriority}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ Right Semi (PARALLEL_HASH) Join Est. 57353820 rows
+                  └─ Right Semi (PARALLEL_HASH) Join Est. 57353779 rows
                      │     Condition: l_orderkey == o_orderkey
                      │     Runtime Filters Builder: {o_orderkey}
                      ├─ Projection Est. 1499997427 rows
@@ -21,9 +21,9 @@ Projection Est. 1 rows
                      │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
                      │              Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
                      │              Outputs: [l_orderkey, l_commitdate, l_receiptdate]
-                     └─ Projection Est. 57353820 rows
+                     └─ Projection Est. 57353779 rows
                         │     Expressions: [o_orderkey, o_orderpriority]
-                        └─ Filter Est. 57353820 rows
+                        └─ Filter Est. 57353779 rows
                            │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
                            └─ TableScan tpch1000.orders Est. 1500000000 rows
                                     Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))

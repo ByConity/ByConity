@@ -58,10 +58,10 @@ Projection Est. 1 rows
                                              │  │  │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
                                              │  │  │           Where: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
                                              │  │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_warehouse_sk, ws_order_number, ws_ext_ship_cost, ws_net_profit]
-                                             │  │  └─ Broadcast Exchange Est. 59 rows
-                                             │  │     └─ Projection Est. 59 rows
+                                             │  │  └─ Broadcast Exchange Est. 60 rows
+                                             │  │     └─ Projection Est. 60 rows
                                              │  │        │     Expressions: [d_date_sk]
-                                             │  │        └─ Filter Est. 59 rows
+                                             │  │        └─ Filter Est. 60 rows
                                              │  │           │     Condition: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))
                                              │  │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                                              │  │                    Where: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))

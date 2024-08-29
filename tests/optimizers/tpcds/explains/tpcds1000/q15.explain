@@ -5,17 +5,17 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {ca_zip ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 4661 rows
+      └─ Gather Exchange Est. 9322 rows
          └─ Sorting Est. 100 rows
             │     Order by: {ca_zip ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 4661 rows
-               └─ Repartition Exchange Est. 4661 rows
+            └─ MergingAggregated Est. 9322 rows
+               └─ Repartition Exchange Est. 9322 rows
                   │     Partition by: {ca_zip}
-                  └─ Aggregating Est. 4661 rows
+                  └─ Aggregating Est. 9322 rows
                      │     Group by: {ca_zip}
                      │     Aggregates: expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
-                     └─ Inner (PARALLEL_HASH) Join Est. 70587275 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 35293637 rows
                         │     Condition: cs_bill_customer_sk == c_customer_sk
                         │     Filter: (cs_sales_price > 500) OR (ca_state IN ('CA', 'WA', 'GA')) OR (substring(ca_zip, 1, 5) IN ('85669', '86197', '88274', '83405', '86475', '85392', '85460', '80348', '81792'))
                         ├─ Repartition Exchange Est. 70587275 rows
@@ -28,10 +28,10 @@ Projection Est. 100 rows
                         │     │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
                         │     │           Where: Runtime Filters: {cs_sold_date_sk}
                         │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_sales_price]
-                        │     └─ Broadcast Exchange Est. 90 rows
-                        │        └─ Projection Est. 90 rows
+                        │     └─ Broadcast Exchange Est. 91 rows
+                        │        └─ Projection Est. 91 rows
                         │           │     Expressions: [d_date_sk]
-                        │           └─ Filter Est. 90 rows
+                        │           └─ Filter Est. 91 rows
                         │              │     Condition: (d_qoy = 2) AND (d_year = 2001)
                         │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
                         │                       Where: (d_qoy = 2) AND (d_year = 2001)

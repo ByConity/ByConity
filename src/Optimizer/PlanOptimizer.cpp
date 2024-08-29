@@ -156,6 +156,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<ColumnPruning>(),
         std::make_shared<UnifyNullableType>(),
 
+        std::make_shared<IterativeRewriter>(Rules::joinUsingToJoinOn(), "JoinUsingToJoinOn"),
         std::make_shared<IterativeRewriter>(Rules::sumIfToCountIf(), "SumIfToCountIf"),
 
         // remove subquery rely on specific pattern

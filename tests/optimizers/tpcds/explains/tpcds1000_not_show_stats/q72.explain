@@ -21,16 +21,16 @@ Projection
                            │     Condition: inv_item_sk == cr_item_sk, cs_order_number == cr_order_number
                            ├─ Inner Join
                            │  │     Condition: inv_warehouse_sk == w_warehouse_sk
+                           │  │     Runtime Filters Builder: {w_warehouse_sk}
                            │  ├─ Inner (PARALLEL_HASH) Join
                            │  │  │     Condition: inv_date_sk == d_date_sk_1, inv_item_sk == cs_item_sk
                            │  │  │     Filter: inv_quantity_on_hand < cs_quantity
-                           │  │  │     Runtime Filters Builder: {cs_item_sk}
                            │  │  ├─ Repartition Exchange
                            │  │  │  │     Partition by: {inv_item_sk}
                            │  │  │  └─ Filter
-                           │  │  │     │     Condition: Runtime Filters: {inv_item_sk}
+                           │  │  │     │     Condition: Runtime Filters: {inv_warehouse_sk}
                            │  │  │     └─ TableScan tpcds1000.inventory
-                           │  │  │              Where: Runtime Filters: {inv_item_sk}
+                           │  │  │              Where: Runtime Filters: {inv_warehouse_sk}
                            │  │  │              Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
                            │  │  └─ Inner Join
                            │  │     │     Condition: d_week_seq == d_week_seq_1

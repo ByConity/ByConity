@@ -1,20 +1,20 @@
-Projection Est. 6 rows
+Projection Est. 13 rows
 │     Expressions: cnt:=`expr#count()`, state:=ca_state
-└─ Limit Est. 6 rows
+└─ Limit Est. 13 rows
    │     Limit: 100
-   └─ Sorting Est. 6 rows
+   └─ Sorting Est. 13 rows
       │     Order by: {expr#count() ASC NULLS LAST, ca_state ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 6 rows
-         └─ Sorting Est. 6 rows
+      └─ Gather Exchange Est. 13 rows
+         └─ Sorting Est. 13 rows
             │     Order by: {expr#count() ASC NULLS LAST, ca_state ASC NULLS LAST}
             │     Limit: 100
-            └─ Filter Est. 6 rows
+            └─ Filter Est. 13 rows
                │     Condition: `expr#count()` >= 10
-               └─ MergingAggregated Est. 26 rows
-                  └─ Repartition Exchange Est. 26 rows
+               └─ MergingAggregated Est. 52 rows
+                  └─ Repartition Exchange Est. 52 rows
                      │     Partition by: {ca_state}
-                     └─ Aggregating Est. 26 rows
+                     └─ Aggregating Est. 52 rows
                         │     Group by: {ca_state}
                         │     Aggregates: expr#count():=AggNull(count)()
                         └─ Inner Join Est. 659722 rows
@@ -65,17 +65,17 @@ Projection Est. 6 rows
                            │                       │           Outputs: [d_date_sk, d_month_seq]
                            │                       └─ Broadcast Exchange Est. 1 rows
                            │                          └─ EnforceSingleRow Est. 1 rows
-                           │                             └─ Gather Exchange Est. 1 rows
-                           │                                └─ Projection Est. 1 rows
+                           │                             └─ Gather Exchange Est. 31 rows
+                           │                                └─ Projection Est. 31 rows
                            │                                   │     Expressions: d_month_seq_2:=cast(d_month_seq_1, 'Nullable(Int16)')
-                           │                                   └─ MergingAggregated Est. 1 rows
-                           │                                      └─ Repartition Exchange Est. 1 rows
+                           │                                   └─ MergingAggregated Est. 31 rows
+                           │                                      └─ Repartition Exchange Est. 31 rows
                            │                                         │     Partition by: {d_month_seq_1}
-                           │                                         └─ Aggregating Est. 1 rows
+                           │                                         └─ Aggregating Est. 31 rows
                            │                                            │     Group by: {d_month_seq_1}
-                           │                                            └─ Projection Est. 30 rows
+                           │                                            └─ Projection Est. 31 rows
                            │                                               │     Expressions: [d_month_seq_1]
-                           │                                               └─ Filter Est. 30 rows
+                           │                                               └─ Filter Est. 31 rows
                            │                                                  │     Condition: (d_year = 2001) AND (d_moy = 1)
                            │                                                  └─ TableScan tpcds1000.date_dim Est. 73049 rows
                            │                                                           Where: (d_year = 2001) AND (d_moy = 1)

@@ -1,19 +1,19 @@
-Projection Est. 5399 rows
+Projection Est. 2165399 rows
 │     Expressions: [P_BRAND], sum(LO_REVENUE):=`expr#sum(LO_REVENUE)`, year:=`expr#toYear(LO_ORDERDATE)`
-└─ Sorting Est. 5399 rows
+└─ Sorting Est. 2165399 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-   └─ Gather Exchange Est. 5399 rows
-      └─ Sorting Est. 5399 rows
+   └─ Gather Exchange Est. 2165399 rows
+      └─ Sorting Est. 2165399 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-         └─ MergingAggregated Est. 5399 rows
-            └─ Repartition Exchange Est. 5399 rows
+         └─ MergingAggregated Est. 2165399 rows
+            └─ Repartition Exchange Est. 2165399 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), P_BRAND}
-               └─ Aggregating Est. 5399 rows
+               └─ Aggregating Est. 2165399 rows
                   │     Group by: {expr#toYear(LO_ORDERDATE), P_BRAND}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 300034234 rows
+                  └─ Projection Est. 300034235 rows
                      │     Expressions: [LO_REVENUE, P_BRAND], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Filter Est. 300034234 rows
+                     └─ Filter Est. 300034235 rows
                         │     Condition: (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228') AND (S_REGION = 'ASIA')
                         └─ TableScan ssb1000.lineorder_flat Est. 5999989813 rows
                                  Where: (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228') AND (S_REGION = 'ASIA')

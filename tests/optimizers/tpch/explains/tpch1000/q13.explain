@@ -1,20 +1,20 @@
-Projection Est. 84805031 rows
+Projection Est. 99770626 rows
 │     Expressions: c_count:=`expr#count(o_orderkey)`, custdist:=`expr#count()`
-└─ Sorting Est. 84805031 rows
+└─ Sorting Est. 99770626 rows
    │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
-   └─ Gather Exchange Est. 84805031 rows
-      └─ Sorting Est. 84805031 rows
+   └─ Gather Exchange Est. 99770626 rows
+      └─ Sorting Est. 99770626 rows
          │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
-         └─ MergingAggregated Est. 84805031 rows
-            └─ Repartition Exchange Est. 84805031 rows
+         └─ MergingAggregated Est. 99770626 rows
+            └─ Repartition Exchange Est. 99770626 rows
                │     Partition by: {expr#count(o_orderkey)}
-               └─ Aggregating Est. 84805031 rows
+               └─ Aggregating Est. 99770626 rows
                   │     Group by: {expr#count(o_orderkey)}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ MergingAggregated Est. 84805031 rows
-                     └─ Repartition Exchange Est. 84805031 rows
+                  └─ MergingAggregated Est. 99770626 rows
+                     └─ Repartition Exchange Est. 99770626 rows
                         │     Partition by: {c_custkey}
-                        └─ Aggregating Est. 84805031 rows
+                        └─ Aggregating Est. 99770626 rows
                            │     Group by: {c_custkey}
                            │     Aggregates: expr#count(o_orderkey):=AggNull(count)(o_orderkey)
                            └─ Right (PARALLEL_HASH) Join Est. 1274999991 rows

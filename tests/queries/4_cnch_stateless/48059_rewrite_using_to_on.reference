@@ -1,0 +1,32 @@
+Projection
+└─ Gather Exchange
+   └─ Left Join
+      ├─ Repartition Exchange
+      │  └─ TableScan default.t1
+      └─ Repartition Exchange
+         └─ TableScan default.t2
+Projection
+└─ Gather Exchange
+   └─ Inner Join
+      ├─ Repartition Exchange
+      │  └─ TableScan default.t1
+      └─ Repartition Exchange
+         └─ TableScan default.t2
+Projection
+└─ Gather Exchange
+   └─ Right Join
+      ├─ Repartition Exchange
+      │  └─ Filter
+      │     └─ TableScan default.t2
+      └─ Repartition Exchange
+         └─ TableScan default.t1
+note: Runtime Filter is applied for 1 times.
+Projection
+└─ Gather Exchange
+   └─ Inner Join
+      ├─ Repartition Exchange
+      │  └─ Filter
+      │     └─ TableScan default.t2
+      └─ Repartition Exchange
+         └─ TableScan default.t1
+note: Runtime Filter is applied for 1 times.

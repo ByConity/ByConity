@@ -5,13 +5,13 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {s_store_name ASC NULLS LAST, i_item_desc ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 43199998 rows
+      └─ Gather Exchange Est. 43199999 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_store_name ASC NULLS LAST, i_item_desc ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 43199998 rows
+            └─ Inner Join Est. 43199999 rows
                │     Condition: ss_item_sk_1 == i_item_sk
-               ├─ Inner Join Est. 43199998 rows
+               ├─ Inner Join Est. 43199999 rows
                │  │     Condition: ss_store_sk_1 == s_store_sk
                │  │     Filter: `expr#sum(ss_sales_price)_1` <= ('0.1' * `expr#avg(revenue)`)
                │  ├─ Buffer Est. 135269996 rows

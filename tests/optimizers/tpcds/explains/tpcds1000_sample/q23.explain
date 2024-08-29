@@ -19,7 +19,7 @@ Projection Est. 1 rows
             │        │  └─ Right Semi (PARALLEL_HASH) Join Est. 21960485 rows
             │        │     │     Condition: i_item_sk_1 == cs_item_sk
             │        │     │     Runtime Filters Builder: {cs_item_sk}
-            │        │     ├─ Filter Est. 143861166 rows
+            │        │     ├─ Filter Est. 143861167 rows
             │        │     │  │     Condition: Runtime Filters: {i_item_sk_1}
             │        │     │  └─ CTERef[0] Est. 575444667 rows
             │        │     └─ Inner Join Est. 21960485 rows
@@ -53,7 +53,7 @@ Projection Est. 1 rows
                      │  └─ Right Semi (PARALLEL_HASH) Join Est. 11058700 rows
                      │     │     Condition: i_item_sk_2 == ws_item_sk
                      │     │     Runtime Filters Builder: {ws_item_sk}
-                     │     ├─ Filter Est. 143861166 rows
+                     │     ├─ Filter Est. 143861167 rows
                      │     │  │     Condition: Runtime Filters: {i_item_sk_2}
                      │     │  └─ CTERef[0] Est. 575444667 rows
                      │     └─ Inner Join Est. 11058700 rows
@@ -132,9 +132,9 @@ CTEDef [1]
                         └─ Aggregating Est. 11815786 rows
                            │     Group by: {ss_customer_sk_1}
                            │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_1:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_1)
-                           └─ Projection Est. 2303073773 rows
+                           └─ Projection Est. 2198216328 rows
                               │     Expressions: [ss_customer_sk_1], expr#multiply(ss_quantity, ss_sales_price)_1:=ss_quantity_1 * ss_sales_price_1
-                              └─ Inner Join Est. 2303073773 rows
+                              └─ Inner Join Est. 2198216328 rows
                                  │     Condition: ss_sold_date_sk_1 == d_date_sk_2
                                  ├─ Filter Est. 2750410684 rows
                                  │  │     Condition: isNotNull(ss_customer_sk_1)
@@ -193,7 +193,7 @@ Projection Est. 100 rows
                │                    │  └─ Right Semi (PARALLEL_HASH) Join Est. 21960485 rows
                │                    │     │     Condition: i_item_sk_6 == cs_item_sk_1
                │                    │     │     Runtime Filters Builder: {cs_item_sk_1}
-               │                    │     ├─ Filter Est. 143861166 rows
+               │                    │     ├─ Filter Est. 143861167 rows
                │                    │     │  │     Condition: Runtime Filters: {i_item_sk_6}
                │                    │     │  └─ Local Exchange Est. 575444667 rows
                │                    │     │     └─ Buffer Est. 575444667 rows
@@ -245,7 +245,7 @@ Projection Est. 100 rows
                                     │  └─ Right Semi (PARALLEL_HASH) Join Est. 11058700 rows
                                     │     │     Condition: i_item_sk_7 == ws_item_sk_1
                                     │     │     Runtime Filters Builder: {ws_item_sk_1}
-                                    │     ├─ Filter Est. 143861166 rows
+                                    │     ├─ Filter Est. 143861167 rows
                                     │     │  │     Condition: Runtime Filters: {i_item_sk_7}
                                     │     │  └─ Local Exchange Est. 575444667 rows
                                     │     │     └─ Buffer Est. 575444667 rows
@@ -325,9 +325,9 @@ CTEDef [1]
                         └─ Aggregating Est. 11815786 rows
                            │     Group by: {ss_customer_sk_7}
                            │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_9:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_7)
-                           └─ Projection Est. 2303073773 rows
+                           └─ Projection Est. 2198216328 rows
                               │     Expressions: [ss_customer_sk_7], expr#multiply(ss_quantity, ss_sales_price)_7:=ss_quantity_7 * ss_sales_price_7
-                              └─ Inner Join Est. 2303073773 rows
+                              └─ Inner Join Est. 2198216328 rows
                                  │     Condition: ss_sold_date_sk_9 == d_date_sk_12
                                  ├─ Filter Est. 2750410684 rows
                                  │  │     Condition: isNotNull(ss_customer_sk_7)

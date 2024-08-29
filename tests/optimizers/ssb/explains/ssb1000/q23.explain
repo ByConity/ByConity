@@ -1,14 +1,14 @@
-Projection Est. 3 rows
+Projection Est. 7795 rows
 │     Expressions: [C_CITY, S_CITY], revenue:=`expr#sum(LO_REVENUE)`, year:=`expr#toYear(LO_ORDERDATE)`
-└─ Sorting Est. 3 rows
+└─ Sorting Est. 7795 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-   └─ Gather Exchange Est. 3 rows
-      └─ Sorting Est. 3 rows
+   └─ Gather Exchange Est. 7795 rows
+      └─ Sorting Est. 7795 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-         └─ MergingAggregated Est. 3 rows
-            └─ Repartition Exchange Est. 3 rows
+         └─ MergingAggregated Est. 7795 rows
+            └─ Repartition Exchange Est. 7795 rows
                │     Partition by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
-               └─ Aggregating Est. 3 rows
+               └─ Aggregating Est. 7795 rows
                   │     Group by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
                   └─ Projection Est. 96991 rows

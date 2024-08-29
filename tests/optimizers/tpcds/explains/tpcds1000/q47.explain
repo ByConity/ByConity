@@ -5,39 +5,39 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#minus(sum_sales, avg_monthly_sales) ASC NULLS LAST, s_store_name_2 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 15868969 rows
+      └─ Gather Exchange Est. 588824579652219 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#minus(sum_sales, avg_monthly_sales) ASC NULLS LAST, s_store_name_2 ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 15868969 rows
+            └─ Projection Est. 588824579652219 rows
                │     Expressions: [d_moy_1, d_year_1, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1, expr#sum(ss_sales_price)_1, expr#sum(ss_sales_price)_2, expr#sum(ss_sales_price)_3, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(ss_sales_price)_1` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`
-               └─ Inner Join Est. 15868969 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 588824579652219 rows
                   │     Condition: expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 'Int128') == expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3, 1), 'Int128'), i_brand_2 == i_brand_3, i_category_2 == i_category_3, s_company_name_2 == s_company_name_3, s_store_name_2 == s_store_name_3
-                  ├─ Projection Est. 478312 rows
+                  ├─ Projection Est. 1825889781952 rows
                   │  │     Expressions: [d_moy_1, d_year_1, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1, expr#sum(ss_sales_price)_1, expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, 'Int128'):=cast(`plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1)`, 'Int128')
-                  │  └─ Inner Join Est. 478312 rows
+                  │  └─ Inner Join Est. 1825889781952 rows
                   │     │     Condition: i_brand_2 == i_brand_1, i_category_2 == i_category_1, plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1) == expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_1, s_company_name_2 == s_company_name_1, s_store_name_2 == s_store_name_1
-                  │     ├─ Projection Est. 57671 rows
+                  │     ├─ Projection Est. 112674927 rows
                   │     │  │     Expressions: [expr#sum(ss_sales_price)_2, i_brand_2, i_category_2, s_company_name_2, s_store_name_2], plus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2, 1):=`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_2` + 1
-                  │     │  └─ Buffer Est. 57671 rows
-                  │     │     └─ CTERef[1] Est. 57671 rows
-                  │     └─ Filter Est. 14417 rows
+                  │     │  └─ Buffer Est. 112674927 rows
+                  │     │     └─ CTERef[1] Est. 112674927 rows
+                  │     └─ Filter Est. 28168732 rows
                   │        │     Condition: (`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1` > 0.) AND (multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1` > 0, abs(`expr#sum(ss_sales_price)_1` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year)_1`, NULL) > 0.1) AND (d_year_1 = 1999)
-                  │        └─ Buffer Est. 57671 rows
-                  │           └─ CTERef[1] Est. 57671 rows
-                  └─ Projection Est. 57671 rows
+                  │        └─ Buffer Est. 112674927 rows
+                  │           └─ CTERef[1] Est. 112674927 rows
+                  └─ Projection Est. 112674927 rows
                      │     Expressions: [expr#sum(ss_sales_price)_3, i_brand_3, i_category_3, s_company_name_3, s_store_name_3], expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3, 1), 'Int128'):=cast(`expr#rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year ASC, d_moy ASC)_3` - 1, 'Int128')
-                     └─ Buffer Est. 57671 rows
-                        └─ CTERef[1] Est. 57671 rows
+                     └─ Buffer Est. 112674927 rows
+                        └─ CTERef[1] Est. 112674927 rows
 CTEDef [1]
-   Window Est. 57671 rows
-   └─ Window Est. 57671 rows
-      └─ Repartition Exchange Est. 57671 rows
+   Window Est. 112674927 rows
+   └─ Window Est. 112674927 rows
+      └─ Repartition Exchange Est. 112674927 rows
          │     Partition by: {i_category, i_brand, s_store_name, s_company_name}
-         └─ MergingAggregated Est. 57671 rows
-            └─ Repartition Exchange Est. 57671 rows
+         └─ MergingAggregated Est. 112674927 rows
+            └─ Repartition Exchange Est. 112674927 rows
                │     Partition by: {i_category, i_brand, s_store_name, s_company_name, d_year, d_moy}
-               └─ Aggregating Est. 57671 rows
+               └─ Aggregating Est. 112674927 rows
                   │     Group by: {i_category, i_brand, s_store_name, s_company_name, d_year, d_moy}
                   │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
                   └─ Inner Join Est. 672997744 rows

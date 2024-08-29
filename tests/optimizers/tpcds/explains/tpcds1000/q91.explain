@@ -41,9 +41,9 @@ Projection Est. 8985 rows
                         │     │        │        └─ TableScan tpcds1000.customer_address Est. 6000000 rows
                         │     │        │                 Where: ca_gmt_offset = -7. Runtime Filters: {ca_address_sk}
                         │     │        │                 Outputs: [ca_address_sk, ca_gmt_offset]
-                        │     │        └─ Repartition Exchange Est. 59903 rows
+                        │     │        └─ Repartition Exchange Est. 59904 rows
                         │     │           │     Partition by: {c_current_addr_sk}
-                        │     │           └─ Inner Join Est. 59903 rows
+                        │     │           └─ Inner Join Est. 59904 rows
                         │     │              │     Condition: c_current_cdemo_sk == cd_demo_sk
                         │     │              │     Runtime Filters Builder: {cd_demo_sk}
                         │     │              ├─ Repartition Exchange Est. 1800000 rows
@@ -64,17 +64,17 @@ Projection Est. 8985 rows
                         │     │              │              └─ TableScan tpcds1000.household_demographics Est. 7200 rows
                         │     │              │                       Where: hd_buy_potential LIKE 'Unknown%'
                         │     │              │                       Outputs: [hd_demo_sk, hd_buy_potential]
-                        │     │              └─ Repartition Exchange Est. 59903 rows
+                        │     │              └─ Repartition Exchange Est. 59904 rows
                         │     │                 │     Partition by: {cd_demo_sk}
-                        │     │                 └─ Filter Est. 59903 rows
+                        │     │                 └─ Filter Est. 59904 rows
                         │     │                    │     Condition: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
                         │     │                    └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
                         │     │                             Where: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
                         │     │                             Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
-                        │     └─ Broadcast Exchange Est. 29 rows
-                        │        └─ Projection Est. 29 rows
+                        │     └─ Broadcast Exchange Est. 30 rows
+                        │        └─ Projection Est. 30 rows
                         │           │     Expressions: [d_date_sk]
-                        │           └─ Filter Est. 29 rows
+                        │           └─ Filter Est. 30 rows
                         │              │     Condition: (d_moy = 11) AND (d_year = 1998)
                         │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
                         │                       Where: (d_moy = 11) AND (d_year = 1998)

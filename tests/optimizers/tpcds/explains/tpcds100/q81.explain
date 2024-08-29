@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, ca_street_number ASC NULLS LAST, ca_street_name ASC NULLS LAST, ca_street_type ASC NULLS LAST, ca_suite_number ASC NULLS LAST, ca_city ASC NULLS LAST, ca_county ASC NULLS LAST, ca_state_2 ASC NULLS LAST, ca_zip ASC NULLS LAST, ca_country ASC NULLS LAST, ca_gmt_offset ASC NULLS LAST, ca_location_type ASC NULLS LAST, expr#sum(cr_return_amt_inc_tax)_1 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 71173 rows
+      └─ Gather Exchange Est. 71174 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, ca_street_number ASC NULLS LAST, ca_street_name ASC NULLS LAST, ca_street_type ASC NULLS LAST, ca_suite_number ASC NULLS LAST, ca_city ASC NULLS LAST, ca_county ASC NULLS LAST, ca_state_2 ASC NULLS LAST, ca_zip ASC NULLS LAST, ca_country ASC NULLS LAST, ca_gmt_offset ASC NULLS LAST, ca_location_type ASC NULLS LAST, expr#sum(cr_return_amt_inc_tax)_1 ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 71173 rows
+            └─ Inner Join Est. 71174 rows
                │     Condition: ca_state_1 == ca_state_3
                │     Filter: `expr#sum(cr_return_amt_inc_tax)_1` > (`expr#avg(ctr_total_return)_1` * '1.2')
                ├─ Inner Join Est. 142347 rows
