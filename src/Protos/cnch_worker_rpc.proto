@@ -630,10 +630,7 @@ service CnchWorkerService
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
   rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
   rpc dropPartDiskCache(DropPartDiskCacheReq) returns (DropPartDiskCacheResp);
-<<<<<<< HEAD
-=======
   rpc dropMemoryDictCache(DropMemoryDictCacheReq) returns (DropMemoryDictCacheResp);
 
   rpc executeDedupTask(ExecuteDedupTaskReq) returns (ExecuteDedupTaskResp);
->>>>>>> 329e77b1a6 (Merge branch 'lta@ETL_perf_optimize4cnch-dev' into 'cnch-dev')
 }

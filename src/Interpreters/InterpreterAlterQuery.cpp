@@ -408,7 +408,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
         }
         case ASTAlterCommand::ATTACH_PARTITION:
         case ASTAlterCommand::ATTACH_DETACHED_PARTITION:
-        {
+        case ASTAlterCommand::PREATTACH_PARTITION: {
             required_access.emplace_back(AccessType::INSERT, database, table);
             break;
         }

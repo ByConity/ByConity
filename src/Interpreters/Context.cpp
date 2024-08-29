@@ -1523,7 +1523,7 @@ void Context::setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_sett
 }
 
 
-void Context::initResourceGroupManager(const ConfigurationPtr & config)
+void Context::initResourceGroupManager(const ConfigurationPtr & )
 {
     LOG_DEBUG(shared->log, "Skip initialize resource group");
 
