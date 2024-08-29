@@ -494,7 +494,9 @@ void HTTPHandler::processQuery(
 
         session = context->acquireNamedSession(session_id, session_timeout, session_check == "1");
 
-        context->copyFrom(session->context);  /// FIXME: maybe move this part to HandleRequest(), copyFrom() is used only here.
+        /// FIXME: maybe move this part to HandleRequest()
+        /// see also https://github.com/ClickHouse/ClickHouse/pull/26864
+        context = Context::createCopy(session->context);
         context->setSessionContext(session->context);
     }
 
