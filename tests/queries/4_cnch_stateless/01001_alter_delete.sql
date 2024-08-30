@@ -65,6 +65,7 @@ CREATE TABLE wrong_column_row_exists(k Int32, _row_exists Int32) ENGINE = CnchMe
 
 SELECT '----- TRIVIAL COUNT AFTER DELETING DATA -----';
 CREATE TABLE t_delete_and_trivial_count(d Date, k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d ORDER BY k;
+SYSTEM START MERGES t_delete_and_trivial_count;
 INSERT INTO t_delete_and_trivial_count SELECT '2024-01-01', number, number FROM numbers(5);
 INSERT INTO t_delete_and_trivial_count SELECT '2024-01-02', number, number FROM numbers(5);
 ALTER TABLE t_delete_and_trivial_count DELETE WHERE m < 3;
@@ -75,6 +76,7 @@ SELECT count() FROM t_delete_and_trivial_count WHERE _partition_id = '20240102' 
 DROP TABLE t_delete_and_trivial_count
 
 CREATE TABLE t_delete_and_trivial_count_u(d Date, k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d ORDER BY k UNIQUE KEY k;
+SYSTEM START MERGES t_delete_and_trivial_count_u;
 INSERT INTO t_delete_and_trivial_count_u SELECT '2024-01-01', number, number FROM numbers(5);
 INSERT INTO t_delete_and_trivial_count_u SELECT '2024-01-02', number, number FROM numbers(5);
 ALTER TABLE t_delete_and_trivial_count_u DELETE WHERE m < 3; -- { serverError 36 }

@@ -60,6 +60,7 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         {"name", std::make_shared<DataTypeString>()},
         {"bytes_on_disk", std::make_shared<DataTypeUInt64>()},
         {"rows_count", std::make_shared<DataTypeUInt64>()},
+        {"delete_rows", std::make_shared<DataTypeUInt64>()},
         {"columns", std::make_shared<DataTypeString>()},
         {"marks_count", std::make_shared<DataTypeUInt64>()},
         {"index_granularity", std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
@@ -203,14 +204,22 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         }
 
         /// use committed visibility to include dropped parts (and exclude intermediates) in system table
-        auto all_parts = enable_filter_by_partition
-            ? cnch_catalog->getServerDataPartsInPartitions(table, {only_selected_partition_id}, start_time, nullptr, Catalog::VisibilityLevel::Committed)
-            : cnch_catalog->getAllServerDataParts(table, start_time, nullptr, Catalog::VisibilityLevel::Committed);
-
-        const FormatSettings format_settings;
+        auto [all_parts, all_bitmaps] = enable_filter_by_partition
+            ? cnch_catalog->getServerDataPartsInPartitionsWithDBM(table, {only_selected_partition_id}, start_time, nullptr, Catalog::VisibilityLevel::Committed)
+            : cnch_catalog->getAllServerDataPartsWithDBM(table, start_time, nullptr, Catalog::VisibilityLevel::Committed);
 
         ServerDataPartsVector visible_parts;
         CnchPartsHelper::calcPartsForGC(all_parts, nullptr, &visible_parts);
+
+        if (visible_parts.empty())
+            continue;
+
+        if (cnch_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
+        {
+            cnch_merge_tree->getDeleteBitmapMetaForServerParts(visible_parts, all_bitmaps, /*force_found*/false);
+        }
+
+        const FormatSettings format_settings;
 
         for (auto & part : visible_parts)
         {
@@ -229,7 +238,9 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 }
                 res_columns[col_num++]->insert(curr_part->name());
                 res_columns[col_num++]->insert(curr_part->part_model().size());
-                res_columns[col_num++]->insert(curr_part->part_model().rows_count());
+                auto delete_rows = curr_part->deletedRowsCount(*cnch_merge_tree, /*ignore_error*/true);
+                res_columns[col_num++]->insert(curr_part->part_model().rows_count() - delete_rows);
+                res_columns[col_num++]->insert(delete_rows);
                 res_columns[col_num++]->insert(curr_part->part_model().columns());
                 res_columns[col_num++]->insert(curr_part->part_model().marks_count());
                 Array index_granularity;

@@ -94,7 +94,7 @@ public:
 
     mutable std::forward_list<DataModelDeleteBitmapPtr> delete_bitmap_metas;
 
-    UInt64 deletedRowsCount(const MergeTreeMetaBase & storage) const;
+    UInt64 deletedRowsCount(const MergeTreeMetaBase & storage, bool ignore_error = false) const;
 
     const ImmutableDeleteBitmapPtr & getDeleteBitmap(const MergeTreeMetaBase & storage, bool is_unique_new_part) const;
 

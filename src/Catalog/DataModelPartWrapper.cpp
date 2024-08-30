@@ -196,14 +196,23 @@ void ServerDataPart::setVirtualPartSize(const UInt64 & vp_size) const { virtual_
 
 UInt64 ServerDataPart::getVirtualPartSize() const { return virtual_part_size; }
 
-UInt64 ServerDataPart::deletedRowsCount(const MergeTreeMetaBase & storage) const
+UInt64 ServerDataPart::deletedRowsCount(const MergeTreeMetaBase & storage, bool ignore_error) const
 {
     UInt64 res = 0;
     /// For unique table, deletedRowsCount is calculated from delete_bitmap.
     if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
     {
         if (delete_bitmap_metas.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap meta for part {} is empty whose engine is unique table, it's a bug!", name());
+        {
+            if (ignore_error)
+            {
+                LOG_DEBUG(storage.getLogger(), "Delete bitmap meta for part {} is empty whose engine is unique table, it's a bug!", name());
+                return 0;
+            }
+            else
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap meta for part {} is empty whose engine is unique table, it's a bug!", name());
+
+        }
 
         for (const auto & delete_bitmap_meta: delete_bitmap_metas)
             res += delete_bitmap_meta->cardinality();

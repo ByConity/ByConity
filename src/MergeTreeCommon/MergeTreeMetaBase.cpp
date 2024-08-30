@@ -2281,7 +2281,7 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
     return res_partitions;
 }
 
-void MergeTreeMetaBase::getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & all_bitmaps) const
+void MergeTreeMetaBase::getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & all_bitmaps, bool force_found) const
 {
     DeleteBitmapMetaPtrVector bitmaps;
     CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
@@ -2290,47 +2290,86 @@ void MergeTreeMetaBase::getDeleteBitmapMetaForServerParts(const ServerDataPartsV
     auto bitmap_it = bitmaps.begin();
     for (const auto & part : parts)
     {
-        /// search for the first bitmap
-        while (bitmap_it != bitmaps.end() && !(*bitmap_it)->sameBlock(part->info()))
+        if (force_found)
+        {
+            /// search for the first bitmap
+            while (bitmap_it != bitmaps.end() && !(*bitmap_it)->sameBlock(part->info()))
+                bitmap_it++;
+
+            if (bitmap_it == bitmaps.end())
+            {
+                if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+                {
+                    auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                    current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                    current_log.event_msg = "Delete bitmap metadata of " + part->name() + " is not found";
+                    unique_table_log->add(current_log);
+                }
+                throw Exception("Delete bitmap metadata of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
+            }
+
+            /// add all visible bitmaps (from new to old) part
+            bool found_base = false;
+            auto list_it = part->delete_bitmap_metas.before_begin();
+            for (auto bitmap_meta = *bitmap_it; bitmap_meta; bitmap_meta = bitmap_meta->tryGetPrevious())
+            {
+                list_it = part->delete_bitmap_metas.insert_after(list_it, bitmap_meta->getModel());
+                if (bitmap_meta->getType() == DeleteBitmapMetaType::Base)
+                {
+                    found_base = true;
+                    break;
+                }
+            }
+            if (!found_base)
+            {
+                if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+                {
+                    auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                    current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                    current_log.event_msg = "Base delete bitmap of " + part->name() + " is not found";
+                    unique_table_log->add(current_log);
+                }
+                throw Exception("Base delete bitmap of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
+            }
+
             bitmap_it++;
-
-        if (bitmap_it == bitmaps.end())
-        {
-            if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
-            {
-                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
-                current_log.metric = ErrorCodes::LOGICAL_ERROR;
-                current_log.event_msg = "Delete bitmap metadata of " + part->name() + " is not found";
-                unique_table_log->add(current_log);
-            }
-            throw Exception("Delete bitmap metadata of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
         }
-
-        /// add all visible bitmaps (from new to old) part
-        bool found_base = false;
-        auto list_it = part->delete_bitmap_metas.before_begin();
-        for (auto bitmap_meta = *bitmap_it; bitmap_meta; bitmap_meta = bitmap_meta->tryGetPrevious())
+        else
         {
-            list_it = part->delete_bitmap_metas.insert_after(list_it, bitmap_meta->getModel());
-            if (bitmap_meta->getType() == DeleteBitmapMetaType::Base)
+            while (bitmap_it != bitmaps.end() && (*(*bitmap_it)) <= part->info())
             {
-                found_base = true;
-                break;
+                if (!(*bitmap_it)->sameBlock(part->info()))
+                    bitmap_it++;
+                else
+                {
+                    /// add all visible bitmaps (from new to old) part
+                    bool found_base = false;
+                    auto list_it = part->delete_bitmap_metas.before_begin();
+                    for (auto bitmap_meta = *bitmap_it; bitmap_meta; bitmap_meta = bitmap_meta->tryGetPrevious())
+                    {
+                        list_it = part->delete_bitmap_metas.insert_after(list_it, bitmap_meta->getModel());
+                        if (bitmap_meta->getType() == DeleteBitmapMetaType::Base)
+                        {
+                            found_base = true;
+                            break;
+                        }
+                    }
+                    if (!found_base)
+                    {
+                        if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
+                        {
+                            auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
+                            current_log.metric = ErrorCodes::LOGICAL_ERROR;
+                            current_log.event_msg = "Base delete bitmap of " + part->name() + " is not found";
+                            unique_table_log->add(current_log);
+                        }
+                        throw Exception("Base delete bitmap of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
+                    }
+                    bitmap_it++;
+                }
             }
         }
-        if (!found_base)
-        {
-            if (auto unique_table_log = getContext()->getCloudUniqueTableLog())
-            {
-                auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, getCnchStorageID());
-                current_log.metric = ErrorCodes::LOGICAL_ERROR;
-                current_log.event_msg = "Base delete bitmap of " + part->name() + " is not found";
-                unique_table_log->add(current_log);
-            }
-            throw Exception("Base delete bitmap of " + part->name() + " is not found", ErrorCodes::LOGICAL_ERROR);
-        }
-
-        bitmap_it++;
+        
     }
 }
 

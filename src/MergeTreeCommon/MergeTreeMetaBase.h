@@ -461,7 +461,7 @@ public:
     /**
      * @param parts input parts, must be sorted in PartComparator order
      */
-    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas) const;
+    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true) const;
     void getDeleteBitmapMetaForCnchParts(MutableMergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
