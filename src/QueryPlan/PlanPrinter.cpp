@@ -153,6 +153,11 @@ String PlanPrinter::textLogicalPlan(
         output += ".";
     }
 
+    if (plan.isShortCircuit())
+    {
+        output += "note: Short Circuit is applied.\n";
+    }
+
     return output;
 }
 

@@ -1223,30 +1223,36 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         options.ignoreProjections();
 
     stage_watch.restart();
-    ASTPtr partition_filter;
-    auto mutable_context = Context::createCopy(build_context.context);
-    if (query_info.partition_filter)
-        partition_filter = query_info.partition_filter->clone();
-    // FIXME: It is used to work around partition keys being chosen as PREWHERE. In long term, we should rely on
-    // enable_partition_filter_push_down = 1 to do the stuff
-    if (mutable_context->getSettingsRef().remove_partition_filter_on_worker)
-        mutable_context->setSetting("enable_partition_filter_push_down", 1U);
+    if (build_context.context->getSettingsRef().enable_table_scan_build_pipeline_optimization)
+    {
+        fillQueryInfoV2(build_context.context);
+    }
+    else
+    {
+        ASTPtr partition_filter;
+        auto mutable_context = Context::createCopy(build_context.context);
+        if (query_info.partition_filter)
+            partition_filter = query_info.partition_filter->clone();
+        // FIXME: It is used to work around partition keys being chosen as PREWHERE. In long term, we should rely on
+        // enable_partition_filter_push_down = 1 to do the stuff
+        if (mutable_context->getSettingsRef().remove_partition_filter_on_worker)
+            mutable_context->setSetting("enable_partition_filter_push_down", 1U);
 
-    options.cache_info = query_info.cache_info;
-    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, mutable_context, options);
-    interpreter->execute(true);
-    auto backup_input_order_info = query_info.input_order_info;
-    query_info = interpreter->getQueryInfo();
-    query_info = fillQueryInfo(build_context.context);
-    query_info.input_order_info = backup_input_order_info;
+        options.cache_info = query_info.cache_info;
+        auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, mutable_context, options);
+        interpreter->execute(true);
+        auto backup_input_order_info = query_info.input_order_info;
+        query_info = interpreter->getQueryInfo();
+        query_info = fillQueryInfo(build_context.context);
+        query_info.input_order_info = backup_input_order_info;
+        if (partition_filter)
+            query_info.partition_filter = partition_filter;
+    }
     LOG_DEBUG(log, "init pipeline stage run time: make up query info, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
     // always do filter underneath, as WHERE filter won't reuse PREWHERE result in optimizer mode
     if (query_info.prewhere_info)
         query_info.prewhere_info->need_filter = true;
-
-    if (partition_filter)
-        query_info.partition_filter = partition_filter;
 
     if (use_projection_index)
     {
@@ -1319,7 +1325,13 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         }
         // flag = Output
         auto pipe = storage->read(
-            interpreter->getRequiredColumns(), storage_snapshot, query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
+            getRequiredColumns(),
+            storage_snapshot,
+            query_info,
+            build_context.context,
+            QueryProcessingStage::Enum::FetchColumns,
+            max_block_size,
+            max_streams);
 
         if (pipe.getCacheHolder())
             pipeline.addCacheHolder(pipe.getCacheHolder());
@@ -2001,5 +2013,37 @@ bool TableScanStep::hasFunctionCanUseBitmapIndex() const
             return true;
     }
     return false;
+}
+
+void TableScanStep::fillQueryInfoV2(ContextPtr context)
+{
+    assert(storage);
+    auto required_columns = getRequiredColumns();
+    auto metadata_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+    auto block = metadata_snapshot->getSampleBlockForColumns(required_columns);
+
+    /// 1. build tree rewriter result
+    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(block.getNamesAndTypesList(), storage, metadata_snapshot);
+    syntax_analyzer_result->analyzed_join = std::make_shared<TableJoin>();
+    query_info.syntax_analyzer_result = syntax_analyzer_result;
+
+    /// 2. build prepared sets
+    if (auto where = query_info.getSelectQuery()->where())
+        makeSetsForIndex(where, context, query_info.sets);
+    if (auto prewhere = query_info.getSelectQuery()->prewhere())
+        makeSetsForIndex(prewhere, context, query_info.sets);
+    // TODO: atomic_predicates_expr
+    if (query_info.partition_filter)
+        makeSetsForIndex(query_info.partition_filter, context, query_info.sets);
+
+    /// 3. build prewhere info
+    if (auto prewhere = query_info.getSelectQuery()->prewhere())
+    {
+        auto prewhere_action = IQueryPlanStep::createFilterExpressionActions(context, prewhere, block);
+        query_info.prewhere_info = std::make_shared<PrewhereInfo>(prewhere_action, prewhere->getColumnName());
+    }
+
+    /// 4. build index context
+    query_info.index_context = std::make_shared<MergeTreeIndexContext>();
 }
 }
