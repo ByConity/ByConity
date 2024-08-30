@@ -656,18 +656,18 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null)
     return getCombinedDeleteBitmapForNormalTable(allow_null);
 }
 
-MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter() const
+MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter(size_t & out_file_size) const
 {
     ProfileEvents::increment(ProfileEvents::LoadDataPartFooter);
     const String data_file_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    size_t data_file_size = volume->getDisk()->getFileSize(data_file_path);
+    out_file_size = volume->getDisk()->getFileSize(data_file_path);
 
     auto data_file = openForReading(volume->getDisk(), data_file_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE, "footer");
 
     if (!parent_part)
     {
-        data_file->setReadUntilPosition(data_file_size);
-        data_file->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+        data_file->setReadUntilPosition(out_file_size);
+        data_file->seek(out_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
     }
     else
     {
@@ -843,7 +843,8 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(
         return checksums;
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    auto data_footer = loadPartDataFooter();
+    size_t cnch_file_size = 0;
+    auto data_footer = loadPartDataFooter(cnch_file_size);
     const auto & checksum_file = data_footer["checksums.txt"];
 
     if (checksum_file.file_size == 0 /* && isDeleted() */)
@@ -855,11 +856,6 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(
     if (checksums->read(buf))
     {
         assertEOF(buf);
-        /// bytes_on_disk += delta_checksums->getTotalSizeOnDisk();
-    }
-    else
-    {
-        /// bytes_on_disk += delta_checksums->getTotalSizeOnDisk();
     }
 
     // merge with data footer
@@ -907,6 +903,9 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
+
+    if (!bytes_on_disk)
+        bytes_on_disk = cnch_file_size;
 
     return checksums;
 }
@@ -1031,7 +1030,8 @@ void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_h
     if (flags & IMergeTreeDataPart::LOW_PRIORITY_FLAG)
         low_priority = true;
 
-    readVarUInt(bytes_on_disk, buf);
+    size_t skip_bytes_on_disk;
+    readVarUInt(skip_bytes_on_disk, buf);
     readVarUInt(rows_count, buf);
     size_t marks_count = 0;
     readVarUInt(marks_count, buf);
