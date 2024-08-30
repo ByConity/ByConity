@@ -157,19 +157,6 @@ void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
         auto failed_worker = segment_parallel_locations[segment_id][parallel_index];
         failed_workers[segment_id].insert(failed_worker);
-        auto iter = pending_task_instances.for_nodes[failed_worker].begin();
-        while (iter != pending_task_instances.for_nodes[failed_worker].end())
-        {
-            if (iter->task_id == segment_id)
-            {
-                pending_task_instances.no_prefs.insert({iter->task_id, iter->parallel_index});
-                iter = pending_task_instances.for_nodes[failed_worker].erase(iter);
-            }
-            else
-            {
-                iter++;
-            }
-        }
     }
 }
 
