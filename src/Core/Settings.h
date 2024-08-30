@@ -1979,6 +1979,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_parquet_coalesce_read, true, "Merge small IO ranges, See arrow::ReadRangeCache", 0) \
     M(Bool, input_format_parquet_use_lazy_io_cache, true, "Lazy caching will trigger io requests when they are requested for the first time. See arrow::ReadRangeCache", 0) \
     M(Bool, input_format_orc_filter_push_down, true, "When reading Orc files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
+    M(DateTimeOverflowBehavior, date_time_overflow_behavior, "ignore", "Overflow mode for Date, Date32, DateTime, DateTime64 types. Possible values: 'ignore', 'throw', 'saturate'.", 0) \
     \
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_arrow_import_nested, false, "Allow to insert array of structs into Nested table in Arrow input format.", 0) \
