@@ -499,8 +499,8 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
         // value, readnothing, system table
         if (plan_segment_ptr->getPlanSegmentInputs().empty())
         {
-            graph_ptr->sources.insert(plan_segment_ptr->getPlanSegmentId());
-            graph_ptr->any_tables.insert(plan_segment_ptr->getPlanSegmentId());
+            graph_ptr->leaf_segments.insert(plan_segment_ptr->getPlanSegmentId());
+            // graph_ptr->segments_has_table_scan.insert(plan_segment_ptr->getPlanSegmentId());
         }
         // source
         if (!plan_segment_ptr->getPlanSegmentInputs().empty())
@@ -515,9 +515,9 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                     any_tables = true;
             }
             if (all_tables)
-                graph_ptr->sources.insert(plan_segment_ptr->getPlanSegmentId());
+                graph_ptr->leaf_segments.insert(plan_segment_ptr->getPlanSegmentId());
             if (any_tables)
-                graph_ptr->any_tables.insert(plan_segment_ptr->getPlanSegmentId());
+                graph_ptr->segments_has_table_scan.insert(plan_segment_ptr->getPlanSegmentId());
         }
         // final stage
         if (plan_segment_ptr->getPlanSegmentOutput()->getPlanSegmentType() == PlanSegmentType::OUTPUT)
@@ -549,9 +549,9 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
         }
     }
     // do some check
-    // 1. check source or final is empty
-    if (graph_ptr->sources.empty())
-        throw Exception("Logical error: source is empty", ErrorCodes::LOGICAL_ERROR);
+    // 1. check if leaf segments or the final is empty
+    if (graph_ptr->leaf_segments.empty())
+        throw Exception("Logical error: no leaf segment", ErrorCodes::LOGICAL_ERROR);
     if (graph_ptr->final == std::numeric_limits<size_t>::max())
         throw Exception("Logical error: final is empty", ErrorCodes::LOGICAL_ERROR);
 
@@ -656,7 +656,7 @@ PlanSegmentSet SegmentScheduler::getIOPlanSegmentInstanceIDs(const String & quer
         throw Exception("query_id-" + query_id + " does not exist in scheduler query map", ErrorCodes::LOGICAL_ERROR);
     const auto & dag_ptr = iter->second;
     PlanSegmentSet res;
-    for (auto && segment_id : dag_ptr->any_tables)
+    for (auto && segment_id : dag_ptr->segments_has_table_scan)
     {
         /// wont wait for final segment, because it is already logged in progress_callback
         if (segment_id != dag_ptr->final)
