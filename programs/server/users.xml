@@ -21,6 +21,10 @@
             <background_schedule_pool_size>6</background_schedule_pool_size>
         </default>
 
+        <test_optimizer_ab_test>
+            <enable_optimizer>1</enable_optimizer>
+        </test_optimizer_ab_test>
+
         <!-- Profile that allows only read queries. -->
         <readonly>
             <readonly>1</readonly>

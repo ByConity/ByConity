@@ -128,10 +128,11 @@
 #include <Common/SensitiveDataMasker.h>
 #include <Interpreters/Context_fwd.h>
 
-#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
-#include <Interpreters/DistributedStages/MPPQueryManager.h>
-#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/ClientInfo.h>
 #include <Interpreters/InterpreterPerfectShard.h>
+#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/MPPQueryManager.h>
+#include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <CloudServices/CnchServerResource.h>
 
 #include <Processors/Formats/IOutputFormat.h>
@@ -914,7 +915,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         // apply ab test profile for query
-        if (!internal)
+        if (!internal && context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
             InterpreterSetQuery::applyABTestProfile(context);
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
