@@ -11,6 +11,9 @@ SELECT arrayJoin(['hello', 'world']) NOT LIKE 'hell_';
 SELECT '_hello' NOT LIKE '\_hello';
 SELECT '%hello' NOT LIKE '\%hello';
 
+SELECT 'hello' NOT LIKE Null;
+SELECT 'hello' LIKE Null;
+
 set enable_optimizer=1;
 set rewrite_like_function=1;
 EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) LIKE 'hello';

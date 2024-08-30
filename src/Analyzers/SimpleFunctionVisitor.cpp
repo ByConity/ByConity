@@ -3,6 +3,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <DataTypes/DataTypeString.h>
 #include <Interpreters/convertFieldToType.h>
+#include "common/types.h"
 
 
 namespace DB
@@ -27,7 +28,11 @@ void SimpleFunctionVisitor::visit(ASTFunction * func)
     if ((func->name == "like" || func->name == "notLike") &&
         func->arguments->children.size() == 2 && func->arguments->children[1]->as<ASTLiteral>())
     {
-        Field converted = convertFieldToType(func->arguments->children[1]->as<ASTLiteral>()->value, DataTypeString());
+        auto & pattern = func->arguments->children[1]->as<ASTLiteral>()->value;
+        if (pattern.getType() != Field::Types::String)
+            return;
+
+        Field converted = convertFieldToType(pattern, DataTypeString());
         String text = converted.safeGet<String>();
 
         for (auto & s : text)
