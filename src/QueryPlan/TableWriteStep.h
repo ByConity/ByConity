@@ -18,7 +18,7 @@ public:
         INSERT,
     };
 
-    TableWriteStep(const DataStream & input_stream_, TargetPtr target_);
+    TableWriteStep(const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_ = false);
 
     String getName() const override
     {
@@ -43,6 +43,8 @@ public:
 
     void allocate(const ContextPtr & context);
 
+    bool isOutputProfiles() const { return insert_select_with_profiles; }
+
     void toProto(Protos::TableWriteStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<TableWriteStep> fromProto(const Protos::TableWriteStep & proto, ContextPtr context);
 
@@ -58,6 +60,7 @@ private:
         ASTPtr query);
 
     TargetPtr target;
+    bool insert_select_with_profiles;
 };
 
 class TableWriteStep::Target
