@@ -194,6 +194,10 @@ StorageCnchMergeTree::StorageCnchMergeTree(
         [](const String &) {})
     , CnchStorageCommonHelper(table_id_, getDatabaseName(), getTableName())
 {
+    setServerVwName(getSettings()->cnch_server_vw);
+    setProperties(metadata_, metadata_, false);
+    checkTTLExpressions(metadata_, metadata_);
+
     String relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)
                                      ->getAnyDisk()
                                      ->getTableRelativePathOnDisk(UUIDHelpers::UUIDToString(table_id_.uuid));
@@ -1404,13 +1408,22 @@ void StorageCnchMergeTree::collectResource(
     const String & local_table_name,
     const std::set<Int64> & required_bucket_numbers,
     const StorageSnapshotPtr & storage_snapshot,
-    WorkerEngineType /*engine_type*/,
+    WorkerEngineType engine_type,
     bool replicated)
 {
     auto cnch_resource = local_context->getCnchServerResource();
-    auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
+    if (local_context->getSettingsRef().send_cacheable_table_definitions)
+    {
+        String local_dictionary_tables;
+        cnch_resource->addCacheableCreateQuery(shared_from_this(), local_table_name, engine_type, local_dictionary_tables);
+    }
+    else
+    {
+        auto create_table_query = getCreateQueryForCloudTable(
+            getCreateTableSql(), local_table_name, local_context, false, std::nullopt, {}, {}, engine_type);
+        cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
+    }
 
-    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
 
     // if (local_context.getSettingsRef().enable_virtual_part)
     //     setVirtualPartSize(local_context, parts, worker_group->getReadWorkers().size());

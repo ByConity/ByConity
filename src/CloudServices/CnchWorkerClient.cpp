@@ -420,8 +420,24 @@ brpc::CallId CnchWorkerClient::sendResources(
     {
         if (!resource.sent_create_query)
         {
-            request.add_create_queries(resource.create_table_query);
-            request.add_dynamic_object_column_schema(resource.object_columns.toString());
+            const auto & def = resource.table_definition;
+            if (resource.table_definition.cacheable)
+            {
+                auto * cacheable = request.add_cacheable_create_queries();
+                RPCHelpers::fillStorageID(resource.storage->getStorageID(), *cacheable->mutable_storage_id());
+                cacheable->set_definition(def.definition);
+                if (!resource.object_columns.empty())
+                    cacheable->set_dynamic_object_column_schema(resource.object_columns.toString());
+                cacheable->set_local_engine_type(static_cast<UInt32>(def.engine_type));
+                cacheable->set_local_table_name(def.local_table_name);
+                if (!def.underlying_dictionary_tables.empty())
+                    cacheable->set_local_underlying_dictionary_tables(def.underlying_dictionary_tables);
+            }
+            else
+            {
+                request.add_create_queries(def.definition);
+                request.add_dynamic_object_column_schema(resource.object_columns.toString());
+            }
         }
 
         /// parts
@@ -442,7 +458,7 @@ brpc::CallId CnchWorkerClient::sendResources(
         }
 
         table_data_parts.set_database(resource.storage->getDatabaseName());
-        table_data_parts.set_table(resource.worker_table_name);
+        table_data_parts.set_table(resource.table_definition.local_table_name);
         if (resource.table_version)
         {
             require_worker_info = true;

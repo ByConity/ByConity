@@ -22,6 +22,7 @@
 #include <CloudServices/DedupWorkerStatus.h>
 #include <Common/Stopwatch.h>
 #include <Common/Configurations.h>
+#include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
@@ -76,6 +77,12 @@
 namespace ProfileEvents
 {
 extern const Event PreloadExecTotalOps;
+}
+
+namespace ProfileEvents
+{
+    extern const Event QueryCreateTablesMicroseconds;
+    extern const Event QuerySendResourcesMicroseconds;
 }
 
 namespace DB
@@ -740,6 +747,7 @@ void CnchWorkerServiceImpl::sendResources(
 
         /// store cloud tables in cnch_session_resource.
         {
+            Stopwatch create_timer;
             /// create a copy of session_context to avoid modify settings in SessionResource
             auto context_for_create = Context::createCopy(query_context);
             for (int i = 0; i < request->create_queries_size(); i++)
@@ -749,9 +757,24 @@ void CnchWorkerServiceImpl::sendResources(
 
                 worker_resource->executeCreateQuery(context_for_create, create_query, false, ColumnsDescription::parse(object_columns));
             }
-
-
-            LOG_DEBUG(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
+            for (int i = 0; i < request->cacheable_create_queries_size(); i++)
+            {
+                auto & item = request->cacheable_create_queries().at(i);
+                ColumnsDescription object_columns;
+                if (item.has_dynamic_object_column_schema())
+                    object_columns = ColumnsDescription::parse(item.dynamic_object_column_schema());
+                worker_resource->executeCacheableCreateQuery(
+                    context_for_create,
+                    RPCHelpers::createStorageID(item.storage_id()),
+                    item.definition(),
+                    item.local_table_name(),
+                    static_cast<WorkerEngineType>(item.local_engine_type()),
+                    item.local_underlying_dictionary_tables(),
+                    object_columns);
+            }
+            create_timer.stop();
+            LOG_INFO(log, "Prepared {} tables for session {} in {} us", request->create_queries_size() + request->cacheable_create_queries_size(), request->txn_id(), create_timer.elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::QueryCreateTablesMicroseconds, create_timer.elapsedMicroseconds());
         }
 
         for (const auto & data : request->data_parts())
@@ -870,7 +893,9 @@ void CnchWorkerServiceImpl::sendResources(
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
         }
 
-        LOG_TRACE(log, "Received all resource for session: {}, elapsed: {}ms.", request->txn_id(), watch.elapsedMilliseconds());
+        watch.stop();
+        LOG_INFO(log, "Received all resources for session {} in {} us.", request->txn_id(), watch.elapsedMicroseconds());
+        ProfileEvents::increment(ProfileEvents::QuerySendResourcesMicroseconds, watch.elapsedMicroseconds());
     })
 }
 

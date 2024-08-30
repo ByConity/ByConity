@@ -16,6 +16,7 @@
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
+#include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/IStorage_fwd.h>
 #include <Databases/IDatabase.h>
 #include <Storages/ColumnsDescription.h>
@@ -35,11 +36,21 @@ class CnchWorkerResource
 {
 public:
     void executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists = false, const ColumnsDescription & object_columns = {});
+
+    void executeCacheableCreateQuery(
+        ContextMutablePtr context,
+        const StorageID & cnch_storage_id,
+        const String & definition,
+        const String & local_table_name,
+        WorkerEngineType engine_type,
+        const String & underlying_dictionary_tables,
+        const ColumnsDescription & object_columns);
+
     StoragePtr getTable(const StorageID & table_id) const;
     DatabasePtr getDatabase(const String & database_name) const;
     bool isCnchTableInWorker(const StorageID & table_id) const;
 
-    ~CnchWorkerResource() 
+    ~CnchWorkerResource()
     {
         clearResource();
     }
@@ -82,6 +93,8 @@ private:
 
     TablesMap cloud_tables;
     std::unordered_map<String, DatabasePtr> memory_databases;
+
+    void insertCloudTable(DatabaseAndTableName key, const StoragePtr & storage, ContextPtr context, bool throw_if_exists);
 
     /// for offloading query
     TablesSet cnch_tables;

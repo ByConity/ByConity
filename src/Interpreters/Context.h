@@ -123,6 +123,7 @@ class ManipulationList;
 class ReplicatedFetchList;
 class Cluster;
 class Compiler;
+class CloudTableDefinitionCache;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
@@ -1224,6 +1225,9 @@ public:
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
+
+    /// result maybe nullptr
+    std::shared_ptr<CloudTableDefinitionCache> tryGetCloudTableDefinitionCache() const;
 
     /// Create a cache of mapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     void setMMappedFileCache(size_t cache_size_in_num_entries);

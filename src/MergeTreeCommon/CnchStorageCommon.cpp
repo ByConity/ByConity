@@ -18,7 +18,6 @@
 
 #include <Core/UUID.h>
 #include <Columns/ColumnSet.h>
-#include <CloudServices/CnchCreateQueryHelper.h>
 #include <DataStreams/RemoteBlockInputStream.h>
 #include <DataTypes/FieldToDataType.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -303,7 +302,7 @@ void CnchStorageCommonHelper::filterCondition(
 String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     const String & query,
     const String & local_table_name,
-    const ContextPtr & context,
+    const ContextPtr & /*context*/,
     bool enable_staging_area,
     const std::optional<StorageID> & cnch_storage_id,
     const Strings & engine_args,
@@ -318,63 +317,19 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     if (!local_database_name.empty())
         create_query.database = local_database_name;
 
-    auto * storage = create_query.storage;
+    replaceCnchWithCloud(
+        create_query.storage,
+        cnch_storage_id.value_or(table_id).getDatabaseName(),
+        cnch_storage_id.value_or(table_id).getTableName(),
+        engine_type,
+        engine_args);
 
-    auto engine = std::make_shared<ASTFunction>();
-    engine->name = storage->engine->name.replace(0, strlen("Cnch"), "Cloud");
-    engine->arguments = std::make_shared<ASTExpressionList>();
-    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getDatabaseName()));
-    engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getTableName()));
-    if (!engine_args.empty())
-    {
-        for (const auto & arg : engine_args)
-        {
-            engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(arg));
-        }
-    }
-    else if (storage->engine->arguments)
-    {
-        for (const auto & arg : storage->engine->arguments->children)
-        {
-            engine->arguments->children.push_back(arg);
-        }
-    }
+    // perhaps better to enable if_not_exists by default
+    if (engine_type == WorkerEngineType::DICT)
+        create_query.if_not_exists = true;
 
-    storage->set(storage->engine, engine);
-
-    if (startsWith(engine->name, "Cloud"))  /// table settings for *MergeTree engines
-    {
-        modifyOrAddSetting(create_query, "cnch_temporary_table", Field(UInt64(1)));
-
-        if (enable_staging_area)
-            modifyOrAddSetting(create_query, "cloud_enable_staging_area", Field(UInt64(1)));
-    }
-    else if(engine->name == "CnchHive" || engine->name == "CnchHDFS" || engine->name == "CnchS3")
-    {
-        modifyOrAddSetting(create_query, "cnch_temporary_table", Field(UInt64(1)));
-    }
-
-    /// query settings
-    auto query_settings = std::make_shared<ASTSetQuery>();
-    query_settings->is_standalone = false;
-
-    if (context)
-        query_settings->changes = context->getSettingsRef().getChangedSettings();
-
-    if (create_query.settings_ast)
-    {
-        auto & settings_ast = create_query.settings_ast->as<ASTSetQuery &>();
-        if (!query_settings->changes.empty())
-        {
-            for (const auto & change: settings_ast.changes)
-                modifyOrAddSetting(*query_settings, change.name, std::move(change.value));
-        }
-        else
-            query_settings->changes = std::move(settings_ast.changes);
-    }
-
-    if (!query_settings->changes.empty())
-        create_query.setOrReplaceAST(create_query.settings_ast, query_settings);
+    if (enable_staging_area)
+        modifyOrAddSetting(create_query, "cloud_enable_staging_area", Field(UInt64(1)));
 
     WriteBufferFromOwnString statement_buf;
     formatAST(create_query, statement_buf, false);
