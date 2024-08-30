@@ -32,8 +32,16 @@ namespace
         {
             if (query.is_revoke)
             {
-                grantee.access.revoke(query.access_rights_elements);
-                grantee.sensitive_access.revoke(query.access_rights_elements);
+                if (query.if_exists)
+                {
+                    grantee.access.tryRevoke(query.access_rights_elements);
+                    grantee.sensitive_access.tryRevoke(query.access_rights_elements);
+                }
+                else
+                {
+                    grantee.access.revoke(query.access_rights_elements);
+                    grantee.sensitive_access.revoke(query.access_rights_elements);
+                }
             }
             else
             {

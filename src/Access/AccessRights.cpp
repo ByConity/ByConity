@@ -275,30 +275,56 @@ public:
         calculateMinMaxFlags();
     }
 
+    template <bool if_exists>
     void revoke(const AccessFlags & flags_)
     {
         removeGrantsRec(flags_);
         optimizeTree();
     }
 
-    template <typename... Args>
+    template <bool if_exists, typename... Args>
     void revoke(const AccessFlags & flags_, const std::string_view & name, const Args &... subnames)
     {
-        auto & child = getChild(name);
+        if constexpr (if_exists)
+        {
+            auto * child = tryGetChild(name);
 
-        child.revoke(flags_, subnames...);
-        eraseChildIfPossible(child);
+            if (!child)
+                return;
+
+            child->template revoke<if_exists>(flags_, subnames...);
+            eraseChildIfPossible(*child);
+        }
+        else
+        {
+            auto & child = getChild(name);
+
+            child.template revoke<if_exists>(flags_, subnames...);
+            eraseChildIfPossible(child);
+        }
         calculateMinMaxFlags();
     }
 
-    template <typename StringT>
+    template <bool if_exists, typename StringT>
     void revoke(const AccessFlags & flags_, const std::vector<StringT> & names)
     {
         for (const auto & name : names)
         {
-            auto & child = getChild(name);
-            child.revoke(flags_);
-            eraseChildIfPossible(child);
+            if constexpr (if_exists)
+            {
+                auto * child = tryGetChild(name);
+                if (!child)
+                    continue;
+
+                child->template revoke<if_exists>(flags_);
+                eraseChildIfPossible(*child);
+            }
+            else
+            {
+                auto & child = getChild(name);
+                child.template revoke<if_exists>(flags_);
+                eraseChildIfPossible(child);
+            }
         }
         calculateMinMaxFlags();
     }
@@ -930,14 +956,14 @@ void AccessRightsBase<IsSensitive>::grantWithGrantOption(const AccessRightsEleme
 
 
 template <bool IsSensitive>
-template <bool grant_option, typename... Args>
+template <bool grant_option, bool if_exists, typename... Args>
 void AccessRightsBase<IsSensitive>::revokeImpl(const AccessFlags & flags, const Args &... args)
 {
     auto helper = [&](std::unique_ptr<Node> & root_node)
     {
         if (!root_node)
             return;
-        root_node->revoke(flags, args...);
+        root_node->template revoke<if_exists>(flags, args...);
         if (!root_node->flags && !root_node->children)
             root_node = nullptr;
     };
@@ -948,78 +974,95 @@ void AccessRightsBase<IsSensitive>::revokeImpl(const AccessFlags & flags, const 
 }
 
 template <bool IsSensitive>
-template <bool grant_option>
+template <bool grant_option, bool if_exists>
 void AccessRightsBase<IsSensitive>::revokeImplHelper(const AccessRightsElement & element)
 {
     assert(!element.grant_option || grant_option);
     if (element.any_database)
-        revokeImpl<grant_option>(element.access_flags);
+        revokeImpl<grant_option, if_exists>(element.access_flags);
     else if (element.any_table)
-        revokeImpl<grant_option>(element.access_flags, element.database);
+        revokeImpl<grant_option, if_exists>(element.access_flags, element.database);
     else if (element.any_column)
-        revokeImpl<grant_option>(element.access_flags, element.database, element.table);
+        revokeImpl<grant_option, if_exists>(element.access_flags, element.database, element.table);
     else
-        revokeImpl<grant_option>(element.access_flags, element.database, element.table, element.columns);
+        revokeImpl<grant_option, if_exists>(element.access_flags, element.database, element.table, element.columns);
 }
 
 template <bool IsSensitive>
-template <bool grant_option>
+template <bool grant_option, bool is_exists>
 void AccessRightsBase<IsSensitive>::revokeImpl(const AccessRightsElement & element)
 {
     if constexpr (grant_option)
     {
-        revokeImplHelper<true>(element);
+        revokeImplHelper<true, is_exists>(element);
     }
     else
     {
         if (element.grant_option)
-            revokeImplHelper<true>(element);
+            revokeImplHelper<true, is_exists>(element);
         else
-            revokeImplHelper<false>(element);
+            revokeImplHelper<false, is_exists>(element);
     }
 }
 
 template <bool IsSensitive>
-template <bool grant_option>
+template <bool grant_option, bool is_exists>
 void AccessRightsBase<IsSensitive>::revokeImpl(const AccessRightsElements & elements)
 {
     for (const auto & element : elements)
-        revokeImpl<grant_option>(element);
+        revokeImpl<grant_option, is_exists>(element);
 }
 
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags) { revokeImpl<false>(flags); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags) { revokeImpl<false, false>(flags); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database) { revokeImpl<false>(flags, database); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database) { revokeImpl<false, false>(flags, database); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) { revokeImpl<false>(flags, database, table); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) { revokeImpl<false, false>(flags, database, table); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) { revokeImpl<false>(flags, database, table, column); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) { revokeImpl<false, false>(flags, database, table, column); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) { revokeImpl<false>(flags, database, table, columns); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) { revokeImpl<false, false>(flags, database, table, columns); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) { revokeImpl<false>(flags, database, table, columns); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) { revokeImpl<false, false>(flags, database, table, columns); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessRightsElement & element) { revokeImpl<false>(element); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessRightsElement & element) { revokeImpl<false, false>(element); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revoke(const AccessRightsElements & elements) { revokeImpl<false>(elements); }
+void AccessRightsBase<IsSensitive>::revoke(const AccessRightsElements & elements) { revokeImpl<false, false>(elements); }
 
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags) { revokeImpl<true>(flags); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessFlags & flags) { revokeImpl<false, true>(flags); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database) { revokeImpl<true>(flags, database); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessFlags & flags, const std::string_view & database) { revokeImpl<false, true>(flags, database); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) { revokeImpl<true>(flags, database, table); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) { revokeImpl<false, true>(flags, database, table); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) { revokeImpl<true>(flags, database, table, column); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) { revokeImpl<false, true>(flags, database, table, column); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) { revokeImpl<true>(flags, database, table, columns); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) { revokeImpl<false, true>(flags, database, table, columns); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) { revokeImpl<true>(flags, database, table, columns); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) { revokeImpl<false, true>(flags, database, table, columns); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessRightsElement & element) { revokeImpl<true>(element); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessRightsElement & element) { revokeImpl<false, true>(element); }
 template <bool IsSensitive>
-void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessRightsElements & elements) { revokeImpl<true>(elements); }
+void AccessRightsBase<IsSensitive>::tryRevoke(const AccessRightsElements & elements) { revokeImpl<false, true>(elements); }
+
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags) { revokeImpl<true, false>(flags); }
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database) { revokeImpl<true, false>(flags, database); }
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table) { revokeImpl<true, false>(flags, database, table); }
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) { revokeImpl<true, false>(flags, database, table, column); }
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) { revokeImpl<true, false>(flags, database, table, columns); }
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) { revokeImpl<true, false>(flags, database, table, columns); }
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessRightsElement & element) { revokeImpl<true, false>(element); }
+template <bool IsSensitive>
+void AccessRightsBase<IsSensitive>::revokeGrantOption(const AccessRightsElements & elements) { revokeImpl<true, false>(elements); }
 
 
 template <bool IsSensitive>
