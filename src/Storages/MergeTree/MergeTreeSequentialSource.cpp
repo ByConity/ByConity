@@ -26,6 +26,7 @@
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Core/Defines.h>
+#include "Storages/MergeTree/MergeTreeSuffix.h"
 
 namespace DB
 {
@@ -171,7 +172,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
             .aio_threshold = read_with_direct_io ? 1UL : std::numeric_limits<size_t>::max(),
         },
         .save_marks_in_cache = false,
-        .read_source_bitmap = true,
+        .read_source_bitmap = (bitengine_read_type == BitEngineReadType::ONLY_SOURCE),
     };
 
     if (future_files)
