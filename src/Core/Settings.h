@@ -506,44 +506,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_join_on_1_equals_1, false, "Enable join on 1=1.", 0) \
     \
     M(UInt64, preferred_block_size_bytes, 1000000, "", 0) \
-<<<<<<< HEAD
-\
-    M(UInt64, \
-      max_replica_delay_for_distributed_queries, \
-      300, \
-      "If set, distributed queries of Replicated tables will choose servers with replication delay in seconds less than the specified " \
-      "value (not inclusive). Zero means do not take delay into account.", \
-      0) \
-    M(Bool, \
-      fallback_to_stale_replicas_for_distributed_queries, \
-      1, \
-      "Suppose max_replica_delay_for_distributed_queries is set and all replicas for the queried table are stale. If this setting is " \
-      "enabled, the query will be performed anyway, otherwise the error will be reported.", \
-      0) \
-    M(UInt64, \
-      preferred_max_column_in_block_size_bytes, \
-      0, \
-      "Limit on max column size in block while reading. Helps to decrease cache misses count. Should be close to L2 cache size.", \
-      0) \
-\
-    M(Bool, \
-      insert_distributed_sync, \
-      false, \
-      "If setting is enabled, insert query into distributed waits until data will be sent to all nodes in cluster.", \
-      0) \
-    M(UInt64, \
-      insert_distributed_timeout, \
-      0, \
-      "Timeout for insert query into distributed. Setting is used only with insert_distributed_sync enabled. Zero value means no " \
-      "timeout.", \
-      0) \
-    M(Int64, \
-      distributed_ddl_task_timeout, \
-      180, \
-      "Timeout for DDL query responses from all hosts in cluster. If a ddl request has not been performed on all hosts, a response will " \
-      "contain a timeout error and a request will be executed in an async mode. Negative value means infinite. Zero means async mode.", \
-      0) \
-=======
     \
     M(UInt64, max_replica_delay_for_distributed_queries, 300, "If set, distributed queries of Replicated tables will choose servers with replication delay in seconds less than the specified value (not inclusive). Zero means do not take delay into account.", 0) \
     M(Bool, fallback_to_stale_replicas_for_distributed_queries, 1, "Suppose max_replica_delay_for_distributed_queries is set and all replicas for the queried table are stale. If this setting is enabled, the query will be performed anyway, otherwise the error will be reported.", 0) \
@@ -553,7 +515,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, insert_distributed_sync, false, "If setting is enabled, insert query into distributed waits until data will be sent to all nodes in cluster.", 0) \
     M(UInt64, insert_distributed_timeout, 0, "Timeout for insert query into distributed. Setting is used only with insert_distributed_sync enabled. Zero value means no timeout.", 0) \
     M(Int64, distributed_ddl_task_timeout, 180, "Timeout for DDL query responses from all hosts in cluster. If a ddl request has not been performed on all hosts, a response will contain a timeout error and a request will be executed in an async mode. Negative value means infinite. Zero means async mode.", 0) \
->>>>>>> cceecdccd5 (Merge 'cherry-pick-mr-22414' into 'cnch-2.2')
     M(Milliseconds, stream_flush_interval_ms, 7500, "Timeout for flushing data from streaming storages.", 0) \
     M(Milliseconds, stream_poll_timeout_ms, 500, "Timeout for polling data from/to streaming storages.", 0) \
 \
@@ -2121,7 +2082,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, load_dict_from_cache, true, "Read dict from cache", 0) \
     M(Bool, throw_exception_if_bucket_unmatched, false, "Whether to throw exception if bucket is unmatched when send bitengine resource", 0) \
     M(Bool, enable_cnch_engine_conversion, false, "Whether to converse MergeTree engine to CnchMergeTree engine", 0) \
-    /** End of BitEngine related settings */ \
+    M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
+    M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
     \
 
 // End of FORMAT_FACTORY_SETTINGS
