@@ -2077,7 +2077,7 @@ void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, 
     mutation_commands.emplace_back(mutation_command);
     mutation_entry.commands = mutation_commands;
     mutation_entry.txn_id = query_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
-    mutation_entry.commit_time = commit_time;
+    mutation_entry.commit_time = query_context->getTimestamp();
     mutation_entry.columns_commit_time = commit_time;
     query_context->getCnchCatalog()->createMutation(getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
 }

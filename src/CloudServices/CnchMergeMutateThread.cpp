@@ -61,8 +61,12 @@ namespace
     constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 60ul;
     constexpr auto DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND = 3ul;
 
-    bool needMutate(const ServerDataPartPtr & part, const TxnTimestamp & commit_ts, bool change_schema)
+    bool needMutate(const ServerDataPartPtr & part, const TxnTimestamp & commit_ts, bool change_schema, bool is_recluster, const TableDefinitionHash & table_definition_hash)
     {
+        if (is_recluster)
+        {
+            return !table_definition_hash.match(part->part_model().table_definition_hash());
+        }
         /// Some mutation commands (@see MutationCommands::changeSchema()) will not change the table schema
         /// which means it will not update columns_commit_time. To track those mutation commands,
         /// we add a new field `mutation_commit_time` in part metadata. And it's set to 0 for a new part by default.
@@ -79,7 +83,7 @@ namespace
     TxnTimestamp getFirstMutation(const ServerDataPartPtr & part, const std::vector<std::pair<TxnTimestamp, bool>> & mutations)
     {
         for (const auto & [commit_time, change_schema] : mutations)
-            if (needMutate(part, commit_time, change_schema))
+            if (needMutate(part, commit_time, change_schema, false, {}))
                 return commit_time;
         return TxnTimestamp::maxTS();
     }
@@ -1248,10 +1252,7 @@ ClusterTaskProgress CnchMergeMutateThread::getReclusteringTaskProgress()
     if (partition_list.empty())
         return cluster_task_progress;
 
-    if (!scheduled_mutation_partitions.empty())
-        cluster_task_progress.progress = (scheduled_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
-    else if (!finish_mutation_partitions.empty())
-        cluster_task_progress.progress = (finish_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
+    cluster_task_progress.progress = (finish_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
     cluster_task_progress.start_time_seconds = current_mutate_entry->commit_time.toSecond();
     return cluster_task_progress;
 }
@@ -1291,6 +1292,19 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
     std::lock_guard lock(try_mutate_parts_mutex);
     auto merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
+    auto finish_current_mutation = [this, &lock, &storage]()
+    {
+        if (!current_mutate_entry)
+            return;
+
+        removeMutationEntryFromKV(*current_mutate_entry, lock);
+        storage.removeMutationEntry(current_mutate_entry->commit_time);
+
+        scheduled_mutation_partitions.clear();
+        finish_mutation_partitions.clear();
+        current_mutate_entry.reset();
+    };
+
     /// Fetch mutation entries from KV.
     std::map<TxnTimestamp, CnchMergeTreeMutationEntry> current_mutations_by_version;
     auto catalog = getContext()->getCnchCatalog();
@@ -1316,10 +1330,33 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry_from_catalog);
     }
 
-    if (current_mutate_entry->isReclusterMutation() && !getContext()->getTableReclusterTaskStatus(storage_id))
-        return false;
+    if (current_mutate_entry->isReclusterMutation())
+    {
+        if (!getContext()->getTableReclusterTaskStatus(storage_id))
+        {
+            LOG_TRACE(log, "recluster task is disabled for {}", storage_id.getNameForLogs());
+            return false;
+        }
+        if (current_mutate_entry->columns_commit_time < storage.commit_time)
+        {
+            /// There is newer version storage, needs to check whether `cluster by` definition changed
+
+            /// get specific version storage
+            auto entry_istorage = catalog->getTableByUUID(*getContext(), toString(storage_id.uuid), current_mutate_entry->columns_commit_time);
+            auto & entry_cnch_table = checkAndGetCnchTable(entry_istorage);
+
+            if (entry_cnch_table.getTableHashForClusterBy() != storage.getTableHashForClusterBy())
+            {
+                LOG_INFO(log, "recluster task {} is canceled due to newer version cluster by", current_mutate_entry->txn_id.toString());
+                finish_current_mutation();
+                return false;
+            }
+        }
+    }
 
     bool change_schema = current_mutate_entry->commands.changeSchema();
+    bool is_recluster = current_mutate_entry->isReclusterMutation();
+    auto table_definition_hash = storage.getTableHashForClusterBy();
 
     /// Function to generating new tasks. Return true if we can still generate new tasks.
     auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & snapshot)
@@ -1330,74 +1367,38 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         size_t curr_mutate_part_size = 0;
         ServerDataPartsVector alter_parts;
         bool remain_tasks_in_partition = false;
-        String command_partition_id;
 
-        if (type == ManipulationType::Clustering)
+        for (const auto & part : visible_parts)
         {
-            auto mutation_command = current_mutate_entry->commands[0];
-            if (mutation_command.partition)
-                command_partition_id = storage.getPartitionIDFromQuery(mutation_command.partition, getContext());
-            else if (mutation_command.predicate)
+            if (!needMutate(part, commit_ts, change_schema, is_recluster, table_definition_hash))
+                continue;
+            if (snapshot.count(part->name()))
             {
-                ServerDataPartsVector parts_to_recluster;
-                auto table_definition_hash = storage.getTableHashForClusterBy();
-                for (const auto & part : visible_parts)
-                {
-                    if (!table_definition_hash.match(part->part_model().table_definition_hash()))
-                        parts_to_recluster.push_back(part);
-                }
-
-                /// TODO: (vivek, zuochuang.zema) why not filter by columns_commit_time and mutation_commit_time?
-                alter_parts = storage.getServerPartsByPredicate(
-                    mutation_command.predicate,
-                    [&]{ return parts_to_recluster; },
-                    getContext());
-            }
-        }
-
-        if (alter_parts.empty())
-        {
-            for (const auto & part : visible_parts)
-            {
-                if (!needMutate(part, commit_ts, change_schema))
-                    continue;
-
-                if (snapshot.count(part->name()))
-                {
-                    remain_tasks_in_partition = true;
-                    continue;
-                }
-
                 remain_tasks_in_partition = true;
-
-                if (type == ManipulationType::Clustering
-                    && command_partition_id != part->partition().getID(storage))
-                    continue;
-
-                alter_parts.push_back(part);
-                curr_mutate_part_size += part->part_model().size();
-                auto p_part = part->tryGetPreviousPart();
-                while (p_part)
-                {
-                    curr_mutate_part_size += p_part->part_model().size();
-                    p_part = p_part->tryGetPreviousPart();
-                }
-
-                /// Batch n parts in one task.
-                if (alter_parts.size() >= storage_settings->cnch_mutate_max_parts_to_mutate
-                    || curr_mutate_part_size >= storage_settings->cnch_mutate_max_total_bytes_to_mutate)
-                {
-                    submitFutureManipulationTask(
-                        storage,
-                        FutureManipulationTask(*this, type)
-                            .setMutationEntry(*current_mutate_entry)
-                            .assignSourceParts(std::move(alter_parts)));
-
-                    alter_parts.clear();
-                    curr_mutate_part_size = 0;
-                    if (running_mutation_tasks >= storage.getSettings()->max_addition_mutation_task_num)
-                        return true;
-                }
+                continue;
+            }
+            remain_tasks_in_partition = true;
+            alter_parts.push_back(part);
+            curr_mutate_part_size += part->part_model().size();
+            auto p_part = part->tryGetPreviousPart();
+            while (p_part)
+            {
+                curr_mutate_part_size += p_part->part_model().size();
+                p_part = p_part->tryGetPreviousPart();
+            }
+            /// Batch n parts in one task.
+            if (alter_parts.size() >= storage_settings->cnch_mutate_max_parts_to_mutate
+                || curr_mutate_part_size >= storage_settings->cnch_mutate_max_total_bytes_to_mutate)
+            {
+                submitFutureManipulationTask(
+                    storage,
+                    FutureManipulationTask(*this, type)
+                        .setMutationEntry(*current_mutate_entry)
+                        .assignSourceParts(std::move(alter_parts)));
+                alter_parts.clear();
+                curr_mutate_part_size = 0;
+                if (running_mutation_tasks >= storage.getSettings()->max_addition_mutation_task_num)
+                    return true;
             }
         }
 
@@ -1410,10 +1411,6 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
                     .setMutationEntry(*current_mutate_entry)
                     .assignSourceParts(std::move(alter_parts)));
         }
-        else if (alter_parts.empty() && type == ManipulationType::Clustering)
-        {
-            remain_tasks_in_partition = false;
-        }
 
         return remain_tasks_in_partition;
     };
@@ -1424,12 +1421,12 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         const auto & commit_ts = current_mutate_entry->commit_time;
         for (const auto & part : visible_parts)
         {
-            if (needMutate(part, commit_ts, change_schema))
+            if (needMutate(part, commit_ts, change_schema, is_recluster, table_definition_hash))
                 return false;
         }
         for (const auto & part : visible_staged_parts)
         {
-            if (needMutate(part, commit_ts, change_schema))
+            if (needMutate(part, commit_ts, change_schema, is_recluster, table_definition_hash))
                 return false;
         }
         return true;
@@ -1437,7 +1434,6 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
 
     /// Step 1: generate mutations tasks for the earliest mutation entry.
     bool is_finish = true;
-    bool is_recluster_partition_finish = false;
 
     auto timestamp = getContext()->getTimestamp();
     if (storage.getInMemoryMetadataPtr()->getPartitionKeyAST())
@@ -1470,7 +1466,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
                     visible_staged_parts = CnchPartsHelper::calcVisibleParts(staged_parts, false);
                 }
 
-                if (check_all_done(visible_parts, visible_staged_parts) || is_recluster_partition_finish)
+                if (check_all_done(visible_parts, visible_staged_parts))
                     finish_mutation_partitions.emplace(partition_id);
             }
             /// Some parts are not scheduled, generate tasks for those parts
@@ -1479,8 +1475,6 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
             {
                 LOG_TRACE(log, "No more mutation tasks for partition {}, mutation id: {}", partition_id,  current_mutate_entry->txn_id);
                 scheduled_mutation_partitions.emplace(partition_id);
-                if (current_mutate_entry->isReclusterMutation())
-                    is_recluster_partition_finish = true;
             }
             ///  - if can't generate all tasks at this round, then go into next round.
             else
@@ -1531,12 +1525,10 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         }
     }
 
-    removeMutationEntryFromKV(*current_mutate_entry, is_newest_cluster_mutation, lock);
-    storage.removeMutationEntry(commit_ts);
+    if (is_newest_cluster_mutation)
+        setTableClusterStatus();
 
-    scheduled_mutation_partitions.clear();
-    finish_mutation_partitions.clear();
-    current_mutate_entry.reset();
+    finish_current_mutation();
 
     return false;
 }
@@ -1557,6 +1549,7 @@ MergeTreeMutationStatusVector CnchMergeMutateThread::getAllMutationStatuses()
     TxnTimestamp curr_ts = context->tryGetTimestamp(__PRETTY_FUNCTION__);
     auto istorage = catalog->getTableByUUID(*context, UUIDHelpers::UUIDToString(storage_id.uuid), curr_ts);
     auto & storage = checkAndGetCnchTable(istorage);
+    auto table_definition_hash = storage.getTableHashForClusterBy();
     auto all_parts = catalog->getAllServerDataParts(istorage, curr_ts, nullptr);
     auto visible_parts = CnchPartsHelper::calcVisibleParts(all_parts, false);
 
@@ -1572,10 +1565,11 @@ MergeTreeMutationStatusVector CnchMergeMutateThread::getAllMutationStatuses()
         calcMutationPartitions(entry, istorage, storage);
         auto & partitions = entry.partition_ids.value();
         bool change_schema = entry.commands.changeSchema();
+        bool is_recluster = entry.isReclusterMutation();
         for (auto & part : visible_parts)
         {
             bool partition_match = std::find(partitions.begin(), partitions.end(), part->info().partition_id) != partitions.end();
-            if (partition_match && needMutate(part, commit_ts, change_schema))
+            if (partition_match && needMutate(part, commit_ts, change_schema, is_recluster, table_definition_hash))
                 ++status.parts_to_do;
         }
 
@@ -1593,7 +1587,40 @@ MergeTreeMutationStatusVector CnchMergeMutateThread::getAllMutationStatuses()
     return res;
 }
 
-void CnchMergeMutateThread::removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, bool recluster_finish, std::lock_guard<std::mutex> &)
+void CnchMergeMutateThread::setTableClusterStatus()
+{
+    /// modify cluster status before removing recluster mutation entry.
+    LOG_DEBUG(log, "All reclusted tasks in table {} have been executed, check for cluster status", storage_id.getNameForLogs());
+
+    bool clustered = true;
+    auto istorage = getStorageFromCatalog();
+    auto & storage = checkAndGetCnchTable(istorage);
+    auto table_definition_hash = storage.getTableHashForClusterBy();
+    auto check_clustered = [&table_definition_hash](const ServerDataPartsVector & parts)
+    {
+        return std::all_of(parts.begin(), parts.end(),
+            [&table_definition_hash](const ServerDataPartPtr & part) { return table_definition_hash.match(part->part_model().table_definition_hash()); });
+    };
+    auto partition_ids = catalog->getPartitionIDs(istorage, nullptr);
+    for (const auto & partition_id : partition_ids)
+    {
+        auto parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, TxnTimestamp::maxTS(), nullptr);
+        auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
+        ServerDataPartsVector visible_staged_parts;
+        if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+        {
+            auto staged_parts = catalog->getStagedServerDataParts(istorage, TxnTimestamp::maxTS());
+            visible_staged_parts = CnchPartsHelper::calcVisibleParts(staged_parts, false);
+        }
+        clustered = check_clustered(visible_parts) && check_clustered(visible_staged_parts);
+        if (!clustered)
+            break;
+    }
+
+    catalog->setTableClusterStatus(storage.getStorageID().uuid, clustered, table_definition_hash);
+}
+
+void CnchMergeMutateThread::removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, std::lock_guard<std::mutex> &)
 {
     const auto & commit_time = entry.commit_time;
     /// FIXME: (zuochuang.zema) buggy: we don't touch active timestamp for insertion,
@@ -1613,12 +1640,6 @@ void CnchMergeMutateThread::removeMutationEntryFromKV(const CnchMergeTreeMutatio
     {
         LOG_TRACE(log, "min_active_ts {} is not updated to the mutation's commit_time {}.", min_active_ts, commit_time);
         return;
-    }
-
-    /// modify cluster status before removing recluster mutation entry.
-    if (recluster_finish)
-    {
-        LOG_DEBUG(log, "Data parts are clustered in table {}.", storage_id.getNameForLogs());
     }
 
     WriteBufferFromOwnString buf;

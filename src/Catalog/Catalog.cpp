@@ -1145,7 +1145,7 @@ namespace Catalog
 
                 // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
                 if (is_modify_cluster_by)
-                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy().getDeterminHash());
+                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy());
 
                 if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                 {
@@ -2381,7 +2381,7 @@ namespace Catalog
                     {
                         if (!part->deleted && !table_definition_hash.match(part->table_definition_hash))
                         {
-                            setTableClusterStatus(storage->getStorageUUID(), false, table_definition_hash.getDeterminHash());
+                            setTableClusterStatus(storage->getStorageUUID(), false, table_definition_hash);
                             break;
                         }
                     }
@@ -3462,7 +3462,7 @@ namespace Catalog
                     {
                         if (!part->deleted && !table_definition_hash.match(part->table_definition_hash))
                         {
-                            setTableClusterStatus(table->getStorageUUID(), false, table_definition_hash.getDeterminHash());
+                            setTableClusterStatus(table->getStorageUUID(), false, table_definition_hash);
                             break;
                         }
                     }
@@ -5169,6 +5169,7 @@ namespace Catalog
 
     void Catalog::createMutation(const StorageID & storage_id, const String & mutation_name, const String & mutate_text)
     {
+        LOG_TRACE(log, "createMutation: {}, {}", storage_id.getNameForLogs(), mutation_name);
         runWithMetricSupport(
             [&] { meta_proxy->createMutation(name_space, UUIDHelpers::UUIDToString(storage_id.uuid), mutation_name, mutate_text); },
             ProfileEvents::CreateMutationSuccess,
@@ -5177,6 +5178,7 @@ namespace Catalog
 
     void Catalog::removeMutation(const StorageID & storage_id, const String & mutation_name)
     {
+        LOG_TRACE(log, "removeMutation: {}, {}", storage_id.getNameForLogs(), mutation_name);
         runWithMetricSupport(
             [&] { meta_proxy->removeMutation(name_space, UUIDHelpers::UUIDToString(storage_id.uuid), mutation_name); },
             ProfileEvents::RemoveMutationSuccess,
@@ -5223,14 +5225,15 @@ namespace Catalog
         }
     }
 
-    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash)
+    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered, const TableDefinitionHash & table_definition_hash)
     {
+        LOG_TRACE(log, "setTableClusterStatus: {} to {}", UUIDHelpers::UUIDToString(table_uuid), clustered);
         runWithMetricSupport(
             [&] {
-                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered, table_definition_hash);
+                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered, table_definition_hash.getDeterminHash());
                 /// keep the cache status up to date.
                 if (context.getPartCacheManager())
-                    context.getPartCacheManager()->setTableClusterStatus(table_uuid, clustered);
+                    context.getPartCacheManager()->setTableClusterStatus(table_uuid, clustered, table_definition_hash);
             },
             ProfileEvents::SetTableClusterStatusSuccess,
             ProfileEvents::SetTableClusterStatusFailed);

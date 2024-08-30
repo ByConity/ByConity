@@ -3,6 +3,7 @@
 #include <atomic>
 #include <Catalog/CatalogUtils.h>
 #include <Storages/CnchPartitionInfo.h>
+#include <Storages/TableDefinitionHash.h>
 #include <Common/CurrentThread.h>
 #include <Common/RWLock.h>
 #include <Common/ScanWaitFreeMap.h>
@@ -69,7 +70,7 @@ struct TableMetaEntry
     CacheVersion cache_version;
 
     bool is_clustered{true};
-    std::atomic_uint64_t table_definition_hash{0};
+    TableDefinitionHash table_definition_hash;
     String preallocate_vw;
     mutable RWLock meta_mutex;
     std::atomic_bool partition_metrics_loaded = false;

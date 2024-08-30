@@ -199,6 +199,7 @@ public:
     void waitMutationFinish(UInt64 mutation_commit_time, UInt64 timeout_ms);
     MergeTreeMutationStatusVector getAllMutationStatuses();
     ClusterTaskProgress getReclusteringTaskProgress();
+    void setTableClusterStatus();
 
 private:
     void preStart() override;
@@ -217,7 +218,7 @@ private:
     String submitFutureManipulationTask(const StorageCnchMergeTree & storage, FutureManipulationTask & future_task, bool maybe_sync_task = false);
 
     // Mutate
-    void removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, bool recluster_finish, std::lock_guard<std::mutex> &);
+    void removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, std::lock_guard<std::mutex> &);
     void calcMutationPartitions(CnchMergeTreeMutationEntry & mutate_entry, StoragePtr & istorage, StorageCnchMergeTree & storage);
     bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
 

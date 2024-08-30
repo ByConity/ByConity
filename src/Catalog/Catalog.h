@@ -40,6 +40,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/StorageSnapshot.h>
 #include <Transaction/CnchServerTransaction.h>
+#include <Storages/TableDefinitionHash.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include "common/types.h"
@@ -647,7 +648,7 @@ public:
     std::multimap<String, String> getAllMutations();
     void fillMutationsByStorage(const StorageID & storage_id, std::map<TxnTimestamp, CnchMergeTreeMutationEntry> & out_mutations);
 
-    void setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash);
+    void setTableClusterStatus(const UUID & table_uuid, const bool clustered, const TableDefinitionHash & table_definition_hash);
     void getTableClusterStatus(const UUID & table_uuid, bool & clustered);
     bool isTableClustered(const UUID & table_uuid);
 
