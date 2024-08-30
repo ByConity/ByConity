@@ -1077,7 +1077,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     std::mutex mutex;
     CheckResults results;
 
-    auto assignment = assignCnchParts(worker_group, parts, local_context);
+    auto assignment = assignCnchParts(worker_group, parts, local_context, getSettings());
 
     ThreadPool allocate_pool(std::min<UInt64>(local_context->getSettingsRef().parts_preallocate_pool_size, num_of_workers));
 
@@ -2258,8 +2258,8 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "parts_preload_level",
         "cnch_parallel_prefetching",
         "enable_prefetch_checksums",
-        "cnch_parallel_preloading",
         "disk_cache_stealing_mode",
+        "cnch_part_allocation_algorithm",
 
         "enable_addition_bg_task",
         "max_addition_bg_task_num",

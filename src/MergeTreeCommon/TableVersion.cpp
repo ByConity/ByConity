@@ -131,7 +131,7 @@ void TableVersion::fileterDataByWorkerInfo(const MergeTreeMetaBase & storage, st
         WorkerGroupHandle mock_wg = WorkerGroupHandleImpl::mockWorkerGroupHandle(worker_id_prefix, worker_info->num_workers, getContext());
 
         // Use the same allocation algorithm as preaload. can work with parts as well as delete bitmap.
-        auto allocate_res = assignCnchParts(mock_wg, data_vector, getContext());
+        auto allocate_res = assignCnchParts(mock_wg, data_vector, getContext(), storage.getSettings());
 
         // only get the allocated data which belongs to current worker
         worker_hold_data = std::move(allocate_res[worker_id]);

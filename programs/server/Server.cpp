@@ -597,7 +597,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initRootConfig(config());
     const auto & root_config = global_context->getRootConfig();
 
-
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.

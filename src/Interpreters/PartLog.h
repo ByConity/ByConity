@@ -40,6 +40,7 @@ struct PartLogElement
     /// Size of the part
     UInt64 rows = 0;
     UInt64 segments = 0;
+    UInt64 preload_level = 0;
 
     /// Size of files in filesystem
     UInt64 bytes_compressed_on_disk = 0;
@@ -81,7 +82,7 @@ public:
     static bool addNewParts(ContextPtr context, const MutableDataPartsVector & parts, UInt64 elapsed_ns,
                             const ExecutionStatus & execution_status = {});
     static PartLogElement createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part,
-                            UInt64 elapsed_ns = 0, const String & exception = "", UInt64 submit_ts = 0, UInt64 segments = 0);
+                            UInt64 elapsed_ns = 0, const String & exception = "", UInt64 submit_ts = 0, UInt64 segments = 0, UInt64 preload_level = 0);
 };
 
 }

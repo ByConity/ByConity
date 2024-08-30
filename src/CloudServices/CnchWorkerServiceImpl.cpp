@@ -20,6 +20,7 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <Common/Stopwatch.h>
 #include <Common/Configurations.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <IO/ReadBufferFromString.h>
@@ -56,6 +57,7 @@
 #include <MergeTreeCommon/GlobalDataManager.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Core/SettingsEnums.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -70,11 +72,6 @@
 #include <Storages/Hive/StorageCloudHive.h>
 #include <Storages/RemoteFile/IStorageCloudFile.h>
 #include <Storages/Hive/StorageCloudHive.h>
-
-namespace ProfileEvents
-{
-extern const Event PreloadExecTotalOps;
-}
 
 namespace ProfileEvents
 {
@@ -617,8 +614,6 @@ void CnchWorkerServiceImpl::preloadDataParts(
     google::protobuf::Closure * done)
 {
     SUBMIT_THREADPOOL({
-        SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::PreloadExecTotalOps, 1, Metrics::MetricType::Rate);});
-
         Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
@@ -640,30 +635,40 @@ void CnchWorkerServiceImpl::preloadDataParts(
             || (!cloud_merge_tree.getSettings()->parts_preload_level && !cloud_merge_tree.getSettings()->enable_preload_parts))
             return;
 
-        std::unique_ptr<ThreadPool> pool;
-        ThreadPool * pool_ptr;
+        auto preload_level = request->preload_level();
+        auto submit_ts = request->submit_ts();
+
         if (request->sync())
         {
-            pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), cloud_merge_tree.getSettings()->cnch_parallel_preloading.value));
-            pool_ptr = pool.get();
+            auto & settings = getContext()->getSettingsRef();
+            auto pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), settings.cnch_parallel_preloading.value));
+            for (const auto & part : data_parts)
+            {
+                pool->scheduleOrThrowOnError([part, preload_level, submit_ts, storage] {
+                    part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;// avoid getCheckum & getIndex re-cache
+                    part->preload(preload_level, submit_ts);
+                });
+            }
+            pool->wait();
+            LOG_DEBUG(
+                log,
+                "Finish preload tasks in {} ms, level: {}, sync: {}, size: {}",
+                watch.elapsedMilliseconds(),
+                preload_level,
+                sync,
+                data_parts.size());
         }
         else
-            pool_ptr = &(IDiskCache::getThreadPool());
-
-        for (const auto & part : data_parts)
         {
-            part->preload(request->preload_level(), *pool_ptr, request->submit_ts());
+            ThreadPool * preload_thread_pool = &(IDiskCache::getPreloadPool());
+            for (const auto & part : data_parts)
+            {
+                preload_thread_pool->scheduleOrThrowOnError([part, preload_level, submit_ts, storage] {
+                    part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;// avoid getCheckum & getIndex re-cache
+                    part->preload(preload_level, submit_ts);
+                });
+            }
         }
-
-        if (request->sync())
-            pool->wait();
-
-        LOG_DEBUG(
-            storage->getLogger(),
-            "Finish preload tasks in {} ms, level: {}, sync: {}",
-            watch.elapsedMilliseconds(),
-            request->preload_level(),
-            request->sync());
     })
 }
 

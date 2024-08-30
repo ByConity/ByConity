@@ -1314,7 +1314,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
     M(Bool, enable_local_disk_cache, 1, "enable global local disk cache", 0) \
     M(UInt64, parts_preload_level, 1, "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for table auto preload, 0 will disable all table preload, > 0 will use table preload setting", 0) \
-    M(UInt64, parts_preload_throttler, 0, "used for max preload rpc concurrent count", 0) \
+    M(MaxThreads, cnch_parallel_preloading, 0, "Max threads when worker preload parts", 0) \
+    M(UInt64, preload_send_rpc_max_ms, 3000, "Max rpc ms when send preload parts reqeust", 0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \

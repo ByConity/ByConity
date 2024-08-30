@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 
+#include <Common/Throttler.h>
 #include <Common/CurrentMetrics.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 
@@ -35,7 +36,8 @@ public:
         int flags = -1,
         mode_t mode = 0666,
         char * existing_memory = nullptr,
-        size_t alignment = 0);
+        size_t alignment = 0,
+        ThrottlerPtr throttler = nullptr);
 
     /// Use pre-opened file descriptor.
     WriteBufferFromFile(

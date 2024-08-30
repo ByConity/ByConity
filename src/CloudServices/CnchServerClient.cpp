@@ -995,18 +995,19 @@ CnchServerClient::getBackGroundStatus(const CnchBGThreadType & type)
     return response.status();
 }
 
-void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 timeout_ms)
+brpc::CallId CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 timeout_ms)
 {
+    auto * cntl = new brpc::Controller();
+    auto call_id = cntl->call_id();
     if (parts.empty())
-        return;
+        return call_id;
 
-    brpc::Controller cntl;
     Protos::SubmitPreloadTaskReq request;
     request.set_ts(time(nullptr));
 
-    Protos::SubmitPreloadTaskResp response;
+    auto response = new Protos::SubmitPreloadTaskResp();
     if (timeout_ms)
-        cntl.set_timeout_ms(timeout_ms);
+        cntl->set_timeout_ms(timeout_ms);
 
     /// prefer to get cnch table uuid from settings as multiple CloudMergeTrees cannot share a same uuid,
     /// thus most CloudMergeTrees have no uuids on the worker side
@@ -1021,9 +1022,8 @@ void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, cons
         fillPartModel(storage, *part, *new_part);
     }
 
-    stub->submitPreloadTask(&cntl, &request, &response, nullptr);
-    assertController(cntl);
-    RPCHelpers::checkResponse(response);
+    stub->submitPreloadTask(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, std::make_shared<ExceptionHandler>()));
+    return call_id;
 }
 
 UInt32 CnchServerClient::reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name)

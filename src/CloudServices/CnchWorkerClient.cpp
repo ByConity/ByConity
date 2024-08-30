@@ -305,8 +305,7 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     auto * response = new Protos::PreloadDataPartsResp();
     /// adjust the timeout to prevent timeout if there are too many parts to send,
     const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, settings.brpc_data_parts_timeout_ms.totalMilliseconds());
-    cntl->set_timeout_ms(send_timeout);
+    cntl->set_timeout_ms(settings.preload_send_rpc_max_ms);
 
     auto call_id = cntl->call_id();
     stub->preloadDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));

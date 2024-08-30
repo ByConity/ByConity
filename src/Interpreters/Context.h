@@ -55,6 +55,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config.h>
@@ -1271,7 +1272,6 @@ public:
         SchedulePool::Type pool_type, SettingFieldUInt64 pool_size, CurrentMetrics::Metric metric, const char * name) const;
 
     ThrottlerPtr getDiskCacheThrottler() const;
-    ThrottlerPtr tryGetPreloadThrottler() const;
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
 
@@ -1657,10 +1657,10 @@ public:
         JUMP_CONSISTENT_HASH = 0,
         RING_CONSISTENT_HASH = 1,
         STRICT_RING_CONSISTENT_HASH = 2,
-        SIMPLE_HASH = 3,//Note: Now just used for test disk cache stealing so not used for online
+        DISK_CACHE_STEALING_DEBUG = 3,//Note: Now just used for test disk cache stealing so not used for online
     };
 
-    PartAllocator getPartAllocationAlgo() const;
+    PartAllocator getPartAllocationAlgo(MergeTreeSettingsPtr settings) const;
 
     /// Consistent hash algorithm for hybrid part allocation
     enum HybridPartAllocator : int
