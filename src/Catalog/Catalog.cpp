@@ -24,6 +24,8 @@
 #include <Catalog/CatalogFactory.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/StringHelper.h>
+#include <Catalog/LargeKVHandler.h>
+#include <Catalog/CatalogBackgroundTask.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryToString.h>
@@ -557,6 +559,9 @@ namespace Catalog
                     topology_key = name_space;
                 else
                     topology_key = name_space + "_" + config.topology_key;
+
+                // Add background task to do some GC job for Catalog.
+                bg_task = std::make_shared<CatalogBackgroundTask>(Context::createCopy(context.shared_from_this()), meta_proxy->getMetastore(), name_space);
             },
             ProfileEvents::CatalogConstructorSuccess,
             ProfileEvents::CatalogConstructorFailed);
@@ -957,7 +962,11 @@ namespace Catalog
                 return;
             }
 
-            auto storage = tryGetTableByUUID(context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+            StoragePtr storage;
+            if (auto query_context = CurrentThread::getGroup()->query_context.lock())
+                storage = tryGetTableByUUID(*query_context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+            else
+                storage = tryGetTableByUUID(context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
 
             if (auto pcm = context.getPartCacheManager(); pcm && storage)
             {
@@ -6233,7 +6242,12 @@ namespace Catalog
         for (const String & dependency : dependencies)
             batch_write.AddDelete(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid()));
 
-        batch_write.AddPut(SinglePutRequest(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString()));
+        addPotentialLargeKVToBatchwrite(
+            meta_proxy->getMetastore(),
+            batch_write,
+            name_space,
+            MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()),
+            table.SerializeAsString());
         // use database name and table name in table_id is required because it may different with that in table data model.
         batch_write.AddPut(SinglePutRequest(
             MetastoreProxy::tableTrashKey(name_space, table_id.database(), table_id.name(), ts.toUInt64()), table_id.SerializeAsString()));

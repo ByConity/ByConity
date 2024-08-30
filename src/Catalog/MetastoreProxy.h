@@ -132,6 +132,9 @@ namespace DB::Catalog
 #define MANIFEST_DATA_PREFIX "MFST_"
 #define MANIFEST_LIST_PREFIX "MFSTS_"
 
+#define LARGE_KV_DATA_PREFIX "LGKV_"
+#define LARGE_KV_REFERENCE "LGKVRF_"
+
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
 {
@@ -954,6 +957,29 @@ public:
         return manifestListPrefix(name_space, uuid) + toString(table_version);
     }
 
+    static String largeKVDataPrefix(const String & name_space, const String & uuid)
+    {
+        return escapeString(name_space) + '_' +  LARGE_KV_DATA_PREFIX + uuid + '_';
+    }
+
+    static String largeKVDataKey(const String & name_space, const String & uuid, UInt64 index)
+    {
+        // keep records in the kv storage with the same order as index. Support at most 10k sub-kv
+        std::ostringstream oss;
+        oss << std::setw(5) << std::setfill('0') << index;
+        return largeKVDataPrefix(name_space, uuid) + oss.str();
+    }
+
+    static String largeKVReferencePrefix(const String & name_space)
+    {
+        return escapeString(name_space) + '_' + LARGE_KV_REFERENCE;
+    }
+
+    static String largeKVReferenceKey(const String & name_space, const String & uuid)
+    {
+        return largeKVReferencePrefix(name_space) + uuid;
+    }
+
     // parse the first key in format of '{prefix}{escapedString(first_key)}_postfix'
     // note that prefix should contains _, like TCS_
     // return [first_key, postfix]
@@ -1037,7 +1063,7 @@ public:
     void updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data);
     void getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info);
     void clearTableMeta(const String & name_space, const String & database, const String & table, const String & uuid, const Strings & dependencies, const UInt64 & ts = 0);
-    static void prepareRenameTable(const String & name_space, const String & table_uuid, const String & from_db, const String & from_table, const UUID & to_db_uuid, Protos::DataModelTable & to_table, BatchCommitRequest & batch_write);
+    void prepareRenameTable(const String & name_space, const String & table_uuid, const String & from_db, const String & from_table, const UUID & to_db_uuid, Protos::DataModelTable & to_table, BatchCommitRequest & batch_write);
     bool alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add);
     Strings getAllTablesInDB(const String & name_space, const String & database);
     IMetaStore::IteratorPtr getAllTablesMeta(const String & name_space);

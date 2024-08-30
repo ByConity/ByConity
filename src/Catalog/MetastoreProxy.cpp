@@ -20,6 +20,7 @@
 #include <string.h>
 #include <Catalog/MetastoreCommon.h>
 #include <Catalog/MetastoreProxy.h>
+#include <Catalog/LargeKVHandler.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
@@ -342,8 +343,16 @@ void MetastoreProxy::createTable(const String & name_space, const UUID & db_uuid
 
     BatchCommitRequest batch_write;
     batch_write.AddPut(SinglePutRequest(nonHostUpdateKey(name_space, uuid), "0", true));
-    // insert table meta
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, uuid, table_data.commit_time()), serialized_meta, true));
+
+    // insert table meta. Handle by largeKVHandler in case the table meta exceeds KV size limitation
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, uuid, table_data.commit_time()),
+        serialized_meta,
+        true/*if_not_exists*/);
+
     /// add dependency mapping if need
     for (const String & dependency : dependencies)
         batch_write.AddPut(SinglePutRequest(viewDependencyKey(name_space, dependency, uuid), uuid));
@@ -419,14 +428,34 @@ void MetastoreProxy::dropUDF(const String & name_space, const String &resolved_n
 
 void MetastoreProxy::updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts)
 {
-    metastore_ptr->put(tableStoreKey(name_space, table_uuid, ts), table_info_new);
+    if (table_info_new.size() > metastore_ptr->getMaxKVSize())
+    {
+        BatchCommitRequest batch_write;
+        addPotentialLargeKVToBatchwrite(
+            metastore_ptr,
+            batch_write,
+            name_space,
+            tableStoreKey(name_space, table_uuid, ts),
+            table_info_new);
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
+    else
+        metastore_ptr->put(tableStoreKey(name_space, table_uuid, ts), table_info_new);
 }
 
 void MetastoreProxy::updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data)
 {
     BatchCommitRequest batch_write;
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table_id.database(), table_id.name()), table_id.SerializeAsString()));
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_id.uuid(), table_data.commit_time()), table_data.SerializeAsString()));
+
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, table_id.uuid(), table_data.commit_time()),
+        table_data.SerializeAsString());
+
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -436,7 +465,10 @@ void MetastoreProxy::getTableByUUID(const String & name_space, const String & ta
     auto it = metastore_ptr->getByPrefix(tableStorePrefix(name_space, table_uuid));
     while(it->next())
     {
-        tables_info.emplace_back(it->value());
+        String table_meta = it->value();
+        /// NOTE: Too many large KVs will cause severe performance regression. It rarely happens
+        tryGetLargeValue(metastore_ptr, name_space, it->key(), table_meta);
+        tables_info.emplace_back(std::move(table_meta));
     }
 }
 
@@ -830,10 +862,14 @@ void MetastoreProxy::prepareRenameTable(const String & name_space,
         RPCHelpers::fillUUID(to_db_uuid, *identifier.mutable_db_uuid());
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, to_table.database(), to_table.name()), identifier.SerializeAsString(), true));
 
-    String meta_data;
-    to_table.SerializeToString(&meta_data);
     /// add new table meta data with new name
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_uuid, to_table.commit_time()), meta_data, true));
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, table_uuid, to_table.commit_time()),
+        to_table.SerializeAsString(),
+        true/*if_not_exists*/);
 }
 
 bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add)
@@ -841,7 +877,14 @@ bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataMod
     BatchCommitRequest batch_write;
 
     String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table.uuid()));
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_uuid, table.commit_time()), table.SerializeAsString(), true));
+
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, table_uuid, table.commit_time()),
+        table.SerializeAsString(),
+        true/*if_not_exists*/);
 
     Protos::TableIdentifier identifier;
     identifier.set_database(table.database());
@@ -3371,7 +3414,9 @@ std::shared_ptr<Protos::DataModelSensitiveDatabase> MetastoreProxy::getSensitive
 String MetastoreProxy::getAccessEntity(EntityType type, const String & name_space, const String & name) const
 {
     String data;
-    metastore_ptr->get(accessEntityKey(type, name_space, name), data);
+    String access_entity_key = accessEntityKey(type, name_space, name);
+    metastore_ptr->get(access_entity_key, data);
+    tryGetLargeValue(metastore_ptr, name_space, access_entity_key, data);
     return data;
 }
 
@@ -3394,7 +3439,16 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::getEntities(EntityType ty
         requests.push_back(accessEntityKey(type, name_space, s));
     }
 
-    return metastore_ptr->multiGet(requests);
+    auto res = metastore_ptr->multiGet(requests);
+
+    for (size_t i=0; i<res.size(); i++)
+    {
+        // try parse large value
+        String & value = res[i].first;
+        tryGetLargeValue(metastore_ptr, name_space, requests[i], value);
+    }
+
+    return res;
 }
 
 Strings MetastoreProxy::getAllAccessEntities(EntityType type, const String & name_space) const
@@ -3403,7 +3457,10 @@ Strings MetastoreProxy::getAllAccessEntities(EntityType type, const String & nam
     auto it = metastore_ptr->getByPrefix(accessEntityPrefix(type, name_space));
     while (it->next())
     {
-        models.push_back(it->value());
+        String value = it->value();
+        /// NOTE: Too many large KVs will cause severe performance regression.
+        tryGetLargeValue(metastore_ptr, name_space, it->key(), value);
+        models.push_back(std::move(value));
     }
     return models;
 }
@@ -3431,12 +3488,30 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
     auto is_rename = !old_access_entity.name().empty() && new_access_entity.name() != old_access_entity.name();
-    auto put_access_entity_request = SinglePutRequest(accessEntityKey(type, name_space, new_access_entity.name()), new_access_entity.SerializeAsString(), !replace_if_exists);
     String uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(new_access_entity.uuid()));
     String serialized_old_access_entity = old_access_entity.SerializeAsString();
     if (!serialized_old_access_entity.empty() && !is_rename)
-        put_access_entity_request.expected_value = serialized_old_access_entity;
-    batch_write.AddPut(put_access_entity_request);
+    {
+        addPotentialLargeKVToBatchwrite(
+            metastore_ptr,
+            batch_write,
+            name_space,
+            accessEntityKey(type, name_space, new_access_entity.name()),
+            new_access_entity.SerializeAsString(),
+            !replace_if_exists,
+            serialized_old_access_entity);
+    }
+    else
+    {
+        addPotentialLargeKVToBatchwrite(
+            metastore_ptr,
+            batch_write,
+            name_space,
+            accessEntityKey(type, name_space, new_access_entity.name()),
+            new_access_entity.SerializeAsString(),
+            !replace_if_exists);
+    }
+
     batch_write.AddPut(SinglePutRequest(accessEntityUUIDNameMappingKey(name_space, uuid), new_access_entity.name(), !replace_if_exists));
     if (is_rename)
         batch_write.AddDelete(accessEntityKey(type, name_space, old_access_entity.name())); // delete old one in case of rename
@@ -3446,21 +3521,22 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
     }
     catch (Exception & e)
     {
+        auto puts_size = batch_write.puts.size();
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
-            if (resp.puts.count(0) && replace_if_exists && !serialized_old_access_entity.empty())
+            if (resp.puts.count(puts_size-2) && replace_if_exists && !serialized_old_access_entity.empty())
             {
                 throw Exception(
                     "Access Entity has recently been changed in catalog. Please try the request again.",
                     ErrorCodes::METASTORE_ACCESS_ENTITY_CAS_ERROR);
             }
-            else if (resp.puts.count(0) && !replace_if_exists)
+            else if (resp.puts.count(puts_size-2) && !replace_if_exists)
             {
                 throw Exception(
                     "Access Entity with the same name already exists in catalog. Please use another name and try again.",
                     ErrorCodes::METASTORE_ACCESS_ENTITY_EXISTS_ERROR);
             }
-            else if (resp.puts.count(1) && !replace_if_exists)
+            else if (resp.puts.count(puts_size-1) && !replace_if_exists)
             {
                 throw Exception(
                     "Access Entity with the same UUID already exists in catalog. Please use another name and try again.",

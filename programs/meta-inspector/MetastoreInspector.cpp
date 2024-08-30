@@ -20,6 +20,7 @@
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Common/HostWithPorts.h>
 #include <Catalog/StringHelper.h>
+#include <Catalog/LargeKVHandler.h>
 #include <Protos/cnch_common.pb.h>
 #include <Protos/data_models.pb.h>
 #include <Common/filesystemHelpers.h>
@@ -362,6 +363,14 @@ private:
                 {
                     std::string value;
                     metastore_ptr->get(full_key, value);
+                    // try parse large KV before really dump metadata.
+                    DB::Protos::DataModelLargeKVMeta large_kv_model;
+                    if (Catalog::tryParseLargeKVMetaModel(value, large_kv_model))
+                    {
+                        std::cout << "Large KV base value: \n" << large_kv_model.DebugString() << std::endl;
+                        tryGetLargeValue(metastore_ptr, name_space, full_key, value);
+                        std::cout << "Original value : " << std::endl;
+                    }
                     dumpMetadata(cmd.key, value);
                     break;
                 }

@@ -2142,7 +2142,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
+    auto action = txn->createActionWithLocalContext<DDLAlterAction>(local_context, shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(mutation_commands);
 

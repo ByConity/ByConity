@@ -82,6 +82,8 @@ enum class VisibilityLevel
     All
 };
 
+class CatalogBackgroundTask;
+
 class Catalog
 {
 public:
@@ -890,6 +892,8 @@ public:
     void commitCheckpointVersion(const UUID & uuid, std::shared_ptr<DB::Protos::ManifestListModel> checkpoint_version);
     void cleanTableVersions(const UUID & uuid, std::vector<std::shared_ptr<DB::Protos::ManifestListModel>> versions_to_clean);
 
+    void shutDown() {bg_task.reset();}
+
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");
     Context & context;
@@ -900,6 +904,8 @@ private:
     std::unordered_map<UUID, std::shared_ptr<std::mutex>> nhut_mutex;
     std::mutex all_storage_nhut_mutex;
     CatalogSettings settings;
+
+    std::shared_ptr<CatalogBackgroundTask> bg_task;
 
     std::shared_ptr<Protos::DataModelDB> tryGetDatabaseFromMetastore(const String & database, const UInt64 & ts);
     std::shared_ptr<Protos::DataModelTable>

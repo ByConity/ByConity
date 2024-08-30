@@ -1842,7 +1842,8 @@ void CnchServerServiceImpl::notifyTableCreated(
         catch (...)
         {
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            RPCHelpers::handleException(response->mutable_exception());
+            (void)response;
+            //RPCHelpers::handleException(response->mutable_exception());
         }
     });
 }

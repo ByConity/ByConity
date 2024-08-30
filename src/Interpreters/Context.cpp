@@ -593,6 +593,8 @@ struct ContextSharedPart
         if (worker_status_manager)
             worker_status_manager->shutdown();
 
+        if (cnch_catalog)
+            cnch_catalog->shutDown();
 
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
