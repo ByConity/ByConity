@@ -132,7 +132,7 @@ public:
 
     //////////////
 
-    void updateSQLBinding(const SQLBindingItemPtr data);
+    void updateSQLBinding(SQLBindingItemPtr data);
 
     SQLBindings getSQLBindings();
 
@@ -141,6 +141,14 @@ public:
     SQLBindingItemPtr getSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression);
 
     void removeSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression);
+
+    void updatePreparedStatement(const PreparedStatementItemPtr & data);
+
+    PreparedStatements getPreparedStatements();
+
+    PreparedStatementItemPtr getPreparedStatement(const String & name);
+
+    void removePreparedStatement(const String & name);
 
     /////////////////////////////
     /// Database related API

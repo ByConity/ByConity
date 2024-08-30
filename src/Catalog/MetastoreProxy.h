@@ -34,6 +34,7 @@
 #include <Core/UUID.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/SQLBinding/SQLBinding.h>
+#include <Interpreters/PreparedStatement/PreparedStatementCatalog.h>
 #include <MergeTreeCommon/InsertionLabel.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Protos/RPCHelpers.h>
@@ -113,6 +114,7 @@ namespace DB::Catalog
 #define COLUMN_STATISTICS_PREFIX "CS_"
 #define COLUMN_STATISTICS_TAG_PREFIX "CST_" // deprecated, just remove it
 #define SQL_BINDING_PREFIX "SBI_"
+#define PREPARED_STATEMENT_PREFIX "PSTAT_"
 #define FILESYS_LOCK_PREFIX "FSLK_"
 #define UDF_STORE_PREFIX "UDF_"
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
@@ -745,6 +747,20 @@ public:
         return ss.str();
     }
 
+    static String preparedStatementKey(const String name_space, const String & key)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << PREPARED_STATEMENT_PREFIX << '_' << key;
+        return ss.str();
+    }
+
+    static String preparedStatementPrefix(const String name_space)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << PREPARED_STATEMENT_PREFIX;
+        return ss.str();
+    }
+
     static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
     {
         std::stringstream ss;
@@ -1249,6 +1265,11 @@ public:
     SQLBindings getReSQLBindings(const String & name_space, const bool & is_re_expression);
     SQLBindingItemPtr getSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression);
     void removeSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression);
+
+    void updatePreparedStatement(const String & name_space, const PreparedStatementItemPtr & data);
+    PreparedStatements getPreparedStatements(const String & name_space);
+    PreparedStatementItemPtr getPreparedStatement(const String & name_space, const String & name);
+    void removePreparedStatement(const String & name_space, const String & name);
 
     void updateTableStatistics(const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
     // new api

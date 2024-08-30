@@ -26,6 +26,7 @@
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
+#include <Protos/plan_node.pb.h>
 #include <Statistics/StatisticsBase.h>
 #include <Storages/MergeTree/IMetastore.h>
 #include <Storages/StorageSnapshot.h>
@@ -2422,6 +2423,56 @@ void MetastoreProxy::removeSQLBinding(const String & name_space, const String & 
 {
     BatchCommitRequest batch_write;
     batch_write.AddDelete(SQLBindingKey(name_space, uuid, tenant_id, is_re_expression));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
+void MetastoreProxy::updatePreparedStatement(const String & name_space, const PreparedStatementItemPtr & data)
+{
+    BatchCommitRequest batch_write;
+
+    Protos::PreparedStatementItem prepared_statement;
+    prepared_statement.set_name(data->name);
+    prepared_statement.set_create_statement(data->create_statement);
+    batch_write.AddPut(SinglePutRequest(preparedStatementKey(name_space, data->name), prepared_statement.SerializeAsString()));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
+PreparedStatements MetastoreProxy::getPreparedStatements(const String & name_space)
+{
+    PreparedStatements res;
+    auto prepared_prefix = preparedStatementPrefix(name_space);
+    auto it = metastore_ptr->getByPrefix(prepared_prefix);
+    while (it->next())
+    {
+        Protos::PreparedStatementItem prepared_statement;
+        prepared_statement.ParseFromString(it->value());
+        PreparedStatementItemPtr statement = std::make_shared<PreparedStatementItem>(prepared_statement.name(), prepared_statement.create_statement());
+        res.emplace_back(statement);
+    }
+
+    return res;
+}
+PreparedStatementItemPtr MetastoreProxy::getPreparedStatement(const String & name_space, const String & name)
+{
+    String value;
+    auto prepared_statement_key = preparedStatementKey(name_space, name);
+    metastore_ptr->get(prepared_statement_key, value);
+
+    if (value.empty())
+        return nullptr;
+
+    Protos::PreparedStatementItem prepared_statement;
+    prepared_statement.ParseFromString(value);
+    PreparedStatementItemPtr prepared = std::make_shared<PreparedStatementItem>(prepared_statement.name(), prepared_statement.create_statement());
+    return prepared;
+}
+
+void MetastoreProxy::removePreparedStatement(const String & name_space, const String & name)
+{
+    BatchCommitRequest batch_write;
+    batch_write.AddDelete(preparedStatementKey(name_space, name));
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }

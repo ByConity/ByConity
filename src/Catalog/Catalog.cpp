@@ -114,6 +114,14 @@ namespace ProfileEvents
     extern const Event GetSQLBindingsFailed;
     extern const Event RemoveSQLBindingSuccess;
     extern const Event RemoveSQLBindingFailed;
+    extern const Event UpdatePreparedStatementSuccess;
+    extern const Event UpdatePreparedStatementFailed;
+    extern const Event GetPreparedStatementSuccess;
+    extern const Event GetPreparedStatementFailed;
+    extern const Event GetPreparedStatementsSuccess;
+    extern const Event GetPreparedStatementsFailed;
+    extern const Event RemovePreparedStatementSuccess;
+    extern const Event RemovePreparedStatementFailed;
     extern const Event CreateDatabaseSuccess;
     extern const Event CreateDatabaseFailed;
     extern const Event GetDatabaseSuccess;
@@ -6638,6 +6646,42 @@ namespace Catalog
             [&] { meta_proxy->removeSQLBinding(name_space, uuid, tenant_id, is_re_expression); },
             ProfileEvents::RemoveSQLBindingSuccess,
             ProfileEvents::RemoveSQLBindingFailed);
+    }
+
+    void Catalog::updatePreparedStatement(const PreparedStatementItemPtr & data)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->updatePreparedStatement(name_space, data); },
+            ProfileEvents::UpdatePreparedStatementSuccess,
+            ProfileEvents::UpdatePreparedStatementFailed);
+    }
+
+    PreparedStatements Catalog::getPreparedStatements()
+    {
+        PreparedStatements res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getPreparedStatements(name_space); },
+            ProfileEvents::GetPreparedStatementSuccess,
+            ProfileEvents::GetPreparedStatementFailed);
+        return res;
+    }
+
+    PreparedStatementItemPtr Catalog::getPreparedStatement(const String & name)
+    {
+        PreparedStatementItemPtr res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getPreparedStatement(name_space, name); },
+            ProfileEvents::GetPreparedStatementSuccess,
+            ProfileEvents::GetPreparedStatementFailed);
+        return res;
+    }
+
+    void Catalog::removePreparedStatement(const String & name)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->removePreparedStatement(name_space, name); },
+            ProfileEvents::RemovePreparedStatementSuccess,
+            ProfileEvents::RemovePreparedStatementFailed);
     }
 
     void Catalog::setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const

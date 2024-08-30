@@ -526,6 +526,14 @@
     M(GetSQLBindingsSuccess, "") \
     M(RemoveSQLBindingFailed, "") \
     M(RemoveSQLBindingSuccess, "") \
+    M(UpdatePreparedStatementFailed, "") \
+    M(UpdatePreparedStatementSuccess, "") \
+    M(GetPreparedStatementFailed, "") \
+    M(GetPreparedStatementSuccess, "") \
+    M(GetPreparedStatementsFailed, "") \
+    M(GetSPreparedStatementsSuccess, "") \
+    M(RemovePreparedStatementFailed, "") \
+    M(RemovePreparedStatementSuccess, "") \
     M(CreateDatabaseSuccess, "") \
     M(CreateDatabaseFailed, "") \
     M(GetDatabaseSuccess, "") \
