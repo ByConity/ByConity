@@ -1326,8 +1326,11 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTSystemQuery & query, C
         scope = CnchDedupHelper::DedupScope::TableDedupWithBucket(buckets);
     }
 
-    auto cnch_lock = txn->createLockHolder(CnchDedupHelper::getLocksToAcquire(
-        scope, txn->getTransactionID(), *this, getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds()));
+    auto cnch_lock = std::make_shared<CnchLockHolder>(
+        local_context,
+        CnchDedupHelper::getLocksToAcquire(
+            scope, txn->getTransactionID(), *this, CnchDedupHelper::getWriteLockTimeout(*this, local_context)));
+    txn->appendLockHolder(cnch_lock);
     cnch_lock->lock();
 
     TxnTimestamp ts = local_context->getTimestamp();
@@ -2435,7 +2438,7 @@ void StorageCnchMergeTree::dropPartitionOrPart(
         }
         /// else { lock all partitions }
         Stopwatch lock_watch;
-        auto cnch_lock = cur_txn->createLockHolder({std::move(partition_lock)});
+        auto cnch_lock = std::make_shared<CnchLockHolder>(local_context, std::move(partition_lock));
         cnch_lock->lock();
         LOG_DEBUG(log, "DROP PARTITION acquired lock in {} ms", lock_watch.elapsedMilliseconds());
 

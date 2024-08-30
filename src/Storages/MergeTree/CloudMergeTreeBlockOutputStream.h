@@ -54,9 +54,6 @@ private:
     using FilterInfo = CnchDedupHelper::FilterInfo;
     FilterInfo dedupWithUniqueKey(const Block & block);
 
-    void writeSuffixForInsert();
-    void writeSuffixForUpsert();
-
     void initOverwritePartitionPruner();
 
     void checkAndInit();

@@ -63,9 +63,17 @@ namespace ErrorCodes
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
 }
 
+bool DumpedData::isEmpty()
+{
+    return parts.empty() && bitmaps.empty() && staged_parts.empty();
+}
+
 void DumpedData::extend(DumpedData && data)
 {
-    auto extendImpl = [](auto & src, auto && dst) {
+    if (data.isEmpty())
+        return;
+
+    auto extendImpl = [] (auto & src, auto && dst) {
         if (src.empty())
         {
             src = std::move(dst);
@@ -80,6 +88,10 @@ void DumpedData::extend(DumpedData && data)
     extendImpl(parts, std::move(data.parts));
     extendImpl(bitmaps, std::move(data.bitmaps));
     extendImpl(staged_parts, std::move(data.staged_parts));
+
+    if (dedup_mode != data.dedup_mode)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Dedup mode is mismatch, {}/{}", typeToString(dedup_mode), typeToString(data.dedup_mode));
 }
 
 using DumpCancelPred = std::function<bool()>;
@@ -145,7 +157,7 @@ DumpedData CnchDataWriter::dumpAndCommitCnchParts(
 {
     if (temp_parts.empty() && temp_bitmaps.empty() && temp_staged_parts.empty())
         // Nothing to dump and commit, returns
-        return {};
+        return {.dedup_mode = dedup_mode};
 
     LOG_DEBUG(
         storage.getLogger(),
@@ -172,7 +184,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 {
     if (temp_parts.empty() && temp_bitmaps.empty() && temp_staged_parts.empty())
         // Nothing to dump, returns
-        return {};
+        return {.dedup_mode = dedup_mode};
 
     Stopwatch watch;
 
@@ -269,7 +281,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     }
 
     /// Parallel dumping to shared storage
-    DumpedData result;
+    DumpedData result{.dedup_mode = dedup_mode};
     S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
         curr_txn->getTransactionID().toString());
     MergeTreeCNCHDataDumper dumper(storage, part_generator_id);
@@ -335,8 +347,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
-                server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false,
-                    consumer_group, tpl, binlog, peak_memory_usage);
+                server_client->commitParts(txn_id, type, storage, dumped_data, task_id, false, consumer_group, tpl, binlog, peak_memory_usage);
             }
             else
             {
@@ -362,8 +373,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
                 throw Exception("Server with transaction " + txn_id.toString() + " is unknown", ErrorCodes::LOGICAL_ERROR);
             }
 
-            server_client->precommitParts(
-                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, binlog, peak_memory_usage);
+            server_client->precommitParts(context, txn_id, type, storage, dumped_data, task_id, is_server, consumer_group, tpl, binlog, peak_memory_usage);
         }
     }
     catch (const Exception &)
@@ -380,12 +390,13 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
 
     LOG_DEBUG(
         storage.getLogger(),
-        "Committed {} parts, {} bitmaps, {} staged parts in transaction {}, elapsed {} ms",
+        "Committed {} parts, {} bitmaps, {} staged parts in transaction {}, elapsed {} ms, dedup mode is {}",
         dumped_parts.size(),
         delete_bitmaps.size(),
         dumped_staged_parts.size(),
         toString(UInt64(txn_id)),
-        watch.elapsedMilliseconds());
+        watch.elapsedMilliseconds(),
+        typeToString(dumped_data.dedup_mode));
 }
 
 void CnchDataWriter::initialize(size_t max_threads)
@@ -560,7 +571,9 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             }
 
             // Precommit stage. Write intermediate parts to KV
-            auto action = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
+            auto action
+                = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
+            action->as<InsertAction>()->checkAndSetDedupMode(dumped_data.dedup_mode);
             txn->appendAction(action);
             action->executeV2();
         }
@@ -650,10 +663,18 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
 
 void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & staged_parts, const LocalDeleteBitmaps & bitmaps_to_dump)
 {
+    if (dedup_mode != CnchDedupHelper::DedupMode::APPEND)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Dedup mode is not append, but got {} when publish staged parts for table {}, it's a bug!",
+            typeToString(dedup_mode),
+            storage.getCnchStorageID().getNameForLogs());
     DumpedData items;
+    items.dedup_mode = dedup_mode;
+
     TxnTimestamp txn_id = context->getCurrentTransactionID();
 
-    for (auto & staged_part : staged_parts)
+    for (const auto & staged_part : staged_parts)
     {
         // new part that shares the data file with the staged part
         Protos::DataModelPart new_part_model;

@@ -946,4 +946,9 @@ void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids) const {
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids, const Strings & names_of_roles) const { checkAdminOptionImpl<true>(role_ids, names_of_roles); }
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids, const std::unordered_map<UUID, String> & names_of_roles) const { checkAdminOptionImpl<true>(role_ids, names_of_roles); }
 
+bool ContextAccessParams::dependsOnSettingName(std::string_view setting_name)
+{
+    return (setting_name == "readonly") || (setting_name == "allow_ddl") || (setting_name == "allow_introspection_functions");
+}
+
 }

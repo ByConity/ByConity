@@ -341,18 +341,10 @@ BlockIO InterpreterInsertQuery::execute()
         /// Handle the insert commit for insert select/infile case in cnch server.
         BlockInputStreamPtr in = cnch_merge_tree->writeInWorker(query_ptr, metadata_snapshot, getContext());
 
-        if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(table.get());
-            cnch_table && cnch_table->commitTxnFromWorkerSide(metadata_snapshot, getContext()))
-        {
-            /// for unique table, insert select|infile is committed from worker side
-            res.in = std::move(in);
-        }
-        else
-        {
-            auto txn = getContext()->getCurrentTransaction();
-            txn->setMainTableUUID(table->getStorageUUID());
-            res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
-        }
+        auto txn = getContext()->getCurrentTransaction();
+        txn->setMainTableUUID(table->getStorageUUID());
+        res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
+
         if (insert_query.is_overwrite && !lock_holders.empty())
         {
             /// Make sure lock is release after txn commit

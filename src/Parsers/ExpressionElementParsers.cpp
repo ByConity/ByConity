@@ -1079,7 +1079,7 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 if (!isOneOf<TokenType::OpeningSquareBracket, TokenType::OpeningRoundBracket, TokenType::Comma, TokenType::Minus>(last_token))
                     return false;
             }
-            else if (isOneOf<TokenType::StringLiteral, TokenType::Minus, TokenType::BackQuotedIdentifier>(pos->type))
+            else if (isOneOf<TokenType::StringLiteral, TokenType::Minus, TokenType::DoubleQuotedIdentifier>(pos->type))
             {
                 if (!isOneOf<TokenType::OpeningSquareBracket, TokenType::OpeningRoundBracket, TokenType::Comma>(last_token))
                     return false;

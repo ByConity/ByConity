@@ -38,6 +38,7 @@
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
+#include <CloudServices/CnchDedupHelper.h>
 #include <DataTypes/ObjectUtils.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <IO/ReadBufferFromString.h>
@@ -189,14 +190,18 @@ void CnchServerServiceImpl::commitParts(
                 CnchDataWriter cnch_writer(
                     *cnch,
                     rpc_context,
-                    ManipulationType(req->type()),
+                    static_cast<ManipulationType>(req->type()),
                     req->task_id(),
                     std::move(consumer_group),
                     tpl,
                     binlog,
                     peak_memory_usage);
 
-                cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
+                auto dedup_mode = static_cast<CnchDedupHelper::DedupMode>(req->dedup_mode());
+                cnch_writer.setDedupMode(dedup_mode);
+
+                cnch_writer.commitPreparedCnchParts(
+                    DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts), dedup_mode});
             }
             catch (...)
             {

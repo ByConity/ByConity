@@ -16,6 +16,7 @@ class CnchLockHolder : private boost::noncopyable, WithContext
 public:
     friend class ICnchTransaction;
     explicit CnchLockHolder(const ContextPtr & context_, std::vector<LockInfoPtr> && elems);
+    explicit CnchLockHolder(const ContextPtr & context_, LockInfoPtr && elem);
 
     ~CnchLockHolder();
 

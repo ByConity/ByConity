@@ -54,6 +54,8 @@
 #include <Storages/ColumnsDescription.h>
 #include <Common/Exception.h>
 #include <MergeTreeCommon/GlobalDataManager.h>
+#include <CloudServices/CnchDedupHelper.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -89,6 +91,7 @@ namespace ErrorCodes
     extern const int PREALLOCATE_TOPOLOGY_ERROR;
     extern const int PREALLOCATE_QUERY_INTENT_NOT_FOUND;
     extern const int SESSION_NOT_FOUND;
+    extern const int ABORTED;
 }
 
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
@@ -1093,6 +1096,64 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
             response->set_last_exception(status.last_exception);
             response->set_last_exception_time(status.last_exception_time);
         }
+    })
+}
+
+void CnchWorkerServiceImpl::executeDedupTask(
+    google::protobuf::RpcController * cntl,
+    const Protos::ExecuteDedupTaskReq * request,
+    Protos::ExecuteDedupTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    SUBMIT_THREADPOOL({
+        auto txn_id = TxnTimestamp(request->txn_id());
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        rpc_context->getClientInfo().rpc_port = request->rpc_port();
+        auto server_client
+            = rpc_context->getCnchServerClient(rpc_context->getClientInfo().current_address.host().toString(), request->rpc_port());
+        auto worker_txn = std::make_shared<CnchWorkerTransaction>(rpc_context, txn_id, server_client);
+        /// This stage is in commit process, we can not finish transaction here.
+        worker_txn->setIsInitiator(false);
+        rpc_context->setCurrentTransaction(worker_txn);
+
+        auto catalog = getContext()->getCnchCatalog();
+        TxnTimestamp ts = getContext()->getTimestamp();
+        auto table_uuid_str = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->table_uuid()));
+        auto table = catalog->tryGetTableByUUID(*getContext(), table_uuid_str, ts);
+        if (!table)
+            throw Exception(ErrorCodes::ABORTED, "Table {} has been dropped", table_uuid_str);
+        auto cnch_table = dynamic_pointer_cast<StorageCnchMergeTree>(table);
+        if (!cnch_table)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Table {} is not cnch merge tree", table_uuid_str);
+
+        auto new_parts = createPartVectorFromModels<MutableMergeTreeDataPartCNCHPtr>(*cnch_table, request->new_parts(), &request->new_parts_paths());
+        DeleteBitmapMetaPtrVector delete_bitmaps_for_new_parts;
+        delete_bitmaps_for_new_parts.reserve(request->delete_bitmaps_for_new_parts_size());
+        for (const auto & bitmap_model : request->delete_bitmaps_for_new_parts())
+            delete_bitmaps_for_new_parts.emplace_back(createFromModel(*cnch_table, bitmap_model));
+
+        auto staged_parts = createPartVectorFromModels<MutableMergeTreeDataPartCNCHPtr>(*cnch_table, request->staged_parts(), &request->staged_parts_paths());
+        DeleteBitmapMetaPtrVector delete_bitmaps_for_staged_parts;
+        delete_bitmaps_for_staged_parts.reserve(request->delete_bitmaps_for_staged_parts_size());
+        for (const auto & bitmap_model : request->delete_bitmaps_for_staged_parts())
+            delete_bitmaps_for_staged_parts.emplace_back(createFromModel(*cnch_table, bitmap_model));
+
+        auto visible_parts = createPartVectorFromModels<MutableMergeTreeDataPartCNCHPtr>(*cnch_table, request->visible_parts(), &request->visible_parts_paths());
+        DeleteBitmapMetaPtrVector delete_bitmaps_for_visible_parts;
+        delete_bitmaps_for_visible_parts.reserve(request->delete_bitmaps_for_visible_parts_size());
+        for (const auto & bitmap_model : request->delete_bitmaps_for_visible_parts())
+            delete_bitmaps_for_visible_parts.emplace_back(createFromModel(*cnch_table, bitmap_model));
+
+        auto dedup_mode = static_cast<CnchDedupHelper::DedupMode>(request->dedup_mode());
+        auto dedup_task = std::make_shared<CnchDedupHelper::DedupTask>(dedup_mode, cnch_table->getCnchStorageID());
+        dedup_task->new_parts = std::move(new_parts);
+        dedup_task->delete_bitmaps_for_new_parts = std::move(delete_bitmaps_for_new_parts);
+        dedup_task->staged_parts = std::move(staged_parts);
+        dedup_task->delete_bitmaps_for_staged_parts = std::move(delete_bitmaps_for_staged_parts);
+        dedup_task->visible_parts = std::move(visible_parts);
+        dedup_task->delete_bitmaps_for_visible_parts = std::move(delete_bitmaps_for_visible_parts);
+
+        CnchDedupHelper::executeDedupTask(*cnch_table, *dedup_task, txn_id, rpc_context);
     })
 }
 

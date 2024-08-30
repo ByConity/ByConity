@@ -1818,7 +1818,7 @@ void InterpreterSystemQuery::lockMemoryLock(const ASTSystemQuery & query, const 
 
     Stopwatch lock_watch;
 
-    auto cnch_lock = transaction->createLockHolder({std::move(partition_lock)});
+    auto cnch_lock = std::make_shared<CnchLockHolder>(local_context, std::move(partition_lock));
     cnch_lock->lock();
     LOG_DEBUG(log, "Acquired lock in {} ms", lock_watch.elapsedMilliseconds());
     sleepForSeconds(query.seconds);

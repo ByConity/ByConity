@@ -19,6 +19,9 @@
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <DataTypes/ObjectUtils.h>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
+#include <CloudServices/CnchDedupHelper.h>
 
 
 namespace DB
@@ -131,4 +134,49 @@ UInt32 InsertAction::collectNewParts(MutableMergeTreeDataPartsCNCHVector const &
     return size;
 }
 
+std::set<Int64> InsertAction::getBucketNumbers() const
+{
+    std::set<Int64> res;
+    for (const auto & part : parts)
+    {
+        if (!res.contains(part->bucket_number))
+            res.insert(part->bucket_number);
+    }
+    return res;
+}
+
+void InsertAction::checkAndSetDedupMode(CnchDedupHelper::DedupMode dedup_mode_)
+{
+    if (dedup_mode_ >= CnchDedupHelper::DedupMode::UPSERT)
+    {
+        if (!table->getInMemoryMetadataPtr()->hasUniqueKey())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Table {} is not unique engine, but dedup mode is {}, it's a bug!",
+                table->getCnchStorageID().getNameForLogs(),
+                typeToString(dedup_mode_));
+
+        if (!staged_parts.empty())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Dedup mode is {}, but staged parts are not empty for table {}, it's a bug!",
+                table->getCnchStorageID().getNameForLogs(),
+                typeToString(dedup_mode_));
+
+        LOG_TRACE(log, "Table {} is in {} mode.", table->getCnchStorageID().getNameForLogs(), typeToString(dedup_mode_));
+    }
+    dedup_mode = dedup_mode_;
+}
+
+CnchDedupHelper::DedupTaskPtr InsertAction::getDedupTask() const
+{
+    /// If parts are empty or dedup mode is append, just skip dedup stage.
+    if (dedup_mode == CnchDedupHelper::DedupMode::APPEND || parts.empty())
+        return nullptr;
+
+    auto dedup_task =  std::make_shared<CnchDedupHelper::DedupTask>(dedup_mode, table->getCnchStorageID());
+    dedup_task->new_parts = parts;
+    dedup_task->delete_bitmaps_for_new_parts = delete_bitmaps;
+    return dedup_task;
+}
 }

@@ -59,29 +59,18 @@ void ICnchTransaction::setTransactionRecord(TransactionRecord record)
     txn_record = std::move(record);
 }
 
-std::shared_ptr<CnchLockHolder> ICnchTransaction::createLockHolder(std::vector<LockInfoPtr> && elems)
+void ICnchTransaction::appendLockHolder(CnchLockHolderPtr & lock_holder)
 {
-    // if (lock_holder.has_value())
-    //     throw Exception("Invalid operation, should only acquired lock once", ErrorCodes::LOGICAL_ERROR);
-    /// TODO: should avoid acquired lock multiple time
-    auto holder = std::make_shared<CnchLockHolder>(global_context, std::move(elems));
-    lock_holder = holder;
-    return holder;
+    auto lock = getLock();
+    lock_holders.emplace_back(lock_holder);
 }
 
 void ICnchTransaction::assertLockAcquired() const
 {
     /// threadsafe
-    if (auto impl = lock_holder.lock())
-    {
-        impl->assertLockAcquired();
-    }
+    for (const auto & lock_holder: lock_holders)
+        lock_holder->assertLockAcquired();
 }
-
-// IntentLockPtr ICnchTransaction::createIntentLock(const LockEntity & entity, const Strings & intent_names)
-// {
-//     return std::make_unique<IntentLock>(context, getTransactionRecord(), entity, intent_names);
-// }
 
 void ICnchTransaction::setKafkaTpl(const String & consumer_group_, const cppkafka::TopicPartitionList & tpl_)
 {

@@ -435,9 +435,7 @@ public:
 
     virtual bool supportsOptimizer() const override { return true; }
 
-    bool commitTxnFromWorkerSide(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const;
     virtual bool supportIntermedicateResultCache() const override { return true; }
-
     ColumnSize calculateMapColumnSizesImpl(const String & map_implicit_column_name) const;
 
     void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
@@ -464,6 +462,7 @@ public:
      * @param parts input parts, must be sorted in PartComparator order
      */
     void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas) const;
+    void getDeleteBitmapMetaForCnchParts(MutableMergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);

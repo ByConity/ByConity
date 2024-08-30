@@ -63,6 +63,11 @@ storage_configuration:
           disk: s3_disk
   # To avoid break hard-coded test cases.
   cnch_default_policy: cnch_default_hdfs
+cnch_unique_table_log:
+  database: cnch_system
+  table: cnch_unique_table_log
+  flush_max_row_count: 10000
+  flush_interval_milliseconds: 7500
 query_log:
   database: system
   table: query_log

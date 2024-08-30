@@ -60,6 +60,8 @@ struct ContextAccessParams
     friend bool operator >(const ContextAccessParams & lhs, const ContextAccessParams & rhs) { return rhs < lhs; }
     friend bool operator <=(const ContextAccessParams & lhs, const ContextAccessParams & rhs) { return !(rhs < lhs); }
     friend bool operator >=(const ContextAccessParams & lhs, const ContextAccessParams & rhs) { return !(lhs < rhs); }
+
+    static bool dependsOnSettingName(std::string_view setting_name);
 };
 
 

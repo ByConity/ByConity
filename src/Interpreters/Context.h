@@ -51,6 +51,7 @@
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
 #include <Common/RemoteHostFilter.h>
+#include <Common/SharedMutex.h>
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
@@ -183,6 +184,7 @@ class VWResourceGroupManager;
 class Credentials;
 class GSSAcceptorContext;
 struct SettingsConstraintsAndProfileIDs;
+struct SettingsProfilesInfo;
 class RemoteHostFilter;
 struct StorageID;
 class IDisk;
@@ -421,15 +423,13 @@ public:
     }
 };
 
-/** A set of known objects that can be used in the query.
-  * Consists of a shared part (always common to all sessions and queries)
-  *  and copied part (which can be its own for each session or query).
-  *
-  * Everything is encapsulated for all sorts of checks and locks.
-  */
-class Context : public std::enable_shared_from_this<Context>
+class ContextData
 {
-private:
+protected:
+    /// Use copy constructor or createGlobal() instead
+    ContextData();
+    ContextData(const ContextData &);
+
     ContextSharedPart * shared;
 
     ClientInfo client_info;
@@ -579,13 +579,12 @@ private:
     bool enable_worker_fault_tolerance = false;
 
     timespec query_expiration_timestamp{};
+
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
 
-private:
-    friend struct NamedCnchSession;
-
+protected:
     using SampleBlockCache = std::unordered_map<std::string, Block>;
     mutable SampleBlockCache sample_block_cache;
 
@@ -627,16 +626,36 @@ private:
     ExceptionHandlerPtr plan_segment_ex_handler = nullptr;
 
     bool read_from_client_finished = false;
-
     bool is_explain_query = false;
+    int step_id = 2000;
+    int rule_id = 3000;
+    String graphviz_sub_query_path;
+    int sub_query_id = 0;
+    bool has_tenant_id_in_username = false;
+    String tenant_id;
+    String current_catalog;
+};
+
+/** A set of known objects that can be used in the query.
+  * Consists of a shared part (always common to all sessions and queries)
+  *  and copied part (which can be its own for each session or query).
+  *
+  * Everything is encapsulated for all sorts of checks and locks.
+  */
+class Context : public ContextData, public std::enable_shared_from_this<Context>
+{
+private:
+    /// ContextData mutex
+    mutable SharedMutex mutex;
 
     Context();
     Context(const Context &);
-    Context & operator=(const Context &);
 
 public:
+    friend struct NamedCnchSession;
+
     /// Create initial Context with ContextShared and etc.
-    static ContextMutablePtr createGlobal(ContextSharedPart * shared);
+    static ContextMutablePtr createGlobal(ContextSharedPart * shared_part);
     static ContextMutablePtr createCopy(const ContextWeakPtr & other);
     static ContextMutablePtr createCopy(const ContextMutablePtr & other);
     static ContextMutablePtr createCopy(const ContextPtr & other);
@@ -644,8 +663,6 @@ public:
 
     void addSessionView(StorageID view_table_id, StoragePtr view_storage);
     StoragePtr getSessionView(StorageID view_table_id);
-
-    void copyFrom(const ContextPtr & other);
 
     ~Context();
 
@@ -710,6 +727,7 @@ public:
     /// Global application configuration settings.
     void setConfig(const ConfigurationPtr & config);
     const Poco::Util::AbstractConfiguration & getConfigRef() const;
+    const Poco::Util::AbstractConfiguration & getConfigRefWithLock(const std::unique_lock<std::recursive_mutex> &) const;
 
     void initRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
     const RootConfiguration & getRootConfig() const;
@@ -941,7 +959,6 @@ public:
     void setSetting(const StringRef & name, const Field & value);
     void applySettingChange(const SettingChange & change);
     void applySettingsChanges(const SettingsChanges & changes, bool internal = true);
-    void applySettingsChanges(const JSON & changes);
 
     /// Checks the constraints.
     void checkSettingsConstraints(const SettingChange & change) const;
@@ -1245,13 +1262,9 @@ public:
     BackgroundSchedulePool & getDistributedSchedulePool() const;
 
     BackgroundSchedulePool & getConsumeSchedulePool() const;
-    BackgroundSchedulePool & getRestartSchedulePool() const;
-    BackgroundSchedulePool & getHaLogSchedulePool() const;
-    BackgroundSchedulePool & getMutationSchedulePool() const;
     BackgroundSchedulePool & getLocalSchedulePool() const;
     BackgroundSchedulePool & getMergeSelectSchedulePool() const;
     BackgroundSchedulePool & getUniqueTableSchedulePool() const;
-    BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
     BackgroundSchedulePool & getMetricsRecalculationSchedulePool() const;
     /// no more get pool method, use getExtraSchedulePool
@@ -1259,12 +1272,9 @@ public:
         SchedulePool::Type pool_type, SettingFieldUInt64 pool_size, CurrentMetrics::Metric metric, const char * name) const;
 
     ThrottlerPtr getDiskCacheThrottler() const;
-
+    ThrottlerPtr tryGetPreloadThrottler() const;
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
-
-    void initPreloadThrottler();
-    ThrottlerPtr tryGetPreloadThrottler() const;
 
     /// Has distributed_ddl configuration or not.
     bool hasDistributedDDL() const;
@@ -1440,17 +1450,14 @@ public:
     UInt32 nextNodeId() { return id_allocator->nextId(); }
     void createPlanNodeIdAllocator(int max_id = 1);
 
-    int step_id = 2000;
     int getStepId() const { return step_id; }
     void setStepId(int step_id_) { step_id = step_id_; }
     int getAndIncStepId() { return ++step_id; }
 
-    int rule_id = 3000;
     int getRuleId() const { return rule_id; }
     void setRuleId(int rule_id_) { rule_id = rule_id_; }
     void incRuleId() { ++rule_id; }
 
-    String graphviz_sub_query_path;
     void setExecuteSubQueryPath(String path) { graphviz_sub_query_path = std::move(path); }
     String getExecuteSubQueryPath() const
     {
@@ -1461,7 +1468,6 @@ public:
         graphviz_sub_query_path = "";
     }
 
-    int sub_query_id = 0;
     int incAndGetSubQueryId() { return ++sub_query_id; }
 
     const SymbolAllocatorPtr & getSymbolAllocator() { return symbol_allocator; }
@@ -1525,10 +1531,10 @@ public:
             return settings.default_catalog.toString();
     }
 
-    void setChecksumsCache(const ChecksumsCacheSettings & settings);
+    void setChecksumsCache(const ChecksumsCacheSettings & settings_);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
 
-    void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings);
+    void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_);
     std::shared_ptr<GinIndexStoreFactory> getGinIndexStoreFactory() const;
 
     void setPrimaryIndexCache(size_t cache_size_in_bytes);
@@ -1704,16 +1710,28 @@ public:
     bool is_tenant_user() const { return has_tenant_id_in_username; }
 
 private:
-    bool has_tenant_id_in_username = false;
-    String tenant_id;
-    String current_catalog;
 
     std::unique_lock<std::recursive_mutex> getLock() const;
+    std::unique_lock<SharedMutex> getLocalLock() const;
+    std::shared_lock<SharedMutex> getLocalSharedLock() const;
 
     void initGlobal();
 
     /// Compute and set actual user settings, client_info.current_user should be set
-    void calculateAccessRights();
+    void calculateAccessRightsWithLock(const std::unique_lock<SharedMutex> &);
+
+    void setCurrentProfileWithLock(const String & profile_name, const std::unique_lock<SharedMutex> & lock);
+    void setCurrentProfileWithLock(const UUID & profile_id, const std::unique_lock<SharedMutex> & lock);
+    void setCurrentProfileWithLock(const SettingsProfilesInfo & profiles_info, const std::unique_lock<SharedMutex> & lock);
+    void setSettingWithLock(const StringRef & name, const String & value, const std::unique_lock<SharedMutex> & lock);
+    void setSettingWithLock(const StringRef & name, const Field & value, const std::unique_lock<SharedMutex> & lock);
+    void applySettingChangeWithLock(const SettingChange & change, const std::unique_lock<SharedMutex> & lock);
+    void applySettingsChangesWithLock(const SettingsChanges & changes, bool internal, const std::unique_lock<SharedMutex> & lock);
+    std::shared_ptr<const SettingsConstraintsAndProfileIDs> getSettingsConstraintsAndCurrentProfilesWithLock() const;
+    void checkSettingsConstraintsWithLock(const SettingChange & change) const;
+    void checkSettingsConstraintsWithLock(const SettingsChanges & changes) const;
+    void checkSettingsConstraintsWithLock(SettingsChanges & changes) const;
+    void clampToSettingsConstraintsWithLock(SettingsChanges & changes) const;
 
     template <typename... Args>
     void checkAccessImpl(const Args &... args) const;

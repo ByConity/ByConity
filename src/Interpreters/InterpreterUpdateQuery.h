@@ -21,6 +21,9 @@ public:
 private:
     ASTPtr prepareInterpreterSelectQuery(const StoragePtr & storage);
     ASTPtr transformToInterpreterInsertQuery(const StoragePtr & storage);
+
+    BlockIO executePartialUpdate(const StoragePtr & storage);
+    ASTPtr prepareInsertQueryForPartialUpdate(const StoragePtr & storage, const std::unordered_map<String, ASTPtr> & name_to_expression_map);
     ASTPtr query_ptr;
     Poco::Logger * log;
 };
