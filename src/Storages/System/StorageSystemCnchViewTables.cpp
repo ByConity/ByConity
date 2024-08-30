@@ -49,7 +49,7 @@ StorageSystemCnchViewTables::StorageSystemCnchViewTables(const StorageID & table
             {"latest_visible_partitions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
             {"previous_partitions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
             {"refresh_type", std::make_shared<DataTypeString>()},
-            {"refresh_start_time", std::make_shared<DataTypeDateTime>()},
+            {"refresh_start_time", std::make_shared<DataTypeString>()},
             {"refresh_interval", std::make_shared<DataTypeString>()},
             {"is_refeshable", std::make_shared<DataTypeUInt8>()},
         }));
