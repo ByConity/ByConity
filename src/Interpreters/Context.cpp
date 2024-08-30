@@ -2186,7 +2186,7 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
 
     // NOTE: tenanted users connect to server using tenant id given in connection info.
     // allow only whitelisted settings for tenanted users
-    if (is_tenant_user() && !internal && !isInternalQuery () && getIsRestrictSettingsToWhitelist() && getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && !getCurrentTenantId().empty())
+    if (is_tenant_user() && !internal && !isInternalQuery () && getIsRestrictSettingsToWhitelist() && (getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY || session_context.lock().get() == this) && !getCurrentTenantId().empty())
     {
         for (const auto & change : changes)
         {
