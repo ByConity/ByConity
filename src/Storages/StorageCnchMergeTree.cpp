@@ -1999,7 +1999,7 @@ void StorageCnchMergeTree::checkAlterPartitionIsPossible(
 }
 
 Pipe StorageCnchMergeTree::alterPartition(
-    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context)
+    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context, const ASTPtr & query)
 {
     if (unlikely(!query_context->getCurrentTransaction()))
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);

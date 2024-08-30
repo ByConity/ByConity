@@ -158,7 +158,7 @@ public:
     void checkAlterPartitionIsPossible(
         const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;
     Pipe
-    alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context) override;
+    alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr query_context, const ASTPtr & query = nullptr) override;
 
     void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
 

@@ -198,7 +198,8 @@ void StorageCloudMergeTree::checkAlterPartitionIsPossible(const PartitionCommand
 Pipe StorageCloudMergeTree::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
-    ContextPtr local_context)
+    ContextPtr local_context,
+    const ASTPtr & /* query */)
 {
     if (commands.size() > 1U)
         throw Exception(

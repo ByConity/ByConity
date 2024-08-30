@@ -979,7 +979,6 @@ void MetastoreProxy::prepareAddDataParts(
     if (parts.empty())
         return;
 
-    std::unordered_set<String> existing_partitions{current_partitions.begin(), current_partitions.end()};
     std::unordered_set<String> partitions_found_in_deleting_set;
     std::unordered_map<String, String > partition_map;
 
@@ -1002,17 +1001,22 @@ void MetastoreProxy::prepareAddDataParts(
             batch_write.AddPut(SinglePutRequest(manifestKeyForPart(name_space, table_uuid, txn_id, info_ptr->getPartName()), part_meta));
 
         if (deleting_partitions.count(info_ptr->partition_id) && !partitions_found_in_deleting_set.count(info_ptr->partition_id))
-        {
             partitions_found_in_deleting_set.emplace(info_ptr->partition_id);
-            partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
-        }
 
-        if (!existing_partitions.count(info_ptr->partition_id) && !partition_map.count(info_ptr->partition_id))
+        if (!partition_map.count(info_ptr->partition_id))
             partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
     }
 
     if (update_sync_list)
         batch_write.AddPut(SinglePutRequest(syncListKey(name_space, table_uuid, commit_time), std::to_string(commit_time)));
+
+    // Prepare partition metadata. Skip those already exists non-deleting partitions
+    for (const auto & exist_partition : current_partitions)
+    {
+        auto it = partition_map.find(exist_partition);
+        if (it != partition_map.end() && !partitions_found_in_deleting_set.count(exist_partition))
+            partition_map.erase(it);
+    }
 
     Protos::PartitionMeta partition_model;
     for (auto it = partition_map.begin(); it != partition_map.end(); it++)
@@ -1037,7 +1041,6 @@ void MetastoreProxy::prepareAddStagedParts(
     if (parts.empty())
         return;
 
-    std::unordered_set<String> existing_partitions{current_partitions.begin(), current_partitions.end()};
     std::unordered_map<String, String> partition_map;
     size_t expected_staged_part_size = expected_staged_parts.size();
     if (expected_staged_part_size != static_cast<size_t>(parts.size()))
@@ -1049,8 +1052,16 @@ void MetastoreProxy::prepareAddStagedParts(
         String part_meta = it->SerializeAsString();
         batch_write.AddPut(SinglePutRequest(stagedDataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_staged_parts[it - parts.begin()]));
 
-        if (!existing_partitions.count(info_ptr->partition_id) && !partition_map.count(info_ptr->partition_id))
+        if (!partition_map.count(info_ptr->partition_id))
             partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
+    }
+
+    // Prepare partition metadata. Skip those already exists partitions
+    for (const auto & exist_partition : current_partitions)
+    {
+        auto it = partition_map.find(exist_partition);
+        if (it != partition_map.end())
+            partition_map.erase(it);
     }
 
     Protos::PartitionMeta partition_model;
