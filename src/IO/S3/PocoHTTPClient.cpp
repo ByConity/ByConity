@@ -101,7 +101,7 @@ void PocoHTTPClientConfiguration::updateSchemeAndRegion()
 
 PocoHTTPClient::PocoHTTPClient(const PocoHTTPClientConfiguration & clientConfiguration)
     : per_request_configuration(clientConfiguration.per_request_configuration)
-    , timeouts(ConnectionTimeouts(
+      ,timeouts(ConnectionTimeouts(
           Poco::Timespan(clientConfiguration.connectTimeoutMs * 1000), /// connection timeout.
           Poco::Timespan(clientConfiguration.requestTimeoutMs * 1000), /// send timeout.
           Poco::Timespan(clientConfiguration.requestTimeoutMs * 1000), /// receive timeout.

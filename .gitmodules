@@ -106,7 +106,7 @@
 	branch = v1.33.2
 [submodule "contrib/aws"]
 	path = contrib/aws
-	url = https://github.com/ClickHouse-Extras/aws-sdk-cpp.git
+	url = git@code.byted.org:dp/aws-sdk-cpp.git
 [submodule "contrib/aws-c-event-stream"]
 	path = contrib/aws-c-event-stream
 	url = https://github.com/awslabs/aws-c-event-stream.git

@@ -9,13 +9,13 @@
 #include <aws/core/http/HttpRequest.h>
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
-
+#include <Common/typeid_cast.h>
 namespace DB::S3
 {
 std::shared_ptr<Aws::Http::HttpClient>
 PocoHTTPClientFactory::CreateHttpClient(const Aws::Client::ClientConfiguration & clientConfiguration) const
 {
-    return std::make_shared<PocoHTTPClient>(static_cast<const PocoHTTPClientConfiguration &>(clientConfiguration));
+    return std::make_shared<PocoHTTPClient>(typeid_cast<const PocoHTTPClientConfiguration &>(clientConfiguration));
 }
 
 std::shared_ptr<Aws::Http::HttpRequest> PocoHTTPClientFactory::CreateHttpRequest(

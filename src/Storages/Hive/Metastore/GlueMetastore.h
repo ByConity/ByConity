@@ -18,7 +18,7 @@ class GlueMetastoreClient : public IMetaClient
 public:
     explicit GlueMetastoreClient(
         const Aws::Auth::AWSCredentials & credentials,
-        const Aws::Client::ClientConfiguration & client_config,
+        const std::shared_ptr<Aws::Client::ClientConfiguration> & client_config,
         const GlueClientAuxParams & _aux);
 
     Strings getAllDatabases() override;
@@ -43,7 +43,7 @@ public:
         const std::vector<Strings> & partition_vals) override;
 
 private:
-    Aws::Client::ClientConfiguration cfg;
+    std::shared_ptr<Aws::Client::ClientConfiguration> cfg;
     GlueClientAuxParams aux;
     Aws::Glue::GlueClient client;
 };
