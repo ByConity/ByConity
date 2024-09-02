@@ -365,12 +365,13 @@ public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(ContextPtr context)
     {
+        bool return_nullable_array = !context || context->getSettingsRef().allow_return_nullable_array;
         if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionArrayIndex>(context));
-        return std::make_shared<FunctionArrayIndex>(context);
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionArrayIndex>(context, return_nullable_array));
+        return std::make_shared<FunctionArrayIndex>(context, return_nullable_array);
     }
 
-    explicit FunctionArrayIndex(ContextPtr context_) :  context(context_) {}
+    explicit FunctionArrayIndex(ContextPtr context_, bool return_nullable_array_ = true) : context(context_), allow_return_nullable_array(return_nullable_array_) {}
 
     ArgType getArgumentsType() const override { return ArgType::ARRAY_FIRST; }
 
@@ -400,7 +401,7 @@ public:
                 "numeric types, or Enum and numeric type. Passed: {} and {}.",
                 getName(), arguments[0]->getName(), arguments[1]->getName());
 
-        if (nullable_type || (context && context->getSettingsRef().enable_implicit_arg_type_convert && arguments[1]->isNullable()))
+        if (allow_return_nullable_array && (nullable_type || (context && context->getSettingsRef().enable_implicit_arg_type_convert && arguments[1]->isNullable())))
             return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
 
         return std::make_shared<DataTypeNumber<ResultType>>();
@@ -420,7 +421,8 @@ public:
         {
             ColumnsWithTypeAndName tmp_args = {{nullable_col->getNestedColumnPtr(), removeNullable(arguments[0].type), arguments[0].name}, arguments[1]};
             auto res = executeInternalImpl(tmp_args, removeNullable(result_type), input_rows_count);
-            return wrapInNullable(res, arguments, result_type, input_rows_count);
+            return allow_return_nullable_array ? wrapInNullable(res, arguments, result_type, input_rows_count)
+                                               : res;
         }
 
         return executeInternalImpl(arguments, result_type, input_rows_count);
@@ -521,6 +523,7 @@ public:
 
 private:
     ContextPtr context;
+    bool allow_return_nullable_array;
     using ResultType = typename ConcreteAction::ResultType;
     using ResultColumnType = ColumnVector<ResultType>;
     using ResultColumnPtr = decltype(ResultColumnType::create());
