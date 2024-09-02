@@ -1426,24 +1426,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         }
         else
         {
-            MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter;
-            if (metadata_snapshot->hasUniqueKey())
-            {
-                /// get a consistent snapshot of delete bitmaps for query,
-                /// otherwise concurrent upserts that modify part's delete bitmap will cause incorrect query result
-                auto delete_bitmap_snapshot = merge_tree_storage->getLatestDeleteSnapshot(plan_element.parts);
-                /// move delete_bitmap_snapshot into the closure because delete_bitmap_getter will be used after this function returns
-                delete_bitmap_getter = [snapshot = std::move(delete_bitmap_snapshot)](const auto & part) -> ImmutableDeleteBitmapPtr
-                {
-                    if (auto it = snapshot.find(part); it != snapshot.end())
-                        return it->second;
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Not found delete bitmap for part " + part->name);
-                };
-            }
-            else
-            {
-                delete_bitmap_getter = [](const auto & part) { return part->getDeleteBitmap(); };
-            }
+            MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter = [](const auto & part) { return part->getDeleteBitmap(); };
 
             auto query_info_for_index = query_info;
             query_info_for_index.read_bitmap_index = plan_element.read_bitmap_index;

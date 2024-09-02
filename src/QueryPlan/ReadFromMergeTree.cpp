@@ -328,8 +328,7 @@ ProcessorPtr ReadFromMergeTree::createSource(
     const MergeTreeStreamSettings & stream_settings)
 {
     return std::make_shared<TSource>(
-                data, storage_snapshot, part.data_part, std::move(combineFilterBitmap(part, delete_bitmap_getter)), required_columns, part.ranges,
-                query_info, true, stream_settings, virt_column_names, part.part_index_in_query);
+        data, storage_snapshot, part, delete_bitmap_getter, required_columns, query_info, true, stream_settings, virt_column_names);
 }
 
 Pipe ReadFromMergeTree::readInOrder(

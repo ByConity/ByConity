@@ -140,14 +140,18 @@ private:
     std::deque<AtomicPredicatePtr> atomic_predicates;
     struct Part
     {
-        MergeTreeMetaBase::DataPartPtr data_part;
-        size_t part_index_in_query;
+        RangesInDataPart part_detail;
+        MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter;
+        /// Lazy init, need to use getDeleteBitmap() interface rather than use delete_bitmap directly
         ImmutableDeleteBitmapPtr delete_bitmap;
+        bool delete_bitmap_initialized = false;
 
-        Part(MergeTreeMetaBase::DataPartPtr data_part_, size_t part_index_in_query_, ImmutableDeleteBitmapPtr delete_bitmap_)
-            : data_part(data_part_), part_index_in_query(part_index_in_query_), delete_bitmap(delete_bitmap_)
+        Part(const RangesInDataPart & part_detail_, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter_)
+            : part_detail(part_detail_), delete_bitmap_getter(std::move(delete_bitmap_getter_))
         {
         }
+
+        ImmutableDeleteBitmapPtr getDeleteBitmap();
     };
 
     std::vector<Part> parts_with_idx;

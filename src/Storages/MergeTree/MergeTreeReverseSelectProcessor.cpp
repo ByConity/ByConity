@@ -37,7 +37,7 @@ namespace ErrorCodes
 bool MergeTreeReverseSelectProcessor::getNewTask()
 try
 {
-    if ((chunks.empty() && all_mark_ranges.empty()) || total_marks_count == 0)
+    if ((chunks.empty() && part_detail.ranges.empty()) || total_marks_count == 0)
     {
         finish();
         return false;
@@ -45,27 +45,27 @@ try
 
     /// We have some blocks to return in buffer.
     /// Return true to continue reading, but actually don't create a task.
-    if (all_mark_ranges.empty())
+    if (part_detail.ranges.empty())
         return true;
 
-    task_columns = getReadTaskColumns(storage, storage_snapshot, data_part, required_columns, prewhere_info, index_context, {}, check_columns);
+    task_columns = getReadTaskColumns(storage, storage_snapshot, part_detail.data_part, required_columns, prewhere_info, index_context, {}, check_columns);
 
     /// will be used to distinguish between PREWHERE and WHERE columns when applying filter
     const auto & column_names = task_columns.columns.getNames();
     column_name_set = NameSet{column_names.begin(), column_names.end()};
 
     /// Read ranges from right to left.
-    MarkRanges mark_ranges_for_task = { all_mark_ranges.back() };
-    all_mark_ranges.pop_back();
+    MarkRanges mark_ranges_for_task = { part_detail.ranges.back() };
+    part_detail.ranges.pop_back();
 
     auto size_predictor = (stream_settings.preferred_block_size_bytes == 0)
         ? nullptr
-        : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
+        : std::make_unique<MergeTreeBlockSizePredictor>(part_detail.data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
 
     task = std::make_unique<MergeTreeReadTask>(
-        data_part, delete_bitmap, mark_ranges_for_task, part_index_in_query, ordered_names, column_name_set,
+        part_detail.data_part, getDeleteBitmap(), mark_ranges_for_task, part_detail.part_index_in_query, ordered_names, column_name_set,
         task_columns, prewhere_info && prewhere_info->remove_prewhere_column,
-        task_columns.should_reorder, std::move(size_predictor), all_mark_ranges);
+        task_columns.should_reorder, std::move(size_predictor), part_detail.ranges);
 
     if (!reader)
         initializeReaders(mark_ranges_for_task);
@@ -76,7 +76,7 @@ catch (...)
 {
     /// Suspicion of the broken part. A part is added to the queue for verification.
     if (getCurrentExceptionCode() != ErrorCodes::MEMORY_LIMIT_EXCEEDED)
-        storage.reportBrokenPart(data_part->name);
+        storage.reportBrokenPart(part_detail.data_part->name);
     throw;
 }
 
@@ -117,7 +117,7 @@ void MergeTreeReverseSelectProcessor::finish()
     */
     reader.reset();
     pre_reader.reset();
-    data_part.reset();
+    part_detail.data_part.reset();
     index_executor.reset();
     pre_index_executor.reset();
 }

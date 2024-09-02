@@ -198,24 +198,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
 
     if (!query_info.projection)
     {
-        MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter;
-        if (metadata_for_reading->hasUniqueKey())
-        {
-            /// get a consistent snapshot of delete bitmaps for query,
-            /// otherwise concurrent upserts that modify part's delete bitmap will cause incorrect query result
-            auto delete_bitmap_snapshot = data.getLatestDeleteSnapshot(parts);
-            /// move delete_bitmap_snapshot into the closure because delete_bitmap_getter will be used after this function returns
-            delete_bitmap_getter = [snapshot = std::move(delete_bitmap_snapshot)](const auto & part) -> ImmutableDeleteBitmapPtr
-            {
-                if (auto it = snapshot.find(part); it != snapshot.end())
-                    return it->second;
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Not found delete bitmap for part " + part->name);
-            };
-        }
-        else
-        {
-            delete_bitmap_getter = [](const auto & part) { return part->getDeleteBitmap(); };
-        }
+        MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter = [](const auto & part) { return part->getDeleteBitmap(); };
 
         auto plan = readFromParts(
             parts,
