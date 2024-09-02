@@ -137,7 +137,10 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
 
 SourcePtr IHiveFile::getReader(const Block & block, const std::shared_ptr<ReadParams> & params)
 {
-    auto buffer = readFile(params->read_settings);
+    auto settings = params->read_settings;
+    settings.remote_fs_prefetch = false;
+    settings.local_fs_prefetch = false;
+    auto buffer = readFile(settings);
     auto input_format = FormatFactory::instance().getInput(getFormatName(), *buffer, block, params->context, params->max_block_size);
     input_format->addBuffer(std::move(buffer));
     return input_format;
