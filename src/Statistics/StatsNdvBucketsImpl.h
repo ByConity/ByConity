@@ -80,8 +80,6 @@ public:
 
     const BucketBounds & getBucketBounds() const override { return bounds; }
 
-    uint64_t getCount(size_t bucket_id) const { return counts[bucket_id]; }
-    double getNdv(size_t bucket_id) const { return hll_sketches[bucket_id].getEstimate(); }
     std::shared_ptr<StatsNdvBucketsResultImpl<T>> asResultImpl() const;
 
     std::shared_ptr<StatsNdvBucketsResult> asResult() const override { return asResultImpl(); }
@@ -141,7 +139,7 @@ void StatsNdvBucketsImpl<T>::deserialize(std::string_view raw_blob)
 
         auto blob = raw_blob.substr(sizeof(serde_data_type), raw_blob.size() - sizeof(serde_data_type));
         Protos::StatsNdvBuckets pb;
-        pb.ParseFromArray(blob.data(), blob.size());
+        ASSERT_PARSE(pb.ParseFromArray(blob.data(), blob.size()));
         BucketBoundsImpl<T> bounds_;
         bounds_.deserialize(pb.bounds_blob());
         int64_t num_buckets = bounds_.numBuckets();

@@ -33,8 +33,7 @@ public:
     explicit FirstFullColumnHandler(HandlerContext & handler_context_, const NameAndTypePair & col_desc) : handler_context(handler_context_)
     {
         col_name = col_desc.name;
-        data_type = decayDataType(col_desc.type);
-        config = getColumnConfig(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, col_desc.type);
         generateSqls();
     }
 
@@ -49,7 +48,7 @@ public:
         sqls.emplace_back(ndv_sql);
         if (config.need_histogram)
         {
-            auto kll_log_k = handler_context.settings.kll_sketch_log_k;
+            auto kll_log_k = handler_context.settings.kll_sketch_log_k();
             auto kll_name = getKllFuncNameWithConfig(kll_log_k);
             auto histogram_sql = fmt::format(FMT_STRING("{}({})"), kll_name, wrapped_col_name);
             sqls.emplace_back(histogram_sql);
@@ -61,6 +60,12 @@ public:
             auto max_sql = fmt::format(FMT_STRING("toFloat64(max({}))"), wrapped_col_name);
             sqls.emplace_back(min_sql);
             sqls.emplace_back(max_sql);
+        }
+
+        if (config.need_length)
+        {
+            auto length_sql = fmt::format(FMT_STRING("sum({})"), config.getByteSizeSql(quote_col_name));
+            sqls.emplace_back(length_sql);
         }
 
         // to estimate ndv
@@ -104,7 +109,7 @@ public:
                     auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, histogram_blob);
                     result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
                     result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
-                    auto histogram_bucket_size = handler_context.settings.histogram_bucket_size;
+                    auto histogram_bucket_size = handler_context.settings.histogram_bucket_size();
                     result.bucket_bounds = histogram->getBucketBounds(histogram_bucket_size);
                 }
                 LOG_INFO(
@@ -132,6 +137,12 @@ public:
                 result.min_as_double = min;
                 result.max_as_double = max;
             }
+
+            if (config.need_length)
+            {
+                auto length = getSingleValue<UInt64>(block, index_offset++);
+                result.length_opt = length;
+            }
         }
         else
         {
@@ -149,7 +160,6 @@ public:
 private:
     HandlerContext & handler_context;
     String col_name;
-    DataTypePtr data_type;
     ColumnCollectConfig config;
     std::vector<String> sqls;
 };
@@ -162,8 +172,7 @@ public:
         : handler_context(handler_context_), bucket_bounds(bucket_bounds_)
     {
         col_name = col_desc.name;
-        data_type = decayDataType(col_desc.type);
-        config = getColumnConfig(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, col_desc.type);
         generateSqls();
     }
 
@@ -202,16 +211,15 @@ private:
     HandlerContext & handler_context;
     std::shared_ptr<BucketBounds> bucket_bounds;
     String col_name;
-    DataTypePtr data_type;
     ColumnCollectConfig config;
     std::vector<String> sqls;
 };
 
 
-class StatisticsCollectorStepFull : public CollectStep
+class FullCollectStep : public CollectStep
 {
 public:
-    explicit StatisticsCollectorStepFull(StatisticsCollector & core_) : CollectStep(core_) { }
+    explicit FullCollectStep(StatisticsCollector & core_) : CollectStep(core_) { }
 
     void collectFirstStep(const ColumnDescVector & cols_desc)
     {
@@ -273,9 +281,9 @@ public:
     }
 };
 
-std::unique_ptr<CollectStep> createStatisticsCollectorStepFull(StatisticsCollector & core)
+std::unique_ptr<CollectStep> createFullCollectStep(StatisticsCollector & core)
 {
-    return std::make_unique<StatisticsCollectorStepFull>(core);
+    return std::make_unique<FullCollectStep>(core);
 }
 
 }

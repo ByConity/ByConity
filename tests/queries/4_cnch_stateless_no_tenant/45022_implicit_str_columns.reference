@@ -1,0 +1,34 @@
+t	1	0
+t.*		0						
+t.id	UInt64	0	0	0	nan	nan	8	0
+t	4	0
+t.*		0						
+t.id	UInt64	0	0	0	nan	nan	8	0
+t.__params__\'a\'	Nullable(String)	0	0	0	nan	nan	8	0
+t.__params__\'b\'	Nullable(String)	0	0	0	nan	nan	8	0
+t.__params__\'c\'	Nullable(String)	0	0	0	nan	nan	8	0
+t.__params__\'d\'	Nullable(String)	0	0	0	nan	nan	8	0
+t	4	2
+t.*		2						
+t.__params__\'a\'	Nullable(String)	2	0	2	1.2424176198970943e+19	1.4482936244000133e+19	12	1
+t.__params__\'b\'	Nullable(String)	1	1	1	9.3657419726685327e+18	9.3657419726685327e+18	13	1
+t.__params__\'c\'	Nullable(String)	1	1	1	7.2320557878566318e+18	7.2320557878566318e+18	13	1
+t.__params__\'d\'	Nullable(String)	0	2	0	nan	nan	8	0
+t.__params__\'a\'	0	[1.2424176198970943e+19, 1.2424176198970943e+19]	1	1	1	1
+t.__params__\'a\'	1	[1.4482936244000133e+19, 1.4482936244000133e+19]	1	1	2	2
+t.__params__\'b\'	0	[9.3657419726685327e+18, 9.3657419726685327e+18]	1	1	1	1
+t.__params__\'c\'	0	[7.2320557878566318e+18, 7.2320557878566318e+18]	1	1	1	1
+t	4	2
+t.*		2						
+t.__params__\'a\'	Nullable(String)	2	0	2	1.2424176198970943e+19	1.4482936244000133e+19	12	1
+t.__params__\'b\'	Nullable(String)	1	1	1	9.3657419726685327e+18	9.3657419726685327e+18	13	1
+t.__params__\'c\'	Nullable(String)	1	1	1	7.2320557878566318e+18	7.2320557878566318e+18	13	1
+t.__params__\'d\'	Nullable(String)	0	2	0	nan	nan	8	0
+expected to update a and id
+t	5	102
+t.*		102						
+t.id	UInt64	102	0	100	0	99	8	1
+t.__params__\'a\'	Nullable(String)	102	0	100	3.7982382647197709e+17	1.8371778432400343e+19	12	1
+t.__params__\'b\'	Nullable(String)	1	101	1	9.3657419726685327e+18	9.3657419726685327e+18	13	1
+t.__params__\'c\'	Nullable(String)	1	101	1	7.2320557878566318e+18	7.2320557878566318e+18	13	1
+t.__params__\'d\'	Nullable(String)	0	102	0	nan	nan	8	0

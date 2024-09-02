@@ -107,7 +107,7 @@ std::optional<Time> getTimeFromString(const String & text)
     {
         return std::nullopt;
     }
-    return DateLUT::instance().toTime(DateLUT::instance().makeDateTime(1971, 1, 1, tmp.tm_hour, tmp.tm_min, 0));
+    return DateLUT::instance().toTime(DateLUT::instance().makeDateTime(1970, 1, 1, tmp.tm_hour, tmp.tm_min, 0));
 }
 
 
@@ -128,7 +128,7 @@ std::optional<double> calcPriority(const InternalConfig & cfg, UInt64 total_udi,
         auto priority = 3 + 1.0 / std::log(static_cast<double>(total_udi) + M_E);
         return priority;
     }
-    else if (total_udi > table_row_count * cfg.update_ratio_threshold || total_udi > cfg.update_row_count_threshold)
+    else if (total_udi > table_row_count * cfg.update_ratio_threshold() || total_udi > cfg.update_row_count_threshold())
     {
         // range (1, 2)
         // when stats is not empty, it will be collected later

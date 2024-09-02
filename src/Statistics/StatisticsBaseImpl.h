@@ -16,6 +16,7 @@
 #pragma once
 #include <Statistics/StatisticsBase.h>
 #include <Common/Exception.h>
+#include <Statistics/SerdeUtils.h>
 
 namespace DB::Statistics
 {

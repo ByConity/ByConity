@@ -38,9 +38,9 @@ void CacheManager::initialize(ContextPtr context)
     initialize(max_size, expire_time);
 }
 
-void CacheManager::initialize(UInt64 max_size, std::chrono::seconds expire_time)
+void CacheManager::initialize(UInt64 entry_size, std::chrono::seconds expire_time)
 {
-    (void)max_size;
+    (void)entry_size;
     cache = std::make_unique<CacheType>(expire_time);
 }
 
@@ -52,9 +52,9 @@ void CacheManager::reset()
 void CacheManager::invalidate(ContextPtr context, const StatsTableIdentifier & table)
 {
     (void)context;
-    if (!cache)
-        throw Exception("CacheManager not initialized", ErrorCodes::LOGICAL_ERROR);
-    cache->invalidate(table.getUniqueKey());
+    // this operation is lightweight:
+    //     local, in memory and exception free
+    if (cache)
+        cache->invalidate(table.getUniqueKey());
 }
-
 } // namespace DB::Statistics

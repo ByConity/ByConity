@@ -14,11 +14,13 @@
  */
 
 #pragma once
+#include <limits>
 #include <memory>
 #include <Statistics/CollectorSettings.h>
 #include <Statistics/ParseUtils.h>
 #include <Statistics/StatisticsCollectorObjects.h>
 #include <Statistics/StatsTableIdentifier.h>
+#include <Poco/Logger.h>
 
 namespace DB::Statistics
 {
@@ -34,10 +36,11 @@ struct HandlerColumnData
     bool is_ndv_reliable = false;
     double ndv_value = 0;
 
-    double min_as_double = 0;
-    double max_as_double = 0;
+    double min_as_double = std::numeric_limits<Float64>::quiet_NaN();
+    double max_as_double = std::numeric_limits<Float64>::quiet_NaN();
     std::shared_ptr<BucketBounds> bucket_bounds; // RowCountHandler will write this
     std::optional<std::shared_ptr<StatsNdvBucketsResult>> ndv_buckets_result_opt;
+    std::optional<UInt64> length_opt;
 };
 
 
@@ -91,10 +94,12 @@ protected:
     CatalogAdaptorPtr catalog;
     ContextPtr context;
     HandlerContext handler_context;
+    Poco::Logger * logger = &Poco::Logger::get("Statistics::CollectStep");
 };
 
 
 std::vector<ColumnDescVector> split(const ColumnDescVector & origin, UInt64 max_columns);
-std::unique_ptr<CollectStep> createStatisticsCollectorStepSample(StatisticsCollector & core);
-std::unique_ptr<CollectStep> createStatisticsCollectorStepFull(StatisticsCollector & core);
+std::unique_ptr<CollectStep> createSampleCollectStep(StatisticsCollector & core);
+std::unique_ptr<CollectStep> createFullCollectStep(StatisticsCollector & core);
+std::unique_ptr<CollectStep> createFullPartitionedCollectStep(StatisticsCollector & core);
 }

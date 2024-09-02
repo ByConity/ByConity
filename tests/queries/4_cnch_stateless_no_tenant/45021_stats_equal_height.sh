@@ -11,4 +11,4 @@ ${CLICKHOUSE_CLIENT} --query="create stats eht with fullscan SETTINGS create_sta
 
 ${CLICKHOUSE_CLIENT} --query="show column_stats eht(x)" | awk -F'\t' '{ if ($4 >= 80 && $4 <= 120) print NR ": ok"; else print NR ": failed " $4; }'
 
-
+${CLICKHOUSE_CLIENT} --query="drop table if exists eht";

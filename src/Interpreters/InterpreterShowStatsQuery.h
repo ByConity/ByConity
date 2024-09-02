@@ -37,7 +37,7 @@ private:
     BlockIO executeTable();
     BlockIO executeAll();
     BlockIO executeColumn();
-    void executeSpecial();
+    BlockIO executeSpecial();
 
     ASTPtr query_ptr;
     // currently only cache_policy is useful

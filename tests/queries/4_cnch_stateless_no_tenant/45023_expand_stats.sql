@@ -14,7 +14,7 @@ create table tb (
     `old_date32` Date32,
     `old_datetime` DateTime,
     `old_datetime64` DateTime64(3)
-) ENGINE = CnchMergeTree()
+) Engine = CnchMergeTree()
 order by
     id;
 

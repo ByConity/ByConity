@@ -24,20 +24,20 @@ std::shared_ptr<TaskInfo> TaskQueue::chooseTask(Mode mode)
 {
     std::unique_lock lck(mtx);
 
-    if (task_infos.size() == 0)
+    if (task_infos.empty())
     {
         return nullptr;
     }
 
     double max_priority = -1e9;
     std::shared_ptr<TaskInfo> chosen_task;
-    int out_of_lease = 0;
+    // int out_of_lease = 0;
     auto now = nowTimePoint();
-    for (auto & [table_uuid, task_info] : task_infos)
+    for (auto & [unique_key, task_info] : task_infos)
     {
         if (now < task_info->getStartLease())
         {
-            ++out_of_lease;
+            // ++out_of_lease;
             continue;
         }
 
@@ -67,10 +67,10 @@ void TaskQueue::clear()
     task_infos.clear();
 }
 
-void TaskQueue::erase(UUID table_uuid)
+void TaskQueue::erase(UUID unique_key)
 {
     std::unique_lock lck(mtx);
-    task_infos.erase(table_uuid);
+    task_infos.erase(unique_key);
 }
 
 size_t TaskQueue::size() const
@@ -83,12 +83,12 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
 {
     std::unique_lock lck(mtx);
     auto context = getContext();
-    auto table_uuid = log.table_uuid;
-    auto min_start_lease = nowTimePoint() + internal_config.schedule_period;
+    auto unique_key = log.table.getUniqueKey();
+    auto min_start_lease = nowTimePoint() + std::chrono::seconds(internal_config.schedule_period_seconds());
 
-    if (task_infos.count(table_uuid))
+    if (task_infos.count(unique_key))
     {
-        auto old_task_info = task_infos.at(table_uuid);
+        auto old_task_info = task_infos.at(unique_key);
 
         if (old_task_info->getTaskUUID() != log.task_uuid)
         {
@@ -132,7 +132,7 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
                 core_old.status = Status::Cancelled;
                 auto info = fmt::format(FMT_STRING("Replaced by another task {}"), toString(core_new.task_uuid));
                 writeTaskLog(context, core_old, info);
-                task_infos.erase(table_uuid);
+                task_infos.erase(unique_key);
                 // continue execution as if we have no old task
             }
         }
@@ -153,7 +153,7 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
             core.status = Status::Pending;
             writeTaskLog(context, core);
             auto new_task = std::make_shared<TaskInfo>(core, min_start_lease);
-            task_infos.emplace(table_uuid, new_task);
+            task_infos.emplace(unique_key, new_task);
             return;
         }
         case Status::Pending: {
@@ -161,7 +161,7 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
             // just add it into TaskQueue
             auto core = static_cast<TaskInfoCore>(log);
             auto new_task = std::make_shared<TaskInfo>(core, min_start_lease);
-            task_infos.emplace(table_uuid, new_task);
+            task_infos.emplace(unique_key, new_task);
             return;
         }
         case Status::Error: {
@@ -169,13 +169,13 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
             // we will attempt to retry it
             auto core = static_cast<TaskInfoLog>(log);
 
-            if (core.retry_times >= internal_config.max_retry_times)
+            if (core.retry_times >= internal_config.auto_stats_max_retry_times())
             {
                 // retry time exceeds limit, we just fail the task
                 core.status = Status::Failed;
                 auto info = fmt::format(FMT_STRING("Retry {} times, failed"), core.retry_times);
                 writeTaskLog(context, core, info);
-                task_infos.erase(table_uuid);
+                task_infos.erase(unique_key);
                 return;
             }
             // retry the task by add it to log

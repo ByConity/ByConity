@@ -1,6 +1,7 @@
 set create_stats_time_output=0;
 drop table if exists t;
-create table t(id UInt64, params Map(String, UInt64)) ENGINE=CnchMergeTree order by id;
+create table t(id UInt64, params Map(String, UInt64)) ENGINE=CnchMergeTree() order by id;
+
 
 create stats t;
 show stats t;

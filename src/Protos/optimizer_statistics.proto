@@ -1,9 +1,12 @@
 syntax = "proto2";
-
 package DB.Protos;
+import "plan_node_utils.proto";
+import "cnch_common.proto";
+option cc_generic_services = true;
 
 message StatsTableBasic {
   required int64 row_count = 1;
+  // internal representation of DateTime64
   optional int64 timestamp = 2;
 }
 
@@ -17,15 +20,15 @@ message StatsColumnBasic {
 
 message StatsNdvBuckets {
   required bytes bounds_blob = 1;
-  repeated int64 counts = 3;           // size = num_buckets
-  repeated bytes hll_sketch_blobs = 4; // size = num_buckets
+  repeated int64 counts = 3;            // size = num_buckets
+  repeated bytes hll_sketch_blobs = 4;  // size = num_buckets
 }
 
 message StatsNdvBucketsExtend {
   required bytes bounds_blob = 1;
-  repeated int64 counts = 3;           // size = num_buckets
-  repeated bytes hll_sketch_blobs = 4; // size = num_buckets
-  repeated double block_ndv_counts = 6; // size = num_buckets
+  repeated int64 counts = 3;             // size = num_buckets
+  repeated bytes hll_sketch_blobs = 4;   // size = num_buckets
+  repeated double block_ndv_counts = 6;  // size = num_buckets
 }
 
 message StatsNdvBucketsResult {
@@ -48,12 +51,12 @@ enum SerdeDataType {
   Int128 = 10;
   Float32 = 11;
   Float64 = 12;
-  StringOldVersion = 15;  // here for compatibility
+  StringOldVersion =
+      15;  // this is the old version of string, here for compatibility
   String = 16;
   UInt256 = 17;
   Int256 = 18;
 }
-
 enum StatisticsType {
   Invalid = 0;
   TableBasic = 1;
@@ -134,4 +137,83 @@ message VectorAny {
     VectorDouble f64_vec = 6;
     VectorString str_vec = 7;
   }
+}
+
+message StatsTableObject {
+  required uint64 row_count = 1;
+}
+
+message StatsColumnObject {
+  required uint64 nonnull_row_count = 1;
+  optional uint64 total_byte_size = 2;
+  optional bytes hll_sketch_blobs = 3;
+  optional double min_as_double = 5;
+  optional double max_as_double = 6;
+}
+
+message StatsObject {
+  optional StatsTableObject table_obj = 1;
+  optional StatsColumnObject column_obj = 2;
+}
+
+message RefreshStatisticsCacheRequest {
+  repeated StorageID tables = 1;
+  message Mode {
+    enum Enum {
+      SyncTable = 1;
+      Refresh = 2;
+      Invalidate = 3;
+    }
+  };
+  required Mode.Enum mode = 2;
+};
+
+message RefreshStatisticsCacheResponse {
+  optional string exception = 1;
+};
+
+message CreateStatsSettingsEntry {
+  optional string database = 1;
+  optional string table = 2;
+  required bool enable_auto_stats = 3;
+  required SettingsChanges changes = 4;
+}
+
+message StatisticsSettings {
+  repeated CreateStatsSettingsEntry scope_settings_list = 1;
+  map<string, string> manager_settings = 2;
+}
+
+message FetchStatisticsSettingsRequest {};
+
+message FetchStatisticsSettingsResponse {
+  optional string exception = 1;
+  required StatisticsSettings statistics_settings = 2;
+}
+
+message QueryUdiCounterRequest {}
+
+message UdiCounterRecord {
+  required string database = 1;
+  required string table = 2;
+  required uint64 udi_count = 3;
+}
+
+message QueryUdiCounterResponse {
+  optional string exception = 1;
+  repeated UdiCounterRecord records = 2;
+}
+
+message ResetSQLBindingCacheRequest {}
+
+message ResetSQLBindingCacheResponse {
+  optional string exception = 1;
+}
+
+service OptimizerStatisticsService {
+  rpc refreshStatisticsCache(RefreshStatisticsCacheRequest)
+      returns (RefreshStatisticsCacheResponse);
+  rpc fetchStatisticsSettings(FetchStatisticsSettingsRequest)
+      returns (FetchStatisticsSettingsResponse);
+  rpc queryUdiCounter(QueryUdiCounterRequest) returns (QueryUdiCounterResponse);
 }

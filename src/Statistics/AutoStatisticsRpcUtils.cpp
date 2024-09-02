@@ -4,6 +4,7 @@
 #include <Statistics/AutoStatisticsManager.h>
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Common/RpcClientPool.h>
+#include "Statistics/StatsTableIdentifier.h"
 #include <Statistics/AutoStatsTaskLogHelper.h>
 
 namespace DB::ErrorCodes
@@ -34,7 +35,7 @@ void convertToProto(const TaskInfoCore & core, Protos::AutoStats::TaskInfoCore &
 {
     RPCHelpers::fillUUID(core.task_uuid, *proto.mutable_task_uuid());
     proto.set_task_type(core.task_type);
-    RPCHelpers::fillUUID(core.table_uuid, *proto.mutable_table_uuid());
+    RPCHelpers::fillStorageID(core.table.getStorageID(), *proto.mutable_storage_id());
 
     for (const auto & column_name : core.columns_name)
         proto.add_columns_name(column_name);
@@ -51,7 +52,7 @@ void convertFromProto(TaskInfoCore & core, const Protos::AutoStats::TaskInfoCore
 {
     core.task_uuid = RPCHelpers::createUUID(proto.task_uuid());
     core.task_type = proto.task_type();
-    core.table_uuid = RPCHelpers::createUUID(proto.table_uuid());
+    core.table = StatsTableIdentifier(RPCHelpers::createStorageID(proto.storage_id()));
     for (const auto & column_name : proto.columns_name())
         core.columns_name.push_back(column_name);
     core.settings_json = proto.settings_json();
@@ -130,7 +131,7 @@ void submitAsyncTasks(ContextPtr context, const std::vector<CollectTarget> & col
         core.udi_count = 0;
         core.task_type = TaskType::Manual;
         core.task_uuid = UUIDHelpers::generateV4();
-        core.table_uuid = target.table_identifier.getUUID();
+        core.table = target.table_identifier;
         core.settings_json = target.settings.toJsonStr();
         if (target.implicit_all_columns)
             core.columns_name = {};

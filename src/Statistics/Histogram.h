@@ -16,6 +16,7 @@
 #pragma once
 #include <optional>
 #include <set>
+#include <math.h>
 #include <Core/Types.h>
 #include <Statistics/Bucket.h>
 #include <Statistics/CommonErrorCodes.h>
@@ -78,12 +79,13 @@ public:
     void clear() { buckets.clear(); }
 
 private:
-    Buckets buckets;
     void cleanupResidualBucket(BucketOpt & bucket, bool bucket_is_residual) const;
     BucketOpt getNextBucket(const BucketOpt & new_bucket, bool & result_bucket_is_residual, size_t & current_bucket_index) const;
     size_t addResidualUnionAllBucket(Buckets & histogram_buckets, const BucketOpt & bucket, bool bucket_is_residual, size_t index) const;
     static void addBuckets(const Buckets & src_buckets, Buckets & dest_buckets, size_t begin, size_t end);
     bool subsumes(const Bucket & bucket) const;
+
+    Buckets buckets;
 };
 
 }

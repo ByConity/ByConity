@@ -15,6 +15,7 @@
 
 #pragma once
 #include <type_traits>
+#include <DataTypes/IDataType.h>
 #include <DataTypes/MapHelpers.h>
 #include <Statistics/BucketBounds.h>
 #include <Statistics/CatalogAdaptor.h>
@@ -46,17 +47,35 @@ struct ColumnCollectConfig
     bool need_ndv = true;
     bool need_histogram = true;
     bool need_minmax = false;
+    bool need_length = false;
+    bool is_nullable = false;
+    
+    String getByteSizeSql(const String& quote_col_name)
+    {
+        if (is_nullable) 
+        {
+            return fmt::format(FMT_STRING("if(isNotNull({0}), byteSize({0}), 0)"), quote_col_name);
+        }
+        else 
+        {
+            return fmt::format(FMT_STRING("byteSize({})"), quote_col_name);
+        }
+    }
 };
 
-inline ColumnCollectConfig getColumnConfig(const CollectorSettings & settings, const DataTypePtr & type)
+inline ColumnCollectConfig getColumnConfig(const CollectorSettings & settings, const DataTypePtr & raw_type)
 {
+    auto type_verbose = decayDataTypeVerbose(raw_type);
+    auto type = type_verbose.type;
     ColumnCollectConfig config;
     config.need_count = true;
     config.need_ndv = true;
     config.need_histogram = true;
     config.need_minmax = false;
+    config.need_length = false;
+    config.is_nullable = type_verbose.is_nullable;
 
-    if (!settings.collect_histogram)
+    if (!settings.collect_histogram() || settings.collect_in_partitions())
     {
         config.need_histogram = false;
         config.need_minmax = true;
@@ -65,10 +84,13 @@ inline ColumnCollectConfig getColumnConfig(const CollectorSettings & settings, c
     if (isString(type))
     {
         config.wrapper_kind = WrapperKind::StringToHash64;
+        config.need_length = true;
     }
     else if (isFixedString(type))
     {
         config.wrapper_kind = WrapperKind::FixedStringToHash64;
+        // NOTE: we don't need length for fixed string
+        // just return the fixed size
     }
     else if (isColumnedAsDecimal(type))
     {
@@ -162,6 +184,17 @@ inline String getKllFuncNameWithConfig(UInt64 kll_log_k)
     }
 }
 
+
+inline std::vector<String> toQuotedNames(const ColumnDescVector & cols_desc)
+{
+    std::vector<String> result;
+    for (const auto & col_desc : cols_desc)
+    {
+        result.push_back(quoteString(col_desc.name));
+    }
+    return result;
+}
+
 // return col name that suitable to use in sql
 // 1. backQuoted when needed
 // 2. convert to map{'...'} when needed
@@ -181,4 +214,21 @@ inline String colNameForSql(const String & col_name)
         return backQuoteIfNeed(col_name);
     }
 }
+
+inline ColumnPtr getNestedColumn(ColumnPtr column)
+{
+    if (column->lowCardinality())
+    {
+        column = column->convertToFullColumnIfLowCardinality();
+    }
+
+    if (column->isNullable())
+    {
+        return checkAndGetColumn<ColumnNullable>(*column)->getNestedColumnPtr();
+    }
+
+    return column;
 }
+
+}
+

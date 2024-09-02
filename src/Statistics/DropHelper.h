@@ -22,4 +22,3 @@ void dropStatsColumns(
     bool throw_exception);
 
 }
-

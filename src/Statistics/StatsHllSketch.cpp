@@ -28,9 +28,12 @@ void StatsHllSketch::deserialize(std::string_view blob)
 {
     if (blob.empty())
     {
-        throw Exception("Empty Blob Data", ErrorCodes::LOGICAL_ERROR);
+        data.reset();
+        un_opt = std::nullopt;
+        return;
     }
     data = decltype(data)::deserialize(blob.data(), blob.size());
+    un_opt = std::nullopt;
 }
 
 } // namespace DB

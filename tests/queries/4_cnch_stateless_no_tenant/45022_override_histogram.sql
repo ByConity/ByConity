@@ -1,4 +1,5 @@
 set create_stats_time_output=0;
+drop table if exists orht_45022;
 create table orht_45022(x UInt64) ENGINE=CnchMergeTree() order by x;
 
 insert into orht_45022 select * from system.numbers limit 10;
@@ -23,3 +24,4 @@ drop stats orht_45022;
 show stats orht_45022;
 show column_stats orht_45022;
 
+drop table orht_45022;

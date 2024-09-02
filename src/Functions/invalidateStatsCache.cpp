@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#if 0
 #include <Functions/FunctionFactory.h>
 #include <Functions/invalidateStatsCache.h>
 #include <Statistics/CatalogAdaptor.h>
@@ -77,3 +78,4 @@ ColumnPtr FunctionInvalidateStatsCache::executeImpl(
     return result_type->createColumnConst(input_rows_count, 0);
 }
 }
+#endif

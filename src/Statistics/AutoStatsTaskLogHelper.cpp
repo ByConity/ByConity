@@ -6,6 +6,8 @@
 #include <Functions/now64.h>
 #include <Protos/auto_statistics.pb.h>
 #include <Statistics/AutoStatsTaskLogHelper.h>
+#include <Statistics/CatalogAdaptor.h>
+#include <Statistics/StatsTableIdentifier.h>
 #include <Statistics/SubqueryHelper.h>
 
 namespace DB::Statistics::AutoStats
@@ -33,17 +35,6 @@ static inline std::vector<String> getVectorString(const ColumnPtr & col_base, UI
         result.emplace_back(data_col->getDataAt(i));
 
     return result;
-}
-
-static inline Float64 getFloat64(const ColumnPtr & col_base, UInt64 row)
-{
-    union
-    {
-        Float64 f64;
-        UInt64 i64;
-    } x;
-    x.i64 = col_base->get64(row);
-    return x.f64;
 }
 
 std::vector<TaskInfoLog> batchReadTaskLog(ContextPtr context, DateTime64 min_event_time)
@@ -98,7 +89,7 @@ std::vector<TaskInfoLog> batchReadTaskLog(ContextPtr context, DateTime64 min_eve
                         task.task_type = static_cast<TaskType>(column->get64(row));
                         break;
                     case 3:
-                        task.table_uuid = getUUID(column, row);
+                        task.table.getMutableStorageID().uuid = getUUID(column, row);
                         break;
                     case 4:
                         task.stats_row_count = column->get64(row);
@@ -107,7 +98,7 @@ std::vector<TaskInfoLog> batchReadTaskLog(ContextPtr context, DateTime64 min_eve
                         task.udi_count = column->get64(row);
                         break;
                     case 6:
-                        task.priority = getFloat64(column, row);
+                        task.priority = column->getFloat64(row);
                         break;
                     case 7:
                         task.retry_times = column->get64(row);
@@ -120,6 +111,13 @@ std::vector<TaskInfoLog> batchReadTaskLog(ContextPtr context, DateTime64 min_eve
                         break;
                     case 10:
                         task.columns_name = getVectorString(column, row);
+                        break;
+                    case 11:
+                        task.table.getMutableStorageID().database_name = column->getDataAt(row).toString();
+                        break;
+                    case 12:
+                        task.table.getMutableStorageID().table_name = column->getDataAt(row).toString();
+                        break;
                 }
             }
         }
@@ -148,21 +146,10 @@ void writeTaskLog(ContextPtr context, const TaskInfoCore & core, const String & 
 
     AutoStatsTaskLogElement element;
 
-    auto table_opt = catalog->getTableIdByUUID(core.table_uuid);
-    if (table_opt)
-    {
-        auto table = table_opt.value();
-        element.database_name = table.getDatabaseName();
-        element.table_name = table.getTableName();
-    }
-    else
-    {
-        element.database_name = "";
-        element.table_name = "unknown table(" + toString(core.table_uuid) + ")";
-    }
-
-
-    element.table_uuid = core.table_uuid;
+    auto table = core.table;
+    element.database_name = table.getDatabaseName();
+    element.table_name = table.getTableName();
+    element.table_uuid = core.table.getStorageID().uuid; // not UniqueKey
     element.columns_name = core.columns_name;
     element.retry = core.retry_times;
     element.task_uuid = core.task_uuid;

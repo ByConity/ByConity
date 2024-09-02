@@ -50,7 +50,7 @@ public:
     TaskInfo(const TaskInfoCore & core_, TimePoint start_lease_) : TaskInfoCore(core_), start_lease(start_lease_) { }
 
     UUID getTaskUUID() const { return task_uuid; }
-    UUID getTableUUID() const { return table_uuid; }
+    StatsTableIdentifier getTable() const { return table; }
     UInt64 getRetryTimes() const { return retry_times; }
     TaskType getTaskType() const { return task_type; }
     const std::vector<String> & getColumnsName() const { return columns_name; }

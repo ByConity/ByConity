@@ -8,13 +8,14 @@ create table memory_test (
                              `i8` Int8,
                              `i16` Int16,
                              `i32` Int32
-) ENGINE = CnchMergeTree PARTITION BY id ORDER BY id;
+) Engine = CnchMergeTree() ORDER BY id;
+
 create table catalog_test (
                            `i64` Int64,
                            `u8` UInt8,
                            `u16` UInt16,
                            `u32` UInt32
-) ENGINE = CnchMergeTree PARTITION BY u8 ORDER BY u8;
+) Engine = CnchMergeTree() ORDER BY u8;
 
 insert into memory_test values (1, -1, -10, -100)(2, -2, -20, -200);
 insert into catalog_test values (-1000, 1, 10, 100)( 2, 20, 200, 2000);

@@ -50,6 +50,7 @@ public:
     bool any_database = false; // use asterisk
     bool any_table = false; // use asterisk
     std::vector<String> columns;
+    std::optional<SettingsChanges> settings_changes_opt;
 
     String getID(char delim) const override
     {

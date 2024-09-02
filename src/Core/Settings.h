@@ -1572,19 +1572,22 @@ enum PreloadLevelSettings : UInt64
     M(String, ab_test_profile, "default", "Profile name for ab test", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
+    M(Bool, statistics_forward_query, false, "Indicate whether this query is coming from another replica", 0)  \
     M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
     M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
     M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
     M(UInt64, statistics_collect_string_size_limit_for_histogram, 64, "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", 0) \
     M(UInt64, statistics_histogram_bucket_size, 250, "Default bucket size of histogram", 0) \
-    M(UInt64, statistics_kll_sketch_log_k, 1600, "Default logK parameter of kll_sketch in statistics", 0) \
+    M(UInt64, statistics_kll_sketch_log_k, DEFAULT_KLL_SKETCH_LOG_K, "Default logK parameter of kll_sketch in statistics", 0) \
     M(Bool, statistics_enable_async, false, "Collect stats use async mode", 0) \
     M(Bool, statistics_enable_sample, true, "Use sampling for statistics", 0) \
     M(UInt64, statistics_sample_row_count, 40'000'000, "Minimal row count for sampling", 0) \
-    M(Float, statistics_sample_ratio, 0.01, "Ratio for sampling", 0) \
+    M(Float, statistics_sample_ratio, 0.001, "Ratio for sampling", 0) \
     M(StatisticsAccurateSampleNdvMode, statistics_accurate_sample_ndv, StatisticsAccurateSampleNdvMode::AUTO, "Mode of accurate sample ndv to estimate full ndv", 0) \
+    M(UInt64, statistics_accurate_sample_ndv_row_limit, 40'000'000, "Limit of accurate sample ndv sample row count, to limit create stats cost. 0 for unlimited", 0) \
     M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
-    M(String, statistics_exclude_tables_regex, "", "regex to exclude tables for statistics operations", 0) \
+    M(String, statistics_exclude_tables_regex, "", "Regex to exclude tables for statistics operations", 0) \
+    M(Bool, statistics_if_not_exists, false, "Collect stats using if not exists mode", 0) \
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
@@ -1592,6 +1595,12 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, statistics_current_timestamp, 0, "Timestamp used for statistics_expand_to_current, 0 to use now(), for testing purpose", 0) \
     M(UInt64, statistics_expand_to_current_threshold_days, 31, "If abs(stats_timestamp - stats_column_max) is within this threshold, we will expand this column", 0) \
     M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
+    M(Bool, statistics_return_row_count_if_empty, false, "Deprecated settings", 0) \
+    M(Bool, statistics_use_hive_metastore, false, "Deprecated Settings", 0) \
+    M(Bool, statistics_collect_in_partitions, false, "Collect partitioned stats", 0) \
+    M(UInt64, statistics_max_partitions_in_a_batch, 1000, "Max parallel size of partitions in single batch when collect partitioned stats", 0) \
+    M(Int64, statistics_ignore_modified_timestamp_older_than, 0, "Ignore partitions whose modified_time older than this Unix timestamp. 0 for unlimited, negative value for now() - abs(value)", 0) \
+    M(UInt64, statistics_max_partitions, 0, "Max partitions in total to collect partitioned stats, 0 for unlimited", 0) \
     M(Bool, statistics_query_cnch_parts_for_row_count, true, "Use cnch parts instead of count(*) for row count to speed up test", 0) \
     /** Optimizer relative settings, cost model and estimation */ \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \

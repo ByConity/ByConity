@@ -45,8 +45,7 @@ public:
         : handler_context(handler_context_)
     {
         col_name = col_desc.name;
-        data_type = decayDataType(col_desc.type);
-        config = getColumnConfig(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, col_desc.type);
         generateSqls();
     }
 
@@ -65,7 +64,7 @@ public:
 
         if (config.need_histogram)
         {
-            auto kll_log_k = handler_context.settings.kll_sketch_log_k;
+            auto kll_log_k = handler_context.settings.kll_sketch_log_k();
             auto kll_name = getKllFuncNameWithConfig(kll_log_k);
             auto histogram_sql = fmt::format(FMT_STRING("{}({})"), kll_name, wrapped_col_name);
             sqls.emplace_back(histogram_sql);
@@ -78,6 +77,13 @@ public:
             sqls.emplace_back(min_sql);
             sqls.emplace_back(max_sql);
         }
+
+        if (config.need_length)
+        {
+            auto length_sql = fmt::format(FMT_STRING("sum({})"), config.getByteSizeSql(quote_col_name));
+            sqls.emplace_back(length_sql);
+        }
+
         // to estimate ndv
         LOG_INFO(
             &Poco::Logger::get("FirstSampleColumnHandler"),
@@ -149,7 +155,7 @@ public:
                     estimated_ndv_upper_bound));
 
             bool use_accurate = false;
-            switch (handler_context.settings.accurate_sample_ndv)
+            switch (handler_context.settings.accurate_sample_ndv())
             {
                 case StatisticsAccurateSampleNdvMode::AUTO:
                     // when error of estimated ndv more than 30% due to HyperLogLog,
@@ -186,7 +192,7 @@ public:
 
                     result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
                     result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
-                    auto histogram_bucket_size = handler_context.settings.histogram_bucket_size;
+                    auto histogram_bucket_size = handler_context.settings.histogram_bucket_size();
                     result.bucket_bounds = histogram->getBucketBounds(histogram_bucket_size);
                 }
             }
@@ -197,13 +203,18 @@ public:
                 result.max_as_double = getSingleValue<Float64>(block, index_offset++);
             }
 
+            if (config.need_length)
+            {
+                result.length_opt = getSingleValue<UInt64>(block, index_offset++) * 1.0 / sample_row_count * full_count;
+            }
+
             LOG_INFO(
                 &Poco::Logger::get("FirstSampleColumnHandler"),
                 fmt::format(
                     FMT_STRING("col info: col={} && "
                                "context raw data: full_count={}, sample_row_count={} && "
                                "column raw data: sample_nonnull_count={}, block_ndv={}, sample_ndv={}&& "
-                               "cast data: result.nonnull_count={}, result.ndv_value={}"),
+                               "cast data: result.nonnull_count={}, result.ndv_value={}, result.length={}"),
                     col_name,
                     full_count,
                     sample_row_count,
@@ -211,7 +222,8 @@ public:
                     block_ndv,
                     sample_ndv,
                     result.nonnull_count,
-                    result.ndv_value));
+                    result.ndv_value,
+                    result.length_opt.value_or(0)));
         }
         else
         {
@@ -231,7 +243,6 @@ public:
 private:
     HandlerContext & handler_context;
     String col_name;
-    DataTypePtr data_type;
     ColumnCollectConfig config;
     std::vector<String> sqls;
 };
@@ -254,8 +265,7 @@ public:
         : handler_context(handler_context_), bucket_bounds(bucket_bounds_)
     {
         col_name = col_desc.name;
-        data_type = decayDataType(col_desc.type);
-        config = getColumnConfig(handler_context.settings, data_type);
+        config = getColumnConfig(handler_context.settings, col_desc.type);
         generateSqls();
     }
 
@@ -330,7 +340,6 @@ private:
     HandlerContext & handler_context;
     std::shared_ptr<BucketBounds> bucket_bounds;
     String col_name;
-    DataTypePtr data_type;
     ColumnCollectConfig config;
     std::vector<String> sqls;
 };
@@ -368,8 +377,7 @@ String constructThirdSql(
     const std::shared_ptr<BucketBounds> & bucket_bounds,
     const String & sample_tail)
 {
-    auto data_type = decayDataType(col_desc.type);
-    auto config = getColumnConfig(settings, data_type);
+    auto config = getColumnConfig(settings, col_desc.type);
     auto wrapped_col_name = getWrappedColumnName(config, colNameForSql(col_desc.name));
     auto tag_sql = [&]() -> String {
         if (bucket_bounds)
@@ -399,39 +407,36 @@ String constructThirdSql(
     return full_sql;
 }
 
-static ColumnPtr getNestedColumn(ColumnPtr column)
-{
-    if (column->lowCardinality())
-    {
-        column = column->convertToFullColumnIfLowCardinality();
-    }
-
-    if (column->isNullable())
-    {
-        return checkAndGetColumn<ColumnNullable>(*column)->getNestedColumnPtr();
-    }
-
-    return column;
-}
-
-class StatisticsCollectorStepSample : public CollectStep
+class SampleCollectStep : public CollectStep
 {
 public:
-    explicit StatisticsCollectorStepSample(StatisticsCollector & core_) : CollectStep(core_) { }
+    explicit SampleCollectStep(StatisticsCollector & core_) : CollectStep(core_) { }
 
-    String getSampleTail()
+    String getSampleTail(bool for_uniq_exact)
     {
         auto row_count = handler_context.full_count;
         const auto & settings = handler_context.settings;
+        UInt64 sample_row_count;
 
-        if (settings.sample_ratio * row_count < settings.sample_row_count)
+        if (for_uniq_exact)
         {
-            return fmt::format(FMT_STRING(" SAMPLE {}"), settings.sample_row_count);
+            sample_row_count = settings.accurate_sample_ndv_row_limit();
         }
         else
         {
-            return fmt::format(FMT_STRING(" SAMPLE {}"), settings.sample_ratio);
+            sample_row_count = std::max<UInt64>(settings.sample_row_count(), row_count * settings.sample_ratio());
         }
+
+        if (row_count <= sample_row_count)
+        {
+            return ""; // don't do sample
+        }
+
+        auto ratio = sample_row_count / static_cast<double>(row_count);
+
+        // sample by rows is problematic, always use ratio instead
+        // keep 3 significant digits
+        return fmt::format(FMT_STRING(" SAMPLE {:.3g}"), ratio);
     }
 
     void firstCollectStep(const ColumnDescVector & cols_desc)
@@ -445,7 +450,7 @@ public:
         }
 
         auto sql = table_handler.getFullSql();
-        auto sample_tail_with_space = getSampleTail();
+        auto sample_tail_with_space = getSampleTail(false);
 
         sql += sample_tail_with_space;
 
@@ -490,7 +495,7 @@ public:
         if (to_collect)
         {
             auto sql = table_handler.getFullSql();
-            sql += getSampleTail();
+            sql += getSampleTail(false);
 
             auto helper = SubqueryHelper::create(context, sql, true);
             auto block = getOnlyRowFrom(helper);
@@ -507,7 +512,7 @@ public:
         for (auto & col_desc : cols_desc)
         {
             auto & col_data = handler_context.columns_data.at(col_desc.name);
-            auto full_sql = constructThirdSql(handler_context.settings, table_info, col_desc, col_data.bucket_bounds, getSampleTail());
+            auto full_sql = constructThirdSql(handler_context.settings, table_info, col_desc, col_data.bucket_bounds, getSampleTail(true));
             LOG_INFO(&Poco::Logger::get("thirdSampleColumnHandler"), full_sql);
             auto helper = SubqueryHelper::create(context, full_sql, true);
             Block block;
@@ -622,9 +627,9 @@ public:
 private:
 };
 
-std::unique_ptr<CollectStep> createStatisticsCollectorStepSample(StatisticsCollector & core)
+std::unique_ptr<CollectStep> createSampleCollectStep(StatisticsCollector & core)
 {
-    return std::make_unique<StatisticsCollectorStepSample>(core);
+    return std::make_unique<SampleCollectStep>(core);
 }
 
 }

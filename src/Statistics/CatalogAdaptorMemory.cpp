@@ -172,19 +172,6 @@ public:
     }
 
 
-    void invalidateClusterStatsCache(const StatsTableIdentifier & table) override
-    {
-        // for memory catalog, there should be only a single server
-        Statistics::CacheManager::invalidate(context, table);
-    }
-
-    void invalidateServerStatsCache(const StatsTableIdentifier & table) override
-    {
-        Statistics::CacheManager::invalidate(context, table);
-    }
-
-    void invalidateAllServerStatsCache() override { Statistics::CacheManager::reset(); }
-
     std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) override
     {
         std::vector<StatsTableIdentifier> results;
@@ -195,10 +182,14 @@ public:
             if (!table)
                 continue;
             StatsTableIdentifier table_id(table->getStorageID());
+            if (!isTableCollectable(table_id))
+                continue;
+
             results.emplace_back(table_id);
         }
         return results;
     }
+
 
     std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table_name) override
     {

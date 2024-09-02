@@ -1,14 +1,14 @@
 tb	9	800
-tb.*		800					
-tb.id	UInt64	800	0	100	0	99	1
-tb.date	Date	800	0	100	19747	19846	1
-tb.date32	Date32	800	0	100	19747	19846	1
-tb.datetime	DateTime	800	0	100	1706185200	1714738800	1
-tb.datetime64	DateTime64(3)	800	0	100	1706185200	1714738800	1
-tb.old_date	Date	800	0	100	18153	18252	1
-tb.old_date32	Date32	800	0	100	18153	18252	1
-tb.old_datetime	DateTime	800	0	100	1577825891	1577825990	1
-tb.old_datetime64	DateTime64(3)	800	0	100	1577825891	1577825990	1
+tb.*		800						
+tb.id	UInt64	800	0	100	0	99	8	1
+tb.date	Date	800	0	100	19747	19846	2	1
+tb.date32	Date32	800	0	100	19747	19846	4	1
+tb.datetime	DateTime	800	0	100	1706185200	1714738800	4	1
+tb.datetime64	DateTime64(3)	800	0	100	1706185200	1714738800	8	1
+tb.old_date	Date	800	0	100	18153	18252	2	1
+tb.old_date32	Date32	800	0	100	18153	18252	4	1
+tb.old_datetime	DateTime	800	0	100	1577825891	1577825990	4	1
+tb.old_datetime64	DateTime64(3)	800	0	100	1577825891	1577825990	8	1
 Projection Est. 1 rows, cost 6.516680e+02
 └─ Gather Exchange Est. 1 rows, cost 6.515940e+02
    └─ Projection Est. 1 rows, cost 6.512740e+02
@@ -69,16 +69,16 @@ Projection Est. 1 rows, cost 6.516680e+02
    └─ Projection Est. 1 rows, cost 6.512740e+02
       └─ Filter Est. 1 rows, cost 6.512000e+02
          └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-tb.*		884					
-tb.id	UInt64	884	0	100	0	99	1
-tb.date	Date	884	0	110	19747	19856.513888888891	1
-tb.date32	Date32	884	0	110	19747	19856.513888888891	1
-tb.datetime	DateTime	884	0	110	1706185200	1715602800	1
-tb.datetime64	DateTime64(3)	884	0	110	1706185200	1715602800	1
-tb.old_date	Date	884	0	100	18153	18252	1
-tb.old_date32	Date32	884	0	100	18153	18252	1
-tb.old_datetime	DateTime	884	0	100	1577825891	1577825990	1
-tb.old_datetime64	DateTime64(3)	884	0	100	1577825891	1577825990	1
+tb.*		884						
+tb.id	UInt64	884	0	100	0	99	8	1
+tb.date	Date	884	0	110	19747	19856.513888888891	2	1
+tb.date32	Date32	884	0	110	19747	19856.513888888891	4	1
+tb.datetime	DateTime	884	0	110	1706185200	1715602800	4	1
+tb.datetime64	DateTime64(3)	884	0	110	1706185200	1715602800	8	1
+tb.old_date	Date	884	0	100	18153	18252	2	1
+tb.old_date32	Date32	884	0	100	18153	18252	4	1
+tb.old_datetime	DateTime	884	0	100	1577825891	1577825990	4	1
+tb.old_datetime64	DateTime64(3)	884	0	100	1577825891	1577825990	8	1
 Projection Est. 43 rows, cost 7.329800e+02
 └─ Gather Exchange Est. 43 rows, cost 7.297980e+02
    └─ Projection Est. 43 rows, cost 7.227580e+02

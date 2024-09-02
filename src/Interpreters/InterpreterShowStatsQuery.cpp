@@ -23,8 +23,8 @@
 #include <Optimizer/Dump/DDLDumper.h>
 #include <Optimizer/Dump/StatsLoader.h>
 #include <Parsers/ASTStatsQuery.h>
+#include <Statistics/ASTHelpers.h>
 #include <Statistics/AutoStatisticsHelper.h>
-#include <Statistics/CachedStatsProxy.h>
 #include <Statistics/ASTHelpers.h>
 #include <Statistics/FormattedOutput.h>
 #include <Statistics/StatisticsCollector.h>
@@ -35,6 +35,11 @@
 #include <Storages/StorageMaterializedView.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Timestamp.h>
+#include "Core/Block.h"
+#include "Core/Types.h"
+#include "Core/UUID.h"
+#include "Interpreters/DatabaseCatalog.h"
+#include "Statistics/AutoStatisticsHelper.h"
 
 namespace DB
 {
@@ -116,6 +121,7 @@ std::vector<FormattedOutputData> getTableFormattedOutput(
         auto null_count = symbol_stats->getNullsCount();
         fod.append("count", row_count - null_count);
         fod.append("null_count", null_count);
+        fod.append("avg_byte_size", symbol_stats->getAvg());
 
         fod.append("min", symbol_stats->getMin());
         fod.append("max", symbol_stats->getMax());
@@ -135,7 +141,7 @@ void writeDbStats(ContextPtr context, const String & db_name, const String & pat
     auto tables = catalog->getAllTablesID(db_name);
     for (auto & table : tables)
     {
-        StatisticsCollector collector(context, catalog, table);
+        StatisticsCollector collector(context, catalog, table, {});
         collector.readAllFromCatalog();
         auto table_collection = collector.getTableStats().writeToCollection();
         if (table_collection.empty())
@@ -178,7 +184,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
 {
     std::ifstream fin(path, std::ios::binary);
     DbStats db_stats;
-    db_stats.ParseFromIstream(&fin);
+    ASSERT_PARSE(db_stats.ParseFromIstream(&fin));
 
     auto version = db_stats.has_version() ? db_stats.version() : DbStats_Version_V1;
     if (version == DbStats_Version_V1)
@@ -206,7 +212,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
             continue;
         }
 
-        StatisticsCollector collector(context, catalog, table_id_opt.value());
+        StatisticsCollector collector(context, catalog, table_id_opt.value(), {});
 
         {
             StatsCollection collection;
@@ -231,7 +237,8 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
             {
                 auto tag = static_cast<StatisticsTag>(k);
                 auto obj = createStatisticsBase(tag, v);
-                collection[tag] = std::move(obj);
+                if (obj)
+                    collection[tag] = std::move(obj);
             }
             StatisticsCollector::ColumnStats column_stats;
             column_stats.readFromCollection(collection);
@@ -262,7 +269,8 @@ BlockIO InterpreterShowStatsQuery::executeAll()
     {
         auto fods = getTableFormattedOutput(context, catalog, collector_settings, table_info, query->columns);
         // adjust here to change the order
-        auto block = outputFormattedBlock(fods, {"identifier", "type", "count", "null_count", "ndv", "min", "max", "has_histogram"});
+        auto block = outputFormattedBlock(
+            fods, {"identifier", "type", "count", "null_count", "ndv", "min", "max", "avg_byte_size", "has_histogram"});
         blocks.emplace_back(std::move(block));
     }
 
@@ -407,18 +415,18 @@ BlockIO InterpreterShowStatsQuery::executeColumn()
 
 static bool isSpecialFunction(const String & name)
 {
-    static std::set<String> specials({"__save", "__load", "__jsonsave", "__jsonload"});
+    static std::set<String> specials({"__save", "__load", "__jsonsave", "__jsonload", "__transfer"});
     return specials.count(name);
 }
 
-void InterpreterShowStatsQuery::executeSpecial()
+BlockIO InterpreterShowStatsQuery::executeSpecial()
 {
-    auto query = query_ptr->as<const ASTShowStatsQuery>();
+    const auto * query = query_ptr->as<const ASTShowStatsQuery>();
     auto context = getContext();
     auto catalog = Statistics::createCatalogAdaptor(context);
 
     // when special, cache settings will be invalid
-    if (collector_settings.cache_policy != StatisticsCachePolicy::Default)
+    if (collector_settings.cache_policy() != StatisticsCachePolicy::Default)
     {
         throw Exception("cache policy is not supported for special functions", ErrorCodes::BAD_ARGUMENTS);
     }
@@ -479,6 +487,7 @@ void InterpreterShowStatsQuery::executeSpecial()
     {
         throw Exception("unknown special action: " + query->table, ErrorCodes::NOT_IMPLEMENTED);
     }
+    return {};
 }
 
 
@@ -513,27 +522,29 @@ BlockIO InterpreterShowStatsQuery::executeTable()
 
 BlockIO InterpreterShowStatsQuery::execute()
 {
-    auto query = query_ptr->as<const ASTShowStatsQuery>();
+    const auto * query = query_ptr->as<const ASTShowStatsQuery>();
     auto context = getContext();
     auto catalog = Statistics::createCatalogAdaptor(context);
 
-    collector_settings.cache_policy = query->cache_policy;
-    if (query->cache_policy == StatisticsCachePolicy::Default)
+    if (query->cache_policy != StatisticsCachePolicy::Default)
     {
-        collector_settings.cache_policy = context->getSettingsRef().statistics_cache_policy;
+        collector_settings.set_cache_policy(query->cache_policy);
+    }
+    else if (context->getSettingsRef().statistics_cache_policy != StatisticsCachePolicy::Default)
+    {
+        collector_settings.set_cache_policy(context->getSettingsRef().statistics_cache_policy);
     }
 
     // when enable_memory_catalog is true, we won't use cache
     if (catalog->getSettingsRef().enable_memory_catalog)
     {
-        if (collector_settings.cache_policy != StatisticsCachePolicy::Default)
+        if (collector_settings.cache_policy() != StatisticsCachePolicy::Default)
             throw Exception("memory catalog don't support cache policy", ErrorCodes::BAD_ARGUMENTS);
     }
 
     if (isSpecialFunction(query->table))
     {
-        executeSpecial();
-        return {};
+        return executeSpecial();
     }
     else if (query->kind == StatsQueryKind::COLUMN_STATS)
     {
@@ -551,7 +562,7 @@ BlockIO InterpreterShowStatsQuery::execute()
         catalog->checkHealth(false);
         return executeTable();
     }
-    return {};
+    UNREACHABLE();
 }
 
 }

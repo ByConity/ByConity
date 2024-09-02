@@ -1,396 +1,417 @@
-test_explain_stats_n	19	5
-Projection Est. 54 rows, cost 9.005200e+01
-│     Expressions: id:=id_18
-└─ Gather Exchange Est. 54 rows, cost 8.605600e+01
-   └─ Union Est. 54 rows, cost 7.725600e+01
-      │     OutputToInputs: id_18 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17]
+test_explain_stats_n	20	5
+Projection Est. 57 rows, cost 9.504600e+01
+│     Expressions: id:=id_19
+└─ Gather Exchange Est. 57 rows, cost 9.082800e+01
+   └─ Union Est. 57 rows, cost 8.154800e+01
+      │     OutputToInputs: id_19 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i8 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i8 = 1
       │              Outputs: [id, i8]
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_1]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i16 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i16 = 1
       │              Outputs: [i16], id_1:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_2]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i32 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i32 = 1
       │              Outputs: [i32], id_2:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_3]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i64 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i64 = 1
       │              Outputs: [i64], id_3:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_4]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u8 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u8 = 1
       │              Outputs: [u8], id_4:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_5]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u16 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u16 = 1
       │              Outputs: [u16], id_5:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_6]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u32 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u32 = 1
       │              Outputs: [u32], id_6:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_7]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u64 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u64 = 1
       │              Outputs: [u64], id_7:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_8]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: f32 < 0.10001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: f32 < 0.10001
       │              Outputs: [f32], id_8:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_9]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: f64 < 0.01001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: f64 < 0.01001
       │              Outputs: [f64], id_9:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_10]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: d = cast(18262, \'Date\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: d = cast(18262, \'Date\')
       │              Outputs: [d], id_10:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_11]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: dt = cast(1577826000, \'DateTime\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: dt = cast(1577826000, \'DateTime\')
-      │              Outputs: [dt], id_11:=id
+      │     │     Condition: d32 = cast(18262, \'Date32\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: d32 = cast(18262, \'Date32\')
+      │              Outputs: [d32], id_11:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_12]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
-      │              Outputs: [dt64], id_12:=id
+      │     │     Condition: dt = cast(1577826000, \'DateTime\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: dt = cast(1577826000, \'DateTime\')
+      │              Outputs: [dt], id_12:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_13]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: s = \'1\'
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: s = \'1\'
-      │              Outputs: [s], id_13:=id
+      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
+      │              Outputs: [dt64], id_13:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_14]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: fxstr = \'1\'
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: fxstr = \'1\'
-      │              Outputs: [fxstr], id_14:=id
+      │     │     Condition: s = \'1\'
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: s = \'1\'
+      │              Outputs: [s], id_14:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_15]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: decimal32 < 0.10001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: decimal32 < 0.10001
-      │              Outputs: [decimal32], id_15:=id
+      │     │     Condition: fxstr = \'1\'
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: fxstr = \'1\'
+      │              Outputs: [fxstr], id_15:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_16]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
+      │     │     Condition: decimal32 < 0.10001
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: decimal32 < 0.10001
+      │              Outputs: [decimal32], id_16:=id
+      ├─ Projection Est. 3 rows, cost 4.292000e+00
+      │  │     Expressions: [id_17]
+      │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: decimal64 < 0.010001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: decimal64 < 0.010001
-      │              Outputs: [decimal64], id_16:=id
+      │              Outputs: [decimal64], id_17:=id
       └─ Projection Est. 3 rows, cost 4.292000e+00
-         │     Expressions: [id_17]
+         │     Expressions: [id_18]
          └─ Filter Est. 3 rows, cost 4.070000e+00
             │     Condition: decimal128 < 0.0010001
-            └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+            └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
                      Where: decimal128 < 0.0010001
-                     Outputs: [decimal128], id_17:=id
-test_explain_stats_n	19	5
-Projection Est. 54 rows, cost 9.005200e+01
-│     Expressions: id:=id_18
-└─ Gather Exchange Est. 54 rows, cost 8.605600e+01
-   └─ Union Est. 54 rows, cost 7.725600e+01
-      │     OutputToInputs: id_18 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17]
+                     Outputs: [decimal128], id_18:=id
+test_explain_stats_n	20	5
+Projection Est. 57 rows, cost 9.504600e+01
+│     Expressions: id:=id_19
+└─ Gather Exchange Est. 57 rows, cost 9.082800e+01
+   └─ Union Est. 57 rows, cost 8.154800e+01
+      │     OutputToInputs: id_19 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i8 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i8 = 1
       │              Outputs: [id, i8]
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_1]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i16 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i16 = 1
       │              Outputs: [i16], id_1:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_2]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i32 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i32 = 1
       │              Outputs: [i32], id_2:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_3]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i64 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i64 = 1
       │              Outputs: [i64], id_3:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_4]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u8 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u8 = 1
       │              Outputs: [u8], id_4:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_5]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u16 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u16 = 1
       │              Outputs: [u16], id_5:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_6]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u32 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u32 = 1
       │              Outputs: [u32], id_6:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_7]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u64 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u64 = 1
       │              Outputs: [u64], id_7:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_8]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: f32 < 0.10001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: f32 < 0.10001
       │              Outputs: [f32], id_8:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_9]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: f64 < 0.01001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: f64 < 0.01001
       │              Outputs: [f64], id_9:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_10]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: d = cast(18262, \'Date\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: d = cast(18262, \'Date\')
       │              Outputs: [d], id_10:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_11]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: dt = cast(1577826000, \'DateTime\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: dt = cast(1577826000, \'DateTime\')
-      │              Outputs: [dt], id_11:=id
+      │     │     Condition: d32 = cast(18262, \'Date32\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: d32 = cast(18262, \'Date32\')
+      │              Outputs: [d32], id_11:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_12]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
-      │              Outputs: [dt64], id_12:=id
+      │     │     Condition: dt = cast(1577826000, \'DateTime\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: dt = cast(1577826000, \'DateTime\')
+      │              Outputs: [dt], id_12:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_13]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: s = \'1\'
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: s = \'1\'
-      │              Outputs: [s], id_13:=id
+      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
+      │              Outputs: [dt64], id_13:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_14]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: fxstr = \'1\'
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: fxstr = \'1\'
-      │              Outputs: [fxstr], id_14:=id
+      │     │     Condition: s = \'1\'
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: s = \'1\'
+      │              Outputs: [s], id_14:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_15]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: decimal32 < 0.10001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: decimal32 < 0.10001
-      │              Outputs: [decimal32], id_15:=id
+      │     │     Condition: fxstr = \'1\'
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: fxstr = \'1\'
+      │              Outputs: [fxstr], id_15:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_16]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
+      │     │     Condition: decimal32 < 0.10001
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: decimal32 < 0.10001
+      │              Outputs: [decimal32], id_16:=id
+      ├─ Projection Est. 3 rows, cost 4.292000e+00
+      │  │     Expressions: [id_17]
+      │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: decimal64 < 0.010001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: decimal64 < 0.010001
-      │              Outputs: [decimal64], id_16:=id
+      │              Outputs: [decimal64], id_17:=id
       └─ Projection Est. 3 rows, cost 4.292000e+00
-         │     Expressions: [id_17]
+         │     Expressions: [id_18]
          └─ Filter Est. 3 rows, cost 4.070000e+00
             │     Condition: decimal128 < 0.0010001
-            └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+            └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
                      Where: decimal128 < 0.0010001
-                     Outputs: [decimal128], id_17:=id
-test_explain_stats_n	19	5
-Projection Est. 54 rows, cost 9.005200e+01
-│     Expressions: id:=id_18
-└─ Gather Exchange Est. 54 rows, cost 8.605600e+01
-   └─ Union Est. 54 rows, cost 7.725600e+01
-      │     OutputToInputs: id_18 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17]
+                     Outputs: [decimal128], id_18:=id
+test_explain_stats_n	20	5
+Projection Est. 57 rows, cost 9.504600e+01
+│     Expressions: id:=id_19
+└─ Gather Exchange Est. 57 rows, cost 9.082800e+01
+   └─ Union Est. 57 rows, cost 8.154800e+01
+      │     OutputToInputs: id_19 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i8 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i8 = 1
       │              Outputs: [id, i8]
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_1]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i16 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i16 = 1
       │              Outputs: [i16], id_1:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_2]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i32 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i32 = 1
       │              Outputs: [i32], id_2:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_3]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: i64 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: i64 = 1
       │              Outputs: [i64], id_3:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_4]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u8 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u8 = 1
       │              Outputs: [u8], id_4:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_5]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u16 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u16 = 1
       │              Outputs: [u16], id_5:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_6]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u32 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u32 = 1
       │              Outputs: [u32], id_6:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_7]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: u64 = 1
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: u64 = 1
       │              Outputs: [u64], id_7:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_8]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: f32 < 0.10001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: f32 < 0.10001
       │              Outputs: [f32], id_8:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_9]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: f64 < 0.01001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: f64 < 0.01001
       │              Outputs: [f64], id_9:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_10]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: d = cast(18262, \'Date\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: d = cast(18262, \'Date\')
       │              Outputs: [d], id_10:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_11]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: dt = cast(1577826000, \'DateTime\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: dt = cast(1577826000, \'DateTime\')
-      │              Outputs: [dt], id_11:=id
+      │     │     Condition: d32 = cast(18262, \'Date32\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: d32 = cast(18262, \'Date32\')
+      │              Outputs: [d32], id_11:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_12]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
-      │              Outputs: [dt64], id_12:=id
+      │     │     Condition: dt = cast(1577826000, \'DateTime\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: dt = cast(1577826000, \'DateTime\')
+      │              Outputs: [dt], id_12:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_13]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: s = \'1\'
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: s = \'1\'
-      │              Outputs: [s], id_13:=id
+      │     │     Condition: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: dt64 = cast(\'1577826000.01\', \'DateTime64(3)\')
+      │              Outputs: [dt64], id_13:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_14]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: fxstr = \'1\'
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: fxstr = \'1\'
-      │              Outputs: [fxstr], id_14:=id
+      │     │     Condition: s = \'1\'
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: s = \'1\'
+      │              Outputs: [s], id_14:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_15]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
-      │     │     Condition: decimal32 < 0.10001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
-      │              Where: decimal32 < 0.10001
-      │              Outputs: [decimal32], id_15:=id
+      │     │     Condition: fxstr = \'1\'
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: fxstr = \'1\'
+      │              Outputs: [fxstr], id_15:=id
       ├─ Projection Est. 3 rows, cost 4.292000e+00
       │  │     Expressions: [id_16]
       │  └─ Filter Est. 3 rows, cost 4.070000e+00
+      │     │     Condition: decimal32 < 0.10001
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │              Where: decimal32 < 0.10001
+      │              Outputs: [decimal32], id_16:=id
+      ├─ Projection Est. 3 rows, cost 4.292000e+00
+      │  │     Expressions: [id_17]
+      │  └─ Filter Est. 3 rows, cost 4.070000e+00
       │     │     Condition: decimal64 < 0.010001
-      │     └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+      │     └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
       │              Where: decimal64 < 0.010001
-      │              Outputs: [decimal64], id_16:=id
+      │              Outputs: [decimal64], id_17:=id
       └─ Projection Est. 3 rows, cost 4.292000e+00
-         │     Expressions: [id_17]
+         │     Expressions: [id_18]
          └─ Filter Est. 3 rows, cost 4.070000e+00
             │     Condition: decimal128 < 0.0010001
-            └─ TableScan test.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
+            └─ TableScan default.test_explain_stats_n Est. 5 rows, cost 3.700000e+00
                      Where: decimal128 < 0.0010001
-                     Outputs: [decimal128], id_17:=id
+                     Outputs: [decimal128], id_18:=id

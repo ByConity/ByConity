@@ -36,12 +36,11 @@ explain select * from test_ip_opt where b == toBool('F');
 
 drop stats test_ip_opt;
 drop table if exists test_ip_opt;
-drop table if exists test_ip_opt_local;
 
 set enable_optimizer=1;
 set dialect_type='MYSQL';
-set data_type_default_nullable=0;
 set create_stats_time_output=0;
+
 drop table if exists test_ip_opt;
 create table test_ip_opt(
     id UInt64,
@@ -50,6 +49,7 @@ create table test_ip_opt(
     fxstr FixedString(3),
     b Bool
 ) Engine = CnchMergeTree() order by id;
+
 
 
 insert into test_ip_opt values (0, '192.168.1.1', '0000:0000:0000:0000:0000:0000:0000:0000', '123', 'T');

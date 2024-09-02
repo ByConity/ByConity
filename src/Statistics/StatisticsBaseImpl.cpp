@@ -23,8 +23,8 @@
 #include <Statistics/StatsNdvBucketsImpl.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Statistics/TypeMacros.h>
-#include <Common/Exception.h>
 #include <Poco/JSON/Parser.h>
+#include <Common/Exception.h>
 
 namespace DB::Statistics
 {
@@ -141,28 +141,23 @@ std::shared_ptr<StatsType> createStatisticsTypedJson(StatisticsTag tag, std::str
 
 StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
 {
-    // TODO: rewrite use macro iteration
     auto ptr = [&]() -> StatisticsBasePtr {
         switch (tag)
         {
-            case StatisticsTag::DummyAlpha:
-                return createStatisticsUntyped<StatsDummyAlpha>(tag, blob);
-            case StatisticsTag::DummyBeta:
-                return createStatisticsUntyped<StatsDummyBeta>(tag, blob);
-            case StatisticsTag::TableBasic:
-                return createStatisticsUntyped<StatsTableBasic>(tag, blob);
-            case StatisticsTag::ColumnBasic:
-                return createStatisticsUntyped<StatsColumnBasic>(tag, blob);
-            case StatisticsTag::HllSketch:
-                return createStatisticsUntyped<StatsHllSketch>(tag, blob);
-            case StatisticsTag::KllSketch:
-                return createStatisticsTyped<StatsKllSketch>(tag, blob);
-            case StatisticsTag::NdvBuckets:
-                return createStatisticsTyped<StatsNdvBuckets>(tag, blob);
-            case StatisticsTag::NdvBucketsExtend:
-                return createStatisticsTyped<StatsNdvBucketsExtend>(tag, blob);
-            case StatisticsTag::NdvBucketsResult:
-                return createStatisticsTyped<StatsNdvBucketsResult>(tag, blob);
+#define UNTYPED_CASE(TYPE) \
+    case StatisticsTag::TYPE: { \
+        return createStatisticsUntyped<Stats##TYPE>(tag, blob); \
+    }
+            UNTYPED_STATS_ITERATE(UNTYPED_CASE)
+#undef UNTYPED_CASE
+
+#define TYPED_CASE(TYPE) \
+    case StatisticsTag::TYPE: { \
+        return createStatisticsTyped<Stats##TYPE>(tag, blob); \
+    }
+            TYPED_STATS_ITERATE(TYPED_CASE)
+#undef TYPED_CASE
+
             default: {
                 // unknonw statistics should be ignored instead of throw Exception
                 return nullptr;

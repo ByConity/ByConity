@@ -1,4 +1,5 @@
-#include <Statistics/CachedStatsProxy.h>
+#include <Core/SettingsEnums.h>
+#include <Statistics/CatalogAdaptorProxy.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Storages/StorageDistributed.h>
@@ -20,10 +21,9 @@ void dropStatsTable(ContextPtr context, const StatsTableIdentifier & table, Stat
     {
         auto catalog = createCatalogAdaptor(context);
         catalog->checkHealth(/*is_write=*/true);
-        auto proxy = createCachedStatsProxy(catalog, cache_policy);
+        auto proxy = createCatalogAdaptorProxy(catalog, cache_policy);
 
         proxy->drop(table);
-        catalog->invalidateClusterStatsCache(table);
     }
     catch (...)
     {
@@ -43,10 +43,9 @@ void dropStatsColumns(
     {
         auto catalog = createCatalogAdaptor(context);
         catalog->checkHealth(/*is_write=*/true);
-        auto proxy = createCachedStatsProxy(catalog, cache_policy);
-        auto cols_desc = catalog->filterCollectableColumns(table, columns);
+        auto proxy = createCatalogAdaptorProxy(catalog, cache_policy);
+        auto cols_desc = catalog->filterCollectableColumns(table, columns, true);
         proxy->dropColumns(table, cols_desc);
-        catalog->invalidateClusterStatsCache(table);
     }
     catch (...)
     {
@@ -54,5 +53,6 @@ void dropStatsColumns(
             throw;
     }
 }
+
 
 }

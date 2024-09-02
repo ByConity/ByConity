@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 ${CLICKHOUSE_CLIENT} --query="drop table if exists test_stats"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE test_stats(x UInt64, id UInt64) Engine=CnchMergeTree order by id;"
+${CLICKHOUSE_CLIENT} --query="CREATE TABLE test_stats(x UInt64, id UInt64) Engine=CnchMergeTree() order by id;"
 ${CLICKHOUSE_CLIENT} --query="insert into test_stats select cityHash64(intDiv(number, 10)), number from system.numbers limit 10000000"
 
 echo "create stats1"
@@ -18,7 +18,7 @@ echo "$INPUT" | grep "test_stats\.\*"
 
 DATA=(`echo "$INPUT" | grep "test_stats\.x"`)
 # echo identifier, type, nonnull_count, null_count, has_histogram
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[8]}
 # test NDV
 if ((${DATA[4]} >= 900000 && ${DATA[4]} <= 1100000)); then
 echo "GOOD NDV for x"
@@ -29,7 +29,7 @@ fi
 # echo identifier, <NOTHING>, full_count
 DATA=(`echo "$INPUT" | grep "test_stats\.id"`)
 # echo identifier, type, nonnull_count, null_count, has_histogram
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[8]}
 # test NDV
 if ((${DATA[4]} >= 9000000 && ${DATA[4]} <= 11000000)); then
 echo "GOOD NDV for id"
@@ -47,7 +47,7 @@ echo "$INPUT" | grep "test_stats\.\*"
 
 DATA=(`echo "$INPUT" | grep "test_stats\.x"`)
 # echo identifier, type, nonnull_count, null_count, has_histogram
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[8]}
 # test NDV
 if ((${DATA[4]} >= 900000 && ${DATA[4]} <= 1100000)); then
 echo "GOOD NDV for x"
@@ -58,7 +58,7 @@ fi
 # echo identifier, <NOTHING>, full_count
 DATA=(`echo "$INPUT" | grep "test_stats\.id"`)
 # echo identifier, type, nonnull_count, null_count, has_histogram
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[8]}
 # test NDV
 if ((${DATA[4]} >= 9000000 && ${DATA[4]} <= 11000000)); then
 echo "GOOD NDV for id"

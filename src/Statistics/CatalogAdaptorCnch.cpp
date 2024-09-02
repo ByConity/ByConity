@@ -45,15 +45,11 @@ public:
     void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) override;
     void dropStatsData(const StatsTableIdentifier & table) override;
 
-    void invalidateClusterStatsCache(const StatsTableIdentifier & table) override;
-    void invalidateServerStatsCache(const StatsTableIdentifier & table) override;
-
     std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) override;
     std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table_name) override;
     std::optional<StatsTableIdentifier> getTableIdByUUID(const UUID & uuid) override;
     StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) override;
     StoragePtr tryGetStorageByUUID(const UUID & uuid) override;
-    void invalidateAllServerStatsCache() override { Statistics::CacheManager::reset(); }
     UInt64 getUpdateTime() override;
     const Settings & getSettingsRef() override { return context->getSettingsRef(); }
     static StatsData convertTableStats(const TableStatistics & table_stats);
@@ -262,25 +258,6 @@ UInt64 CatalogAdaptorCnch::getUpdateTime()
 {
     // TODO: support cache invalidate strategy
     return 0;
-}
-
-void CatalogAdaptorCnch::invalidateClusterStatsCache(const StatsTableIdentifier & table)
-{
-#if 0
-    auto sql = fmt::format(
-        FMT_STRING("select host(), invalidateStatsCache('{}', '{}') from cnch(server, system.one)"),
-        table.getDatabaseName(),
-        table.getTableName());
-    // TODO: remove it when this bug is fixed
-    sql += " SETTINGS enable_optimizer=0";
-    executeSubQuery(context, sql);
-#endif
-    Statistics::CacheManager::invalidate(context, table);
-}
-
-void CatalogAdaptorCnch::invalidateServerStatsCache(const StatsTableIdentifier & table)
-{
-    Statistics::CacheManager::invalidate(context, table);
 }
 
 StatsData CatalogAdaptorCnch::convertTableStats(const TableStatistics & table_statistics)

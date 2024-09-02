@@ -21,17 +21,17 @@ show stats all;
 drop stats all;
 set enable_optimizer=1;
 set enable_materialized_view_rewrite=0;
-explain select * from v;
-explain select * from mv;
-explain select * from a;
+explain verbose=0 select * from v;
+explain verbose=0 select * from mv;
+explain verbose=0 select * from a;
 create stats all settings statistics_exclude_tables_regex='a.*';
-explain select * from v;
-explain select * from mv;
-explain select * from a;
+explain verbose=0 select * from v;
+explain verbose=0 select * from mv;
+explain verbose=0 select * from a;
 create stats all settings statistics_exclude_tables_regex='b.*';
-explain select * from v;
-explain select * from mv;
-explain select * from a;
+explain verbose=0 select * from v;
+explain verbose=0 select * from mv;
+explain verbose=0 select * from a;
 
 -- bug of alias at mv rewrite rule
 select ali.x from mv as ali inner join system.one on dummy=ali.x;

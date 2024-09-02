@@ -51,5 +51,15 @@ void checkSerdeDataType(SerdeDataType serde_data_type)
     }
 }
 
+inline void assertOk(bool ok, const char * expr)
+{
+    if (!ok)
+    {
+        auto err_msg = fmt::format(FMT_STRING("parse from blob failed when executing ({})"), expr);
+        throw Exception("failed to parse from blob", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+#define ASSERT_PARSE(EXPR) assertOk((EXPR), #EXPR)
 
 }

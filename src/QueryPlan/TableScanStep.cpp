@@ -1203,6 +1203,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     bool use_optimizer_projection_selection
         = build_context.context->getSettingsRef().optimizer_projection_support && is_merge_tree && !use_projection_index;
 
+    LOG_INFO(&Poco::Logger::get("test"), "initTableScan, limit={}, !empty={}", query->limitLength() ? serializeAST(*query->limitLength()) : "nothing", use_projection_index || use_optimizer_projection_selection);
+
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
     /// Rewrite runtime filter

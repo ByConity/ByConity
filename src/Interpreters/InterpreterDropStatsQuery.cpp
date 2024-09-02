@@ -17,9 +17,11 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InterpreterDropStatsQuery.h>
 #include <Parsers/ASTStatsQuery.h>
-#include <Statistics/CachedStatsProxy.h>
+#include <Statistics/ASTHelpers.h>
 #include <Statistics/CatalogAdaptor.h>
+#include <Statistics/CatalogAdaptorProxy.h>
 #include <Statistics/DropHelper.h>
+#include <Statistics/OptimizerStatisticsClient.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Statistics/ASTHelpers.h>
 
@@ -55,22 +57,14 @@ BlockIO InterpreterDropStatsQuery::execute()
             throw Exception("memory catalog don't support cache policy", ErrorCodes::BAD_ARGUMENTS);
     }
 
-
     if (query->table == "__reset")
     {
-        if (cache_policy != StatisticsCachePolicy::Cache)
-            throw Exception("__reset is only valid at cache mode", ErrorCodes::NOT_IMPLEMENTED);
-
-        // dummy means all
-        StatsTableIdentifier dummy(StorageID("", "__reset", UUID{}));
-        catalog->invalidateClusterStatsCache(dummy);
-
-        return {};
+        throw Exception("unsupported", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     catalog->checkHealth(/*is_write=*/true);
 
-    auto proxy = Statistics::createCachedStatsProxy(catalog, cache_policy);
+    auto proxy = Statistics::createCatalogAdaptorProxy(catalog, cache_policy);
     auto db = context->resolveDatabase(query->database);
 
     if (!DatabaseCatalog::instance().isDatabaseExist(db, context))

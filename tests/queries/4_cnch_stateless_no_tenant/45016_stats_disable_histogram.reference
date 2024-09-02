@@ -1,8 +1,8 @@
 sample=0 & histogram=1
 stats_disable_hist	2	3
-stats_disable_hist.*		3					
-stats_disable_hist.x	UInt64	3	0	3	0	2	1
-stats_disable_hist.y	Float64	3	0	3	0	2	1
+stats_disable_hist.*		3						
+stats_disable_hist.x	UInt64	3	0	3	0	2	8	1
+stats_disable_hist.y	Float64	3	0	3	0	2	8	1
 stats_disable_hist.x	0	[0, 0]	1	1	1	1
 stats_disable_hist.x	1	[1, 1]	1	1	2	2
 stats_disable_hist.x	2	[2, 2]	1	1	3	3
@@ -11,14 +11,14 @@ stats_disable_hist.y	1	[1, 1]	1	1	2	2
 stats_disable_hist.y	2	[2, 2]	1	1	3	3
 sample=0 & histogram=0
 stats_disable_hist	2	3
-stats_disable_hist.*		3					
-stats_disable_hist.x	UInt64	3	0	3	0	2	0
-stats_disable_hist.y	Float64	3	0	3	0	2	0
+stats_disable_hist.*		3						
+stats_disable_hist.x	UInt64	3	0	3	0	2	8	0
+stats_disable_hist.y	Float64	3	0	3	0	2	8	0
 sample=1 & histogram=1
 stats_disable_hist	2	3
-stats_disable_hist.*		3					
-stats_disable_hist.x	UInt64	3	0	3	0	2	1
-stats_disable_hist.y	Float64	3	0	3	0	2	1
+stats_disable_hist.*		3						
+stats_disable_hist.x	UInt64	3	0	3	0	2	8	1
+stats_disable_hist.y	Float64	3	0	3	0	2	8	1
 stats_disable_hist.x	0	[0, 0]	1	1	1	1
 stats_disable_hist.x	1	[1, 1]	1	1	2	2
 stats_disable_hist.x	2	[2, 2]	1	1	3	3
@@ -27,6 +27,6 @@ stats_disable_hist.y	1	[1, 1]	1	1	2	2
 stats_disable_hist.y	2	[2, 2]	1	1	3	3
 sample=1 & histogram=0
 stats_disable_hist	2	3
-stats_disable_hist.*		3					
-stats_disable_hist.x	UInt64	3	0	3	0	2	0
-stats_disable_hist.y	Float64	3	0	3	0	2	0
+stats_disable_hist.*		3						
+stats_disable_hist.x	UInt64	3	0	3	0	2	8	0
+stats_disable_hist.y	Float64	3	0	3	0	2	8	0

@@ -38,7 +38,9 @@ public:
 
     String getDbTableName() const { return storage_id.getFullTableName(); }
     UniqueKey getUniqueKey() const;
-    StorageID getStorageID() const { return storage_id; }
+
+    const StorageID & getStorageID() const { return storage_id; }
+    StorageID & getMutableStorageID() { return storage_id; }
     UUID getUUID() const { return storage_id.uuid; }
     String getNameForLogs() const { return storage_id.getNameForLogs(); }
 

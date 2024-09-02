@@ -15,60 +15,10 @@
 
 #pragma once
 #include <Core/Settings.h>
+#include <Protos/auto_statistics.pb.h>
+#include <Statistics/SettingsMap.h>
 namespace DB::Statistics
 {
-
-struct CollectorSettings
-{
-    bool collect_histogram = true;
-    bool collect_floating_histogram = true;
-    bool collect_floating_histogram_ndv = true;
-    bool enable_sample = true;
-    UInt64 sample_row_count = 40000000;
-    double sample_ratio = 0.01;
-    StatisticsAccurateSampleNdvMode accurate_sample_ndv = StatisticsAccurateSampleNdvMode::AUTO;
-    StatisticsCachePolicy cache_policy = StatisticsCachePolicy::Default;
-    bool if_not_exists = false;
-    UInt64 histogram_bucket_size = 250;
-    UInt64 kll_sketch_log_k = DEFAULT_KLL_SKETCH_LOG_K;
-
-    CollectorSettings() { }
-
-    explicit CollectorSettings(const Settings & settings)
-    {
-        // read from context Settings
-        fromContextSettings(settings);
-    }
-
-    void fromContextSettings(const Settings & settings)
-    {
-        collect_histogram = settings.statistics_collect_histogram;
-        collect_floating_histogram = settings.statistics_collect_floating_histogram;
-        collect_floating_histogram_ndv = settings.statistics_collect_floating_histogram_ndv;
-        enable_sample = settings.statistics_enable_sample;
-        sample_row_count = settings.statistics_sample_row_count;
-        sample_ratio = settings.statistics_sample_ratio;
-        accurate_sample_ndv = settings.statistics_accurate_sample_ndv;
-        cache_policy = settings.statistics_cache_policy;
-        histogram_bucket_size = settings.statistics_histogram_bucket_size;
-        kll_sketch_log_k = settings.statistics_kll_sketch_log_k;
-
-        // other settings should be manually set
-        // like if not exists
-
-        // normalize conflicting settings
-        normalize();
-    }
-
-    void normalize()
-    {
-        if (histogram_bucket_size <= 0)
-        {
-            collect_histogram = false;
-        }
-    }
-
-    String toJsonStr() const;
-    void fromJsonStr(const String & json_str);
-};
+// don't change this name since it is used everywhere
+using CollectorSettings = Statistics::CreateStatsSettings;
 }

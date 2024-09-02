@@ -25,8 +25,6 @@ CollectStep::CollectStep(StatisticsCollector & core_)
 {
 }
 
-std::unique_ptr<CollectStep> createStatisticsCollectorStepFull(StatisticsCollector & core);
-
 
 void CollectStep::writeResult(TableStats & core_table_stats, ColumnStatsMap & core_columns_stats)
 {
@@ -44,7 +42,8 @@ void CollectStep::writeResult(TableStats & core_table_stats, ColumnStatsMap & co
 
         auto ndv_value_regulated = std::min<double>(std::llround(col_data.nonnull_count), col_data.ndv_value);
         column_stats.basic->mutableProto().set_ndv_value(ndv_value_regulated);
-        column_stats.basic->mutableProto().set_total_length(0);
+        if (col_data.length_opt)
+            column_stats.basic->mutableProto().set_total_length(col_data.length_opt.value());
 
         if (col_data.ndv_buckets_result_opt.has_value())
         {
@@ -56,14 +55,11 @@ void CollectStep::writeResult(TableStats & core_table_stats, ColumnStatsMap & co
 }
 void CollectStep::collectTable()
 {
-    if (context->getSettingsRef().statistics_query_cnch_parts_for_row_count)
+    // try get count by fast trivial count
+    if (auto count_opt = catalog->queryRowCount(table_info))
     {
-        // try get count by fast trivial count
-        if (auto count_opt = catalog->queryRowCount(table_info))
-        {
-            handler_context.full_count = count_opt.value();
-            return;
-        }
+        handler_context.full_count = count_opt.value();
+        return;
     }
 
     TableHandler table_handler(table_info);
