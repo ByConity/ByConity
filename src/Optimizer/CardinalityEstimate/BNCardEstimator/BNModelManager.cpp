@@ -64,11 +64,10 @@ String readFileFromHdfs(const String & path)
     String file_path = path;
     /// url encoding is necessary otherwise `ReadBufferFromByteHDFS` will not recognize the filename
     boost::replace_all(file_path, "#", "%23");
-    static constexpr Int64 BUFFER_SIZE = 1024*1024*10;
 
     WriteBufferFromOwnString writer;
     std::shared_ptr<HDFSFileSystem> fs = getDefaultHdfsFileSystem();
-    ReadBufferFromByteHDFS reader(file_path, fs->getHDFSParams(), BUFFER_SIZE);
+    ReadBufferFromByteHDFS reader(file_path, fs->getHDFSParams());
     copyData(reader, writer);
     return writer.str();
 }

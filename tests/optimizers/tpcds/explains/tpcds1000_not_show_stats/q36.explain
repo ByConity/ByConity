@@ -24,33 +24,33 @@ Projection
                                  │     Aggregates: expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit), expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                                  └─ Inner Join
                                     │     Condition: ss_item_sk == i_item_sk
-                                    ├─ Repartition Exchange
-                                    │  │     Partition by: {ss_item_sk}
-                                    │  └─ Inner Join
-                                    │     │     Condition: ss_sold_date_sk == d_date_sk
-                                    │     │     Runtime Filters Builder: {d_date_sk}
-                                    │     ├─ Inner Join
-                                    │     │  │     Condition: ss_store_sk == s_store_sk
-                                    │     │  │     Runtime Filters Builder: {s_store_sk}
-                                    │     │  ├─ Filter
-                                    │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
-                                    │     │  │  └─ TableScan tpcds1000.store_sales
-                                    │     │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
-                                    │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_ext_sales_price, ss_net_profit]
-                                    │     │  └─ Broadcast Exchange
-                                    │     │     └─ Filter
-                                    │     │        │     Condition: s_state = 'TN'
-                                    │     │        └─ TableScan tpcds1000.store
-                                    │     │                 Where: s_state = 'TN'
-                                    │     │                 Outputs: [s_store_sk, s_state]
-                                    │     └─ Broadcast Exchange
+                                    ├─ Inner Join
+                                    │  │     Condition: ss_sold_date_sk == d_date_sk
+                                    │  │     Runtime Filters Builder: {d_date_sk}
+                                    │  ├─ Inner Join
+                                    │  │  │     Condition: ss_store_sk == s_store_sk
+                                    │  │  │     Runtime Filters Builder: {s_store_sk}
+                                    │  │  ├─ Filter
+                                    │  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
+                                    │  │  │  └─ TableScan tpcds1000.store_sales
+                                    │  │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
+                                    │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_ext_sales_price, ss_net_profit]
+                                    │  │  └─ Broadcast Exchange
+                                    │  │     └─ Projection
+                                    │  │        │     Expressions: [s_store_sk]
+                                    │  │        └─ Filter
+                                    │  │           │     Condition: s_state = 'TN'
+                                    │  │           └─ TableScan tpcds1000.store
+                                    │  │                    Where: s_state = 'TN'
+                                    │  │                    Outputs: [s_store_sk, s_state]
+                                    │  └─ Broadcast Exchange
+                                    │     └─ Projection
+                                    │        │     Expressions: [d_date_sk]
                                     │        └─ Filter
                                     │           │     Condition: d_year = 2001
                                     │           └─ TableScan tpcds1000.date_dim
                                     │                    Where: d_year = 2001
                                     │                    Outputs: [d_date_sk, d_year]
-                                    └─ Repartition Exchange
-                                       │     Partition by: {i_item_sk}
-                                       └─ TableScan tpcds1000.item
-                                                Outputs: [i_item_sk, i_class, i_category]
+                                    └─ TableScan tpcds1000.item
+                                             Outputs: [i_item_sk, i_class, i_category]
 note: Runtime Filter is applied for 2 times.

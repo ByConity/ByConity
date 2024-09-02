@@ -125,7 +125,8 @@ void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_e
     {
         size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
     
-        DB::fillMissingColumns(res_columns, num_rows, columns, metadata_snapshot, num_bitmap_columns);
+        auto mutable_this = const_cast<IMergeTreeReader *>(this);
+        DB::fillMissingColumns(res_columns, num_rows, columns, metadata_snapshot, num_bitmap_columns, &(mutable_this->filled_missing_column_types));
         should_evaluate_missing_defaults = std::any_of(
             res_columns.begin(), res_columns.end(), [](const auto & column) { return column == nullptr; });
     }
@@ -222,7 +223,12 @@ void IMergeTreeReader::performRequiredConversions(Columns & res_columns, bool /*
             if (res_columns[pos] == nullptr)
                 continue;
 
-            copy_block.insert({res_columns[pos], getColumnFromPart(*name_and_type).type, name_and_type->name});
+            /// If some column is filled by fillMissingColumns, we should use the same type.
+            auto it = filled_missing_column_types.find(name_and_type->name);
+            if (it != filled_missing_column_types.end())
+                copy_block.insert({res_columns[pos], it->second, name_and_type->name});
+            else
+                copy_block.insert({res_columns[pos], getColumnFromPart(*name_and_type).type, name_and_type->name});
         }
 
         DB::performRequiredConversions(copy_block, columns, storage.getContext());
@@ -571,6 +577,8 @@ void IMergeTreeReader::readData(
     {
         return getCompressedIndex(data_part, name_and_type, substream_path);
     };
+    
+    deserialize_settings.zero_copy_read_from_cache = settings.read_settings.zero_copy_read_from_cache;
 
     const auto & name = name_and_type.name;
     const SerializationPtr & serialization = serializations[name];

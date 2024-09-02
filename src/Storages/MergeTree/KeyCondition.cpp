@@ -659,8 +659,8 @@ ASTPtr cloneASTWithInversionPushDown(const ASTPtr node, const bool need_inversio
 }
 
 
-inline bool Range::equals(const Field & lhs, const Field & rhs) { return applyVisitor(FieldVisitorAccurateEquals(), lhs, rhs); }
-inline bool Range::less(const Field & lhs, const Field & rhs) { return applyVisitor(FieldVisitorAccurateLess(), lhs, rhs); }
+bool Range::equals(const Field & lhs, const Field & rhs) { return applyVisitor(FieldVisitorAccurateEquals(), lhs, rhs); }
+bool Range::less(const Field & lhs, const Field & rhs) { return applyVisitor(FieldVisitorAccurateLess(), lhs, rhs); }
 
 
 /** Calculate expressions, that depend only on constants.
@@ -674,7 +674,7 @@ Block KeyCondition::getBlockWithConstants(
         { DataTypeUInt8().createColumnConstWithDefaultValue(1), std::make_shared<DataTypeUInt8>(), "_dummy" }
     };
 
-   
+
     auto actions = ExpressionAnalyzer(query, syntax_analyzer_result, context).getConstActionsDAG();
     for (const auto & action_node : actions->getOutputs())
     {
@@ -1233,6 +1233,10 @@ bool KeyCondition::tryPrepareSetIndex(
     if (!prepared_set->hasExplicitSetElements())
         return false;
 
+    if (prepared_set->getSetElements().size() == 1 &&
+        "BitMap64" == String(prepared_set->getSetElements()[0]->getFamilyName()))
+        return false;
+
     prepared_set->checkColumnsNumber(left_args_count);
     for (size_t i = 0; i < indexes_mapping.size(); ++i)
         prepared_set->checkTypesEqual(indexes_mapping[i].tuple_index, data_types[i]);
@@ -1440,12 +1444,15 @@ static void castValueToType(const DataTypePtr & desired_type, Field & src_value,
     {
         src_value = convertFieldToType(src_value, *desired_type, src_type.get());
     }
-    catch (...)
+    catch (Exception & e)
     {
         throw Exception("Key expression contains comparison between inconvertible types: " +
             desired_type->getName() + " and " + src_type->getName() +
-            " inside " + queryToString(node),
+            " inside " + queryToString(node) + ". Error message : " + e.what(),
             ErrorCodes::BAD_TYPE_OF_FIELD);
+    }
+    catch (...) {
+        throw;
     }
 }
 

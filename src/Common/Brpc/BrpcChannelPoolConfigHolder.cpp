@@ -34,6 +34,7 @@ std::ostream & operator<<(std::ostream & os, const BrpcChannelPoolConfigHolder::
 
 void BrpcChannelPoolConfigHolder::afterInit(const PoolOptionsMap * conf_ptr)
 {
+    BrpcChannelPoolOptions::getInstance().initPoolExpireTimer();
     std::cout << Poco::DateTimeFormatter::format(Poco::DateTime(), "%Y.%m.%d %H:%M:%S.%i") << " <Info> "
               << "BrpcChannelPoolConfigHolder::afterinit Init brpc client channel pool with config: " << *conf_ptr << std::endl;
 }
@@ -49,6 +50,16 @@ BrpcChannelPoolConfigHolder::createTypedConfig(RawConfAutoPtr conf_ptr) noexcept
 
     for (auto & pool_name : pool_name_keys)
     {
+        if (pool_name == "channel_pool_common_options")
+        {
+
+            RawConfAutoPtr pool_options_conf_ptr = conf_ptr->createView(pool_name);
+            auto rpc_channel_pool_expired_seconds = pool_options_conf_ptr->getUInt64("channel_pool.channel_pool_common_options.rpc_channel_pool_expired_seconds", 1800);
+            auto rpc_channel_pool_check_interval_seconds = pool_options_conf_ptr->getUInt64("channel_pool.channel_pool_common_options.rpc_channel_pool_check_interval_seconds", 300);
+            BrpcChannelPoolOptions::getInstance().setPoolCheckConfig(rpc_channel_pool_check_interval_seconds, rpc_channel_pool_expired_seconds);
+
+            continue;
+        }
         auto pair = option_unique_ptr->find(pool_name);
         if (likely(pair == option_unique_ptr->end()))
         {

@@ -1,7 +1,7 @@
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypesNumber.h>
 
-
+#include <DataTypes/IDataType.h>
 #include <Parsers/IAST.h>
 
 
@@ -21,7 +21,8 @@ static DataTypePtr createNumericDataType(const ASTPtr & arguments)
         if (std::is_integral_v<T>)
         {
             if (arguments->children.size() > 1)
-                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "{} data type family must not have more than one argument - display width", TypeName<T>);
+                /// MySQL compatibility
+                arguments->children = {arguments->children[0]};
         }
         else
         {
@@ -32,6 +33,41 @@ static DataTypePtr createNumericDataType(const ASTPtr & arguments)
     return std::make_shared<DataTypeNumber<T>>();
 }
 
+DataTypePtr makeUnsigned(const DataTypePtr & type)
+{
+    WhichDataType which(type);
+    if (which.isInt8())
+        return std::make_shared<DataTypeUInt8>();
+    if (which.isInt16())
+        return std::make_shared<DataTypeUInt16>();
+    if (which.isInt32())
+        return std::make_shared<DataTypeUInt32>();
+    if (which.isInt64())
+        return std::make_shared<DataTypeUInt64>();
+    if (which.isInt128())
+        return std::make_shared<DataTypeUInt128>();
+    if (which.isInt256())
+        return std::make_shared<DataTypeUInt256>();
+    return type;
+}
+
+DataTypePtr makeSigned(const DataTypePtr & type)
+{
+    WhichDataType which(type);
+    if (which.isUInt8())
+        return std::make_shared<DataTypeInt8>();
+    if (which.isUInt16())
+        return std::make_shared<DataTypeInt16>();
+    if (which.isUInt32())
+        return std::make_shared<DataTypeInt32>();
+    if (which.isUInt64())
+        return std::make_shared<DataTypeInt64>();
+    if (which.isUInt128())
+        return std::make_shared<DataTypeInt128>();
+    if (which.isUInt256())
+        return std::make_shared<DataTypeInt256>();
+    return type;
+}
 
 void registerDataTypeNumbers(DataTypeFactory & factory)
 {

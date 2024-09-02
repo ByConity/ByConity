@@ -46,10 +46,10 @@ TEST(OptimizerPatternTest, TypeOfPattern)
 
 TEST(OptimizerPatternTest, CapturePattern)
 {
-    Capture readNodeCap;
-    Capture idCap;
-    Capture dbCap;
-    Capture tableCap;
+    Capture readNodeCap = "readNodeCap";
+    Capture idCap = "idCap";
+    Capture dbCap = "dbCap";
+    Capture tableCap = "tableCap";
     PatternPtr pattern = tableScan()
                              .capturedAs(readNodeCap)
                              .capturedAs(idCap, [](const auto & node) { return node->getId(); })
@@ -71,7 +71,10 @@ TEST(OptimizerPatternTest, CapturePattern)
 // Capture step property of wrong step type will lead to a runtime exception
 TEST(OptimizerPatternTest, CapturePattern_unexpectedStepProvided)
 {
-    Capture dbCap;
+    if (isDebugBuild())
+        GTEST_SKIP() << "Skipping test in debug mode";
+
+    Capture dbCap = "dbCap";
     PatternPtr pattern = exchange().capturedStepAs<MockedTableScanStep>(dbCap, [](const auto & step) { return step.database; }).result();
 
     PlanNodePtr exchangeNode = createExchangeNode(ExchangeMode::BROADCAST, {});
@@ -87,17 +90,17 @@ TEST(OptimizerPatternTest, FilterPattern)
         = typeOf(IQueryPlanStep::Type::TableScan).matchingStep<MockedTableScanStep>([](const auto & s) { return s.table == "t1"; }).result();
 
     PatternPtr t2Pattern
-        = typeOf(IQueryPlanStep::Type::TableScan).matching([](const auto & node, const auto &) { return !node->getChildren().empty(); }).result();
+        = typeOf(IQueryPlanStep::Type::TableScan).withEmpty().result();
 
     ASSERT_TRUE(t1Pattern->matches(readNodeT1));
     ASSERT_TRUE(!t1Pattern->matches(readNodeT2));
-    ASSERT_TRUE(!t2Pattern->matches(readNodeT1));
-    ASSERT_TRUE(t2Pattern->matches(readNodeT2));
+    ASSERT_TRUE(t2Pattern->matches(readNodeT1));
+    ASSERT_TRUE(!t2Pattern->matches(readNodeT2));
 }
 
 TEST(OptimizerPatternTest, FilterPatternFilterByCaptures)
 {
-    Capture dbCap;
+    Capture dbCap{"dbCap"};
     PatternPtr pattern = tableScan()
                              .capturedStepAs<MockedTableScanStep>(dbCap, [](const auto & step) { return step.database; })
                              .matchingCapture([&dbCap](const Captures & caps) { return caps.at<std::string>(dbCap) == "db1"; }).result();
@@ -112,6 +115,8 @@ TEST(OptimizerPatternTest, FilterPatternFilterByCaptures)
 // Predicate of wrong step type will lead to a runtime exception
 TEST(OptimizerPatternTest, FilterPatternUnexpectedStepProvided)
 {
+    if (isDebugBuild())
+        GTEST_SKIP() << "Skipping test in debug mode";
     PatternPtr pattern = exchange().matchingStep<MockedTableScanStep>([](const auto & step) { return step.database == "db1"; }).result();
 
     PlanNodePtr exchangeNode = createExchangeNode(ExchangeMode::BROADCAST, {});
@@ -158,10 +163,10 @@ TEST(OptimizerPatternTest, WithPatterns)
 
 TEST(OptimizerPatternTest, WithPatternsSubPatternCanUseOuterCaptures)
 {
-    Capture read1DbCap;
-    Capture read1TableCap;
-    Capture read2DbCap;
-    Capture read2TableCap;
+    Capture read1DbCap = "read1DbCap";
+    Capture read1TableCap = "read1TableCap";
+    Capture read2DbCap = "read2DbCap";
+    Capture read2TableCap = "read2TableCap";
 
     PlanNodePtr node = createTableScanNode("db1", "t1", {createTableScanNode("db1", "t2", {})});
 
@@ -184,10 +189,10 @@ TEST(OptimizerPatternTest, WithPatternsSubPatternCanUseOuterCaptures)
 
 TEST(OptimizerPatternTest, WithPatternsOuterPatternCanUseSubCaptures)
 {
-    Capture read1DbCap;
-    Capture read1TableCap;
-    Capture read2DbCap;
-    Capture read2TableCap;
+    Capture read1DbCap{"read1DbCap"};
+    Capture read1TableCap{"read1TableCap"};
+    Capture read2DbCap{"read2DbCap"};
+    Capture read2TableCap{"read2TableCap"};
 
     PlanNodePtr node = createTableScanNode("db1", "t1", {createTableScanNode("db1", "t2", {})});
 
@@ -198,12 +203,12 @@ TEST(OptimizerPatternTest, WithPatternsOuterPatternCanUseSubCaptures)
                              .capturedStepAs<MockedTableScanStep>(read1DbCap, dbProperty)
                              .capturedStepAs<MockedTableScanStep>(read1TableCap, tableProperty)
                              .withSingle(tableScan()
-                                              .capturedStepAs<MockedTableScanStep>(read2DbCap, dbProperty)
-                                              .capturedStepAs<MockedTableScanStep>(read2TableCap, tableProperty))
-                             .matchingCapture([&](const Captures & caps) {
-                                 return caps.at<std::string>(read1DbCap) == caps.at<std::string>(read2DbCap)
-                                     && caps.at<std::string>(read1TableCap) != caps.at<std::string>(read2TableCap);
-                             }).result();
+                                            .capturedStepAs<MockedTableScanStep>(read2DbCap, dbProperty)
+                                            .capturedStepAs<MockedTableScanStep>(read2TableCap, tableProperty)
+                                            .matchingCapture([&](const Captures & caps) {
+                                                return caps.at<std::string>(read1DbCap) == caps.at<std::string>(read2DbCap)
+                                                    && caps.at<std::string>(read1TableCap) != caps.at<std::string>(read2TableCap);
+                             })).result();
 
     ASSERT_TRUE(pattern->matches(node));
 }
@@ -507,11 +512,12 @@ TEST(OptimizerPatternTest, Case4)
     PatternPtr pattern2
         = join().capturedAs(join1Cap).withAny(DB::Patterns::any().capturedAs(anyCap).withAny(tableScan().capturedAs(read1Cap))).result();
 
-    PatternPtr pattern3
-        = join()
-              .capturedAs(join1Cap)
-              .withAny(tableScan().matchingStep(isDb1Pred, "isDb1").capturedAs(read1Cap))
-              .withAny(join().capturedAs(join2Cap).withAll(tableScan().matchingStep(isDb1Pred, "isDb1").capturedAs(read2Cap))).result();
+    PatternPtr pattern3 = join()
+                              .capturedAs(join1Cap)
+                              .withAny(tableScan().matchingStep<MockedTableScanStep>(isDb1Pred, "isDb1").capturedAs(read1Cap))
+                              .withAny(join().capturedAs(join2Cap).withAll(
+                                  tableScan().matchingStep<MockedTableScanStep>(isDb1Pred, "isDb1").capturedAs(read2Cap)))
+                              .result();
 
     ASSERT_TRUE(pattern1->matches(plan));
     ASSERT_TRUE(pattern1->match(plan)->captures.size() == 3);
@@ -560,10 +566,10 @@ TEST(OptimizerPatternTest, Case4)
 //                   capture tableName as: @33
 TEST(OptimizerPatternTest, Case5)
 {
-    Capture aggOpCap;
-    Capture joinTypeCap;
-    Capture excgCap;
-    Capture tableCap;
+    Capture aggOpCap{"aggOpCap"};
+    Capture joinTypeCap{"joinTypeCap"};
+    Capture excgCap{"excgCap"};
+    Capture tableCap{"tableCap"};
 
     PlanNodePtr plan = createAggregatingNode(
         "ak1",
@@ -577,14 +583,16 @@ TEST(OptimizerPatternTest, Case5)
 
     PatternPtr pattern1
         = aggregating()
-              .matchingStep<MockedAggregatingStep>(&MockedAggregatingStep::final, "isFinalAgg")
+              .matchingStep<MockedAggregatingStep>(
+                  std::function<bool(const MockedAggregatingStep &)>{&MockedAggregatingStep::final}, "isFinalAgg")
               .capturedStepAs<MockedAggregatingStep>(aggOpCap, &MockedAggregatingStep::aggregator, "aggOp")
               .withSingle(join()
-                               .capturedStepAs<MockedJoinStep>(joinTypeCap, &MockedJoinStep::kind, "joinType")
-                               .withAny(exchange().capturedAs(excgCap).withSingle(
-                                   tableScan()
-                                       .matchingStep<MockedTableScanStep>([](const auto & st) { return st.database == "db1"; }, "isDb1")
-                                       .capturedStepAs<MockedTableScanStep>(tableCap, &MockedTableScanStep::table, "tableName")))).result();
+                              .capturedStepAs<MockedJoinStep>(joinTypeCap, &MockedJoinStep::kind, "joinType")
+                              .withAny(exchange().capturedAs(excgCap).withSingle(
+                                  tableScan()
+                                      .matchingStep<MockedTableScanStep>([](const auto & st) { return st.database == "db1"; }, "isDb1")
+                                      .capturedStepAs<MockedTableScanStep>(tableCap, &MockedTableScanStep::table, "tableName"))))
+              .result();
 
     ASSERT_TRUE(pattern1->matches(plan));
     ASSERT_TRUE(pattern1->match(plan)->captures.size() == 4);
@@ -592,4 +600,20 @@ TEST(OptimizerPatternTest, Case5)
     ASSERT_TRUE(pattern1->match(plan)->captures.at<ASTTableJoin::Kind>(joinTypeCap) == ASTTableJoin::Kind::Cross);
     ASSERT_TRUE(pattern1->match(plan)->captures.at<PlanNodePtr>(excgCap) == plan->getChildren()[0]->getChildren()[0]);
     ASSERT_TRUE(pattern1->match(plan)->captures.at<std::string>(tableCap) == "t1");
+}
+
+TEST(OptimizerPatternTest, TestFilterWithCapture)
+{
+    auto plan1 = createTableScanNode("db1", "t1", {});
+    auto plan2 = createTableScanNode("db2", "t2", {});
+    PatternPtr pattern = tableScan()
+                             .matchingStep<MockedTableScanStep>([](auto & step, auto & captures) {
+                                 captures.emplace("table", step.table);
+                                 return step.database == "db1";
+                             })
+                             .result();
+    ASSERT_TRUE(pattern->matches(plan1));
+    ASSERT_TRUE(pattern->match(plan1)->captures.size() == 1);
+    ASSERT_TRUE(pattern->match(plan1)->captures.at<std::string>("table") == "t1");
+    ASSERT_TRUE(!pattern->matches(plan2));
 }

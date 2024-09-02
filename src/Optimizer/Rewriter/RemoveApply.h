@@ -17,6 +17,7 @@
 
 #include <Interpreters/Context.h>
 #include <Optimizer/Rewriter/Rewriter.h>
+#include <Optimizer/Rule/Rule.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/TranslationMap.h>
 
@@ -300,7 +301,10 @@ private:
 class UnCorrelatedQuantifiedComparisonSubqueryVisitor : public SimplePlanRewriter<Void>
 {
 public:
-    UnCorrelatedQuantifiedComparisonSubqueryVisitor(ContextMutablePtr context_, CTEInfo & cte_info) : SimplePlanRewriter(context_, cte_info) { }
+    UnCorrelatedQuantifiedComparisonSubqueryVisitor(ContextMutablePtr context_, CTEInfo & cte_info) : SimplePlanRewriter(context_, cte_info)
+    {
+    }
+
 private:
     PlanNodePtr visitApplyNode(ApplyNode &, Void &) override;
 };
@@ -327,10 +331,58 @@ private:
 class CorrelatedQuantifiedComparisonSubqueryVisitor : public SimplePlanRewriter<Void>
 {
 public:
-    CorrelatedQuantifiedComparisonSubqueryVisitor(ContextMutablePtr context_, CTEInfo & cte_info) : SimplePlanRewriter(context_, cte_info) { }
+    CorrelatedQuantifiedComparisonSubqueryVisitor(ContextMutablePtr context_, CTEInfo & cte_info) : SimplePlanRewriter(context_, cte_info)
+    {
+    }
 
 private:
     PlanNodePtr visitApplyNode(ApplyNode &, Void &) override;
+};
+
+
+class UnnestingWithWindow : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::UNNESTING_WITH_WINDOW; }
+    String getName() const override { return "UNNESTING_WITH_WINDOW"; }
+    ConstRefPatternPtr getPattern() const override;
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_window; }
+
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class UnnestingWithProjectionWindow : public UnnestingWithWindow
+{
+public:
+    RuleType getType() const override { return RuleType::UNNESTING_WITH_PROJECTION_WINDOW; }
+    String getName() const override { return "UNNESTING_WITH_PROJECTION_WINDOW"; }
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_window; }
+    ConstRefPatternPtr getPattern() const override;
+};
+
+class ExistsToSemiJoin : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::EXISTS_TO_SEMI_JOIN; }
+    String getName() const override { return "EXISTS_TO_SEMI_JOIN"; }
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_semi_anti_join; }
+    ConstRefPatternPtr getPattern() const override;
+
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class InToSemiJoin : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::IN_TO_SEMI_JOIN; }
+    String getName() const override { return "IN_TO_SEMI_JOIN"; }
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_unnesting_subquery_with_semi_anti_join; }
+    ConstRefPatternPtr getPattern() const override;
+
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
 }

@@ -116,6 +116,11 @@ bool CnchServerManager::isLeader() const
     return elector->isLeader();
 }
 
+std::optional<HostWithPorts> CnchServerManager::getCurrentLeader() const
+{
+    return elector->getLeaderInfo();
+}
+
 /// Callback by StorageElector. Need to gurantee no exception thrown in this method.
 bool CnchServerManager::onLeader()
 {

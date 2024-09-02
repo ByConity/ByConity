@@ -27,6 +27,11 @@
 namespace DB
 {
 std::atomic<UInt64> MinimumDataPart::increment = 0;
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
 }
 
 namespace DB::CnchPartsHelper
@@ -58,6 +63,8 @@ namespace
 {
     struct ServerDataPartOperation
     {
+        static String getName(const ServerDataPartPtr & part) { return part->name(); }
+
         static Int64 getMaxBlockNumber(const ServerDataPartPtr & part) { return part->get_info().max_block; }
 
         static UInt64 getCommitTime(const ServerDataPartPtr & part) { return part->get_commit_time(); }
@@ -93,6 +100,8 @@ namespace
 
     struct MinimumDataPartOperation
     {
+        static String getName(const MinimumDataPartPtr & part) { return part->name; }
+
         static Int64 getMaxBlockNumber(const MinimumDataPartPtr & part) { return part->info.max_block; }
 
         static UInt64 getCommitTime(const MinimumDataPartPtr & part) { return part->commit_time; }
@@ -128,6 +137,8 @@ namespace
 
     struct DeleteBitmapOperation
     {
+        static String getName(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getNameForLogs(); }
+
         static Int64 getMaxBlockNumber(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getModel()->part_max_block(); }
 
         static UInt64 getCommitTime(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getCommitTime(); }
@@ -136,6 +147,11 @@ namespace
 
         static void setEndTime(const DeleteBitmapMetaPtr & bitmap, UInt64 end_time)
         {
+            /// a bitmap's end time is equal to the commit time of the first non-partial bitmap that covers it.
+            /// e.g., for the following mvvc chain ("->" means next version)
+            ///   base(commit=t1) -> delta(commit=t2) -> delta(commit=t3) -> base(commit=t4) -> base(commit=t5) -> delta(commit=t6)
+            /// the end time for each bitmaps are updated to
+            ///   base(end=t4)    -> delta(end=t4)    -> delta(end=t4)    -> base(end=t5)    -> base(end=0)     -> delta(end=0)
             for (auto it = bitmap; it; it = it->tryGetPrevious())
             {
                 if (end_time)
@@ -212,7 +228,12 @@ namespace
         while (prev_it != end)
         {
             auto & prev = *prev_it;
-            chassert(Operation::getCommitTime(prev));
+            if (!Operation::getCommitTime(prev))
+            {
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR, "Unexpected input, object {} doesn't have commit time", Operation::getName(prev));
+            }
+
             bool reach_partition_end = (curr_it == end || !Operation::isSamePartition(prev, *curr_it));
             const auto max_block_number = Operation::getMaxBlockNumber(prev);
 
@@ -245,15 +266,20 @@ namespace
             /// latest version of non-tombstone item
             else
             {
+                UInt64 end_time = 0;
                 /// find the first covering range tombstone for prev
                 for (auto it = range_tombstone_beg_it; it != range_tombstone_end_it; ++it)
                 {
                     if (max_block_number <= Operation::getMaxBlockNumber(*it))
                     {
-                        Operation::setEndTime(prev, Operation::getCommitTime(*it));
+                        end_time = Operation::getCommitTime(*it);
                         break;
                     }
                 }
+                /// NOTE: mvcc-chain of bitmaps can have multiple base(full) versions,
+                /// and `setEndTime(prev, 0)` is required in order to gc old versions
+                /// covered by new base bitmap. for parts, it's a no-op when end_time is 0.
+                Operation::setEndTime(prev, end_time);
                 output(prev);
             }
 

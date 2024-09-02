@@ -34,6 +34,7 @@ namespace DB
 
 void Analysis::setScope(IAST & statement, ScopePtr scope)
 {
+    LOG_TRACE(logger, "scope of ast {}: {}", statement.dumpTree(0), scope->toString());
     MAP_SET(scopes, &statement, scope);
 }
 
@@ -54,17 +55,18 @@ ScopePtr Analysis::getQueryWithoutFromScope(ASTSelectQuery & query)
 
 void Analysis::setTableStorageScope(ASTIdentifier & db_and_table, ScopePtr scope)
 {
+    LOG_TRACE(logger, "scope of table ast {}: {}", db_and_table.dumpTree(0), scope->toString());
     MAP_SET(table_storage_scopes, &db_and_table, scope);
-}
-
-std::unordered_map<ASTIdentifier *, ScopePtr> & Analysis::getTableStorageScopeMap()
-{
-    return table_storage_scopes;
 }
 
 ScopePtr Analysis::getTableStorageScope(ASTIdentifier & db_and_table)
 {
     MAP_GET(table_storage_scopes, &db_and_table);
+}
+
+std::unordered_map<ASTIdentifier *, ScopePtr> & Analysis::getTableStorageScopeMap()
+{
+    return table_storage_scopes;
 }
 
 /*
@@ -119,7 +121,7 @@ ExpressionTypes Analysis::getExpressionTypes()
 {
     ExpressionTypes expression_types;
     for(auto & it : expression_column_with_types)
-        expression_types[it.first] = expression_column_with_types[it.first].type;
+        expression_types[it.first] = it.second.type;
     return expression_types;
 }
 
@@ -149,7 +151,7 @@ JoinOnAnalysis & Analysis::getJoinOnAnalysis(ASTTableJoin & table_join)
 const StorageAnalysis & Analysis::getStorageAnalysis(const IAST & ast)
 {
     if (storage_results.count(&ast) == 0)
-        throw Exception("storage not found in storage_results", ErrorCodes::LOGICAL_ERROR); 
+        throw Exception("storage not found in storage_results", ErrorCodes::LOGICAL_ERROR);
     return storage_results[&ast];
 }
 

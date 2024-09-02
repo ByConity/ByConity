@@ -1,9 +1,17 @@
+#include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
+#include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/Rewriter/AddBufferForDeadlockCTE.h>
+#include <Optimizer/Rewriter/ColumnPruning.h>
+#include <Optimizer/Rewriter/PredicatePushdown.h>
+#include <Optimizer/Rewriter/RemoveUnusedCTE.h>
+#include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
+#include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/BufferStep.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/SimplePlanRewriter.h>
+#include <QueryPlan/SimplePlanVisitor.h>
 #include <QueryPlan/Void.h>
 #include <fmt/core.h>
 #include <common/logger_useful.h>
@@ -22,6 +30,10 @@ namespace
     class UpdateParentExecuteOrderVisitor;
     // visitor to update execute_order from a join node to left descendant node
     class UpdateLeftExecuteOrderVisitor;
+
+    // visitor to find cte ref exists both sides of join build and probe to add buffer
+    class FindAllCTEIfExistsOnJoinBuildVisitor;
+
     // visitor to add BufferStep for deadlock CTEs
     class AddBufferVisitor;
 
@@ -33,7 +45,14 @@ namespace
 
     using VisitEntry = std::pair<PlanNodeBase *, JoinPath>;
     using VisitPath = std::vector<VisitEntry>;
-    using ExecuteOrderMap = std::unordered_map<PlanNodeId, std::unordered_set<int>>;
+    struct CTEExecuteOrder
+    {
+        PlanNodeId node_id;
+        CTEId cte_id;
+        int execute_order;
+    };
+
+    using ExecuteOrders = std::vector<CTEExecuteOrder>;
 
     class FindDirectRightVisitor : public PlanNodeVisitor<void, const JoinPath>
     {
@@ -48,7 +67,7 @@ namespace
 
         CTEInfo & cte_info;
         Poco::Logger * logger;
-        std::unordered_set<CTEId> deadlock_ctes;
+        std::unordered_set<PlanNodeId> deadlock_ctes;
         VisitPath visit_path;
     };
 
@@ -65,14 +84,14 @@ namespace
 
         CTEInfo & cte_info;
         VisitPath visit_path;
-        ExecuteOrderMap execute_orders;
+        ExecuteOrders execute_orders;
         int cur_execute_order = 0;
     };
 
     class UpdateLeftExecuteOrderVisitor : public PlanNodeVisitor<void, const Void>
     {
     public:
-        UpdateLeftExecuteOrderVisitor(CTEInfo & cte_info_, ExecuteOrderMap & execute_orders_, int execute_order_)
+        UpdateLeftExecuteOrderVisitor(CTEInfo & cte_info_, ExecuteOrders & execute_orders_, int execute_order_)
             : cte_info(cte_info_), execute_orders(execute_orders_), execute_order(execute_order_)
         {
         }
@@ -82,21 +101,23 @@ namespace
         void visitJoinNode(JoinNode & node, const Void &) override;
 
         CTEInfo & cte_info;
-        ExecuteOrderMap & execute_orders;
+        ExecuteOrders & execute_orders;
         const int execute_order = 0;
     };
 
     class AddBufferVisitor : public SimplePlanRewriter<const Void>
     {
     public:
-        AddBufferVisitor(const std::unordered_set<CTEId> & deadlock_ctes_, ContextMutablePtr context_, CTEInfo & cte_info_)
-            : SimplePlanRewriter<const Void>(std::move(context_), cte_info_), deadlock_ctes(deadlock_ctes_)
+        AddBufferVisitor(
+            const std::unordered_set<PlanNodeId> & deadlock_ctes_, ContextMutablePtr context_, CTEInfo & cte_info_, Poco::Logger * logger_)
+            : SimplePlanRewriter<const Void>(std::move(context_), cte_info_), deadlock_ctes(deadlock_ctes_), logger(logger_)
         {
         }
 
         PlanNodePtr visitCTERefNode(CTERefNode & node, const Void & c) override;
 
-        const std::unordered_set<CTEId> & deadlock_ctes;
+        const std::unordered_set<PlanNodeId> & deadlock_ctes;
+        Poco::Logger * logger;
     };
 
     void FindDirectRightVisitor::visitPlanNode(PlanNodeBase & node, const JoinPath & join_path)
@@ -109,19 +130,31 @@ namespace
             VisitorUtil::accept(node, update_parent_order_visitor, {});
             const auto & execute_orders = update_parent_order_visitor.execute_orders;
 
-            if (logger && logger->is(Poco::Message::PRIO_TRACE))
+            LOG_TRACE(logger, "FindDirectRightVisitor visit on node {}", node.getId());
+
+            std::unordered_map<CTEId, int> cte_min_execute_orders;
+            for (const auto & execute_order : execute_orders)
             {
-                std::ostringstream os;
-                for (const auto & [node_id, node_orders] : execute_orders)
-                    os << node_id << "->" << fmt::format("({})", fmt::join(node_orders, ",")) << " ";
-                LOG_TRACE(logger, "Direct right node id: {}, calculated execute order: {}", node.getId(), os.str());
+                auto it = cte_min_execute_orders.find(execute_order.cte_id);
+                if (it == cte_min_execute_orders.end())
+                    cte_min_execute_orders.emplace(execute_order.cte_id, execute_order.execute_order);
+                else
+                    it->second = std::min(it->second, execute_order.execute_order);
             }
 
-            for (const auto & [cte_id, cte_def_node] : cte_info.getCTEs())
+            // find deadlock ctes
+            for (const auto & execute_order : execute_orders)
             {
-                auto cte_def_node_id = cte_def_node->getId();
-                if (execute_orders.count(cte_def_node_id) && execute_orders.at(cte_def_node_id).size() > 1)
-                    deadlock_ctes.emplace(cte_id);
+                LOG_TRACE(
+                    logger,
+                    "Direct right node id: {}, cte_id: {}, execute order: {}, cte min execute order: {}",
+                    execute_order.node_id,
+                    execute_order.cte_id,
+                    execute_order.execute_order,
+                    cte_min_execute_orders[execute_order.cte_id]);
+
+                if (execute_order.execute_order > cte_min_execute_orders[execute_order.cte_id])
+                    deadlock_ctes.emplace(execute_order.node_id);
             }
         }
 
@@ -156,7 +189,6 @@ namespace
     {
         assert(visit_path.back().second == JoinPath::RIGHT);
         visit_path.pop_back();
-        execute_orders[node.getId()].emplace(cur_execute_order);
 
         if (!visit_path.empty())
         {
@@ -177,7 +209,8 @@ namespace
     {
         auto join_path = visit_path.back().second;
         visit_path.pop_back();
-        execute_orders[node.getId()].emplace(++cur_execute_order);
+
+        ++cur_execute_order;
 
         // update execute_order for left tree of join node
         UpdateLeftExecuteOrderVisitor update_left_order_visitor{cte_info, execute_orders, cur_execute_order};
@@ -192,7 +225,6 @@ namespace
 
     void UpdateLeftExecuteOrderVisitor::visitPlanNode(PlanNodeBase & node, const Void & ctx)
     {
-        execute_orders[node.getId()].emplace(execute_order);
 
         for (auto & child : node.getChildren())
             VisitorUtil::accept(*child, *this, ctx);
@@ -200,16 +232,14 @@ namespace
 
     void UpdateLeftExecuteOrderVisitor::visitCTERefNode(CTERefNode & node, const Void & ctx)
     {
-        execute_orders[node.getId()].emplace(execute_order);
 
         auto cte_id = node.getStep()->getId();
+        execute_orders.emplace_back(CTEExecuteOrder{node.getId(), cte_id, execute_order});
         VisitorUtil::accept(*cte_info.getCTEDef(cte_id), *this, ctx);
     }
 
     void UpdateLeftExecuteOrderVisitor::visitJoinNode(JoinNode & node, const Void & ctx)
     {
-        execute_orders[node.getId()].emplace(execute_order);
-
         VisitorUtil::accept(*node.getChildren().at(0), *this, ctx);
     }
 
@@ -218,37 +248,159 @@ namespace
         SimplePlanRewriter<const Void>::visitCTERefNode(node, c);
         auto cte_id = node.getStep()->getId();
 
-        if (!deadlock_ctes.count(cte_id))
-        {
+        if (!deadlock_ctes.count(node.getId()))
             return node.shared_from_this();
-        }
-        else
+
+        /**
+         * if buffer size exceed max_buffer_size_for_deadlock_cte, we inline cte instead of add buffer.
+         * 
+         * note: max buffer size for tpcds 1t is 7994883314, so we set max_buffer_size_for_deadlock_cte 
+         * 8'000'000'000 bytes (8Gb) by default for tpcds 1T
+         */
+        Int64 max_buffer_size = context->getSettingsRef().max_buffer_size_for_deadlock_cte;
+        if (max_buffer_size == 0)
         {
-            QueryPlanStepPtr buffer_step = std::make_shared<BufferStep>(node.getCurrentDataStream());
-            PlanNodePtr buffer_node = PlanNodeBase::createPlanNode(
-                context->nextNodeId(), std::move(buffer_step), {node.shared_from_this()}, node.getStatistics());
-            return buffer_node;
+            LOG_TRACE(logger, "Inline CTE {} because max_buffer_size_for_deadlock_cte=0", cte_id);
+            return node.getStep()->toInlinedPlanNode(cte_helper.getCTEInfo(), context);
         }
+
+        if (max_buffer_size > 0)
+        {
+            auto stats = CardinalityEstimator::estimate(node, cte_helper.getCTEInfo(), context);
+            if (!stats)
+            {
+                LOG_TRACE(logger, "Inline CTE {} because estimates stats failed", cte_id);
+                return node.getStep()->toInlinedPlanNode(cte_helper.getCTEInfo(), context);
+            }
+
+            Int64 buffer_size = (*stats)->getOutputSizeInBytes();
+            LOG_TRACE(logger, "CTE {} estimated buffer size {}", cte_id, (*stats)->getOutputSizeInBytes());
+            if (buffer_size > max_buffer_size)
+            {
+                LOG_TRACE(
+                    logger,
+                    "Inline CTE {} because estimates buffer size {} is bigger than max_buffer_size_for_deadlock_cte({})",
+                    cte_id,
+                    buffer_size,
+                    max_buffer_size);
+                return node.getStep()->toInlinedPlanNode(cte_helper.getCTEInfo(), context);
+            }
+        }
+
+        QueryPlanStepPtr buffer_step = std::make_shared<BufferStep>(node.getCurrentDataStream());
+        PlanNodePtr buffer_node
+            = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(buffer_step), {node.shared_from_this()}, node.getStatistics());
+        return buffer_node;
     }
+
+    class FindAllCTEIfExistsOnJoinBuildVisitor : public PlanNodeVisitor<std::unordered_set<CTEId>, Void>
+    {
+    public:
+        explicit FindAllCTEIfExistsOnJoinBuildVisitor(CTEInfo & cte_info) : cte_helper(cte_info)
+        {
+        }
+
+        std::unordered_set<CTEId> visitPlanNode(PlanNodeBase & node, Void & c) override
+        {
+            std::unordered_set<PlanNodeId> ctes;
+            for (const auto & child : node.getChildren())
+            {
+                auto child_ctes = VisitorUtil::accept(*child, *this, c);
+                ctes.insert(child_ctes.begin(), child_ctes.end());
+            }
+            return ctes;
+        }
+
+        std::unordered_set<CTEId> visitCTERefNode(CTERefNode & node, Void & c) override
+        {
+            const auto * cte_step = dynamic_cast<const CTERefStep *>(node.getStep().get());
+            auto cte_id = cte_step->getId();
+            cte_refs[cte_id].emplace_back(node.getId());
+
+            auto ctes = cte_helper.accept(cte_id, *this, c);
+            ctes.emplace(cte_id);
+
+            return ctes;
+        }
+
+        std::unordered_set<CTEId> visitJoinNode(JoinNode & node, Void & c) override
+        {
+            auto left_ctes = VisitorUtil::accept(*node.getChildren()[0], *this, c);
+            auto right_ctes = VisitorUtil::accept(*node.getChildren()[1], *this, c);
+            for (const auto & cte_id : right_ctes)
+            {
+                for (const auto & node_id : cte_refs[cte_id])
+                    deadlock_ctes.emplace(node_id);
+            }
+
+            left_ctes.insert(right_ctes.begin(), left_ctes.end());
+            return left_ctes;
+        }
+
+        SimpleCTEVisitHelper<std::unordered_set<PlanNodeId>> cte_helper;
+        std::unordered_map<CTEId, std::vector<PlanNodeId>> cte_refs;
+
+        std::unordered_set<PlanNodeId> deadlock_ctes;
+    };
 }
 
 void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     static auto * logger = &Poco::Logger::get("AddBufferForDeadlockCTE");
 
-    FindDirectRightVisitor find_deadlock_cte_visitor{plan.getCTEInfo(), logger};
-    VisitorUtil::accept<void, const JoinPath>(plan.getPlanNode(), find_deadlock_cte_visitor, JoinPath::RIGHT);
+    if (plan.getCTEInfo().empty())
+        return;
 
-    if (logger && logger->is(Poco::Message::PRIO_DEBUG))
+    std::unordered_set<PlanNodeId> deadlock_ctes;
+
+    // fixme: fix deadlock algorithm to enable this settings
+    if (context->getSettings().enable_remove_remove_unnecessary_buffer)
     {
-        std::ostringstream os;
-        for (const auto & cte_id : find_deadlock_cte_visitor.deadlock_ctes)
-            os << cte_id << '#' << plan.getCTEInfo().getCTEDef(cte_id)->getId() << ", ";
-        LOG_DEBUG(logger, "Detected deadlock ctes(cte_id#plan_node_id): {}", os.str());
+        FindDirectRightVisitor find_deadlock_cte_visitor{plan.getCTEInfo(), logger};
+        VisitorUtil::accept<void, const JoinPath>(plan.getPlanNode(), find_deadlock_cte_visitor, JoinPath::RIGHT);
+        deadlock_ctes = std::move(find_deadlock_cte_visitor.deadlock_ctes);
+    }
+    else
+    {
+        FindAllCTEIfExistsOnJoinBuildVisitor find_all_cte_ref_visitor{plan.getCTEInfo()};
+        Void c;
+        VisitorUtil::accept(plan.getPlanNode(), find_all_cte_ref_visitor, c);
+        deadlock_ctes = std::move(find_all_cte_ref_visitor.deadlock_ctes);
     }
 
-    AddBufferVisitor add_buffer_visitor{find_deadlock_cte_visitor.deadlock_ctes, context, plan.getCTEInfo()};
-    VisitorUtil::accept(plan.getPlanNode(), add_buffer_visitor, {});
+    if (deadlock_ctes.empty())
+        return;
+
+    if (logger->debug())
+    {
+        std::ostringstream os;
+        for (const auto & cte_ref_id : deadlock_ctes)
+            os << cte_ref_id << ", ";
+        LOG_DEBUG(logger, "Detected deadlock ctes(cte_ref_id): {}", os.str());
+    }
+
+    AddBufferVisitor add_buffer_visitor{deadlock_ctes, context, plan.getCTEInfo(), logger};
+    plan.update(VisitorUtil::accept(plan.getPlanNode(), add_buffer_visitor, {}));
+
+    RewriterPtr push_limit_through_buffer = std::make_shared<IterativeRewriter>(
+        std::vector<RulePtr>{std::make_shared<PushLimitThroughBuffer>()}, "PushDownLimitThroughBuffer");
+    push_limit_through_buffer->rewritePlan(plan, context);
+
+    if (context->getSettingsRef().max_buffer_size_for_deadlock_cte >= 0)
+    {
+        static Rewriters rewriters
+            = {std::make_shared<RemoveUnusedCTE>(),
+               std::make_shared<ColumnPruning>(),
+               std::make_shared<PredicatePushdown>(false, true),
+               std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+               std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
+               std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
+               std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+               std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant")};
+
+        for (auto & rewriter : rewriters)
+            rewriter->rewritePlan(plan, context);
+    }
 }
 
 }

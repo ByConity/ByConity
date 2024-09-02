@@ -34,7 +34,9 @@ namespace DB::Statistics
 class Histogram
 {
 public:
-    Histogram(Buckets buckets = {});
+    Histogram() = default;
+    explicit Histogram(const Buckets & buckets);
+    explicit Histogram(Buckets && buckets);
 
     void emplaceBackBucket(Bucket ptr) { buckets.emplace_back(std::move(ptr)); }
 

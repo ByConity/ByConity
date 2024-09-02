@@ -1,0 +1,44 @@
+Projection Est. ? rows
+│     Expressions: sumIf(1, equals(mapElement(string_profiles, \'gender\'), NULL)):=`expr#sumIf(1, equals(mapElement(string_profiles, \'gender\'), NULL))`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#sumIf(1, equals(mapElement(string_profiles, \'gender\'), NULL)):=AggNull(countIf)(expr#equals(mapElement(string_profiles, \'gender\'), NULL))
+         └─ Projection Est. ? rows
+            │     Expressions: expr#equals(mapElement(string_profiles, \'gender\'), NULL):=`__string_profiles__\'gender\'` = NULL
+            └─ TableScan test_48048.users Est. ? rows
+                     Outputs: [__string_profiles__\'gender\']
+Projection Est. ? rows
+│     Expressions: sum(if(equals(mapElement(string_profiles, \'gender\'), NULL), 1, 0)):=`expr#sum(if(equals(mapElement(string_profiles, \'gender\'), NULL), 1, 0))`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#sum(if(equals(mapElement(string_profiles, \'gender\'), NULL), 1, 0)):=AggNull(countIf)(expr#equals(__string_profiles__\'gender\', NULL))
+         └─ Projection Est. ? rows
+            │     Expressions: expr#equals(__string_profiles__\'gender\', NULL):=`__string_profiles__\'gender\'` = NULL
+            └─ TableScan test_48048.users Est. ? rows
+                     Outputs: [__string_profiles__\'gender\']
+Projection Est. ? rows
+│     Expressions: sum(if(equals(mapElement(string_profiles, \'gender\'), NULL), 0, 1)):=`expr#sum(if(equals(mapElement(string_profiles, \'gender\'), NULL), 0, 1))`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#sum(if(equals(mapElement(string_profiles, \'gender\'), NULL), 0, 1)):=AggNull(sum)(expr#if(equals(mapElement(string_profiles, \'gender\'), NULL), 0, 1))
+         └─ Projection Est. ? rows
+            │     Expressions: expr#if(equals(mapElement(string_profiles, \'gender\'), NULL), 0, 1):=if(`__string_profiles__\'gender\'` = NULL, 0, 1)
+            └─ TableScan test_48048.users Est. ? rows
+                     Outputs: [__string_profiles__\'gender\']
+Projection Est. ? rows
+│     Expressions: sum(if(less(project_id, 10), 0, 1)):=`expr#sum(if(less(project_id, 10), 0, 1))`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#sum(if(less(project_id, 10), 0, 1)):=AggNull(countIf)(expr#not(less(project_id, 10)))
+         └─ Projection Est. ? rows
+            │     Expressions: expr#not(less(project_id, 10)):=NOT (project_id < 10)
+            └─ TableScan test_48048.users Est. ? rows
+                     Outputs: [project_id]

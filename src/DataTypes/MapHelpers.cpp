@@ -24,7 +24,6 @@
 #include <Common/Exception.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/escapeForFileName.h>
 
 namespace DB
 {

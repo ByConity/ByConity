@@ -1,0 +1,80 @@
+name: Auto Release
+on:
+  release:
+    types: [published]
+jobs:
+  build:
+    name: Build & Uploads Binaries & Images
+    container: byconity/byconity-ci:24Jan08
+    runs-on: self-hosted
+    steps:
+      - name: Setup Git Proxy.
+        if: ${{ runner.name != 'ec2-aws-id4-10.10.129.157' }}
+        run: |
+          git config --global http.proxy http://${{ secrets.HTTP_PROXY }}
+      - name: Setup Environment Varialbes
+        run: |
+          export PROJECT_NAME=byconity-$(cat /etc/hostname)
+          echo "SRC_VOL=${PROJECT_NAME}_src_volume" >> $GITHUB_ENV
+          echo "OUTPUT_VOL=${PROJECT_NAME}_output_volume" >> $GITHUB_ENV
+          echo "DUMMY_CONTAINER=dummy-${PROJECT_NAME}" >> $GITHUB_ENV
+      - name: Checkout ByConity Repo.
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Will be copied to volume's `/` path.
+          path: ByConity
+      - name: Prepare for Build Binaries.
+        run: |
+          mkdir -p release-binary/output
+          docker container create --name ${DUMMY_CONTAINER} -v ${SRC_VOL}:/build hello-world
+          docker cp ./ByConity/. ${DUMMY_CONTAINER}:/build/
+          docker rm ${DUMMY_CONTAINER}
+      - name: Build All Binaries.
+        run: |
+          ./ByConity/docker/packager/packager --output-dir /output --package-type deb --ccache_dir=${HOME}/.ccache_for_docker --additional-pkgs --version ${{ github.ref_name }} --build-type release --dind-mode
+      - name: Copy Binaries out.
+        run: |
+          docker container create --name ${DUMMY_CONTAINER} -v ${OUTPUT_VOL}:/output hello-world
+          docker cp ${DUMMY_CONTAINER}:/output/. release-binary/output/
+          docker rm ${DUMMY_CONTAINER}
+          ls -al release-binary/output/
+          echo "BIN_DIR=${PWD}/release-binary/output" >> $GITHUB_ENV
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: release-binary/output/byconity-*
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+      - name: Build Docker.
+        run: |
+          cd ByConity/docker/debian/release
+          BUILD_TYPE=Release CMAKE_FLAGS="-DENABLE_JAVA_EXTENSIONS=0" TAG=${{ github.ref_name }} make image-github
+          cd -
+          docker images
+      - name: Login to Docker Hub.
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push Dockers.
+        run: |
+          docker push byconity/byconity:${{ github.ref_name }}
+      - name: Tag as Stable then push to Docker Hub.
+        if: "!github.event.release.prerelease"
+        run: |
+          docker tag byconity/byconity:${{ github.ref_name }} byconity/byconity:stable
+          docker push byconity/byconity:stable
+          docker image rm -f byconity/byconity:stable
+      - name: Cleanup Data.
+        if: always()
+        run: |
+          docker ps --filter="name=${DUMMY_CONTAINER}" -qa | xargs -I {} docker rm {}
+          docker volume rm ${SRC_VOL}
+          docker volume rm ${OUTPUT_VOL}
+          docker volume prune -f
+          docker image rm -f byconity/byconity:${{ github.ref_name }}
+          docker container prune -f
+          docker network prune -f

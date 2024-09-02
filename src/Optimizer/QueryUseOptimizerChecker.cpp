@@ -22,6 +22,7 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/misc.h>
 #include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTWithElement.h>
 #include <Storages/StorageView.h>
@@ -34,6 +35,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_QUERY;
+    extern const int UNSUPPORTED_PARAMETER;
 }
 
 void changeASTSettings(ASTPtr &node)
@@ -119,6 +121,9 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
         return false;
     }
 
+    if (!context->getSettingsRef().enable_optimizer && context->getSettingsRef().enable_distributed_output)
+        throw Exception("Distributed output in non-optimizer mode is not supported, please enable optimizer.", ErrorCodes::UNSUPPORTED_PARAMETER);
+
     String reason;
     if (auto * explain = node->as<ASTExplainQuery>())
     {
@@ -133,14 +138,21 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
             || explain->getKind() ==  ASTExplainQuery::MetaData;
-         return explain_plan && check(explain->getExplainedQuery(), context, throw_exception);
+        if (!explain_plan)
+            reason = "unsupported explain type";
+        return explain_plan && check(explain->getExplainedQuery(), context, throw_exception);
     }
+    if (auto * prepare = node->as<ASTCreatePreparedStatementQuery>())
+    {
+        return check(prepare->getQuery(), context, throw_exception);
+    }
+
 
     bool support = false;
 
     if (node->as<ASTSelectQuery>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTSelectIntersectExceptQuery>())
     {
-        // disable system query, array join, table function, no merge tree table
+        // disable system query, table function, no merge tree table
         NameSet with_tables;
 
         QueryUseOptimizerVisitor checker;
@@ -185,10 +197,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             }
         }
 
-        // only disable optimizer when insert in interactive session
-        if (isQueryInInteractiveSession(context, node))
-            support = false;
-
         LOG_DEBUG(
             &Poco::Logger::get("QueryUseOptimizerChecker"),
             fmt::format("support: {}, check: {}", support, check(insert_query->select, context)));
@@ -221,9 +229,6 @@ bool QueryUseOptimizerVisitor::visitNode(ASTPtr & node, QueryUseOptimizerContext
 
 static bool checkDatabaseAndTable(const ASTTableExpression & table_expression, const ContextMutablePtr & context, const NameSet & ctes)
 {
-    if (table_expression.sample_size || table_expression.sample_offset)
-        return false;
-
     if (table_expression.database_and_table_name)
     {
         auto db_and_table = DatabaseAndTableWithAlias(table_expression.database_and_table_name);
@@ -242,17 +247,14 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
         return false;
     }
 
-    if (select->group_by_with_totals && context.is_add_totals.has_value())
+    if (select->group_by_with_totals && context.disallow_with_totals)
     {
         reason = "group by with totals only supports with totals at outmost select";
         return false;
     }
-    if (select->group_by_with_totals)
-        context.is_add_totals.emplace(true);
-    else
-        context.is_add_totals.emplace(false);
+    auto has_join = [](const auto & sel_query) { return sel_query.tables() && sel_query.tables()->children.size() > 1; };
 
-    QueryUseOptimizerContext child_context{.context = context.context, .ctes = context.ctes, .is_add_totals = context.is_add_totals};
+    QueryUseOptimizerContext child_context{.context = context.context, .ctes = context.ctes, .disallow_with_totals = has_join(*select)};
     collectWithTableNames(*select, child_context.ctes);
 
     for (const auto * table_expression : getTableExpressions(*select))

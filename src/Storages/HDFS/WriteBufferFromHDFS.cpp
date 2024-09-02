@@ -59,12 +59,49 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
     HDFSBuilderWrapper builder;
     HDFSFSPtr fs;
     bool need_close = false;
+    // lock file is used to avoid concurrent writing that all use overwrite(puf -f)
+    hdfsFile lock_file;
+    std::string lock_file_path;
+    bool need_delete_lock_file = false;
 
-    void openFile( const std::string & hdfs_name_, int flags, bool overwrite_current_file = false) {
+    void tryGetLockFile(std::string path)
+    {
+        lock_file_path = path + ".lock";
+
+        if (!hdfsExists(fs.get(), lock_file_path.c_str()))
+            throw Exception(
+                ErrorCodes::CANNOT_OPEN_FILE,
+                "Can't get lock file cause file {} is already open. Please wait for the previous task finish.",
+                lock_file_path);
+
         ProfileEvents::increment(ProfileEvents::HdfsFileOpen);
+        lock_file = hdfsOpenFile(fs.get(), lock_file_path.c_str(), O_CREAT, 0, 0, 0);
+
+        if (lock_file == nullptr)
+        {
+            throw Exception(
+                "Unable to get Lock file: " + lock_file_path + " error: " + std::string(hdfsGetLastError()), ErrorCodes::CANNOT_OPEN_FILE);
+        }
+
+        // We don't write anything to this lock file, only create it
+        int ec = hdfsCloseFile(fs.get(), lock_file);
+        if (ec != 0)
+        {
+            ProfileEvents::increment(ProfileEvents::WriteBufferFromHdfsWriteFailed);
+            const char * underlying_err_msg = hdfsGetLastError();
+            std::string reason = underlying_err_msg ? std::string(underlying_err_msg) : "unknown error";
+            throw Exception(
+                ErrorCodes::CANNOT_CLOSE_FILE, "Failed to close hdfs file {}, errno: {}, reason: {}", lock_file_path, ec, reason);
+        }
+
+        need_delete_lock_file = true;
+    }
+
+    void openFile(const std::string & hdfs_name_, int flags, bool overwrite_current_file = false)
+    {
         /// We use hdfs_name as path directly to avoid Poco URI escaping character(e.g. %) in hdfs_name.
         std::string path;
-        if (hdfs_name_.size() > 0 && hdfs_name_.at(0) == '/')
+        if (!hdfs_name_.empty() && hdfs_name_.at(0) == '/')
             path = hdfs_name_;
         else
             path = hdfs_uri.getPath();
@@ -76,6 +113,10 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "File {} already exists. \
                 If you want to overwrite it, enable setting overwrite_current_file = 1", path);
 
+        if (overwrite_current_file)
+            tryGetLockFile(path);
+
+        ProfileEvents::increment(ProfileEvents::HdfsFileOpen);
         fout = hdfsOpenFile(fs.get(), path.c_str(), flags, 0, 0, 0);     /// O_WRONLY meaning create or overwrite i.e., implies O_TRUNCAT here
 
         if (fout == nullptr)
@@ -110,7 +151,7 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
     {
         try
         {
-            closeFile();
+            tryCloseFile();
         }
         catch (...)
         {
@@ -118,25 +159,42 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
         }
     }
 
-    void closeFile()
+    void deleteLockFile(std::string file_path)
+    {
+        int ec = hdfsDelete(fs.get(), file_path.c_str(), 0);
+        need_delete_lock_file = false;
+        if (ec != 0)
+        {
+            const char * underlying_err_msg = hdfsGetLastError();
+            std::string reason = underlying_err_msg ? std::string(underlying_err_msg) : "unknown error";
+            throw Exception(ErrorCodes::CANNOT_CLOSE_FILE, "Failed to delete file {}, errno: {}, reason: {}", file_path, ec, reason);
+        }
+    }
+
+    void tryCloseFile()
     {
         if (need_close)
         {
             int ec = hdfsCloseFile(fs.get(), fout);
+
+            // We can only call hdfsCloseFile() once even if it's failed.
+            need_close = false;
             if (ec != 0)
             {
                 ProfileEvents::increment(ProfileEvents::WriteBufferFromHdfsWriteFailed);
 
+                // even close failed, we delete lock file
+                if (need_delete_lock_file)
+                    deleteLockFile(lock_file_path);
+
                 const char * underlying_err_msg = hdfsGetLastError();
                 std::string reason = underlying_err_msg ? std::string(underlying_err_msg) : "unknown error";
                 throw Exception(
-                    ErrorCodes::CANNOT_CLOSE_FILE,
-                    "Failed to close hdfs file {}, errno: {}, reason: {}",
-                    hdfs_uri.toString(),
-                    ec,
-                    reason);
+                    ErrorCodes::CANNOT_CLOSE_FILE, "Failed to close hdfs file {}, errno: {}, reason: {}", hdfs_uri.toString(), ec, reason);
             }
-            need_close = false;
+
+            if (need_delete_lock_file)
+                deleteLockFile(lock_file_path);
         }
     }
 
@@ -172,9 +230,11 @@ WriteBufferFromHDFS::WriteBufferFromHDFS(
 
 
 WriteBufferFromHDFS::WriteBufferFromHDFS(
-    const std::string & hdfs_name_, const HDFSConnectionParams & hdfs_params, const size_t buf_size_, int flag, bool overwrite_current_file)
+    const std::string & hdfs_name_, const HDFSConnectionParams & hdfs_params_, const size_t buf_size_, int flag, bool overwrite_current_file_)
     : WriteBufferFromFileBase(buf_size_, nullptr, 0)
-    , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, hdfs_params, flag, overwrite_current_file))
+    , hdfs_params(hdfs_params_)
+    , skip_file_exist_check(overwrite_current_file_)
+    , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, hdfs_params, flag, overwrite_current_file_))
     , hdfs_name(hdfs_name_)
 {
 }
@@ -214,7 +274,7 @@ off_t WriteBufferFromHDFS::getPositionInFile()
 void WriteBufferFromHDFS::finalizeImpl()
 {
     next();
-    impl->closeFile();
+    impl->tryCloseFile();
 }
 
 WriteBufferFromHDFS::~WriteBufferFromHDFS()

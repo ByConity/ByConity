@@ -47,6 +47,8 @@ public:
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
 
+    static constexpr bool IS_SPECIAL_HT_FOR_SMALL_KEYS = false;
+
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
     /// NOTE Bad for hash tables with more than 2^32 cells.
@@ -97,27 +99,44 @@ public:
             impl.reserve(size_hint / NUM_BUCKETS);
     }
 
+    template <typename Source>
+    void insertFrom(const Source & src)
+    {
+        typename Source::const_iterator it = src.begin();
+        for (; it != src.end(); ++it)
+        {
+            insert(it->getValue());
+        }
+    }
+
     /// Copy the data from another (normal) hash table. It should have the same hash function.
     template <typename Source>
     TwoLevelHashTable(const Source & src)
     {
-        typename Source::const_iterator it = src.begin();
+        if constexpr (Source::IS_SPECIAL_HT_FOR_SMALL_KEYS) {
+            insertFrom(src);
+        } else {
+             typename Source::const_iterator it = src.begin();
 
-        /// It is assumed that the zero key (stored separately) is first in iteration order.
-        if (it != src.end() && it.getPtr()->isZero(src))
-        {
-            insert(it->getValue());
-            ++it;
-        }
+            /// It is assumed that the zero key (stored separately) is first in iteration order.
+            if (it != src.end() && it.getPtr()->isZero(src))
+            {
+                insert(it->getValue());
+                ++it;
+            }
 
-        for (; it != src.end(); ++it)
-        {
-            const Cell * cell = it.getPtr();
-            size_t hash_value = cell->getHash(src);
-            size_t buck = getBucketFromHash(hash_value);
-            impls[buck].insertUniqueNonZero(cell, hash_value);
+            for (; it != src.end(); ++it)
+            {
+                const auto * cell = it.getPtr();
+                size_t hash_value = cell->getHash(src);
+                size_t buck = getBucketFromHash(hash_value);
+                impls[buck].insertUniqueNonZero(cell, hash_value);
+            }
         }
+       
     }
+
+   
 
 
     class iterator

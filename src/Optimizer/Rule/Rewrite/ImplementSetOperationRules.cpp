@@ -32,9 +32,10 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-PatternPtr ImplementExceptRule::getPattern() const
+ConstRefPatternPtr ImplementExceptRule::getPattern() const
 {
-    return Patterns::except().result();
+    static auto pattern = Patterns::except().result();
+    return pattern;
 }
 
 TransformResult ImplementExceptRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -247,9 +248,10 @@ TransformResult ImplementExceptRule::transformImpl(PlanNodePtr node, const Captu
     return project_node;
 }
 
-PatternPtr ImplementIntersectRule::getPattern() const
+ConstRefPatternPtr ImplementIntersectRule::getPattern() const
 {
-    return Patterns::intersect().result();
+    static auto pattern = Patterns::intersect().result();
+    return pattern;
 }
 
 TransformResult ImplementIntersectRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

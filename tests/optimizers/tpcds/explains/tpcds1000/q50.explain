@@ -17,29 +17,27 @@ Projection Est. 100 rows
                      │     Aggregates: expr#sum(multiIf(lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 30), 1, 0)):=AggNull(sum)(expr#multiIf(lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 30), 1, 0)), expr#sum(multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 30), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 60)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 30), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 60)), 1, 0)), expr#sum(multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 60), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 90)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 60), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 90)), 1, 0)), expr#sum(multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 90), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 120)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 90), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 120)), 1, 0)), expr#sum(multiIf(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 120), 1, 0)):=AggNull(sum)(expr#multiIf(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 120), 1, 0))
                      └─ Projection Est. 33127745 rows
                         │     Expressions: [s_city, s_company_id, s_county, s_state, s_store_name, s_street_name, s_street_number, s_street_type, s_suite_number, s_zip], expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 30), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 60)), 1, 0):=multiIf(((sr_returned_date_sk - ss_sold_date_sk) > 30) AND ((sr_returned_date_sk - ss_sold_date_sk) <= 60), 1, 0), expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 60), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 90)), 1, 0):=multiIf(((sr_returned_date_sk - ss_sold_date_sk) > 60) AND ((sr_returned_date_sk - ss_sold_date_sk) <= 90), 1, 0), expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 90), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 120)), 1, 0):=multiIf(((sr_returned_date_sk - ss_sold_date_sk) > 90) AND ((sr_returned_date_sk - ss_sold_date_sk) <= 120), 1, 0), expr#multiIf(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 120), 1, 0):=multiIf((sr_returned_date_sk - ss_sold_date_sk) > 120, 1, 0), expr#multiIf(lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 30), 1, 0):=multiIf((sr_returned_date_sk - ss_sold_date_sk) <= 30, 1, 0)
-                        └─ Inner Join Est. 33127743 rows
+                        └─ Inner Join Est. 33127745 rows
                            │     Condition: ss_store_sk == s_store_sk
-                           ├─ Inner (PARALLEL_HASH) Join Est. 33127743 rows
+                           ├─ Inner (PARALLEL_HASH) Join Est. 33127745 rows
                            │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │  │     Runtime Filters Builder: {sr_customer_sk,sr_ticket_number}
-                           │  ├─ Repartition Exchange Est. 2750387156 rows
-                           │  │  │     Partition by: {ss_customer_sk, ss_item_sk, ss_ticket_number}
-                           │  │  └─ Filter Est. 2750387156 rows
-                           │  │     │     Condition: isNotNull(ss_sold_date_sk) Runtime Filters: {ss_customer_sk, ss_ticket_number}
-                           │  │     └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                           │  │              Where: isNotNull(ss_sold_date_sk) Runtime Filters: {ss_customer_sk, ss_ticket_number}
-                           │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number]
-                           │  └─ Repartition Exchange Est. 4313526 rows
-                           │     │     Partition by: {sr_customer_sk, sr_item_sk, sr_ticket_number}
-                           │     └─ Inner Join Est. 4313526 rows
-                           │        │     Condition: sr_returned_date_sk == d_date_sk_1
-                           │        │     Runtime Filters Builder: {d_date_sk_1}
-                           │        ├─ Filter Est. 287999764 rows
-                           │        │  │     Condition: Runtime Filters: {sr_returned_date_sk}
-                           │        │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
-                           │        │           Where: Runtime Filters: {sr_returned_date_sk}
-                           │        │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number]
-                           │        └─ Broadcast Exchange Est. 30 rows
+                           │  ├─ Filter Est. 2750387156 rows
+                           │  │  │     Condition: isNotNull(ss_sold_date_sk) Runtime Filters: {ss_customer_sk, ss_ticket_number}
+                           │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                           │  │           Where: isNotNull(ss_sold_date_sk) Runtime Filters: {ss_customer_sk, ss_ticket_number}
+                           │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number]
+                           │  └─ Inner Join Est. 4313526 rows
+                           │     │     Condition: sr_returned_date_sk == d_date_sk_1
+                           │     │     Runtime Filters Builder: {d_date_sk_1}
+                           │     ├─ Filter Est. 287999764 rows
+                           │     │  │     Condition: Runtime Filters: {sr_returned_date_sk}
+                           │     │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
+                           │     │           Where: Runtime Filters: {sr_returned_date_sk}
+                           │     │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number]
+                           │     └─ Broadcast Exchange Est. 30 rows
+                           │        └─ Projection Est. 30 rows
+                           │           │     Expressions: [d_date_sk_1]
                            │           └─ Filter Est. 30 rows
                            │              │     Condition: (d_moy = 8) AND (d_year = 2001)
                            │              └─ TableScan tpcds1000.date_dim Est. 73049 rows

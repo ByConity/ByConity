@@ -47,13 +47,90 @@ bool InternalResourceGroup::canQueueMore() const
 void InternalResourceGroup::initCpu()
 {
     if (cpu_shares == 0)
+    {
+        LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} shares zero",
+           getCGroupName());
         return;
+    }
 
     CGroupManager & cgroup_manager = CGroupManagerFactory::instance();
-    cpu = cgroup_manager.createCpu(name, cpu_shares);
+    cpu = cgroup_manager.createCpu(getCGroupName(), cpu_shares);
     if (!cpu)
         return;
-    thread_pool = std::make_shared<FreeThreadPool>(10000, 500, 10000, true, nullptr, cpu);
+
+    LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} create success",
+        getCGroupName());
+
+    thread_pool = std::make_shared<FreeThreadPool>(2000, 100, 10000, true, nullptr, cpu);
+}
+
+int InternalResourceGroup::initCfsQuota()
+{
+    if (cfs_quota == 0)
+    {
+        LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} quota zero",
+           getCGroupName());
+        return -1;
+    }
+
+    if (!cpu)
+    {
+        LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} not found",
+           getCGroupName());
+        return -2;
+    }
+        
+    LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} set cfs_quota {}",
+        getCGroupName(), cfs_quota);
+    cpu->setQuota(cfs_quota);
+    return 0;
+}
+
+int InternalResourceGroup::initCfsPeriod()
+{
+    if (cfs_period == 0)
+    {
+        LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} period zero",
+           getCGroupName());
+        return -1;
+    }
+
+    if (!cpu)
+    {
+        LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} not found",
+           getCGroupName());
+        return -2;
+    }
+        
+    LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} set cfs_period {}",
+        getCGroupName(), cfs_period);
+    cpu->setPeriod(cfs_period);
+    return 0;
+}
+
+int InternalResourceGroup::setCfsQuotaPeriod(Int64 cfs_quota_, Int64 cfs_period_)
+{
+    if (cfs_quota_ == 0 || cfs_period_ == 0)
+    {
+        LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} period zero",
+           getCGroupName());
+        return -1;
+    }
+
+    if (!cpu)
+    {
+        LOG_DEBUG(&Poco::Logger::get("InternalResourceGroup"), "cpu controller {} not found",
+           getCGroupName());
+        return -2;
+    }
+
+    cfs_quota = cfs_quota_;
+    cfs_period = cfs_period_;
+
+    cpu->setPeriod(cfs_period);
+    cpu->setQuota(cfs_quota);
+
+    return 0;
 }
 
 }

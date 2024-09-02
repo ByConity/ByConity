@@ -29,7 +29,6 @@ public:
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings &, FormatState &, FormatStateStacked) const override;
 
-    bool if_not_exists{false};
     String worker_group_id;
     String vw_name;
     ASTSetQuery * settings{nullptr};

@@ -261,6 +261,8 @@ public:
         return *this;
     }
 
+    static constexpr bool IS_SPECIAL_HT_FOR_SMALL_KEYS = true;
+
     class Reader final : private Cell::State
     {
     public:

@@ -2,9 +2,9 @@
 #include <Interpreters/Context.h>
 #include <Processors/Transforms/TableWriteTransform.h>
 #include <Storages/IStorage.h>
+#include <Transaction/ICnchTransaction.h>
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
-#include "Transaction/ICnchTransaction.h"
 
 namespace DB
 {
@@ -60,11 +60,6 @@ void TableWriteTransform::consume(Chunk chunk)
 void TableWriteTransform::onFinish()
 {
     stream->writeSuffix();
-    TransactionCnchPtr txn = context->getCurrentTransaction();
-    txn->setMainTableUUID(storage->getStorageUUID());
-    if (txn->getStatus() == CnchTransactionStatus::Running && !txn->isSecondary())
-        txn->commitV2();
-    LOG_DEBUG(&Poco::Logger::get("TableWriteTransform"), "Finish insert select commit in table write.");
     output.finish();
 }
 

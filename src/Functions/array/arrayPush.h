@@ -1,10 +1,13 @@
 #pragma once
 #include <Functions/IFunction.h>
+#include <Functions/FunctionHelpers.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnNullable.h>
 #include <Interpreters/castColumn.h>
 #include <Common/typeid_cast.h>
 
@@ -36,7 +39,10 @@ public:
         if (arguments[0]->onlyNull())
             return arguments[0];
 
-        const auto * array_type = typeid_cast<const DataTypeArray *>(arguments[0].get());
+        const auto * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
+        const auto * nullable_type = checkAndGetDataType<DataTypeNullable>(arguments[0].get());
+        if (nullable_type)
+            array_type = checkAndGetDataType<DataTypeArray>(nullable_type->getNestedType().get());
         if (!array_type)
             throw Exception("First argument for function " + getName() + " must be an array but it has type "
                             + arguments[0]->getName() + ".", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -45,10 +51,28 @@ public:
 
         DataTypes types = {nested_type, arguments[1]};
 
+        if (nullable_type)
+            return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeArray>(getLeastSupertype(types)));
+
         return std::make_shared<DataTypeArray>(getLeastSupertype(types));
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    {
+        /// Execute on nested columns and wrap results with nullable
+        auto * nullable_col = checkAndGetColumn<ColumnNullable>(arguments[0].column.get());
+
+        if (nullable_col)
+        {
+            ColumnsWithTypeAndName tmp_args = {{nullable_col->getNestedColumnPtr(), removeNullable(arguments[0].type), arguments[0].name}, arguments[1]};
+            auto res = executeInternalImpl(tmp_args, removeNullable(result_type), input_rows_count);
+            return wrapInNullable(res, arguments, result_type, input_rows_count);
+        }
+
+        return executeInternalImpl(arguments, result_type, input_rows_count);
+    }
+
+    ColumnPtr executeInternalImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type, size_t input_rows_count) const
     {
         if (return_type->onlyNull())
             return return_type->createColumnConstWithDefaultValue(input_rows_count);

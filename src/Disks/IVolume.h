@@ -82,6 +82,7 @@ public:
 
     /// Return biggest unreserved space across all disks
     UInt64 getMaxUnreservedFreeSpace() const;
+    DiskStats getTotalSpace(bool with_keep_free = false) const;
 
     DiskPtr getDisk() const { return getDisk(0); }
     virtual DiskPtr getDisk(size_t i) const { return disks[i]; }

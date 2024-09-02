@@ -12,9 +12,12 @@ struct SelectQueryDescription
     /// Table id for select query
     StorageID select_table_id = StorageID::createEmpty();
 
+    /// Async refresh task have multiple base tables
     std::vector<std::shared_ptr<StorageID>> base_table_ids = {};
+
     /// Select query itself (ASTSelectWithUnionQuery)
     ASTPtr select_query;
+
     /// First query from select_query list
     ASTPtr inner_query;
 

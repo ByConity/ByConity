@@ -168,7 +168,7 @@ bool ParserHints::parseOption(IParser::Pos & pos, SqlHint & hint, bool & first, 
 
 bool ParserHints::parsehintName(IParser::Pos & pos, String & name, Expected &)
 {
-    if (pos->type == TokenType::QuotedIdentifier)
+    if (pos->type == TokenType::BackQuotedIdentifier || pos->type == TokenType::DoubleQuotedIdentifier)
     {
         ReadBufferFromMemory buf(pos->begin, pos->size());
 
@@ -195,7 +195,7 @@ bool ParserHints::parsehintName(IParser::Pos & pos, String & name, Expected &)
 bool ParserHints::parseOptionName(IParser::Pos & pos, String & name, Expected & )
 {
     /// Identifier in backquotes or in double quotes
-    if (pos->type == TokenType::QuotedIdentifier)
+    if (pos->type == TokenType::BackQuotedIdentifier || pos->type == TokenType::DoubleQuotedIdentifier)
     {
         ReadBufferFromMemory buf(pos->begin, pos->size());
 

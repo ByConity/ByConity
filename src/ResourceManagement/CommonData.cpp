@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <optional>
 #include <ResourceManagement/CommonData.h>
 
 #include <Interpreters/Context.h>
@@ -22,6 +23,57 @@
 
 namespace DB::ResourceManagement
 {
+
+void QueueRule::fillProto(Protos::QueueRule & queue_rule) const
+{
+    queue_rule.set_rule_name(rule_name);
+    for (const auto & database : databases)
+        queue_rule.add_databases(database);
+    for (const auto & table : tables)
+        queue_rule.add_tables(table);
+    queue_rule.set_query_id(query_id);
+    queue_rule.set_user(user);
+    queue_rule.set_ip(ip);
+    queue_rule.set_fingerprint(fingerprint);
+}
+
+void QueueRule::parseFromProto(const Protos::QueueRule & queue_rule)
+{
+    rule_name = queue_rule.rule_name();
+    for (const auto & database : queue_rule.databases())
+        databases.push_back(database);
+    for (const auto & table : queue_rule.tables())
+        tables.push_back(table);
+    query_id = queue_rule.query_id();
+    user = queue_rule.user();
+    ip = queue_rule.ip();
+    fingerprint = queue_rule.fingerprint();
+}
+
+void QueueData::fillProto(Protos::QueueData & queue_data) const
+{
+    queue_data.set_queue_name(queue_name);
+    queue_data.set_max_concurrency(max_concurrency);
+    queue_data.set_query_queue_size(query_queue_size);
+    for (const auto & queue_rule : queue_rules)
+    {
+        auto queue_rule_iter = queue_data.add_queue_rules();
+        queue_rule.fillProto(*queue_rule_iter);
+    }
+}
+
+void QueueData::parseFromProto(const Protos::QueueData & queue_data)
+{
+    queue_name = queue_data.queue_name();
+    max_concurrency = queue_data.max_concurrency();
+    query_queue_size = queue_data.query_queue_size();
+    queue_rules.reserve(queue_data.queue_rules().size());
+    for (const auto & queue_rule : queue_data.queue_rules())
+    {
+        queue_rules.resize(queue_rules.size() + 1);
+        queue_rules.back().parseFromProto(queue_rule);
+    }
+}
 
 void VirtualWarehouseSettings::fillProto(Protos::VirtualWarehouseSettings & pb_settings) const
 {
@@ -62,6 +114,11 @@ void VirtualWarehouseSettings::fillProto(Protos::VirtualWarehouseSettings & pb_s
         pb_settings.set_cooldown_seconds_after_scaleup(cooldown_seconds_after_scaleup);
     if (cooldown_seconds_after_scaledown)
         pb_settings.set_cooldown_seconds_after_scaledown(cooldown_seconds_after_scaledown);
+
+    for (auto & queue_data : queue_datas)
+    {
+        queue_data.fillProto(*pb_settings.add_queue_datas());
+    }
 }
 
 void VirtualWarehouseSettings::parseFromProto(const Protos::VirtualWarehouseSettings & pb_settings)
@@ -86,6 +143,12 @@ void VirtualWarehouseSettings::parseFromProto(const Protos::VirtualWarehouseSett
     mem_threshold_for_recall = pb_settings.mem_threshold_for_recall();
     cooldown_seconds_after_scaleup = pb_settings.cooldown_seconds_after_scaleup();
     cooldown_seconds_after_scaledown = pb_settings.cooldown_seconds_after_scaledown();
+    queue_datas.reserve(pb_settings.queue_datas_size());
+    for (const auto & pb_queue_data : pb_settings.queue_datas())
+    {
+        queue_datas.resize(queue_datas.size() + 1);
+        queue_datas.back().parseFromProto(pb_queue_data);
+    }
 }
 
 void VirtualWarehouseAlterSettings::fillProto(Protos::VirtualWarehouseAlterSettings & pb_settings) const
@@ -130,6 +193,38 @@ void VirtualWarehouseAlterSettings::fillProto(Protos::VirtualWarehouseAlterSetti
         pb_settings.set_cooldown_seconds_after_scaleup(*cooldown_seconds_after_scaleup);
     if (cooldown_seconds_after_scaledown)
         pb_settings.set_cooldown_seconds_after_scaledown(*cooldown_seconds_after_scaledown);
+    if (max_concurrency)
+        pb_settings.set_max_concurrency(*max_concurrency);
+    if (query_queue_size)
+        pb_settings.set_query_queue_size(*query_queue_size);
+    if (query_id)
+        pb_settings.set_query_id(*query_id);
+    if (user)
+        pb_settings.set_user(*user);
+    if (ip)
+        pb_settings.set_ip(*ip);
+    if (rule_name)
+        pb_settings.set_rule_name(*rule_name);
+    if (fingerprint)
+        pb_settings.set_fingerprint(*fingerprint);
+    if (queue_name)
+        pb_settings.set_queue_name(*queue_name);
+    if (has_table)
+    {
+        pb_settings.set_has_table(true);
+        for (const auto & table : tables)
+            pb_settings.add_tables(table);
+    }
+    if (has_database)
+    {
+        pb_settings.set_has_database(true);
+        for (const auto & db : databases)
+            pb_settings.add_databases(db);
+    }
+
+    pb_settings.set_queue_alter_type(queue_alter_type);
+    if (queue_data)
+        queue_data->fillProto(*pb_settings.mutable_queue_data());
 }
 
 void VirtualWarehouseAlterSettings::parseFromProto(const Protos::VirtualWarehouseAlterSettings & pb_settings)
@@ -174,6 +269,41 @@ void VirtualWarehouseAlterSettings::parseFromProto(const Protos::VirtualWarehous
         cooldown_seconds_after_scaleup = pb_settings.cooldown_seconds_after_scaleup();
     if (pb_settings.has_cooldown_seconds_after_scaledown())
         cooldown_seconds_after_scaledown = pb_settings.cooldown_seconds_after_scaledown();
+    if (pb_settings.has_max_concurrency())
+        max_concurrency = pb_settings.max_concurrency();
+    if (pb_settings.has_query_queue_size())
+        query_queue_size = pb_settings.query_queue_size();
+    if (pb_settings.has_query_id())
+        query_id = pb_settings.query_id();
+    if (pb_settings.has_user())
+        user = pb_settings.user();
+    if (pb_settings.has_ip())
+        ip = pb_settings.ip();
+    if (pb_settings.has_rule_name())
+        rule_name = pb_settings.rule_name();
+    if (pb_settings.has_fingerprint())
+        fingerprint = pb_settings.fingerprint();
+    if (pb_settings.has_table())
+    {
+        has_table = true;
+        for (const auto & table : pb_settings.tables())
+            tables.push_back(table);
+    }
+    if (pb_settings.has_database())
+    {
+        has_database = true;
+        for (const auto & db : pb_settings.databases())
+            databases.push_back(db);
+    }
+    if (pb_settings.has_queue_name())
+        queue_name = pb_settings.queue_name();
+
+    queue_alter_type = pb_settings.queue_alter_type();
+    if (pb_settings.has_queue_data())
+    {
+        queue_data = std::make_optional<QueueData>();
+        queue_data->parseFromProto(pb_settings.queue_data());
+    }
 }
 
 void VirtualWarehouseData::fillProto(Protos::VirtualWarehouseData & pb_data) const
@@ -280,10 +410,10 @@ WorkerNodeResourceData::WorkerNodeResourceData(const Protos::WorkerNodeResourceD
 
     if (resource_info.has_last_update_time())
         last_update_time = resource_info.last_update_time();
-    
+
     if (resource_info.has_register_time())
         register_time = resource_info.register_time();
-    
+
     if (resource_info.has_last_status_create_time())
         last_status_create_time = resource_info.last_status_create_time();
     if (resource_info.has_state())

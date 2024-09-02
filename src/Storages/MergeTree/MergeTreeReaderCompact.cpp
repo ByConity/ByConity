@@ -69,13 +69,11 @@ MergeTreeReaderCompact::CompactDataReader::CompactDataReader(
 {
     // Do not use max_read_buffer_size, but try to lower buffer size with maximal size of granule to avoid reading much data.
     auto buffer_size = getReadBufferSize(data_part, marks_loader, column_positions_, all_mark_ranges);
-    if (!buffer_size || settings.read_settings.buffer_size < buffer_size)
-        buffer_size = settings.read_settings.buffer_size;
-    // auto buffer_size = settings.max_read_buffer_size;
-
     ReadSettings data_read_settings = settings.read_settings;
-    data_read_settings.buffer_size = buffer_size;
+    if (!buffer_size)
+        data_read_settings.adjustBufferSize(buffer_size);    
     data_read_settings.estimated_size = 0;
+
     const String full_data_path = data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
     if (uncompressed_cache)
     {

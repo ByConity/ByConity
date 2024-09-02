@@ -240,8 +240,6 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
         {
             if (ParserKeyword("USING").ignore(pos, expected))
             {
-                if (!dt.parse_outer_join_with_using && table_join->kind != ASTTableJoin::Kind::Inner)
-                    return false;
                 /// Expression for USING could be in parentheses or not.
                 bool in_parens = pos->type == TokenType::OpeningRoundBracket;
                 if (in_parens)

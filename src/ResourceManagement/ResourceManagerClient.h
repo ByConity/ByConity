@@ -23,6 +23,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Protos/resource_manager_rpc.pb.h>
 
 namespace DB
 {
@@ -61,12 +62,12 @@ public:
     void dropVirtualWarehouse(const std::string & vw_name, const bool if_exists);
     void getAllVirtualWarehouses(std::vector<VirtualWarehouseData> & vw_data_list);
 
-    void createWorkerGroup(const String & group_id, bool if_not_exists, const String & vw_name, const WorkerGroupData & group_data);
+    void createWorkerGroup(const String & group_id, const String & vw_name, const WorkerGroupData & group_data);
     void dropWorkerGroup(const String & group_id, bool if_exists);
     std::vector<WorkerGroupData> getAllWorkerGroups(bool with_metrics = false);
 
     void getAllWorkers(std::vector<WorkerNodeResourceData> & data);
-    void getWorkerGroups(const std::string & vw_name, std::vector<WorkerGroupData> & groups_data);
+    void getWorkerGroups(const std::string & vw_name, std::vector<WorkerGroupData> & groups_data, std::optional<VirtualWarehouseSettings> & settings, std::atomic<UInt64> & last_settings_timestamp);
     bool reportResourceUsage(const WorkerNodeResourceData & data);
 
     void registerWorker(const WorkerNodeResourceData & data);

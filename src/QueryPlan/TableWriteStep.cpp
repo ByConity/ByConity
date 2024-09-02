@@ -1,4 +1,5 @@
-#include <memory>
+#include <QueryPlan/TableWriteStep.h>
+
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
@@ -9,10 +10,15 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/TableWriteTransform.h>
 #include <QueryPlan/ITransformingStep.h>
-#include <QueryPlan/TableWriteStep.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Common/RpcClientPool.h>
+#include "QueryPlan/IQueryPlanStep.h"
 #include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <Processors/Transforms/SquashingChunksTransform.h>
+#include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Processors/Transforms/ProcessorToOutputStream.h>
 
 namespace DB
 {
@@ -27,9 +33,18 @@ static ITransformingStep::Traits getTraits()
         {.preserves_number_of_rows = true}};
 }
 
-TableWriteStep::TableWriteStep(const DataStream & input_stream_, TargetPtr target_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits()), target(target_)
+TableWriteStep::TableWriteStep(const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_)
+    : ITransformingStep(input_stream_, {}, getTraits())
+    , target(target_)
+    , insert_select_with_profiles(insert_select_with_profiles_)
 {
+    if (insert_select_with_profiles)
+    {
+        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        output_stream = DataStream{.header = std::move(new_header)};
+    }
+    else
+        output_stream = {input_stream_.header};
 }
 
 Block TableWriteStep::getHeader(const NamesAndTypes & input_columns)
@@ -46,13 +61,17 @@ BlockOutputStreams TableWriteStep::createOutputStream(
     Block & header,
     size_t max_threads,
     bool no_destination,
-    bool no_squash)
+    ASTPtr query)
 {
     BlockOutputStreams out_streams;
     size_t out_streams_size = 1;
     auto query_settings = settings.context->getSettingsRef();
     if (target_table->supportsParallelInsert() && query_settings.max_insert_threads > 1)
+    {
+        LOG_INFO(&Poco::Logger::get("TableWriteStep"),
+                 fmt::format("createOutputStream support parallel insert, max threads:{}, max insert threads.size:{}", max_threads, query_settings.max_insert_threads));
         out_streams_size = std::min(size_t(query_settings.max_insert_threads), max_threads);
+    }
 
     for (size_t i = 0; i < out_streams_size; ++i)
     {
@@ -63,10 +82,10 @@ BlockOutputStreams TableWriteStep::createOutputStream(
         /// NOTE: we explicitly ignore bound materialized views when inserting into Kafka Storage.
         ///       Otherwise we'll get duplicates when MV reads same rows again from Kafka.
         if (target_table->noPushingToViews() && !no_destination)
-            out = target_table->write(nullptr, metadata_snapshot, settings.context);
+            out = target_table->write(query, metadata_snapshot, settings.context);
         else
             out = std::make_shared<PushingToViewsBlockOutputStream>(
-                target_table, metadata_snapshot, settings.context, ASTPtr(), no_destination);
+                target_table, metadata_snapshot, settings.context, query, no_destination);
 
         /// Note that we wrap transforms one on top of another, so we write them in reverse of data processing order.
 
@@ -99,23 +118,8 @@ BlockOutputStreams TableWriteStep::createOutputStream(
         out = std::make_shared<AddingDefaultBlockOutputStream>(
             out, header, metadata_snapshot->getColumns(), settings.context, null_as_default);
 
-        /// It's important to squash blocks as early as possible (before other transforms),
-        ///  because other transforms may work inefficient if block size is small.
-
-        /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
-        /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
-        if (!(query_settings.insert_distributed_sync && target_table->isRemote()) && !no_squash)
-        {
-            bool table_prefers_large_blocks = target_table->prefersLargeBlocks();
-
-            out = std::make_shared<SquashingBlockOutputStream>(
-                out,
-                out->getHeader(),
-                table_prefers_large_blocks ? query_settings.min_insert_block_size_rows : query_settings.max_block_size,
-                table_prefers_large_blocks ? query_settings.min_insert_block_size_bytes : 0);
-        }
-
         auto out_wrapper = std::make_shared<CountingBlockOutputStream>(out);
+        out_wrapper->setProcessListElement(settings.context->getProcessListElement());
         out_streams.emplace_back(std::move(out_wrapper));
     }
 
@@ -129,23 +133,13 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
         case TargetType::INSERT: {
             auto * insert_target = dynamic_cast<TableWriteStep::InsertTarget *>(target.get());
             auto target_storage = DatabaseCatalog::instance().getTable(insert_target->getStorageID(), settings.context);
-
-            if (settings.context->getCurrentTransaction() == nullptr || !settings.context->getCurrentTransaction()->isSecondary())
-            {
-                auto host_ports = settings.context->getCnchTopologyMaster()->getTargetServer(
-                    UUIDHelpers::UUIDToString(target_storage->getStorageUUID()), target_storage->getServerVwName(), true);
-                auto server_client = host_ports.empty() ? settings.context->getCnchServerClientPool().get()
-                                                        : settings.context->getCnchServerClientPool().get(host_ports);
-                auto txn = std::make_shared<CnchWorkerTransaction>(settings.context->getGlobalContext(), server_client);
-                const_cast<Context *>(settings.context.get())->setCurrentTransaction(txn);
-            }
-
+            
             auto insert_target_header = getHeader(insert_target->getColumns());
             auto out_streams = createOutputStream(
-                target_storage, settings, insert_target_header, pipeline.getNumThreads(), false, false);
+                target_storage, settings, insert_target_header, settings.context->getSettingsRef().max_threads, false, insert_target->getQuery());
 
             if (out_streams.empty())
-                throw Exception("No output stream when transfrom TableWriteStep", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("No output stream when transform TableWriteStep", ErrorCodes::LOGICAL_ERROR);
 
             const auto & header = out_streams[0]->getHeader();
             auto actions_dag = ActionsDAG::makeConvertingActions(
@@ -158,16 +152,48 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
             pipeline.addSimpleTransform(
                 [&](const Block & in_header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(in_header, actions); });
 
-            pipeline.resize(out_streams.size());
-            //LOG_DEBUG(&Poco::Logger::get("TableWriteStep"), fmt::format("pipeline size: {}, threads {}", pipeline.getNumStreams(), pipeline.getNumThreads()));
+            size_t min_insert_block_size_rows = settings.context->getSettingsRef().min_insert_block_size_rows;
+            size_t min_insert_block_size_bytes = settings.context->getSettingsRef().min_insert_block_size_bytes;
+            /// It's important to squash blocks as early as possible (before other transforms),
+            ///  because other transforms may work inefficient if block size is small.
 
-            auto stream = std::move(out_streams.back());
-            out_streams.pop_back();
-
+            /// Do not squash blocks if it is a sync INSERT into Distributed, since it lead to double bufferization on client and server side.
+            /// Client-side bufferization might cause excessive timeouts (especially in case of big blocks).
+            if (!(settings.context->getSettingsRef().insert_distributed_sync && target_storage->isRemote()) && settings.context->getSettingsRef().enable_insert_squashing)
+            {
+                pipeline.addSimpleTransform(
+                    [&](const Block & current_header) -> ProcessorPtr {
+                        return std::make_shared<SimpleSquashingChunksTransform>(current_header, min_insert_block_size_rows, min_insert_block_size_bytes);}
+                );
+                LOG_INFO(&Poco::Logger::get("TableWriteStep"), fmt::format("squash min insert block size rows:{}, min insert block size bytes:{}", min_insert_block_size_rows, min_insert_block_size_bytes));
+            }
             //LOG_DEBUG(&Poco::Logger::get("TableWriteStep"), fmt::format("output header: {}", stream->getHeader().dumpStructure()));
-            pipeline.addTransform(std::make_shared<TableWriteTransform>(
-                std::move(stream), insert_target_header, insert_target->getStorage(), settings.context));
-            break;
+            pipeline.resize(out_streams.size());
+            LOG_INFO(&Poco::Logger::get("TableWriteStep"), fmt::format("pipeline size: {}, out streams size {}", pipeline.getNumStreams(), out_streams.size()));
+
+            if (insert_select_with_profiles)
+            {
+                pipeline.addSimpleTransform([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr
+                {
+                    if (type != QueryPipeline::StreamType::Main)
+                        return nullptr;
+
+                    auto stream = std::move(out_streams.back());
+                    out_streams.pop_back();
+
+                    return std::make_shared<ProcessorToOutputStream>(std::move(stream));
+                });
+            }
+            else
+            {
+                pipeline.addSimpleTransform(
+                    [&]([[maybe_unused]] const Block & in_header) -> ProcessorPtr {
+                        auto stream = std::move(out_streams.back());
+                        out_streams.pop_back();
+                        return std::make_shared<TableWriteTransform>(stream, insert_target_header, insert_target->getStorage(), settings.context);}
+                    );
+                break;
+            }
         }
     }
 }
@@ -175,12 +201,18 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
 void TableWriteStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
-    output_stream = DataStream{.header = std::move((input_streams_[0].header))};
+    if (insert_select_with_profiles)
+    {
+        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        output_stream = DataStream{.header = std::move(new_header)};
+    }
+    else
+        output_stream = DataStream{.header = std::move((input_streams_[0].header))};
 }
 
 std::shared_ptr<IQueryPlanStep> TableWriteStep::copy(ContextPtr) const
 {
-    return std::make_shared<TableWriteStep>(input_streams[0], target);
+    return std::make_shared<TableWriteStep>(input_streams[0], target, insert_select_with_profiles);
 }
 
 void TableWriteStep::toProto(Protos::TableWriteStep & proto, bool) const
@@ -190,13 +222,15 @@ void TableWriteStep::toProto(Protos::TableWriteStep & proto, bool) const
     if (!target)
         throw Exception("Target cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
     target->toProto(*proto.mutable_target());
+    proto.set_insert_select_with_profiles(insert_select_with_profiles);
 }
 
 std::shared_ptr<TableWriteStep> TableWriteStep::fromProto(const Protos::TableWriteStep & proto, ContextPtr context)
 {
     auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     auto target = TableWriteStep::Target::fromProto(proto.target(), context);
-    auto step = std::make_shared<TableWriteStep>(base_input_stream, target);
+    bool insert_select_with_profiles = proto.has_insert_select_with_profiles() ? proto.insert_select_with_profiles() : context->getSettingsRef().insert_select_with_profiles;
+    auto step = std::make_shared<TableWriteStep>(base_input_stream, target, insert_select_with_profiles);
     step->setStepDescription(step_description);
     return step;
 }
@@ -205,7 +239,7 @@ void TableWriteStep::allocate(const ContextPtr & context)
 {
     auto storage_id = target->getStorage()->prepareTableWrite(context);
     if (auto * input_target = dynamic_cast<InsertTarget *>(target.get()))
-        target = std::make_shared<InsertTarget>(input_target->getStorage(), storage_id, input_target->getColumns());
+        target = std::make_shared<InsertTarget>(input_target->getStorage(), storage_id, input_target->getColumns(), input_target->getQuery());
     else
         throw Exception("unknown TableWrite::Target", ErrorCodes::LOGICAL_ERROR);
 }
@@ -241,6 +275,7 @@ void TableWriteStep::InsertTarget::toProtoImpl(Protos::TableWriteStep::InsertTar
     storage_id.toProto(*proto.mutable_storage_id());
     for (const auto & element : columns)
         element.toProto(*proto.add_columns());
+    serializeASTToProto(query, *proto.mutable_query());
 }
 
 std::shared_ptr<TableWriteStep::InsertTarget>
@@ -255,7 +290,11 @@ TableWriteStep::InsertTarget::createFromProtoImpl(const Protos::TableWriteStep::
         element.fillFromProto(proto_element);
         columns.emplace_back(std::move(element));
     }
-    auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns);
+    ASTPtr query;
+    if (proto.has_query())
+        query = deserializeASTFromProto(proto.query());
+
+    auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns, query);
 
     return step;
 }

@@ -47,6 +47,7 @@
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/HTTPHandlerRequestFilter.h>
 #include <Server/IServer.h>
+#include <common/logger_useful.h>
 #include <Common/SettingsChanges.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
@@ -127,7 +128,6 @@ namespace ErrorCodes
     extern const int REQUIRED_PASSWORD;
     extern const int AUTHENTICATION_FAILED;
 
-    extern const int BAD_REQUEST_PARAMETER;
     extern const int INVALID_SESSION_TIMEOUT;
     extern const int HTTP_LENGTH_REQUIRED;
 }
@@ -223,9 +223,7 @@ static Poco::Net::HTTPResponse::HTTPStatus exceptionCodeToHTTPStatus(int excepti
 }
 
 
-static std::chrono::steady_clock::duration parseSessionTimeout(
-    const Poco::Util::AbstractConfiguration & config,
-    const HTMLForm & params)
+static size_t parseSessionTimeout(const Poco::Util::AbstractConfiguration & config, const HTMLForm & params)
 {
     unsigned session_timeout = config.getInt("default_session_timeout", 60);
 
@@ -239,12 +237,12 @@ static std::chrono::steady_clock::duration parseSessionTimeout(
             throw Exception("Invalid session timeout: '" + session_timeout_str + "'", ErrorCodes::INVALID_SESSION_TIMEOUT);
 
         if (session_timeout > max_session_timeout)
-            throw Exception("Session timeout '" + session_timeout_str + "' is larger than max_session_timeout: " + toString(max_session_timeout)
-                + ". Maximum session timeout could be modified in configuration file.",
-                ErrorCodes::INVALID_SESSION_TIMEOUT);
+            throw Exception(ErrorCodes::INVALID_SESSION_TIMEOUT,
+                "Session timeout '{}' is larger than max_session_timeout: {}. Maximum session timeout could be modified in configuration file.",
+                session_timeout_str, max_session_timeout);
     }
 
-    return std::chrono::seconds(session_timeout);
+    return session_timeout;
 }
 
 
@@ -373,18 +371,7 @@ bool HTTPHandler::authenticateUser(
         if (!basic_credentials)
             throw Exception("Invalid authentication: unexpected 'Basic' HTTP Authorization scheme", ErrorCodes::AUTHENTICATION_FAILED);
 
-        if (auto pos = user.find('`'); pos != String::npos)
-        {
-            auto tenant_id_from_user = String(user.c_str(), pos);
-            context->setSetting("tenant_id", tenant_id_from_user);
-            context->setTenantId(tenant_id_from_user);
-            if (user.substr(pos + 1) == "default")
-                user = user.substr(pos + 1);
-            else
-                user[pos] = '.';
-        }
-
-        basic_credentials->setUserName(user); // add tenant_id to user here
+        basic_credentials->setUserName(context->formatUserName(user)); // add tenant_id to user here
         basic_credentials->setPassword(password);
     }
     else
@@ -496,19 +483,20 @@ void HTTPHandler::processQuery(
 
     std::shared_ptr<NamedSession> session;
     String session_id;
-    std::chrono::steady_clock::duration session_timeout;
     bool session_is_set = params.has("session_id");
     const auto & config = server.config();
 
     if (session_is_set)
     {
         session_id = params.get("session_id");
-        session_timeout = parseSessionTimeout(config, params);
+        auto session_timeout = parseSessionTimeout(config, params);
         std::string session_check = params.get("session_check", "");
 
         session = context->acquireNamedSession(session_id, session_timeout, session_check == "1");
 
-        context->copyFrom(session->context);  /// FIXME: maybe move this part to HandleRequest(), copyFrom() is used only here.
+        /// FIXME: maybe move this part to HandleRequest()
+        /// see also https://github.com/ClickHouse/ClickHouse/pull/26864
+        context = Context::createCopy(session->context);
         context->setSessionContext(session->context);
     }
 
@@ -528,9 +516,8 @@ void HTTPHandler::processQuery(
         if (!context->getClientInfo().client_trace_context.parseTraceparentHeader(
             opentelemetry_traceparent, error))
         {
-            throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER,
-                "Failed to parse OpenTelemetry traceparent header '{}': {}",
-                opentelemetry_traceparent, error);
+             LOG_WARNING(log, "Failed to parse OpenTelemetry traceparent header '{}': {}, "
+                "probably due to other service also requests traceparent.", opentelemetry_traceparent, error);
         }
 
         context->getClientInfo().client_trace_context.tracestate = request.get("tracestate", "");
@@ -731,6 +718,12 @@ void HTTPHandler::processQuery(
             if (default_format.empty())
                 default_format = value;
         }
+        else if (key == "tenant_id")
+        {
+            //Even this is a GET request or with "readonly=1" setting, we force to apply the tenant_id setting change.
+            context->setSetting("tenant_id", value);
+            context->setTenantId(value);
+        }
         else if (param_could_be_skipped(key))
         {
         }
@@ -749,7 +742,8 @@ void HTTPHandler::processQuery(
         //CNCH multi-tenant default database pattern from gateway client: {tenant_id}`{default_database}
         if (auto pos = default_database.find('`'); pos != String::npos)
         {
-            settings_changes.push_back({"tenant_id", String(default_database.c_str(), pos)});
+            //Even this is a GET request or with "readonly=1" setting, we force to apply the tenant_id setting change.
+            connection_context->setSetting("tenant_id", String(default_database.c_str(), pos));
             connection_context->setTenantId(String(default_database.c_str(), pos));
             if (pos + 1 != default_database.size())  ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
             {
@@ -771,7 +765,7 @@ void HTTPHandler::processQuery(
 
     /// For external data we also want settings
     context->checkSettingsConstraints(settings_changes);
-    context->applySettingsChanges(settings_changes);
+    context->applySettingsChanges(settings_changes, false);
 
     const auto & query = getQuery(request, params, context);
     std::unique_ptr<ReadBuffer> in_param = std::make_unique<ReadBufferFromString>(query);
@@ -807,6 +801,8 @@ void HTTPHandler::processQuery(
         });
     };
 
+    adjustAccessTablesIfNeeded(context);
+
     /// While still no data has been sent, we will report about query execution progress by sending HTTP headers.
     if (settings.send_progress_in_http_headers)
         append_callback([&used_output] (const Progress & progress) { used_output.out->onProgress(progress); });
@@ -827,12 +823,13 @@ void HTTPHandler::processQuery(
     query_scope.emplace(context);
 
     executeQuery(*in, *used_output.out_maybe_delayed_and_compressed, /* allow_into_outfile = */ false, context,
-        [&response] (const String & current_query_id, const String & content_type, const String & format, const String & timezone)
+        [&response,&http_write_buffer=used_output.out] (const String & current_query_id, const String & content_type, const String & format, const String & timezone, MPPQueryCoordinatorPtr coordinator)
         {
             response.setContentType(content_type);
             response.add("X-ClickHouse-Query-Id", current_query_id);
             response.add("X-ClickHouse-Format", format);
             response.add("X-ClickHouse-Timezone", timezone);
+            http_write_buffer->setMPPCordinator(std::move(coordinator));
         }
     );
 
@@ -849,6 +846,7 @@ void HTTPHandler::processQuery(
 
     /// Send HTTP headers with code 200 if no exception happened and the data is still not sent to
     /// the client.
+    used_output.out_maybe_compressed->finalize();
     used_output.out->finalize();
 }
 

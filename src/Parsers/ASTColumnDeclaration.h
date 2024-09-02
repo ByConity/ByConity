@@ -35,8 +35,11 @@ public:
     String name;
     ASTPtr type;
     std::optional<bool> null_modifier;
+    std::optional<bool> unsigned_modifier;
     String default_specifier;
     ASTPtr default_expression;
+    bool auto_increment;
+    bool mysql_primary_key;
     ASTPtr comment;
     ASTPtr codec;
     ASTPtr ttl;

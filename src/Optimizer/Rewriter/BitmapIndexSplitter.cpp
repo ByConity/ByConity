@@ -10,6 +10,8 @@
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
+#include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
 
 
 namespace DB
@@ -87,7 +89,7 @@ PlanNodePtr FuncSplitter::visitFilterNode(FilterNode & node, SplitterContext & s
     auto new_node = visitPlanNode(node, splitter_context);
     if (const auto * filter_step = dynamic_cast<const FilterStep *>(new_node->getStep().get()))
     {
-        auto result = CollectFuncs::collect(filter_step->getFilter(), context);
+        auto result = CollectFuncs::collect(filter_step->getFilter(), new_node->getChildren()[0]->getCurrentDataStream().getNamesToTypes(), context);
         Assignments array_set_check_func;
         for (auto & item : result)
         {
@@ -129,9 +131,10 @@ PlanNodePtr FuncSplitter::visitProjectionNode(ProjectionNode & node, SplitterCon
         }
         // split arraysetcheck func in projection
         Assignments array_set_check_func;
+        auto tname_to_type = new_node->getChildren()[0]->getCurrentDataStream().getNamesToTypes();
         for (const auto & item : projection_step->getAssignments())
         {
-            auto tmp_array_set_check_func = CollectFuncs::collect(item.second, context);
+            auto tmp_array_set_check_func = CollectFuncs::collect(item.second, tname_to_type, context);
             for (const auto & it : tmp_array_set_check_func)
             {
                 if (!splitter_context.ast_to_name.contains(it.second))
@@ -190,11 +193,13 @@ ConstASTPtr CollectFuncs::visitASTFunction(const ConstASTPtr & node, Assignments
 
     if (const auto * func = node->as<ASTFunction>())
     {
-        String func_name = Poco::toLower(func->name);
-        static NameSet funcs{"arraysetcheck"};
-        if (funcs.contains(func_name))
+        if (functionCanUseBitmapIndex(*func) && func->arguments->children.size() > 0)
         {
-            assignments.emplace_back(context->getSymbolAllocator()->newSymbol(node->getColumnName()), node->clone());
+            String argu_name = func->arguments->children[0]->getColumnName();
+            if (name_to_type.contains(argu_name) && MergeTreeBitmapIndex::isBitmapIndexColumn(*name_to_type.at(argu_name)))
+            {
+                assignments.emplace_back(context->getSymbolAllocator()->newSymbol(node->getColumnName()), node->clone());
+            }
         }
     }
     return node;

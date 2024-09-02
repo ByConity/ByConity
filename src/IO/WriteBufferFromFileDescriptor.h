@@ -22,6 +22,7 @@
 #pragma once
 
 #include <IO/WriteBufferFromFileBase.h>
+#include <Common/Throttler.h>
 
 
 namespace DB
@@ -33,6 +34,7 @@ class WriteBufferFromFileDescriptor : public WriteBufferFromFileBase
 {
 protected:
     int fd;
+    ThrottlerPtr throttler;
 
     void nextImpl() override;
 
@@ -44,7 +46,8 @@ public:
         int fd_ = -1,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
-        size_t alignment = 0);
+        size_t alignment = 0,
+        ThrottlerPtr throttler = nullptr);
 
     /** Could be used before initialization if needed 'fd' was not passed to constructor.
       * It's not possible to change 'fd' during work.

@@ -19,6 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+
+#include <Storages/System/StorageSystemHuAllocStats.h>
 #include <Databases/IDatabase.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachSystemTablesImpl.h>
@@ -74,6 +76,7 @@
 #include <Storages/System/StorageSystemKafkaTables.h>
 #include <Storages/System/StorageSystemCnchKafkaTables.h>
 #endif
+#include <Storages/System/StorageSystemVirtualWarehouseQueryQueue.h>
 #include <Storages/System/StorageSystemCnchTransactions.h>
 #include <Storages/System/StorageSystemCnchFilesystemLock.h>
 #include "Storages/System/StorageSystemExternalTables.h"
@@ -89,6 +92,7 @@
 #include <Storages/System/StorageSystemUsers.h>
 #include <Storages/System/StorageSystemRoles.h>
 #include <Storages/System/StorageSystemGrants.h>
+#include <Storages/System/StorageSystemSensitiveGrants.h>
 #include <Storages/System/StorageSystemRoleGrants.h>
 #include <Storages/System/StorageSystemCurrentRoles.h>
 #include <Storages/System/StorageSystemEnabledRoles.h>
@@ -135,6 +139,9 @@
 #include <Storages/System/StorageSystemCnchViewTables.h>
 #include <Storages/System/StorageSystemCnchTablesHistory.h>
 #include <Storages/System/StorageSystemCnchTrashItems.h>
+#include <Storages/System/StorageSystemCnchManifestList.h>
+#include <Storages/System/StorageSystemCnchUserPriv.h>
+#include <Storages/System/StorageSystemCnchDBPriv.h>
 #include <Storages/System/StorageSystemDMBGJobs.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemLockMap.h>
@@ -144,6 +151,7 @@
 #include <Storages/System/StorageSystemWorkers.h>
 #include <Storages/System/StorageSystemIOSchedulers.h>
 #include <Storages/System/StorageSystemIOWorkers.h>
+#include <Storages/System/StorageSystemCnchDetachedParts.h>
 #if USE_HIVE
 #include <Storages/System/StorageSystemExternalCatalogs.h>
 #include <Storages/System/StorageSystemExternalDatabases.h>
@@ -152,6 +160,7 @@
 #include <Storages/System/StorageSystemMaterializedMySQL.h>
 #include <Storages/System/StorageSystemCnchMaterializedMySQL.h>
 #include <Storages/System/StorageSystemCnchTransactionCleanTasks.h>
+#include <Storages/System/StorageSystemSchemaInferenceCache.h>
 
 namespace DB
 {
@@ -182,6 +191,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     attach<StorageSystemUsers>(system_database, "users");
     attach<StorageSystemRoles>(system_database, "roles");
     attach<StorageSystemGrants>(system_database, "grants");
+    attach<StorageSystemSensitiveGrants>(system_database, "sensitive_grants");
     attach<StorageSystemRoleGrants>(system_database, "role_grants");
     attach<StorageSystemCurrentRoles>(system_database, "current_roles");
     attach<StorageSystemEnabledRoles>(system_database, "enabled_roles");
@@ -208,6 +218,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
 #endif
     attach<StorageSystemIOSchedulers>(system_database, "io_schedulers");
     attach<StorageSystemIOWorkers>(system_database, "io_workers");
+
 }
 
 void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
@@ -223,6 +234,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemStoragePolicies>(system_database, "storage_policies");
     attach<StorageSystemProcesses>(system_database, "processes");
     attach<StorageSystemQueryQueue>(system_database, "query_queue");
+    attach<StorageSystemVirtualWarehouseQueryQueue>(system_database, "virtual_warehouse_queue");
     attach<StorageSystemMetrics>(system_database, "metrics");
     attach<StorageSystemMerges>(system_database, "merges");
     attach<StorageSystemMutations>(system_database, "mutations");
@@ -271,10 +283,13 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchViewTables>(system_database, "cnch_view_tables");
     attach<StorageSystemCnchManipulations>(system_database, "cnch_manipulations");
     attach<StorageSystemCnchSnapshots>(system_database, "cnch_snapshots");
+    attach<StorageSystemCnchUserPriv>(system_database, "cnch_user_priv");
+    attach<StorageSystemCnchDBPriv>(system_database, "cnch_db_priv");
     attach<StorageSystemDMBGJobs>(system_database, "dm_bg_jobs");
     attach<StorageSystemPersistentBGJobStatus>(system_database, "persistent_bg_job_status");
     attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");
     attach<StorageSystemLockMap>(system_database, "lock_map");
+    attach<StorageSystemHuAllocStats>( system_database, "hualloc_stats");
 
     attach<StorageSystemWorkers>(system_database, "workers");
     attach<StorageSystemWorkerGroups>(system_database, "worker_groups");
@@ -284,12 +299,15 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
     attach<StorageSystemCnchAsyncQueries>(system_database, "cnch_async_queries");
     attach<StorageSystemCnchTrashItems>(system_database, "cnch_trash_items");
+    attach<StorageSystemCnchDetachedParts>(system_database, "cnch_detached_parts");
+    attach<StorageSystemCnchManifestList>(system_database, "cnch_manifest_list");
 #if USE_HIVE
     attach<StorageSystemExternalCatalogs>(system_database, "external_catalogs");
     attach<StorageSystemExternalDatabases>(system_database, "external_databases");
     attach<StorageSystemExternalTables>(system_database, "external_tables");
 #endif
     attach<StorageSystemCnchTransactionCleanTasks>(system_database, "cnch_transaction_clean_tasks");
+    attach<StorageSystemSchemaInferenceCache>(system_database, "schema_inference_cache");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

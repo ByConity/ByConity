@@ -20,7 +20,7 @@ public:
     RuleType getType() const override { return RuleType::PUSH_DOWN_APPLY_THROUGH_JOIN; }
     String getName() const override { return "PUSH_DOWN_APPLY_THROUGH_JOIN"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_down_apply_through_join; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };

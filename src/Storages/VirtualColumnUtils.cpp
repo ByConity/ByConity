@@ -47,6 +47,7 @@
 #include <IO/WriteHelpers.h>
 #include <Common/typeid_cast.h>
 #include <Interpreters/ActionsVisitor.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 
 
 namespace DB
@@ -55,6 +56,25 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+}
+
+void buildSets(const ASTPtr & expression, ExpressionAnalyzer & analyzer)
+{
+    const auto * func = expression->as<ASTFunction>();
+    if (func && functionIsInOrGlobalInOperator(func->name))
+    {
+        const IAST & args = *func->arguments;
+        const ASTPtr & arg = args.children.at(1);
+        if (arg->as<ASTSubquery>() || arg->as<ASTTableIdentifier>())
+        {
+            analyzer.tryMakeSetForIndexFromSubquery(arg);
+        }
+    }
+    else
+    {
+        for (const auto & child : expression->children)
+            buildSets(child, analyzer);
+    }
 }
 
 namespace
@@ -69,6 +89,8 @@ bool isValidFunction(const ASTPtr & expression, const std::function<bool(const A
         // Second argument of IN can be a scalar subquery
         return isValidFunction(function->arguments->children[0], is_constant);
     }
+    else if (function && function->name == InternalFunctionRuntimeFilter::name)
+        return true;
     else
         return is_constant(expression);
 }
@@ -101,25 +123,6 @@ ASTPtr buildWhereExpression(const ASTs & functions)
     if (functions.size() == 1)
         return functions[0];
     return makeASTFunction("and", functions);
-}
-
-void buildSets(const ASTPtr & expression, ExpressionAnalyzer & analyzer)
-{
-    const auto * func = expression->as<ASTFunction>();
-    if (func && functionIsInOrGlobalInOperator(func->name))
-    {
-        const IAST & args = *func->arguments;
-        const ASTPtr & arg = args.children.at(1);
-        if (arg->as<ASTSubquery>() || arg->as<ASTTableIdentifier>())
-        {
-            analyzer.tryMakeSetForIndexFromSubquery(arg);
-        }
-    }
-    else
-    {
-        for (const auto & child : expression->children)
-            buildSets(child, analyzer);
-    }
 }
 
 }

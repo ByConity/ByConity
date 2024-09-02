@@ -14,6 +14,7 @@
 #include "Parsers/ASTIdentifier.h"
 #include "Parsers/ASTLiteral.h"
 #include "Parsers/ASTSelectQuery.h"
+#include <Storages/System/CollectWhereClausePredicate.h>
 namespace DB
 {
 namespace ErrorCodes

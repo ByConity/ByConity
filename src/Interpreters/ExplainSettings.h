@@ -13,6 +13,24 @@ namespace ErrorCodes
 
 /// Settings. Different for each explain type.
 
+struct QueryMetadataSettings
+{
+    bool json = false;
+    bool lineage = false;
+    bool format_json = false;
+    bool lineage_use_optimizer = false;
+
+    constexpr static char name[] = "METADATA";
+
+    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
+    {
+        {"json", json},
+        {"lineage", lineage},
+        {"lineage_use_optimizer", lineage_use_optimizer},
+        {"format_json", format_json}
+    };
+};
+
 struct QueryPlanSettings
 {
     QueryPlan::ExplainPlanOptions query_plan_options;

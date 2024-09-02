@@ -211,6 +211,7 @@ String PlanSegmentInput::toString(size_t indent) const
     ostr << indent_str << "keep_order: " << keep_order << "\n";
     ostr << indent_str << "storage_id: " << (type == PlanSegmentType::SOURCE && storage_id.has_value() ? storage_id->getNameForLogs() : "") << "\n";
     ostr << indent_str << "source_addresses: " << "\n";
+    ostr << indent_str << "isStable: " << isStable() << "\n";
     for (auto & address : source_addresses)
         ostr << indent_str << indent_str << address.toString() << "\n";
 
@@ -239,6 +240,8 @@ void PlanSegmentOutput::toProto(Protos::PlanSegmentOutput & proto)
     proto.set_shuffle_hash_function(shuffle_function_name);
     proto.set_parallel_size(parallel_size);
     proto.set_keep_order(keep_order);
+    if(!shuffle_func_params.empty())
+        serializeFieldVectorToProto(shuffle_func_params, *proto.mutable_shuffle_function_parameters());
 }
 
 void PlanSegmentOutput::fillFromProto(const Protos::PlanSegmentOutput & proto)
@@ -247,6 +250,8 @@ void PlanSegmentOutput::fillFromProto(const Protos::PlanSegmentOutput & proto)
     shuffle_function_name = proto.shuffle_hash_function();
     parallel_size = proto.parallel_size();
     keep_order = proto.keep_order();
+    if (proto.has_shuffle_function_parameters())
+        shuffle_func_params = deserializeFieldVectorFromProto<Array>(proto.shuffle_function_parameters());
 }
 
 String PlanSegmentOutput::toString(size_t indent) const
@@ -256,6 +261,15 @@ String PlanSegmentOutput::toString(size_t indent) const
 
     ostr << IPlanSegment::toString(indent) << "\n";
     ostr << indent_str << "shuffle_function_name: " << shuffle_function_name << "\n";
+    if (!shuffle_func_params.empty())
+    {
+        ostr << indent_str << "shuffle_parameters: ";
+        for (auto & field : shuffle_func_params)
+        {
+            ostr << field.toString() << " ";
+        }
+        ostr << "\n";
+    }
     ostr << indent_str << "parallel_size: " << parallel_size << "\n";
     ostr << indent_str << "keep_order: " << keep_order;
 

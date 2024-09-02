@@ -106,12 +106,13 @@ String IHiveFile::getFormatName() const
 std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings & settings) const
 {
     auto * log = &Poco::Logger::get(__func__);
-    if (settings.disk_cache_mode < DiskCacheMode::SKIP_DISK_CACHE)
+    auto cache_strategy = DiskCacheFactory::instance().tryGet(DiskCacheType::Hive);
+    if (cache_strategy && settings.disk_cache_mode < DiskCacheMode::SKIP_DISK_CACHE)
     {
         /// use local cache
         try
         {
-            auto cache = DiskCacheFactory::instance().get(DiskCacheType::Hive)->getDataCache();
+            auto cache = cache_strategy->getDataCache();
             auto [cache_disk, segment_path] = cache->get(file_path);
             if (cache_disk && cache_disk->exists(segment_path))
             {
@@ -132,27 +133,6 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
     }
     LOG_TRACE(log, "Read from remote {}/{}, disk_cache_mode {}", disk->getPath(), file_path, settings.disk_cache_mode);
     return disk->readFile(file_path, settings);
-}
-
-String IHiveFile::describeMinMaxIndex(const NamesAndTypesList & index_names_and_types) const
-{
-    WriteBufferFromOwnString buf;
-    size_t i = 0;
-    for (const auto & name_type : index_names_and_types)
-    {
-        writeString(name_type.name, buf);
-        writeChar(':', buf);
-        writeString(name_type.type->getName(), buf);
-        writeChar('\n', buf);
-        for (const auto & split_minmax : split_minmax_idxes)
-        {
-            writeString(split_minmax->hyperrectangle[i].toString(), buf);
-            writeChar('\n', buf);
-        }
-
-        ++i;
-    }
-    return buf.str();
 }
 
 SourcePtr IHiveFile::getReader(const Block & block, const std::shared_ptr<ReadParams> & params)

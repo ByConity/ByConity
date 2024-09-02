@@ -80,14 +80,14 @@ public:
         return join->alwaysReturnsEmptySet();
     }
 
-    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & block, UInt64 max_block_size) const override
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & block, UInt64 max_block_size, size_t total_size, size_t index) const override
     {
-        return join->createStreamWithNonJoinedRows(block, max_block_size);
+        return join->createStreamWithNonJoinedRows(block, max_block_size, total_size, index);
     }
 
-    void tryBuildRuntimeFilters(size_t total_rows) const override
+    void tryBuildRuntimeFilters() const override
     {
-        join->tryBuildRuntimeFilters(total_rows);
+        join->tryBuildRuntimeFilters();
     }
 
 private:
@@ -122,7 +122,7 @@ protected:
     {
         if (!stream)
         {
-            stream = join.createStreamWithNonJoinedRows(result_sample_block, max_block_size);
+            stream = join.createStreamWithNonJoinedRows(result_sample_block, max_block_size, 0, 0);
             if (!stream)
                 return {};
         }

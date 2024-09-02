@@ -52,6 +52,11 @@ namespace ErrorCodes
 
 DataTypePtr DataTypeFactory::get(const String & full_name, UInt16 flags) const
 {
+    /// check whether it is a common data type and has been already cached
+    auto cached_ast = data_type_cache.tryGet(full_name);
+    if (cached_ast)
+        return get(cached_ast, flags);
+
     /// Data type parser can be invoked from coroutines with small stack.
     /// Value 315 is known to cause stack overflow in some test configurations (debug build, sanitizers)
     /// let's make the threshold significantly lower.

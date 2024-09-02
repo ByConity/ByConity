@@ -61,7 +61,7 @@
 #include <Core/QueryProcessingStage.h>
 #include <Core/ExternalTable.h>
 #include <DataStreams/InternalTextLogsRowOutputStream.h>
-#include <DataStreams/NullBlockOutputStream.h>
+#include <Processors/Formats/Impl/NullFormat.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/registerFormats.h>
 #include <Functions/registerFunctions.h>
@@ -191,6 +191,7 @@ private:
                            "йгшеж", "дщпщгеж", "q",      "й",    "\\q",  "\\Q",    "\\й",   "\\Й",   ":q",      "Жй"};
     bool is_interactive = true; /// Use either interactive line editing interface or batch mode.
     bool echo_queries = false; /// Print queries before execution in batch mode.
+    bool echo_pretty = false; /// Print queries with indention
     bool ignore_error
         = false; /// In case of errors, don't print error message, continue to next query. Only applicable for non-interactive mode.
     bool print_time_to_stderr = false; /// Output execution time to stderr in batch mode.
@@ -233,7 +234,7 @@ private:
     /// The user can specify to redirect query output to a file.
     OutfileTargetPtr outfile_target;
 
-    BlockOutputStreamPtr block_out_stream;
+    std::shared_ptr<IOutputFormat> output_format;
     /// The user could specify special file for server logs (stderr by default)
     std::unique_ptr<WriteBuffer> out_logs_buf;
     String server_logs_file;
@@ -479,7 +480,8 @@ private:
                {TokenType::BareWord, Replxx::Color::DEFAULT},
                {TokenType::Number, Replxx::Color::GREEN},
                {TokenType::StringLiteral, Replxx::Color::CYAN},
-               {TokenType::QuotedIdentifier, Replxx::Color::MAGENTA},
+               {TokenType::BackQuotedIdentifier, Replxx::Color::MAGENTA},
+               {TokenType::DoubleQuotedIdentifier, Replxx::Color::MAGENTA},
                {TokenType::OpeningRoundBracket, Replxx::Color::BROWN},
                {TokenType::ClosingRoundBracket, Replxx::Color::BROWN},
                {TokenType::OpeningSquareBracket, Replxx::Color::BROWN},
@@ -496,11 +498,17 @@ private:
                {TokenType::Minus, Replxx::Color::INTENSE},
                {TokenType::Slash, Replxx::Color::INTENSE},
                {TokenType::Percent, Replxx::Color::INTENSE},
+               {TokenType::BitLeftShift, Replxx::Color::INTENSE},
+               {TokenType::BitRightShift, Replxx::Color::INTENSE},
                {TokenType::Arrow, Replxx::Color::INTENSE},
                {TokenType::QuestionMark, Replxx::Color::INTENSE},
                {TokenType::Colon, Replxx::Color::INTENSE},
                {TokenType::Equals, Replxx::Color::INTENSE},
                {TokenType::NotEquals, Replxx::Color::INTENSE},
+               {TokenType::BitEquals, Replxx::Color::INTENSE},
+               {TokenType::BitOr, Replxx::Color::INTENSE},
+               {TokenType::BitAnd, Replxx::Color::INTENSE},
+               {TokenType::BitXor, Replxx::Color::INTENSE},
                {TokenType::Less, Replxx::Color::INTENSE},
                {TokenType::Greater, Replxx::Color::INTENSE},
                {TokenType::LessOrEquals, Replxx::Color::INTENSE},
@@ -515,7 +523,6 @@ private:
                {TokenType::ErrorMultilineCommentIsNotClosed, Replxx::Color::RED},
                {TokenType::ErrorSingleQuoteIsNotClosed, Replxx::Color::RED},
                {TokenType::ErrorDoubleQuoteIsNotClosed, Replxx::Color::RED},
-               {TokenType::ErrorSinglePipeMark, Replxx::Color::RED},
                {TokenType::ErrorWrongNumber, Replxx::Color::RED},
                {TokenType::ErrorMaxQuerySizeExceeded, Replxx::Color::RED},
                { TokenType::ErrorMaxQuerySizeExceeded,
@@ -594,6 +601,7 @@ private:
         {
             need_render_progress = config().getBool("progress", false);
             echo_queries = config().getBool("echo", false);
+            echo_pretty = config().getBool("echo-pretty", false);
             ignore_error = config().getBool("ignore-error", false);
         }
 
@@ -1640,7 +1648,10 @@ private:
 
         if (echo_query.value_or(echo_queries))
         {
-            writeString(full_query, std_out);
+            if (echo_pretty)
+                writeString(serializeAST(*parsed_query, false), std_out);
+            else
+                writeString(full_query, std_out);
             writeChar('\n', std_out);
             std_out.next();
         }
@@ -1995,7 +2006,7 @@ private:
     /// Flush all buffers.
     void resetOutput()
     {
-        block_out_stream.reset();
+        output_format.reset();
         logs_out_stream.reset();
         outfile_target.reset();
 
@@ -2222,14 +2233,19 @@ private:
         }
     }
 
+    bool isOutfileInOtherPlace(const Settings & settings) const
+    {
+        return settings.outfile_in_server_with_tcp || settings.enable_distributed_output;
+    }
+
     void initBlockOutputStream(const Block & block)
     {
-        if (!block_out_stream)
+        if (!output_format)
         {
             /// Ignore all results when fuzzing as they can be huge.
             if (query_fuzzer_runs)
             {
-                block_out_stream = std::make_shared<NullBlockOutputStream>(block);
+                output_format = std::make_shared<NullOutputFormat>(block);
                 return;
             }
 
@@ -2251,8 +2267,15 @@ private:
             /// The query can specify output format or output file.
             /// FIXME: try to prettify this cast using `as<>()`
             if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get());
-                query_with_output && !context->getSettingsRef().outfile_in_server_with_tcp)
+                query_with_output && !isOutfileInOtherPlace(context->getSettingsRef()))
             {
+                if (query_with_output->format != nullptr)
+                {
+                    if (has_vertical_output_suffix)
+                        throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
+                    current_format = query_with_output->format->as<ASTIdentifier &>().name();
+                }
+
                 if (query_with_output->out_file)
                 {
                     // const auto & out_file_node = query_with_output->out_file->as<ASTLiteral &>();
@@ -2266,23 +2289,15 @@ private:
                     }
                     out_path.emplace(typeid_cast<const ASTLiteral &>(*query_with_output->out_file).value.safeGet<std::string>());
                     // We are writing to file, so default format is the same as in non-interactive mode.
-                    if (is_interactive && is_default_format)
+                    if (is_interactive && query_with_output->format == nullptr && is_default_format)
                         current_format = "TabSeparated";
 
                     String compression_method_str;
                     UInt64 compression_level = 1;
-
                     OutfileTarget::setOutfileCompression(query_with_output, compression_method_str, compression_level);
 
-                    outfile_target = OutfileTarget::getOutfileTarget(*out_path, "", compression_method_str, compression_level);
-                    out_buf = outfile_target->getOutfileBuffer(context, true).get();
-                }
-                if (query_with_output->format != nullptr)
-                {
-                    if (has_vertical_output_suffix)
-                        throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
-                    const auto & id = query_with_output->format->as<ASTIdentifier &>();
-                    current_format = id.name();
+                    outfile_target = std::make_shared<OutfileTarget>(context, *out_path, current_format, compression_method_str, compression_level);
+                    out_buf = outfile_target->getOutfileBuffer(true).get();
                 }
             }
 
@@ -2291,11 +2306,15 @@ private:
 
             /// It is not clear how to write progress with parallel formatting. It may increase code complexity significantly.
             if (!need_render_progress)
-                block_out_stream = context->getOutputStreamParallelIfPossible(current_format, *out_buf, block);
+                output_format = context->getOutputFormatParallelIfPossible(
+                    current_format, *out_buf, block, outfile_target ? outfile_target->outToMultiFile() : false);
             else
-                block_out_stream = context->getOutputStream(current_format, *out_buf, block);
+                output_format = context->getOutputFormat(current_format, *out_buf, block);
 
-            block_out_stream->writePrefix();
+            if (outfile_target)
+                output_format->setOutFileTarget(outfile_target);
+
+            output_format->doWritePrefix();
         }
     }
 
@@ -2344,7 +2363,7 @@ private:
         initBlockOutputStream(block);
 
         /// The header block containing zero rows was used to initialize
-        /// block_out_stream, do not output it.
+        /// output_format, do not output it.
         /// Also do not output too much data if we're fuzzing.
         if (block.rows() == 0 || (query_fuzzer_runs != 0 && processed_rows >= 100))
             return;
@@ -2352,12 +2371,12 @@ private:
         if (need_render_progress)
             progress_indication.clearProgressOutput();
 
-        block_out_stream->write(block);
+        output_format->write(block);
         written_first_block = true;
 
         /// If does not upload result to local file/hdfs, then received data block is immediately displayed to the user.
         if (!out_path)
-            block_out_stream->flush();
+            output_format->flush();
 
         /// Restore progress bar after data block.
         if (need_render_progress)
@@ -2377,13 +2396,13 @@ private:
     void onTotals(Block & block)
     {
         initBlockOutputStream(block);
-        block_out_stream->setTotals(block);
+        output_format->setTotals(block);
     }
 
     void onExtremes(Block & block)
     {
         initBlockOutputStream(block);
-        block_out_stream->setExtremes(block);
+        output_format->setExtremes(block);
     }
 
 
@@ -2395,8 +2414,8 @@ private:
             return;
         }
 
-        if (block_out_stream)
-            block_out_stream->onProgress(value);
+        if (output_format)
+            output_format->onProgress(value);
 
         if (need_render_progress)
             progress_indication.writeProgress();
@@ -2416,8 +2435,8 @@ private:
 
     void onProfileInfo(const BlockStreamProfileInfo & profile_info)
     {
-        if (profile_info.hasAppliedLimit() && block_out_stream)
-            block_out_stream->setRowsBeforeLimit(profile_info.getRowsBeforeLimit());
+        if (profile_info.hasAppliedLimit() && output_format)
+            output_format->setRowsBeforeLimit(profile_info.getRowsBeforeLimit());
     }
 
 
@@ -2425,13 +2444,16 @@ private:
     {
         progress_indication.clearProgressOutput();
 
-        if (block_out_stream)
+        if (output_format)
         {
-            block_out_stream->writeSuffix();
+            output_format->doWriteSuffix();
 
             if (outfile_target)
             {
-                outfile_target->flushFile(context);
+                if (outfile_target->outToFile())
+                    outfile_target->flushFile();
+                if (outfile_target->outToMultiFile())
+                    outfile_target->resetCounter();
             }
         }
 
@@ -2460,7 +2482,7 @@ private:
                     |___/
             )" << std::endl;
 
-        std::cout << DBMS_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
+        std::cout << VERSION_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
     }
 
     static void clearTerminal()
@@ -2609,6 +2631,7 @@ public:
             ("version,V", "print version information and exit")
             ("version-clean", "print version in machine-readable format and exit")
             ("echo", "in batch mode, print query before execution")
+            ("echo-pretty", "in batch mode, print queries with indention")
             ("max_client_network_bandwidth", po::value<int>(), "the maximum speed of data exchange over the network for the client in bytes per second.")
             ("compression", po::value<bool>(), "enable or disable compression")
             ("highlight", po::value<bool>()->default_value(true), "enable or disable basic syntax highlight in interactive command line")
@@ -2768,6 +2791,8 @@ public:
             config().setBool("progress", true);
         if (options.count("echo"))
             config().setBool("echo", true);
+        if (options.count("echo-pretty"))
+            config().setBool("echo-pretty", true);
         if (options.count("time"))
             print_time_to_stderr = true;
         if (options.count("max_client_network_bandwidth"))

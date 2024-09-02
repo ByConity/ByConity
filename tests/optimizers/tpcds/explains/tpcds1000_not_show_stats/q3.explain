@@ -17,24 +17,28 @@ Projection
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                      └─ Inner Join
                         │     Condition: ss_sold_date_sk == d_date_sk
+                        │     Runtime Filters Builder: {d_date_sk}
                         ├─ Inner Join
                         │  │     Condition: ss_item_sk == i_item_sk
                         │  │     Runtime Filters Builder: {i_item_sk}
                         │  ├─ Filter
-                        │  │  │     Condition: Runtime Filters: {ss_item_sk}
+                        │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                         │  │  └─ TableScan tpcds1000.store_sales
-                        │  │           Where: Runtime Filters: {ss_item_sk}
+                        │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                         │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ext_sales_price]
-                        │  └─ Broadcast Exchange
+                        │  └─ Projection
+                        │     │     Expressions: [i_brand, i_brand_id, i_item_sk]
                         │     └─ Filter
                         │        │     Condition: i_manufact_id = 128
                         │        └─ TableScan tpcds1000.item
                         │                 Where: i_manufact_id = 128
                         │                 Outputs: [i_item_sk, i_brand_id, i_brand, i_manufact_id]
                         └─ Broadcast Exchange
-                           └─ Filter
-                              │     Condition: d_moy = 11
-                              └─ TableScan tpcds1000.date_dim
-                                       Where: d_moy = 11
-                                       Outputs: [d_date_sk, d_year, d_moy]
-note: Runtime Filter is applied for 1 times.
+                           └─ Projection
+                              │     Expressions: [d_date_sk, d_year]
+                              └─ Filter
+                                 │     Condition: d_moy = 11
+                                 └─ TableScan tpcds1000.date_dim
+                                          Where: d_moy = 11
+                                          Outputs: [d_date_sk, d_year, d_moy]
+note: Runtime Filter is applied for 2 times.

@@ -4,6 +4,13 @@ import "cnch_common.proto";
 import "enum.proto";
 package DB.Protos;
 
+message SizeOrVariable {
+  oneof size_or_variable {
+    uint64 size = 1;
+    string variable = 2;
+  }
+}
+
 message Field {
   required FieldType.Enum type = 1;
   optional bytes blob = 2;
@@ -102,12 +109,13 @@ message Partitioning {
   required bool enforce_round_robin = 5;
   required Component.Enum component = 6;
   required bool exactly_match = 7;
+  optional AST bucket_expr = 8;
 }
 
 // possibly nullptr
 message AST {
   // empty bytes means nullptr
-  required bytes blob = 1; // exact binary 
+  required bytes blob = 1; // exact binary
   optional string text = 2; // only for read
   // TODO: use better serialize method
 }
@@ -173,6 +181,7 @@ message AggregatorParams {
   required uint64 min_count_to_compile_aggregate_expression = 15;
   optional bool enable_lc_group_by_opt = 16;
   optional uint64 spill_buffer_bytes_before_external_group_by = 17;
+  optional bool enable_adaptive_spill = 18;
 }
 
 message AggregatingTransformParams {
@@ -190,10 +199,33 @@ message ArrayJoinAction {
   required bool is_left = 2;
 }
 
+message CacheDependentScanInfo {
+  required bytes required_digest = 1;
+  required uint64 table_index = 2;
+}
+
+message TableScanCacheInfo {
+  message Status {
+    enum Enum {
+      CACHE_TABLE = 0;
+      CACHE_DEPENDENT_TABLE = 1;
+      NO_CACHE = 2;
+    }
+  }
+
+  required Status.Enum status = 1;
+  required bytes cache_digest = 2;
+  required uint64 dependent_table_count = 3;
+  repeated CacheDependentScanInfo cache_dependent_info = 4;
+}
+
+
 message SelectQueryInfo {
   required AST query = 1;
   required AST view_query = 2;
   optional AST partition_filter = 3;
+  optional TableScanCacheInfo cache_info = 4;
+  optional InputOrderInfo input_order_info = 5;
 }
 
 message NameWithAliasPair {
@@ -233,6 +265,7 @@ message PlanSegmentOutput {
   optional string shuffle_hash_function = 2;
   optional uint32 parallel_size = 3;
   optional bool keep_order = 4;
+  optional FieldVector shuffle_function_parameters = 5;
 }
 
 message WindowFrame {
@@ -268,7 +301,7 @@ message WindowFrame {
   required bool begin_preceding = 5;
   required BoundaryType.Enum end_type = 6;
   required Field end_offset = 7;
-  required bool end_preceding = 8; 
+  required bool end_preceding = 8;
 }
 
 message WindowFunctionDescription {
@@ -286,6 +319,14 @@ message WindowDescription {
   repeated WindowFunctionDescription window_functions = 6;
 }
 
+message CacheParam {
+  required bytes digest = 1;
+  map<uint64, uint64> output_pos_to_cache_pos = 2;
+  map<uint64, uint64> cache_pos_to_output_pos = 3;
+  required StorageID cached_table = 4;
+  repeated StorageID dependent_tables = 5;
+}
+
 message Edge {
   required uint64 from = 1;
   required uint64 to = 2;
@@ -299,3 +340,11 @@ message Graph {
   required AST filter = 3;
 }
 
+message SettingChange {
+  required string name = 1;
+  required Field value = 2;
+}
+
+message SettingsChanges {
+  repeated SettingChange settings_changes = 1;
+}

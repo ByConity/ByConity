@@ -15,42 +15,49 @@
 
 #include <Optimizer/SymbolTransformMap.h>
 
+#include <Interpreters/InDepthNodeVisitor.h>
+#include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/PlanVisitor.h>
-#include <Interpreters/InDepthNodeVisitor.h>
 
 namespace DB
 {
-class SymbolTransformMap::Visitor : public PlanNodeVisitor<Void, Void>
+class SymbolTransformMap::Visitor : public PlanNodeVisitor<bool, Void>
 {
 public:
     explicit Visitor(std::optional<PlanNodeId> stop_node_) : stop_node(std::move(stop_node_))
     {
     }
 
-    Void visitAggregatingNode(AggregatingNode & node, Void & context) override
+    bool visitAggregatingNode(AggregatingNode & node, Void & context) override
     {
         const auto * agg_step = dynamic_cast<const AggregatingStep *>(node.getStep().get());
         for (const auto & aggregate_description : agg_step->getAggregates())
         {
             auto function = Utils::extractAggregateToFunction(aggregate_description);
-            addSymbolExpressionMapping(aggregate_description.column_name, function);
+            if (!symbol_transform_map.addSymbolMapping(aggregate_description.column_name, function))
+                return false;
         }
         return visitChildren(node, context);
     }
 
-    Void visitFilterNode(FilterNode & node, Void & context) override { return visitChildren(node, context); }
+    bool visitFilterNode(FilterNode & node, Void & context) override { return visitChildren(node, context); }
 
-    Void visitProjectionNode(ProjectionNode & node, Void & context) override
+    bool visitProjectionNode(ProjectionNode & node, Void & context) override
     {
         const auto * project_step = dynamic_cast<const ProjectionStep *>(node.getStep().get());
+        
+        if (project_step->isFinalProject())
+            return false;
+
         for (const auto & assignment : project_step->getAssignments())
         {
             if (Utils::isIdentity(assignment))
                 continue;
-            addSymbolExpressionMapping(assignment.first, assignment.second);
+            if (!symbol_transform_map.addSymbolMapping(assignment.first, assignment.second))
+                return false;
             // if (const auto * function = dynamic_cast<const ASTFunction *>(assignment.second.get()))
             // {
             //     if (function->name == "cast" && TypeCoercion::compatible)
@@ -62,61 +69,52 @@ public:
         return visitChildren(node, context);
     }
 
-    Void visitSortingNode(SortingNode & node, Void & context) override
+    bool visitSortingNode(SortingNode & node, Void & context) override
     {
         return visitChildren(node, context);
     }
 
-    Void visitJoinNode(JoinNode & node, Void & context) override { return visitChildren(node, context); }
-    Void visitExchangeNode(ExchangeNode & node, Void & context) override { return visitChildren(node, context); }
+    bool visitJoinNode(JoinNode & node, Void & context) override { return visitChildren(node, context); }
+    bool visitExchangeNode(ExchangeNode & node, Void & context) override { return visitChildren(node, context); }
 
-    Void visitTableScanNode(TableScanNode & node, Void &) override
+    bool visitTableScanNode(TableScanNode & node, Void &) override
     {
-        auto table_step = dynamic_cast<const TableScanStep *>(node.getStep().get());
+        const auto *table_step = dynamic_cast<const TableScanStep *>(node.getStep().get());
         for (const auto & item : table_step->getColumnAlias())
         {
             auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage().get(), node.getId(), item.first);
-            addSymbolExpressionMapping(item.second, column_reference);
+            if (!symbol_transform_map.addSymbolMapping(item.second, column_reference))
+                return false;
         }
 
         for (const auto & item : table_step->getInlineExpressions())
         {
             auto inline_expr
                 = IdentifierToColumnReference::rewrite(table_step->getStorage().get(), node.getId(), item.second->clone(), false);
-            addSymbolExpressionMapping(item.first, inline_expr);
+            if (!symbol_transform_map.addSymbolMapping(item.first, inline_expr))
+                return false;
         }
-        return Void{};
+        return true;
     }
 
-    Void visitPlanNode(PlanNodeBase & node, Void & context) override
+    bool visitPlanNode(PlanNodeBase &, Void &) override
     {
-        visitChildren(node, context);
-        valid = false; // unsupported node
-        return Void{};
+        return false;
     }
 
-    Void visitChildren(PlanNodeBase & node, Void & context)
+    bool visitChildren(PlanNodeBase & node, Void & context)
     {
         if (stop_node.has_value() && node.getId() == *stop_node)
-            return {};
+            return true;
+        
         for (auto & child : node.getChildren())
-            VisitorUtil::accept(*child, *this, context);
-        return Void{};
+            if (!VisitorUtil::accept(*child, *this, context))
+                return false;
+        return true;
     }
 
-public:
     std::optional<PlanNodeId> stop_node; // visit this node, but not visit its descendant
-    std::unordered_map<String, ConstASTPtr> symbol_to_expressions;
-    std::unordered_map<String, ConstASTPtr> symbol_to_cast_lossless_expressions;
-    bool valid = true;
-
-    void addSymbolExpressionMapping(const String & symbol, ConstASTPtr expr)
-    {
-        // violation may happen when matching the root node, which may contain duplicate
-        // symbol names with other plan nodes. e.g. select sum(amount) as amount
-        if (!symbol_to_expressions.emplace(symbol, std::move(expr)).second)
-            valid = false;
-    }
+    SymbolTransformMap symbol_transform_map;
 };
 
 class SymbolTransformMap::Rewriter : public SimpleExpressionRewriter<Void>
@@ -156,11 +154,9 @@ std::optional<SymbolTransformMap> SymbolTransformMap::buildFrom(PlanNodeBase & p
 {
     Visitor visitor(stop_node);
     Void context;
-    VisitorUtil::accept(plan, visitor, context);
-    std::optional<SymbolTransformMap> ret;
-    if (visitor.valid)
-        ret = SymbolTransformMap{visitor.symbol_to_expressions, visitor.symbol_to_cast_lossless_expressions};
-    return ret;
+    if (!VisitorUtil::accept(plan, visitor, context))
+        return {};
+    return std::move(visitor.symbol_transform_map);
 }
 
 ASTPtr SymbolTransformMap::inlineReferences(const ConstASTPtr & expression) const
@@ -180,6 +176,14 @@ String SymbolTransformMap::toString() const
     for (const auto & x: symbol_to_expressions)
         str += x.first + " = " + serializeAST(*x.second) + ", ";
     return str;
+}
+
+bool SymbolTransformMap::addSymbolMapping(const String & symbol, ConstASTPtr expr)
+{
+    for (const auto & symbol_in_expr : SymbolsExtractor::extract(expr))
+        if (symbol_to_expressions.contains(symbol_in_expr))
+            return false;
+    return symbol_to_expressions.emplace(symbol, std::move(expr)).second;
 }
 
 void SymbolTranslationMap::addStorageTranslation(ASTPtr ast, String name, const IStorage * storage, UInt32 unique_id)
@@ -214,6 +218,15 @@ ASTPtr SymbolTranslationMap::translateImpl(ASTPtr ast) const
                 translated_arguments.push_back(translateImpl(arg));
 
         return makeASTFunction(func->name, translated_arguments);
+    }
+
+    // for the 4th argument of InternalRuntimeFilter
+    if (const auto * expr_list = ast->as<ASTExpressionList>())
+    {
+        auto new_expr_list = std::make_shared<ASTExpressionList>();
+        for (const auto & arg : expr_list->children)
+            new_expr_list->children.push_back(translateImpl(arg));
+        return new_expr_list;
     }
 
     // other ast type

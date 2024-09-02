@@ -1,4 +1,5 @@
 BYCONITY_SOURCE=$(realpath ../../..)
+BINARY_DIR = ${BIN_DIR}
 BUILD_TYPE ?= "Release"
 CMAKE_FLAGS ?= ""
 TAG ?= "latest"
@@ -20,6 +21,12 @@ compile:
 
 image:
 	cp -r ${BYCONITY_SOURCE}/build_install .
+	DOCKER_BUILDKIT=1 docker build -t byconity/byconity:${TAG} .
+
+image-github:
+	mkdir -p build_install
+	cp -ra ${BINARY_DIR}/usr/* ./build_install/
+	cp -ra ${BINARY_DIR}/etc ./build_install/
 	DOCKER_BUILDKIT=1 docker build -t byconity/byconity:${TAG} .
 
 release:

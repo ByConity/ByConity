@@ -27,6 +27,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace DB
 {
@@ -39,18 +40,8 @@ class SymbolMapper
 public:
     using Symbol = std::string;
     using MappingFunction = std::function<Symbol(const Symbol &)>;
-    using AddSymbolMapping = std::function<void(const Symbol &, const Symbol &)>;
 
-    explicit SymbolMapper(MappingFunction mapping_function_) : mapping_function(std::move(mapping_function_))
-    {
-        add_symbol_mapping_function
-            = [](const Symbol &, const Symbol &) { throw Exception("Not supported in SymbolMapper", ErrorCodes::NOT_IMPLEMENTED); };
-    }
-
-    SymbolMapper(MappingFunction mapping_function_, AddSymbolMapping add_symbol_mapping_function_)
-        : mapping_function(std::move(mapping_function_)), add_symbol_mapping_function(add_symbol_mapping_function_)
-    {
-    }
+    explicit SymbolMapper(MappingFunction mapping_function_) : mapping_function(std::move(mapping_function_)) { }
 
     /**
      * replace symbol using mapping
@@ -72,12 +63,21 @@ public:
     static SymbolMapper symbolReallocator(std::unordered_map<Symbol, Symbol> & mapping, SymbolAllocator & symbolAllocator);
 
     std::string map(const Symbol & symbol) { return mapping_function(symbol); }
-    void addSymbolMapping(const Symbol & from, const Symbol & to) { add_symbol_mapping_function(from, to); }
     template <typename T>
     std::vector<T> map(const std::vector<T> & items)
     {
         std::vector<T> ret;
         std::transform(items.begin(), items.end(), std::back_inserter(ret), [&](const auto & param) { return map(param); });
+        return ret;
+    }
+
+    static Names distinct(const Names & items)
+    {
+        Names ret;
+        std::unordered_set<String> set;
+        for (const auto & item : items)
+            if (set.emplace(item).second)
+                ret.emplace_back(item);
         return ret;
     }
 
@@ -104,6 +104,7 @@ public:
     ArrayJoinActionPtr map(const ArrayJoinActionPtr & array_join_action);
     GroupingDescription map(const GroupingDescription & desc);
     SortDescription map(const SortDescription & sort_desc);
+    std::map<Int32, Names> map(const std::map<Int32, Names> & group_id_non_null_symbol);
 
     LinkedHashMap<String, RuntimeFilterBuildInfos> map(const LinkedHashMap<String, RuntimeFilterBuildInfos> & infos);
     PlanNodeStatisticsEstimate map(const PlanNodeStatisticsEstimate & estimate);
@@ -116,7 +117,6 @@ public:
 
 private:
     MappingFunction mapping_function;
-    AddSymbolMapping add_symbol_mapping_function;
     class IdentifierRewriter;
     class SymbolMapperVisitor;
 };

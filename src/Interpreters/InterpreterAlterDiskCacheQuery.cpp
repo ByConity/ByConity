@@ -38,13 +38,13 @@ BlockIO InterpreterAlterDiskCacheQuery::execute()
     }
     else
     {
-        parts = storage->getAllParts(getContext());
+        parts = storage->getAllPartsWithDBM(getContext()).first;
     }
     parts = CnchPartsHelper::calcVisibleParts(parts, false);
 
     if (query.type == ASTAlterDiskCacheQuery::Type::PRELOAD)
     {
-        storage->sendPreloadTasks(getContext(), std::move(parts), query.sync, getContext()->getSettings().parts_preload_level);
+        storage->sendPreloadTasks(getContext(), std::move(parts), query.sync, getContext()->getSettings().parts_preload_level, time(nullptr));
     }
     else if (query.type == ASTAlterDiskCacheQuery::Type::DROP)
     {

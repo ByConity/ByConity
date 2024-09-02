@@ -11,8 +11,8 @@ unset (_current_dir_name)
 
 # Third-party libraries may have substandard code.
 # Also remove a possible source of nondeterminism.
-set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
+set (CMAKE_C_FLAGS "-w -Wno-implicit-function-declaration ${CMAKE_C_FLAGS} -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
+set (CMAKE_CXX_FLAGS "-w -Wno-implicit-function-declaration ${CMAKE_CXX_FLAGS} -D__DATE__= -D__TIME__= -D__TIMESTAMP__=")
 
 # add_contrib cmake_folder[ base_folder1[, ...base_folderN]]
 function(add_contrib cmake_folder)
@@ -79,6 +79,10 @@ add_subdirectory (nanodbc-cmake)
 add_subdirectory (jsonc-cmake)
 add_subdirectory (ipdb-cmake)
 add_subdirectory (maxminddb-cmake)
+
+if (USE_LIBDEFLATE)
+  add_subdirectory (libdeflate-cmake)
+endif()
 
 if (USE_YAML_CPP)
     add_subdirectory (yaml-cpp-cmake)
@@ -224,9 +228,11 @@ if (USE_INTERNAL_PARQUET_LIBRARY)
     add_subdirectory(arrow-cmake)
 
     # The library is large - avoid bloat.
-    target_compile_options (${ARROW_LIBRARY} PRIVATE -g0)
-    target_compile_options (${THRIFT_LIBRARY} PRIVATE -g0)
-    target_compile_options (${PARQUET_LIBRARY} PRIVATE -g0)
+    if( NOT (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+        target_compile_options (${ARROW_LIBRARY} PRIVATE -g0)
+        target_compile_options (${THRIFT_LIBRARY} PRIVATE -g0)
+        target_compile_options (${PARQUET_LIBRARY} PRIVATE -g0)
+    endif()
 endif()
 
 if (USE_INTERNAL_AVRO_LIBRARY)
@@ -435,4 +441,8 @@ endif()
 
 if (USE_TSQUERY)
     add_subdirectory(TSQuery-cmake)
+endif()
+
+if (ENABLE_HUALLOC)
+add_subdirectory (hualloc-cmake)
 endif()

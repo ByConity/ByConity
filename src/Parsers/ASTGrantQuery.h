@@ -42,6 +42,7 @@ class ASTGrantQuery : public IAST
 public:
     bool attach_mode = false;
     bool is_revoke = false;
+    bool if_exists = false;
     AccessRightsElements access_rights_elements;
     std::shared_ptr<ASTRolesOrUsersSet> roles;
     bool admin_option = false;

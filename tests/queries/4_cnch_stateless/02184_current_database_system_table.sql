@@ -3,6 +3,6 @@ CREATE DATABASE IF NOT EXISTS db_02184;
 USE db_02184;
 CREATE TABLE tb_02184 (id UInt64) ENGINE = CnchMergeTree() ORDER BY tuple();
 INSERT INTO tb_02184 VALUES (1);
-SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() and table = 'tb_02184';
+SELECT count() FROM system.cnch_parts WHERE database = currentDatabase(1) and table = 'tb_02184';
 DROP TABLE tb_02184;
 DROP DATABASE db_02184;

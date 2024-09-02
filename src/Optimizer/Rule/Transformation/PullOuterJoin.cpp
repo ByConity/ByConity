@@ -25,9 +25,9 @@ namespace DB
 /**
  * (A left join B) join C
  */
-PatternPtr PullLeftJoinThroughInnerJoin::getPattern() const
+ConstRefPatternPtr PullLeftJoinThroughInnerJoin::getPattern() const
 {
-    return Patterns::join()
+    static auto pattern = Patterns::join()
         .matchingStep<JoinStep>([](const JoinStep & join_step) {
             if (join_step.getStrictness() != ASTTableJoin::Strictness::Unspecified
                 && join_step.getStrictness() != ASTTableJoin::Strictness::All && join_step.getStrictness() != ASTTableJoin::Strictness::Any)
@@ -52,6 +52,7 @@ PatternPtr PullLeftJoinThroughInnerJoin::getPattern() const
                  })
                  .with(Patterns::any(), Patterns::any()),
              Patterns::any()).result();
+    return pattern;
 }
 
 static std::optional<PlanNodePtr> createNewJoin(
@@ -163,9 +164,9 @@ TransformResult PullLeftJoinThroughInnerJoin::transformImpl(PlanNodePtr node, co
 /**
  * (projection(A left join B)) join C
  */
-PatternPtr PullLeftJoinProjectionThroughInnerJoin::getPattern() const
+ConstRefPatternPtr PullLeftJoinProjectionThroughInnerJoin::getPattern() const
 {
-    return Patterns::join()
+    static auto pattern = Patterns::join()
         .matchingStep<JoinStep>([](const JoinStep & join_step) {
             return join_step.getKind() == ASTTableJoin::Kind::Inner && PredicateUtils::isTruePredicate(join_step.getFilter())
                 && !join_step.isMagic();
@@ -178,6 +179,7 @@ PatternPtr PullLeftJoinProjectionThroughInnerJoin::getPattern() const
                                                  })
                                                  .with(Patterns::any(), Patterns::any())),
              Patterns::any()).result();
+    return pattern;
 }
 TransformResult PullLeftJoinProjectionThroughInnerJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
@@ -230,9 +232,9 @@ TransformResult PullLeftJoinProjectionThroughInnerJoin::transformImpl(PlanNodePt
 /**
  * (filter(A left join B)) join C
  */
-PatternPtr PullLeftJoinFilterThroughInnerJoin::getPattern() const
+ConstRefPatternPtr PullLeftJoinFilterThroughInnerJoin::getPattern() const
 {
-    return Patterns::join()
+    static auto pattern = Patterns::join()
         .matchingStep<JoinStep>([](const JoinStep & join_step) {
             return join_step.getKind() == ASTTableJoin::Kind::Inner && PredicateUtils::isTruePredicate(join_step.getFilter())
                 && !join_step.isMagic();
@@ -245,6 +247,7 @@ PatternPtr PullLeftJoinFilterThroughInnerJoin::getPattern() const
                                                 })
                                                 .with(Patterns::any(), Patterns::any())),
              Patterns::any()).result();
+    return pattern;
 }
 
 TransformResult PullLeftJoinFilterThroughInnerJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

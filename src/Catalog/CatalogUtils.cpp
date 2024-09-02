@@ -1,4 +1,5 @@
 #include <Catalog/CatalogUtils.h>
+#include <Catalog/MetastoreProxy.h>
 #include <Common/CurrentThread.h>
 #include <Interpreters/Context.h>
 #include <algorithm>
@@ -29,6 +30,34 @@ size_t getMinParts()
             return context->getSettingsRef().catalog_multiple_threads_min_parts;
     }
     return DEFAULT_MIN_PARTS;
+}
+
+bool parseTxnIdFromUndoBufferKey(const String & key, UInt64 & txn_id)
+{
+    static const String ub_prefix{UNDO_BUFFER_PREFIX};
+
+    auto pos = key.find(ub_prefix);
+    if (pos == std::string::npos || pos + ub_prefix.size() > key.size())
+    {
+        return false;
+    }
+    auto under_score_pos = key.find('_', pos + ub_prefix.size());
+    if (under_score_pos == std::string::npos)
+    {
+        return false;
+    }
+    String txn_id_str;
+    if (key.at(under_score_pos - 1) == 'R') /// Reversed transaction id
+    {
+        txn_id_str = key.substr(pos + ub_prefix.size(), under_score_pos - 1 - pos - ub_prefix.size());
+        std::reverse(txn_id_str.begin(), txn_id_str.end());
+    }
+    else
+    {
+        txn_id_str = key.substr(pos + ub_prefix.size(), under_score_pos - pos - ub_prefix.size());
+    }
+    txn_id = std::stoull(txn_id_str);
+    return true;
 }
 
 }

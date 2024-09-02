@@ -1,0 +1,7 @@
+Setting input_format_json_read_objects_as_strings should be disabled by default
+0
+INSERT with setting input_format_json_read_objects_as_strings = 1
+Row 1:
+──────
+obj:    {"name":"durian"}
+params: ['{"property0":"value0"}','{"property1":"value1"}']

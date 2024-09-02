@@ -307,7 +307,7 @@ void ASTIdentifier::appendCatalogName(const std::string & catalog_name)
     cnch_append_catalog = true;
 }
 
-void ASTIdentifier::appendTenantId(const Context * context)
+void ASTIdentifier::appendTenantId(const Context* context, bool is_datbase_name)
 {
     if (!context)
         return;
@@ -315,7 +315,7 @@ void ASTIdentifier::appendTenantId(const Context * context)
     {
         /// Only catalogname
         case 1:
-            name_parts[0] = appendTenantIdOnly(name_parts[0]);
+            name_parts[0] = appendTenantIdOnly(name_parts[0], is_datbase_name);
             resetFullName();
             break;
         default:
@@ -358,6 +358,16 @@ StorageID ASTTableIdentifier::getTableId() const
         return {name_parts[0], name_parts[1], uuid};
     else
         return {{}, name_parts[0], uuid};
+}
+
+String ASTTableIdentifier::getTableName() const
+{
+    if (name_parts.size() == 3)
+        return name_parts[2];
+    if (name_parts.size() == 2)
+        return name_parts[1];
+    else
+        return name_parts[0];
 }
 
 String ASTTableIdentifier::getDatabaseName() const
@@ -453,7 +463,7 @@ void ASTTableIdentifier::appendCatalogName(const std::string & catalog_name)
     cnch_append_catalog = true;
 }
 
-void ASTTableIdentifier::appendTenantId([[maybe_unused]] const Context * context)
+void ASTTableIdentifier::appendTenantId([[maybe_unused]]const Context* context, bool  /*is_datbase_name*/)
 {
     // this function shall not be called on TableIdentifier.
     throw Exception(ErrorCodes::LOGICAL_ERROR, "this function shall not be called on TableIdentifier.");
@@ -525,9 +535,8 @@ void tryRewriteHiveCatalogName(ASTPtr & ast_catalog, const Context * context)
         return;
     if (auto * c = dynamic_cast<ASTIdentifier *>(ast_catalog.get()))
     {
-        if (c->name() == "cnch")
-            return;
-        c->appendTenantId(context);
+        if(c->name() == "cnch") return;
+        c->appendTenantId(context, true);
     }
 }
 

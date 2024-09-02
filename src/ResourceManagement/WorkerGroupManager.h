@@ -68,10 +68,8 @@ private:
     std::unordered_map<String, WorkerGroupPtr> getAllWorkerGroupsImpl(std::lock_guard<bthread::Mutex> * wg_lock);
 
     // Creation and deletion of worker groups should be done via ResourceManagerController
-    WorkerGroupPtr createWorkerGroup(
-        const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<bthread::Mutex> * vw_lock = nullptr);
     WorkerGroupPtr createWorkerGroupImpl(
-        const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<bthread::Mutex> * vw_lock, std::lock_guard<bthread::Mutex> * wg_lock);
+        const std::string & group_id, const std::string & vw_name, WorkerGroupData data, std::lock_guard<bthread::Mutex> * vw_lock, std::lock_guard<bthread::Mutex> * wg_lock);
     void dropWorkerGroup(const std::string & group_id);
     void dropWorkerGroupImpl(const std::string & group_id, std::lock_guard<bthread::Mutex> * wg_lock);
 

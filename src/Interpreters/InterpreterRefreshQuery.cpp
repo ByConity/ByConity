@@ -19,7 +19,7 @@
 #include <Parsers/ASTRefreshQuery.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Interpreters/InterpreterSetQuery.h>
-
+#include <CloudServices/CnchRefreshMaterializedViewThread.h>
 
 namespace DB
 {
@@ -33,20 +33,45 @@ namespace DB
         const auto & refresh = query_ptr->as<ASTRefreshQuery &>();
         if (refresh.settings_ast)
             InterpreterSetQuery(refresh.settings_ast, getContext()).executeForCurrentContext();
-        StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({refresh.database, refresh.table}, getContext());
+        auto database = refresh.database.empty() ? getContext()->getCurrentDatabase() : refresh.database;
+        StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({database, refresh.table}, getContext());
         if (auto * view = dynamic_cast<StorageMaterializedView *>(storage_ptr.get()))
         {
-            if (refresh.where_expr)
-                view->refreshWhere(refresh.where_expr, getContext(), refresh.async);
-            else if (refresh.partition)
-                view->refresh(refresh.partition, getContext(), refresh.async);
+            if (view->async())
+            {
+                if (getContext()->getSettingsRef().async_mv_refresh_task_submit_to_bg_thread)
+                {
+                    auto bg_thread = getContext()->tryGetCnchBGThread(CnchBGThreadType::CnchRefreshMaterializedView, view->getStorageID());
+                    if (bg_thread)
+                    {
+                        auto * refresh_thread = dynamic_cast<CnchRefreshMaterializedViewThread *>(bg_thread.get());
+                        refresh_thread->start();
+                    }
+                    else
+                    {
+                        AsyncRefreshParamPtrs refersh_params = view->getAsyncRefreshParams(getContext(), true);
+                        if (!refersh_params.empty())
+                            view->refreshAsync(refersh_params[0], getContext());
+                    }
+                }
+                else
+                {
+                    AsyncRefreshParamPtrs refersh_params = view->getAsyncRefreshParams(getContext(), true);
+                    if (!refersh_params.empty())
+                        view->refreshAsync(refersh_params[0], getContext());
+                }
+            }
+            else
+            {
+                if (refresh.where_expr)
+                    view->refreshWhere(refresh.where_expr, getContext(), refresh.async);
+                else if (refresh.partition)
+                    view->refresh(refresh.partition, getContext(), refresh.async);
+            }
         }
         else
-        {
-            String db_str = refresh.database.empty() ? "" : backQuoteIfNeed(refresh.database) + ".";
-            throw Exception("Table " + db_str + backQuoteIfNeed(refresh.table) +
+            throw Exception("Table " + backQuoteIfNeed(database) + backQuoteIfNeed(refresh.table) +
                             " isn't a materialized view, can't be refreshed.", ErrorCodes::LOGICAL_ERROR);
-        }
         getContext()->getCnchServerResource()->skipCleanWorker();
         return {};
     }

@@ -20,15 +20,21 @@
  */
 
 #include "DiskLocal.h"
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 #include <Common/createHardLink.h>
-#include "DiskFactory.h"
+#include <Disks/DiskFactory.h>
+#include <Disks/IDisk.h>
 
 #include <Disks/LocalDirectorySyncGuard.h>
 #include <Interpreters/Context.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/quoteString.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <Poco/Logger.h>
 
+#include <filesystem>
 #include <fstream>
 #include <unistd.h>
 
@@ -130,19 +136,20 @@ bool DiskLocal::tryReserve(UInt64 bytes)
     }
 
     auto available_space = getAvailableSpace();
-    UInt64 unreserved_space = available_space - std::min(available_space, reserved_bytes);
-    if (unreserved_space >= bytes)
+    auto unreserved_space = available_space - DiskStats{std::min(available_space.bytes, reserved_bytes), std::min(available_space.inodes, reserved_inodes)};
+    if (!unreserved_space.isEmpty())
     {
-        LOG_DEBUG(log, "Reserving {} on disk {}, having unreserved {}.",
-            ReadableSize(bytes), backQuote(name), ReadableSize(unreserved_space));
+        LOG_DEBUG(log, "Reserving {} on disk {}, having unreserved {}({}).",
+            ReadableSize(bytes), backQuote(name), ReadableSize(unreserved_space.bytes), unreserved_space.inodes);
         ++reservation_count;
         reserved_bytes += bytes;
+        reserved_inodes += 1;
         return true;
     }
     return false;
 }
 
-UInt64 DiskLocal::getTotalSpace() const
+DiskStats DiskLocal::getTotalSpace(bool with_keep_free) const
 {
     struct statvfs fs;
     if (name == "default") /// for default disk we get space from path/data/
@@ -150,12 +157,18 @@ UInt64 DiskLocal::getTotalSpace() const
     else
         fs = getStatVFS(disk_path);
     UInt64 total_size = fs.f_blocks * fs.f_bsize;
-    if (total_size < keep_free_space_bytes)
-        return 0;
-    return total_size - keep_free_space_bytes;
+    UInt64 total_inode = fs.f_files;
+    if (!with_keep_free)
+    {
+        if (total_size < keep_free_disk_stats.bytes || total_inode < keep_free_disk_stats.inodes)
+            return {0, 0};
+        return {total_size - keep_free_disk_stats.bytes, total_inode - keep_free_disk_stats.inodes};
+    }
+
+    return {total_size, total_inode};
 }
 
-UInt64 DiskLocal::getAvailableSpace() const
+DiskStats DiskLocal::getAvailableSpace() const
 {
     /// we use f_bavail, because part of b_free space is
     /// available for superuser only and for system purposes
@@ -165,16 +178,17 @@ UInt64 DiskLocal::getAvailableSpace() const
     else
         fs = getStatVFS(disk_path);
     UInt64 total_size = fs.f_bavail * fs.f_bsize;
-    if (total_size < keep_free_space_bytes)
-        return 0;
-    return total_size - keep_free_space_bytes;
+    UInt64 total_inode = fs.f_favail;
+    if (total_size < keep_free_disk_stats.bytes || total_inode < keep_free_disk_stats.inodes)
+        return {0, 0};
+    return {total_size - keep_free_disk_stats.bytes, total_inode - keep_free_disk_stats.inodes};
 }
 
-UInt64 DiskLocal::getUnreservedSpace() const
+DiskStats DiskLocal::getUnreservedSpace() const
 {
     std::lock_guard lock(DiskLocal::reservation_mutex);
     auto available_space = getAvailableSpace();
-    available_space -= std::min(available_space, reserved_bytes);
+    available_space -= {std::min(available_space.bytes, reserved_bytes), std::min(available_space.inodes, reserved_inodes)};
     return available_space;
 }
 
@@ -410,9 +424,6 @@ void registerDiskLocal(DiskFactory & factory)
         if (path.back() != '/')
             path.push_back('/');
 
-        // if (!FS::canRead(path) || !FS::canWrite(path))
-        //     throw Exception("There is no RW access to the disk " + name + " (" + path + ")", ErrorCodes::PATH_ACCESS_DENIED);
-
         bool has_space_ratio = config.has(config_prefix + ".keep_free_space_ratio");
 
         if (config.has(config_prefix + ".keep_free_space_bytes") && has_space_ratio)
@@ -420,22 +431,31 @@ void registerDiskLocal(DiskFactory & factory)
                 "Only one of 'keep_free_space_bytes' and 'keep_free_space_ratio' can be specified",
                 ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
 
-        UInt64 keep_free_space_bytes = config.getUInt64(config_prefix + ".keep_free_space_bytes", 0);
+        UInt64 keep_free_space_bytes
+            = std::max(config.getUInt64(config_prefix + ".keep_free_space_bytes", 0), config.getUInt64("global_keep_free_space_bytes", 0));
+        UInt64 keep_free_inode_count = std::max(
+            config.getUInt64(config_prefix + ".keep_free_space_inodes", 0), config.getUInt64("global_keep_free_space_inodes", 0));
+        double ratio = std::max(
+            config.getDouble(config_prefix + ".keep_free_space_ratio", 0),
+            config.getDouble(config_prefix + "global_keep_free_space_ratio", 0.05));
 
-        if (has_space_ratio)
+        if (ratio < 0 || ratio > 1)
+            throw Exception("'keep_free_space_ratio' have to be between 0 and 1", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
+        String tmp_path = path;
+        if (tmp_path.empty())
+            tmp_path = context->getPath();
+
+        if (!fs::exists(tmp_path))
         {
-            auto ratio = config.getDouble(config_prefix + ".keep_free_space_ratio");
-            if (ratio < 0 || ratio > 1)
-                throw Exception("'keep_free_space_ratio' have to be between 0 and 1", ErrorCodes::EXCESSIVE_ELEMENT_IN_CONFIG);
-            String tmp_path = path;
-            if (tmp_path.empty())
-                tmp_path = context->getPath();
-
-            // Create tmp disk for getting total disk space.
-            keep_free_space_bytes = static_cast<UInt64>(DiskLocal("tmp", tmp_path, 0).getTotalSpace() * ratio);
+            LOG_WARNING(&Poco::Logger::get("DiskLocal"), "Can't find path {} so keep-free is forced to set zero", tmp_path);
+            return std::make_shared<DiskLocal>(name, path, DiskStats{});
         }
 
-        return std::make_shared<DiskLocal>(name, path, keep_free_space_bytes);
+        // Create tmp disk for getting total disk space.
+        auto tmp_disk = DiskLocal("tmp", tmp_path, {});
+        keep_free_space_bytes = std::max(static_cast<UInt64>(tmp_disk.getTotalSpace().bytes * ratio), keep_free_space_bytes);
+        keep_free_inode_count = std::max(static_cast<UInt64>(tmp_disk.getTotalSpace().inodes * ratio), keep_free_inode_count);
+        return std::make_shared<DiskLocal>(name, path, DiskStats{keep_free_space_bytes, keep_free_inode_count});
     };
     factory.registerDiskType("local", creator);
 }

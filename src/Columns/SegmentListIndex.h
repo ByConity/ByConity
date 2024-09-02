@@ -500,9 +500,7 @@ void SegmentBitmapColumnListIndexes<VIDTYPE>::setSegmentCover(ColumnSegmentIndex
 template<typename VIDTYPE>
 inline void SegmentBitmapColumnListIndexes<VIDTYPE>::constructColumnSegmentIndexes(ColumnSegmentIndexes<VIDTYPE> &column_segment_indexes, size_t bias, size_t offset, size_t row_num, [[maybe_unused]]const ColumnNullable * col)
 {
-    if constexpr (std::is_same_v<VIDTYPE, UInt8>  || std::is_same_v<VIDTYPE, UInt16> || std::is_same_v<VIDTYPE, UInt32> || std::is_same_v<VIDTYPE, UInt64>
-                  || std::is_same_v<VIDTYPE, UInt128> || std::is_same_v<VIDTYPE, Int8> || std::is_same_v<VIDTYPE, Int16> || std::is_same_v<VIDTYPE, Int32>
-                  || std::is_same_v<VIDTYPE, Int64>  || std::is_same_v<VIDTYPE, Float32> || std::is_same_v<VIDTYPE, Float64>)
+    if constexpr (VIDNumeric<VIDTYPE>)
     {
         const auto * data_numbers = static_cast<const ColumnVector<VIDTYPE> *>(&col->getNestedColumn());
         const auto & data_col = data_numbers->getData();
@@ -543,9 +541,7 @@ inline void SegmentBitmapColumnListIndexes<VIDTYPE>::constructColumnSegmentIndex
 template<typename VIDTYPE>
 inline void SegmentBitmapColumnListIndexes<VIDTYPE>::constructColumnSegmentIndexes(ColumnSegmentIndexes<VIDTYPE> &column_segment_indexes, size_t bias, size_t offset, size_t row_num, [[maybe_unused]]const ColumnVector<VIDTYPE> * col)
 {
-    if constexpr (std::is_same_v<VIDTYPE, UInt8>  || std::is_same_v<VIDTYPE, UInt16> || std::is_same_v<VIDTYPE, UInt32> || std::is_same_v<VIDTYPE, UInt64>
-                  || std::is_same_v<VIDTYPE, UInt128> || std::is_same_v<VIDTYPE, Int8> || std::is_same_v<VIDTYPE, Int16> || std::is_same_v<VIDTYPE, Int32>
-                  || std::is_same_v<VIDTYPE, Int64>  || std::is_same_v<VIDTYPE, Float32> || std::is_same_v<VIDTYPE, Float64>)
+    if constexpr (VIDNumeric<VIDTYPE>)
     {
         const auto & data_col = col->getData();
 
@@ -723,10 +719,8 @@ void SegmentBitmapColumnListIndexes<VIDTYPE>::appendColumnData(ColumnPtr col, st
     size_t row_num = task->row_num;
     if (dynamic_cast<const ColumnArray *>(col.get()))
         constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnArray *>(col.get()));
-    else if (dynamic_cast<const ColumnString *>(col.get()))
-        constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnString *>(col.get()));
-    else if (dynamic_cast<const ColumnVector<VIDTYPE> *>(col.get()))
-        constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnVector<VIDTYPE> *>(col.get()));
+    else if (typeid_cast<const typename VIDColumn<VIDTYPE>::Type *>(col.get()))
+        constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, typeid_cast<const typename VIDColumn<VIDTYPE>::Type *>(col.get()));
     else if (dynamic_cast<const ColumnNullable *>(col.get()))
         constructColumnSegmentIndexes(column_indexes, bias, offset, row_num, dynamic_cast<const ColumnNullable *>(col.get()));
     else

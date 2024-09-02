@@ -54,6 +54,8 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 
+    void prepare(const PreparedStatementContext & prepared_context) override;
+
     static ActionsDAGPtr createActions(const Assignments & assignments, const NamesAndTypesList & source, ContextPtr context);
 
 private:

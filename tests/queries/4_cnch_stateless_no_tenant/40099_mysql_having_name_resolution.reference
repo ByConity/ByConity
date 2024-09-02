@@ -1,0 +1,98 @@
+-- { echoOn }
+
+SELECT a FROM t40099_x HAVING b = 10;
+1
+-- "b" refer to "(1 + 1) as b"
+SELECT a, (1 + 1) as b FROM t40099_x HAVING b = 10;
+EXPLAIN SELECT a, (1 + 1) as b FROM t40099_x HAVING b = 10;
+ReadNothing Est. 0 rows, cost 0.000000e+00
+-- "b" refer to "(1 > 0) as b"
+SELECT a, (1 > 0) as b FROM t40099_x HAVING b;
+1	1
+EXPLAIN SELECT a, (1 > 0) as b FROM t40099_x HAVING b;
+Projection Est. ? rows
+│     Expressions: [a], b:=`expr#greater(1, 0)`
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: [a], expr#greater(1, 0):=1
+      └─ TableScan default.t40099_x Est. ? rows
+               Outputs: [a]
+-- "b" refer to "sum(c) as b"
+SELECT sum(c) as b FROM t40099_x HAVING b = 10;
+EXPLAIN SELECT sum(c) as b FROM t40099_x HAVING b = 10;
+Projection Est. ? rows
+│     Expressions: b:=`expr#sum(c)`
+└─ Filter Est. ? rows
+   │     Condition: `expr#sum(c)` = 10
+   └─ MergingAggregated Est. ? rows
+      └─ Gather Exchange Est. ? rows
+         └─ Aggregating Est. ? rows
+            │     Group by: {}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(c)
+            └─ TableScan default.t40099_x Est. ? rows
+                     Outputs: [c]
+-- "b" refer to "b"
+SELECT b, sum(c) as b FROM t40099_x GROUP BY b HAVING b = 10;
+10	100
+EXPLAIN SELECT b, sum(c) as b FROM t40099_x GROUP BY b HAVING b = 10;
+Projection Est. ? rows
+│     Expressions: [b], b_1:=`expr#sum(c)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {b}
+         └─ Aggregating Est. ? rows
+            │     Group by: {b}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(c)
+            └─ Filter Est. ? rows
+               │     Condition: b = 10
+               └─ TableScan default.t40099_x Est. ? rows
+                        Where: b = 10
+                        Outputs: [b, c]
+-- "b" refer to "t40099_x.b"
+SELECT t40099_x.b, sum(c) as b FROM t40099_x JOIN t40099_y ON t40099_x.a = t40099_y.a GROUP BY t40099_x.b HAVING b = 10;
+10	100
+EXPLAIN SELECT t40099_x.b, sum(c) as b FROM t40099_x JOIN t40099_y ON t40099_x.a = t40099_y.a GROUP BY t40099_x.b HAVING b = 10;
+Projection Est. ? rows
+│     Expressions: [b], b_1:=`expr#sum(c)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {b}
+         └─ Aggregating Est. ? rows
+            │     Group by: {b}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(c)
+            └─ Inner Join Est. ? rows
+               │     Condition: a == a_1
+               ├─ Filter Est. ? rows
+               │  │     Condition: b = 10
+               │  └─ TableScan default.t40099_x Est. ? rows
+               │           Where: b = 10
+               │           Outputs: [a, b, c]
+               └─ Broadcast Exchange Est. ? rows
+                  └─ TableScan default.t40099_y Est. ? rows
+                           Outputs: a_1:=a
+-- "b" refer to "t40099_y.b"
+SELECT t40099_y.b, sum(c) as b FROM t40099_x JOIN t40099_y ON t40099_x.a = t40099_y.a GROUP BY t40099_y.b HAVING b = 10;
+EXPLAIN SELECT t40099_y.b, sum(c) as b FROM t40099_x JOIN t40099_y ON t40099_x.a = t40099_y.a GROUP BY t40099_y.b HAVING b = 10;
+Projection Est. ? rows
+│     Expressions: [b], b_1:=`expr#sum(c)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {b}
+         └─ Aggregating Est. ? rows
+            │     Group by: {b}
+            │     Aggregates: expr#sum(c):=AggNull(sum)(c)
+            └─ Inner Join Est. ? rows
+               │     Condition: a == a_1
+               ├─ TableScan default.t40099_x Est. ? rows
+               │        Outputs: [a, c]
+               └─ Broadcast Exchange Est. ? rows
+                  └─ Filter Est. ? rows
+                     │     Condition: b = 10
+                     └─ TableScan default.t40099_y Est. ? rows
+                              Where: b = 10
+                              Outputs: [b], a_1:=a
+-- "b" is ambiguous as there are 2 items with name "b" in GROUP BY
+SELECT t40099_x.b, t40099_y.b, sum(c) as b FROM t40099_x JOIN t40099_y ON t40099_x.a = t40099_y.a GROUP BY t40099_x.b, t40099_y.b HAVING b = 10; -- { serverError 179 }

@@ -87,14 +87,22 @@ bool canBecomeNullable(const DataTypePtr & type)
 /// Note: LowCardinality(T) transformed to LowCardinality(Nullable(T))
 DataTypePtr convertTypeToNullable(const DataTypePtr & type)
 {
+    if (isNullable(type))
+        return type;
+
     if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
     {
         const auto & dict_type = low_cardinality_type->getDictionaryType();
         if (dict_type->canBeInsideNullable())
             return std::make_shared<DataTypeLowCardinality>(makeNullable(dict_type));
     }
-    return makeNullable(type);
+
+    if (type->canBeInsideNullable())
+        return makeNullable(type);
+
+    return type;
 }
+
 
 DataTypePtr tryConvertTypeToNullable(const DataTypePtr & type)
 {
@@ -312,10 +320,21 @@ ColumnRawPtrs materializeColumnsInplace(Block & block, const Names & names,
     ptrs.reserve(names_size + null_safe_size);
     append.reserve(null_safe_size);
 
+    // Note that names can duplicate, as of commit e912d058ea48c484d7465c865ed257ec8c851a0e
+    // Thus, we resolve names into columns first into columns_by_name so that indices with same name
+    // will also have the same column.
+    // And so that ptrs will not have a dangling ptr.
+    std::vector<std::reference_wrapper<ColumnPtr>> columns_by_name;
+    for (const auto & column_name : names)
+        columns_by_name.push_back(std::ref(block.getByName(column_name).column));
+    
+    for (ColumnPtr & column : columns_by_name)
+        column = recursiveRemoveLowCardinality(column->convertToFullColumnIfConst());
+
     for (size_t i = 0; i < names_size; ++i)
     {
         const auto & column_name = names[i];
-        auto & column = block.getByName(column_name).column;
+        ColumnPtr & column = columns_by_name[i];
         if (null_safeColumns && (*null_safeColumns)[i]) {
             /* push extra nullmap column for null safe column */
             if (const auto * nullable = checkAndGetColumn<ColumnNullable>(column.get())) {
@@ -329,7 +348,6 @@ ColumnRawPtrs materializeColumnsInplace(Block & block, const Names & names,
             }
         }
 
-        column = recursiveRemoveLowCardinality(column->convertToFullColumnIfConst());
         ptrs.push_back(column.get());
     }
 

@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <Common/COW.h>
+#include <DataTypes/IDataType.h>
 
 namespace DB
 {
@@ -43,6 +44,7 @@ void fillMissingColumns(
     size_t num_rows,
     const NamesAndTypesList & requested_columns,
     StorageMetadataPtr metadata_snapshot,
-    size_t num_bitmap_columns = 0);
+    size_t num_bitmap_columns = 0,
+    std::unordered_map<String, DataTypePtr> * filled_missing_column_types = nullptr);
 
 }

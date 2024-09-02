@@ -26,6 +26,8 @@ using TemporaryDataOnDiskPtr = std::unique_ptr<TemporaryDataOnDisk>;
 
 class TemporaryFileStream;
 using TemporaryFileStreamPtr = std::unique_ptr<TemporaryFileStream>;
+using TemporaryFileStreamShardPtr = std::shared_ptr<TemporaryFileStream>;
+using TemporaryFileStreams = std::vector<std::shared_ptr<TemporaryFileStream>>;
 
 /*
  * Used to account amount of temporary data written to disk.
@@ -93,16 +95,16 @@ public:
     }
 
     /// If max_file_size > 0, then check that there's enough space on the disk and throw an exception in case of lack of free space
-    TemporaryFileStream & createStream(const Block & header, size_t max_file_size = 0);
+    // TemporaryFileStream & createStream(const Block & header, size_t max_file_size = 0);
 
     std::vector<TemporaryFileStream *> getStreams() const;
     bool empty() const;
 
     const StatAtomic & getStat() const { return stat; }
+    TemporaryFileStreamShardPtr createStreamPtrToRegularFile(const Block & header, size_t max_file_size = 0);
 
 private:
     TemporaryFileStream & createStreamToCacheFile(const Block & header, size_t max_file_size);
-    TemporaryFileStream & createStreamToRegularFile(const Block & header, size_t max_file_size);
 
     mutable std::mutex mutex;
     std::vector<TemporaryFileStreamPtr> streams TSA_GUARDED_BY(mutex);

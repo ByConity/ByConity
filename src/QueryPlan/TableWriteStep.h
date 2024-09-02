@@ -1,4 +1,5 @@
 #pragma once
+#include <Parsers/IAST_fwd.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/ITransformingStep.h>
 
@@ -17,7 +18,7 @@ public:
         INSERT,
     };
 
-    TableWriteStep(const DataStream & input_stream_, TargetPtr target_);
+    TableWriteStep(const DataStream & input_stream_, TargetPtr target_, bool insert_select_with_profiles_ = false);
 
     String getName() const override
     {
@@ -42,6 +43,8 @@ public:
 
     void allocate(const ContextPtr & context);
 
+    bool isOutputProfiles() const { return insert_select_with_profiles; }
+
     void toProto(Protos::TableWriteStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<TableWriteStep> fromProto(const Protos::TableWriteStep & proto, ContextPtr context);
 
@@ -54,9 +57,10 @@ private:
         Block & header,
         size_t max_threads,
         bool no_destination,
-        bool no_squash);
+        ASTPtr query);
 
     TargetPtr target;
+    bool insert_select_with_profiles;
 };
 
 class TableWriteStep::Target
@@ -75,8 +79,8 @@ public:
 class TableWriteStep::InsertTarget : public TableWriteStep::Target
 {
 public:
-    InsertTarget(StoragePtr storage_, StorageID storage_id_, NamesAndTypes columns_)
-        : storage(std::move(storage_)), storage_id(storage_id_), columns(std::move(columns_))
+    InsertTarget(StoragePtr storage_, StorageID storage_id_, NamesAndTypes columns_, ASTPtr query_)
+        : storage(std::move(storage_)), storage_id(storage_id_), columns(std::move(columns_)), query(query_)
     {
     }
 
@@ -97,6 +101,11 @@ public:
         return storage_id;
     }
 
+    ASTPtr getQuery() const
+    {
+        return query;
+    }
+
     void toProtoImpl(Protos::TableWriteStep::InsertTarget & proto) const;
     static std::shared_ptr<InsertTarget> createFromProtoImpl(const Protos::TableWriteStep::InsertTarget & proto, ContextPtr context);
 
@@ -104,6 +113,7 @@ private:
     StoragePtr storage;
     StorageID storage_id;
     NamesAndTypes columns;
+    ASTPtr query;
 };
 
 }

@@ -43,12 +43,12 @@ SELECT arrayJoin(_map_column_keys as ts) as t FROM 10027_map_files_and_extract_m
 ORDER BY c, k;
 
 SELECT 'CASE 6';
-SELECT getMapKeys(currentDatabase(), '10027_map_files_and_extract_map_functions', 'ms');
-SELECT getMapKeys(currentDatabase(), '10027_map_files_and_extract_map_functions', 'ms', '');
+SELECT getMapKeys(currentDatabase(0), '10027_map_files_and_extract_map_functions', 'ms');
+SELECT getMapKeys(currentDatabase(0), '10027_map_files_and_extract_map_functions', 'ms', '');
 
 SELECT 'CASE 7';
-SELECT getMapKeys(currentDatabase(), '10027_map_files_and_extract_map_functions', 'ms', '20000101');
+SELECT getMapKeys(currentDatabase(0), '10027_map_files_and_extract_map_functions', 'ms', '20000101');
 
 SELECT 'CASE 8';
 INSERT INTO 10027_map_files_and_extract_map_functions VALUES (0, toDate('2023-03-03'), {'k3': 'v3'}, {}, {}, {});
-SELECT getMapKeys(currentDatabase(), '10027_map_files_and_extract_map_functions', 'ms', '20230303');
+SELECT getMapKeys(currentDatabase(0), '10027_map_files_and_extract_map_functions', 'ms', '20230303');

@@ -20,8 +20,10 @@ namespace DB
 {
 
 static std::vector<WorkloadExtendedStatsType> extended_stats_types = {
-    WorkloadExtendedStatsType::HLL_STATS,
-    WorkloadExtendedStatsType::COUNT_DISTINCT_STATS
+    WorkloadExtendedStatsType::COUNT_TO_UINT32_OR_NULL,
+    WorkloadExtendedStatsType::COUNT_TO_FLOAT32_OR_NULL,
+    WorkloadExtendedStatsType::COUNT_TO_DATE_OR_NULL,
+    WorkloadExtendedStatsType::COUNT_TO_DATE_TIME_OR_NULL
 };
 
 WorkloadTableStats WorkloadTableStats::build(ContextPtr context, const String & database_name, const String & table_name)
@@ -36,7 +38,7 @@ WorkloadTableStats WorkloadTableStats::build(ContextPtr context, const String & 
     PlanNodeStatisticsPtr basic_stats;
     try
     {
-        Statistics::StatisticsCollector collector(context, stats_catalog, stats_table_id.value());
+        Statistics::StatisticsCollector collector(context, stats_catalog, stats_table_id.value(), {});
         collector.readAllFromCatalog();
         basic_stats = collector.toPlanNodeStatistics().value_or(nullptr);
         if (basic_stats)
@@ -56,7 +58,10 @@ WorkloadExtendedStatsPtr WorkloadTableStats::collectExtendedStats(
     std::set<String> columns_to_collect; /* ordered set */
     for (const auto & column : columns)
     {
-        if (!extended_stats->contains(column.name))
+        /// TODO: currently only String type is targeted for collection of extended statistics
+        auto decayed_tpe = Statistics::decayDataType(column.type);
+        bool is_string = decayed_tpe->getTypeId() == TypeIndex::String || decayed_tpe->getTypeId() == TypeIndex::FixedString;
+        if (is_string && !extended_stats->contains(column.name))
             columns_to_collect.emplace(column.name);
     }
 

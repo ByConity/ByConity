@@ -26,6 +26,7 @@
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/ASTTTLElement.h>
 #include <Parsers/IAST.h>
+#include "Parsers/IAST_fwd.h"
 
 
 namespace DB
@@ -98,6 +99,7 @@ public:
         FREEZE_ALL,
         UNFREEZE_PARTITION,
         UNFREEZE_ALL,
+        PREATTACH_PARTITION,
 
         DROP_PARTITION_WHERE,
         FETCH_PARTITION_WHERE,
@@ -128,6 +130,10 @@ public:
         CHANGE_ENGINE,
 
         MODIFY_DATABASE_SETTING,
+
+        RENAME_TABLE,
+
+        PARTITION_BY,
     };
 
     Type type = NO_TYPE;
@@ -240,6 +246,8 @@ public:
     ASTPtr columns;
     /// For Ingestion columns
     ASTPtr keys;
+    /// The INGEST PARTITION query here optionally stores the buckets that going to be ingested
+    ASTPtr buckets;
 
     /// For sample / split / resharding expression
     ASTPtr with_sharding_exp;
@@ -297,8 +305,20 @@ public:
     /// Target column namea
     ASTPtr rename_to;
 
+    ASTPtr rename_table_to;
+    ASTPtr partition_by;
+    ASTPtr storage_policy;
+    ASTPtr hot_partition_count;
+    ASTPtr rt_engine;
+    ASTPtr life_cycle;
+    bool all = false;
+
     /// Which property user want to remove
     String remove_property;
+
+    /// For DETACH/ATTACH PARTITION commands
+    bool specify_bucket = false;
+    UInt64 bucket_number;
 
     String getID(char delim) const override { return "AlterCommand" + (delim + std::to_string(static_cast<int>(type))); }
 
@@ -306,7 +326,7 @@ public:
 
     ASTType getType() const override { return ASTType::ASTAlterCommand; }
 
-    void toLowerCase() override 
+    void toLowerCase() override
     {
         boost::to_lower(from_database);
         boost::to_lower(from_table);
@@ -314,7 +334,7 @@ public:
         boost::to_lower(to_table);
     }
 
-    void toUpperCase() override 
+    void toUpperCase() override
     {
         boost::to_upper(from_database);
         boost::to_upper(from_table);
@@ -360,6 +380,10 @@ protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 
     bool isOneCommandTypeOnly(const ASTAlterCommand::Type & type) const;
+};
+
+class ASTAlterAnalyticalMySQLQuery : public ASTAlterQuery
+{
 };
 
 }

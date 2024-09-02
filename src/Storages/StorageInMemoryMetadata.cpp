@@ -248,11 +248,11 @@ bool StorageInMemoryMetadata::hasPartitionLevelTTL() const
         if (partition_columns.count(name))
             return true;
 
-        if (auto literal = expr->as<ASTLiteral>())
+        if (auto * literal = expr->as<ASTLiteral>())
             return true;
-        if (auto identifier = expr->as<ASTIdentifier>())
+        if (auto * identifier = expr->as<ASTIdentifier>())
             return false;
-        if (auto func = expr->as<ASTFunction>())
+        if (auto * func = expr->as<ASTFunction>())
         {
             bool res = true;
             for (auto & arg : func->arguments->children)
@@ -472,6 +472,15 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
     }
 
     return res;
+}
+
+bool StorageInMemoryMetadata::hasDynamicSubcolumns() const
+{
+    return std::any_of(columns.begin(), columns.end(),
+        [](const auto & column)
+        {
+            return column.type->hasDynamicSubcolumns();
+        });
 }
 
 const KeyDescription & StorageInMemoryMetadata::getPartitionKey() const

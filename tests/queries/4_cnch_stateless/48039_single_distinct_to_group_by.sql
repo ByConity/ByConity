@@ -29,4 +29,4 @@ select count(distinct a, b) from test1 group by c;
 
 select count(distinct a), max(distinct a) from test1 group by b,c ;
 
-select count(distinct a, b), count(distinct b, a) from test1 group by c;
+select count(distinct a), count(distinct b) from test1 group by c;

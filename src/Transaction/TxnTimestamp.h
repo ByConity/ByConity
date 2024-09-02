@@ -57,6 +57,8 @@ public:
 
     static TxnTimestamp fromUnixTimestamp(UInt64 unix_timestamp) { return TxnTimestamp((unix_timestamp * 1000) << 18); }
 
+    static TxnTimestamp fromMilliSeconds(UInt64 time_ms) { return TxnTimestamp(time_ms << 18); }
+
     std::string toString() const;
 
 private:

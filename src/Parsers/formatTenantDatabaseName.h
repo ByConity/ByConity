@@ -7,14 +7,14 @@ namespace DB
 
 class Context;
 
-void setEnableTenantSystemDB(bool v);
+String getCurrentTenantId();
 
 // database_name -> tenant_id.[catalog$$].database_name
 String formatTenantDatabaseName(const String & database_name);
 
 // name -> tenant_id.name
 // no catalog information will be attached.
-String appendTenantIdOnly(const String & name);
+String appendTenantIdOnly(const String & name, bool is_datbase_name = true);
 
 String formatTenantConnectDefaultDatabaseName(const String & database_name);
 
@@ -24,11 +24,15 @@ String formatTenantConnectUserName(const String & user_name, bool is_force = fal
 
 String formatTenantEntityName(const String & name);
 
-String getOriginalEntityName(const String & tenant_entity_name);
+String getOriginalEntityName(const String & tenant_entity_name, const String & tenant_id = {});
 
-bool isTenantMatchedEntityName(const String & tenant_entity_name);
+bool isTenantMatchedEntityName(const String & tenant_entity_name, const String & tenant_id = {});
 
 String getOriginalDatabaseName(const String & tenant_database_name);
+
+String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id);
+
+String formatTenantName(const String & name, char separator = '.');
 
 void pushTenantId(const String &tenant_id);
 
@@ -45,5 +49,13 @@ String formatCatalogDatabaseName(const String & database_name, const String cata
 // tenant_id.db -> teannt_id.db
 // tenant_id.catalog$$db -> teanant_id.catalog, db
 // catalog$$db -> catalog, db
-std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDatabaseName(const String & database_name);
+std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDatabaseName(const String &database_name);
+
+class DisableTenantGuard
+{
+public:
+    DisableTenantGuard();
+    ~DisableTenantGuard();
+};
+
 }

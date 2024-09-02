@@ -200,6 +200,12 @@ public:
         return container.erase(iter);
     }
 
+size_t erase( const OriKey & key )
+    {
+        return container.erase(ConstHashAST::make(key));
+    }
+
+
 private:
     std::unordered_set<Key, EqAST::Hash, EqAST::Equal> container;
 };

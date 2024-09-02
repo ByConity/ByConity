@@ -86,6 +86,9 @@ std::vector<size_t> countColumnsSizeInSelector(IColumn::ColumnIndex num_columns,
 bool memoryIsZero(const void * data, size_t size);
 bool memoryIsByte(const void * data, size_t size, uint8_t byte);
 
+bool memoryIsZero(const void * data, size_t start, size_t end);
+bool memoryIsByte(const void * data, size_t start, size_t end, uint8_t byte);
+
 /// The general implementation of `filter` function for ColumnArray and ColumnString.
 template <typename T>
 void filterArraysImpl(

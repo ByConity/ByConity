@@ -64,7 +64,7 @@ namespace
 
         if (type->canBeInsideNullable())
             return makeNullable(type);
-        
+
         /// Can't be inside nullable
         return type;
     }
@@ -700,7 +700,7 @@ public:
             arguments[1]
         };
 
-        return FunctionArrayIndex<HasAction, NameMapContains>().executeImpl(new_arguments, result_type, input_rows_count);
+        return FunctionArrayIndex<HasAction, NameMapContains>(nullptr).executeImpl(new_arguments, result_type, input_rows_count);
     }
 };
 
@@ -1047,7 +1047,7 @@ public:
         }
     }
 
-    /// override executeImplDryRun to prevent calling getMapKeys multi times under 
+    /// override executeImplDryRun to prevent calling getMapKeys multi times under
     /// same txn id, which may cause worker create table multi times
     ColumnPtr executeImplDryRun(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
@@ -1074,27 +1074,29 @@ public:
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1, 2}; }
 
-    /// throw error when argument[0] column is Nullable(String)
-    /// TODO : add Function Convert Nullable(String) column to String column
+    /// throw error when argument[0] column is constant value NULL
     bool useDefaultImplementationForNulls() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 3)
-            throw Exception("Function " + getName() + " requires 3 argument. Passed " + toString(arguments.size()) + ".",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Function {} requires 3 argument. Passed {}.", getName(), arguments.size());
 
-        if (!isString(arguments[0].type))
-            throw Exception("First argument for function " + getName() + "  must be String, but parsed " + arguments[0].type->getName() + ".",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        /// non-constant null values will be converted to String('') and returned Map({})
+        auto arguments_without_nullable = createBlockWithNestedColumns(arguments);
 
-        if (!isString(arguments[1].type))
-            throw Exception("Second argument for function " + getName() + " (delimiter) must be String.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!isString(arguments_without_nullable[0].type))
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "First argument for function {} must be String, but parsed {}.", getName(), arguments_without_nullable[0].type->getName());
 
-        if (!isString(arguments[2].type))
-            throw Exception("Third argument for function " + getName() + " (delimiter) must be String.",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!isString(arguments_without_nullable[1].type))
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Second argument for function {} (delimiter) must be String.", getName());
+
+        if (!isString(arguments_without_nullable[2].type))
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Third argument for function {} (delimiter) must be String.", getName());
 
         return std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>());
     }
@@ -1229,7 +1231,10 @@ REGISTER_FUNCTION(Map)
     factory.registerFunction<FunctionExtractKeyLike>();
     factory.registerFunction<FunctionMapUpdate>();
     factory.registerFunction<FunctionMapFromArrays>();
+
     factory.registerAlias("MAP_FROM_ARRAYS", "mapFromArrays");
+    factory.registerAlias("map_keys", "mapKeys");
+    factory.registerAlias("map_values", "mapValues");
 }
 
 }

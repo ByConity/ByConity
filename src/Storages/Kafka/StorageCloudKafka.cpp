@@ -155,7 +155,7 @@ void StorageCloudKafka::tryLoadFormatSchemaFileFromHDFS()
             }
 
             LOG_DEBUG(log, "Loading format schema files from remote path: {} to local path: {}", path, local_format_path);
-            reloadFormatSchema(path, local_format_path, log);
+            reloadFormatSchema(getContext(), path, local_format_path, log);
 
             /// Check the existence of the file to ensure loading successfully
             if (!Poco::File(local_format_path + "/" + target_path.getFileName()).exists())
@@ -212,6 +212,8 @@ void StorageCloudKafka::subscribeBuffer(BufferPtr &buffer)
 {
     auto *consumer_buf = buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>();
     consumer_buf->assign(consumer_context.assignment);
+    if (unlikely(!consumer_context.sample_partitions.empty()))
+        consumer_buf->setSampleConsumingPartitionList(consumer_context.sample_partitions);
 
     consumer_buf->reset();
 }
@@ -234,6 +236,12 @@ cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
     conf.set_error_callback([this] (cppkafka::KafkaHandleBase &, int error, const std::string & reason)
     {
         String error_msg;
+        if (error == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN)
+        {
+            error_msg = "All brokers are down and we will destroy the consumer and recreate it: " + reason;
+            consumer_context.error_event = true;
+        }
+
         if (error_msg.empty())
             error_msg = ("[RDKAFKA Exception] error code: " + std::to_string(error) + ", reason: " + reason);
 
@@ -283,7 +291,8 @@ BufferPtr StorageCloudKafka::createBuffer()
             settings.row_delimiter);
 }
 
-void StorageCloudKafka::createStreamThread(const cppkafka::TopicPartitionList & assignment)
+void StorageCloudKafka::createStreamThread(const cppkafka::TopicPartitionList & assignment,
+                                           const std::set<cppkafka::TopicPartition> & sample_partitions)
 {
     if (consumer_context.initialized)
     {
@@ -294,6 +303,7 @@ void StorageCloudKafka::createStreamThread(const cppkafka::TopicPartitionList & 
     LOG_TRACE(log, "Creating stream thread and buffer");
     consumer_context.mutex = std::make_unique<std::timed_mutex>();
     consumer_context.assignment = assignment;
+    consumer_context.sample_partitions = sample_partitions;
     auto task = getContext()->getConsumeSchedulePool().createTask(
             log->name(),[this] { streamThread(); });
     task->deactivate();
@@ -329,12 +339,13 @@ void StorageCloudKafka::checkStagedArea()
     }
 }
 
-void StorageCloudKafka::startConsume(size_t consumer_index, const cppkafka::TopicPartitionList & tpl)
+void StorageCloudKafka::startConsume(size_t consumer_index, const cppkafka::TopicPartitionList & tpl,
+                                    const std::set<cppkafka::TopicPartition> & sample_partitions)
 {
     std::lock_guard lock_thread(table_status_mutex);
 
     assigned_consumer_index = consumer_index;
-    createStreamThread(tpl);
+    createStreamThread(tpl, sample_partitions);
 
     LOG_TRACE(log, "Activating stream thread");
     stream_run = true;
@@ -774,6 +785,10 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
     if (!settings.avro_schema_registry_url.value.empty())
         result.emplace_back("format_avro_schema_registry_url", settings.avro_schema_registry_url.value);
 
+    /// enable to read JSON object as Strings if you required by changing the setting of CnchKafka
+    if (settings.input_format_json_read_objects_as_strings.changed)
+        result.emplace_back("input_format_json_read_objects_as_strings", settings.input_format_json_read_objects_as_strings.value);
+
     /// Forbidden parallel parsing for Kafka in case of global setting.
     /// Kafka cannot support parallel parsing due to virtual column
     result.emplace_back("input_format_parallel_parsing", false);
@@ -989,7 +1004,7 @@ void executeKafkaConsumeTaskImpl(const KafkaTaskCommand & command, ContextMutabl
     {
         case KafkaTaskCommand::Type::START_CONSUME:
             storage->setCnchStorageID(command.cnch_storage_id);
-            storage->startConsume(command.assigned_consumer, command.tpl);
+            storage->startConsume(command.assigned_consumer, command.tpl, command.sample_partitions);
             break;
         case KafkaTaskCommand::Type::STOP_CONSUME:
             storage->stopConsume();

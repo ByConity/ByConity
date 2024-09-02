@@ -14,12 +14,6 @@ public:
     static String getJoinOrder(QueryPlan & plan);
 };
 
-struct PlanAndProp
-{
-    PlanNodePtr plan;
-    Property property;
-};
-
 class JoinOrderExtractor : public PlanNodeVisitor<String, Void>
 {
 public:

@@ -37,12 +37,13 @@
 #include <Storages/MergeTree/MergeTreeReaderStreamWithSegmentCache.h>
 #include <bits/types/clockid_t.h>
 #include <Poco/Logger.h>
+#include <common/getFQDNOrHostName.h>
 #include <Common/Priority.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 #include <Common/escapeForFileName.h>
 #include <Common/ProfileEventsTimer.h>
 #include <Common/typeid_cast.h>
-#include "Storages/MergeTree/IMergeTreeDataPart.h"
+#include <Storages/MergeTree/IMergeTreeDataPart.h>
 
 namespace ProfileEvents
 {
@@ -90,6 +91,7 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     , segment_cache_strategy(nullptr)
     , segment_cache(nullptr)
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
+    , reader_id(UUIDHelpers::UUIDToString(UUIDHelpers::generateV4()))
 
 {
     if (data_part->enableDiskCache())
@@ -99,6 +101,9 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     }
 
     initializeStreams(profile_callback_, internal_progress_cb_, clock_type_);
+
+    if (settings.read_settings.remote_read_log)
+        LOG_TRACE(log, "Created reader {} with {} columns: {}", reader_id, columns.size(), fmt::join(columns.getNames(), ","));
 }
 
 size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_mark,
@@ -128,7 +133,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_
         size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(from_mark);
         size_t starting_row = from_mark_start_row + from_row;
         size_t init_row_number = next_row_number_to_read;
-    
+
         bool adjacent_reading = next_row_number_to_read >= from_mark_start_row
             && starting_row >= next_row_number_to_read;
         size_t rows_to_skip = adjacent_reading ? starting_row - next_row_number_to_read : from_row;
@@ -155,6 +160,8 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_
         }
 
         prefetched_streams.clear();
+        if (settings.read_settings.remote_read_log)
+            LOG_TRACE(log, "reader {} reads {} rows into {} columns from mark {} offset {}", reader_id, read_rows, num_columns, from_mark, from_row);
 
         return read_rows;
     }
@@ -164,7 +171,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_
             storage.reportBrokenPart(data_part->name);
 
         /// Better diagnostics.
-        e.addMessage("(while reading from part " + data_part->getFullPath() + " "
+        e.addMessage("(worker node: " + getPodOrHostName() +  " while reading from part " + data_part->getFullPath() + " "
                      "from mark " + toString(from_mark) + " "
                      "with max_rows_to_read = " + toString(max_rows_to_read) + ")");
         throw;
@@ -213,7 +220,8 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
         /// Scan the directory to get all implicit columns(stream) for the map type
         const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column_from_part.type);
 
-        for (auto & file : data_part->getChecksums()->files)
+        auto checksums = data_part->getChecksums();
+        for (auto & file : checksums->files)
         {
             /// Need to use column_from_part to read the correct implicit column when renaming columns.
             /// Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
@@ -473,8 +481,10 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         const auto& [name, type] = column_from_part;
         size_t pos = res_col_to_idx[name];
 
-        if (res_columns[pos] == nullptr)
+        if (!res_columns[pos]) {
+            type->enable_zero_cpy_read = this->settings.read_settings.zero_copy_read_from_cache;
             res_columns[pos] = type->createColumn();
+        }
 
         /// row number column will be populated at last after `read_rows` is set
         if (name == "_part_row_number")
@@ -524,7 +534,7 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         if (readed_rows)
         {
             auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
-            ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
+            ColumnUInt64 & column = typeid_cast<ColumnUInt64 &>(*mutable_column);
             for (size_t i = 0, row_number = next_row_number_to_read; i < readed_rows; ++i)
                 column.insertValue(row_number++);
             res_columns[row_number_column_pos] = std::move(mutable_column);

@@ -82,7 +82,8 @@ public:
             Int64 priority_ = 1,
             UInt16 exchange_port_ = 0,
             UInt16 exchange_status_port_ = 0,
-            UInt16 rpc_port_ = 0)
+            UInt16 rpc_port_ = 0,
+            String worker_id_ = "virtual_id")
         : Base(max_connections_,
         &Poco::Logger::get("ConnectionPool (" + host_ + ":" + toString(port_) + ")")),
         host(host_),
@@ -98,7 +99,8 @@ public:
         priority(priority_),
         exchange_port(exchange_port_),
         exchange_status_port(exchange_status_port_),
-        rpc_port(rpc_port_)
+        rpc_port(rpc_port_),
+        worker_id(worker_id_)
     {
     }
 
@@ -142,7 +144,7 @@ protected:
             cluster, cluster_secret,
             client_name, compression, secure,
             Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
-            exchange_port, exchange_status_port, rpc_port);
+            exchange_port, exchange_status_port, rpc_port, worker_id);
     }
 
 private:
@@ -163,6 +165,7 @@ private:
     UInt16 exchange_port;
     UInt16 exchange_status_port;
     UInt16 rpc_port;
+    String worker_id;
 };
 
 }

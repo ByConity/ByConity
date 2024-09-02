@@ -16,23 +16,23 @@
 #include <memory>
 #include <CloudServices/CnchWorkerResource.h>
 
+#include <CloudServices/CnchCreateQueryHelper.h>
 #include <Core/Names.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
-#include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/parseQuery.h>
+#include <Parsers/ParserQueryWithOutput.h>
+#include <Parsers/formatAST.h>
 #include <Parsers/formatTenantDatabaseName.h>
-#include <Parsers/ASTForeignKeyDeclaration.h>
-#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
+#include <Parsers/parseQuery.h>
 #include <Poco/Logger.h>
-#include <Storages/StorageCloudMergeTree.h>
-#include <Storages/ForeignKeysDescription.h>
-#include <Storages/UniqueNotEnforcedDescription.h>
-#include <Storages/IStorage.h>
 #include <Databases/DatabaseMemory.h>
-#include <Storages/StorageFactory.h>
+#include <Storages/ForeignKeysDescription.h>
+#include <Storages/IStorage.h>
+#include <Storages/MergeTree/CloudTableDefinitionCache.h>
+#include <Storages/StorageCloudMergeTree.h>
+#include <Storages/StorageDictCloudMergeTree.h>
 
 
 namespace DB
@@ -40,122 +40,142 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int DUPLICATE_COLUMN;
-    extern const int INCORRECT_QUERY;
+    extern const int BAD_ARGUMENTS;
     extern const int TABLE_ALREADY_EXISTS;
+}
+
+static ASTPtr parseCreateQuery(ContextMutablePtr context, const String & create_query)
+{
+    const char * begin = create_query.data();
+    const char * end = create_query.data() + create_query.size();
+    ParserQueryWithOutput parser{end};
+    const auto & settings = context->getSettingsRef();
+    return parseQuery(parser, begin, end, "CreateCloudTable", settings.max_query_size, settings.max_parser_depth);
 }
 
 void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists, const ColumnsDescription & object_columns)
 {
     LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "start create cloud table {}", create_query);
-    const char * begin = create_query.data();
-    const char * end = create_query.data() + create_query.size();
-    ParserQueryWithOutput parser{end};
-    const auto & settings = context->getSettingsRef();
-    ASTPtr ast_query = parseQuery(parser, begin, end, "CreateCloudTable", settings.max_query_size, settings.max_parser_depth);
+    auto ast_query = parseCreateQuery(context, create_query);
     auto & ast_create_query = ast_query->as<ASTCreateQuery &>();
 
     /// set query settings
+    /// TODO: can we remove this? i.e., don't rely on create query to pass query setting
     if (ast_create_query.settings_ast)
         InterpreterSetQuery(ast_create_query.settings_ast, context).executeForCurrentContext();
 
+    auto res = createStorageFromQuery(ast_create_query, context);
+    if (auto cloud_table = std::dynamic_pointer_cast<StorageCloudMergeTree>(res))
+        cloud_table->resetObjectColumns(object_columns);
+    res->startup();
+
+    bool throw_if_exists = !ast_create_query.if_not_exists && !skip_if_exists;
     const auto & database_name = ast_create_query.database; // not empty.
     const auto & table_name = ast_create_query.table;
     String tenant_db = formatTenantDatabaseName(database_name);
+    insertCloudTable({tenant_db, table_name}, res, context, throw_if_exists);
+}
+
+void CnchWorkerResource::executeCacheableCreateQuery(
+    ContextMutablePtr context,
+    const StorageID & cnch_storage_id,
+    const String & definition,
+    const String & local_table_name,
+    WorkerEngineType engine_type,
+    const String & underlying_dictionary_tables,
+    const ColumnsDescription & object_columns)
+{
+    static auto * log = &Poco::Logger::get("WorkerResource");
+
+    std::shared_ptr<StorageCloudMergeTree> cached;
+    if (auto cache = context->tryGetCloudTableDefinitionCache())
     {
-        auto lock = getLock();
-        if (cloud_tables.find({tenant_db, table_name}) != cloud_tables.end())
+        auto load = [&]() -> std::shared_ptr<StorageCloudMergeTree>
         {
-            if (ast_create_query.if_not_exists || skip_if_exists)
-                return;
-            else
-                throw Exception("Table " + tenant_db + "." + table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
-        }
+            auto ast_query = parseCreateQuery(context, definition);
+            auto & create_query = ast_query->as<ASTCreateQuery &>();
+
+            replaceCnchWithCloud(
+                create_query.storage,
+                cnch_storage_id.getDatabaseName(),
+                cnch_storage_id.getTableName(),
+                engine_type);
+
+            auto table = createStorageFromQuery(create_query, context);
+            if (auto cloud_table = std::dynamic_pointer_cast<StorageCloudMergeTree>(table))
+                return cloud_table;
+            return {};
+        };
+
+        cached = cache->getOrSet(CloudTableDefinitionCache::hash(definition), std::move(load)).first;
     }
 
-    ColumnsDescription columns;
-    IndicesDescription indices;
-    ConstraintsDescription constraints;
-    ForeignKeysDescription foreign_keys;
-    UniqueNotEnforcedDescription unique_not_enforced;
-
-    if (ast_create_query.columns_list)
+    StoragePtr res;
+    if (cached)
     {
-        if (ast_create_query.columns_list->columns)
+        LOG_DEBUG(log, "Creating cloud table {} from cached template of definition {}", local_table_name, definition);
+        StorageID actual_table_id = cached->getStorageID();
+        actual_table_id.table_name = local_table_name;
+
+        std::unique_ptr<MergeTreeSettings> new_settings = std::make_unique<MergeTreeSettings>(*cached->getSettings());
+        if (!underlying_dictionary_tables.empty())
+            new_settings->underlying_dictionary_tables = underlying_dictionary_tables;
+
+        switch (engine_type)
         {
-            // Set attach = true to avoid making columns nullable due to ANSI settings, because the dialect change
-            // should NOT affect existing tables.
-            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, /* attach= */ true);
+            case WorkerEngineType::CLOUD:
+                res = StorageCloudMergeTree::create(
+                    actual_table_id,
+                    cnch_storage_id.database_name,
+                    cnch_storage_id.table_name,
+                    *cached->getInMemoryMetadataPtr(),
+                    context,
+                    /*date_column_name*/ "",
+                    cached->getMergingParams(),
+                    std::move(new_settings));
+                break;
+            case WorkerEngineType::DICT:
+                /// NOTE: StorageDictCloudMergeTree::create is broken, don't use it
+                res = std::make_shared<StorageDictCloudMergeTree>(
+                    actual_table_id,
+                    cnch_storage_id.database_name,
+                    cnch_storage_id.table_name,
+                    *cached->getInMemoryMetadataPtr(),
+                    context,
+                    /*date_column_name*/ "",
+                    cached->getMergingParams(),
+                    std::move(new_settings));
+                break;
+            default:
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown value for engine_type: {}", static_cast<UInt32>(engine_type));
         }
 
-        if (ast_create_query.columns_list->indices)
-            for (const auto & index : ast_create_query.columns_list->indices->children)
-                indices.push_back(IndexDescription::getIndexFromAST(index->clone(), columns, context));
-
-        if (ast_create_query.columns_list->constraints)
-            for (const auto & constraint : ast_create_query.columns_list->constraints->children)
-                constraints.constraints.push_back(std::dynamic_pointer_cast<ASTConstraintDeclaration>(constraint->clone()));
-
-        if (ast_create_query.columns_list->foreign_keys)
-            for (const auto & foreign_key : ast_create_query.columns_list->foreign_keys->children)
-                foreign_keys.foreign_keys.push_back(std::dynamic_pointer_cast<ASTForeignKeyDeclaration>(foreign_key->clone()));
-
-        if (ast_create_query.columns_list->unique)
-            for (const auto & unique : ast_create_query.columns_list->unique->children)
-                unique_not_enforced.unique.push_back(std::dynamic_pointer_cast<ASTUniqueNotEnforcedDeclaration>(unique->clone()));
     }
-    else
-        throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
-
-    /// Even if query has list of columns, canonicalize it (unfold Nested columns).
-    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(columns, ParserSettings::valueOf(context->getSettingsRef()));
-    ASTPtr new_indices = InterpreterCreateQuery::formatIndices(indices);
-    ASTPtr new_constraints = InterpreterCreateQuery::formatConstraints(constraints);
-    ASTPtr new_foreign_keys = InterpreterCreateQuery::formatForeignKeys(foreign_keys);
-    ASTPtr new_unique_not_enforced = InterpreterCreateQuery::formatUnique(unique_not_enforced);
-
-    if (ast_create_query.columns_list->columns)
-        ast_create_query.columns_list->replace(ast_create_query.columns_list->columns, new_columns);
-
-    if (ast_create_query.columns_list->indices)
-        ast_create_query.columns_list->replace(ast_create_query.columns_list->indices, new_indices);
-
-    if (ast_create_query.columns_list->constraints)
-        ast_create_query.columns_list->replace(ast_create_query.columns_list->constraints, new_constraints);
-
-    if (ast_create_query.columns_list->foreign_keys)
-        ast_create_query.columns_list->replace(ast_create_query.columns_list->foreign_keys, new_foreign_keys);
-
-    if (ast_create_query.columns_list->unique)
-        ast_create_query.columns_list->replace(ast_create_query.columns_list->unique, new_unique_not_enforced);
-
-    /// Check for duplicates
-    std::set<String> all_columns;
-    for (const auto & column : columns)
+    else /// for cloud table other than CloudMergeTree. e.g., CloudS3, CloudHive, ...
     {
-        if (!all_columns.emplace(column.name).second)
-            throw Exception("Column " + backQuoteIfNeed(column.name) + " already exists", ErrorCodes::DUPLICATE_COLUMN);
-    }
+        auto ast_query = parseCreateQuery(context, definition);
+        auto & create_query = ast_query->as<ASTCreateQuery &>();
 
-    /// Table constructing
-    StoragePtr res = StorageFactory::instance().get(ast_create_query, "", context, context->getGlobalContext(), columns, constraints, foreign_keys, unique_not_enforced, false);
-    res->startup();
+        replaceCnchWithCloud(
+            create_query.storage,
+            cnch_storage_id.getDatabaseName(),
+            cnch_storage_id.getTableName(),
+            engine_type);
+
+        create_query.table = local_table_name;
+        if (!underlying_dictionary_tables.empty())
+            modifyOrAddSetting(create_query, "underlying_dictionary_tables", Field(underlying_dictionary_tables));
+
+        LOG_DEBUG(log, "Creating cloud table {} from rewritted definition {}", local_table_name, serializeAST(create_query));
+        res = createStorageFromQuery(create_query, context);
+    }
 
     if (auto cloud_table = std::dynamic_pointer_cast<StorageCloudMergeTree>(res))
         cloud_table->resetObjectColumns(object_columns);
+    res->startup();
 
-    {
-        auto lock = getLock();
-        cloud_tables.emplace(std::make_pair(tenant_db, table_name), res);
-        auto it = memory_databases.find(tenant_db);
-        if (it == memory_databases.end())
-        {
-            DatabasePtr database = std::make_shared<DatabaseMemory>(tenant_db, context->getGlobalContext());
-            memory_databases.insert(std::make_pair(tenant_db, std::move(database)));
-        }
-    }
-
-    LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "Successfully create cloud table {} and database {}", res->getStorageID().getNameForLogs(), database_name);
+    auto res_table_id = res->getStorageID();
+    insertCloudTable({res_table_id.getDatabaseName(), res_table_id.getTableName()}, res, context, /*throw_if_exists=*/ false);
 }
 
 StoragePtr CnchWorkerResource::getTable(const StorageID & table_id) const
@@ -182,6 +202,27 @@ DatabasePtr CnchWorkerResource::getDatabase(const String & database_name) const
         return it->second;
 
     return {};
+}
+
+void CnchWorkerResource::insertCloudTable(DatabaseAndTableName key, const StoragePtr & storage, ContextPtr context, bool throw_if_exists)
+{
+    auto & tenant_db = key.first;
+    {
+        auto lock = getLock();
+        bool inserted = cloud_tables.emplace(key, storage).second;
+        if (!inserted && throw_if_exists)
+            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {} already exists", storage->getStorageID().getFullTableName());
+        auto it = memory_databases.find(tenant_db);
+        if (it == memory_databases.end())
+        {
+            DatabasePtr database = std::make_shared<DatabaseMemory>(tenant_db, context->getGlobalContext());
+            memory_databases.insert(std::make_pair(tenant_db, std::move(database)));
+        }
+    }
+
+    static auto * log = &Poco::Logger::get("WorkerResource");
+    LOG_DEBUG(log, "Successfully create database {} and table {} {}",
+        tenant_db, storage->getName(), storage->getStorageID().getNameForLogs());
 }
 
 bool CnchWorkerResource::isCnchTableInWorker(const StorageID & table_id) const

@@ -77,6 +77,9 @@ public:
     }
 };
 
+DataTypePtr makeUnsigned(const DataTypePtr & type);
+DataTypePtr makeSigned(const DataTypePtr & type);
+
 using DataTypeUInt8 = DataTypeNumber<UInt8>;
 using DataTypeUInt16 = DataTypeNumber<UInt16>;
 using DataTypeUInt32 = DataTypeNumber<UInt32>;

@@ -17,6 +17,7 @@
 
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <Optimizer/Rule/Rule.h>
+#include <QueryPlan/CTEInfo.h>
 
 namespace DB
 {
@@ -26,9 +27,13 @@ public:
     RuleType getType() const override { return RuleType::INLINE_CTE; }
     String getName() const override { return "INLINE_CTE"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().cte_mode == CTEMode::AUTO; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
-    static PlanNodePtr reoptimize(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context);
+    /**
+     * In order for cascades to calculate the right cost, some ruls need be applied for inlined plan, 
+     * like PredicatePushDown, SimplifyExpression, RemoveRedundant and so on.
+     */
+    static PlanNodePtr reoptimize(CTEId cte_id, const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context);
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -40,10 +45,9 @@ public:
     RuleType getType() const override { return RuleType::INLINE_CTE_WITH_FILTER; }
     String getName() const override { return "InlineCTEWithFilter"; }
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().cte_mode == CTEMode::AUTO; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
-   
 };
 }

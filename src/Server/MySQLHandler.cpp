@@ -69,6 +69,8 @@ static const size_t PACKET_HEADER_SIZE = 4;
 static const size_t SSL_REQUEST_PAYLOAD_SIZE = 32;
 
 static String selectEmptyReplacementQuery(const String & query, const String & prefix);
+static String selectEmptySetQuery(const String & /*query*/, const String & /*prefix*/);
+static String showIndexReplacementQuery(const String & query, const String & prefix);
 static String showTableStatusReplacementQuery(const String & query, const String & prefix);
 static String killConnectionIdReplacementQuery(const String & query, const String & prefix);
 static std::optional<String> setSettingReplacementQuery(const String & query, const String & mysql_setting, const String & native_setting);
@@ -77,11 +79,15 @@ static std::optional<String> setSettingReplacementQuery(const String & query, co
 // For MySQL workbench
 static String showVariableReplacementQuery(const String & query, const String & prefix)
 {
-    std::regex pattern(prefix + R"((?: LIKE (.*))?)");
+    std::regex pattern(prefix + R"( LIKE (.*))");
     std::smatch match;
 
+    /// for 'show variables;'
     if (!std::regex_search(query, match, pattern))
-        return query;
+    {
+        return "SELECT name AS Variable_name, value AS Value FROM system.settings";
+        // return query;
+    }
 
     if (match[1].matched)
     {
@@ -169,31 +175,51 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
         server_capabilities |= CLIENT_SSL;
 
     static constexpr const char SHOW_CHARSET[] = "SELECT 'utf8mb4' AS charset, 'UTF-8 Unicode' AS Description, 'utf8mb4_0900_ai_ci' AS `Default collation`, 4 AS Maxlen";
-    static constexpr const char SHOW_COLLATION[] = "SELECT 'utf8_bin' AS collation, 'utf8' AS Charset, '255' AS Id, 'Yes' AS Default, 'Yes' AS Compiled, 0 AS Sortlen, 'NO PAD' AS Pad_attribute";
+    static constexpr const char SHOW_COLLATION[] = "SELECT 'utf8mb4_0900_ai_ci' AS collation, 'utf8mb4' AS Charset, '255' AS Id, 'Yes' AS Default, 'Yes' AS Compiled, 0 AS Sortlen, 'NO PAD' AS Pad_attribute";
     static constexpr const char SHOW_ENGINES[] = "SELECT name AS Engine, 'Yes' AS Support, concat(name, ' engine') AS Comment, 'NO' AS Transcations,  'NO' AS XA, 'NO' AS Savepoints FROM system.table_engines";
-    static constexpr const char SHOW_TABLE_STATUS_LIKE[] = "SELECT name AS Name, engine AS Engine, '10' AS Version, 'Dynamic' AS Row_format, 0 AS Rows, 0 AS Avg_row_length, 0 AS Data_length, 0 AS Max_data_length, 0 AS Index_length, 0 AS Data_free, 'NULL' AS Auto_increment, metadata_modification_time AS Create_time, metadata_modification_time AS Update_time, metadata_modification_time AS Check_time, 'utf8_bin' AS Collation, 'NULL' AS Checksum, '' AS Create_options, '' AS Comment FROM system.tables WHERE name LIKE ";
 
+    static constexpr const char SHOW_PRIVILEGES[] = "SELECT '' AS Privilege, '' AS Context, '' AS Comment";
+    static constexpr const char ANALYZE_TABLE[] = "CREATE STATS ";
+    static constexpr const char SHOW_CREATE_SCHEMA[] = "SHOW CREATE DATABASE ";
+
+    queries_replacements.emplace_back("ALTER DATABASE", selectEmptyReplacementQuery);
+    queries_replacements.emplace_back("ANALYZE TABLE", ReplaceWith<ANALYZE_TABLE>::fn);
+    queries_replacements.emplace_back("COMMIT", selectEmptyReplacementQuery);
     queries_replacements.emplace_back("KILL QUERY ", killConnectionIdReplacementQuery);
-    queries_replacements.emplace_back("SHOW TABLE STATUS FROM ", showTableStatusReplacementQuery);
-    queries_replacements.emplace_back("SHOW TABLE STATUS LIKE ", ReplaceWith<SHOW_TABLE_STATUS_LIKE>::fn);
-    queries_replacements.emplace_back("SHOW VARIABLES WHERE ", showVariableWhereReplacementQuery);
-    queries_replacements.emplace_back("SHOW VARIABLES", selectEmptyReplacementQuery);
-    queries_replacements.emplace_back("SHOW PLUGINS", selectEmptyReplacementQuery);
-    queries_replacements.emplace_back("SHOW SESSION STATUS", showVariableReplacementQuery);
-    queries_replacements.emplace_back("SHOW SESSION VARIABLES", showVariableReplacementQuery);
-    queries_replacements.emplace_back("SHOW GLOBAL STATUS", showVariableReplacementQuery);
-    queries_replacements.emplace_back("SHOW GLOBAL VARIABLES", showVariableReplacementQuery);
-    queries_replacements.emplace_back("SHOW STATUS", showVariableReplacementQuery);
-    queries_replacements.emplace_back("SHOW VARIABLES", showVariableReplacementQuery);
-    //queries_replacements,emplace_back("SHOW CREATE TABLE", showCreateTableReplacementQuery);
+    queries_replacements.emplace_back("LOCK TABLE", selectEmptySetQuery);
+    queries_replacements.emplace_back("UNLOCK TABLE", selectEmptySetQuery);
+    queries_replacements.emplace_back("REPAIR TABLE", selectEmptyReplacementQuery);
+    queries_replacements.emplace_back("ROLLBACK", selectEmptyReplacementQuery);
     queries_replacements.emplace_back("SHOW CHARACTER SET", ReplaceWith<SHOW_CHARSET>::fn);
     queries_replacements.emplace_back("SHOW CHARSET", ReplaceWith<SHOW_CHARSET>::fn);
     queries_replacements.emplace_back("SHOW COLLATION", ReplaceWith<SHOW_COLLATION>::fn);
+    queries_replacements.emplace_back("SHOW CREATE SCHEMA", ReplaceWith<SHOW_CREATE_SCHEMA>::fn);
     queries_replacements.emplace_back("SHOW ENGINES", ReplaceWith<SHOW_ENGINES>::fn);
-    settings_replacements.emplace("SQL_SELECT_LIMIT", "limit");
-    settings_replacements.emplace("NET_WRITE_TIMEOUT", "send_timeout");
-    settings_replacements.emplace("NET_READ_TIMEOUT", "receive_timeout");
-    settings_replacements.emplace("CHARACTER SET utf8", "SQL_CHARSET='utf8'");
+    queries_replacements.emplace_back("SHOW EVENTS", selectEmptySetQuery);
+    queries_replacements.emplace_back("SHOW FUNCTION STATUS", selectEmptySetQuery);
+    queries_replacements.emplace_back("SHOW GLOBAL STATUS", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW GLOBAL VARIABLES", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW INDEXES", showIndexReplacementQuery);
+    queries_replacements.emplace_back("SHOW INDEX", showIndexReplacementQuery);
+    queries_replacements.emplace_back("SHOW PLUGINS", selectEmptyReplacementQuery);
+    queries_replacements.emplace_back("SHOW PRIVILEGES", ReplaceWith<SHOW_PRIVILEGES>::fn);
+    queries_replacements.emplace_back("SHOW PROCEDURE STATUS", selectEmptySetQuery);
+    queries_replacements.emplace_back("SHOW SESSION STATUS", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW SESSION VARIABLES", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW STATUS", showVariableReplacementQuery);
+    queries_replacements.emplace_back("SHOW TABLE STATUS", showTableStatusReplacementQuery);
+    queries_replacements.emplace_back("SHOW TRIGGERS", selectEmptySetQuery);
+    queries_replacements.emplace_back("SHOW VARIABLES WHERE ", showVariableWhereReplacementQuery);
+    queries_replacements.emplace_back("SHOW VARIABLES", selectEmptyReplacementQuery);
+    queries_replacements.emplace_back("SHOW VARIABLES", showVariableReplacementQuery);
+
+    settings_replacements.emplace_back("SQL_SELECT_LIMIT=DEFAULT", "limit = 0");
+    settings_replacements.emplace_back("SQL_SELECT_LIMIT", "limit");
+    settings_replacements.emplace_back("NET_WRITE_TIMEOUT", "send_timeout");
+    settings_replacements.emplace_back("NET_READ_TIMEOUT", "receive_timeout");
+    settings_replacements.emplace_back("CHARACTER SET utf8", "SQL_CHARSET='utf8mb4'");
+    settings_replacements.emplace_back("AUTOCOMMIT", "SQL_AUTOCOMMIT");
+    settings_replacements.emplace_back("PROFILING", "SQL_PROFILING");
 }
 
 void MySQLHandler::run()
@@ -235,6 +261,7 @@ void MySQLHandler::run()
         if (!(client_capabilities & CLIENT_PROTOCOL_41))
             throw Exception("Required capability: CLIENT_PROTOCOL_41.", ErrorCodes::MYSQL_CLIENT_INSUFFICIENT_CAPABILITIES);
 
+        handshake_response.username = connection_context->formatUserName(handshake_response.username);
         authenticate(handshake_response.username, handshake_response.auth_plugin_name, handshake_response.auth_response);
 
         connection_context->getClientInfo().initial_user = handshake_response.username;
@@ -262,9 +289,10 @@ void MySQLHandler::run()
                 if (!default_database.empty())
                     connection_context->setCurrentDatabase(default_database);
             }
-            connection_context->setSetting("dialect_type", String("MYSQL"));
-            /// Temporay fix, need to default enable it under mysql dialect
-            connection_context->setSetting("enable_implicit_arg_type_convert", 1);
+            SettingsChanges setting_changes;
+            setting_changes.emplace_back("dialect_type", String("MYSQL"));
+            connection_context->applySettingsChanges(setting_changes);
+
             connection_context->setCurrentQueryId(fmt::format("mysql:{}", connection_id));
 
         }
@@ -424,6 +452,7 @@ void MySQLHandler::comInitDB(ReadBuffer & payload)
 {
     String database;
     readStringUntilEOF(database, payload);
+    database = formatTenantDatabaseNameWithTenantId(database, connection_context->getTenantId(), '.');
     LOG_DEBUG(log, "Setting current database to {}", database);
     connection_context->setCurrentDatabase(database);
     packet_endpoint->sendPacket(OKPacket(0, client_capabilities, 0, 0, 1), true);
@@ -476,9 +505,14 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
 
     LOG_INFO(log, "MySQL server received: " + query);
 
+    /// skip empty queries
+    if (query.empty())
+    {
+        packet_endpoint->sendPacket(OKPacket(0x00, client_capabilities, 0, 0, 0), true);
+    }
     // This is a workaround in order to support adding ClickHouse to MySQL using federated server.
     // As Clickhouse doesn't support these statements, we just send OK packet in response.
-    if (isFederatedServerSetupSetCommand(query))
+    else if (isFederatedServerSetupSetCommand(query))
     {
         packet_endpoint->sendPacket(OKPacket(0x00, client_capabilities, 0, 0, 0), true);
     }
@@ -514,7 +548,17 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
 
         ReadBufferFromString replacement(replacement_query);
         auto query_context = Context::createCopy(connection_context);
+        query_context->setCurrentTransaction(nullptr, false);
         query_context->setCurrentQueryId(fmt::format("mysql:{}:{}", connection_id, toString(UUIDHelpers::generateV4())));
+        /// TODO(fredwang) only set it for queries from IDEs (not users)
+        query_context->setSetting("text_case_option", String{"MIXED"});
+        query_context->setSetting("enable_multiple_tables_for_cnch_parts", 1);
+        /// if the following settings are false, IDE would get BLOB type for string columns,
+        /// and then fail to parse data from disk CSV files
+        query_context->setSetting("mysql_map_string_to_text_in_show_columns", 1);
+        query_context->setSetting("mysql_map_fixed_string_to_text_in_show_columns", 1);
+        /// TODO(fredwang) change it to a smaller threshold?
+        query_context->setSetting("max_execution_time", 18000);
         CurrentThread::QueryScope query_scope{query_context};
 
         std::atomic<size_t> affected_rows {0};
@@ -533,7 +577,7 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
         format_settings.mysql_wire.sequence_id = &sequence_id;
         format_settings.mysql_wire.binary_protocol = binary_protocol;
 
-        auto set_result_details = [&with_output](const String &, const String &, const String &, const String &)
+        auto set_result_details = [&with_output](const String &, const String &, const String &, const String &, MPPQueryCoordinatorPtr)
         {
             with_output = true;
         };
@@ -683,10 +727,11 @@ static bool isFederatedServerSetupSetCommand(const String & query)
     static const re2::RE2 expr(
         "(^(SET NAMES(.*)))"
         "|(^(SET character_set_results(.*)))"
-        "|(^(SET FOREIGN_KEY_CHECKS(.*)))"
+        "|(^(SET (GLOBAL )?FOREIGN_KEY_CHECKS(.*)))"
         "|(^(SET AUTOCOMMIT(.*)))"
         "|(^(SET sql_mode(.*)))"
         "|(^(SET @@(.*)))"
+        "|(^(SET UNIQUE_CHECKS(.*)))"
         "|(^(SET SESSION TRANSACTION ISOLATION LEVEL(.*)))", regexp_options);
     assert(expr.ok());
     return re2::RE2::FullMatch(query, expr);
@@ -698,56 +743,117 @@ static String selectEmptyReplacementQuery(const String & /*query*/, const String
     return "select ''";
 }
 
-/// Replace "SHOW TABLE STATUS FROM 'value1' LIKE 'value2'" into "SELECT ... FROM system.tables WHERE name LIKE 'xx'".
+static String selectEmptySetQuery(const String & /*query*/, const String & /*prefix*/)
+{
+    return "select * from information_schema.events where 0 = 1";
+}
+
+/// "SHOW TABLE STATUS [{FROM | IN} db_name] [LIKE 'patten' | WHERE expr]
+/// by joining cnch_tables and cnch_parts on table name to get the table status
 static String showTableStatusReplacementQuery(const String & query, const String & prefix)
 {
+    String select = "SELECT T.name as Name, any(engine) as Engine, NULL as Version, NULL as Row_format, ifNull(sum(rows_count), 0) as Rows, ifNull(floor(divide(Data_length, sum(rows_count))), 0) as Avg_row_length, ifNull(sum(bytes_on_disk), 0) as Data_length, 0 AS Max_data_length, 0 AS Index_length, 0 AS Data_free, NULL AS Auto_increment, '2024-01-01 00:00:01' AS Create_time, max(modification_time) AS Update_time, NULL AS Check_time, 'utf8mb4_0900_ai_ci' AS Collation, NULL AS Checksum, '' AS Create_options, '' AS Comment FROM system.cnch_tables as T LEFT OUTER JOIN (SELECT * FROM system.cnch_parts WHERE visible = 1) as P on T.database = P.database and T.name = P.table ";
+
     if (query.size() > prefix.size())
     {
-        std::regex regexPattern(prefix + R"(((?:\x60.*\x60)|[^ ]+)(?: LIKE (.*))?)");
+        std::regex regexPattern(prefix + R"((?: (?:FROM|IN) (\x60\w+\x60|[^ ]+))?(?: LIKE (.+)| WHERE (.+))?)", std::regex_constants::icase);
 
         std::smatch match;
         if (std::regex_search(query, match, regexPattern))
         {
             String dbName = match[1].str();
-            if (dbName.size() > 2 and dbName.front() == '`' and dbName.back() == '`')
-                dbName.front() = dbName.back() = '\'';
+            if (match[1].matched)
+            {
+                if (dbName.size() > 2 and dbName.front() == '`' and dbName.back() == '`')
+                    dbName.front() = dbName.back() = '\'';
+                else
+                    dbName = '\'' + dbName + '\'';
+            }
             else
-                dbName = '\'' + dbName + '\'';
+            {
+                dbName = "currentDatabase(1)";
+            }
+
             std::optional<String> tableName;
             if (match[2].matched)
                 tableName.emplace(match[2].str());
 
-            String rewritten_query =
-                "SELECT"
-                " name AS Name,"
-                " engine AS Engine,"
-                " '10' AS Version,"
-                " 'Dynamic' AS Row_format,"
-                " 0 AS Rows,"
-                " 0 AS Avg_row_length,"
-                " 0 AS Data_length,"
-                " 0 AS Max_data_length,"
-                " 0 AS Index_length,"
-                " 0 AS Data_free,"
-                " 'NULL' AS Auto_increment,"
-                " metadata_modification_time AS Create_time,"
-                " metadata_modification_time AS Update_time,"
-                " metadata_modification_time AS Check_time,"
-                " 'utf8_bin' AS Collation,"
-                " 'NULL' AS Checksum,"
-                " '' AS Create_options,"
-                " '' AS Comment"
-                " FROM"
-                " system.tables"
-                " WHERE"
-                " database = " + dbName
-                ;
+            std::optional<String> where;
+            if (match[3].matched)
+                where.emplace(match[3].str());
+
+            String rewritten_query = select + " WHERE T.database=" + dbName;
+
             if (tableName)
-            {
-                rewritten_query +=
-                    " AND name LIKE " + *tableName;
-            }
+                rewritten_query += " AND T.name LIKE " + *tableName;
+
+            if (where)
+                rewritten_query += " AND " + *where;
+
+            rewritten_query += " GROUP BY T.name settings enable_multiple_tables_for_cnch_parts=1";
             return rewritten_query;
+        }
+    }
+    else if (query.size() == prefix.size())
+    {
+        return select + " WHERE T.database=currentDatabase(1) GROUP BY T.name settings enable_multiple_tables_for_cnch_parts=1";
+    }
+    return query;
+}
+
+/// For "SHOW {INDEX | INDEXES | KEYS} {FROM | IN} tbl_name [{FROM | IN} db_name] [WHERE expr]
+static String showIndexReplacementQuery(const String & query, const String & prefix)
+{
+    if (query.size() > prefix.size())
+    {
+        std::regex regexPattern(prefix + R"( (?:FROM|IN) (\x60\w+\x60|[^ ]+)(?:\.(\x60\w+\x60|[^ ]+))?(?: (?:FROM|IN) (\x60\w+\x60|[^ ]+))?(?: WHERE (.+))?)", std::regex_constants::icase);
+
+        std::smatch match;
+        if (std::regex_search(query, match, regexPattern))
+        {
+            int dbId = 0;
+            int tableId = 0;
+
+            /// SHOW INDEX FROM sakila.actor
+            if (match[2].matched)
+            {
+                dbId = 1;
+                tableId = 2;
+            }
+            /// SHOW INDEX FROM actor FROM sakila
+            else if (match[3].matched)
+            {
+                dbId = 3;
+                tableId = 1;
+            }
+            /// SHOW INDEX FROM actor
+            else
+            {
+                tableId = 1;
+            }
+
+            String dbName =  match[dbId].str();
+
+            if (dbId == 0)
+                dbName = "currentDatabase(1)" ;
+            else if (dbName.size() > 2 and dbName.front() == '`' and dbName.back() == '`')
+                dbName.front() = dbName.back() = '\'';
+            else
+                dbName = '\'' + dbName + '\'';
+
+            String tableName = match[tableId].str();
+            if (tableName.size() > 2 and tableName.front() == '`' and tableName.back() == '`')
+                tableName.front() = tableName.back() = '\'';
+            else
+                tableName = '\'' + tableName + '\'';
+
+            return "SELECT table_name as Table, non_unique as Non_unique, index_name as Key_name, "
+                "seq_in_index as Seq_in_index, column_name as Column_name, collation as Collation, "
+                "cardinality as Cardinality, sub_part as Sub_part, packed as Packed, nullable as Null, "
+                "index_type as Index_type, comment as Comment, index_comment as Index_comment, "
+                "is_visible as Visible, expression as Expression "
+                "FROM information_schema.statistics "
+                "WHERE table_schema=" + dbName + " AND table_name = " + tableName + (match[4].matched ? " AND " + match[4].str() : "");
         }
     }
     return query;

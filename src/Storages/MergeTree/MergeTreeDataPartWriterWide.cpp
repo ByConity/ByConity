@@ -27,6 +27,7 @@
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/sortBlock.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
@@ -44,6 +45,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int CANNOT_OPEN_FILE;
+    extern const int UNIQUE_TABLE_DUPLICATE_KEY_FOUND;
 }
 
 namespace
@@ -128,7 +130,10 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
         if (it.type->isByteMap())
             continue;
         else if (isMapImplicitKey(it.name))
-            addByteMapStreams({it}, parseMapNameFromImplicitColName(it.name), default_codec->getFullCodecDesc());
+        {
+            auto map_name = parseMapNameFromImplicitColName(it.name);
+            addByteMapStreams({it}, map_name, columns.getCodecDescOrDefault(map_name, default_codec));
+        }
         else
             addStreams(it, columns.getCodecDescOrDefault(it.name, default_codec));
     }
@@ -485,7 +490,21 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
 
     /// Prevent merge task from creating merged part with duplicated keys
     if (rows_count != keys_count)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "rows count {} doesn't match unique keys count {}", rows_count, keys_count);
+    {
+        if (auto unique_table_log = storage.getContext()->getCloudUniqueTableLog())
+        {
+            auto current_log = UniqueTable::createUniqueTableLog(UniqueTableLogElement::ERROR, storage.getCnchStorageID());
+            current_log.metric = ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND;
+            current_log.event_msg = fmt::format("rows count {} doesn't match unique keys count {}", rows_count, keys_count);
+            TaskInfo log_entry_task_info;
+            log_entry_task_info.task_type = TaskInfo::MERGE_TASK;
+            log_entry_task_info.dedup_gran.partition_id = !storage.getSettings()->partition_level_unique_keys ? ALL_DEDUP_GRAN_PARTITION_ID : data_part->get_info().partition_id;
+            log_entry_task_info.dedup_gran.bucket_number = storage.getSettings()->enable_bucket_level_unique_keys ? data_part->bucket_number : -1;
+            current_log.task_info = std::move(log_entry_task_info);
+            unique_table_log->add(current_log);
+        }
+        throw Exception(ErrorCodes::UNIQUE_TABLE_DUPLICATE_KEY_FOUND, "rows count {} doesn't match unique keys count {}", rows_count, keys_count);
+    }
 
     status = index_writer.Finish(&file_info);
     if (!status.ok())
@@ -567,7 +586,7 @@ void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name,
         {
             auto column = type.createColumn();
 
-            serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0);
+            serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0, false);
 
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
@@ -604,7 +623,7 @@ void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name,
 
         auto column = type.createColumn();
 
-        serialization->deserializeBinaryBulk(*column, bin_in, index_granularity_rows, 0.0);
+        serialization->deserializeBinaryBulk(*column, bin_in, index_granularity_rows, 0.0, false);
 
         if (bin_in.eof())
         {
@@ -653,7 +672,7 @@ void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name,
     {
         auto column = type.createColumn();
 
-        serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0);
+        serialization->deserializeBinaryBulk(*column, bin_in, 1000000000, 0.0, false);
 
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,

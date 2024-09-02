@@ -1,0 +1,7 @@
+TableFinish
+└─ Gather Exchange
+   └─ TableWrite
+      └─ Local Exchange
+         └─ Projection
+            └─ TableScan test.t480282
+6

@@ -114,6 +114,7 @@ class ReadBuffer;
     M(ASTSelectQuery) \
     M(ASTSelectWithUnionQuery) \
     M(ASTSetQuery) \
+    M(ASTSetSensitiveQuery) \
     M(ASTSetRoleQuery) \
     M(ASTSettingsProfileElement) \
     M(ASTSettingsProfileElements) \
@@ -154,7 +155,15 @@ class ReadBuffer;
     M(ASTQuantifiedComparison) \
     M(ASTTableColumnReference) \
     M(ASTUpdateQuery) \
-    M(ASTBitEngineConstraintDeclaration)
+    M(ASTPreparedParameter) \
+    M(ASTCreatePreparedStatementQuery) \
+    M(ASTExecutePreparedStatementQuery) \
+    M(ASTShowPreparedStatementQuery) \
+    M(ASTDropPreparedStatementQuery) \
+    M(ASTBitEngineConstraintDeclaration) \
+    M(ASTStorageAnalyticalMySQL) \
+    M(ASTCreateQueryAnalyticalMySQL) \
+    M(ASTClusterByElement)
 #define ENUM_TYPE(ITEM) ITEM,
 
 enum class ASTType : UInt8
@@ -382,6 +391,7 @@ public:
         bool without_alias = false;
         IdentifierQuotingStyle identifier_quoting_style = IdentifierQuotingStyle::Backticks;
         DialectType dialect_type = DialectType::CLICKHOUSE;
+        bool show_secrets = true; /// Show secret parts of the AST (e.g. passwords, encryption keys).
 
         // Newline or whitespace.
         char nl_or_ws;
@@ -438,10 +448,16 @@ public:
     }
 
     // A simple way to add some user-readable context to an error message.
-    std::string formatForErrorMessage() const;
-    template <typename AstArray>
-    static std::string formatForErrorMessage(const AstArray & array);
+    String formatWithHiddenSecrets(size_t max_length = 0,
+                                   bool one_line = true,  
+                                   bool no_alias = false,
+                                   DialectType dialect = DialectType::CLICKHOUSE) const;
+    String formatForLogging(size_t max_length = 0) const { return formatWithHiddenSecrets(max_length, true); }
+    String formatForErrorMessage() const { return formatWithHiddenSecrets(0, true); }
+    String formatForErrorMessageWithoutAlias() const { return formatWithHiddenSecrets(0, true, true); }
 
+    /// If an AST has secret parts then formatForLogging() will replace them with the placeholder '[HIDDEN]'.
+    virtual bool hasSecretParts() const { return childrenHaveSecretParts(); }
     void cloneChildren();
 
     virtual void serialize(WriteBuffer &) const { throw Exception("Not implement serialize of " + getID(), ErrorCodes::NOT_IMPLEMENTED); }
@@ -458,24 +474,11 @@ public:
     static const char * hilite_substitution;
     static const char * hilite_none;
 
+protected:
+    bool childrenHaveSecretParts() const;
+
 private:
     size_t checkDepthImpl(size_t max_depth, size_t level) const;
 };
-
-template <typename AstArray>
-std::string IAST::formatForErrorMessage(const AstArray & array)
-{
-    WriteBufferFromOwnString buf;
-    for (size_t i = 0; i < array.size(); ++i)
-    {
-        if (i > 0)
-        {
-            const char * delim = ", ";
-            buf.write(delim, strlen(delim));
-        }
-        array[i]->format(IAST::FormatSettings(buf, true /* one line */));
-    }
-    return buf.str();
-}
 
 }

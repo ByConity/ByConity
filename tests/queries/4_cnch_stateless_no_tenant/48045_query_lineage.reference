@@ -1,0 +1,434 @@
+{
+ "UsedTablesInfo" : [
+  {
+   "Database" : "test",
+   "Table" : "lineage_test",
+   "Columns" : [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "Database" : "test",
+   "Table" : "lineage_test2",
+   "Columns" : [
+    "b",
+    "c"
+   ]
+  }
+ ],
+ "UsedFunctions" : [
+  "count",
+  "equals",
+  "sum"
+ ],
+ "UsedSettings" : {
+ },
+ "InsertInfo" : {
+ },
+ "FunctionsInfo" : [
+
+ ],
+ "LineageInfo" : {
+  "TableSources" : [
+   {
+    "Database" : "test",
+    "Table" : "lineage_test2",
+    "Columns" : [
+     {
+      "Id" : 3,
+      "Name" : "b"
+     },
+     {
+      "Id" : 2,
+      "Name" : "c"
+     }
+    ]
+   },
+   {
+    "Database" : "test",
+    "Table" : "lineage_test",
+    "Columns" : [
+     {
+      "Id" : 1,
+      "Name" : "a"
+     },
+     {
+      "Id" : 0,
+      "Name" : "b"
+     }
+    ]
+   }
+  ],
+  "ExpressionSources" : [
+   {
+    "Sources" : [
+     {
+      "Database" : "test",
+      "Table" : "lineage_test2"
+     }
+    ],
+    "Expression" : [
+     {
+      "Id" : 4,
+      "Name" : "count()()"
+     }
+    ]
+   },
+   {
+    "Sources" : [
+     {
+      "Database" : "test",
+      "Table" : "lineage_test"
+     },
+     {
+      "Database" : "test",
+      "Table" : "lineage_test2"
+     },
+     {
+      "Database" : "test",
+      "Table" : "lineage_test2"
+     }
+    ],
+    "Expression" : [
+     {
+      "Id" : 5,
+      "Name" : "2"
+     }
+    ]
+   }
+  ],
+  "OutputLineageInfo" : [
+   {
+    "Name" : "2",
+    "SourceIds" : [
+     5
+    ]
+   },
+   {
+    "Name" : "b",
+    "SourceIds" : [
+     0,
+     3
+    ]
+   },
+   {
+    "Name" : "a",
+    "SourceIds" : [
+     3,
+     4
+    ]
+   }
+  ],
+  "InsertLinageInfo" : {
+  }
+ }
+}
+{
+ "UsedTablesInfo" : [
+  {
+   "Database" : "test",
+   "Table" : "lineage_test",
+   "Columns" : [
+    "a"
+   ]
+  },
+  {
+   "Database" : "test",
+   "Table" : "lineage_test2",
+   "Columns" : [
+    "a",
+    "b"
+   ]
+  }
+ ],
+ "UsedFunctions" : [
+  "equals",
+  "less"
+ ],
+ "UsedSettings" : {
+ },
+ "InsertInfo" : {
+ },
+ "FunctionsInfo" : [
+
+ ],
+ "LineageInfo" : {
+  "TableSources" : [
+   {
+    "Database" : "test",
+    "Table" : "lineage_test2",
+    "Columns" : [
+     {
+      "Id" : 2,
+      "Name" : "a"
+     },
+     {
+      "Id" : 1,
+      "Name" : "b"
+     }
+    ]
+   },
+   {
+    "Database" : "test",
+    "Table" : "lineage_test",
+    "Columns" : [
+     {
+      "Id" : 0,
+      "Name" : "a"
+     }
+    ]
+   }
+  ],
+  "ExpressionSources" : [
+
+  ],
+  "OutputLineageInfo" : [
+   {
+    "Name" : "t2.b",
+    "SourceIds" : [
+     1
+    ]
+   },
+   {
+    "Name" : "a",
+    "SourceIds" : [
+     0
+    ]
+   }
+  ],
+  "InsertLinageInfo" : {
+  }
+ }
+}
+{
+ "UsedTablesInfo" : [
+  {
+   "Database" : "test",
+   "Table" : "lineage_test",
+   "Columns" : [
+    "a"
+   ]
+  },
+  {
+   "Database" : "test",
+   "Table" : "lineage_test2",
+   "Columns" : [
+    "a",
+    "b"
+   ]
+  }
+ ],
+ "UsedFunctions" : [
+  "equals",
+  "less"
+ ],
+ "UsedSettings" : {
+ },
+ "InsertInfo" : {
+ },
+ "FunctionsInfo" : [
+
+ ],
+ "LineageInfo" : {
+  "TableSources" : [
+   {
+    "Database" : "test",
+    "Table" : "lineage_test2",
+    "Columns" : [
+     {
+      "Id" : 2,
+      "Name" : "a"
+     },
+     {
+      "Id" : 1,
+      "Name" : "b"
+     }
+    ]
+   },
+   {
+    "Database" : "test",
+    "Table" : "lineage_test",
+    "Columns" : [
+     {
+      "Id" : 0,
+      "Name" : "a"
+     }
+    ]
+   }
+  ],
+  "ExpressionSources" : [
+
+  ],
+  "OutputLineageInfo" : [
+   {
+    "Name" : "t2.b",
+    "SourceIds" : [
+     1
+    ]
+   },
+   {
+    "Name" : "a",
+    "SourceIds" : [
+     0
+    ]
+   }
+  ],
+  "InsertLinageInfo" : {
+  }
+ }
+}
+{
+ "UsedTablesInfo" : [
+  {
+   "Database" : "_table_function",
+   "Table" : "cnch",
+   "Columns" : [
+    "a"
+   ]
+  },
+  {
+   "Database" : "test",
+   "Table" : "lineage_test2",
+   "Columns" : [
+    "a",
+    "b"
+   ]
+  }
+ ],
+ "UsedFunctions" : [
+  "equals",
+  "less"
+ ],
+ "UsedSettings" : {
+ },
+ "InsertInfo" : {
+ },
+ "FunctionsInfo" : [
+
+ ],
+ "LineageInfo" : {
+  "TableSources" : [
+   {
+    "Database" : "test",
+    "Table" : "lineage_test2",
+    "Columns" : [
+     {
+      "Id" : 2,
+      "Name" : "a"
+     },
+     {
+      "Id" : 1,
+      "Name" : "b"
+     }
+    ]
+   },
+   {
+    "Database" : "test",
+    "Table" : "lineage_test",
+    "Columns" : [
+     {
+      "Id" : 0,
+      "Name" : "a"
+     }
+    ]
+   }
+  ],
+  "ExpressionSources" : [
+
+  ],
+  "OutputLineageInfo" : [
+   {
+    "Name" : "t2.b",
+    "SourceIds" : [
+     1
+    ]
+   },
+   {
+    "Name" : "a",
+    "SourceIds" : [
+     0
+    ]
+   }
+  ],
+  "InsertLinageInfo" : {
+  }
+ }
+}
+{
+ "UsedTablesInfo" : [
+  {
+   "Database" : "test",
+   "Table" : "lineage_test2",
+   "Columns" : [
+    "c",
+    "a"
+   ]
+  }
+ ],
+ "UsedFunctions" : [
+  "isNotNull"
+ ],
+ "UsedSettings" : {
+ },
+ "InsertInfo" : {
+  "Database" : "test",
+  "Table" : "lineage_test",
+  "columns" : [
+   "a",
+   "b"
+  ]
+ },
+ "FunctionsInfo" : [
+
+ ],
+ "LineageInfo" : {
+  "TableSources" : [
+   {
+    "Database" : "test",
+    "Table" : "lineage_test2",
+    "Columns" : [
+     {
+      "Id" : 1,
+      "Name" : "a"
+     },
+     {
+      "Id" : 0,
+      "Name" : "c"
+     }
+    ]
+   }
+  ],
+  "ExpressionSources" : [
+
+  ],
+  "OutputLineageInfo" : [
+   {
+    "Name" : "a",
+    "SourceIds" : [
+     1
+    ]
+   },
+   {
+    "Name" : "c",
+    "SourceIds" : [
+     0
+    ]
+   }
+  ],
+  "InsertLinageInfo" : {
+   "Database" : "test",
+   "Table" : "lineage_test",
+   "InsertColumnInfo" : [
+    {
+     "InsertColumnName" : "b",
+     "InputName" : "a"
+    },
+    {
+     "InsertColumnName" : "a",
+     "InputName" : "c"
+    }
+   ]
+  }
+ }
+}

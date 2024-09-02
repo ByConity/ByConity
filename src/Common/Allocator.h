@@ -238,7 +238,7 @@ public:
                 if (new_size > old_size)
                     memset(reinterpret_cast<char *>(buf) + old_size, 0, new_size - old_size);
         }
-        else if (!DB::jeprofEnabled() && old_size >= MMAP_THRESHOLD && new_size >= MMAP_THRESHOLD)
+        else if (DB::canUseMmapDirectly() && old_size >= MMAP_THRESHOLD && new_size >= MMAP_THRESHOLD)
         {
             /// Resize mmap'd memory region.
             CurrentMemoryTracker::realloc(old_size, new_size);
@@ -302,7 +302,7 @@ private:
         void * buf;
         size_t mmap_min_alignment = ::getPageSize();
 
-        if (!DB::jeprofEnabled() && size >= MMAP_THRESHOLD)
+        if (DB::canUseMmapDirectly() && size >= MMAP_THRESHOLD)
         {
             if (alignment > mmap_min_alignment)
                 throw DB::Exception(fmt::format("Too large alignment {}: more than page size when allocating {}.",
@@ -345,7 +345,7 @@ private:
 
     void freeNoTrack(void * buf, size_t size)
     {
-        if (!DB::jeprofEnabled() && size >= MMAP_THRESHOLD)
+        if (DB::canUseMmapDirectly() && size >= MMAP_THRESHOLD)
         {
             if (0 != munmap(buf, size))
                 DB::throwFromErrno(fmt::format("Allocator: Cannot munmap {}.", ReadableSize(size)), DB::ErrorCodes::CANNOT_MUNMAP);

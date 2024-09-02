@@ -106,6 +106,35 @@ CnchKafkaBlockInputStream::~CnchKafkaBlockInputStream()
                     cloud_kafka_log->add(kafka_empty_log);
             }
 
+            if (read_buf->getSkippedMessagesBySampling() > 0)
+            {
+                /// A trick way to mark skip records by sampling as I don't want to add a new type now :(
+                /// xxx: Add a new event_type, maybe like `SKIP_MESSAGE`
+                auto kafka_skip_log = storage.createKafkaLog(KafkaLogElement::FILTER, consumer_index);
+                kafka_skip_log.event_time = create_time;
+                kafka_skip_log.duration_ms = duration_ms;
+                kafka_skip_log.metric = read_buf->getSkippedMessagesBySampling();
+                kafka_skip_log.last_exception = "Skipped by Sampling";
+                kafka_log->add(kafka_skip_log);
+                if (cloud_kafka_log)
+                    cloud_kafka_log->add(kafka_skip_log);
+            }
+
+            auto rdkafka_errors_buffer = read_buf->getRdkafkaErrorsBuffer();
+            if (!rdkafka_errors_buffer.empty())
+            {
+                for (const auto & err : rdkafka_errors_buffer)
+                {
+                    auto kafka_error_log = storage.createKafkaLog(KafkaLogElement::EXCEPTION, consumer_index);
+                    kafka_error_log.event_time = err.timestamp_usec;
+                    kafka_error_log.last_exception = err.text;
+                    kafka_error_log.has_error = true;
+                    kafka_log->add(kafka_error_log);
+                    if (cloud_kafka_log)
+                        cloud_kafka_log->add(kafka_error_log);
+                }
+            }
+
             IRowInputFormat * row_input = nullptr;
              if (!children.empty())
              {

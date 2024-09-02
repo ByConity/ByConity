@@ -8,6 +8,7 @@
 // non-native version will be less than optimal.
 
 #include "MurmurHash3.h"
+#include <cstdint>
 #include <string.h>
 
 //-----------------------------------------------------------------------------
@@ -42,7 +43,15 @@ inline uint64_t rotl64 ( uint64_t x, int8_t r )
   return (x << r) | (x >> (64 - r));
 }
 
+/// for signed integer
+inline int32_t rotli32 ( int32_t x, int8_t r )
+{
+  //similar to >>> in Java
+  return (x << r) | static_cast<int32_t>(static_cast<uint32_t>(x) >> (32 - r));
+}
+
 #define	ROTL32(x,y)	rotl32(x,y)
+#define	ROTLI32(x,y)	rotli32(x,y)
 #define ROTL64(x,y)	rotl64(x,y)
 
 #define BIG_CONSTANT(x) (x##LLU)
@@ -75,6 +84,18 @@ FORCE_INLINE uint32_t fmix32 ( uint32_t h )
   h ^= h >> 13;
   h *= 0xc2b2ae35;
   h ^= h >> 16;
+
+  return h;
+}
+
+FORCE_INLINE int32_t fmixi32 ( int32_t h )
+{
+  // similar to >>> in Java
+  h ^= static_cast<int32_t>(static_cast<uint32_t>(h) >> 16);
+  h *= 0x85ebca6b;
+  h ^= static_cast<int32_t>(static_cast<uint32_t>(h) >> 13);
+  h *= 0xc2b2ae35;
+  h ^= static_cast<int32_t>(static_cast<uint32_t>(h) >> 16);
 
   return h;
 }
@@ -146,6 +167,61 @@ void MurmurHash3_x86_32 ( const void * key, size_t len,
   h1 = fmix32(h1);
 
   *(uint32_t*)out = h1;
+}
+
+void MurmurHash3_x86_32_spark_compatible  ( const void * key, size_t len, int32_t seed, void * out )
+{
+  const uint8_t * data = static_cast<const uint8_t*>(key);
+  const int nblocks = len / 4;
+
+  int32_t h1 = seed;
+  const int32_t c1 = 0xcc9e2d51;
+  const int32_t c2 = 0x1b873593;
+
+  auto mixK1 = [c1, c2](int32_t k1)
+  {
+      k1 *= c1;
+      k1 = ROTLI32(k1, 15);
+      k1 *= c2;
+      return k1;
+  };
+
+  auto mixH1 = [](int32_t h1, int32_t k1) {
+    h1 ^= k1;
+    h1 = ROTLI32(h1, 13);
+    h1 = h1 * 5 + 0xe6546b64;
+    return h1;
+  };
+
+  const uint32_t * blocks = reinterpret_cast<const uint32_t *>(data + nblocks*4);
+
+  for(int i = -nblocks; i; i++)
+  {
+    uint32_t k1 = getblock32(blocks, i);
+
+    k1 = mixK1(static_cast<int32_t>(k1));
+    h1 = mixH1(h1, k1);
+  }
+
+  //----------
+  // tail
+
+  const uint8_t * tail = data + nblocks*4;
+  size_t remaining_size = len - nblocks*4;
+  for (size_t i = 0; i < remaining_size; ++i)
+  {
+      int32_t k1  = mixK1(static_cast<int32_t>(tail[i]));
+      h1 = mixH1(h1, k1);
+  }
+
+  //----------
+  // finalization
+
+  h1 ^= len;
+
+  h1 = fmixi32(h1);
+
+  *static_cast<int32_t*>(out) = h1;
 }
 
 //-----------------------------------------------------------------------------
@@ -335,4 +411,3 @@ void MurmurHash3_x64_128 ( const void * key, const size_t len,
 }
 
 //-----------------------------------------------------------------------------
-

@@ -2,5 +2,6 @@
     <access_control_improvements>
         <select_from_system_db_requires_grant remove="remove"/>
         <select_from_information_schema_requires_grant remove="remove"/>
+        <select_from_mysql_requires_grant remove="remove"/>
     </access_control_improvements>
 </clickhouse>

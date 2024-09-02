@@ -31,11 +31,11 @@ namespace DB
 /// You should first load system database, then attach system tables that you need into it, then load other databases.
 void loadMetadataSystem(ContextMutablePtr context);
 
-/// Load tables from databases and add them to context. Database 'system' and 'information_schema' is ignored.
+/// Load tables from databases and add them to context. Database 'system' and 'information_schema' and 'mysql' is ignored.
 /// Use separate function to load system tables.
 void loadMetadata(ContextMutablePtr context, const String & default_database_name = {});
 
-void reloadFormatSchema(String remote_format_schema_path,
+void reloadFormatSchema(ContextMutablePtr context, String remote_format_schema_path,
                         String format_schema_path,
                         Poco::Logger * log = nullptr);
 

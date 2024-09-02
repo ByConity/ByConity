@@ -85,6 +85,18 @@ void ParquetBlockOutputFormat::finalize()
         throw Exception{"Error while closing a table: " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION};
 }
 
+void ParquetBlockOutputFormat::customReleaseBuffer()
+{
+    if (file_writer)
+    {
+        auto status = file_writer->Close();
+        if (!status.ok())
+            throw Exception{"Error while closing a table: " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION};
+
+        file_writer.reset();
+    }
+}
+
 void registerOutputFormatProcessorParquet(FormatFactory & factory)
 {
     factory.registerOutputFormatProcessor(

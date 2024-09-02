@@ -61,7 +61,7 @@ public:
     /// Query management:
 
     /// Call from master thread as soon as possible (e.g. when thread accepted connection)
-    static void initializeQuery();
+    static void initializeQuery(MemoryTracker * memory_tracker = nullptr);
 
     /// You must call one of these methods when create a query child thread:
     /// Add current thread to a group associated with the thread group
@@ -88,6 +88,13 @@ public:
         return current_thread->getTransactionId();
     }
 
+    static UInt64 getThreadId()
+    {
+        if (unlikely(!current_thread))
+            return 0;
+        return current_thread->thread_id;
+    }
+
     /// Non-master threads call this method in destructor automatically
     static void detachQuery();
     static void detachQueryIfNotDetached();
@@ -95,7 +102,7 @@ public:
     /// Initializes query with current thread as master thread in constructor, and detaches it in destructor
     struct QueryScope
     {
-        explicit QueryScope(ContextMutablePtr query_context);
+        explicit QueryScope(ContextMutablePtr query_context, MemoryTracker * memory_tracker = nullptr);
         ~QueryScope();
 
         void logPeakMemoryUsage();

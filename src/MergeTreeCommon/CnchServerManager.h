@@ -43,6 +43,7 @@ public:
     ~CnchServerManager();
 
     bool isLeader() const;
+    std::optional<HostWithPorts> getCurrentLeader() const;
 
     void shutDown();
     void partialShutdown();

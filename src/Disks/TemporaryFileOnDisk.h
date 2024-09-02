@@ -30,4 +30,6 @@ private:
 
 using TemporaryFileOnDiskHolder = std::unique_ptr<TemporaryFileOnDisk>;
 
+static const double kDefaultSpillTrigerThreshold = 0.7;
+
 }

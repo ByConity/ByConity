@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {ca_zip ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 9322 rows
+      └─ Gather Exchange Est. 4661 rows
          └─ Sorting Est. 100 rows
             │     Order by: {ca_zip ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 9322 rows
-               └─ Repartition Exchange Est. 9322 rows
+            └─ MergingAggregated Est. 4661 rows
+               └─ Repartition Exchange Est. 4661 rows
                   │     Partition by: {ca_zip}
-                  └─ Aggregating Est. 9322 rows
+                  └─ Aggregating Est. 4661 rows
                      │     Group by: {ca_zip}
                      │     Aggregates: expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
                      └─ Inner (PARALLEL_HASH) Join Est. 70587275 rows
@@ -29,11 +29,13 @@ Projection Est. 100 rows
                         │     │           Where: Runtime Filters: {cs_sold_date_sk}
                         │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_sales_price]
                         │     └─ Broadcast Exchange Est. 90 rows
-                        │        └─ Filter Est. 90 rows
-                        │           │     Condition: (d_qoy = 2) AND (d_year = 2001)
-                        │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                        │                    Where: (d_qoy = 2) AND (d_year = 2001)
-                        │                    Outputs: [d_date_sk, d_year, d_qoy]
+                        │        └─ Projection Est. 90 rows
+                        │           │     Expressions: [d_date_sk]
+                        │           └─ Filter Est. 90 rows
+                        │              │     Condition: (d_qoy = 2) AND (d_year = 2001)
+                        │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                        │                       Where: (d_qoy = 2) AND (d_year = 2001)
+                        │                       Outputs: [d_date_sk, d_year, d_qoy]
                         └─ Repartition Exchange Est. 12000000 rows
                            │     Partition by: {c_customer_sk}
                            └─ Inner (PARALLEL_HASH) Join Est. 12000000 rows

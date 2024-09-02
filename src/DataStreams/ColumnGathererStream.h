@@ -80,8 +80,13 @@ class ColumnGathererStream : public IBlockInputStream
 {
 public:
     ColumnGathererStream(
-        const String & column_name_, const BlockInputStreams & source_streams, ReadBuffer & row_sources_buf_,
-        bool enable_low_cardinality_merge_new_algo_ = true, size_t fallback_threshold = 0, size_t block_preferred_size_ = DEFAULT_BLOCK_SIZE);
+        const String & column_name_,
+        const BlockInputStreams & source_streams,
+        ReadBuffer & row_sources_buf_,
+        size_t block_preferred_size_rows_,
+        size_t block_preferred_size_bytes_,
+        bool enable_low_cardinality_merge_new_algo_ = true,
+        size_t fallback_threshold = 0);
 
     String getName() const override { return "ColumnGatherer"; }
 
@@ -127,6 +132,7 @@ private:
         {
             column = block.getByName(name).column.get();
             size = block.rows();
+            index_map.clear();
             pos = 0;
         }
     };
@@ -140,13 +146,14 @@ private:
     ReadBuffer & row_sources_buf;
     bool enable_low_cardinality_merge_new_algo;
     size_t low_cardinality_fallback_threshold;
-    size_t block_preferred_size;
+    const size_t block_preferred_size_rows;
+    const size_t block_preferred_size_bytes;
     bool is_switch_low_cardinality = false;
     bool is_first_merge = true;
 
     Source * source_to_fully_copy = nullptr;
     Block output_block;
-    MutableColumnPtr cardinalityDict = nullptr;
+    MutableColumnPtr cardinality_dict = nullptr;
 
     Poco::Logger * log;
 };
@@ -166,13 +173,16 @@ void ColumnGathererStream::gather(Column & column_res)
     RowSourcePart * row_source_pos = reinterpret_cast<RowSourcePart *>(row_sources_buf.position());
     RowSourcePart * row_sources_end = reinterpret_cast<RowSourcePart *>(row_sources_buf.buffer().end());
 
-    size_t cur_block_preferred_size = std::min(static_cast<size_t>(row_sources_end - row_source_pos), block_preferred_size);
-    column_res.reserve(cur_block_preferred_size);
+    /// Actually reserve works only for fixed size columns.
+    /// So it's safe to ignore preferred size in bytes and call reserve for number of rows.
+    size_t size_to_reserve = std::min(static_cast<size_t>(row_sources_end - row_source_pos), block_preferred_size_rows);
+    column_res.reserve(size_to_reserve);
 
-    size_t cur_size = 0;
-
-    while (row_source_pos < row_sources_end && cur_size < cur_block_preferred_size)
+    do
     {
+        if (row_source_pos >= row_sources_end)
+            break;
+
         RowSourcePart row_source = *row_source_pos;
         size_t source_num = row_source.getSourceNum();
         Source & source = sources[source_num];
@@ -202,7 +212,7 @@ void ColumnGathererStream::gather(Column & column_res)
             {
                 /// If current block already contains data, return it.
                 /// Whole column from current source will be returned on next read() iteration.
-                if (cur_size > 0)
+                if (column_res.size() > 0)
                 {
                     source_to_fully_copy = &source;
                     return;
@@ -216,12 +226,10 @@ void ColumnGathererStream::gather(Column & column_res)
                 column_res.insertFrom(*source.column, source.pos);
             else
                 column_res.insertRangeFrom(*source.column, source.pos, len);
-
-            cur_size += len;
         }
 
         source.pos += len;
-    }
+    }   while (column_res.size() < block_preferred_size_rows && column_res.allocatedBytes() < block_preferred_size_bytes);
 }
 
 }

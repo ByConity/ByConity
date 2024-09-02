@@ -30,7 +30,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Processors/Pipe.h>
@@ -177,7 +179,7 @@ void IStorage::read(
 }
 
 Pipe IStorage::alterPartition(
-    const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */)
+    const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */, const ASTPtr & /* query */)
 {
     throw Exception("Partition operations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -222,8 +224,11 @@ StorageID IStorage::getStorageID() const
 
 void IStorage::renameInMemory(const StorageID & new_table_id)
 {
+    /// Do not change server_vw_name here
+    auto old_server_vw_name = storage_id.server_vw_name;
     std::lock_guard lock(id_mutex);
     storage_id = new_table_id;
+    storage_id.server_vw_name = old_server_vw_name;
 }
 
 NamesAndTypesList IStorage::getVirtuals() const
@@ -243,16 +248,40 @@ Names IStorage::getAllRegisteredNames() const
 NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
 {
     NameDependencies name_deps;
-    auto dependencies = DatabaseCatalog::instance().getDependencies(storage_id);
-    for (const auto & depend_id : dependencies)
+    std::vector<StoragePtr> dependent_views;
+    if (context->getServerType() == ServerType::cnch_server ||
+        context->getServerType() == ServerType::cnch_daemon_manager)
     {
-        auto depend_table = DatabaseCatalog::instance().getTable(depend_id, context);
-        if (depend_table->getInMemoryMetadataPtr()->select.inner_query)
+        auto start_time = context->getTimestamp();
+        auto catalog_client = context->getCnchCatalog();
+        if (!catalog_client)
+            throw Exception("getDependentViewsByColumn to get catalog client failed", ErrorCodes::LOGICAL_ERROR);
+        dependent_views = catalog_client->getAllViewsOn(*context, std::const_pointer_cast<IStorage>(shared_from_this()), start_time);
+    }
+    else
+    {
+        auto dependencies = DatabaseCatalog::instance().getDependencies(storage_id);
+        for (const auto & depend_id : dependencies)
         {
-            const auto & select_query = depend_table->getInMemoryMetadataPtr()->select.inner_query;
-            auto required_columns = InterpreterSelectQuery(select_query, context, SelectQueryOptions{}.noModify()).getRequiredColumns();
+            auto depend_table = DatabaseCatalog::instance().getTable(depend_id, context);
+            dependent_views.emplace_back(depend_table);
+        }
+    }
+    for (const auto & view : dependent_views)
+    {
+        if (view->getInMemoryMetadataPtr()->select.inner_query)
+        {
+            Names required_columns;
+            const auto & select_query = view->getInMemoryMetadataPtr()->select.inner_query;
+            if (auto * select = select_query->as<ASTSelectWithUnionQuery>())
+            {
+                if (select->list_of_selects->children.size() == 1)
+                    required_columns = InterpreterSelectQuery(select->list_of_selects->children.at(0)->clone(), context, SelectQueryOptions{}.noModify()).getRequiredColumns();
+            }
+            else if (select_query->as<ASTSelectQuery>())
+                required_columns = InterpreterSelectQuery(select_query->clone(), context, SelectQueryOptions{}.noModify()).getRequiredColumns();
             for (const auto & col_name : required_columns)
-                name_deps[col_name].push_back(depend_id.table_name);
+                name_deps[col_name].push_back(view->getTableName());
         }
     }
     return name_deps;
@@ -303,6 +332,22 @@ UInt64 IStorage::getPartColumnsCommitTime(const NamesAndTypesList &search_part_c
             return ts;
     }
     return most_recend_quilified;
+}
+
+ASTPtr IStorage::applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const
+{
+    // only set query.where()
+    auto * select_query = query_info.getSelectQuery();
+
+    if (!PredicateUtils::isTruePredicate(query_filter))
+    {
+        if (auto where = select_query->where())
+            select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(ASTs{query_filter, where}));
+        else
+            select_query->setExpression(ASTSelectQuery::Expression::WHERE, ASTPtr{query_filter});
+    }
+
+    return query_filter;
 }
 
 std::string PrewhereInfo::dump() const

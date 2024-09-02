@@ -16,6 +16,7 @@
 #include "RpcClient.h"
 
 #include <errno.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <fmt/core.h>
@@ -24,8 +25,11 @@
 namespace DB
 {
 
-RpcClient::RpcClient(String host_port_, brpc::ChannelOptions * options)
-    : log(&Poco::Logger::get("RpcClient")), host_port(std::move(host_port_)), brpc_channel(std::make_unique<brpc::Channel>())
+RpcClient::RpcClient(String host_port_, std::function<void()> report_err_, brpc::ChannelOptions * options)
+    : log(&Poco::Logger::get("RpcClient"))
+    , host_port(std::move(host_port_))
+    , report_err(std::move(report_err_))
+    , brpc_channel(std::make_unique<brpc::Channel>())
 {
     initChannel(*brpc_channel, host_port, options);
 }
@@ -35,14 +39,14 @@ void RpcClient::checkAliveWithController(const brpc::Controller & cntl) noexcept
     if (cntl.Failed())
     {
         auto err = cntl.ErrorCode();
-        if (err == EHOSTDOWN || err == ECONNREFUSED || err == ECONNRESET || err == ENETUNREACH || err == ENOTCONN)
-        {
-            ok_.store(false, std::memory_order_relaxed);
-        }
+        if (err == ECONNREFUSED || err == ECONNRESET || err == ENOTCONN)
+            setOk(false);
+        else if (err == EHOSTDOWN || err == ENETUNREACH)
+            reportError();
     }
     else
     {
-        ok_.store(true, std::memory_order_relaxed);
+        setOk(true);
     }
 }
 
@@ -51,16 +55,16 @@ void RpcClient::assertController(const brpc::Controller & cntl, int error_code)
     if (cntl.Failed())
     {
         auto err = cntl.ErrorCode();
-        if (err == EHOSTDOWN || err == ECONNREFUSED || err == ECONNRESET || err == ENETUNREACH || err == ENOTCONN)
-        {
-            ok_.store(false, std::memory_order_relaxed);
-        }
+        if (err == ECONNREFUSED || err == ECONNRESET || err == ENOTCONN)
+            setOk(false);
+        else if (err == EHOSTDOWN || err == ENETUNREACH)
+            reportError();
         throw Exception(
             fmt::format("Fail to call {}, error code: {}, msg: {}", cntl.method()->full_name(), err, cntl.ErrorText()), error_code);
     }
     else
     {
-        ok_.store(true, std::memory_order_relaxed);
+        setOk(true);
     }
 }
 

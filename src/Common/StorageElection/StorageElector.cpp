@@ -88,7 +88,15 @@ bool StorageElector::setRole(Role role_)
         if (role_ == Role::Leader)
         {
             role.store(role_, std::memory_order::release);
-            auto ret = on_leader(curr_leader_host.has_value() ? &curr_leader_host.value() : nullptr);
+            bool ret = false;
+            try
+            {
+                ret = on_leader(curr_leader_host.has_value() ? &curr_leader_host.value() : nullptr);
+            }
+            catch (...)
+            {
+                //We do nothing here because ret==false.
+            }
             if (!ret)
             {
                 LOG_ERROR(
@@ -217,6 +225,10 @@ bool StorageElector::tryUpdateLocalRecord(const Protos::LeaderInfo & remote_info
     last_leader_info_string = remote_info_string;
 
     setRole(new_role);
+    if (new_role == Role::Leader)
+    {
+        expired = isLeaseExpired(remote_info);
+    }
 
     return expired;
 }
@@ -274,17 +286,24 @@ void StorageElector::tryUpdateRemoteRecord(bool refreshed, bool yield)
     if (result.first)
     {
         if (tryUpdateLocalRecord(new_leader_info, leader_info_string, !yield))
+        {
             LOG_WARNING(
                 logger,
-                "It is updated successfully on remote but expired on local: {}, time cost : {}ms",
-                new_leader_info.DebugString(),
-                getCurrentTimeMs() - now);
+                "It is updated successfully on remote but expired on local: time cost : {}ms, {} ",
+                getCurrentTimeMs() - now,
+                new_leader_info.DebugString());
+            if (!yield)
+            {
+                doYield(true);
+            }
+        }
+            
         else if (!refreshed)
             LOG_INFO(
                 logger,
-                "It is updated successfully and not expired: {}, time cost : {}ms",
-                new_leader_info.DebugString(),
-                getCurrentTimeMs() - now);
+                "It is updated successfully and not expired: time cost : {}ms, {}",
+                getCurrentTimeMs() - now,
+                new_leader_info.DebugString());
         else
             LOG_TRACE(logger, "It is refreshed successfully and not expired: {}", new_leader_info.DebugString());
     }
@@ -399,14 +418,22 @@ void StorageElector::doFollowerCheck()
                 if (!expired && leader_info.lease().status() != Protos::LeaderLease::Yield)
                     tryUpdateRemoteRecord(true);
                 else
+                {
                     tryUpdateRemoteRecord(false);
+                    if (role.load(std::memory_order::acquire) != Role::Follower)
+                        sleep_time = std::chrono::milliseconds::zero();
+                }
             }
             else
             {
                 bool expired = tryUpdateLocalRecord(leader_info, result, false);
                 // Try to be the leader
                 if (expired)
+                {
                     tryUpdateRemoteRecord(false);
+                    if (role.load(std::memory_order::acquire) != Role::Follower)
+                        sleep_time = std::chrono::milliseconds::zero();
+                }
             }
 
             initted = true;
@@ -426,12 +453,12 @@ void StorageElector::doFollowerCheck()
 void StorageElector::doYield(bool soft)
 {
     // Even cas failed, the node should be switched to follower first.
+    if (role != Role::Leader)
+        return;
     {
         std::lock_guard lock(leader_host_mutex);
         curr_leader_host.reset();
     }
-    if (role != Role::Leader)
-        return;
 
     setRole(Role::Follower);
      // You can not try to become a leader immediately. Wait for a longer time.

@@ -10,7 +10,7 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#count():=AggNull(count)()
-               └─ Inner Join Est. 2785801 rows
+               └─ Inner Join Est. 2763691 rows
                   │     Condition: ss_store_sk == s_store_sk
                   │     Runtime Filters Builder: {s_store_sk}
                   ├─ Inner Join Est. 11076876 rows
@@ -25,21 +25,27 @@ Projection Est. 1 rows
                   │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_time_sk, ss_store_sk}
                   │  │  │           Outputs: [ss_sold_time_sk, ss_hdemo_sk, ss_store_sk]
                   │  │  └─ Broadcast Exchange Est. 1800 rows
-                  │  │     └─ Filter Est. 1800 rows
-                  │  │        │     Condition: (t_hour = 20) AND (t_minute >= 30)
-                  │  │        └─ TableScan tpcds1000.time_dim Est. 86400 rows
-                  │  │                 Where: (t_hour = 20) AND (t_minute >= 30)
-                  │  │                 Outputs: [t_time_sk, t_hour, t_minute]
+                  │  │     └─ Projection Est. 1800 rows
+                  │  │        │     Expressions: [t_time_sk]
+                  │  │        └─ Filter Est. 1800 rows
+                  │  │           │     Condition: (t_hour = 20) AND (t_minute >= 30)
+                  │  │           └─ TableScan tpcds1000.time_dim Est. 86400 rows
+                  │  │                    Where: (t_hour = 20) AND (t_minute >= 30)
+                  │  │                    Outputs: [t_time_sk, t_hour, t_minute]
                   │  └─ Broadcast Exchange Est. 720 rows
-                  │     └─ Filter Est. 720 rows
-                  │        │     Condition: hd_dep_count = 7
-                  │        └─ TableScan tpcds1000.household_demographics Est. 7200 rows
-                  │                 Where: hd_dep_count = 7
-                  │                 Outputs: [hd_demo_sk, hd_dep_count]
-                  └─ Broadcast Exchange Est. 126 rows
-                     └─ Filter Est. 126 rows
-                        │     Condition: s_store_name = 'ese'
-                        └─ TableScan tpcds1000.store Est. 1002 rows
-                                 Where: s_store_name = 'ese'
-                                 Outputs: [s_store_sk, s_store_name]
+                  │     └─ Projection Est. 720 rows
+                  │        │     Expressions: [hd_demo_sk]
+                  │        └─ Filter Est. 720 rows
+                  │           │     Condition: hd_dep_count = 7
+                  │           └─ TableScan tpcds1000.household_demographics Est. 7200 rows
+                  │                    Where: hd_dep_count = 7
+                  │                    Outputs: [hd_demo_sk, hd_dep_count]
+                  └─ Broadcast Exchange Est. 125 rows
+                     └─ Projection Est. 125 rows
+                        │     Expressions: [s_store_sk]
+                        └─ Filter Est. 125 rows
+                           │     Condition: s_store_name = 'ese'
+                           └─ TableScan tpcds1000.store Est. 1002 rows
+                                    Where: s_store_name = 'ese'
+                                    Outputs: [s_store_sk, s_store_name]
 note: Runtime Filter is applied for 3 times.

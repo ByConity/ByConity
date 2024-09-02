@@ -1,13 +1,16 @@
 #include <ctime>
 #include <memory>
-#include <Storages/MergeTree/MergeTreePrefetchedReaderCNCH.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+
+#include <Common/escapeForFileName.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataTypes/ObjectUtils.h>
-#include "MarkRange.h"
-#include "MergeTreeIOSettings.h"
-#include "MergeTreeIndexGranularityInfo.h"
-#include "MergeTreePrefetchedReaderCNCH.h"
-#include "MergeTreeSuffix.h"
+#include <Storages/MergeTree/MarkRange.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/MergeTree/MergeTreeIOSettings.h>
+#include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
+#include <Storages/MergeTree/MergeTreePrefetchedReaderCNCH.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 
 namespace DB
 {
@@ -48,7 +51,33 @@ MergeTreePrefetchedReaderCNCH::MergeTreePrefetchedReaderCNCH(
         for (const NameAndTypePair & column : columns)
         {
             auto column_in_part = getColumnFromPart(column);
-            addStreams(column_in_part, profile_callback_, clock_type_, &mocked_index_granularity_info);
+            if (column_in_part.type->isByteMap())
+            {
+                auto checksums = data_part->getChecksums();
+                auto implicit_value_type = typeid_cast<const DataTypeMap &>(*column_in_part.type.get()).getValueTypeForImplicitColumn();
+                auto serialization = implicit_value_type->getDefaultSerialization();
+
+                auto [curr, end] = getMapColumnRangeFromOrderedFiles(column_in_part.name, checksums->files);
+                for (; curr != end; ++curr)
+                {
+                    if (curr->second.is_deleted || !isMapImplicitDataFileNameNotBaseOfSpecialMapName(curr->first, column_in_part.name))
+                        continue;
+                    const String & implicit_key_name = parseImplicitColumnFromImplicitFileName(curr->first, column_in_part.name);
+                    const String & key_name = parseKeyNameFromImplicitFileName(curr->first, column_in_part.name);
+                    // Special handing if implicit key is referenced too
+                    if (columns.contains(implicit_key_name))
+                    {
+                        dup_implicit_keys.insert(implicit_key_name);
+                    }
+
+                    addStreams({implicit_key_name, implicit_value_type}, profile_callback_, clock_type_, &mocked_index_granularity_info);
+                    map_column_keys.insert({column_in_part.name, key_name});
+                }
+            }
+            else
+            {
+                addStreams(column_in_part, profile_callback_, clock_type_, &mocked_index_granularity_info);
+            }
         }
     }
     catch (...)

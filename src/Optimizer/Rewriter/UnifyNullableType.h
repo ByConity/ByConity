@@ -19,6 +19,7 @@
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SimplePlanRewriter.h>
+#include "QueryPlan/PlanNode.h"
 
 namespace DB
 {
@@ -47,23 +48,19 @@ private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().join_use_nulls; }
 };
 
-class UnifyNullableVisitor : public SimplePlanRewriter<Void>
+class UnifyNullableVisitor : public PlanNodeVisitor<PlanNodePtr, ContextMutablePtr>
 {
 public:
-    UnifyNullableVisitor(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_) { }
-    PlanNodePtr visitProjectionNode(ProjectionNode &, Void &) override;
-    PlanNodePtr visitFilterNode(FilterNode &, Void &) override;
-    PlanNodePtr visitJoinNode(JoinNode &, Void &) override;
-    PlanNodePtr visitAggregatingNode(AggregatingNode &, Void &) override;
-    PlanNodePtr visitWindowNode(WindowNode &, Void &) override;
-    PlanNodePtr visitUnionNode(UnionNode &, Void &) override;
-    PlanNodePtr visitExchangeNode(ExchangeNode &, Void &) override;
-    PlanNodePtr visitPartialSortingNode(PartialSortingNode &, Void &) override;
-    PlanNodePtr visitMergeSortingNode(MergeSortingNode &, Void &) override;
-    PlanNodePtr visitLimitNode(LimitNode &, Void &) override;
-    PlanNodePtr visitEnforceSingleRowNode(EnforceSingleRowNode &, Void &) override;
-    PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode &, Void &) override;
-    PlanNodePtr visitCTERefNode(CTERefNode &, Void &) override;
+    UnifyNullableVisitor(CTEInfo & cte_info_, PlanNodePtr & ) : cte_helper(cte_info_){}
+
+    PlanNodePtr visitPlanNode(PlanNodeBase & node, ContextMutablePtr & context) override;
+
+#define VISITOR_DEF(TYPE) PlanNodePtr visit##TYPE##Node(TYPE##Node &, ContextMutablePtr &) override;
+    APPLY_STEP_TYPES(VISITOR_DEF)
+#undef VISITOR_DEF
+
+private:
+    SimpleCTEVisitHelper<PlanNodePtr> cte_helper;
 };
 
 }

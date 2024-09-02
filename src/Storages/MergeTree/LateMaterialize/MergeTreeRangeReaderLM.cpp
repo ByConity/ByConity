@@ -188,7 +188,7 @@ static ColumnPtr combineFilterEqualSize(ColumnPtr first, ColumnPtr second)
 
     if (first_const_descr.always_true)
         return second;
-    
+
     if (first_const_descr.always_false)
         return first;
 
@@ -305,6 +305,7 @@ int MergeTreeRangeReaderLM::evaluatePredicateAndCombine(ReadResult & result)
         else
         {
             filter = result.columns[filter_column_pos];
+            result.filter_type = block.getByPosition(filter_column_pos).type;
             result.last_filter_column_pos = filter_column_pos;
         }
     }
@@ -368,8 +369,8 @@ ReadResult MergeTreeRangeReaderLM::read(MarkRanges & ranges, bool need_filter)
                 if (read_result.bitmap_block.rows() > 0)
                     filterBlock(read_result.bitmap_block, read_result.getFilterHolder(), popcnt);
                 read_result.num_rows = filter_ret_num == popcnt ? popcnt : filter_ret_num;
-                if (read_result.last_filter_column_pos >= 0)
-                    read_result.columns[read_result.last_filter_column_pos] = DataTypeUInt8().createColumnConst(read_result.num_rows, 1u);
+                if (read_result.last_filter_column_pos >= 0 && read_result.columns.size() > static_cast<size_t>(read_result.last_filter_column_pos))
+                    read_result.columns[read_result.last_filter_column_pos] = read_result.filter_type->createColumnConst(read_result.num_rows, 1u);
                 read_result.clearFilter();
             }
         }

@@ -87,6 +87,10 @@ struct PartitionCommand
     /// true for DETACH/DROP STAGED PARTITION/PART, only used by unique table
     bool staging_area = false;
 
+    /// true for DETACH/ATTACH PARTITION xxx BUCKET xxx
+    bool specify_bucket = false;
+    UInt64 bucket_number;
+
     /// For ATTACH PARTITION partition FROM db.table
     String from_database;
     String from_table;
@@ -105,6 +109,7 @@ struct PartitionCommand
     /// columns for INGEST PARTITION
     Names column_names;
     Names key_names;
+    std::vector<Int64> bucket_nums;
 
     /// expression for sample / split / resharding
     ASTPtr sharding_exp;
@@ -116,6 +121,7 @@ struct PartitionCommand
     {
         DISK,
         VOLUME,
+        BYTECOOL,
         TABLE,
         SHARD,
     };

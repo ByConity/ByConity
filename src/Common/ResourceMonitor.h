@@ -14,8 +14,10 @@
  */
 
 #pragma once
-#include <string>
 #include <optional>
+#include <string>
+#include <time.h>
+
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
 #include <boost/circular_buffer.hpp>
@@ -104,7 +106,10 @@ private:
 class ResourceMonitor : protected WithContext
 {
 public:
-    explicit ResourceMonitor(const ContextPtr global_context_): WithContext(global_context_), mem_monitor(), cpu_monitor() {}
+    explicit ResourceMonitor(const ContextPtr global_context_) : WithContext(global_context_), mem_monitor(), cpu_monitor()
+    {
+        start_time = time(nullptr);
+    }
 
     WorkerNodeResourceData createResourceData(bool init = false);
 
@@ -120,6 +125,7 @@ private:
 private:
     MemoryMonitor mem_monitor;
     CPUMonitor cpu_monitor;
+    UInt32 start_time;
 };
 
 }

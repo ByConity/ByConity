@@ -29,23 +29,6 @@ INSERT INTO funnel_test_2 (timestamp, event, prop) values (129600,1000,'a'),(143
 -- 144000              1970-01-02 04:00:00     1970-01-03 00:00:00
 -- 172800              1970-01-03 00:00:00     1970-01-03 08:00:00
 -- 216000              1970-01-03 12:00:00     1970-01-03 20:00:00
-<<<<<<< HEAD
-SELECT uid, finderFunnel(86400, 129600, 86400, 1)(timestamp, timestamp, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 129600, 86400, 1, 1, 'Asia/Shanghai')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 129600, 86400, 1, 1, 'Etc/GMT')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-
-SELECT uid, finderFunnel(86400, 129600, 86400, 1)(timestamp, timestamp, event = 1000, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 129600, 86400, 1, 1, 'Asia/Shanghai')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 129600, 86400, 1, 1, 'Etc/GMT')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-
-SELECT uid, finderFunnel(86400, 129600, 86400, 2)(timestamp, timestamp, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 129600, 86400, 2, 1, 'Asia/Shanghai')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 129600, 86400, 2, 1, 'Etc/GMT')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-
-SELECT uid, finderFunnel(86400, 129600, 86400, 2)(timestamp, timestamp, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 57600, 86400, 2, 1, 'Asia/Shanghai')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(86400000, 86400, 86400, 2, 1, 'Etc/GMT')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test GROUP BY uid;
-=======
 SELECT uid, finderFunnel(86400, 129600, 86400, 1)(timestamp, timestamp, event = 1000, event = 1001, event = 1002) FROM funnel_test_2 GROUP BY uid;
 SELECT uid, finderFunnel(86400000, 129600, 86400, 1, 1, 'Asia/Shanghai')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test_2 GROUP BY uid;
 SELECT uid, finderFunnel(86400000, 129600, 86400, 1, 1, 'Etc/GMT')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test_2 GROUP BY uid;
@@ -61,31 +44,12 @@ SELECT uid, finderFunnel(86400000, 129600, 86400, 2, 1, 'Etc/GMT')(timestamp, ti
 SELECT uid, finderFunnel(86400, 129600, 86400, 2)(timestamp, timestamp, event = 1000, event = 1001, event = 1002) FROM funnel_test_2 GROUP BY uid;
 SELECT uid, finderFunnel(86400000, 57600, 86400, 2, 1, 'Asia/Shanghai')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test_2 GROUP BY uid;
 SELECT uid, finderFunnel(86400000, 86400, 86400, 2, 1, 'Etc/GMT')(timestamp, timestamp*1000, event = 1000, event = 1001, event = 1002) FROM funnel_test_2 GROUP BY uid;
->>>>>>> f74a4646cf5 (Merge branch 'fix_finiderfunnel_cnch2.0' into 'cnch-ce-merge')
 
 DROP TABLE IF EXISTS funnel_test_3;
 CREATE TABLE funnel_test_3 (uid UInt32 default 1, timestamp UInt64, event UInt32, prop String) engine=CnchMergeTree() order by uid;
 INSERT INTO funnel_test_3 (timestamp, event, prop) values
 (86400, 1001, 'a'),(86401, 1002, 'b'), (86402, 1001, 'b'), (86403, 1003, 'b'), (86404, 1001, 'a'), (86405, 1001, 'd'), (86406, 1002, 'd'), (86407, 1003, 'b'), (86408, 1004, 'd'), (86410, 1003, 'f'), (86413, 1001, 'w');
 
-<<<<<<< HEAD
-SELECT uid, finderFunnel(5, 86400, 1, 14, 7)(timestamp, timestamp, prop, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 5)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 6)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 10)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 14)(timestamp, timestamp, prop, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14)(timestamp, timestamp, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-
-
-SELECT uid, finderFunnel(5, 86400, 1, 14, 7, 0, 'Asia/Shanghai', 1)(timestamp, timestamp, prop, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 5, 0, 'Asia/Shanghai', 1)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 6, 0, 'Asia/Shanghai', 1)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 10, 0, 'Asia/Shanghai', 1)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 14, 0, 'Asia/Shanghai', 1)(timestamp, timestamp, prop, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-SELECT uid, finderFunnel(5, 86400, 1, 14, 0, 0, 'Asia/Shanghai', 1)(timestamp, timestamp, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test GROUP BY uid;
-
-DROP TABLE funnel_test;
-=======
 SELECT uid, finderFunnel(5, 86400, 1, 14, 7)(timestamp, timestamp, prop, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test_3 GROUP BY uid;
 SELECT uid, finderFunnel(5, 86400, 1, 14, 5)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test_3 GROUP BY uid;
 SELECT uid, finderFunnel(5, 86400, 1, 14, 6)(timestamp, timestamp, prop, prop, event = 1001, event = 1002, event = 1003, event = 1004) FROM funnel_test_3 GROUP BY uid;
@@ -103,7 +67,6 @@ SELECT uid, finderFunnel(5, 86400, 1, 14, 0, 0, 'Asia/Shanghai', 1)(timestamp, t
 DROP TABLE funnel_test;
 DROP TABLE funnel_test_2;
 DROP TABLE funnel_test_3;
->>>>>>> f74a4646cf5 (Merge branch 'fix_finiderfunnel_cnch2.0' into 'cnch-ce-merge')
 
 DROP TABLE IF EXISTS tob_apps_test;
 CREATE TABLE tob_apps_test
@@ -133,8 +96,6 @@ SELECT finderFunnel(60000, 1671408000, 86400, 3, 3, 0, 'UTC')(if(time > 20000000
 DROP TABLE tob_apps_test;
 
 -- for step execute
-<<<<<<< HEAD
-=======
 
 -- for same event
 DROP TABLE IF EXISTS test_funnel1;
@@ -151,4 +112,3 @@ SELECT finderFunnel(0, 1682870400, 86400000, 25, 0, 1, 'Asia/Shanghai', 1)(toUIn
 
 DROP TABLE IF EXISTS test_funnel1;
 DROP TABLE IF EXISTS test_funnel2;
->>>>>>> f74a4646cf5 (Merge branch 'fix_finiderfunnel_cnch2.0' into 'cnch-ce-merge')

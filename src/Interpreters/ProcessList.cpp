@@ -29,6 +29,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/queryNormalization.h>
+#include <common/types.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/LabelledMetrics.h>
@@ -72,6 +73,7 @@ namespace ErrorCodes
     extern const int TIMEOUT_EXCEEDED;
     extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
     extern const int QUERY_WAS_CANCELLED;
+    extern const int QUERY_WAS_CANCELLED_INTERNAL;
 }
 
 
@@ -165,6 +167,9 @@ static CurrentMetrics::Metric getQueryTypeMetric(ProcessListQueryType & query_ty
 
 static bool isMonitoredCnchQuery(const IAST * ast)
 {
+    if (!ast)
+        return false;
+
     if (const auto * create_ast = ast->as<ASTCreateQuery>(); create_ast && create_ast->select)
     {
         return true;
@@ -238,7 +243,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
     }
 
     if (resource_group != nullptr)
-        group_it = resource_group->run(query_, *query_context);
+        group_it = resource_group->run(query_, query_context);
 
     {
         {
@@ -280,67 +285,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
                     ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
         }
 
-        /** Why we use current user?
-          * Because initial one is passed by client and credentials for it is not verified,
-          *  and using initial_user for limits will be insecure.
-          *
-          * Why we use current_query_id?
-          * Because we want to allow distributed queries that will run multiple secondary queries on same server,
-          *  like SELECT count() FROM remote('127.0.0.{1,2}', system.numbers)
-          *  so they must have different query_ids.
-          */
-
-        {
-            std::unique_lock lock(mutex);
-            auto user_process_list = user_to_queries.find(client_info.current_user);
-
-            if (user_process_list != user_to_queries.end())
-            {
-                if (!is_unlimited_query && settings.max_concurrent_queries_for_user
-                    && user_process_list->second.queries.size() >= settings.max_concurrent_queries_for_user)
-                    throw Exception("Too many simultaneous queries for user " + client_info.current_user
-                        + ". Current: " + toString(user_process_list->second.queries.size())
-                        + ", maximum: " + settings.max_concurrent_queries_for_user.toString(),
-                        ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
-
-                auto running_query = user_process_list->second.queries.find(client_info.current_query_id);
-
-                if (running_query != user_process_list->second.queries.end())
-                {
-                    if (!force && !settings.replace_running_query)
-                        throw Exception("Query with id = " + client_info.current_query_id + " is already running.",
-                            ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
-
-                    /// Ask queries to cancel. They will check this flag.
-                    running_query->second->is_killed.store(true, std::memory_order_relaxed);
-
-                    const auto replace_running_query_max_wait_ms = settings.replace_running_query_max_wait_ms.totalMilliseconds();
-                    if (!replace_running_query_max_wait_ms || !have_space.wait_for(lock, std::chrono::milliseconds(replace_running_query_max_wait_ms),
-                        [&]
-                        {
-                            running_query = user_process_list->second.queries.find(client_info.current_query_id);
-                            if (running_query == user_process_list->second.queries.end())
-                                return true;
-                            running_query->second->is_killed.store(true, std::memory_order_relaxed);
-                            return false;
-                        }))
-                    {
-                        throw Exception("Query with id = " + client_info.current_query_id + " is already running and can't be stopped",
-                            ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
-                    }
-                 }
-            }
-
-            /// Check other users running query with our query_id
-            for (const auto & process_list_for_user : user_to_queries)
-            {
-                if (process_list_for_user.first == client_info.current_user)
-                    continue;
-                if (auto running_query = process_list_for_user.second.queries.find(client_info.current_query_id); running_query != process_list_for_user.second.queries.end())
-                    throw Exception("Query with id = " + client_info.current_query_id + " is already running by user " + process_list_for_user.first,
-                        ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
-            }
-        }
+        checkRunningQuery(query_context, is_unlimited_query, force);
 
         CurrentMetrics::Metric query_type_metric = getQueryTypeMetric(query_type);
         auto query_status = std::make_shared<QueryStatus>(query_context, query_, client_info, priorities.insert(settings.priority),
@@ -422,6 +367,70 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
     return res;
 }
 
+void ProcessList::checkRunningQuery(ContextPtr query_context, bool is_unlimited_query, bool force)
+{
+    /** Why we use current user?
+      * Because initial one is passed by client and credentials for it is not verified,
+      *  and using initial_user for limits will be insecure.
+      *
+      * Why we use current_query_id?
+      * Because we want to allow distributed queries that will run multiple secondary queries on same server,
+      *  like SELECT count() FROM remote('127.0.0.{1,2}', system.numbers)
+      *  so they must have different query_ids.
+      */
+    
+    const ClientInfo & client_info = query_context->getClientInfo();
+    const Settings & settings = query_context->getSettingsRef();
+    std::unique_lock lock(mutex);
+    auto user_process_list = user_to_queries.find(client_info.current_user);
+
+    if (user_process_list != user_to_queries.end())
+    {
+        if (!is_unlimited_query && settings.max_concurrent_queries_for_user
+            && user_process_list->second.queries.size() >= settings.max_concurrent_queries_for_user)
+            throw Exception("Too many simultaneous queries for user " + client_info.current_user
+                + ". Current: " + toString(user_process_list->second.queries.size())
+                + ", maximum: " + settings.max_concurrent_queries_for_user.toString(),
+                ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
+
+        auto running_query = user_process_list->second.queries.find(client_info.current_query_id);
+
+        if (running_query != user_process_list->second.queries.end())
+        {
+            if (!force && !settings.replace_running_query)
+                throw Exception("Query with id = " + client_info.current_query_id + " is already running.",
+                    ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
+
+            /// Ask queries to cancel. They will check this flag.
+            running_query->second->is_killed.store(QueryStatus::EXTERNAL_KILL_BIT, std::memory_order_relaxed);
+
+            const auto replace_running_query_max_wait_ms = settings.replace_running_query_max_wait_ms.totalMilliseconds();
+            if (!replace_running_query_max_wait_ms || !have_space.wait_for(lock, std::chrono::milliseconds(replace_running_query_max_wait_ms),
+                [&]
+                {
+                    running_query = user_process_list->second.queries.find(client_info.current_query_id);
+                    if (running_query == user_process_list->second.queries.end())
+                        return true;
+                    running_query->second->is_killed.store(QueryStatus::EXTERNAL_KILL_BIT, std::memory_order_relaxed);
+                    return false;
+                }))
+            {
+                throw Exception("Query with id = " + client_info.current_query_id + " is already running and can't be stopped",
+                    ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
+            }
+         }
+    }
+
+    /// Check other users running query with our query_id
+    for (const auto & process_list_for_user : user_to_queries)
+    {
+        if (process_list_for_user.first == client_info.current_user)
+            continue;
+        if (auto running_query = process_list_for_user.second.queries.find(client_info.current_query_id); running_query != process_list_for_user.second.queries.end())
+            throw Exception("Query with id = " + client_info.current_query_id + " is already running by user " + process_list_for_user.first,
+                ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
+    }
+}
 
 ProcessListEntry::~ProcessListEntry()
 {
@@ -541,8 +550,9 @@ bool QueryStatus::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStream
     return true;
 }
 
-CancellationCode QueryStatus::cancelQuery(bool kill)
+CancellationCode QueryStatus::cancelQuery(bool kill, bool internal)
 {
+    UInt8 kill_flag = internal ? INTERNAL_KILL_BIT : EXTERNAL_KILL_BIT;
     {
         std::lock_guard lock(executors_mutex);
         if (!executors.empty())
@@ -550,7 +560,7 @@ CancellationCode QueryStatus::cancelQuery(bool kill)
             if (is_killed.load())
                 return CancellationCode::CancelSent;
 
-            is_killed.store(true);
+            is_killed.store(kill_flag);
 
             for (auto * e : executors)
                 e->cancel();
@@ -576,7 +586,7 @@ CancellationCode QueryStatus::cancelQuery(bool kill)
         return CancellationCode::CancelCannotBeSent;
     }
     /// Query is not even started
-    is_killed.store(true);
+    is_killed.store(kill_flag);
     return CancellationCode::CancelSent;
 }
 
@@ -646,8 +656,11 @@ void QueryStatus::throwKilledException()
 
 bool QueryStatus::checkTimeLimit()
 {
-    if (is_killed.load())
-        throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+    if (auto kill_flag = is_killed.load(); kill_flag)
+    {
+        throw Exception(
+            "Query was cancelled", kill_flag & INTERNAL_KILL_BIT ? ErrorCodes::QUERY_WAS_CANCELLED_INTERNAL : ErrorCodes::QUERY_WAS_CANCELLED);
+    }
 
     return limits.checkTimeLimit(watch, overflow_mode);
 }
@@ -722,7 +735,7 @@ CancellationCode ProcessList::sendCancelToQuery(const String & current_query_id,
         cancelled_cv.notify_all();
     });
 
-    return elem->cancelQuery(kill);
+    return elem->cancelQuery(kill, false);
 }
 
 
@@ -751,7 +764,16 @@ void ProcessList::killAllQueries()
     }
 
     for (auto & cancelled_process : cancelled_processes)
-        cancelled_process->cancelQuery(true);
+    {
+        try
+        {
+            cancelled_process->cancelQuery(true, false);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__, "Kill query failed with id: "+ cancelled_process->client_info.current_query_id + "");
+        }
+    }
 }
 
 

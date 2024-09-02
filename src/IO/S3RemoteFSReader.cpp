@@ -10,7 +10,10 @@
 #include <common/sleep.h>
 #include <Poco/Logger.h>
 
-namespace ProfileEvents {
+namespace ProfileEvents 
+{
+    extern const Event S3GetObject;
+
     extern const Event S3TrivialReaderReadCount;
     extern const Event S3TrivialReaderReadMicroseconds;
     extern const Event S3TrivialReaderReadBytes;
@@ -63,6 +66,7 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
     req.SetKey(key_);
     req.SetRange(range);
 
+    ProfileEvents::increment(ProfileEvents::S3GetObject);
     std::optional<Aws::S3::Model::GetObjectResult> result;
     bool all_data_read = false;
     SCOPE_EXIT_SAFE({ S3::resetSessionIfNeeded(all_data_read, result); });
@@ -193,6 +197,7 @@ bool S3ReadAheadReader::refillBuffer()
     req.SetKey(key_);
     req.SetRange(range);
 
+    ProfileEvents::increment(ProfileEvents::S3GetObject);
     Aws::S3::Model::GetObjectOutcome outcome = client_->GetObject(req);
 
     if (outcome.IsSuccess())

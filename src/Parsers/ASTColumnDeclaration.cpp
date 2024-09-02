@@ -86,7 +86,13 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
 
         type->formatImpl(settings, state, type_frame);
 
-        if (settings.dialect_type == DialectType::ANSI && !null_modifier && !type->as<ASTDataType>())
+        if (unsigned_modifier)
+        {
+            settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "")
+                        << (*unsigned_modifier ? "UNSIGNED" : "SIGNED ") << (settings.hilite ? hilite_none : "");
+        }
+
+        if ((settings.dialect_type != DialectType::CLICKHOUSE) && !null_modifier && !type->as<ASTDataType>())
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "")
                           << " NOT NULL" << (settings.hilite ? hilite_none : "");

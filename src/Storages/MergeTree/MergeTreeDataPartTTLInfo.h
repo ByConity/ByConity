@@ -71,6 +71,7 @@ struct MergeTreeDataPartTTLInfos
     /// to merge in order to remove expired rows.
     time_t part_min_ttl = 0;
     time_t part_max_ttl = 0;
+    std::optional<bool> part_finished = std::nullopt;
 
     TTLInfoMap rows_where_ttl;
 
@@ -87,6 +88,7 @@ struct MergeTreeDataPartTTLInfos
     void write(WriteBuffer & out) const;
     void update(const MergeTreeDataPartTTLInfos & other_infos);
 
+    void evalPartFinished();
     /// Has any TTLs which are not calculated on completely expired parts.
     bool hasAnyNonFinishedTTLs() const;
 

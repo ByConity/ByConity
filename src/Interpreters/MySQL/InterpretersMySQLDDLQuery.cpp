@@ -400,6 +400,7 @@ static ASTPtr getOrderByPolicy(
     return order_by_expression;
 }
 
+// TODO: previous version throws exception for like_table. consider add extra check in upper layer or throw exception
 void InterpreterCreateImpl::validate(const InterpreterCreateImpl::TQuery & create_query, ContextPtr)
 {
     /// This is dangerous, because the like table may not exists in ClickHouse
@@ -412,6 +413,7 @@ void InterpreterCreateImpl::validate(const InterpreterCreateImpl::TQuery & creat
         throw Exception("Missing definition of columns.", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED);
 }
 
+// TODO: move to a new file
 static ASTPtr tryGetTableOverride(const String & mapped_database, const String & table, ContextPtr context)
 {
     if (auto database_ptr = DatabaseCatalog::instance().tryGetDatabase(mapped_database, context))
@@ -453,7 +455,7 @@ ASTs InterpreterCreateImpl::getRewrittenQueries(
 
     auto columns = std::make_shared<ASTColumns>();
     auto dialect_type = ParserSettings::valueOf(context->getSettingsRef().dialect_type);
-    columns->set(columns->columns, InterpreterCreateQuery::formatColumns(columns_description, dialect_type));
+columns->set(columns->columns, InterpreterCreateQuery::formatColumns(columns_description, dialect_type));
 
     auto storage = std::make_shared<ASTStorage>();
 

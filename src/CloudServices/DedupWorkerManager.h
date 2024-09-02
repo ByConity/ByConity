@@ -17,6 +17,8 @@
 
 #include <CloudServices/ICnchBGThread.h>
 #include <CloudServices/CnchWorkerClientPools.h>
+#include <CloudServices/DedupScheduler.h>
+#include <CloudServices/DedupDataChecker.h>
 #include <CloudServices/DedupWorkerStatus.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/VirtualWarehousePool.h>
@@ -45,29 +47,61 @@ public:
      */
     DedupWorkerHeartbeatResult reportHeartbeat(const String & worker_table_name);
 
-    DedupWorkerStatus getDedupWorkerStatus();
+    std::vector<DedupWorkerStatus> getDedupWorkerStatus();
+
+    void dedupWithHighPriority(const ASTPtr & partition, const ContextPtr & local_context);
+
+    struct DeduperInfo
+    {
+        /// Make sure worker_storage_id does not contain uuid as there may be multi dedup workers on the same Cnch-Worker side
+        DeduperInfo(size_t index_, const StorageID & storage_id_):
+            index(index_),
+            worker_storage_id(storage_id_.getDatabaseName(), storage_id_.getTableName()) {}
+
+        DeduperInfo(const DeduperInfo & other):
+            is_running(other.is_running),
+            index(other.index),
+            worker_client(other.worker_client),
+            worker_storage_id(other.worker_storage_id) {}
+
+        mutable bthread::Mutex mutex;
+        bool is_running{false};
+        size_t index{0};
+        CnchWorkerClientPtr worker_client;
+        StorageID worker_storage_id;
+    };
+    using DeduperInfoPtr = std::shared_ptr<DeduperInfo>;
 
 private:
 
     void clearData() override;
 
-    void iterate(StoragePtr & istorage);
+    void iterate(StoragePtr & storage, StorageCnchMergeTree & cnch_table);
 
-    void assignDeduperToWorker(StoragePtr & cnch_table);
+    void initialize(StoragePtr & storage, StorageCnchMergeTree & cnch_table);
 
-    /// caller must hold lock of worker_client_mutex.
-    void selectDedupWorker(StorageCnchMergeTree & cnch_table);
+    void createDeduperOnWorker(StoragePtr & storage, StorageCnchMergeTree & cnch_table, DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock);
 
-    void stopDeduperWorker();
+    void selectDedupWorker(StorageCnchMergeTree & cnch_table, DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock);
 
-    bool checkDedupWorkerStatus(StoragePtr & storage);
+    void markDedupWorker(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock);
 
-    String getDedupWorkerDebugInfo();
+    void stopDeduperWorker(DeduperInfoPtr & info);
 
-    mutable bthread::Mutex worker_client_mutex;
-    CnchWorkerClientPtr worker_client;
-    StorageID worker_storage_id;
+    bool checkDedupWorkerStatus(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock);
 
+    static void assignHighPriorityDedupPartition(DeduperInfoPtr & info, const Names & high_priority_partition, std::unique_lock<bthread::Mutex> & info_lock);
+    static void unsetWorkerClient(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock);
+    static void assignRepairGran(DeduperInfoPtr & info, const DedupGran & dedup_gran, const UInt64 & max_event_time, std::unique_lock<bthread::Mutex> & info_lock);
+    static String getDedupWorkerDebugInfo(DeduperInfoPtr & info, std::unique_lock<bthread::Mutex> & info_lock);
+
+    mutable bthread::Mutex deduper_infos_mutex;
+    std::atomic<bool> initialized{false};
+    std::vector<DeduperInfoPtr> deduper_infos;
+    std::shared_ptr<DedupScheduler> dedup_scheduler;
+
+    /// Check if data duplication in background.
+    std::shared_ptr<DedupDataChecker> data_checker;
 };
 
 }

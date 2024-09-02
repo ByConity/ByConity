@@ -36,13 +36,9 @@ ExpressionTransform
   (Limit)
   Limit
     (Sorting)
-    MergeSortingTransform
-      LimitsCheckingTransform
-        PartialSortingTransform
-          (RemoteExchangeSource)
-          Source segment_id : [ 1 ]
-          DeserializeBufTransform
-            ExchangeSource 0 → 1
+      (RemoteExchangeSource)
+      Source segment_id : [ 1 ]
+      ExchangeSource 0 → 1
 
 ------------------------------------------
 EXPLAIN PIPELINE SELECT i2, count() as cnt
@@ -82,13 +78,9 @@ ExpressionTransform
   (Limit)
   Limit
     (Sorting)
-    MergeSortingTransform
-      LimitsCheckingTransform
-        PartialSortingTransform
-          (RemoteExchangeSource)
-          Source segment_id : [ 1 ]
-          DeserializeBufTransform
-            ExchangeSource 0 → 1
+      (RemoteExchangeSource)
+      Source segment_id : [ 1 ]
+      ExchangeSource 0 → 1
 
 ------------------------------------------
 -- prefix can also be matched
@@ -128,13 +120,9 @@ ExpressionTransform
   (Limit)
   Limit
     (Sorting)
-    MergeSortingTransform
-      LimitsCheckingTransform
-        PartialSortingTransform
-          (RemoteExchangeSource)
-          Source segment_id : [ 1 ]
-          DeserializeBufTransform
-            ExchangeSource 0 → 1
+      (RemoteExchangeSource)
+      Source segment_id : [ 1 ]
+      ExchangeSource 0 → 1
 
 ------------------------------------------
 EXPLAIN PIPELINE SELECT i1, i2, count() as cnt
@@ -173,13 +161,9 @@ ExpressionTransform
   (Limit)
   Limit
     (Sorting)
-    MergeSortingTransform
-      LimitsCheckingTransform
-        PartialSortingTransform
-          (RemoteExchangeSource)
-          Source segment_id : [ 1 ]
-          DeserializeBufTransform
-            ExchangeSource 0 → 1
+      (RemoteExchangeSource)
+      Source segment_id : [ 1 ]
+      ExchangeSource 0 → 1
 
 ------------------------------------------
 EXPLAIN PIPELINE SELECT i1, i2, count() as cnt
@@ -219,12 +203,8 @@ ExpressionTransform
   (Limit)
   Limit
     (Sorting)
-    MergeSortingTransform
-      LimitsCheckingTransform
-        PartialSortingTransform
-          (RemoteExchangeSource)
-          Source segment_id : [ 1 ]
-          DeserializeBufTransform
-            ExchangeSource 0 → 1
+      (RemoteExchangeSource)
+      Source segment_id : [ 1 ]
+      ExchangeSource 0 → 1
 
 ------------------------------------------

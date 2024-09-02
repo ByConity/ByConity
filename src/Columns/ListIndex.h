@@ -42,6 +42,34 @@
 
 namespace DB
 {
+
+template <typename VIDTYPE>
+concept VIDNumeric = std::is_same_v<VIDTYPE, UInt8> || std::is_same_v<VIDTYPE, UInt16> || std::is_same_v<VIDTYPE, UInt32>
+    || std::is_same_v<VIDTYPE, UInt64> || std::is_same_v<VIDTYPE, UInt128> || std::is_same_v<VIDTYPE, Int8>
+    || std::is_same_v<VIDTYPE, Int16> || std::is_same_v<VIDTYPE, Int32> || std::is_same_v<VIDTYPE, Int64>
+    || std::is_same_v<VIDTYPE, Float32> || std::is_same_v<VIDTYPE, Float64>;
+
+template <typename VIDTYPE>
+concept VIDString = std::is_same_v<VIDTYPE, String>;
+
+template <typename VIDTYPE>
+struct VIDColumn
+{
+};
+
+template <VIDNumeric VIDTYPE>
+struct VIDColumn<VIDTYPE>
+{
+    using Type = ColumnVector<VIDTYPE>;
+};
+
+template <VIDString VIDTYPE>
+struct VIDColumn<VIDTYPE>
+{
+    using Type = ColumnString;
+};
+
+
 class BitMap : public Roaring
 {
 public:
@@ -184,7 +212,7 @@ struct FileOffsetAndSize
 class BitmapIndexReader
 {
 private:
-    IMergeTreeDataPartPtr part;
+    IMergeTreeDataPartPtr source_part;
     String column_name;
     [[maybe_unused]] BitmapIndexMode bitmap_index_mode;
     std::unique_ptr<CompressedReadBufferFromFile> compressed_idx;
@@ -386,9 +414,7 @@ template<typename VIDTYPE>
 void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]]const ColumnNullable * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
 {
     size_t num_rows = col->size();
-    if constexpr (std::is_same_v<VIDTYPE, UInt8>  || std::is_same_v<VIDTYPE, UInt16> || std::is_same_v<VIDTYPE, UInt32> || std::is_same_v<VIDTYPE, UInt64>
-                  || std::is_same_v<VIDTYPE, UInt128> || std::is_same_v<VIDTYPE, Int8> || std::is_same_v<VIDTYPE, Int16> || std::is_same_v<VIDTYPE, Int32>
-                  || std::is_same_v<VIDTYPE, Int64>  || std::is_same_v<VIDTYPE, Float32> || std::is_same_v<VIDTYPE, Float64>)
+    if constexpr (VIDNumeric<VIDTYPE>)
     {
         const auto * data_numbers = static_cast<const ColumnVector<VIDTYPE> *>(&col->getNestedColumn());
         const auto & data_col = data_numbers->getData();
@@ -420,9 +446,7 @@ void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & 
 template<typename VIDTYPE>
 void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]]const ColumnVector<VIDTYPE> * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
 {
-    if constexpr (std::is_same_v<VIDTYPE, UInt8>  || std::is_same_v<VIDTYPE, UInt16> || std::is_same_v<VIDTYPE, UInt32> || std::is_same_v<VIDTYPE, UInt64>
-                  || std::is_same_v<VIDTYPE, UInt128> || std::is_same_v<VIDTYPE, Int8> || std::is_same_v<VIDTYPE, Int16> || std::is_same_v<VIDTYPE, Int32>
-                  || std::is_same_v<VIDTYPE, Int64>  || std::is_same_v<VIDTYPE, Float32> || std::is_same_v<VIDTYPE, Float64>)
+    if constexpr (VIDNumeric<VIDTYPE>)
     {
         size_t num_rows = col->size();
         const auto & data_col = col->getData();
@@ -593,10 +617,8 @@ void BitmapColumnListIndexes<VIDTYPE>::appendColumnData(ColumnPtr col, std::shar
     size_t offset = task->start_offset;
     if (typeid_cast<const ColumnArray *>(col.get()))
         construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnArray *>(col.get()), bitmap_index_mode, index_granularity);
-    else if (typeid_cast<const ColumnString *>(col.get()))
-        construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnString *>(col.get()), bitmap_index_mode, index_granularity);
-    else if (typeid_cast<const ColumnVector<VIDTYPE> *>(col.get()))
-        construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnVector<VIDTYPE> *>(col.get()), bitmap_index_mode, index_granularity);
+    else if (typeid_cast<const typename VIDColumn<VIDTYPE>::Type *>(col.get()))
+        construct_column_indexes(column_indexes, offset, typeid_cast<const typename VIDColumn<VIDTYPE>::Type *>(col.get()), bitmap_index_mode, index_granularity);
     // else if (typeid_cast<const ColumnBitMap32 *>(col.get()))
     //     construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnBitMap32 *>(col.get()), bitmap_index_mode, index_granularity);
     // else if (typeid_cast<const ColumnBitMap64 *>(col.get()))

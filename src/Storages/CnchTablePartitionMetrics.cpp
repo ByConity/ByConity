@@ -20,7 +20,7 @@ static constexpr auto days_to_timestamp = [](uint64_t days) { return hours_to_ti
  * 3. Last update time is longer than 3 days.
  */
 static bool
-need_recalculate(uint64_t last_update_time, uint64_t last_snapshot_time, uint64_t current_time, bool force, const ContextPtr & context)
+need_recalculate(uint64_t last_update_time, uint64_t last_snapshot_time, uint64_t current_time, bool miss, bool force, const ContextPtr & context)
 {
     UInt64 recently_used_threshold = context->getSettingsRef().table_partition_metrics_recalculate_recently_used_threshold;
     UInt64 not_recently_used_threshold = context->getSettingsRef().table_partition_metrics_recalculate_not_recently_used_threshold;
@@ -29,6 +29,10 @@ need_recalculate(uint64_t last_update_time, uint64_t last_snapshot_time, uint64_
     if (last_update_time == 0)
     {
         // Case 1.
+        return true;
+    }
+    else if (!miss && last_update_time == last_snapshot_time)
+    {
         return true;
     }
     /// Use `last_snapshot_time` in case of `last_update_time` always be updated to `current_time`.
@@ -115,8 +119,13 @@ bool PartitionMetrics::recalculate(size_t current_time, ContextPtr context, bool
     {
         LOG_TRACE(log, "{} current metrics: {}", getTraceID(), read().toString());
         /// Try to trigger a recalculation.
-        if (auto info = read();
-            need_recalculate(info.last_update_time, info.last_snapshot_time, current_time, force || !info.validateMetrics(), context))
+        if (auto info = read(); need_recalculate(
+                info.last_update_time,
+                info.last_snapshot_time,
+                current_time,
+                recalculateion_miss,
+                force || !info.validateMetrics(),
+                context))
         {
             stopwatch = std::make_optional<Stopwatch>();
             LOG_TRACE(
@@ -149,7 +158,10 @@ bool PartitionMetrics::recalculate(size_t current_time, ContextPtr context, bool
                 }
             }
             if (shutdown)
+            {
+                recalculating = false;
                 return false;
+            }
             /// Only update current_time when schedule success
             /// There is no need to reset `recalculating` since the task will
             /// be executed asynchronously.
@@ -222,6 +234,8 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
                 table_uuid, partition_id, old_store.value().first, [this]() { return shutdown.load(); });
             LOG_TRACE(log, "{} After recalculate: {}", getTraceID(), metrics.toString());
 
+            recalculateion_miss = metrics.matches(read());
+
             /// 4. Replace the old value.
             {
                 std::unique_lock write_lock(mutex);
@@ -234,6 +248,7 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
                 new_store += metrics;
                 old_store = std::nullopt;
             }
+            finished_first_recalculation = true;
             auto elapsed_seconds = -1;
             if (stopwatch.has_value())
             {
@@ -366,17 +381,25 @@ void TableMetrics::recalculate(size_t current_time, ContextPtr context, bool for
     try
     {
         /// Try to trigger a recalculation.
-        if (auto info = getDataRef();
-            need_recalculate(info.last_update_time, info.last_snapshot_time, current_time, force || !info.validateMetrics(), context))
+        if (auto info = getDataRef(); need_recalculate(
+                info.last_update_time,
+                info.last_snapshot_time,
+                current_time,
+                recalculateion_miss,
+                force || !info.validateMetrics(),
+                context))
         {
             stopwatch = std::make_optional<Stopwatch>();
             LOG_TRACE(log, "{} Start recalculate {}, recalculation triggered at {}", getTraceID(), table_uuid, current_time);
 
-            auto metrics = context->getCnchCatalog()->getTableTrashItemsMetricsDataFromMetastore(table_uuid, current_time);
+            auto metrics = context->getCnchCatalog()->getTableTrashItemsMetricsDataFromMetastore(
+                table_uuid, current_time, [this]() { return shutdown.load(); });
 
             /// Inherit `last_update_time` and `last_snapshot_time`.
             metrics.last_update_time = current_time;
             metrics.last_snapshot_time.store(data.last_snapshot_time);
+
+            recalculateion_miss = metrics.matches(data);
 
             data = metrics;
 
@@ -473,6 +496,34 @@ void TableMetrics::TableMetricsData::update(const DeleteBitmapMetaPtr & bitmap, 
     }
     last_update_time.store(std::max(last_update_time.load(), ts));
 }
+void TableMetrics::TableMetricsData::update(const Protos::DataModelPart & part, size_t ts, bool positive)
+{
+    if (positive)
+    {
+        total_parts_number++;
+        total_parts_size += part.size();
+    }
+    else
+    {
+        total_parts_number--;
+        total_parts_size -= part.size();
+    }
+    last_update_time.store(std::max(last_update_time.load(), ts));
+}
+void TableMetrics::TableMetricsData::update(const Protos::DataModelDeleteBitmap & bitmap, size_t ts, bool positive)
+{
+    if (positive)
+    {
+        total_bitmap_number++;
+        total_bitmap_size += bitmap.file_size();
+    }
+    else
+    {
+        total_bitmap_number--;
+        total_bitmap_size -= bitmap.file_size();
+    }
+    last_update_time.store(std::max(last_update_time.load(), ts));
+}
 PartitionMetrics::PartitionMetricsStore::PartitionMetricsStore(const Protos::PartitionPartsMetricsSnapshot & snapshot)
 {
     total_parts_size = snapshot.total_parts_size();
@@ -484,6 +535,7 @@ PartitionMetrics::PartitionMetricsStore::PartitionMetricsStore(const Protos::Par
     is_deleted = snapshot.is_deleted();
     last_update_time = snapshot.last_update_time();
     last_snapshot_time = snapshot.last_snapshot_time();
+    last_modification_time = snapshot.last_modification_time();
 }
 Protos::PartitionPartsMetricsSnapshot PartitionMetrics::PartitionMetricsStore::toSnapshot() const
 {
@@ -497,6 +549,7 @@ Protos::PartitionPartsMetricsSnapshot PartitionMetrics::PartitionMetricsStore::t
     res.set_is_deleted(is_deleted);
     res.set_last_update_time(last_update_time);
     res.set_last_snapshot_time(last_snapshot_time);
+    res.set_last_modification_time(last_modification_time);
     return res;
 }
 PartitionMetrics::PartitionMetricsStore PartitionMetrics::PartitionMetricsStore::operator+(const PartitionMetricsStore & rhs) const
@@ -513,15 +566,43 @@ PartitionMetrics::PartitionMetricsStore PartitionMetrics::PartitionMetricsStore:
 
     res.last_update_time = std::max(this->last_update_time, rhs.last_update_time);
     res.last_snapshot_time = std::max(this->last_snapshot_time, rhs.last_snapshot_time);
+    res.last_modification_time = std::max(this->last_modification_time, rhs.last_modification_time);
 
     return res;
 }
+
+static auto isMergePart(const Protos::DataModelPart & part) -> bool {
+
+    return !part.deleted() && part.part_info().hint_mutation() == 0 && part.part_info().level() != 0;
+}
+
+void PartitionMetrics::PartitionMetricsStore::updateLastModificationTime(const Protos::DataModelPart & part_model)
+{
+    if (isMergePart(part_model))
+    {
+        last_modification_time = std::max(last_modification_time, part_model.last_modification_time());
+    }
+    else if (part_model.deleted())
+    {
+        last_modification_time = std::max(
+            last_modification_time,
+            part_model.has_last_modification_time() ? part_model.last_modification_time() : part_model.commit_time());
+    }
+    else
+    {
+        last_modification_time = std::max(last_modification_time, part_model.commit_time());
+    }
+}
+
+
 void PartitionMetrics::PartitionMetricsStore::update(const Protos::DataModelPart & part_model)
 {
     /// We ignore rows_count for partial parts.
     auto is_partial_part = part_model.part_info().hint_mutation();
 
     auto is_deleted_part = part_model.has_deleted() && part_model.deleted();
+
+    updateLastModificationTime(part_model);
 
     if (is_deleted_part && is_partial_part)
         return;
@@ -586,5 +667,15 @@ TableMetrics::TableMetricsData & TableMetrics::TableMetricsData::operator+=(cons
 {
     *this = *this + rhs;
     return *this;
+}
+bool TableMetrics::TableMetricsData::matches(const TableMetricsData & rhs) const
+{
+    return total_parts_size == rhs.total_parts_size && total_parts_number == rhs.total_parts_number
+        && total_bitmap_size == rhs.total_bitmap_size && total_bitmap_number == rhs.total_bitmap_number;
+}
+bool PartitionMetrics::PartitionMetricsStore::matches(const PartitionMetricsStore & rhs) const
+{
+    return total_parts_size == rhs.total_parts_size && total_parts_number == rhs.total_parts_number
+        && total_rows_count == rhs.total_rows_count && last_modification_time == rhs.last_modification_time;
 }
 }

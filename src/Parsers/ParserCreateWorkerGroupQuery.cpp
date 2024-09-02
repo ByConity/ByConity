@@ -28,7 +28,6 @@ bool ParserCreateWorkerGroupQuery::parseImpl(Pos & pos, ASTPtr & node, Expected 
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_worker_group("WORKER GROUP");
-    ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserKeyword s_in("IN");
     ParserKeyword s_settings("SETTINGS");
     ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
@@ -38,10 +37,6 @@ bool ParserCreateWorkerGroupQuery::parseImpl(Pos & pos, ASTPtr & node, Expected 
 
     if (!s_worker_group.ignore(pos, expected))
         return false;
-
-    bool if_not_exists = false;
-    if (s_if_not_exists.ignore(pos, expected))
-        if_not_exists = true;
 
     ASTPtr worker_group_id_ast;
     if (!ParserIdentifier{}.parse(pos, worker_group_id_ast, expected))
@@ -63,7 +58,6 @@ bool ParserCreateWorkerGroupQuery::parseImpl(Pos & pos, ASTPtr & node, Expected 
 
     /// construct ast
     auto query = std::make_shared<ASTCreateWorkerGroupQuery>();
-    query->if_not_exists = if_not_exists;
     query->worker_group_id = getIdentifierName(worker_group_id_ast);
     if (vw_name_ast)
         query->vw_name = getIdentifierName(vw_name_ast);

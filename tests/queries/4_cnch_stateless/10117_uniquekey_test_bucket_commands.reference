@@ -1,0 +1,140 @@
+Ensure bucket number is assigned to a part in bucket table
+3	2024-03-26	0	value
+2	2024-03-26	1	value
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+3	2024-03-26	4	value
+0	2024-03-26	5	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+0	2024-03-26	8	value
+3	2024-03-26	9	value
+2
+detach partition id 20240326 bucket 0
+3	2024-03-26	0	value
+2	2024-03-26	1	value
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+3	2024-03-26	4	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+3	2024-03-26	9	value
+detach partition id 20240326
+attach partition id 20240326 bucket 1
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+attach partition id 20240326
+3	2024-03-26	0	value
+2	2024-03-26	1	value
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+3	2024-03-26	4	value
+0	2024-03-26	5	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+0	2024-03-26	8	value
+3	2024-03-26	9	value
+
+construct duplicate key case, test repair commands
+0	3
+1	2
+2	1
+3	1
+4	3
+5	0
+6	1
+7	1
+8	0
+9	3
+0	3
+2	1
+3	1
+4	3
+5	0
+6	1
+7	1
+8	0
+9	3
+0	3
+4	3
+5	0
+8	0
+9	3
+
+modify cluster by, test expected_table_definition_hash setting
+3	2024-03-26	0	value
+2	2024-03-26	1	value
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+3	2024-03-26	4	value
+0	2024-03-26	5	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+0	2024-03-26	8	value
+3	2024-03-26	9	value
+1	2024-03-26	10	value
+0	2024-03-26	11	value
+1	2024-03-26	12	value
+1	2024-03-26	13	value
+0	2024-03-26	14	value
+1	2024-03-26	15	value
+0	2024-03-26	16	value
+1	2024-03-26	17	value
+1	2024-03-26	18	value
+1	2024-03-26	19	value
+3	2024-03-26	0	value
+2	2024-03-26	1	value
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+3	2024-03-26	4	value
+0	2024-03-26	5	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+0	2024-03-26	8	value
+3	2024-03-26	9	value
+1	2024-03-26	10	value
+1	2024-03-26	12	value
+1	2024-03-26	13	value
+1	2024-03-26	15	value
+1	2024-03-26	17	value
+1	2024-03-26	18	value
+1	2024-03-26	19	value
+3	2024-03-26	0	value
+2	2024-03-26	1	value
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+3	2024-03-26	4	value
+0	2024-03-26	5	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+0	2024-03-26	8	value
+3	2024-03-26	9	value
+1	2024-03-26	10	value
+1	2024-03-26	12	value
+1	2024-03-26	13	value
+1	2024-03-26	15	value
+1	2024-03-26	17	value
+1	2024-03-26	18	value
+1	2024-03-26	19	value
+3	2024-03-26	0	value
+2	2024-03-26	1	value
+1	2024-03-26	2	value
+1	2024-03-26	3	value
+3	2024-03-26	4	value
+0	2024-03-26	5	value
+1	2024-03-26	6	value
+1	2024-03-26	7	value
+0	2024-03-26	8	value
+3	2024-03-26	9	value
+1	2024-03-26	10	value
+0	2024-03-26	11	value
+1	2024-03-26	12	value
+1	2024-03-26	13	value
+0	2024-03-26	14	value
+1	2024-03-26	15	value
+0	2024-03-26	16	value
+1	2024-03-26	17	value
+1	2024-03-26	18	value
+1	2024-03-26	19	value

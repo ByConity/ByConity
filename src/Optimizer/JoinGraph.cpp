@@ -89,6 +89,19 @@ JoinGraph JoinGraph::withJoinGraph(
     return JoinGraph{std::move(nodes_merged), std::move(edges_merged), std::move(filters_merged), new_root, is_contains_cross_join};
 }
 
+std::vector<std::pair<String, String>> JoinGraph::getJoinClauses() const
+{
+    std::vector<std::pair<String, String>> res;
+    for (const auto & item : edges)
+    {
+        for (const auto & edge : item.second)
+        {
+            res.emplace_back(edge.getSourceSymbol(), edge.getTargetSymbol());
+        }
+    }
+    return res;
+}
+
 String JoinGraph::toString() // NOLINT
 {
     std::stringstream details;

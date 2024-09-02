@@ -37,6 +37,16 @@ select JSONExtractString('{"abc":"\\u263"}', 'abc');
 select JSONExtractString('{"abc":"hello}', 'abc');
 
 SELECT '--JSONExtract (generic)--';
+SELECT JSONExtract('{"a": "hello", "b": "world"}', 'Map(String, String)');
+SELECT JSONExtract('{"a": "hello", "b": "world"}', 'Map(LowCardinality(String), String)');
+SELECT JSONExtract('{"a": ["hello", 100.0], "b": ["world", 200]}', 'Map(String, Tuple(String, Float64))');
+SELECT JSONExtract('{"a": [100.0, 200], "b": [-100, 200.0, 300]}', 'Map(String, Array(Float64))');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Map(String, String)');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Map(String, UInt8)');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Map(UInt8, String)'); -- { serverError 43 }
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}', 'Map(String, Map(String, String))');
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}', 'a',  'Map(String, String)');
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}', 'Map(String, String)');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Tuple(String, Array(Float64))');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Tuple(a String, b Array(Float64))');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Tuple(b Array(Float64), a String)');
@@ -121,6 +131,16 @@ select JSONExtractString('{"abc":"\\u263"}', 'abc');
 select JSONExtractString('{"abc":"hello}', 'abc');
 
 SELECT '--JSONExtract (generic)--';
+SELECT JSONExtract('{"a": "hello", "b": "world"}', 'Map(String, String)');
+SELECT JSONExtract('{"a": "hello", "b": "world"}', 'Map(LowCardinality(String), String)');
+SELECT JSONExtract('{"a": ["hello", 100.0], "b": ["world", 200]}', 'Map(String, Tuple(String, Float64))');
+SELECT JSONExtract('{"a": [100.0, 200], "b": [-100, 200.0, 300]}', 'Map(String, Array(Float64))');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Map(String, String)');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Map(String, UInt8)');
+SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Map(UInt8, String)'); -- { serverError 43 }
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}', 'Map(String, Map(String, String))');
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}', 'a',  'Map(String, String)');
+SELECT JSONExtract('{"a": {"c": "hello"}, "b": {"d": "world"}}', 'Map(String, String)');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Tuple(String, Array(Float64))');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Tuple(a String, b Array(Float64))');
 SELECT JSONExtract('{"a": "hello", "b": [-100, 200.0, 300]}', 'Tuple(b Array(Float64), a String)');
@@ -159,6 +179,11 @@ SELECT JSONExtractRaw('{"passed": true}');
 SELECT JSONExtractRaw('{}');
 SELECT JSONExtractRaw('{"abc":"\\n\\u0000"}', 'abc');
 SELECT JSONExtractRaw('{"abc":"\\u263a"}', 'abc');
+
+
+SELECT '--JSONUnquote--';
+SELECT JSONUnquote('"abc"');
+SELECT JSONUnquote('"\\t\\u0032"');
 
 SELECT '--const/non-const mixed--';
 SELECT JSONExtractString('["a", "b", "c", "d", "e"]', idx) FROM (SELECT arrayJoin([1,2,3,4,5]) AS idx);

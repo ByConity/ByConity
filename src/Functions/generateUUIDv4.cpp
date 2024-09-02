@@ -103,6 +103,7 @@ private:
 REGISTER_FUNCTION(GenerateUUIDv4)
 {
     factory.registerFunction<FunctionGenerateUUIDv4>();
+    factory.registerAlias("UUID", FunctionGenerateUUIDv4::name, FunctionFactory::CaseInsensitive);
 }
 
 }

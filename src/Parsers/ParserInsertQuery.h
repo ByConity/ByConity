@@ -42,13 +42,21 @@ namespace DB
   * Insert the result of the SELECT or WATCH query.
   * INSERT INTO [db.]table (c1, c2, c3) SELECT | WATCH  ...
   * INSERT INTO [db.]table SELECT | WATCH ...
+  * 
+  * Insert overwrite table of partition, when there is no parition list , overwrite all partition
+  * INSERT OVERWRITE [db.]table [PARTITION (p1,p2...)] SELECT 
+  *
+  * REPLACE INTO uniq_table remaining_part_of_query
+  * where uniq_table has UNIQUE KEY defined
+  * works exactly the same as INSERT INTO uniq_table remaining_part_of_query
+  *
   */
 class ParserInsertQuery : public IParserDialectBase
 {
 private:
     const char * end;
 
-    const char * getName() const override { return "INSERT query"; }
+    const char * getName() const override { return "INSERT query or REPLACE INTO query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
     explicit ParserInsertQuery(const char * end_, ParserSettingsImpl t) : IParserDialectBase(t), end(end_) {}

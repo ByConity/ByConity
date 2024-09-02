@@ -18,6 +18,8 @@ public:
         return name;
     }
 
+    bool isPreviledgedFunction() const override { return true; }
+
 private:
     StoragePtr getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const override;
     const char * getStorageTypeName() const override { return "URL"; }

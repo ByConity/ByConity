@@ -93,24 +93,24 @@ alter table afo_detached_partition_multi_with_delta_src drop column value;
 alter table afs_partition_multi_with_delta modify column key String;
 alter table afp_partition_multi_with_delta_src drop column value;
 
-system start merges ${CLICKHOUSE_DATABASE}.afo_partition_with_delta_src;
-system start merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_with_delta_src;
-system start merges ${CLICKHOUSE_DATABASE}.afs_partition_with_delta;
-system start merges ${CLICKHOUSE_DATABASE}.afs_part_with_delta;
-system start merges ${CLICKHOUSE_DATABASE}.afp_partition_with_delta_src;
-system start merges ${CLICKHOUSE_DATABASE}.afp_parts_with_delta_src;
-system start merges ${CLICKHOUSE_DATABASE}.afo_partition_multi_with_delta_src;
-system start merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_multi_with_delta_src;
-system start merges ${CLICKHOUSE_DATABASE}.afs_partition_multi_with_delta;
-system start merges ${CLICKHOUSE_DATABASE}.afp_partition_multi_with_delta_src;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_with_delta_src;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_with_delta_src;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afs_partition_with_delta;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afs_part_with_delta;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_with_delta_src;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_parts_with_delta_src;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_multi_with_delta_src;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_multi_with_delta_src;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afs_partition_multi_with_delta;
+system start merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_multi_with_delta_src;
 
-system stop merges ${CLICKHOUSE_DATABASE}.afo_partition_with_delta_tgt;
-system stop merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_with_delta_tgt;
-system stop merges ${CLICKHOUSE_DATABASE}.afp_partition_with_delta_tgt;
-system stop merges ${CLICKHOUSE_DATABASE}.afp_parts_with_delta_tgt;
-system stop merges ${CLICKHOUSE_DATABASE}.afo_partition_multi_with_delta_tgt;
-system stop merges ${CLICKHOUSE_DATABASE}.afo_detached_partition_multi_with_delta_tgt;
-system stop merges ${CLICKHOUSE_DATABASE}.afp_partition_multi_with_delta_tgt;
+system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_with_delta_tgt;
+system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_with_delta_tgt;
+system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_with_delta_tgt;
+system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_parts_with_delta_tgt;
+system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_partition_multi_with_delta_tgt;
+system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afo_detached_partition_multi_with_delta_tgt;
+system stop merges \`${CLICKHOUSE_TENANT_DATABASE}\`.afp_partition_multi_with_delta_tgt;
 "
 echo "${QUERY}" | ${CLICKHOUSE_CLIENT} --multiquery 
 

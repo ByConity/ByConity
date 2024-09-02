@@ -23,6 +23,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/MapHelpers.h>
 
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSubquery.h>
@@ -158,6 +159,8 @@ void StorageView::read(
         current_inner_query = query_info.view_query->clone();
     }
 
+    appendColumns(current_inner_query, column_names);
+
     InterpreterSelectWithUnionQuery interpreter(current_inner_query, context, {}, column_names);
     interpreter.buildQueryPlan(query_plan);
 
@@ -179,8 +182,8 @@ void StorageView::read(
     {
         throw DB::Exception(ErrorCodes::INCORRECT_QUERY,
                             "Query from view {} returned Nullable column having not Nullable type in structure. "
-                            "If query from view has JOIN, it may be cause by different values of 'json_use_nulls' setting. "
-                            "You may explicitly specify 'json_use_nulls' in 'CREATE VIEW' query to avoid this error",
+                            "If query from view has JOIN, it may be caused by different values of 'join_use_nulls' setting. "
+                            "You may explicitly specify 'join_use_nulls' in 'CREATE VIEW' query to avoid this error",
                             getStorageID().getFullTableName());
     }
 
@@ -192,6 +195,48 @@ void StorageView::read(
     auto converting = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), convert_actions_dag);
     converting->setStepDescription("Convert VIEW subquery result to VIEW table structure");
     query_plan.addStep(std::move(converting));
+}
+
+/**
+ * append column to select list so that we can pruning unnecessary columns from query in SyntaxAnalyzer.
+ * if there are map column, we append map-key column to select list to pruning map column.
+ */
+void StorageView::appendColumns(ASTPtr & query, const Names & column_names)
+{
+    if (auto * select_with_union = query->as<ASTSelectWithUnionQuery>())
+    {
+        for (auto & child : select_with_union->list_of_selects->children)
+            appendColumns(child, column_names);
+    }
+    else if (auto * select = query->as<ASTSelectQuery>())
+    {
+        if (select->select() && select->tables())
+        {
+            auto * select_list = select->refSelect()->as<ASTExpressionList>();
+            if (!select_list)
+                return;
+
+            NameSet visited_names;
+            for (auto & column : select_list->children)
+            {
+                if (auto * column_with_alias = dynamic_cast<ASTWithAlias *>(column.get()))
+                {
+                    visited_names.insert(column_with_alias->getAliasOrColumnName());
+                }
+            }
+
+            for (const auto & name : column_names)
+            {
+                /**
+                 * only support map column right now
+                 */
+                if (!visited_names.count(name) && isMapImplicitKey(name))
+                {
+                    select_list->children.push_back(std::make_shared<ASTIdentifier>(name));
+                }
+            }
+        }
+    }
 }
 
 static ASTTableExpression * getFirstTableExpression(ASTSelectQuery & select_query)

@@ -15,34 +15,39 @@ Projection
                   └─ Aggregating
                      │     Group by: {i_item_id, i_item_desc, i_current_price}
                      └─ Inner Join
-                        │     Condition: ss_item_sk == i_item_sk
+                        │     Condition: ss_item_sk == inv_item_sk
+                        │     Runtime Filters Builder: {inv_item_sk}
                         ├─ Filter
                         │  │     Condition: Runtime Filters: {ss_item_sk}
                         │  └─ TableScan tpcds1000.store_sales
                         │           Where: Runtime Filters: {ss_item_sk}
                         │           Outputs: [ss_item_sk]
-                        └─ Broadcast Exchange
-                           └─ Inner Join
-                              │     Condition: inv_date_sk == d_date_sk
-                              │     Runtime Filters Builder: {d_date_sk}
-                              ├─ Inner Join
-                              │  │     Condition: inv_item_sk == i_item_sk
-                              │  │     Runtime Filters Builder: {i_item_sk}
-                              │  ├─ Filter
-                              │  │  │     Condition: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
-                              │  │  └─ TableScan tpcds1000.inventory
-                              │  │           Where: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
-                              │  │           Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
-                              │  └─ Broadcast Exchange
-                              │     └─ Filter
-                              │        │     Condition: (i_current_price >= 62.) AND (i_current_price <= 92.) AND (i_manufact_id IN (129, 270, 423, 821))
-                              │        └─ TableScan tpcds1000.item
-                              │                 Where: (i_current_price >= 62.) AND (i_current_price <= 92.) AND (i_manufact_id IN (129, 270, 423, 821))
-                              │                 Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_manufact_id]
-                              └─ Broadcast Exchange
+                        └─ Inner Join
+                           │     Condition: inv_date_sk == d_date_sk
+                           │     Runtime Filters Builder: {d_date_sk}
+                           ├─ Inner Join
+                           │  │     Condition: inv_item_sk == i_item_sk
+                           │  │     Runtime Filters Builder: {i_item_sk}
+                           │  ├─ Projection
+                           │  │  │     Expressions: [inv_date_sk, inv_item_sk]
+                           │  │  └─ Filter
+                           │  │     │     Condition: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
+                           │  │     └─ TableScan tpcds1000.inventory
+                           │  │              Where: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
+                           │  │              Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
+                           │  └─ Projection
+                           │     │     Expressions: [i_current_price, i_item_desc, i_item_id, i_item_sk]
+                           │     └─ Filter
+                           │        │     Condition: (i_manufact_id IN (129, 270, 423, 821)) AND (i_current_price >= 62.) AND (i_current_price <= 92.)
+                           │        └─ TableScan tpcds1000.item
+                           │                 Where: (i_manufact_id IN (129, 270, 423, 821)) AND (i_current_price >= 62.) AND (i_current_price <= 92.)
+                           │                 Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_manufact_id]
+                           └─ Broadcast Exchange
+                              └─ Projection
+                                 │     Expressions: [d_date_sk]
                                  └─ Filter
-                                    │     Condition: (d_date >= cast(11102, 'Date')) AND (d_date <= cast(11162, 'Date'))
+                                    │     Condition: (d_date >= cast(11102, 'Date32')) AND (d_date <= cast(11162, 'Date32'))
                                     └─ TableScan tpcds1000.date_dim
-                                             Where: (d_date >= cast(11102, 'Date')) AND (d_date <= cast(11162, 'Date'))
+                                             Where: (d_date >= cast(11102, 'Date32')) AND (d_date <= cast(11162, 'Date32'))
                                              Outputs: [d_date_sk, d_date]
 note: Runtime Filter is applied for 3 times.

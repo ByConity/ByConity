@@ -19,37 +19,16 @@
 
 #include <any>
 #include <atomic>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 
 namespace DB
 {
 
-class Capture
-{
-public:
-    explicit Capture(const std::string& type = "") : desc(type + "@" + std::to_string(id++)){}
+using Capture = std::string_view;
 
-    bool operator==(const Capture & other) const
-    {
-        return desc == other.desc;
-    }
-
-    struct hash
-    {
-        std::size_t operator()(const Capture& c) const
-        {
-            return std::hash<std::string>()(c.desc);
-        }
-    };
-
-    std::string desc;
-
-private:
-    static std::atomic_uint64_t id;
-};
-
-class Captures: public std::unordered_multimap<Capture, std::any, Capture::hash>
+class Captures : public std::unordered_multimap<Capture, std::any>
 {
 public:
     template <typename T>
@@ -59,7 +38,7 @@ public:
         auto next = iters.first;
 
         if (iters.first == iters.second || ++next != iters.second) {
-            throw Exception("Not unique capture for this capture key: " + capture.desc, ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not unique capture for this capture key: " + String{capture}, ErrorCodes::LOGICAL_ERROR);
         }
 
         return std::any_cast<T>(iters.first->second);

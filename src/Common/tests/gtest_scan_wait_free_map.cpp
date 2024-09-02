@@ -5,6 +5,8 @@
 
 #include <thread>
 #include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 static constexpr int requests = 512;
 static constexpr int find_requests = 1024 * 64;
@@ -293,8 +295,62 @@ void ScanWaitFreeMapBasic()
     ASSERT_EQ(map.trashSize(), 0);
 }
 
+void ScanWaitFreeMapAtomic()
+{
+    TestMap map;
+    std::vector<std::thread> threads;
+    threads.reserve(2);
+    size_t MAX_ROUND = 10000;
+    size_t MAX_RECORDS = 100;
+    std::mutex mutex;
+    std::condition_variable write_ready;
+    std::condition_variable read_ready;
+    auto writer = [&]()
+    {
+        for (int round = 0; round < MAX_ROUND; ++round)
+        {
+            if (round % MAX_RECORDS == 0)
+                map.clear();
+            std::vector<std::shared_ptr<std::string>> new_values;
+            new_values.push_back(std::make_shared<std::string>("partition-" + std::to_string(round)));
+            map.insert(new_values, [](const std::shared_ptr<std::string> & v) { return *v; });
+            std::unique_lock<std::mutex> lock(mutex);
+            write_ready.notify_one();
+            read_ready.wait(lock);
+        }
+    };
+
+    auto reader = [&]()
+    {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            write_ready.wait(lock);
+        }
+        for (int round = 0; round < MAX_ROUND; ++round)
+        {
+            size_t number = 0;
+            for (auto it = map.begin(); it != map.end(); ++it) { number++; }
+            ASSERT_EQ(round%MAX_RECORDS+1, number);
+            std::unique_lock<std::mutex> lock(mutex);
+            read_ready.notify_one();
+            if (round < MAX_ROUND-1)
+                write_ready.wait(lock);
+        }
+    };
+
+    Stopwatch watch;
+    threads.emplace_back(reader);
+    threads.emplace_back(writer);
+    
+    for (auto & thread : threads)
+        thread.join();
+    double ms = watch.elapsedMilliseconds();
+    std::cout << "Check rounds = " << MAX_ROUND << ":\t" << ms << " ms" << std::endl;
+}
+
 TEST(ScanWaitFreeMap, Basic) {  ScanWaitFreeMapBasic(); }
 TEST(ScanWaitFreeMap, FindOnly) {  ScanWaitFreeMapFindOnly(); }
 TEST(ScanWaitFreeMap, WriteOnly) {  ScanWaitFreeMapWriteOnly(); }
 TEST(ScanWaitFreeMap, ScanOnly) {  ScanWaitFreeMapScanOnly(); }
 TEST(ScanWaitFreeMap, ScanWrite) {  ScanWaitFreeMapScanWrite(); }
+TEST(ScanWaitFreeMap, Atomic) { ScanWaitFreeMapAtomic(); }

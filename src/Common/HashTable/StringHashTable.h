@@ -103,9 +103,12 @@ public:
 
     void clearHasZero()
     {
-        has_zero = false;
-        if (!std::is_trivially_destructible_v<Cell>)
-            zeroValue()->~Cell();
+        if (has_zero)
+        {
+            has_zero = false;
+            if (!std::is_trivially_destructible_v<Cell>)
+                zeroValue()->~Cell();
+        }
     }
 
     Cell * zeroValue() { return std::launder(reinterpret_cast<Cell *>(&zero_value_storage)); }
@@ -231,6 +234,8 @@ public:
     }
 
     ~StringHashTable() = default;
+
+    static constexpr bool IS_SPECIAL_HT_FOR_SMALL_KEYS = false;
 
 public:
     // Dispatch is written in a way that maximizes the performance:
@@ -421,6 +426,7 @@ public:
 
     void clearAndShrink()
     {
+        m0.clearHasZero();
         m1.clearHasZero();
         m1.clearAndShrink();
         m2.clearAndShrink();
@@ -430,6 +436,7 @@ public:
 
     void clear()
     {
+        m0.clearHasZero();
         m1.clearHasZero();
         m1.clear();
         m2.clear();

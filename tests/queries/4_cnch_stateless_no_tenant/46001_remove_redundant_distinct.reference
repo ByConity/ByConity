@@ -7,8 +7,10 @@ Projection Est. ? rows
          │     Partition by: {id_2}
          └─ Union Est. ? rows
             │     OutputToInputs: id_2 = [id,id_1]
-            ├─ TableScan test_distinct.unique_1 Est. ? rows
-            │        Outputs: [id]
+            ├─ Aggregating Est. ? rows
+            │  │     Group by: {id}
+            │  └─ TableScan test_distinct.unique_1 Est. ? rows
+            │           Outputs: [id]
             └─ Aggregating Est. ? rows
                │     Group by: {id_1}
                └─ MergingAggregated Est. ? rows
@@ -27,10 +29,14 @@ Projection Est. ? rows
          │     Partition by: {id_1}
          └─ Union Est. ? rows
             │     OutputToInputs: id_1 = [id,id3]
-            ├─ TableScan test_distinct.unique_1 Est. ? rows
-            │        Outputs: [id]
-            └─ TableScan test_distinct.unique_3 Est. ? rows
-                     Outputs: [id3]
+            ├─ Aggregating Est. ? rows
+            │  │     Group by: {id}
+            │  └─ TableScan test_distinct.unique_1 Est. ? rows
+            │           Outputs: [id]
+            └─ Aggregating Est. ? rows
+               │     Group by: {id3}
+               └─ TableScan test_distinct.unique_3 Est. ? rows
+                        Outputs: [id3]
 ---------test inner join1
 Projection Est. ? rows
 │     Expressions: [id]
@@ -141,35 +147,40 @@ Projection Est. ? rows
                   │  │     Filter: id3 > `expr#divide(sum(avg_id), 25)_1`
                   │  ├─ TableScan test_distinct.unique_3 Est. ? rows
                   │  │        Outputs: [id3]
-                  │  └─ Broadcast Exchange Est. ? rows
-                  │     └─ Projection Est. ? rows
-                  │        │     Expressions: expr#divide(sum(avg_id), 25)_1:=cast(`expr#sum(avg_id)` / 25, \'Nullable(Float64)\')
-                  │        └─ Aggregating Est. ? rows
-                  │           │     Group by: {}
-                  │           │     Aggregates: expr#sum(avg_id):=AggNull(sum)(id_1)
-                  │           └─ CTERef[0] Est. ? rows
-                  └─ Broadcast Exchange Est. ? rows
-                     └─ Projection Est. ? rows
-                        │     Expressions: expr#divide(sum(avg_id), 20)_1:=cast(`expr#sum(avg_id)_1` / 20, \'Nullable(Float64)\')
-                        └─ Aggregating Est. ? rows
-                           │     Group by: {}
-                           │     Aggregates: expr#sum(avg_id)_1:=AggNull(sum)(id_2)
-                           └─ CTERef[0] Est. ? rows
-CTEDef [0]
-   Gather Exchange Est. ? rows
-   └─ TableScan test_distinct.unique_1 Est. ? rows
-            Outputs: [id]
-note: CTE(Common Table Expression) is applied for 2 times.
+                  │  └─ Projection Est. ? rows
+                  │     │     Expressions: expr#divide(sum(avg_id), 25)_1:=cast(`expr#sum(avg_id)_4` / 25, \'Nullable(Float64)\')
+                  │     └─ Broadcast Exchange Est. ? rows
+                  │        └─ MergingAggregated Est. ? rows
+                  │           └─ Gather Exchange Est. ? rows
+                  │              └─ Aggregating Est. ? rows
+                  │                 │     Group by: {}
+                  │                 │     Aggregates: expr#sum(avg_id)_4:=AggNull(sum)(id_6)
+                  │                 └─ TableScan test_distinct.unique_1 Est. ? rows
+                  │                          Outputs: id_6:=id
+                  └─ Projection Est. ? rows
+                     │     Expressions: expr#divide(sum(avg_id), 20)_1:=cast(`expr#sum(avg_id)_5` / 20, \'Nullable(Float64)\')
+                     └─ Broadcast Exchange Est. ? rows
+                        └─ MergingAggregated Est. ? rows
+                           └─ Gather Exchange Est. ? rows
+                              └─ Aggregating Est. ? rows
+                                 │     Group by: {}
+                                 │     Aggregates: expr#sum(avg_id)_5:=AggNull(sum)(id_7)
+                                 └─ TableScan test_distinct.unique_1 Est. ? rows
+                                          Outputs: id_7:=id
 ---------test cte2
 Projection Est. ? rows
 │     Expressions: id:=id_3
 └─ Gather Exchange Est. ? rows
    └─ Union Est. ? rows
       │     OutputToInputs: id_3 = [id_1,id_2]
-      ├─ TableScan test_distinct.unique_1 Est. ? rows
-      │        Outputs: id_1:=id
-      └─ TableScan test_distinct.unique_1 Est. ? rows
-               Outputs: id_2:=id
+      ├─ CTERef[1] Est. ? rows
+      └─ CTERef[1] Est. ? rows
+CTEDef [1]
+   Projection Est. ? rows
+   │     Expressions: id_1:=id_4
+   └─ TableScan test_distinct.unique_1 Est. ? rows
+            Outputs: id_4:=id
+note: CTE(Common Table Expression) is applied for 2 times.
 ---------test groupby
 Projection Est. ? rows
 │     Expressions: [m1, m2]
@@ -195,3 +206,5 @@ Projection Est. ? rows
             │     Group by: {id4, m2, k3}
             └─ TableScan test_distinct.unique_4 Est. ? rows
                      Outputs: [id4, m2, k3]
+1
+1

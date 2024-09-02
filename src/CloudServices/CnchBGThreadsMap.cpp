@@ -15,8 +15,10 @@
 
 #include <CloudServices/CnchBGThreadsMap.h>
 
+#include <CloudServices/CnchRefreshMaterializedViewThread.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchPartGCThread.h>
+#include <CloudServices/CnchManifestCheckpointThread.h>
 #include <Interpreters/Context.h>
 #include <ResourceManagement/ResourceReporter.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
@@ -26,6 +28,7 @@
 #include <CloudServices/CnchObjectColumnSchemaAssembleThread.h>
 
 #include <Databases/MySQL/MaterializedMySQLSyncThreadManager.h>
+#include <CloudServices/CnchPartMoverThread.h>
 
 #include <regex>
 
@@ -80,6 +83,18 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     else if (type == CnchBGThreadType::MaterializedMySQL)
     {
         return std::make_shared<MaterializedMySQLSyncThreadManager>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+    {
+        return std::make_shared<CnchRefreshMaterializedViewThread>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::PartMover)
+    {
+        return std::make_shared<CnchPartMoverThread>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::ManifestCheckpoint)
+    {
+        return std::make_shared<CnchManifestCheckpointThread>(getContext(), storage_id);
     }
     else
     {

@@ -93,7 +93,7 @@ private:
 
 namespace
 {
-    /** 
+    /**
      * Convert key according to map key type.
      * For some types, like Enum, Date, DateTime which can be map key type, they need to convert to correct Field. Otherwise, query will be wrong.
      * For example, there has one map column named a and one row data
@@ -287,7 +287,7 @@ void QueryNormalizer::visit(ASTIdentifier & node, ASTPtr & ast, Data & data)
     if (!IdentifierSemantic::getColumnName(node))
         return;
 
-    if (data.settings.prefer_column_name_to_alias && !(data.aliases_rewrite_scope && data.is_order_by_clause))
+    if (data.settings.prefer_column_name_to_alias)
     {
         if (data.source_columns_set.find(node.name()) != data.source_columns_set.end())
             return;
@@ -356,7 +356,7 @@ void QueryNormalizer::visit(ASTTablesInSelectQueryElement & node, const ASTPtr &
         if (join.on_expression)
             visit(join.on_expression, data);
 
-        if (join.using_expression_list && !data.aliases_rewrite_scope)
+        if (join.using_expression_list)
             visit(join.using_expression_list, data);
     }
 
@@ -376,13 +376,8 @@ void QueryNormalizer::visit(ASTSelectQuery & select, const ASTPtr &, Data & data
 {
     for (auto & child : select.children)
     {
-        if (child == select.orderBy())
-            data.is_order_by_clause = true;
-
         if (needVisitChild(child))
             visit(child, data);
-
-        data.is_order_by_clause = false;
     }
 
     /// If the WHERE clause or HAVING consists of a single alias, the reference must be replaced not only in children,

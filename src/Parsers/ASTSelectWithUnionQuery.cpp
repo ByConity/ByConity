@@ -26,6 +26,7 @@
 #include <Parsers/ASTTEALimit.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <Common/typeid_cast.h>
+#include "Parsers/ASTQueryWithOutput.h"
 #include <Parsers/SelectUnionMode.h>
 #include <IO/Operators.h>
 #include <IO/ReadBuffer.h>
@@ -122,6 +123,15 @@ void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, F
         settings.ostr << settings.nl_or_ws;
         tealimit->formatImpl(settings, state, frame);
     }
+}
+
+String ASTSelectWithUnionQuery::formatOutputTree()
+{
+    WriteBufferFromOwnString buf;
+    IAST::FormatSettings settings(buf, true);
+    FormatState state;
+    ASTQueryWithOutput::formatOutput(settings, state, FormatStateStacked());
+    return buf.str();
 }
 
 void ASTSelectWithUnionQuery::resetTEALimit()

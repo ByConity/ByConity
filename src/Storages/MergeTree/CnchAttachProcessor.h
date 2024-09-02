@@ -124,7 +124,7 @@ public:
 
     void writeRenameRecord(const DiskPtr& disk, const String& from, const String& to);
     // Persist rename map and other temporary resource to kv in form of undo-buffer
-    void writeRenameMapToKV(Catalog::Catalog & catalog, const String& uuid, const TxnTimestamp& txn_id);
+    void writeRenameMapToKV(Catalog::Catalog & catalog, const StorageID & storage_id, const TxnTimestamp & txn_id);
     // Record delete Meta files name to delete for attaching unique table parts
     void writeMetaFilesNameRecord(const DiskPtr& disk, const String& meta_file_name);
 
@@ -183,6 +183,9 @@ public:
             logger(&Poco::Logger::get("CnchAttachProcessor")) {}
 
     void exec();
+
+    std::vector<MutableMergeTreeDataPartsCNCHVector> getDetachedParts(const AttachFilter& filter);
+
 
 private:
     using PartsFromSources = std::vector<MutableMergeTreeDataPartsCNCHVector>;

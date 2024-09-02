@@ -26,6 +26,8 @@ protected:
         return function->executeImplDryRun(arguments, result_type, input_rows_count);
     }
 
+    bool isPreviledgedFunction() const final { return function->isPreviledgedFunction(); }
+
     bool useDefaultImplementationForNulls() const final { return function->useDefaultImplementationForNulls(); }
     bool useDefaultImplementationForNothing() const final
     {
@@ -57,9 +59,9 @@ public:
 
     bool isCompilable() const override { return function->isCompilable(getArgumentTypes()); }
 
-    llvm::Value * compile(llvm::IRBuilderBase & builder, Values values) const override
+    llvm::Value * compile(llvm::IRBuilderBase & builder, Values values, JITContext & jit_context) const override
     {
-        return function->compile(builder, getArgumentTypes(), std::move(values));
+        return function->compile(builder, getArgumentTypes(), std::move(values), jit_context);
     }
 
 #endif

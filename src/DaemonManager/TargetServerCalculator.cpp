@@ -58,8 +58,8 @@ CnchServerClientPtr TargetServerCalculator::getTargetServerForCnchKafka(const St
     auto kafka_storage = catalog->tryGetTableByUUID(context, UUIDHelpers::UUIDToString(storage_id.uuid), TxnTimestamp::maxTS());
     if (!kafka_storage)
     {
-        LOG_INFO(log, "Cannot get table by UUID for {}", storage_id.getNameForLogs());
-        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Cannot get table by UUID for {}", storage_id.getNameForLogs());
+        LOG_INFO(log, "Cannot get Kafka table by UUID for {}", storage_id.getNameForLogs());
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Cannot get Kafka table by UUID for {}", storage_id.getNameForLogs());
     }
 
     auto dependencies = catalog->getAllViewsOn(context, kafka_storage, TxnTimestamp::maxTS());
@@ -69,27 +69,42 @@ CnchServerClientPtr TargetServerCalculator::getTargetServerForCnchKafka(const St
         throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "No dependencies found for {}", storage_id.getNameForLogs());
     }
 
-    if (dependencies.size() > 1)
-        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "More than one MV found for {}", storage_id.getNameForLogs());
+    /// For multiple MVs, we will try to use the first target table by default
+    for (const auto & dependence : dependencies)
+    {
+        if (auto * mv_table = dynamic_cast<StorageMaterializedView*>(dependence.get()))
+        {
+            if (mv_table->async())
+                continue;
+            /// XXX: We cannot get target table from context here, we may store target table storageID in MV later
+            if (auto cnch_table = catalog->tryGetTable(context, mv_table->getTargetDatabaseName(),
+                                                         mv_table->getTargetTableName(), TxnTimestamp::maxTS()))
+            {
+                if (auto * cnch_storage = dynamic_cast<StorageCnchMergeTree*>(cnch_table.get()))
+                {
+                    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(cnch_storage->getStorageUUID()),
+                                                                                          cnch_storage->getServerVwName(), false);
+                    return context.getCnchServerClientPool().get(target_server);
+                }
+                else
+                {
+                    LOG_ERROR(log, "Target table should be CnchMergeTree for " + storage_id.getNameForLogs());
+                    throw Exception("Target table should be CnchMergeTree for " + storage_id.getNameForLogs(), ErrorCodes::BAD_REQUEST_PARAMETER);
+                }
+            }
+            else
+            {
+                LOG_ERROR(log, "Target table not found for MV " + mv_table->getStorageID().getFullTableName());
+                throw Exception("Target table not found for MV " + mv_table->getStorageID().getFullTableName(), ErrorCodes::BAD_REQUEST_PARAMETER);
+            }
+        }
+        else
+        {
+            LOG_WARNING(log, "Expected MaterializedView but got " + dependence->getName() + " for " + dependence->getTableName());
+        }
+    }
 
-    auto * mv_table = dynamic_cast<StorageMaterializedView*>(dependencies[0].get());
-    if (!mv_table)
-        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Unknown MV table {}", dependencies[0]->getTableName());
-
-    /// XXX: We cannot get target table from context here, we may store target table storageID in MV later
-    auto cnch_table = catalog->tryGetTable(context, mv_table->getTargetDatabaseName(), mv_table->getTargetTableName(), TxnTimestamp::maxTS());
-    if (!cnch_table)
-        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Target table not found for MV {}.{}",
-                        mv_table->getTargetDatabaseName(), mv_table->getTargetTableName());
-
-    auto * cnch_storage = dynamic_cast<StorageCnchMergeTree*>(cnch_table.get());
-    if (!cnch_storage)
-        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Target table should be CnchMergeTree for {}", storage_id.getNameForLogs());
-
-    /// TODO: refactor this function
-    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(cnch_storage->getStorageUUID()), cnch_storage->getServerVwName(), false);
-
-    return context.getCnchServerClientPool().get(target_server);
+    return nullptr;
 }
 
 } /// end namespace

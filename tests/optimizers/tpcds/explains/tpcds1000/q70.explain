@@ -5,54 +5,51 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) DESC NULLS LAST, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) ASC NULLS LAST, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 461 rows
+      └─ Gather Exchange Est. 121 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) DESC NULLS LAST, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) ASC NULLS LAST, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 461 rows
+            └─ Projection Est. 121 rows
                │     Expressions: [expr#plus(grouping(s_state), grouping(s_county)), expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC), expr#sum(ss_net_profit)_1, s_county, s_state], expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL):=multiIf(`expr#plus(grouping(s_state), grouping(s_county))` = 0, s_state, NULL)
-               └─ Window Est. 461 rows
-                  └─ Repartition Exchange Est. 461 rows
+               └─ Window Est. 121 rows
+                  └─ Repartition Exchange Est. 121 rows
                      │     Partition by: {expr#plus(grouping(s_state), grouping(s_county)), expr#multiIf(equals(grouping(s_county), 0), s_state, NULL)}
-                     └─ Projection Est. 461 rows
+                     └─ Projection Est. 121 rows
                         │     Expressions: [expr#sum(ss_net_profit)_1, s_county, s_state], expr#multiIf(equals(grouping(s_county), 0), s_state, NULL):=multiIf(`expr#grouping(s_county)` = 0, s_state, NULL), expr#plus(grouping(s_state), grouping(s_county)):=`expr#grouping(s_state)` + `expr#grouping(s_county)`
-                        └─ MergingAggregated Est. 461 rows
-                           └─ Repartition Exchange Est. 461 rows
+                        └─ MergingAggregated Est. 121 rows
+                           └─ Repartition Exchange Est. 121 rows
                               │     Partition by: {s_state, s_county, __grouping_set}
-                              └─ Aggregating Est. 461 rows
+                              └─ Aggregating Est. 121 rows
                                  │     Group by: {s_state, s_county}
                                  │     Aggregates: expr#sum(ss_net_profit)_1:=AggNull(sum)(ss_net_profit)
-                                 └─ Inner Join Est. 526075701 rows
+                                 └─ Inner Join Est. 119562659 rows
                                     │     Condition: ss_store_sk == s_store_sk
+                                    │     Runtime Filters Builder: {s_store_sk}
                                     ├─ Inner Join Est. 526075701 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk
                                     │  │     Runtime Filters Builder: {d_date_sk}
                                     │  ├─ Filter Est. 2879987999 rows
-                                    │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                                    │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                                     │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                                    │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                                    │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                                     │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_net_profit]
                                     │  └─ Broadcast Exchange Est. 334 rows
-                                    │     └─ Filter Est. 334 rows
-                                    │        │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                    │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                    │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                    │                 Outputs: [d_date_sk, d_month_seq]
-                                    └─ Broadcast Exchange Est. 865 rows
-                                       └─ Inner Join Est. 865 rows
+                                    │     └─ Projection Est. 334 rows
+                                    │        │     Expressions: [d_date_sk]
+                                    │        └─ Filter Est. 334 rows
+                                    │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                                    │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                                    │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                                    │                    Outputs: [d_date_sk, d_month_seq]
+                                    └─ Broadcast Exchange Est. 227 rows
+                                       └─ Left Semi Join Est. 227 rows
                                           │     Condition: s_state == s_state_1
-                                          ├─ Repartition Exchange Est. 1002 rows
-                                          │  │     Partition by: {s_state}
-                                          │  └─ Filter Est. 1002 rows
-                                          │     │     Condition: isNotNull(s_state)
-                                          │     └─ TableScan tpcds1000.store Est. 1002 rows
-                                          │              Where: isNotNull(s_state)
-                                          │              Outputs: [s_store_sk, s_county, s_state]
-                                          └─ Aggregating Est. 19 rows
-                                             │     Group by: {s_state_1}
-                                             └─ Projection Est. 19 rows
+                                          ├─ TableScan tpcds1000.store Est. 1002 rows
+                                          │        Outputs: [s_store_sk, s_county, s_state]
+                                          └─ Broadcast Exchange Est. 5 rows
+                                             └─ Projection Est. 5 rows
                                                 │     Expressions: [s_state_1]
-                                                └─ Filter Est. 19 rows
+                                                └─ Filter Est. 5 rows
                                                    │     Condition: `expr#rank() OVER (PARTITION BY s_state ORDER BY sum(ss_net_profit) DESC)` <= 5
                                                    └─ Window Est. 22 rows
                                                       └─ MergingAggregated Est. 22 rows
@@ -72,15 +69,14 @@ Projection Est. 100 rows
                                                                   │  │           Where: Runtime Filters: {ss_sold_date_sk}
                                                                   │  │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_store_sk_1:=ss_store_sk, ss_net_profit_1:=ss_net_profit
                                                                   │  └─ Broadcast Exchange Est. 334 rows
-                                                                  │     └─ Filter Est. 334 rows
-                                                                  │        │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
-                                                                  │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                                                  │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                                                  │                 Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
+                                                                  │     └─ Projection Est. 334 rows
+                                                                  │        │     Expressions: [d_date_sk_1]
+                                                                  │        └─ Filter Est. 334 rows
+                                                                  │           │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= cast(1211, 'UInt32'))
+                                                                  │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                                                                  │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                                                                  │                    Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
                                                                   └─ Broadcast Exchange Est. 1002 rows
-                                                                     └─ Filter Est. 1002 rows
-                                                                        │     Condition: isNotNull(s_state_1)
-                                                                        └─ TableScan tpcds1000.store Est. 1002 rows
-                                                                                 Where: isNotNull(s_state)
-                                                                                 Outputs: s_store_sk_1:=s_store_sk, s_state_1:=s_state
-note: Runtime Filter is applied for 2 times.
+                                                                     └─ TableScan tpcds1000.store Est. 1002 rows
+                                                                              Outputs: s_store_sk_1:=s_store_sk, s_state_1:=s_state
+note: Runtime Filter is applied for 3 times.

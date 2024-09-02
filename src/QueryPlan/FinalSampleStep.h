@@ -37,6 +37,7 @@ public:
     size_t getSampleSize() const { return sample_size; }
     size_t getMaxChunkSize() const { return max_chunk_size; }
 
+    void setSampleSize(size_t sample_size_) { sample_size = sample_size_; }
 
     String getName() const override { return "FinalSample"; }
 

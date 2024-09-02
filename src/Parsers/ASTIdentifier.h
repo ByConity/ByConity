@@ -91,7 +91,7 @@ public:
 
     virtual void appendCatalogName(const std::string& catalog_name);
 
-    virtual void appendTenantId(const Context * context);
+    virtual void appendTenantId(const Context * context, bool is_datbase_name);
 
     String full_name;
     std::vector<String> name_parts;
@@ -129,6 +129,7 @@ public:
 
     StorageID getTableId() const;
     String getDatabaseName() const;
+    String getTableName() const;
 
     // FIXME: used only when it's needed to rewrite distributed table name to real remote table name.
     void resetTable(const String & database_name, const String & table_name);  // TODO(ilezhankin): get rid of this
@@ -142,7 +143,7 @@ public:
     // void rewriteCnchDatabaseOrCatalog(const Context *context) override;
     void rewriteCnchDatabaseName(const Context * context = nullptr) override;
     virtual void appendCatalogName(const std::string& catalog_name) override;
-    virtual void appendTenantId(const Context * context) override;
+    virtual void appendTenantId(const Context * context, bool is_datbase_name) override;
 
 };
 
@@ -163,4 +164,5 @@ inline String getIdentifierName(const ASTPtr & ast) { return getIdentifierName(a
 inline std::optional<String> tryGetIdentifierName(const ASTPtr & ast) { return tryGetIdentifierName(ast.get()); }
 inline bool tryGetIdentifierNameInto(const ASTPtr & ast, String & name) { return tryGetIdentifierNameInto(ast.get(), name); }
 
+inline std::shared_ptr<ASTIdentifier> makeASTIdentifier(const String & name) { return std::make_shared<ASTIdentifier>(name); }
 }

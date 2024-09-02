@@ -1,0 +1,80 @@
+-- { echo }
+
+-- not hit mv
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+GROUP BY server_time_hour, event_date, uid; -- { serverError 3011 }
+-- hit mv
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE event_date = '2023-01-01'
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid;
+8	2023-01-01	1000	1
+9	2023-01-01	1000	2
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE event_date = '2023-01-01'
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid
+settings enable_materialized_view_rewrite=0;
+8	2023-01-01	1000	1
+9	2023-01-01	1000	2
+-- not hit mv
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE toHour(toDateTime(server_time, 'Europe/Moscow')) = 8
+GROUP BY server_time_hour, event_date, uid; -- { serverError 3011 }
+-- not hit mv
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE event_date BETWEEN '2023-01-01' AND '2023-01-10'
+GROUP BY server_time_hour, event_date, uid; -- { serverError 3011 }
+-- hit mv
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE toHour(toDateTime(server_time, 'Europe/Moscow')) IN (9, 10, 11) AND event_date = '2023-01-01'
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid;
+9	2023-01-01	1000	2
+SELECT
+    toHour(toDateTime(server_time, 'Europe/Moscow')) AS server_time_hour,
+    event_date,
+    uid,
+    sum(click) AS sum_click
+FROM base40037
+WHERE toHour(toDateTime(server_time, 'Europe/Moscow')) IN (9, 10, 11) AND event_date = '2023-01-01'
+GROUP BY server_time_hour, event_date, uid
+ORDER BY server_time_hour, event_date, uid
+settings enable_materialized_view_rewrite=0;
+9	2023-01-01	1000	2
+DROP TABLE IF EXISTS mv40037;
+DROP TABLE IF EXISTS mv40037_2;
+DROP TABLE IF EXISTS base40037;
+DROP TABLE IF EXISTS target40037;
+DROP TABLE IF EXISTS mv40037;
+DROP DATABASE IF EXISTS test_40037;

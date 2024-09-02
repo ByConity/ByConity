@@ -33,6 +33,7 @@
 #include <IO/LimitReadBuffer.h>
 #include <Common/CurrentMetrics.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 
 
 namespace CurrentMetrics

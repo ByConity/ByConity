@@ -12,7 +12,7 @@ namespace DB
   * - info about errors of query execution.
   */
 
-/// A struct which will be inserted as row into query_log table
+/// A struct which will be inserted as row into cnch_materialized_mysql_log table
 struct MaterializedMySQLLogElement
 {
     enum Type
@@ -47,7 +47,7 @@ struct MaterializedMySQLLogElement
     /// some reserved fields, currently not used
     UInt64 duration_ms = 0;
     UInt64 metric = 0;
-    
+
     UInt8 has_error = 0;
     String event_msg;
     EventSource event_source{SYNC_MANAGER};

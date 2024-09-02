@@ -19,24 +19,29 @@ Projection
                         │     Expressions: [s_store_id, s_store_name], expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Friday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Monday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Saturday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Sunday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Thursday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Tuesday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Wednesday', ss_sales_price, NULL)
                         └─ Inner Join
                            │     Condition: ss_store_sk == s_store_sk
+                           │     Runtime Filters Builder: {s_store_sk}
                            ├─ Inner Join
                            │  │     Condition: ss_sold_date_sk == d_date_sk
                            │  │     Runtime Filters Builder: {d_date_sk}
                            │  ├─ Filter
-                           │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                           │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                            │  │  └─ TableScan tpcds1000.store_sales
-                           │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                           │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                            │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_sales_price]
                            │  └─ Broadcast Exchange
-                           │     └─ Filter
-                           │        │     Condition: d_year = 2000
-                           │        └─ TableScan tpcds1000.date_dim
-                           │                 Where: d_year = 2000
-                           │                 Outputs: [d_date_sk, d_year, d_day_name]
+                           │     └─ Projection
+                           │        │     Expressions: [d_date_sk, d_day_name]
+                           │        └─ Filter
+                           │           │     Condition: d_year = 2000
+                           │           └─ TableScan tpcds1000.date_dim
+                           │                    Where: d_year = 2000
+                           │                    Outputs: [d_date_sk, d_year, d_day_name]
                            └─ Broadcast Exchange
-                              └─ Filter
-                                 │     Condition: s_gmt_offset = -5.
-                                 └─ TableScan tpcds1000.store
-                                          Where: s_gmt_offset = -5.
-                                          Outputs: [s_store_sk, s_store_id, s_store_name, s_gmt_offset]
-note: Runtime Filter is applied for 1 times.
+                              └─ Projection
+                                 │     Expressions: [s_store_id, s_store_name, s_store_sk]
+                                 └─ Filter
+                                    │     Condition: s_gmt_offset = -5.
+                                    └─ TableScan tpcds1000.store
+                                             Where: s_gmt_offset = -5.
+                                             Outputs: [s_store_sk, s_store_id, s_store_name, s_gmt_offset]
+note: Runtime Filter is applied for 2 times.

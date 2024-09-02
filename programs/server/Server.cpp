@@ -33,6 +33,7 @@
 #include <Catalog/Catalog.h>
 #include "BrpcServerHolder.h"
 #include "MetricsTransmitter.h"
+#include <Transaction/LockManager.h>
 // #include <Catalog/MetastoreConfig.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
@@ -56,6 +57,7 @@
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
@@ -80,6 +82,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
+#include <Storages/System/attachMySQLTables.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -136,8 +139,8 @@
 #include <common/logger_useful.h>
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
-#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/ChineseTokenExtractor.h>
+#include <Common/HuAllocator.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -187,6 +190,7 @@ namespace CurrentMetrics
     extern const Metric Revision;
     extern const Metric VersionInteger;
     extern const Metric MemoryTracking;
+    extern const Metric MergesMutationsMemoryTracking;
     extern const Metric MaxDDLEntryID;
 }
 
@@ -226,7 +230,6 @@ namespace DB::ErrorCodes
 int mainEntryClickHouseServer(int argc, char ** argv)
 {
     DB::Server app;
-
     if (jemallocOptionEnabled("opt.background_thread"))
     {
         LOG_ERROR(&app.logger(),
@@ -462,7 +465,7 @@ int Server::run()
     }
     if (config().hasOption("version"))
     {
-        std::cout << DBMS_NAME << " server version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
+        std::cout << VERSION_NAME << " server version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
         return 0;
     }
     return Application::run(); // NOLINT
@@ -533,6 +536,12 @@ void checkForUsersNotInMainConfig(
 #endif
 }
 
+void huallocLogPrint(std::string s)
+{
+    static Poco::Logger * logger = &Poco::Logger::get("HuallocDebug");
+    LOG_INFO(logger, s);
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Poco::Logger * log = &logger();
@@ -552,6 +561,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerDisks();
     registerFormats();
     registerServiceDiscovery();
+    initMetrics2();
 
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::getVersionRevision());
     CurrentMetrics::set(CurrentMetrics::VersionInteger, ClickHouseRevision::getVersionInteger());
@@ -575,12 +585,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setServerType(config().getString("cnch_type", "standalone"));
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->setIsRestrictSettingsToWhitelist(config().getBool("restrict_tenanted_users_to_whitelist_settings", false));
+    if (global_context->getIsRestrictSettingsToWhitelist())
+    {
+        auto setting_names = getMultipleValuesFromConfig(config(), "tenant_whitelist_settings", "name");
+        global_context->addRestrictSettingsToWhitelist(setting_names);
+    }
 
     global_context->initCnchConfig(config());
+    global_context->setBlockPrivilegedOp(config().getBool("restrict_tenanted_users_to_privileged_operations", false));
     global_context->initRootConfig(config());
-    global_context->initPreloadThrottler();
     const auto & root_config = global_context->getRootConfig();
-
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
@@ -660,6 +675,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // global_context->initTestLog();
     }
+
+    if (global_context->getServerType() == ServerType::cnch_worker)
+        global_context->initGlobalDataManager();
 
     global_context->initTSOElectionReader();
 
@@ -1000,9 +1018,59 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             BrpcApplication::getInstance().reloadConfig(*config);
 
+            #if USE_HUALLOC
+            if (config->getBool("hualloc_numa_aware", false))
+            {
+                size_t max_numa_node = SystemUtils::getMaxNumaNode();
+                std::vector<cpu_set_t> numa_nodes_cpu_mask = SystemUtils::getNumaNodesCpuMask();
+                bool hualloc_enable_mbind = config->getBool("hualloc_enable_mbind", false);
+                int mbind_mode = config->getInt("hualloc_mbind_mode", 1);
+
+                /*
+                *mbind mode
+                    #define MPOL_DEFAULT     0
+                    #define MPOL_PREFERRED   1
+                    #define MPOL_BIND        2
+                    #define MPOL_INTERLEAVE  3
+                    #define MPOL_LOCAL       4
+                    #define MPOL_MAX         5
+                */
+                huallocSetNumaInfo(
+                    max_numa_node,
+                    numa_nodes_cpu_mask,
+                    hualloc_enable_mbind,
+                    mbind_mode,
+                    huallocLogPrint
+                );
+            }
+
+            double default_hualloc_cache_ratio = config->getDouble("hualloc_cache_ratio", 0.25);
+            LOG_INFO(log, "HuAlloc cache memory size:{}",
+                    formatReadableSizeWithBinarySuffix(max_server_memory_usage * default_hualloc_cache_ratio));
+            HuAllocator<false>::InitHuAlloc(max_server_memory_usage * default_hualloc_cache_ratio);
+            #endif
             total_memory_tracker.setHardLimit(max_server_memory_usage);
             total_memory_tracker.setDescription("(total)");
             total_memory_tracker.setMetric(CurrentMetrics::MemoryTracking);
+
+            size_t merges_mutations_memory_usage_soft_limit = config->getUInt64("merges_mutations_memory_usage_soft_limit", 0);
+            double merges_mutations_memory_usage_to_ram_ratio = config->getDouble("merges_mutations_memory_usage_to_ram_ratio", 0.9);
+            size_t default_merges_mutations_server_memory_usage = static_cast<size_t>(memory_amount * merges_mutations_memory_usage_to_ram_ratio);
+            if (merges_mutations_memory_usage_soft_limit == 0 || merges_mutations_memory_usage_soft_limit > default_merges_mutations_server_memory_usage)
+            {
+                merges_mutations_memory_usage_soft_limit = default_merges_mutations_server_memory_usage;
+                LOG_WARNING(log, "Setting merges_mutations_memory_usage_soft_limit was set to {}"
+                    " ({} available * {:.2f} merges_mutations_memory_usage_to_ram_ratio)",
+                    formatReadableSizeWithBinarySuffix(merges_mutations_memory_usage_soft_limit),
+                    formatReadableSizeWithBinarySuffix(memory_amount),
+                    merges_mutations_memory_usage_to_ram_ratio);
+            }
+
+            LOG_INFO(log, "Merges and mutations memory limit is set to {}",
+                formatReadableSizeWithBinarySuffix(merges_mutations_memory_usage_soft_limit));
+            background_memory_tracker.setSoftLimit(merges_mutations_memory_usage_soft_limit);
+            background_memory_tracker.setDescription("(background)");
+            background_memory_tracker.setMetric(CurrentMetrics::MergesMutationsMemoryTracking);
 
             // FIXME logging-related things need synchronization -- see the 'Logger * log' saved
             // in a lot of places. For now, disable updating log configuration without server restart.
@@ -1041,6 +1109,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #if USE_JEMALLOC
             JeprofControl::instance().loadFromConfig(*config);
 #endif
+            global_context->updateAdditionalServices(*config);
             if (global_context->getServerType() == ServerType::cnch_server)
             {
                 global_context->updateQueueManagerConfig();
@@ -1049,7 +1118,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 {
                     auto_stats_manager->prepareNewConfig(*config);
                 }
+
+                global_context->setVWCustomizedSettings(std::make_shared<VWCustomizedSettings>(config));
             }
+
+            if (auto catalog = global_context->tryGetCnchCatalog())
+                catalog->loadFromConfig("catalog_service", *config);
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
@@ -1062,20 +1136,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
     setDefaultUseMapType(config().getBool("default_use_kv_map_type", false));
 
     /// Still need `users_config` for server-worker communication
-    ConfigurationPtr users_config;
+    String users_config_path;
     if (config().has("users_config") || config().has("config-file") || fs::exists("config.xml"))
     {
         // String config_dir = std::filesystem::path{config_path}.remove_filename().string()
-        const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
-        ConfigProcessor config_processor(users_config_path);
-        const auto loaded_config = config_processor.loadConfig();
-        users_config = loaded_config.configuration;
+        users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
     }
 
-    if (users_config)
-        global_context->setUsersConfig(users_config);
-    else
-        LOG_ERROR(log, "Can't load config for users");
+    auto users_config_reloader = std::make_unique<ConfigReloader>(
+        users_config_path,
+        include_from_path,
+        config().getString("path", ""),
+        zkutil::ZooKeeperNodeCache([&] { return global_context->getZooKeeper(); }),
+        std::make_shared<Poco::Event>(),
+        [&](ConfigurationPtr config, bool) { global_context->setUsersConfig(config); },
+        /* already_loaded = */ false);
 
     /// Initialize access storages.
     access_control.setUpFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
@@ -1085,6 +1160,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setConfigReloadCallback([&]()
     {
         main_config_reloader->reload();
+        users_config_reloader->reload();
         access_control.reloadUsersConfigs();
     });
 
@@ -1106,13 +1182,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setUncompressedCache(uncompressed_cache_size);
 
+    size_t footer_cache_size = config().getUInt64("footer_cache_size", 3221225472);
+    global_context->setFooterCache(footer_cache_size);
+
     /// Load global settings from default_profile and system_profile.
     if (global_context->getServerType() == ServerType::cnch_server)
     {
         auto vw_customized_settings_ptr = std::make_shared<VWCustomizedSettings>(config());
         if (!vw_customized_settings_ptr->isEmpty())
         {
-            vw_customized_settings_ptr->loadCustomizedSettings();
             global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
         }
     }
@@ -1141,7 +1219,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setChecksumsCache(checksum_cache_settings);
 
 
-    /// A cache for gin index store 
+    /// A cache for gin index store
     GinIndexStoreCacheSettings ginindex_store_cache_settings;
     ginindex_store_cache_settings.lru_max_size = config().getUInt64("ginindex_store_cache_size", 5368709120); //5GB
     ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 5000); //5000
@@ -1169,6 +1247,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// A cache for query results.
     if (global_context->getServerType() == ServerType::cnch_server)
         global_context->setQueryCache(config());
+
+    /// Size of cache for intermediate_result. It is not necessary.
+    size_t intermediate_result_cache_size = config().getUInt64("intermediate_result_cache_size", 1000000000);
+    if (intermediate_result_cache_size)
+        global_context->setIntermediateResultCache(intermediate_result_cache_size);
 
     /// Size of delete bitmap for HaMergeTree engine to be cached in memory; default is 1GB
     size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);
@@ -1286,7 +1369,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::File disk_path(disk->getPath());
             if (!disk_path.canRead() || !disk_path.canWrite())
                 throw Exception("There is no RW access to disk " + name + " (" + disk->getPath() + ")", ErrorCodes::PATH_ACCESS_DENIED);
-            uki_disk_cache_max_bytes = std::min<size_t>(0.25 * disk->getAvailableSpace(), uki_disk_cache_max_bytes);
+            uki_disk_cache_max_bytes = std::min<size_t>(0.25 * disk->getAvailableSpace().bytes, uki_disk_cache_max_bytes);
             break;
         }
     }
@@ -1310,7 +1393,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setFormatSchemaPath(remote_format_schema_path, true);
     try
     {
-        reloadFormatSchema(remote_format_schema_path, format_schema_path.string(), log);
+        reloadFormatSchema(global_context, remote_format_schema_path, format_schema_path.string(), log);
     }
     catch(const Exception &)
     {
@@ -1377,6 +1460,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // Uses a raw pointer to global context for getting ZooKeeper.
         main_config_reloader.reset();
+        users_config_reloader.reset();
 
         /** Explicitly destroy Context. It is more convenient than in destructor of Server, because logger is still available.
           * At this moment, no one could own shared part of Context.
@@ -1404,6 +1488,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         attachSystemTablesServer(*database_catalog.getSystemDatabase(), has_zookeeper);
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA, global_context));
         attachInformationSchema(global_context, *database_catalog.getDatabase(DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, global_context));
+        attachMySQL(global_context, *database_catalog.getDatabase(DatabaseCatalog::MYSQL, global_context));
+        attachMySQL(global_context, *database_catalog.getDatabase(DatabaseCatalog::MYSQL_UPPERCASE, global_context));
         /// We load temporary database first, because projections need it.
         database_catalog.initializeAndLoadTemporaryDatabase();
         /// Then, load remaining databases
@@ -1788,12 +1874,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         global_context->setEnableSSL(enable_ssl);
 
-        bool enable_tenant_systemdb = config().getBool("enable_tenant_systemdb", true);
-        setEnableTenantSystemDB(enable_tenant_systemdb);
-
         buildLoggers(config(), logger());
 
         main_config_reloader->start();
+        users_config_reloader->start();
         access_control.startPeriodicReloadingUsersConfigs();
         if (dns_cache_updater)
             dns_cache_updater->start();
@@ -1832,6 +1916,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Statistics::CacheManager::initialize(global_context);
             BindingCacheManager::initializeGlobalBinding(global_context);
             PlanCacheManager::initialize(global_context);
+            PreparedStatementManager::initialize(global_context);
             Statistics::AutoStats::AutoStatisticsManager::initialize(global_context, global_context->getConfigRef());
         }
 
@@ -1928,6 +2013,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_INFO(log, "Will shutdown forcefully.");
                 forceShutdown();
             }
+
+            /// Need to shutdown LockManager before shared->schedule_pool in context shutdown, otherwise it may core.
+            LockManager::instance().shutdown();
         });
 
         std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;

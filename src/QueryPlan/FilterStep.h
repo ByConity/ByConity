@@ -59,6 +59,8 @@ public:
 
     static ConstASTPtr rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
 
+    void prepare(const PreparedStatementContext & prepared_context) override;
+
 private:
     ActionsDAGPtr actions_dag;
     ConstASTPtr filter;

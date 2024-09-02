@@ -80,6 +80,8 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
+
     void setHiveMetaClient(const IMetaClientPtr & client);
     void initialize(StorageInMemoryMetadata metadata_);
 
@@ -92,8 +94,10 @@ public:
     bool supportsDistributedRead() const override { return true; }
     StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
     std::optional<TableStatistics> getTableStats(const Strings & columns, ContextPtr local_context) override;
+    std::vector<std::pair<String, UInt64>> getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format = true);
 
     virtual void serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files);
+    bool supportIntermedicateResultCache() const override { return true; }
 
 protected:
     void collectResource(ContextPtr local_context, PrepareContextResult & result);
@@ -101,8 +105,12 @@ protected:
     HivePartitions selectPartitions(
         ContextPtr local_context,
         const StorageMetadataPtr & metadata_snapshot,
-        const SelectQueryInfo & query_info,
-        const HiveWhereOptimizer & optimizer);
+        const SelectQueryInfo & query_info);
+
+    std::optional<UInt64> getSelectedBucketNumber(
+        ContextPtr local_context,
+        SelectQueryInfo & query_info,
+        const StorageMetadataPtr & metadata_snapshot) const;
 
     /// DirectoryList is not multi-threaded
     virtual std::shared_ptr<IDirectoryLister> getDirectoryLister();

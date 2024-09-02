@@ -33,7 +33,6 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
-#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
@@ -54,7 +53,7 @@ struct ExceptionWithCode
     int code;
 };
 
-using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
+using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 // <query_id, <segment_id, set of segment's received status for each instance >>
 using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, std::unordered_set<UInt64>>;
@@ -73,7 +72,7 @@ public:
                                              ContextPtr query_context);
 
     CancellationCode
-    cancelPlanSegmentsFromCoordinator(const String query_id, const Int32 & code, const String & exception, ContextPtr query_context);
+    cancelPlanSegmentsFromCoordinator(const String & query_id, const Int32 & code, const String & exception, ContextPtr query_context);
     CancellationCode cancelPlanSegments(
         const String & query_id,
         const Int32 & code,
@@ -82,21 +81,26 @@ public:
         ContextPtr query_context,
         std::shared_ptr<DAGGraph> dag_graph_ptr = nullptr);
 
-    void cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context);
+    void cancelWorkerPlanSegments(const String & query_id, DAGGraphPtr dag_ptr, ContextPtr query_context);
 
     bool finishPlanSegments(const String & query_id);
 
     AddressInfos getWorkerAddress(const String & query_id, size_t segment_id);
 
-    String getCurrentDispatchStatus(const String & query_id);
     void checkQueryCpuTime(const String & query_id);
-    void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
-    void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
+    void updateSegmentStatus(const RuntimeSegmentStatus & segment_status);
+    void updateQueryStatus(const RuntimeSegmentStatus & segment_status);
 
-    void updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index);
+    void updateReceivedSegmentStatusCounter(
+        const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentStatus & status);
     // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
-    void onSegmentFinished(const RuntimeSegmentsStatus & status);
+    void onSegmentFinished(const RuntimeSegmentStatus & status);
+    std::shared_ptr<BSPScheduler> getBSPScheduler(const String & query_id);
+
+    PlanSegmentSet getIOPlanSegmentInstanceIDs(const String & query_id) const;
+
+    void workerRestarted(const WorkerId & id);
 
 private:
     // Protect `query_map`.
@@ -118,11 +122,9 @@ private:
     Poco::Logger * log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
-    bool schedule(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
     void scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr);
 
 protected:
-    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> rank_worker_ids);
 };
 
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;

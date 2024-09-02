@@ -13,6 +13,7 @@ namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int ILLEGAL_COLUMN;
+    extern const int LOGICAL_ERROR;
 }
 
 namespace
@@ -44,6 +45,11 @@ public:
                             ErrorCodes::ILLEGAL_COLUMN};
 
         std::string_view setting_name{column->getDataAt(0)};
+        /// Tenant is not allowed to get blacklist settings
+        if (getContext()->shouldBlockPrivilegedOperations()
+            && privilegedSettings.find(std::string(setting_name)) != privilegedSettings.end())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Tenant cannot execute this function {} for security reason.", getName());
+
         value = getContext()->getSettingsRef().get(setting_name);
 
         DataTypePtr type = applyVisitor(FieldToDataType{}, value);
@@ -58,8 +64,10 @@ public:
 
 private:
     mutable Field value;
+    static const std::unordered_set<std::string> privilegedSettings;
 };
 
+const std::unordered_set<std::string> FunctionGetSetting::privilegedSettings = { "s3_access_key_secret", "tos_secret_key", "lasfs_secret_key", "s3_ak_secret" };
 }
 
 REGISTER_FUNCTION(GetSetting)

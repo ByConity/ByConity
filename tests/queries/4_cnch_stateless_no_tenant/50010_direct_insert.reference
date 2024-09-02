@@ -1,19 +1,4 @@
 1	1
-2	2
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: app_id:=`expr#app_id`, event_date:=`expr#event_date`, event_name:=`expr#event_name`, max_duration:=`expr#maxMerge(max_duration)`, sum_cost:=`expr#sumMerge(sum_cost)`
-   └─ MergingAggregated Est. ? rows
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#event_date, expr#event_name, expr#app_id}
-         └─ Aggregating Est. ? rows
-            │     Group by: {expr#event_date, expr#event_name, expr#app_id}
-            │     Aggregates: expr#sumMerge(sum_cost):=AggNull(sumMerge)(expr#sum_cost), expr#maxMerge(max_duration):=AggNull(maxMerge)(expr#max_duration)
-            └─ Projection Est. ? rows
-               │     Expressions: expr#app_id:=app_id, expr#event_date:=event_date, expr#event_name:=event_name, expr#max_duration:=max_duration, expr#sum_cost:=sum_cost
-               └─ TableScan test.events_aggregation Est. ? rows
-                        Outputs: [max_duration, sum_cost, event_date, event_name, app_id]
-note: Materialized Views is applied for 1 times: test.events_aggregate_view.
 1	show	2022-06-14	1	64
 2	send	2022-06-14	2	64
 3	show	2022-06-15	3	64
@@ -22,3 +7,4 @@ note: Materialized Views is applied for 1 times: test.events_aggregate_view.
 2	send	2022-06-14	2	64
 3	show	2022-06-15	3	64
 4	show	2022-06-15	3	64
+project_1	2023-06-15	23	84	53.5

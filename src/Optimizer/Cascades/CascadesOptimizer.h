@@ -20,10 +20,13 @@
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <Optimizer/Rule/Rule.h>
+#include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/CTEVisitHelper.h>
 #include <QueryPlan/PlanNode.h>
+#include <QueryPlan/PlanNodeIdAllocator.h>
 
 #include <stack>
+#include <unordered_set>
 
 namespace DB
 {
@@ -47,7 +50,7 @@ public:
     static PlanNodePtr buildPlanNode(GroupId root, CascadesContext & context, const Property & required_prop);
 private:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
-    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_cascades_optimizer;}
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_cascades_optimizer; }
     bool enable_cbo;
 };
 
@@ -77,32 +80,15 @@ public:
     const std::vector<RulePtr> & getTransformationRules() const { return transformation_rules; }
     const std::vector<RulePtr> & getImplementationRules() const { return implementation_rules; }
 
-    String getInfo() const
-    {
-        std::stringstream ss;
+    void trace(const String & task_name, GroupId group_id, RuleType rule_type, UInt64 elapsed_ns);
 
-        ss << "Group: " << memo.getGroups().size() << '\n';
-
-        size_t total_logical_expr = 0;
-        size_t total_physical_expr = 0;
-        for (auto & group : memo.getGroups())
-        {
-            total_logical_expr += group->getLogicalExpressions().size();
-            total_physical_expr += group->getPhysicalExpressions().size();
-        }
-        ss << "Logical Expr: " << total_logical_expr << '\n';
-        ss << "Physical Expr: " << total_physical_expr << '\n';
-
-
-        return ss.str();
-    }
+    String getInfo() const;
 
     UInt64 getTaskExecutionTimeout() const { return task_execution_timeout; }
 
     bool isEnablePruning() const { return enable_pruning; }
-
-    void setEnableWhatIfMode(bool enable_what_if_mode_) { enable_what_if_mode = enable_what_if_mode_; }
-    bool isEnableWhatIfMode() const { return enable_what_if_mode;}
+    bool isEnableAutoCTE() const { return enable_auto_cte; }
+    bool isEnableTrace() const { return enable_trace; }
     bool isEnableCbo() const { return enable_cbo; }
 
     size_t getMaxJoinSize() const { return max_join_size; }
@@ -119,9 +105,17 @@ private:
     bool support_filter;
     UInt64 task_execution_timeout;
     bool enable_pruning;
-    bool enable_what_if_mode = false;
+    bool enable_auto_cte;
+    bool enable_trace;
     bool enable_cbo;
     size_t max_join_size;
+
+    struct Metric
+    {
+        UInt64 elapsed_ns;
+        UInt64 counts;
+    };
+    std::unordered_map<RuleType, std::unordered_map<String, Metric>> rule_trace;
     
     Poco::Logger * log;
 };
@@ -170,13 +164,13 @@ private:
     double cost_upper_bound;
 };
 
-class WorkerSizeFinder : public PlanNodeVisitor<std::optional<size_t>, Void>
+class WorkerSizeFinder : public PlanNodeVisitor<std::optional<size_t>, const Context>
 {
 public:
     static size_t find(QueryPlan & query_plan, const Context & context);
-    std::optional<size_t> visitPlanNode(PlanNodeBase & node, Void & context) override;
-    std::optional<size_t> visitTableScanNode(TableScanNode & node, Void & context) override;
-    std::optional<size_t> visitCTERefNode(CTERefNode & node, Void & context) override;
+    std::optional<size_t> visitPlanNode(PlanNodeBase & node, const Context & context) override;
+    std::optional<size_t> visitTableScanNode(TableScanNode & node, const Context & context) override;
+    std::optional<size_t> visitCTERefNode(CTERefNode & node, const Context & context) override;
 
 private:
     explicit WorkerSizeFinder(CTEInfo & cte_info_) : cte_info(cte_info_) { }

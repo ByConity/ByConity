@@ -27,8 +27,9 @@
 #include <Transaction/TxnTimestamp.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
-#include "Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h"
+#include <Storages/CheckResults.h>
+#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/DataPart_fwd.h>
 
 #include <unordered_set>
@@ -49,7 +50,13 @@ namespace IngestColumnCnch
     struct IngestPartitionParam;
 }
 
+namespace CnchDedupHelper
+{
+    struct DedupTask;
+}
+
 class MergeTreeMetaBase;
+class StorageMaterializedView;
 struct MarkRange;
 struct StorageID;
 struct ManipulationInfo;
@@ -75,8 +82,11 @@ public:
     std::unordered_set<String> touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id);
     std::vector<ManipulationInfo> getManipulationTasksStatus();
 
+    void submitMvRefreshTask(
+        const StorageMaterializedView & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id);
+
     /// send resource to worker async
-    void sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries);
+    void sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries, std::set<String> cnch_table_create_queries = {});
 
     brpc::CallId sendQueryDataParts(
         const ContextPtr & context,
@@ -86,6 +96,20 @@ public:
         const std::set<Int64> & required_bucket_numbers,
         const ExceptionHandlerWithFailedInfoPtr & handler,
         const WorkerId & worker_id = WorkerId{});
+
+    brpc::CallId sendCnchFileDataParts(
+        const ContextPtr & context,
+        const StoragePtr & storage,
+        const String & local_table_name,
+        const FileDataPartsCNCHVector & parts,
+        const ExceptionHandlerPtr & handler);
+
+    CheckResults checkDataParts(
+        const ContextPtr & context,
+        const IStorage & storage,
+        const String & local_table_name,
+        const String & create_query,
+        const ServerDataPartsVector & parts);
 
     brpc::CallId preloadDataParts(
         const ContextPtr & context,
@@ -98,14 +122,14 @@ public:
         UInt64 parts_preload_level,
         UInt64 submit_ts);
 
-        brpc::CallId dropPartDiskCache(
-            const ContextPtr & context,
-            const TxnTimestamp & txn_id,
-            const IStorage & storage,
-            const String & create_local_table_query,
-            const ServerDataPartsVector & parts,
-            bool sync,
-            bool drop_vw_disk_cache);
+    brpc::CallId dropPartDiskCache(
+        const ContextPtr & context,
+        const TxnTimestamp & txn_id,
+        const IStorage & storage,
+        const String & create_local_table_query,
+        const ServerDataPartsVector & parts,
+        bool sync,
+        bool drop_vw_disk_cache);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,
@@ -121,9 +145,20 @@ public:
         const WorkerId & worker_id,
         bool with_mutations = false);
 
-    void removeWorkerResource(TxnTimestamp txn_id);
+    brpc::CallId executeDedupTask(
+        const ContextPtr & context,
+        const TxnTimestamp & txn_id,
+        UInt16 rpc_port,
+        const IStorage & storage,
+        const CnchDedupHelper::DedupTask & dedup_task,
+        const ExceptionHandlerPtr & handler,
+        std::function<void(bool)> funcOnCallback);
 
-    void createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports);
+    brpc::CallId removeWorkerResource(TxnTimestamp txn_id, ExceptionHandlerPtr handler);
+
+    void createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports, const size_t & deduper_index);
+    void assignHighPriorityDedupPartition(const StorageID & storage_id, const Names & high_priority_partition);
+    void assignRepairGran(const StorageID & storage_id, const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time);
     void dropDedupWorker(const StorageID & storage_id);
     DedupWorkerStatus getDedupWorkerStatus(const StorageID & storage_id);
 

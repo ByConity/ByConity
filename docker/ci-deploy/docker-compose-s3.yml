@@ -16,6 +16,7 @@ services:
     depends_on:
       - fdb
       - minio
+      - createbuckets
     volumes:
       - binary_volume:/opt/byconity/bin/
       - config_volume_for_s3:/config/
@@ -130,7 +131,7 @@ services:
     # image: minio/minio:RELEASE.2024-01-11T07-46-16Z
     image: quay.io/minio/minio:RELEASE.2024-01-11T07-46-16Z
     volumes:
-      - './minio_data:/data'
+      - /data
     command: server /data --console-address ":9001"
   # Create a default bucket.
   createbuckets:

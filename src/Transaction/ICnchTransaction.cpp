@@ -16,14 +16,16 @@
 #include <Transaction/ICnchTransaction.h>
 
 #include <Catalog/DataModelPartWrapper.h>
-// #include <MergeTreeCommon/CnchPartsHelper.h>
+#include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
+#include <Core/UUID.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Transaction/CnchLock.h>
 #include <Transaction/LockManager.h>
 #include <cppkafka/topic_partition_list.h>
 #include <Common/serverLocality.h>
+#include <Transaction/TransactionCommon.h>
 
 namespace DB
 {
@@ -57,29 +59,18 @@ void ICnchTransaction::setTransactionRecord(TransactionRecord record)
     txn_record = std::move(record);
 }
 
-std::shared_ptr<CnchLockHolder> ICnchTransaction::createLockHolder(std::vector<LockInfoPtr> && elems)
+void ICnchTransaction::appendLockHolder(CnchLockHolderPtr & lock_holder)
 {
-    // if (lock_holder.has_value())
-    //     throw Exception("Invalid operation, should only acquired lock once", ErrorCodes::LOGICAL_ERROR);
-    /// TODO: should avoid acquired lock multiple time
-    auto holder = std::make_shared<CnchLockHolder>(global_context, std::move(elems));
-    lock_holder = holder;
-    return holder;
+    auto lock = getLock();
+    lock_holders.emplace_back(lock_holder);
 }
 
 void ICnchTransaction::assertLockAcquired() const
 {
     /// threadsafe
-    if (auto impl = lock_holder.lock())
-    {
-        impl->assertLockAcquired();
-    }
+    for (const auto & lock_holder: lock_holders)
+        lock_holder->assertLockAcquired();
 }
-
-// IntentLockPtr ICnchTransaction::createIntentLock(const LockEntity & entity, const Strings & intent_names)
-// {
-//     return std::make_unique<IntentLock>(context, getTransactionRecord(), entity, intent_names);
-// }
 
 void ICnchTransaction::setKafkaTpl(const String & consumer_group_, const cppkafka::TopicPartitionList & tpl_)
 {
@@ -107,6 +98,37 @@ void ICnchTransaction::addDatabaseIntoCache(DatabasePtr db)
 {
     std::lock_guard lock(database_cache_mutex);
     database_cache.insert(std::make_pair(db->getDatabaseName(), std::move(db)));
+}
+
+void ICnchTransaction::tryCleanMergeTagger()
+{
+    if (getInitiator() != txnInitiatorToString(CnchTransactionInitiator::Merge))
+        return;
+
+    /// Only uuid is required to getting merge thread.
+    auto storage_id = StorageID("", "", main_table_uuid);
+    auto bg_thread = global_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, storage_id);
+    if (!bg_thread)
+    {
+        LOG_WARNING(log, "MergeMutateThread is not found for {} and can't clean merge tagger for txn {}",
+                        UUIDHelpers::UUIDToString(storage_id.uuid), txn_record.txnID().toString());
+        return;
+    }
+
+    auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+    merge_mutate_thread->tryRemoveTask(txn_record.txnID().toString());
+}
+
+void ICnchTransaction::serialize(Protos::TransactionMetadata & txn_meta)  const
+{
+    txn_meta.mutable_txn_record()->CopyFrom(txn_record.pb_model);
+    txn_meta.set_commit_time(commit_time.toUInt64());
+    RPCHelpers::fillUUID(main_table_uuid, *(txn_meta.mutable_main_table()));
+    if (!consumer_group.empty())
+    {
+        txn_meta.set_consumer_group(consumer_group);
+        RPCHelpers::fillKafkaTPL(tpl, *(txn_meta.mutable_tpl()));
+    }
 }
 
 }

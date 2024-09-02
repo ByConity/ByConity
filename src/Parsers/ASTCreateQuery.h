@@ -29,6 +29,7 @@
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTableOverrides.h>
+#include <Parsers/ASTRefreshStrategy.h>
 #include <Interpreters/StorageID.h>
 #include "Parsers/IAST_fwd.h"
 
@@ -49,7 +50,6 @@ public:
     IAST * unique_key = nullptr;
     IAST * sample_by = nullptr;
     IAST * ttl_table = nullptr;
-    IAST * comment = nullptr;
     ASTSetQuery * settings = nullptr;
 
 
@@ -75,6 +75,7 @@ public:
     IAST              * primary_key = nullptr;
     ASTExpressionList * foreign_keys = nullptr;
     ASTExpressionList * unique = nullptr; // unique is not enforced.
+    ASTExpressionList * mysql_indices = nullptr;
 
     String getID(char) const override { return "Columns definition"; }
 
@@ -87,7 +88,8 @@ public:
     bool empty() const
     {
         return (!columns || columns->children.empty()) && (!indices || indices->children.empty()) && (!constraints || constraints->children.empty())
-            && (!projections || projections->children.empty()) && (!foreign_keys || foreign_keys->children.empty())&& (!unique || unique->children.empty());
+            && (!projections || projections->children.empty()) && (!foreign_keys || foreign_keys->children.empty())&& (!unique || unique->children.empty())
+            && (!mysql_indices || mysql_indices->children.empty());
     }
 };
 
@@ -127,6 +129,7 @@ public:
 
     StorageID to_table_id = StorageID::createEmpty();   /// For CREATE MATERIALIZED VIEW mv TO table.
     UUID to_inner_uuid = UUIDHelpers::Nil;      /// For materialized view with inner table
+    
     ASTStorage * storage = nullptr;
     String as_database;
     String as_table;
@@ -138,6 +141,7 @@ public:
     ASTExpressionList * dictionary_attributes_list = nullptr; /// attributes of
     ASTDictionary * dictionary = nullptr; /// dictionary definition (layout, primary key, etc.)
 
+    ASTRefreshStrategy * refresh_strategy = nullptr; // For CREATE MATERIALIZED VIEW ... REFRESH ...
     std::optional<UInt64> live_view_timeout;    /// For CREATE LIVE VIEW ... WITH TIMEOUT ...
     std::optional<UInt64> live_view_periodic_refresh;    /// For CREATE LIVE VIEW ... WITH [PERIODIC] REFRESH ...
 

@@ -2,6 +2,7 @@
 
 #include <sys/types.h>
 
+#include <Common/Throttler.h>
 #include <Common/CurrentMetrics.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 
@@ -35,7 +36,8 @@ public:
         int flags = -1,
         mode_t mode = 0666,
         char * existing_memory = nullptr,
-        size_t alignment = 0);
+        size_t alignment = 0,
+        ThrottlerPtr throttler = nullptr);
 
     /// Use pre-opened file descriptor.
     WriteBufferFromFile(
@@ -53,6 +55,14 @@ public:
     std::string getFileName() const override
     {
         return file_name;
+    }
+
+    WriteBuffer * inplaceReconstruct(const String & out_path, [[maybe_unused]] std::unique_ptr<WriteBuffer> nested) override
+    {
+        // Call the destructor explicitly but does not free memory
+        this->~WriteBufferFromFile();
+        new (this) WriteBufferFromFile(out_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
+        return this;
     }
 };
 

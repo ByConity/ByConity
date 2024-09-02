@@ -127,7 +127,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     for (const auto & child : alter.command_list->children)
     {
         auto * command_ast = child->as<ASTAlterCommand>();
-        if (auto alter_command = AlterCommand::parse(command_ast))
+        if (auto alter_command = AlterCommand::parse(command_ast, getContext()))
             alter_commands.emplace_back(std::move(*alter_command));
         else if (auto partition_command = PartitionCommand::parse(command_ast))
         {
@@ -167,7 +167,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
     if (!partition_commands.empty())
     {
         table->checkAlterPartitionIsPossible(partition_commands, metadata_snapshot, getContext()->getSettingsRef());
-        auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
+        auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext(), query_ptr);
         if (!partition_commands_pipe.empty())
             res.pipeline.init(std::move(partition_commands_pipe));
         table->setUpdateTimeNow();
@@ -223,7 +223,7 @@ BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
     for (const auto & child : alter.command_list->children)
     {
         auto * command_ast = child->as<ASTAlterCommand>();
-        if (auto alter_command = AlterCommand::parse(command_ast))
+        if (auto alter_command = AlterCommand::parse(command_ast, getContext()))
             alter_commands.emplace_back(std::move(*alter_command));
         else
             throw Exception("Wrong parameter type in ALTER DATABASE query", ErrorCodes::LOGICAL_ERROR);
@@ -408,7 +408,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
         }
         case ASTAlterCommand::ATTACH_PARTITION:
         case ASTAlterCommand::ATTACH_DETACHED_PARTITION:
-        {
+        case ASTAlterCommand::PREATTACH_PARTITION: {
             required_access.emplace_back(AccessType::INSERT, database, table);
             break;
         }
@@ -427,6 +427,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             {
                 case DataDestinationType::DISK: [[fallthrough]];
                 case DataDestinationType::VOLUME:
+                case DataDestinationType::BYTECOOL:
                     required_access.emplace_back(AccessType::ALTER_MOVE_PARTITION, database, table);
                     break;
                 case DataDestinationType::TABLE:
@@ -531,6 +532,14 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
         case ASTAlterCommand::MODIFY_DATABASE_SETTING:
         {
             required_access.emplace_back(AccessType::ALTER_DATABASE_SETTINGS, database, table);
+            break;
+        }
+        case ASTAlterCommand::RENAME_TABLE:
+        {
+            break;
+        }
+        case ASTAlterCommand::PARTITION_BY:
+        {
             break;
         }
     }

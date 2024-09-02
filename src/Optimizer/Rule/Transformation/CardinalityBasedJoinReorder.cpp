@@ -22,11 +22,10 @@ const std::vector<RuleType> & CardinalityBasedJoinReorder::blockRules() const
     return block;
 }
 
-PatternPtr CardinalityBasedJoinReorder::getPattern() const
+ConstRefPatternPtr CardinalityBasedJoinReorder::getPattern() const
 {
-    return Patterns::multiJoin()
-        .matchingStep<MultiJoinStep>([&](const MultiJoinStep & s) { return s.getGraph().getNodes().size() > max_join_size; })
-        .result();
+    /* can't make static lambda with capture */
+    return pattern;
 }
 
 struct InterJoinNodeInfo
@@ -45,7 +44,7 @@ struct InterJoinNodeInfo
 TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto * multi_join_node = dynamic_cast<MultiJoinNode *>(node.get());
-    if (!multi_join_node || !rule_context.optimization_context->getMemo().getGroupById(rule_context.group_id)->isJoinRoot())
+    if (!multi_join_node|| !rule_context.optimization_context->getMemo().getGroupById(rule_context.group_id)->isJoinRoot())
         return {};
 
     auto multi_join_step = multi_join_node->getStep();
@@ -121,10 +120,12 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
                         join_step.getLeftKeys(),
                         join_step.getRightKeys(),
                         join_step.getKind(),
+                        join_step.getStrictness(),
                         *rule_context.context,
                         memo.getGroupById(current_group_id)->isTableScan(),
                         memo.getGroupById(group_id)->isTableScan(),
-                        nullptr,
+                        {JoinReorderUtils::computeFilterSelectivity(current_group_id, memo),
+                         JoinReorderUtils::computeFilterSelectivity(group_id, memo)},
                         {},
                         true);
                     if (!stat)
@@ -143,11 +144,7 @@ TransformResult CardinalityBasedJoinReorder::transformImpl(PlanNodePtr node, con
                 GroupExprPtr join_expr;
                 rule_context.optimization_context->getOptimizerContext().recordPlanNodeIntoGroup(
                     min_join_node.join_node, join_expr, RuleType::CARDILALITY_BASED_JOIN_REORDER);
-                                    
                 auto new_group_id = join_expr->getGroupId();
-                
-                // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "CardinalityBased generate new join in new group id={}", new_group_id);
-
                 for (auto type : blockRules())
                     join_expr->setRuleExplored(type);
 

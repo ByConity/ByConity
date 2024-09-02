@@ -19,8 +19,7 @@ namespace DB
 {
 PlanNodeStatisticsPtr LimitEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const LimitStep & step)
 {
-    size_t limit = step.getLimit();
-    return getLimitStatistics(child_stats, limit);
+    return step.hasPreparedParam() ? child_stats : getLimitStatistics(child_stats, step.getLimitValue());
 }
 
 PlanNodeStatisticsPtr LimitEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const LimitByStep & step)

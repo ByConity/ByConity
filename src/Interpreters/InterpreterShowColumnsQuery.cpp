@@ -8,7 +8,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
-
+#include <Parsers/formatTenantDatabaseName.h>
 
 namespace DB
 {
@@ -26,10 +26,10 @@ String InterpreterShowColumnsQuery::getRewrittenQuery()
     const auto & query = query_ptr->as<ASTShowColumnsQuery &>();
     const DialectType dialect_type = getContext()->getSettingsRef().dialect_type;
     ClientInfo::Interface client_interface = getContext()->getClientInfo().interface;
-    const bool use_mysql_types = 
+    const bool use_mysql_types =
         (client_interface == ClientInfo::Interface::MYSQL) // connection made through MySQL wire protocol
         || (dialect_type == DialectType::MYSQL) // for ease of unit-testing
-        ; 
+        ;
 
     const auto & settings = getContext()->getSettingsRef();
     const bool remap_string_as_text = settings.mysql_map_string_to_text_in_show_columns;
@@ -123,7 +123,7 @@ SELECT
         /// - comment
         /// - privileges: <not implemented, TODO ask system.grants>
         rewritten_query += R"(,
-    NULL AS collation,
+    'utf8mb4_0900_ai_ci' AS collation,
     comment_ AS comment,
     '' AS privileges )";
     }
@@ -139,10 +139,10 @@ FROM (SELECT name AS name_,
              default_kind AS default_kind_,
              default_expression AS default_expression_,
              comment AS comment_
-      FROM system.columns)
+      FROM system.cnch_columns)
 WHERE
     database_ = '{}'
-    AND table_ = '{}' )", database, table);
+    AND table_ = '{}' )", getOriginalDatabaseName(database), table);
 
     if (!query.like.empty())
     {
@@ -162,6 +162,13 @@ WHERE
 
     if (query.limit_length)
         rewritten_query += fmt::format(" LIMIT {}", query.limit_length);
+
+    if (use_mysql_types) {
+        String select = "SELECT field as Field, type as Type, subq.null as `Null`, key as Key, default as Default, extra as Extra";
+        if (query.full)
+            select += ", collation as Collation, comment as Comment, privileges as Privileges";
+        rewritten_query = fmt::format("{} from ({}) as subq", select, rewritten_query);
+    }
 
     return rewritten_query;
 }

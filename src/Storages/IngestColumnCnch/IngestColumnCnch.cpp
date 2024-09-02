@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Storages/IngestColumnCnch/IngestColumnBlockInputStream.h>
 #include <Storages/IngestColumnCnch/IngestColumnHelper.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -36,6 +37,10 @@
 #include <Parsers/queryToString.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
+#include <common/sleep.h>
 
 namespace DB
 {
@@ -110,6 +115,90 @@ String reconstructAlterQuery(
 
     return fmt::format("{} {} {}", query_first_part, query_key_part, query_end_part);
 }
+
+std::vector<std::pair<size_t, uint32_t>>
+getIngestWorkersIndexAndJobsWithOrder(const std::vector<ResourceManagement::WorkerMetrics> & worker_metrics, UInt64 max_ingest_task)
+{
+    if(worker_metrics.empty())
+    {
+        throw Exception("Can not get WorkerMetrics from ResourceManagement before Ingest with bucket.", ErrorCodes::SYSTEM_ERROR);
+    }
+
+    std::vector<std::pair<size_t, uint32_t>> workers_index_with_task;
+
+    for (size_t i = 0; i < worker_metrics.size(); i++)
+    {
+        if (worker_metrics[i].num_queries < max_ingest_task || max_ingest_task == 0)
+        {
+            workers_index_with_task.push_back({i, worker_metrics[i].num_queries});
+        }
+    }
+
+    std::sort(
+        workers_index_with_task.begin(), workers_index_with_task.end(), [](std::pair<size_t, uint32_t> x, std::pair<size_t, uint32_t> y) {
+            return x.second < y.second;
+        });
+
+    return workers_index_with_task;
+}
+
+BlockInputStreamPtr forwardIngestPartitionToWorkerWithBucketTableImpl(
+    StorageCnchMergeTree & target_table,
+    const String & create_source_cloud_merge_tree_query,
+    const String & create_target_cloud_merge_tree_query,
+    const String & query_for_send_to_worker,
+    const PartitionCommand & command,
+    const WorkerGroupHandle & worker_group,
+    const ContextPtr & context,
+    Poco::Logger * log)
+{
+    auto workers_index_with_task = getIngestWorkersIndexAndJobsWithOrder(
+        worker_group->getMetrics().worker_metrics_vec, context->getSettingsRef().max_ingest_task_on_workers);
+
+    size_t worker_nums = workers_index_with_task.size();
+
+    std::vector<Int64> buckets_for_ingest = command.bucket_nums;
+
+    if (buckets_for_ingest.empty())
+    {
+        assert(target_table.getInMemoryMetadataPtr()->getBucketNumberFromClusterByKey() > 0);
+        buckets_for_ingest.resize(target_table.getInMemoryMetadataPtr()->getBucketNumberFromClusterByKey());
+        std::iota(buckets_for_ingest.begin(), buckets_for_ingest.end(), 0);
+    }
+
+    auto buckets_lists = splitBucketsForWorker(worker_nums, buckets_for_ingest);
+
+    auto tmp_ingest_context = Context::createCopy(context);
+    std::vector<BlockInputStreamPtr> remote_streams;
+
+    for (size_t index = 0; index < worker_nums; index++)
+    {
+        if (buckets_lists[index].empty())
+        {
+            continue;
+        }
+
+        LOG_TRACE(log, fmt::format("{} with {} buckets", query_for_send_to_worker, buckets_lists[index].size()));
+
+        auto worker_index = workers_index_with_task[index].first;
+        const auto * write_shard_ptr = &(worker_group->getShardsInfo().at(worker_index));
+        auto worker_client = worker_group->getWorkerClients().at(worker_index);
+
+        auto query_for_send = fmt::format("{} BUCKETS {}", query_for_send_to_worker, fmt::join(buckets_lists[index], ", "));
+
+        if (query_for_send.size() > tmp_ingest_context->getSettingsRef().max_query_size)
+        {
+            tmp_ingest_context->setSetting("max_query_size", query_for_send.size() + 1);
+        }
+
+        worker_client->sendCreateQueries(tmp_ingest_context, {create_target_cloud_merge_tree_query, create_source_cloud_merge_tree_query});
+        remote_streams.emplace_back(
+            CnchStorageCommonHelper::sendQueryPerShard(tmp_ingest_context, query_for_send, *write_shard_ptr, true));
+    }
+
+    return std::make_shared<UnionBlockInputStream>(remote_streams, nullptr, worker_nums);
+}
+
 } /// end namespace anonymous
 
 BlockInputStreamPtr forwardIngestPartitionToWorker(
@@ -119,6 +208,9 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
     ContextPtr context
     )
 {
+    if (auto sleep_ms = context->getSettingsRef().sleep_in_send_ingest_to_worker_ms.totalMilliseconds())
+        sleepForMilliseconds(sleep_ms);
+
     Poco::Logger * log = target_table.getLogger();
     TxnTimestamp txn_id = context->getCurrentTransactionID();
     std::hash<String> hasher;
@@ -138,13 +230,33 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
     auto num_of_workers = worker_group->getShardsInfo().size();
     if (!num_of_workers)
         throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
-    std::size_t index = std::hash<String>{}(task_id) % num_of_workers;
-    auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
-    auto worker_client = worker_group->getWorkerClient(index, /*skip_busy_worker*/false).second;
-    worker_client->sendCreateQueries(context,
-        {create_target_cloud_merge_tree_query, create_source_cloud_merge_tree_query});
 
-    return CnchStorageCommonHelper::sendQueryPerShard(context, query_for_send_to_worker, *write_shard_ptr, true);
+    auto ordered_key_names = getOrderedKeys(command.key_names, target_table.getInMemoryMetadata());
+    auto ingest_column_names = command.column_names;
+
+    if (context->getSettingsRef().optimize_ingest_with_bucket
+        && checkIngestWithBucketTable(source_table, target_table, ordered_key_names, ingest_column_names))
+    {
+        return forwardIngestPartitionToWorkerWithBucketTableImpl(
+            target_table,
+            create_source_cloud_merge_tree_query,
+            create_target_cloud_merge_tree_query,
+            query_for_send_to_worker,
+            command,
+            worker_group,
+            context,
+            log);
+    }
+    else
+    {
+        std::size_t index = std::hash<String>{}(task_id) % num_of_workers;
+        auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
+        auto worker_client = worker_group->getWorkerClient(index, /*skip_busy_worker*/false).second;
+        worker_client->sendCreateQueries(context,
+            {create_target_cloud_merge_tree_query, create_source_cloud_merge_tree_query});
+
+        return CnchStorageCommonHelper::sendQueryPerShard(context, query_for_send_to_worker, *write_shard_ptr, true);
+    }
 }
 
 Pipe StorageCloudMergeTree::ingestPartition(const StorageMetadataPtr & /*metadata_snapshot*/, const PartitionCommand & command, ContextPtr local_context)
@@ -206,12 +318,12 @@ Pipe ingestPartitionInServer(
     LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
     partition_lock->setMode(LockMode::X);
     partition_lock->setTimeout(local_context->getSettingsRef().ingest_column_memory_lock_timeout.value.totalMilliseconds()); // default 5s
-    partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(target_storage_id.uuid));
+    partition_lock->setUUIDAndPrefix(target_storage_id.uuid, LockInfo::task_domain);
     partition_lock->setPartition(partition_id);
 
     Stopwatch lock_watch;
 
-    auto cnch_lock = cur_txn->createLockHolder({std::move(partition_lock)});
+    auto cnch_lock = std::make_shared<CnchLockHolder>(local_context, std::move(partition_lock));
     cnch_lock->lock();
     LOG_DEBUG(log, "Acquired lock in {} ms", lock_watch.elapsedMilliseconds());
 
@@ -251,7 +363,7 @@ Pipe ingestPartitionInServer(
 
     BlockInputStreamPtr in = forwardIngestPartitionToWorker(storage, *source_merge_tree, command, local_context);
     cur_txn->setMainTableUUID(storage.getStorageUUID());
-    in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(cur_txn));
+    in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(cur_txn), std::move(cnch_lock));
     return Pipe{std::make_shared<SourceFromInputStream>(std::move(in))};
 }
 

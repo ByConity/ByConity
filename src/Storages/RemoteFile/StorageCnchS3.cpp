@@ -26,13 +26,16 @@
 #    include <Storages/VirtualColumnUtils.h>
 #    include <aws/core/auth/AWSCredentials.h>
 #    include <aws/s3/S3Client.h>
-#    include <aws/s3/model/CopyObjectRequest.h>
-#    include <aws/s3/model/DeleteObjectsRequest.h>
 #    include <aws/s3/model/ListObjectsV2Request.h>
 #    include <re2/re2.h>
 #    include <re2/stringpiece.h>
 #    include <Common/Exception.h>
 #    include <Common/parseGlobs.h>
+
+namespace ProfileEvents
+{
+    extern const Event S3ListObjects;
+}
 
 namespace DB
 {
@@ -64,6 +67,7 @@ Strings ListKeysWithRegexpMatching(
     UInt64 total_keys = 0;
     while (!is_finished)
     {
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
         outcome = client->ListObjectsV2(request);
         if (!outcome.IsSuccess())
             throw Exception(

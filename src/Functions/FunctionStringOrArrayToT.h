@@ -22,7 +22,7 @@ namespace ErrorCodes
 }
 
 
-template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = true>
+template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = true, bool is_array = false>
 class FunctionStringOrArrayToT : public IFunction
 {
 public:
@@ -30,11 +30,16 @@ public:
     static FunctionPtr create(ContextPtr context)
     {
         if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
-            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionStringOrArrayToT>());
-        return std::make_shared<FunctionStringOrArrayToT>();
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionStringOrArrayToT>(context));
+        return std::make_shared<FunctionStringOrArrayToT>(context);
     }
 
-    ArgType getArgumentsType() const override { return ArgType::STRINGS; }
+    explicit FunctionStringOrArrayToT(ContextPtr context)
+    {
+        is_mysql_dialect = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+    }
+
+    ArgType getArgumentsType() const override { return is_array ? ArgType::UNDEFINED : ArgType::STRINGS; }
 
     String getName() const override
     {
@@ -117,7 +122,7 @@ public:
             vec_res.resize(col_map->size());
             const auto & col_nested = col_map->getNestedColumn();
 
-            Impl::array(col_nested.getOffsets(), vec_res);
+            Impl::map(col_nested.getOffsets(), vec_res, is_mysql_dialect);
             return col_res;
         }
         else if (const ColumnUUID * col_uuid = checkAndGetColumn<ColumnUUID>(column.get()))
@@ -148,6 +153,43 @@ public:
             throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}",
                 arguments[0].column->getName(), getName());
     }
+
+private:
+    bool is_mysql_dialect;
+
+#ifdef USE_EMBEDDED_COMPILER
+protected:
+    bool isCompilableImpl(const DataTypes & types) const override
+    {
+        return Impl::isCompilable(types);
+    }
+
+    llvm::Value * compileImpl(llvm::IRBuilderBase & b, const DataTypes & types, Values values, JITContext & ) const override
+    {
+        WhichDataType which_data_type(types[0]);
+        if (which_data_type.isString())
+        {
+            return Impl::compileString(b, types, values);
+        }
+        else if (which_data_type.isFixedString())
+        {
+            return Impl::compileFixedString(b, types, values);
+        }
+        else if (which_data_type.isArray())
+        {
+            return Impl::compileArray(b, types, values);
+        }
+        else if (which_data_type.isMap())
+        {
+            return Impl::compileMap(b, types, values);
+        }
+        else if (which_data_type.isUUID())
+        {
+            return Impl::compileUuid(b, types, values);
+        }
+        throw Exception("Illegal type " + types[0]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+#endif
 };
 
 }

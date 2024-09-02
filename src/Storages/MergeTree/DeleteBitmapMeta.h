@@ -28,6 +28,7 @@ namespace DB
 {
 class MergeTreeMetaBase;
 
+using DataModelDeleteBitmap = Protos::DataModelDeleteBitmap;
 using DataModelDeleteBitmapPtr = std::shared_ptr<Protos::DataModelDeleteBitmap>;
 using DataModelDeleteBitmapPtrVector = std::vector<std::shared_ptr<Protos::DataModelDeleteBitmap>>;
 
@@ -47,9 +48,16 @@ enum class DeleteBitmapMetaType
 class LocalDeleteBitmap
 {
 public:
-    static std::shared_ptr<LocalDeleteBitmap> createBase(const MergeTreePartInfo & part_info, const DeleteBitmapPtr & bitmap, UInt64 txn_id)
+    static std::shared_ptr<LocalDeleteBitmap>
+    createBase(const MergeTreePartInfo & part_info, const DeleteBitmapPtr & bitmap, UInt64 txn_id, int64_t bucket_number)
     {
-        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, bitmap);
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, bitmap, bucket_number);
+    }
+
+    static std::shared_ptr<LocalDeleteBitmap>
+    createDelta(const MergeTreePartInfo & part_info, const DeleteBitmapPtr & bitmap, UInt64 txn_id, int64_t bucket_number)
+    {
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Delta, txn_id, bitmap, bucket_number);
     }
 
     /// If the delta part is small, just create a delta bitmap.
@@ -61,29 +69,43 @@ public:
         const ImmutableDeleteBitmapPtr & base_bitmap,
         const DeleteBitmapPtr & delta_bitmap,
         UInt64 txn_id,
-        bool force_create_base_bitmap);
+        bool force_create_base_bitmap,
+        int64_t bucket_number);
 
-    static std::shared_ptr<LocalDeleteBitmap> createTombstone(const MergeTreePartInfo & part_info, UInt64 txn_id)
+    static std::shared_ptr<LocalDeleteBitmap>
+    createTombstone(const MergeTreePartInfo & part_info, UInt64 txn_id, int64_t bucket_number)
     {
-        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Tombstone, txn_id, /*bitmap=*/nullptr);
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Tombstone, txn_id, /*bitmap=*/nullptr, bucket_number);
     }
 
-    static std::shared_ptr<LocalDeleteBitmap> createRangeTombstone(const String & partition_id, Int64 max_block, UInt64 txn_id)
+    static std::shared_ptr<LocalDeleteBitmap>
+    createRangeTombstone(const String & partition_id, Int64 max_block, UInt64 txn_id, int64_t bucket_number)
     {
         return std::make_shared<LocalDeleteBitmap>(
-            partition_id, 0, max_block, DeleteBitmapMetaType::RangeTombstone, txn_id, /*bitmap=*/nullptr);
+            partition_id, 0, max_block, DeleteBitmapMetaType::RangeTombstone, txn_id, /*bitmap=*/nullptr, bucket_number);
     }
 
     /// Clients should prefer the createXxx static factory method above
-    LocalDeleteBitmap(const MergeTreePartInfo & part_info, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
     LocalDeleteBitmap(
-        const String & partition_id, Int64 min_block, Int64 max_block, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
+        const MergeTreePartInfo & part_info,
+        DeleteBitmapMetaType type,
+        UInt64 txn_id,
+        DeleteBitmapPtr bitmap,
+        int64_t bucket_number);
+    LocalDeleteBitmap(
+        const String & partition_id,
+        Int64 min_block,
+        Int64 max_block,
+        DeleteBitmapMetaType type,
+        UInt64 txn_id,
+        DeleteBitmapPtr bitmap,
+        int64_t bucket_number);
 
     UndoResource getUndoResource(const TxnTimestamp & txn_id, UndoResourceType type = UndoResourceType::DeleteBitmap) const;
 
     bool canInlineStoreInCatalog() const;
 
-    DeleteBitmapMetaPtr dump(const MergeTreeMetaBase & storage) const;
+    DeleteBitmapMetaPtr dump(const MergeTreeMetaBase & storage, bool check_dir = true) const;
 
     /// only for merge task to pre-set commit ts for merged part's base bitmap
     void setCommitTs(UInt64 commit_ts) { model->set_commit_time(commit_ts); }
@@ -136,6 +158,9 @@ public:
     /// PartitionID_MinBlock_MaxBlock
     String getBlockName() const;
 
+    /// Used for data allocation only
+    String getNameForAllocation() const;
+
     const String & getPartitionID() const { return model->partition_id(); }
 
     bool sameBlock(const DeleteBitmapMeta & rhs) const
@@ -186,6 +211,17 @@ public:
     DeleteBitmapMeta & setEndTime(UInt64 end_time);
 
     String getNameForLogs() const;
+
+    Int64 bucketNumber() const { return model->bucket_number(); }
+
+    // No actual use. Just required in assignParts
+    void setHostPort(const String & disk_cache_host_port_, const String & assign_compute_host_port_) const
+    {
+        disk_cache_host_port = disk_cache_host_port_;
+        assign_compute_host_port = assign_compute_host_port_;
+    }
+    mutable String disk_cache_host_port;
+    mutable String assign_compute_host_port;
 
 private:
     const MergeTreeMetaBase & storage;

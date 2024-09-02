@@ -37,6 +37,12 @@ public:
         Protos::ExecuteSimpleQueryResp * response,
         google::protobuf::Closure * done) override;
 
+    void submitMVRefreshTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitMVRefreshTaskReq * request,
+        Protos::SubmitMVRefreshTaskResp * response,
+        google::protobuf::Closure * done) override;
+
     void submitManipulationTask(
         google::protobuf::RpcController * cntl,
         const Protos::SubmitManipulationTaskReq * request,
@@ -103,6 +109,18 @@ public:
         Protos::CreateDedupWorkerResp * response,
         google::protobuf::Closure * done) override;
 
+    void assignHighPriorityDedupPartition(
+        google::protobuf::RpcController * ,
+        const Protos::AssignHighPriorityDedupPartitionReq * request,
+        Protos::AssignHighPriorityDedupPartitionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void assignRepairGran(
+        google::protobuf::RpcController * ,
+        const Protos::AssignRepairGranReq * request,
+        Protos::AssignRepairGranResp * response,
+        google::protobuf::Closure * done) override;
+
     void dropDedupWorker(
         google::protobuf::RpcController *,
         const Protos::DropDedupWorkerReq * request,
@@ -113,6 +131,12 @@ public:
         google::protobuf::RpcController *,
         const Protos::GetDedupWorkerStatusReq * request,
         Protos::GetDedupWorkerStatusResp * response,
+        google::protobuf::Closure * done) override;
+
+    void executeDedupTask(
+        google::protobuf::RpcController *,
+        const Protos::ExecuteDedupTaskReq * request,
+        Protos::ExecuteDedupTaskResp * response,
         google::protobuf::Closure * done) override;
 
 #if USE_RDKAFKA

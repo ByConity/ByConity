@@ -15,20 +15,21 @@
 
 #include <Optimizer/MaterializedView/MaterializedViewMemoryCache.h>
 
-#include <Analyzers/QueryAnalyzer.h>
-#include <Analyzers/QueryRewriter.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/SegmentScheduler.h>
-#include <Optimizer/Iterative/IterativeRewriter.h>
-#include <Optimizer/PlanOptimizer.h>
-#include <Optimizer/Rewriter/PredicatePushdown.h>
-#include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/QueryPlanner.h>
-#include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageDistributed.h>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
+#include <Storages/StorageMaterializedView.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+    extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW;
+}
 class MaterializedViewMemoryCache::LocalTableRewriter
 {
 public:
@@ -92,6 +93,9 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
     if (!materialized_view)
         return {};
 
+    if (materialized_view->sync() && !context->getSettings().enable_sync_materialized_view_rewrite)
+        return {};
+
     ASTPtr query = materialized_view->getInnerQuery();
     StorageID materialized_view_id = materialized_view->getStorageID();
     std::optional<StorageID> target_table_id = findTargetTable(
@@ -105,34 +109,24 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
         LocalTableRewriter::Visitor(data).visit(query);
     }
 
-    auto query_ptr = QueryRewriter().rewrite(query, context, false);
-    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
-
-    if (!analysis->non_deterministic_functions.empty())
+    try
+    {
+        return MaterializedViewStructure::buildFrom(materialized_view_id, target_table_id.value(), query, materialized_view->async(), context);
+    }
+    catch (Exception & exception)
+    {
+        static auto * log = &Poco::Logger::get("MaterializedViewRewriter");
+        if (exception.code() == ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW)
+            LOG_DEBUG(log, "skip {}, reason: {}", materialized_view_id.getFullTableName(), exception.message());
+        else
+            LOG_ERROR(log, "skip {}, reason: {}", materialized_view_id.getFullTableName(), exception.message());
         return {};
-    QueryPlanPtr query_plan = QueryPlanner().plan(query_ptr, *analysis, context);
-
-    auto wrap_rewriter_name = [&](const String & name) -> String {
-        return "MV_" + name + "_" + database_and_table_name.getDatabaseName() + "." + database_and_table_name.getTableName();
-    };
-
-    static Rewriters rewriters
-        = {std::make_shared<PredicatePushdown>(),
-           std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), wrap_rewriter_name("SimplifyExpression")),
-           std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), wrap_rewriter_name("RemoveRedundant")),
-           std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), wrap_rewriter_name("InlineProjection")),
-           std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), wrap_rewriter_name("NormalizeExpression")),
-           std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), wrap_rewriter_name("SwapPredicate"))};
-
-    for (auto & rewriter : rewriters)
-        rewriter->rewritePlan(*query_plan, context);
-
-    GraphvizPrinter::printLogicalPlan(*query_plan, context, "MaterializedViewPlan_" + std::to_string(context->nextNodeId()));
-    return MaterializedViewStructure::buildFrom(materialized_view_id, target_table_id.value(), query_plan->getPlanNode(), context);
+    }
 }
 
 std::optional<StorageID> MaterializedViewMemoryCache::findTargetTable(
-    bool local_materialized_view, const StorageMaterializedView & view, const StorageID & view_id, ContextMutablePtr context) {
+    bool local_materialized_view, const StorageMaterializedView & view, const StorageID & view_id, ContextMutablePtr context)
+{
     if (!local_materialized_view) {
         return std::make_optional(view.getTargetTableId());
     }

@@ -14,6 +14,7 @@ ASTPtr ASTUpdateQuery::clone() const
     auto res = std::make_shared<ASTUpdateQuery>(*this);
     res->children.clear();
 
+    res->tables = tables->clone();
     res->assignment_list = assignment_list->clone();
     res->where_condition = where_condition->clone();
 
@@ -29,19 +30,28 @@ ASTPtr ASTUpdateQuery::clone() const
 
 void ASTUpdateQuery::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-     settings.ostr << (settings.hilite ? hilite_keyword : "") << "UPDATE " << (settings.hilite ? hilite_none : "");
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << "UPDATE " << (settings.hilite ? hilite_none : "");
 
-    if (!database.empty())
-        settings.ostr << backQuoteIfNeed(database) << ".";
-    
-    settings.ostr << backQuoteIfNeed(table);
+    if (single_table)
+    {
+        if (!database.empty())
+            settings.ostr << backQuoteIfNeed(database) << ".";
+        settings.ostr << backQuoteIfNeed(table);
+    }
+    else
+    {
+        tables->formatImpl(settings, state, frame);
+    }
 
     settings.ostr << (settings.hilite ? hilite_keyword : "") << " SET " << (settings.hilite ? hilite_none : "");
 
     assignment_list->formatImpl(settings, state, frame);
 
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << " WHERE " << (settings.hilite ? hilite_none : "");
-    where_condition->formatImpl(settings, state, frame);
+    if (where_condition)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " WHERE " << (settings.hilite ? hilite_none : "");
+        where_condition->formatImpl(settings, state, frame);
+    }
 
     if (order_by_expr)
     {

@@ -20,6 +20,7 @@ public:
         bool has_date = false;
         bool has_datetime = false;
 
+        size_t i = 0;
         for (const auto & type : types)
         {
             auto type_removed_nullable = removeNullable(type);
@@ -33,13 +34,16 @@ public:
             if (has_date && has_datetime)
                 return false;
 
-            if (!isCompilableType(type_removed_nullable))
+            // return value is string is compilable
+            if (!isCompilableType(type_removed_nullable) && (!which.isString() && i%2 == 1))
                 return false;
+
+            i += 1;
         }
         return true;
     }
 
-    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const override
+    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values, JITContext & ) const override
     {
         auto & b = static_cast<llvm::IRBuilder<> &>(builder);
         auto return_type = getReturnTypeImpl(types);

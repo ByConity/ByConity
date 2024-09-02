@@ -24,7 +24,7 @@ public:
     RuleType getType() const override { return RuleType::MERGE_UNION; }
     String getName() const override { return "MERGE_UNION"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_merge_union; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -36,7 +36,7 @@ public:
     RuleType getType() const override { return RuleType::MERGE_EXCEPT; }
     String getName() const override { return "MERGE_EXCEPT"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_merge_except; }    
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -48,7 +48,7 @@ public:
     RuleType getType() const override { return RuleType::MERGE_INTERSECT; }
     String getName() const override { return "MERGE_INTERSECT"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_merge_intersect; }    
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

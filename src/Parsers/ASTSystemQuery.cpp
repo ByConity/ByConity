@@ -76,8 +76,12 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP QUERY CACHE";
         case Type::DROP_CHECKSUMS_CACHE:
             return "DROP CHECKSUMS CACHE";
+        case Type::DROP_CNCH_META_CACHE:
+            return "DROP CNCH CACHE";
         case Type::DROP_CNCH_PART_CACHE:
             return "DROP CNCH PART CACHE";
+        case Type::DROP_CNCH_DELETE_BITMAP_CACHE:
+            return "DROP CNCH DELETE BITMAP CACHE";
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE:
             return "DROP COMPILED EXPRESSION CACHE";
@@ -130,6 +134,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SUSPEND_ALL MERGES";
         case Type::GC:
             return "GC";
+        case Type::MANIFEST_CHECKPOINT:
+            return "MANIFEST CHECKPOINT";
         case Type::START_GC:
             return "START GC";
         case Type::STOP_GC:
@@ -190,10 +196,14 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "METASTORE";
         case Type::CLEAR_BROKEN_TABLES:
             return "CLEAR BROKEN TABLES";
+        case Type::DEDUP_WITH_HIGH_PRIORITY:
+            return "DEDUP WITH HIGH PRIORITY";
         case Type::DEDUP:
             return "DEDUP";
         case Type::SYNC_DEDUP_WORKER:
             return "SYNC DEDUP WORKER";
+        case Type::SYNC_REPAIR_TASK:
+            return "SYNC REPAIR TASK";
         case Type::START_DEDUP_WORKER:
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
@@ -222,6 +232,16 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "RESYNC MATERIALIZEDMYSQL TABLE";
         case Type::RECALCULATE_METRICS:
             return "RECALCULATE METRICS FOR";
+        case Type::START_VIEW:
+            return "START VIEW";
+        case Type::STOP_VIEW:
+            return "STOP VIEW";
+        case Type::DROP_VIEW_META:
+            return "DROP VIEW META";
+        case Type::RELEASE_MEMORY_LOCK:
+            return "RELEASE MEMORY LOCK";
+        case Type::DROP_SCHEMA_CACHE:
+            return "DROP SCHEMA CACHE";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
@@ -328,9 +348,13 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::RESTART_CONSUME
             || type == Type::RESYNC_MATERIALIZEDMYSQL_TABLE
             || type == Type::SYNC_DEDUP_WORKER
+            || type == Type::SYNC_REPAIR_TASK
+            || type == Type::DROP_CNCH_META_CACHE
             || type == Type::DROP_CNCH_PART_CACHE
+            || type == Type::DROP_CNCH_DELETE_BITMAP_CACHE
             || type == Type::START_CLUSTER
-            || type == Type::STOP_CLUSTER)
+            || type == Type::STOP_CLUSTER
+            || type == Type::MANIFEST_CHECKPOINT)
     {
         print_database_table();
     }
@@ -364,6 +388,15 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             partition->formatImpl(settings, state, frame);
         }
     }
+    else if (type == Type::DEDUP_WITH_HIGH_PRIORITY)
+    {
+        print_database_table();
+        if (partition)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
+            partition->formatImpl(settings, state, frame);
+        }
+    }
     else if (type == Type::DEDUP)
     {
         print_database_table();
@@ -371,6 +404,9 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
             partition->formatImpl(settings, state, frame);
+
+            if (specify_bucket)
+                settings.ostr << " BUCKET " << bucket_number;
         }
         settings.ostr << " FOR REPAIR";
     }
@@ -388,6 +424,18 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if(type == Type::START_MATERIALIZEDMYSQL || type == Type::STOP_MATERIALIZEDMYSQL)
     {
         print_database();
+    }
+    else if (type == Type::RELEASE_MEMORY_LOCK)
+    {
+        if (specify_txn)
+            settings.ostr << " OF TXN " << txn_id;
+        else
+            print_database_table();
+    }
+    else if (type == Type::DROP_SCHEMA_CACHE)
+    {
+        if (!schema_cache_storage.empty())
+            settings.ostr << " FOR " << schema_cache_storage;
     }
 }
 

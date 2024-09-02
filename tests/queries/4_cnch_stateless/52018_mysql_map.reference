@@ -1,0 +1,49 @@
+element_at
+v1	v1	Nullable(String)	Nullable(String)
+v1	v1	Nullable(String)	Nullable(String)
+v2	v2	Nullable(String)	Nullable(String)
+v2	v2	Nullable(String)	Nullable(String)
+\N	\N	Nullable(String)	Nullable(String)
+\N	\N	Nullable(String)	Nullable(String)
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+2	\N	\N
+1	Nullable(UInt8)
+\N	Nullable(UInt8)
+\N	Nullable(UInt8)
+map_keys
+['k1','k2']	['k1','k2']
+['k1','k2']	['k1','k2']
+[]
+\N
+map_values
+['v1','v2']	['v1','v2']
+['v1','v2']	['v1','v2']
+[]
+\N
+size
+4	4
+4	4
+0
+\N

@@ -160,6 +160,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
         false,
         agg_step->shouldProduceResultsInOrderOfBucketNumber(),
         agg_step->isNoShuffle(),
+        agg_step->isStreamingForCache(),
         agg_step->getHints());
     node_ptr = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(new_agg_step), node.getChildren());
 

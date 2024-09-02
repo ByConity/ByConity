@@ -17,6 +17,11 @@
 
 namespace ProfileEvents
 {
+    extern const Event S3CreateMultipartUpload;
+    extern const Event S3UploadPart;
+    extern const Event S3CompleteMultipartUpload;
+    extern const Event S3PutObject;
+    
     extern const Event S3WriteBytes;
 }
 
@@ -107,6 +112,7 @@ void WriteBufferFromS3::createMultipartUpload()
     if (object_metadata.has_value())
         req.SetMetadata(object_metadata.value());
 
+    ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload);
     auto outcome = client_ptr->CreateMultipartUpload(req);
 
     if (outcome.IsSuccess())
@@ -139,6 +145,7 @@ void WriteBufferFromS3::writePart()
         LOG_WARNING(log, "Maximum part number in S3 protocol has reached (too many parts). Server may not accept this whole upload.");
     }
 
+    ProfileEvents::increment(ProfileEvents::S3UploadPart);
     Aws::S3::Model::UploadPartRequest req;
 
     req.SetBucket(bucket);
@@ -181,6 +188,7 @@ void WriteBufferFromS3::completeMultipartUpload()
 
     req.SetMultipartUpload(multipart_upload);
 
+    ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload);
     auto outcome = client_ptr->CompleteMultipartUpload(req);
 
     if (outcome.IsSuccess())
@@ -206,6 +214,7 @@ void WriteBufferFromS3::makeSinglepartUpload()
     if (object_metadata.has_value())
         req.SetMetadata(object_metadata.value());
 
+    ProfileEvents::increment(ProfileEvents::S3PutObject);
     auto outcome = client_ptr->PutObject(req);
 
     if (outcome.IsSuccess())

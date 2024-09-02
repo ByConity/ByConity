@@ -1,19 +1,19 @@
-Projection Est. 3 rows
+Projection Est. 1 rows
 │     Expressions: [P_BRAND, S_CITY], profit:=`expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST))`, year:=`expr#toYear(LO_ORDERDATE)`
-└─ Sorting Est. 3 rows
+└─ Sorting Est. 1 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-   └─ Gather Exchange Est. 3 rows
-      └─ Sorting Est. 3 rows
+   └─ Gather Exchange Est. 1 rows
+      └─ Sorting Est. 1 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-         └─ MergingAggregated Est. 3 rows
-            └─ Repartition Exchange Est. 3 rows
+         └─ MergingAggregated Est. 1 rows
+            └─ Repartition Exchange Est. 1 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), S_CITY, P_BRAND}
-               └─ Aggregating Est. 3 rows
+               └─ Aggregating Est. 1 rows
                   │     Group by: {expr#toYear(LO_ORDERDATE), S_CITY, P_BRAND}
                   │     Aggregates: expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST)):=AggNull(sum)(expr#minus(LO_REVENUE, LO_SUPPLYCOST))
-                  └─ Projection Est. 9559194 rows
+                  └─ Projection Est. 2389798 rows
                      │     Expressions: [P_BRAND, S_CITY], expr#minus(LO_REVENUE, LO_SUPPLYCOST):=LO_REVENUE - LO_SUPPLYCOST, expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Filter Est. 9559194 rows
+                     └─ Filter Est. 2389798 rows
                         │     Condition: (S_NATION = 'UNITED STATES') AND (toYear(LO_ORDERDATE) IN (1997, 1998)) AND (P_CATEGORY = 'MFGR#14')
                         └─ TableScan ssb1000.lineorder_flat Est. 5999989813 rows
                                  Where: (S_NATION = 'UNITED STATES') AND (toYear(LO_ORDERDATE) IN (1997, 1998)) AND (P_CATEGORY = 'MFGR#14')

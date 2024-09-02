@@ -12,35 +12,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include <chrono>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
+#include <CloudServices/CnchServerClient.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
-#include <Common/getMultipleKeysFromConfig.h>
+#include <DaemonManager/DMDefines.h>
 #include <DaemonManager/DaemonFactory.h>
-#include <DaemonManager/DaemonManager.h>
-#include <DaemonManager/registerDaemons.h>
+#include <DaemonManager/DaemonHelper.h>
 #include <DaemonManager/DaemonJobGlobalGC.h>
+#include <DaemonManager/DaemonManager.h>
+#include <DaemonManager/DaemonManagerServiceImpl.h>
+#include <DaemonManager/FixCatalogMetaDataTask.h>
+#include <DaemonManager/registerDaemons.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <Functions/registerFunctions.h>
-#include <CloudServices/CnchServerClient.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <brpc/server.h>
 #include <gflags/gflags.h>
-#include <Poco/Util/HelpFormatter.h>
 #include <Poco/Environment.h>
-#include <Common/StringUtils/StringUtils.h>
+#include <Poco/Util/HelpFormatter.h>
+#include <Common/Brpc/BrpcApplication.h>
 #include <Common/Config/MetastoreConfig.h>
-#include <DaemonManager/DMDefines.h>
-#include <DaemonManager/DaemonHelper.h>
-#include <DaemonManager/DaemonManagerServiceImpl.h>
-#include <DaemonManager/FixCatalogMetaDataTask.h>
-#include <chrono>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/getMultipleKeysFromConfig.h>
 
 using namespace std::chrono_literals;
 
@@ -86,6 +86,8 @@ void DaemonManager::uninitialize()
 
 int DaemonManager::run()
 {
+    // Init Brpc config. It's a must before you construct a RpcClientBase.
+    BrpcApplication::getInstance().initialize(config());
     if (config().hasOption("help"))
     {
         Poco::Util::HelpFormatter help_formatter(DaemonManager::options());
@@ -164,7 +166,6 @@ std::vector<DaemonJobPtr> createLocalDaemonJobs(
     );
 
     return res;
-
 }
 
 std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJobsForBGThread(
@@ -180,7 +181,10 @@ std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJob
         { "DEDUP_WORKER", 10000},
         { "PART_CLUSTERING", 10000},
         { "OBJECT_SCHEMA_ASSEMBLE", 10000},
-        { "MATERIALIZED_MYSQL", 10000}
+        { "MATERIALIZED_MYSQL", 10000},
+        { "CNCH_REFRESH_MATERIALIZED_VIEW", 10000},
+        { "PART_MOVER", 10000},
+        { "MANIFEST_CHECKPOINT", 10000}
     };
 
     std::map<std::string, unsigned int> config = updateConfig(std::move(default_config), app_config);
@@ -212,7 +216,7 @@ int DaemonManager::main(const std::vector<std::string> &)
     DB::registerServiceDiscovery();
     registerDaemonJobs();
 
-    const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+    const char * consul_http_host = getConsulIPFromEnv();
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
     if (consul_http_host != nullptr && consul_http_port != nullptr)
         brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
@@ -249,7 +253,15 @@ int DaemonManager::main(const std::vector<std::string> &)
     std::string path = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
     global_context->setPath(path);
 
-    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
+
+    /// Init HDFS3 client config path
+    std::string hdfs_config = config().getString("hdfs3_config", "");
+    if (!hdfs_config.empty())
+    {
+        setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
+    }
+
     global_context->setHdfsConnectionParams(hdfs_params);
 
     /// Temporary solution to solve the problem with Disk initialization

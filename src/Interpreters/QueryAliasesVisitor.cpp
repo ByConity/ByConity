@@ -33,18 +33,19 @@ namespace
 
 }
 
-
-bool QueryAliasesWithSubqueries::needChildVisit(const ASTPtr & node, const ASTPtr &)
+template <bool allow_ambiguous_>
+bool QueryAliasesWithSubqueries<allow_ambiguous_>::needChildVisit(const ASTPtr & node, const ASTPtr &)
 {
     /// Don't descent into table functions and subqueries and special case for ArrayJoin.
     return !(node->as<ASTTableExpression>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTArrayJoin>());
 }
 
-bool QueryAliasesNoSubqueries::needChildVisit(const ASTPtr & node, const ASTPtr & child)
+template <bool allow_ambiguous_>
+bool QueryAliasesNoSubqueries<allow_ambiguous_>::needChildVisit(const ASTPtr & node, const ASTPtr & child)
 {
     if (node->as<ASTSubquery>())
         return false;
-    return QueryAliasesWithSubqueries::needChildVisit(node, child);
+    return QueryAliasesWithSubqueries<allow_ambiguous_>::needChildVisit(node, child);
 }
 
 template <typename T>
@@ -127,9 +128,14 @@ void QueryAliasesMatcher<T>::visitOther(const ASTPtr & ast, Data & data)
     if (!alias.empty())
     {
         if (aliases.count(alias) && ast->getTreeHash() != aliases[alias]->getTreeHash())
-            throw Exception(wrongAliasMessage(ast, aliases[alias], alias), ErrorCodes::MULTIPLE_EXPRESSIONS_FOR_ALIAS);
-
-        aliases[alias] = ast;
+        {
+            if constexpr (T::allow_ambiguous)
+                aliases.emplace(alias, ast);
+            else
+                throw Exception(wrongAliasMessage(ast, aliases[alias], alias), ErrorCodes::MULTIPLE_EXPRESSIONS_FOR_ALIAS);
+        }
+        else
+            aliases[alias] = ast;
     }
 
     /** QueryAliasesVisitor is executed before ExecuteScalarSubqueriesVisitor.
@@ -158,7 +164,13 @@ void QueryAliasesMatcher<T>::visitOther(const ASTPtr & ast, Data & data)
 }
 
 /// Explicit template instantiations
-template class QueryAliasesMatcher<QueryAliasesWithSubqueries>;
-template class QueryAliasesMatcher<QueryAliasesNoSubqueries>;
+template struct QueryAliasesWithSubqueries<false>;
+template struct QueryAliasesWithSubqueries<true>;
+template struct QueryAliasesNoSubqueries<false>;
+template struct QueryAliasesNoSubqueries<true>;
 
+template class QueryAliasesMatcher<QueryAliasesWithSubqueries<false>>;
+template class QueryAliasesMatcher<QueryAliasesWithSubqueries<true>>;
+template class QueryAliasesMatcher<QueryAliasesNoSubqueries<false>>;
+template class QueryAliasesMatcher<QueryAliasesNoSubqueries<true>>;
 }

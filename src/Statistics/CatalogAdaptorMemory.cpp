@@ -171,14 +171,6 @@ public:
         sms.entries.erase(key);
     }
 
-    void dropStatsDataAll(const String & database) override
-    {
-        auto tables = getAllTablesID(database);
-        for (auto & table : tables)
-        {
-            dropStatsData(table);
-        }
-    }
 
     void invalidateClusterStatsCache(const StatsTableIdentifier & table) override
     {

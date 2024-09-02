@@ -27,16 +27,20 @@ Projection Est. 84450 rows
                         │     │           Where: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
                         │     │           Outputs: [LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                         │     └─ Broadcast Exchange Est. 79584 rows
-                        │        └─ Filter Est. 79584 rows
-                        │           │     Condition: P_CATEGORY = 'MFGR#12'
-                        │           └─ TableScan ssb1000.part Est. 2000000 rows
-                        │                    Where: P_CATEGORY = 'MFGR#12'
-                        │                    Outputs: [P_PARTKEY, P_CATEGORY, P_BRAND]
+                        │        └─ Projection Est. 79584 rows
+                        │           │     Expressions: [P_BRAND, P_PARTKEY]
+                        │           └─ Filter Est. 79584 rows
+                        │              │     Condition: P_CATEGORY = 'MFGR#12'
+                        │              └─ TableScan ssb1000.part Est. 2000000 rows
+                        │                       Where: P_CATEGORY = 'MFGR#12'
+                        │                       Outputs: [P_PARTKEY, P_CATEGORY, P_BRAND]
                         └─ Repartition Exchange Est. 399954 rows
                            │     Partition by: {S_SUPPKEY}
-                           └─ Filter Est. 399954 rows
-                              │     Condition: S_REGION = 'AMERICA'
-                              └─ TableScan ssb1000.supplier Est. 2000000 rows
-                                       Where: S_REGION = 'AMERICA'
-                                       Outputs: [S_SUPPKEY, S_REGION]
+                           └─ Projection Est. 399954 rows
+                              │     Expressions: [S_SUPPKEY]
+                              └─ Filter Est. 399954 rows
+                                 │     Condition: S_REGION = 'AMERICA'
+                                 └─ TableScan ssb1000.supplier Est. 2000000 rows
+                                          Where: S_REGION = 'AMERICA'
+                                          Outputs: [S_SUPPKEY, S_REGION]
 note: Runtime Filter is applied for 2 times.

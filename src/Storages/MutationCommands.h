@@ -60,6 +60,7 @@ struct MutationCommand
         RENAME_COLUMN,
         CLEAR_MAP_KEY,
         RECLUSTER,
+        MODIFY_CLUSTER_BY,
     };
 
     Type type = EMPTY;

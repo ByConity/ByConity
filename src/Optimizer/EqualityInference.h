@@ -71,10 +71,10 @@ public:
     ASTPtr rewrite(const ConstASTPtr & expression, const std::set<String> & scope, bool contains, bool allow_full_replacement);
     ConstHashAST getScopedCanonical(const ConstHashAST & expression, const std::set<String> & scope, bool contains);
     static ConstHashAST getCanonical(ConstASTSet & equivalence);
-    static bool isScoped(const ConstASTPtr & expression, const std::set<String> & scope);
-    static bool isNotScoped(const ConstASTPtr & expression, const std::set<String> & scope);
+    static bool isScoped(const ConstASTPtr & equivalence, const std::set<String> & scope);
+    static bool isNotScoped(const ConstASTPtr & equivalence, const std::set<String> & scope);
     EqualityPartition partitionedBy(const std::set<String>& scope);
-
+    String toString();
 private:
     EqualityInference(
         EqualityASTMap<ConstASTSet> equality_sets_,
@@ -177,7 +177,7 @@ public:
     const std::vector<ConstASTPtr> & getScopeEqualities() const { return scope_equalities; }
     const std::vector<ConstASTPtr> & getScopeComplementEqualities() const { return scope_complement_equalities; }
     const std::vector<ConstASTPtr> & getScopeStraddlingEqualities() const { return scope_straddling_equalities; }
-
+    String toString();
 private:
     std::vector<ConstASTPtr> scope_equalities;
     std::vector<ConstASTPtr> scope_complement_equalities;

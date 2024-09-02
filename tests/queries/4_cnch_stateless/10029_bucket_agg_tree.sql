@@ -21,7 +21,7 @@ CREATE TABLE test_optimize_with_date_column (`id` UInt32, `code` UInt32, `record
 -- Ensure bucket number is assigned to a part in bucket table
 INSERT INTO bucket VALUES ('jane', 10);
 SELECT * FROM bucket ORDER BY name FORMAT CSV;
-SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket' FORMAT CSV;
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket' FORMAT CSV;
 
 -- Ensure join queries between bucket tables work correctly
 INSERT INTO bucket2 VALUES ('bob', 10);
@@ -30,17 +30,17 @@ SELECT b1.name, age, b2.name FROM bucket b1 JOIN bucket2 b2 USING (age) FORMAT C
 
 -- Attach part from bucket table to another bucket table of same table definition
 ALTER TABLE bucket2 ATTACH PARTITION 'jane' from bucket;
-SELECT partition FROM system.cnch_parts where database = currentDatabase() and table = 'bucket2' FORMAT CSV;
+SELECT partition FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket2' FORMAT CSV;
 
 -- Attach part from bucket table to normal table
 ALTER TABLE normal ATTACH PARTITION 'bob' from bucket2;
-SELECT partition FROM system.cnch_parts where database = currentDatabase() and table = 'normal' FORMAT CSV;
+SELECT partition FROM system.cnch_parts where database = currentDatabase(1) and table = 'normal' FORMAT CSV;
 
 -- DROP bucket table definition, INSERT, ensure new part's bucket number is -1
 ALTER TABLE bucket3 DROP CLUSTER;
 INSERT INTO bucket3 VALUES ('jack', 15);
 SELECT * FROM bucket3 ORDER BY name FORMAT CSV;
-SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket3' FORMAT CSV;
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket3' FORMAT CSV;
 
 -- TODO: Alter bucket table and see if bucket number changes (might need to delay check due to async recluster). Bucket number will
 -- change from 0 to -1 to random number for async rescluster. Need to handle this case
@@ -48,20 +48,20 @@ SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() a
 -- Ensure bucket number is assigned to a part in bucket table with shard ratio 
 INSERT INTO bucket_with_split_number VALUES ('vivek', 10);
 SELECT * FROM bucket_with_split_number ORDER BY name FORMAT CSV;
-SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket_with_split_number' FORMAT CSV;
-SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'bucket_with_split_number' FORMAT CSV;
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket_with_split_number' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase(1) and name = 'bucket_with_split_number' FORMAT CSV;
 
 -- Ensure bucket number is assigned to a part in bucket table with shard ratio and range
 INSERT INTO bucket_with_split_number_n_range VALUES ('vivek', 20);
 SELECT * FROM bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
-SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket_with_split_number_n_range' FORMAT CSV;
-SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'bucket_with_split_number_n_range' FORMAT CSV;
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'bucket_with_split_number_n_range' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase(1) and name = 'bucket_with_split_number_n_range' FORMAT CSV;
 
 -- Ensure bucket number is assigned using DTSPartition with shard ratio and range
 INSERT INTO dts_bucket_with_split_number_n_range VALUES ('vivek', 30);
 SELECT * FROM dts_bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
-SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
-SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase(1) and table = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase(1) and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
 
 -- Ensure optimize_skip_unused_workers 
 INSERT INTO TABLE test_optimize select toUInt32(number/10), toUInt32(number/10), concat('record', toString(number)) from system.numbers limit 30;

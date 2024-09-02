@@ -96,25 +96,25 @@ const String & DiskRestartProxy::getPath() const
     return DiskDecorator::getPath();
 }
 
-UInt64 DiskRestartProxy::getTotalSpace() const
+DiskStats DiskRestartProxy::getTotalSpace(bool) const
 {
     ReadLock lock (mutex);
     return DiskDecorator::getTotalSpace();
 }
 
-UInt64 DiskRestartProxy::getAvailableSpace() const
+DiskStats DiskRestartProxy::getAvailableSpace() const
 {
     ReadLock lock (mutex);
     return DiskDecorator::getAvailableSpace();
 }
 
-UInt64 DiskRestartProxy::getUnreservedSpace() const
+DiskStats DiskRestartProxy::getUnreservedSpace() const
 {
     ReadLock lock (mutex);
     return DiskDecorator::getUnreservedSpace();
 }
 
-UInt64 DiskRestartProxy::getKeepingFreeSpace() const
+DiskStats DiskRestartProxy::getKeepingFreeSpace() const
 {
     ReadLock lock (mutex);
     return DiskDecorator::getKeepingFreeSpace();

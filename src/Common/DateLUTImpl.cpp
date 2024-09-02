@@ -216,21 +216,21 @@ DateLUTImpl::LUTIndex DateLUTImpl::makeLUTIndex(Int16 year, UInt8 month, UInt8 d
     if (unlikely(year < DATE_LUT_MIN_YEAR || month < 1 || month > 12 || day_of_month < 1 || day_of_month > 31))
     {
         if (DB::current_thread)
-            DB::current_thread->has_truncated_date = true;
+            DB::current_thread->setOverflow(DB::ThreadStatus::OverflowFlag::Date);
         return LUTIndex(0);
     }
 
     if (unlikely(year > DATE_LUT_MAX_YEAR))
     {
         if (DB::current_thread)
-            DB::current_thread->has_truncated_date = true;
+            DB::current_thread->setOverflow(DB::ThreadStatus::OverflowFlag::Date);
         return LUTIndex(DATE_LUT_SIZE - 1);
     }
 
     auto year_lut_index = (year - DATE_LUT_MIN_YEAR) * 12 + month - 1;
     UInt32 index = years_months_lut[year_lut_index].toUnderType() + day_of_month - 1;
     if (index > static_cast<UInt32>(DATE_LUT_SIZE - 1) && DB::current_thread)
-        DB::current_thread->has_truncated_date = true;
+        DB::current_thread->setOverflow(DB::ThreadStatus::OverflowFlag::Date);
     /// When date is out of range, default value is DATE_LUT_SIZE - 1 (2299-12-31)
     return LUTIndex{std::min(index, static_cast<UInt32>(DATE_LUT_SIZE - 1))};
 }
@@ -241,7 +241,7 @@ ExtendedDayNum DateLUTImpl::makeDayNum(Int16 year, UInt8 month, UInt8 day_of_mon
     if (unlikely(year < DATE_LUT_MIN_YEAR || month < 1 || month > 12 || day_of_month < 1 || day_of_month > 31))
     {
         if (DB::current_thread)
-            DB::current_thread->has_truncated_date = true;
+            DB::current_thread->setOverflow(DB::ThreadStatus::OverflowFlag::Date);
         return ExtendedDayNum(default_error_day_num);
     }
 

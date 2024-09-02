@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <CloudServices/CnchCreateQueryHelper.h>
 #include <DataStreams/NullBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <Interpreters/ProcessList.h>
@@ -69,23 +70,6 @@ enum class CNCHStorageMediumType
 String toStr(CNCHStorageMediumType tp);
 CNCHStorageMediumType fromStr(const String & type_str);
 
-enum class WorkerEngineType : uint8_t
-{
-    CLOUD,
-    DICT,
-};
-
-inline static String toString(WorkerEngineType type)
-{
-    switch (type)
-    {
-        case WorkerEngineType::CLOUD:
-            return "Cloud";
-        case WorkerEngineType::DICT:
-            return "DictCloud";
-    }
-}
-
 class CnchStorageCommonHelper
 {
 public:
@@ -121,6 +105,8 @@ public:
     // when move these conditions from where to implicit_where.
     static ASTs getConditions(const ASTPtr & ast);
 
+    // TODO: too many arguments, try remove `enable_staging_area', `cnch_storage_id', `engine_args', `local_database_name'.
+    // check StorageCnchMergeTree::genViewDependencyCreateQueries to see whether it's possible
     String getCreateQueryForCloudTable(
         const String & query,
         const String & local_table_name,
@@ -128,7 +114,8 @@ public:
         bool enable_staging_area = false,
         const std::optional<StorageID> & cnch_storage_id = std::nullopt,
         const Strings & engine_args = {},
-        const String & local_database_name = {}) const;
+        const String & local_database_name = {},
+        WorkerEngineType engine_type = WorkerEngineType::CLOUD) const;
 
     static void rewritePlanSegmentQueryImpl(ASTPtr & query, const std::string & database, const std::string & table);
 

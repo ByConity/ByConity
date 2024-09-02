@@ -94,6 +94,11 @@ public:
     /// It would be called every time when processor reports read progress.
     void setReadProgressCallback(ReadProgressCallbackPtr callback);
 
+    bool isCancelled() const
+    {
+        return cancelled;
+    }
+
 private:
     Processors & processors;
     std::mutex processors_mutex;

@@ -165,7 +165,7 @@ static NO_INLINE void deserializeBinarySSE2(ColumnSketchBinary::Chars & data, Co
 }
 
 
-void SerializationSketch::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+void SerializationSketch::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool /*zero_copy_cache_read*/) const
 {
     ColumnSketchBinary & column_string = typeid_cast<ColumnSketchBinary &>(column);
     ColumnSketchBinary::Chars & data = column_string.getChars();

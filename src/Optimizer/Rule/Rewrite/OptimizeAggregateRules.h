@@ -23,7 +23,7 @@ public:
         return context->getSettingsRef().enable_optimize_aggregate_memory_efficient
             && context->getSettingsRef().distributed_aggregation_memory_efficient;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 
     bool excludeIfTransformSuccess() const override

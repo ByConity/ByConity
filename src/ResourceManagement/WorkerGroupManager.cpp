@@ -154,7 +154,7 @@ WorkerGroupPtr WorkerGroupManager::tryGetWorkerGroupImpl(const std::string & id,
         if (!catalog->tryGetWorkerGroup(id, data))
             return nullptr;
 
-        res = rm_controller.createWorkerGroup(id, false, data.vw_name, data, vw_lock, wg_lock);
+        res = rm_controller.createWorkerGroup(id, data.vw_name, data, vw_lock, wg_lock);
     }
     return res;
 }
@@ -191,22 +191,8 @@ WorkerGroupPtr WorkerGroupManager::getWorkerGroupImpl(const std::string & id, st
     return res;
 }
 
-WorkerGroupPtr WorkerGroupManager::createWorkerGroup(
-    const std::string & id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<bthread::Mutex> * vw_lock)
-{
-    std::unique_ptr<std::lock_guard<bthread::Mutex>> vw_lock_guard;
-    if (!vw_lock)
-    {
-        vw_lock_guard = std::make_unique<std::lock_guard<bthread::Mutex>>(rm_controller.getVirtualWarehouseManager().getMutex());
-        vw_lock = vw_lock_guard.get();
-    }
-    auto wg_lock = getLock();
-    return createWorkerGroupImpl(id, if_not_exists, vw_name, data, vw_lock, &wg_lock);
-}
-
 WorkerGroupPtr WorkerGroupManager::createWorkerGroupImpl(
     const std::string & id,
-    bool /*if_not_exists*/,
     const std::string & vw_name,
     WorkerGroupData data,
     std::lock_guard<bthread::Mutex> * vw_lock,

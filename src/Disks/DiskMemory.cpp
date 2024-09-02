@@ -170,19 +170,19 @@ ReservationPtr DiskMemory::reserve(UInt64 /*bytes*/)
     throw Exception("Method reserve is not implemented for memory disks", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-UInt64 DiskMemory::getTotalSpace() const
+DiskStats DiskMemory::getTotalSpace(bool) const
 {
-    return 0;
+    return {};
 }
 
-UInt64 DiskMemory::getAvailableSpace() const
+DiskStats DiskMemory::getAvailableSpace() const
 {
-    return 0;
+    return {};
 }
 
-UInt64 DiskMemory::getUnreservedSpace() const
+DiskStats DiskMemory::getUnreservedSpace() const
 {
-    return 0;
+    return {};
 }
 
 bool DiskMemory::exists(const String & path) const

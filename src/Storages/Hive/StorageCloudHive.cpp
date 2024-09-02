@@ -30,6 +30,30 @@ StorageCloudHive::StorageCloudHive(
     setInMemoryMetadata(metadata);
 }
 
+HiveFiles StorageCloudHive::filterHiveFilesByIntermediateResultCache(SelectQueryInfo & query_info, ContextPtr query_context, HiveFiles & hive_files)
+{
+    auto cache = query_context->getIntermediateResultCache();
+    if(!cache)
+        return hive_files;
+
+    TableScanCacheInfo cache_info = getTableScanCacheInfo(query_info);
+
+    // check enable result cache
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::NO_CACHE)
+        return hive_files;
+
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_DEPENDENT_TABLE)
+    {
+        return hive_files;
+    }
+    auto s_id = getStorageID();
+
+    assert(cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_TABLE);
+    HiveFiles new_files;
+    cache_holder = cache->createCacheHolder(query_context, cache_info.getDigest(), s_id, hive_files, new_files);
+    return new_files;
+}
+
 Pipe StorageCloudHive::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
@@ -53,148 +77,42 @@ Pipe StorageCloudHive::read(
             real_columns.push_back(column);
     }
 
-    HiveFiles hive_files = getHiveFiles();
+    HiveFiles hive_files_before_filter = getHiveFiles();
+    HiveFiles hive_files = filterHiveFilesByIntermediateResultCache(query_info, local_context, hive_files_before_filter);
     selectFiles(local_context, storage_snapshot->metadata, query_info, hive_files, num_streams);
 
     Pipes pipes;
     auto block_info = std::make_shared<StorageHiveSource::BlockInfo>(
-        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata->getPartitionKey());
+        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata);
     auto allocator = std::make_shared<StorageHiveSource::Allocator>(std::move(hive_files));
 
-    if (block_info->to_read.columns() == 0)
-        allocator->allow_allocate_by_slice = false;
-
-    if (local_context->getReadSettings().parquet_parallel_read)
-        allocator->allow_allocate_by_slice = false;
-
     LOG_DEBUG(log, "read with {} streams, disk_cache mode {}", num_streams, local_context->getSettingsRef().disk_cache_mode.toString());
+    auto query_info_ptr = std::make_shared<SelectQueryInfo>(query_info);
+
     for (size_t i = 0; i < num_streams; ++i)
     {
         pipes.emplace_back(std::make_shared<StorageHiveSource>(
             local_context,
             block_info,
-            allocator
+            allocator,
+            query_info_ptr
         ));
     }
     auto pipe = Pipe::unitePipes(std::move(pipes));
     narrowPipe(pipe, num_streams);
+    if (cache_holder)
+        pipe.addCacheHolder(cache_holder);
     return pipe;
 }
 
-StorageCloudHive::MinMaxDescription StorageCloudHive::getMinMaxIndex(const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
-{
-    /// columns not in partition key column can be used
-    NamesAndTypesList required_cols = metadata_snapshot->getColumns().getAllPhysical();
-    NameSet partition_cols;
-    if (metadata_snapshot->hasPartitionKey())
-    {
-        const auto & col_names = metadata_snapshot->getPartitionKey().column_names;
-        partition_cols = NameSet{col_names.begin(), col_names.end()};
-    }
-    required_cols.remove_if([&] (const auto & name_type) {
-        return partition_cols.contains(name_type.name);
-    });
-
-    MinMaxDescription description;
-    description.expression = std::make_shared<ExpressionActions>(std::make_shared<ActionsDAG>(required_cols), ExpressionActionsSettings::fromContext(local_context));
-    description.columns = std::move(required_cols);
-    return description;
-}
-
 void StorageCloudHive::selectFiles(
-    ContextPtr local_context,
-    const StorageMetadataPtr & metadata_snapshot,
-    const SelectQueryInfo & query_info,
+    ContextPtr,
+    const StorageMetadataPtr &,
+    const SelectQueryInfo &,
     HiveFiles & hive_files,
-    unsigned num_streams)
+    unsigned /*num_streams*/)
 {
-    const auto & settings = local_context->getSettingsRef();
-    std::optional<KeyCondition> condition;
-    StorageCloudHive::MinMaxDescription description;
-    if (settings.use_hive_split_level_filter)
-    {
-        description = getMinMaxIndex(metadata_snapshot, local_context);
-        condition.emplace(query_info, local_context, description.columns.getNames(), description.expression);
-    }
-
-    struct HiveFileStats
-    {
-        std::atomic_size_t total_files {0};
-        std::atomic_size_t total_slices {0};
-        std::atomic_size_t skipped_files {0};
-        std::atomic_size_t skipped_slices {0};
-        Stopwatch watch;
-    };
-
-    HiveFileStats stats;
-
-    if (!(condition && !condition->alwaysUnknownOrTrue()))
-    {
-        /// minmax index is not useful
-        return;
-    }
-
-    auto process_hive_file = [&] (IHiveFile & hive_file)
-    {
-        stats.total_files.fetch_add(1, std::memory_order_relaxed);
-
-        auto supported_features = hive_file.getFeatures();
-
-        if (supported_features.support_file_minmax_index && condition)
-        {
-            /// TODO:
-            /// hive_file.loadFileMinmaxIndex();
-        }
-
-        if (supported_features.support_file_splits && condition)
-        {
-            std::vector<bool> skip_splits(hive_file.numSlices(), false);
-            hive_file.loadSplitMinMaxIndex(description.columns);
-            const auto & minmax_idxes = hive_file.getSplitMinMaxIndex();
-            stats.total_slices.fetch_add(hive_file.numSlices(), std::memory_order_relaxed);
-            auto types = description.columns.getTypes();
-            for (size_t i = 0; i < minmax_idxes.size(); ++i)
-            {
-                if (!condition->checkInHyperrectangle(minmax_idxes[i]->hyperrectangle, types).can_be_true)
-                {
-                    skip_splits[i] = true;
-                    stats.skipped_slices.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-            hive_file.setSkipSplits(std::move(skip_splits));
-            // LOG_TRACE(log, "hive file {}, minmax index \n{}", hive_file.file_path, hive_file.describeMinMaxIndex(description.columns));
-        }
-    };
-
-    size_t num_threads = std::min(static_cast<size_t>(num_streams), files.size());
-    if (num_threads <= 1)
-    {
-        for (auto & file : hive_files)
-            process_hive_file(*file);
-    }
-    else
-    {
-        ThreadPool pool(num_streams);
-        for (auto & file : hive_files)
-        {
-            pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]
-            {
-                SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
-                if (thread_group)
-                    CurrentThread::attachTo(thread_group);
-
-                process_hive_file(*file);
-            });
-        }
-        pool.wait();
-    }
-
-    LOG_DEBUG(log, "Selected {}/{} hive files, {}/{} slices, elapsed {} ms",
-        stats.total_files - stats.skipped_files,
-        stats.total_files,
-        stats.total_slices - stats.skipped_slices,
-        stats.total_slices,
-        stats.watch.elapsedMilliseconds());
+    LOG_DEBUG(log, "Selected {} hive files", hive_files.size());
 }
 
 NamesAndTypesList StorageCloudHive::getVirtuals() const

@@ -61,7 +61,10 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="load csv to table")
-    parser.add_argument('--client', default='clickhouse-client', help="the cnch client path")
+    if "TENANT_ID" in os.environ:
+        parser.add_argument('--client', default='clickhouse-client --tenant_id=' + os.environ['TENANT_ID'], help="the cnch client path")
+    else:
+        parser.add_argument('--client', default='clickhouse-client', help="the cnch client path")
     parser.add_argument('--suite-path', required=True, help="the suite path")
 
     args = parser.parse_args()

@@ -58,8 +58,6 @@ public:
 
     ~RemoteBlockOutputStream() override;
 
-    void parseQueryWorkerMetrics(const QueryWorkerMetricElements & elements);
-
 private:
     Connection & connection;
     String query;

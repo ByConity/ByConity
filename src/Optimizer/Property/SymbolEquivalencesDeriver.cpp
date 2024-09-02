@@ -67,28 +67,35 @@ SymbolEquivalencesPtr SymbolEquivalencesDeriverVisitor::visitFilterStep(const Fi
 SymbolEquivalencesPtr
 SymbolEquivalencesDeriverVisitor::visitProjectionStep(const ProjectionStep & step, std::vector<SymbolEquivalencesPtr> & context)
 {
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
-    std::unordered_map<String, String> revert_identifies;
-
     for (auto & item : identities)
-    {
-        revert_identifies[item.second] = item.first;
-    }
-
-    return context[0]->translate(revert_identifies);
+        context[0]->add(item.second, item.first);
+    return context[0];
 }
 
 SymbolEquivalencesPtr
-SymbolEquivalencesDeriverVisitor::visitAggregatingStep(const AggregatingStep & step, std::vector<SymbolEquivalencesPtr> & context)
+SymbolEquivalencesDeriverVisitor::visitAggregatingStep(const AggregatingStep &, std::vector<SymbolEquivalencesPtr> & context)
 {
-    NameSet set{step.getKeys().begin(), step.getKeys().end()};
-    return context[0]->translate(set);
+    return context[0];
 }
 SymbolEquivalencesPtr
 SymbolEquivalencesDeriverVisitor::visitExchangeStep(const ExchangeStep &, std::vector<SymbolEquivalencesPtr> & context)
 {
     return context[0];
+}
+
+SymbolEquivalencesPtr
+SymbolEquivalencesDeriverVisitor::visitCTERefStep(const CTERefStep & step, std::vector<SymbolEquivalencesPtr> & context)
+{
+    if (!context.empty() && context[0])
+    {
+        auto mappings = step.getOutputColumns();
+        for (const auto & mapping : mappings)
+            context[0]->add(mapping.first, mapping.second);
+        return context[0];
+    }
+    return std::make_shared<SymbolEquivalences>();
 }
 
 }

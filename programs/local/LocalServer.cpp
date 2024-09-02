@@ -36,6 +36,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
+#include <Storages/System/attachMySQLTables.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/loadMetadata.h>
@@ -300,6 +301,10 @@ try
     if (mmap_cache_size)
         global_context->setMMappedFileCache(mmap_cache_size);
 
+    size_t footer_cache_size = config().getUInt64("footer_cache_size", 3221225472);
+    if (footer_cache_size)
+        global_context->setFooterCache(footer_cache_size);
+
     /// Load global settings from default_profile and system_profile.
     global_context->setDefaultProfiles(config());
 
@@ -337,6 +342,8 @@ try
         attachSystemTablesLocal(*createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::SYSTEM_DATABASE));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL_UPPERCASE));
         loadMetadata(global_context);
         DatabaseCatalog::instance().loadDatabases();
         LOG_DEBUG(log, "Loaded metadata.");
@@ -346,6 +353,8 @@ try
         attachSystemTablesLocal(*createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::SYSTEM_DATABASE));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA));
         attachInformationSchema(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL));
+        attachMySQL(global_context, *createMemoryDatabaseIfNotExists(global_context, DatabaseCatalog::MYSQL_UPPERCASE));
     }
 
     processQueries();
@@ -558,7 +567,7 @@ void LocalServer::cleanup()
 
 static void showClientVersion()
 {
-    std::cout << DBMS_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << '\n';
+    std::cout << VERSION_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << '\n';
 }
 
 static std::string getHelpHeader()

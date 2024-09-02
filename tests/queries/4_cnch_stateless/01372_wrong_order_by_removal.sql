@@ -1,3 +1,5 @@
+SET enable_optimizer = 0;
+
 CREATE TEMPORARY TABLE moving_sum_num
 (
     `k` String,

@@ -200,7 +200,7 @@ public:
         }
         else
         {
-            const auto & column_key = dynamic_cast<const ColumnVector<T> &>(*columns[0]);
+            const auto & column_key = typeid_cast<const ColumnVector<T> &>(*columns[0]);
             this->data(place).add(column_key.getElement(row_num), bitmap);
         }
     }
@@ -278,7 +278,7 @@ public:
         }
         else
         {
-            auto & first_col_in_tuple = dynamic_cast<ColumnVector<T> &>(tuple_in_array.getColumn(0));
+            auto & first_col_in_tuple = typeid_cast<ColumnVector<T> &>(tuple_in_array.getColumn(0));
             for (auto it = intermediate_res.begin(); it != intermediate_res.end(); ++it)
                 first_col_in_tuple.insertValue(it->first);
         }
@@ -289,7 +289,7 @@ public:
 
         if (result_type == 0ull)
         {
-            auto & column_in_tuple = dynamic_cast<ColumnUInt64 &>(second_col_in_tuple.getData());
+            auto & column_in_tuple = typeid_cast<ColumnUInt64 &>(second_col_in_tuple.getData());
 
             for (auto it = intermediate_res.begin(); it != intermediate_res.end(); ++it)
             {

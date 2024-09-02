@@ -28,14 +28,15 @@
 #include <common/ErrorHandlers.h>
 
 #include <Core/Defines.h>
-#include <Common/Configurations.h>
-#include <Common/getMultipleKeysFromConfig.h>
-#include <Server/ProtocolServerAdapter.h>
-#include <Poco/Net/NetException.h>
-#include <TSO/TSOImpl.h>
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/PrometheusRequestHandler.h>
+#include <Server/ProtocolServerAdapter.h>
 #include <Server/TSOPrometheusMetricsWriter.h>
+#include <TSO/TSOImpl.h>
+#include <Poco/Net/NetException.h>
+#include <Common/Brpc/BrpcApplication.h>
+#include <Common/Configurations.h>
+#include <Common/getMultipleKeysFromConfig.h>
 
 using namespace std::chrono;
 
@@ -89,7 +90,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
 
     registerServiceDiscovery();
 
-    const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+    const char * consul_http_host = getConsulIPFromEnv();
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
     if (consul_http_host != nullptr && consul_http_port != nullptr)
         brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
@@ -528,6 +529,8 @@ int TSOServer::main(const std::vector<std::string> &)
 
 int TSOServer::run()
 {
+    // Init Brpc config. It's a must before you construct a RpcClientBase.
+    BrpcApplication::getInstance().initialize(config());
     if (config().hasOption("help"))
     {
         Poco::Util::HelpFormatter help_formatter(TSOServer::options());

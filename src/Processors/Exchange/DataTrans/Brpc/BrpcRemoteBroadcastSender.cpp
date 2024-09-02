@@ -43,10 +43,6 @@
 
 namespace DB
 {
-namespace
-{
-    const auto STREAM_WAIT_TIMEOUT_MS = 1000;
-}
 
 namespace ErrorCodes
 {
@@ -124,7 +120,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendImpl(Chunk chunk)
     for (size_t i = 0; i < sender_stream_ids.size(); ++i)
     {
         BroadcastStatus ret_status = sendIOBuffer(buf, sender_stream_ids[i], *trans_keys[i]);
-        if (ret_status.is_modifer && ret_status.code != BroadcastStatusCode::RUNNING)
+        if (ret_status.is_modified_by_operator && ret_status.code != BroadcastStatusCode::RUNNING)
         {
             finish(
                 BroadcastStatusCode::SEND_CANCELLED,
@@ -164,15 +160,17 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
 {
     if (io_buffer.size() > brpc::FLAGS_max_body_size)
         throw Exception(
-            "Write stream-" + std::to_string(stream_id) + " buffer fail, io buffer size is bigger than "
+            CurrentThread::getQueryId().toString() +
+            " write stream-" + std::to_string(stream_id) + " buffer fail, io buffer size is bigger than "
                 + std::to_string(brpc::FLAGS_max_body_size) + " current is " + std::to_string(io_buffer.size()),
             ErrorCodes::BRPC_EXCEPTION);
 
     size_t retry_count = 0;
+    size_t overcrowded_retry = 0;
     Stopwatch s;
     bool success = false;
     timespec query_expiration_ts = context->getQueryExpirationTimeStamp();
-    UInt64 query_expiration_ms_ts = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
+    size_t query_expiration_ms_ts = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
     while (time_in_milliseconds(std::chrono::system_clock::now()) < query_expiration_ms_ts)
     {
         int rect_code = brpc::StreamWrite(stream_id, io_buffer);
@@ -183,9 +181,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         }
         else if (rect_code == EAGAIN)
         {
-            bthread_usleep(50 * 1000);
-            timespec timeout = butil::milliseconds_from_now(STREAM_WAIT_TIMEOUT_MS);
-            int wait_res_code = brpc::StreamWait(stream_id, &timeout);
+            int wait_res_code = brpc::StreamWait(stream_id, &query_expiration_ts);
             if (wait_res_code == EINVAL)
             {
                 // TODO: retain stream object before finish code is read.
@@ -196,8 +192,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
 
             LOG_TRACE(
                 log,
-                "Stream write buffer full wait for {} ms,  retry count-{}, stream_id-{} ,with data_key-{} wait res code:{} size:{} ",
-                STREAM_WAIT_TIMEOUT_MS,
+                "Stream write buffer full wait, retry count-{}, stream_id-{} ,with data_key-{} wait res code:{} size:{} ",
                 retry_count,
                 stream_id,
                 data_key,
@@ -212,11 +207,24 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         }
         else if (rect_code == 1011) //EOVERCROWDED   | 1011 | The server is overcrowded
         {
-            if (enable_sender_metrics)
-                sender_metrics.overcrowded_retry << 1;
-            bthread_usleep(1000 * 1000);
+            size_t now = time_in_milliseconds(std::chrono::system_clock::now());
+            if (now < query_expiration_ms_ts)
+            {
+                if (enable_sender_metrics)
+                    sender_metrics.overcrowded_retry << 1;
+                overcrowded_retry += 1;
+                size_t sleep_time = std::min(1000 * overcrowded_retry, query_expiration_ms_ts - now);
+
+                bthread_usleep(1000 * sleep_time);
+            }
             LOG_WARNING(
-                log, "Stream-{} write buffer error rect_code:{}, server is overcrowded, data_key-{}", stream_id, rect_code, data_key);
+                log,
+                "Stream-{} write buffer error rect_code:{}, server is overcrowded, data_key:{}, retry_count:{}, overcrowded_retry:{}",
+                stream_id,
+                rect_code,
+                data_key,
+                retry_count,
+                overcrowded_retry);
         }
         // stream finished
         else if (rect_code == -1)
@@ -245,8 +253,8 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
     }
     if (!success)
     {
-        const auto msg = fmt::format("Write stream-{} timeout, with data_key-{}, size:{}, retry_count:{}, query_expiration_ms_ts:{}, maximum:{}", 
-            stream_id, data_key, io_buffer.size(), retry_count, query_expiration_ms_ts, context->getQueryMaxExecutionTime() / 1000);
+        const auto msg = fmt::format("Write stream-{} timeout, with data_key-{}, size:{}, retry_count:{}, overcrowded_retry:{}, query_expiration_ms_ts:{}, maximum:{}", 
+            stream_id, data_key, io_buffer.size(), retry_count, overcrowded_retry, query_expiration_ms_ts, context->getQueryMaxExecutionTime() / 1000);
         LOG_ERROR(log, msg);
         auto current_status = BroadcastStatus(BroadcastStatusCode::SEND_TIMEOUT, true, msg);
         int actual_status_code = BroadcastStatusCode::RUNNING;

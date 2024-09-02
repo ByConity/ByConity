@@ -148,8 +148,8 @@ public:
             {
                 case SetVariants::Type::EMPTY:
                     break;
-                // case SetVariants::Type::bitmap64:
-                    // break;
+                case SetVariants::Type::bitmap64:
+                    break;
                 case SetVariants::Type::key_string:
                     if (is_nullable)                                                    \
                         setCheckImpl<std::decay_t<decltype(*st.data.key_string)>, true, true>(*st.data.key_string, *array, vec_res, first);

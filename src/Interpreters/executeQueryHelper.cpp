@@ -20,10 +20,12 @@
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
 
-#include <common/logger_useful.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RemoteBlockInputStream.h>
+#include <Interpreters/QueryLog.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
+#include <common/logger_useful.h>
+
 
 namespace DB
 {
@@ -39,6 +41,12 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
         database = alter->database;
         table = alter->table;
         is_alter_database = (alter->alter_object == ASTAlterQuery::AlterObjectType::DATABASE);
+    }
+    else if (const auto * alter_mysql = ast->as<ASTAlterAnalyticalMySQLQuery>())
+    {
+        database = alter_mysql->database;
+        table = alter_mysql->table;
+        is_alter_database = (alter_mysql->alter_object == ASTAlterQuery::AlterObjectType::DATABASE);
     }
     else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
     {
@@ -152,7 +160,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         *plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
     res.pipeline.addInterpreterContext(context);
 
-    res.finish_callback = [proxy_txn, context, remote_query_executor](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
+    res.finish_callback = [proxy_txn, context, remote_query_executor](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *) {
         /// Get the extended profile info which is mainly for INSERT SELECT/INSERT INFILE
         context->setExtendedProfileInfo(remote_query_executor->getExtendedProfileInfo());
         if (proxy_txn)
@@ -161,7 +169,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
 
     };
-    res.exception_callback = [proxy_txn, context](int) {
+    res.exception_callback = [proxy_txn, context]() {
         if (proxy_txn)
             proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
 
@@ -169,4 +177,23 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     };
 }
 
+/// Call this inside catch block.
+void setExceptionStackTrace(QueryLogElement & elem)
+{
+    /// Disable memory tracker for stack trace.
+    /// Because if exception is "Memory limit (for query) exceed", then we probably can't allocate another one string.
+    MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
+
+    try
+    {
+        throw;
+    }
+    catch (const std::exception & e)
+    {
+        elem.stack_trace = getExceptionStackTraceString(e);
+    }
+    catch (...)
+    {
+    }
+}
 }

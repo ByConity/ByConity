@@ -21,16 +21,16 @@ insert into pi values ('a', 'a', 2);
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info
-        where database = currentDatabase() and table = 'pi'
+        where database = currentDatabase(0) and table = 'pi'
     )
 );
 
 -- Row numbers should match.
-select total_rows_count from system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+select total_rows_count from system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 -- Action: mutation.
 ALTER TABLE pi DROP COLUMN asdf;
@@ -44,16 +44,16 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
-        where database = currentDatabase() and table = 'pi'
+        where database = currentDatabase(0) and table = 'pi'
     )
 );
 
 -- Row numbers should match.
-select total_rows_count from system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+select total_rows_count from system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 -- Action: mutation.
 ALTER TABLE pi DROP COLUMN country;
@@ -65,21 +65,21 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
-        where database = currentDatabase() and table = 'pi'
+        where database = currentDatabase(0) and table = 'pi'
     )
 );
 
 -- Row numbers should match.
-select total_rows_count from system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+select total_rows_count from system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 TRUNCATE TABLE pi;
 
 select total_parts_number, total_rows_count, total_parts_size from
-system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 DROP TABLE IF EXISTS pi;
 
@@ -108,16 +108,16 @@ insert into pi values ('a', 'a', 1);
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
-        where database = currentDatabase() and table = 'pi'
+        where database = currentDatabase(0) and table = 'pi'
     )
 );
 
 -- Row numbers should match.
-select total_rows_count from system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+select total_rows_count from system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 -- Action: mutation.
 ALTER TABLE pi DROP COLUMN asdf;
@@ -131,16 +131,16 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
-        where database = currentDatabase() and table = 'pi'
+        where database = currentDatabase(0) and table = 'pi'
     )
 );
 
 -- Row numbers should match.
-select total_rows_count from system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+select total_rows_count from system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 -- Action: mutation.
 ALTER TABLE pi DROP COLUMN country;
@@ -152,20 +152,20 @@ OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 select equals( 
     (
         select count(), sum(bytes_on_disk) from system.cnch_parts
-        where database = currentDatabase() and table = 'pi' and part_type <= 2
+        where database = currentDatabase(1) and table = 'pi' and part_type <= 2
     ), 
     (
         select total_parts_number, total_parts_size from system.cnch_parts_info 
-        where database = currentDatabase() and table = 'pi'
+        where database = currentDatabase(0) and table = 'pi'
     )
 );
 
 -- Row numbers should match.
-select total_rows_count from system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+select total_rows_count from system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 TRUNCATE TABLE pi;
 
 select total_parts_number, total_rows_count, total_parts_size from
-system.cnch_parts_info where database = currentDatabase() and table = 'pi';
+system.cnch_parts_info where database = currentDatabase(0) and table = 'pi';
 
 DROP TABLE IF EXISTS pi;

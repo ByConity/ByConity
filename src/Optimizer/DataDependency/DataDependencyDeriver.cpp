@@ -22,7 +22,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <QueryPlan/Assignment.h>
-#include <Storages/StorageMemory.h>
 
 namespace DB
 {
@@ -103,7 +102,7 @@ DataDependency DataDependencyDeriverVisitor::visitStep(const IQueryPlanStep &, D
 
 DataDependency DataDependencyDeriverVisitor::visitProjectionStep(const ProjectionStep & step, DataDependencyDeriverContext & context)
 {
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     std::unordered_map<String, String> revert_identifies;
 

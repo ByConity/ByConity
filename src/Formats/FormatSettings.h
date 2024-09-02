@@ -21,10 +21,15 @@
 
 #pragma once
 
-#include <map>
-#include <unordered_set>
-#include <vector>
 #include <common/types.h>
+#include <unordered_set>
+#include <map>
+#include <vector>
+#include <Core/Defines.h>
+
+#if !defined(ARCADIA_BUILD)
+#    include <Common/config.h>
+#endif
 
 namespace DB
 {
@@ -52,10 +57,13 @@ struct FormatSettings
     bool null_as_default = true;
     bool defaults_for_omitted_fields = true;
     bool decimal_trailing_zeros = false;
-    bool throw_on_date_overflow = false;
-    /// set to true for MYSQL dialect
-    bool check_date_overflow = false;
+    bool check_data_overflow = false;
 
+    bool seekable_read = true;
+    UInt64 max_rows_to_read_for_schema_inference = 100;
+    UInt64 max_bytes_to_read_for_schema_inference = 32 * 1024 * 1024;
+
+    bool avoid_buffering = true;
     enum class DateTimeInputFormat
     {
         Basic,      /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
@@ -74,8 +82,22 @@ struct FormatSettings
 
     DateTimeOutputFormat date_time_output_format = DateTimeOutputFormat::Simple;
 
+    enum class DateTimeOverflowBehavior
+    {
+        Ignore,
+        Throw,
+        Saturate
+    };
+
+    DateTimeOverflowBehavior date_time_overflow_behavior = DateTimeOverflowBehavior::Ignore;
+
+
     UInt64 input_allow_errors_num = 0;
     Float32 input_allow_errors_ratio = 0;
+
+    bool schema_inference_make_columns_nullable = true;
+
+    UInt64 max_parser_depth = DBMS_DEFAULT_MAX_PARSER_DEPTH;
 
     struct
     {
@@ -130,10 +152,16 @@ struct FormatSettings
         bool quote_64bit_integers = false;
         bool quote_denormals = true;
         bool escape_forward_slashes = true;
-        bool named_tuples_as_objects = false;
+        bool read_named_tuples_as_objects = false;
+        bool write_named_tuples_as_objects = false;
+        bool defaults_for_missing_elements_in_named_tuple = false;
         bool serialize_as_strings = false;
         bool read_bools_as_numbers = true;
+        bool read_numbers_as_strings = true;
         bool quota_json_string = true;
+        bool read_objects_as_strings = false;
+        bool allow_object_type = false;
+        bool try_infer_numbers_from_strings = false;
     } json;
 
     struct
@@ -141,22 +169,37 @@ struct FormatSettings
         UInt64 row_group_size = 1000000;
         bool import_nested = false;
         bool allow_missing_columns = false;
+        bool skip_columns_with_unsupported_types_in_schema_inference = false;
         std::unordered_set<int> skip_row_groups;
         bool output_string_as_string = false;
         bool output_fixed_string_as_fixed_byte_array = true;
         bool preserve_order = false;
-        size_t file_size = 0 ;
+        bool coalesce_read = false;
         bool case_insensitive_column_matching = false;
         UInt64 max_block_size = 8192;
+        size_t max_download_threads = 1;
+        size_t min_bytes_for_seek = 8192;
+        size_t max_buffer_size = 8 * 1024 * 1024;
+        bool use_lazy_io_cache = true;
+        bool filter_push_down = true;
+        bool use_footer_cache = false;
+        bool use_native_reader = false;
     } parquet;
 
     struct Orc
     {
-        bool import_nested = false;
         bool allow_missing_columns = false;
+        int64_t row_batch_size = 100000;
         bool case_insensitive_column_matching = false;
-        std::vector<bool> skip_stripes;
+        bool import_nested = false;
+        std::unordered_set<int> skip_stripes = {};
         bool output_string_as_string = false;
+        size_t use_fast_decoder = 0;
+        bool allow_out_of_range = false;
+        size_t current_file_offset = 0;
+        size_t range_bytes = 0;
+        bool filter_push_down = true;
+        bool use_footer_cache = false;
     } orc;
 
     struct Pretty

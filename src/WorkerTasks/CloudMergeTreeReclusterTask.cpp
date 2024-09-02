@@ -26,6 +26,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ABORTED;
+    extern const int BAD_ARGUMENTS;
 }
 
 CloudMergeTreeReclusterTask::CloudMergeTreeReclusterTask(
@@ -35,6 +36,11 @@ CloudMergeTreeReclusterTask::CloudMergeTreeReclusterTask(
     : ManipulationTask(std::move(params_), std::move(context_))
     , storage(storage_)
 {
+    if (/*params.source_parts.empty() && */params.source_data_parts.empty())
+        throw Exception("Expected non-empty source parts in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
+
+    if (params.new_part_names.empty())
+        throw Exception("Expected non-empty new part names in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void CloudMergeTreeReclusterTask::executeImpl()
@@ -72,7 +78,8 @@ void CloudMergeTreeReclusterTask::executeImpl()
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Clustering, params.task_id);
     auto res = cnch_writer.dumpAndCommitCnchParts(parts_to_commit);
     getContext()->getCurrentTransaction()->commitV2();
-    cnch_writer.preload(res.parts);
+    if (params.parts_preload_level)
+        cnch_writer.preload(res.parts);
 }
 
 }

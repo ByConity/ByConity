@@ -329,9 +329,8 @@ void ClickHouseDumper::initHDFS()
 
     /// Options load from command line argument use priority -100 in layeredconfiguration, so construct
     /// hdfs params from config directly rather than from config file
-    HDFSConnectionParams hdfs_params = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY,
-        config().getString("hdfs_user", "clickhouse"), config().getString("output_hdfs_nnproxy", "nnproxy"));
-    hdfs_params.lookupOnNeed();
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseFromMisusedNNProxyStr(
+        config().getString("output_hdfs_nnproxy", "nnproxy"), config().getString("hdfs_user", "clickhouse"));
     global_context->setHdfsConnectionParams(hdfs_params);
     /// register default hdfs file system
     bool has_hdfs_disk = false;

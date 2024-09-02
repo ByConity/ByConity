@@ -26,26 +26,21 @@
 
 namespace DB
 {
-PatternPtr InlineProjections::getPattern() const
+ConstRefPatternPtr InlineProjections::getPattern() const
 {
-    return Patterns::project().withSingle(Patterns::project()).result();
+    static auto pattern = Patterns::project().withSingle(Patterns::project()).result();
+    return pattern;
 }
 
 TransformResult InlineProjections::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & parent = node;
-    const auto & step = dynamic_cast<const ProjectionStep &>(*node->getStep());
     auto & child = node->getChildren()[0];
+
+    const auto & step = dynamic_cast<const ProjectionStep &>(*node->getStep());
     const auto & child_step = dynamic_cast<const ProjectionStep &>(*child->getStep());
-    if (step.isFinalProject())
-    {
-        for (const auto & item : child_step.getAssignments())
-        {
-            auto func_count = CollectFuncs::collect(item.second, rule_context.context).size();
-            if (func_count > 0)
-                return {};
-        }
-    }
+    if (step.isFinalProject() && !Utils::isAlias(child_step.getAssignments()))
+        return {};
     return TransformResult::of(inlineProjections(parent, child, rule_context.context, inline_arraysetcheck));
 }
 
@@ -146,7 +141,7 @@ InlineProjections::inlineProjections(PlanNodePtr & parent_node, PlanNodePtr & ch
     else
     {
         auto new_child_step = std::make_shared<ProjectionStep>(
-            child->getChildren()[0]->getStep()->getOutputStream(), new_child_assignments, new_child_types);
+            child->getChildren()[0]->getStep()->getOutputStream(), new_child_assignments, new_child_types, false, child_step.isIndexProject());
         new_child_node = std::make_shared<ProjectionNode>(child->getId(), std::move(new_child_step), PlanNodes{child->getChildren()[0]});
     }
 
@@ -280,9 +275,10 @@ ASTPtr InlineProjections::inlineReferences(const ConstASTPtr & expression, Assig
     return ExpressionInliner::inlineSymbols(expression, assignments);
 }
 
-PatternPtr InlineProjectionIntoJoin::getPattern() const
+ConstRefPatternPtr InlineProjectionIntoJoin::getPattern() const
 {
-    return Patterns::join().result();
+    static auto pattern = Patterns::join().result();
+    return pattern;
 }
 
 TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -342,11 +338,13 @@ TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const 
     return new_join_node;
 }
 
-PatternPtr InlineProjectionOnJoinIntoJoin::getPattern() const
+ConstRefPatternPtr InlineProjectionOnJoinIntoJoin::getPattern() const
 {
-    return Patterns::project()
+    static auto pattern = Patterns::project()
         .matchingStep<ProjectionStep>([](const auto & step) { return Utils::isIdentity(step); })
-        .withSingle(Patterns::join()).result();
+        .withSingle(Patterns::join())
+        .result();
+    return pattern;
 }
 
 TransformResult InlineProjectionOnJoinIntoJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)

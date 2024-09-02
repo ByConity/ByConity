@@ -493,6 +493,10 @@ std::string ExpressionActions::Action::toString() const
         case ActionsDAG::ActionType::INPUT:
             out << "INPUT " << arguments.front();
             break;
+
+        case ActionsDAG::ActionType::PREPARED_COLUMN:
+            out << "PREPARED_COLUMN " << arguments.front();
+            break;
     }
 
     out << " -> " << node->result_name
@@ -662,6 +666,14 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
         {
             auto & res_column = columns[action.result_position];
             res_column.column = action.node->column->cloneResized(num_rows);
+            res_column.type = action.node->result_type;
+            res_column.name = action.node->result_name;
+            break;
+        }
+
+        case ActionsDAG::ActionType::PREPARED_COLUMN: {
+            auto & res_column = columns[action.result_position];
+            res_column.column = action.node->result_type->createColumn();
             res_column.type = action.node->result_type;
             res_column.name = action.node->result_name;
             break;

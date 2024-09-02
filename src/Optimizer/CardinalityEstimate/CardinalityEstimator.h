@@ -33,16 +33,18 @@ public:
         std::vector<PlanNodeStatisticsPtr> children_stats,
         ContextMutablePtr context,
         bool simple_children,
-        std::vector<bool> is_table_scany,
-        const InclusionDependency & inclusion_dependency);
+        std::vector<bool> is_table_scan,
+        std::vector<double> children_filter_selectivity,
+        const InclusionDependency & inclusion_dependency = {});
 
-    static std::optional<PlanNodeStatisticsPtr> estimate(PlanNodeBase & node,
+    static std::optional<PlanNodeStatisticsPtr> estimate(
+        PlanNodeBase & node,
         CTEInfo & cte_info,
         ContextMutablePtr context,
         bool recursive = false, 
         bool re_estimate = false);
-    static void estimate(QueryPlan & plan, ContextMutablePtr context, bool re_estimate = false);
 
+    static void estimate(QueryPlan & plan, ContextMutablePtr context, bool re_estimate = false);
 };
 
 struct CardinalityContext
@@ -54,14 +56,14 @@ struct CardinalityContext
     std::vector<bool> children_are_table_scan = {};
     bool is_table_scan = false;
     bool re_estimate = false;
-    InclusionDependency inclusion_dependency;
+    std::vector<double> children_filter_selectivity = {};
+    InclusionDependency inclusion_dependency = {};
 };
 
 class CardinalityVisitor : public StepVisitor<PlanNodeStatisticsPtr, CardinalityContext>
 {
 public:
     PlanNodeStatisticsPtr visitStep(const IQueryPlanStep &, CardinalityContext &) override;
-
 
 #define VISITOR_DEF(TYPE) PlanNodeStatisticsPtr visit##TYPE##Step(const TYPE##Step &, CardinalityContext &) override;
     APPLY_STEP_TYPES(VISITOR_DEF)
@@ -71,12 +73,12 @@ public:
 class PlanCardinalityVisitor : public PlanNodeVisitor<PlanNodeStatisticsPtr, CardinalityContext>
 {
 public:
-    PlanCardinalityVisitor(CTEInfo & cte_info) : cte_helper(cte_info) { }
+    explicit PlanCardinalityVisitor(CTEInfo & cte_info) : cte_helper(cte_info) { }
 
     PlanNodeStatisticsPtr visitPlanNode(PlanNodeBase &, CardinalityContext &) override;
     PlanNodeStatisticsPtr visitCTERefNode(CTERefNode & node, CardinalityContext & context) override;
 private:
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<void> cte_helper;
 };
 
 }

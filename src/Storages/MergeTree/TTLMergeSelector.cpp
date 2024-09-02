@@ -140,7 +140,8 @@ bool TTLDeleteMergeSelector::isTTLAlreadySatisfied(const IMergeSelector::Part & 
     if (only_drop_parts)
         return false;
 
-    /// All TTL satisfied
+    /// Part's all ttls expired
+    /// part_finished (expired) -> hasAnyNonFinishedTTLs false -> !: true
     if (!part.ttl_infos->hasAnyNonFinishedTTLs())
         return true;
 

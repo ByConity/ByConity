@@ -223,11 +223,6 @@ void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_
 
     ProfileEvents::increment(ProfileEvents::DiskCacheSetTotalOps, 1, Metrics::MetricType::Rate, {{"type", (is_preload ? "preload": "query")}});
 
-    if (set_throughput_throttler)
-    {
-        set_throughput_throttler->add(weight_hint);
-    }
-
     auto key = hash(seg_name);
     auto& shard = containers.shard(key);
     // Insert cache meta first, if there is a entry already there, skip this insert
@@ -307,7 +302,8 @@ size_t DiskCacheLRU::writeSegment(const String& seg_key, ReadBuffer& buffer, Res
         // Write into temporary file, by default it will truncate this file
         size_t written_size = 0;
         {
-            WriteBufferFromFile to(fs::path(disk->getPath()) / temp_cache_rel_path);
+            WriteBufferFromFile to(
+                fs::path(disk->getPath()) / temp_cache_rel_path, DBMS_DEFAULT_BUFFER_SIZE, -1, 0666, nullptr, 0, set_throughput_throttler);
             copyData(buffer, to, reservation.get());
             to.finalize();
             written_size = to.count();
@@ -316,6 +312,14 @@ size_t DiskCacheLRU::writeSegment(const String& seg_key, ReadBuffer& buffer, Res
         // Finish file writing, rename it, there shouldn't be any threads trying
         // to modify these files now
         disk->replaceFile(temp_cache_rel_path, cache_rel_path);
+
+        if (disk->getFileSize(cache_rel_path) != written_size)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "cached {} file size {} doesn't match written size {}",
+                cache_rel_path,
+                disk->getFileSize(cache_rel_path),
+                written_size);
 
         return written_size;
     }

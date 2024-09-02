@@ -116,7 +116,7 @@ void CnchReadBufferFromKafkaConsumer::commit()
     if (!offsets.empty())
     {
         auto tpl = getOffsets();
-        LOG_TRACE(log, "Committing offsets: {}", DB::Kafka::toString(tpl));
+        LOG_DEBUG(log, "Committing offsets: {}", DB::Kafka::toString(tpl));
 
         try
         {
@@ -171,6 +171,15 @@ void CnchReadBufferFromKafkaConsumer::assign(const cppkafka::TopicPartitionList 
     reset();
 }
 
+void CnchReadBufferFromKafkaConsumer::setSampleConsumingPartitionList(const std::set<cppkafka::TopicPartition> & sample_partitions_)
+{
+    if (!sample_partitions_.empty())
+    {
+        sample_partitions = sample_partitions_;
+        enable_sample_consuming = true;
+    }
+}
+
 void CnchReadBufferFromKafkaConsumer::unassign()
 {
     LOG_TRACE(log, "Re-joining claimed consumer after failure");
@@ -196,8 +205,20 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
         /// thus here we don't need to check if the message has some error;
         /// Of course, we may get no message, e.g there are no more messages in the topic-partition now.
         auto new_message = consumer->poll(std::chrono::milliseconds(poll_timeout));
-        if (!new_message)
+        if (!new_message || new_message.is_eof())
             continue;
+
+        /// Must continue polling and handling the consumer queue even if the queue is filled with errors;
+        /// or the memory leak occurs because the consumer keeps fetching from brokers and fill the queue
+        if (auto error = new_message.get_error())
+        {
+            ++rdkafka_errors;
+            if (consumer->is_serious_err(error))
+                consumer->setDestroyed();
+
+            rdkafka_errors_buffer.push_back({"poll(): " + error.to_string(), static_cast<UInt64>(Poco::Timestamp().epochTime())});
+            continue;
+        }
 
         /// Get an available message, save it for committing
         current = std::move(new_message);
@@ -238,6 +259,15 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
         /// Once committed, the `postition` and the `committed position` would be equal
         offset = current.get_offset() + 1;
 
+        /// if sample consuming is enabled and the consumed topic & partition is not the sampled one,
+        /// the message would be discarded; but we still record the offset to avoid the lag
+        if (unlikely(enable_sample_consuming) && !sample_partitions.contains({current.get_topic(), current.get_partition()}))
+        {
+            /// XXX: record the discarded message number here
+            ++skip_messages_by_sample;
+            continue;
+        }
+
         const auto & payload = current.get_payload();
 
         /// Check empty payload to avoid CORE DUMP
@@ -258,7 +288,7 @@ bool CnchReadBufferFromKafkaConsumer::nextImpl()
     }
 
     /// This buffer/consumer has been expired if reached here
-    LOG_TRACE(log, "Stalled. Polled {} messages", read_messages);
+    LOG_DEBUG(log, "Stalled. Polled {} messages and {} errors", read_messages, rdkafka_errors);
     stalled = true;
     return false;
 }
@@ -273,6 +303,9 @@ void CnchReadBufferFromKafkaConsumer::reset()
     stalled = false;
     skipped_msgs_in_holes = 0;
     skipped_ofsets_hole.clear();
+    skip_messages_by_sample = 0;
+    rdkafka_errors = 0;
+    rdkafka_errors_buffer.clear();
 }
 
 bool CnchReadBufferFromKafkaConsumer::hasExpired()

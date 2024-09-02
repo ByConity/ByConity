@@ -221,6 +221,91 @@ static int compareValuesWithOffsetFloat(const IColumn * _compared_column,
     return result;
 }
 
+static constexpr int NO_NULL_DATA = 0xFF;
+
+/* upper layer will take care of NULLS LAST and NULLS FIRST */
+static int compareNullable(const IColumn * & _compared_column,
+    size_t compared_row, const IColumn * & _reference_column,
+    size_t reference_row)
+{
+    const auto* compared_col = typeid_cast<const ColumnNullable *>(_compared_column);
+    const auto* ref_col = typeid_cast<const ColumnNullable *>(_reference_column);
+    bool nullable_compared = false;
+    bool nullable_ref = false;
+
+    if (compared_col)
+    {
+        _compared_column = compared_col->getNestedColumnPtr().get();
+        nullable_compared = true;
+    }
+
+    if (ref_col)
+    {
+        _reference_column = ref_col->getNestedColumnPtr().get();
+        nullable_ref = true;
+    }
+
+    if (nullable_compared || nullable_ref)
+    {
+        if (nullable_compared && nullable_ref)
+        {
+            bool null_compared = compared_col->isNullAt(compared_row);
+            bool null_ref = ref_col->isNullAt(reference_row);
+            /* both compared row and reference row are NULL */
+            if (null_compared && null_ref)
+                return 0;
+
+            /* only compared row is NULL */
+            if (null_compared)
+                return 1;
+
+            /* only reference row is NULL */
+            if (null_ref)
+                return -1;
+
+            /* both compared row and reference row are not NULL */
+        }
+        else if (nullable_compared)
+            return 1;
+        else
+            return -1;
+    }
+
+    return NO_NULL_DATA;
+}
+
+template <typename ColumnType>
+static int compareNullableValuesWithOffset(const IColumn * _compared_column,
+    size_t compared_row, const IColumn * _reference_column,
+    size_t reference_row,
+    const Field & _offset,
+    bool offset_is_preceding)
+{
+    int ret = compareNullable(_compared_column, compared_row, _reference_column, reference_row);
+    if (ret != NO_NULL_DATA)
+        return ret;
+
+    return compareValuesWithOffset<ColumnType>(_compared_column, compared_row,
+                                               _reference_column, reference_row,
+                                               _offset, offset_is_preceding);
+}
+
+template <typename ColumnType>
+static int compareNullableValuesWithOffsetFloat(const IColumn * _compared_column,
+    size_t compared_row, const IColumn * _reference_column,
+    size_t reference_row,
+    const Field & _offset,
+    bool offset_is_preceding)
+{
+    int ret = compareNullable(_compared_column, compared_row, _reference_column, reference_row);
+    if (ret != NO_NULL_DATA)
+        return ret;
+
+    return compareValuesWithOffsetFloat<ColumnType>(_compared_column, compared_row,
+                                                    _reference_column, reference_row,
+                                                    _offset, offset_is_preceding);
+}
+
 // Helper macros to dispatch on type of the ORDER BY column
 #define APPLY_FOR_ONE_TYPE(FUNCTION, TYPE) \
 else if (typeid_cast<const TYPE *>(column)) \
@@ -337,7 +422,13 @@ WindowTransform::WindowTransform(const Block & input_header_,
         assert(order_by_indices.size() == 1);
         const auto & entry = input_header.getByPosition(order_by_indices[0]);
         const IColumn * column = entry.column.get();
-        APPLY_FOR_TYPES(compareValuesWithOffset)
+        if (const auto* null_col = typeid_cast<const ColumnNullable *>(column))
+        {
+            column = null_col->getNestedColumnPtr().get();
+            APPLY_FOR_TYPES(compareNullableValuesWithOffset)
+        } else {
+            APPLY_FOR_TYPES(compareValuesWithOffset)
+        }
 
         // Convert the offsets to the ORDER BY column type. We can't just check
         // that the type matches, because e.g. the int literals are always
@@ -2378,7 +2469,8 @@ void registerWindowFunctions(AggregateFunctionFactory & factory)
         .returns_default_when_only_null = true,
         // This probably doesn't make any difference for window functions because
         // it is an Aggregator-specific setting.
-        .is_order_dependent = true };
+        .is_order_dependent = true,
+        .is_window_function = true };
 
     factory.registerFunction("rank", {[](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)

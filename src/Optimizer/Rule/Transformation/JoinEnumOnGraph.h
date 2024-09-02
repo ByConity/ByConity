@@ -31,15 +31,16 @@ using GroupId = UInt32;
 class JoinEnumOnGraph : public Rule
 {
 public:
-    JoinEnumOnGraph(bool support_filter_) : support_filter(support_filter_) { }
+    explicit JoinEnumOnGraph(bool support_filter_) : support_filter(support_filter_) { }
     RuleType getType() const override { return RuleType::JOIN_ENUM_ON_GRAPH; }
     String getName() const override { return "JOIN_ENUM_ON_GRAPH"; }
-    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_join_enum_on_graph; }
-    PatternPtr getPattern() const override;
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_join_enum_on_graph; }
+    ConstRefPatternPtr getPattern() const override;
 
     const std::vector<RuleType> & blockRules() const override;
+    static ConstASTs getJoinFilter(
+        const ASTPtr & all_filter, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context);
 
-    static ASTPtr getJoinFilter(const ASTPtr & all_filter, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context);
 private:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
     bool support_filter;

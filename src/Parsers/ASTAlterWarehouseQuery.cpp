@@ -46,11 +46,37 @@ void ASTAlterWarehouseQuery::formatImpl(const FormatSettings &s, FormatState &st
                       << (s.hilite ? hilite_none : "");
     }
 
+    if (type == Type::ADD_RULE)
+    {
+        s.ostr << " ADD RULE ";
+    }
+    else if (type == Type::DELETE_RULE)
+    {
+        s.ostr << " DELETE RULE "; 
+    }
+    else if (type == Type::MODIFY_RULE)
+    {
+        s.ostr << " MODIFY RULE ";
+    }
+
+    if (assignment_list)
+    {
+        s.ostr << " SET ";
+        assignment_list->formatImpl(s, state, frame);
+    }
+
+    if (predicate)
+    {
+        s.ostr << " WHERE ";
+        predicate->formatImpl(s, state, frame);
+    }
+    //todo format
     if (settings)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "SETTINGS " << (s.hilite ? hilite_none : "");
         settings->formatImpl(s, state, frame);
     }
+
 }
 
 }

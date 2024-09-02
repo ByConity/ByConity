@@ -44,11 +44,12 @@
 #include <Poco/Util/MapConfiguration.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
-#include "Core/NamesAndTypes.h"
-#include "DataTypes/DataTypeMap.h"
-#include "DataTypes/DataTypeNullable.h"
-#include "IO/WriteBuffer.h"
-#include "Interpreters/Context.h"
+#include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <IO/WriteBuffer.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 
 namespace DB::UnitTest
 {
@@ -215,7 +216,7 @@ public:
         NamesAndTypes columns;
         for (int i = 0; i < 2; ++i)
             columns.emplace_back(generateNameAndTypePair(eng));
-        auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns);
+        auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns, nullptr);
         return step;
     }
 
@@ -261,7 +262,7 @@ public:
 
     static Block generateBlock(std::default_random_engine & eng, bool arr = false)
     {
-        std::vector<std::string> columns = {"a", "b", "c"};
+        std::vector<std::string> columns = {"a", "b", "c", "col_0", "col_1", "col_3"};
         size_t rows = 10;
         size_t stride = 1;
         size_t start = 0;
@@ -334,7 +335,7 @@ public:
         auto buckets = eng() % 1000;
         auto enforce_round_robin = eng() % 2 == 1;
         auto component = static_cast<Partitioning::Component>(eng() % 3);
-        auto result = Partitioning(handle, columns, require_handle, buckets, enforce_round_robin, component);
+        auto result = Partitioning(handle, columns, require_handle, buckets, nullptr, enforce_round_robin, component);
         return result;
     }
 
@@ -400,7 +401,7 @@ public:
         return res;
     }
 
-    static AggregateDescription generateAggregateDescription(std::default_random_engine & eng)
+    static AggregateDescription generateAggregateDescription(std::default_random_engine & /*eng*/, int i)
     {
         AggregateDescription res;
         AggregateFunctionProperties properties;
@@ -412,7 +413,7 @@ public:
         // generate Names
         // for (int i = 0; i < 10; ++i)
         // res.argument_names.emplace_back(fmt::format("text{}", eng() % 100));
-        res.column_name = std::vector{"a", "b"}[eng() % 2];
+        res.column_name = "col_" + std::to_string(i);
         res.mask_column = res.column_name;
         return res;
     }
@@ -426,13 +427,14 @@ public:
             keys.emplace_back(eng() % 3);
         AggregateDescriptions aggregates;
         for (int i = 0; i < 2; ++i)
-            aggregates.emplace_back(generateAggregateDescription(eng));
+            aggregates.emplace_back(generateAggregateDescription(eng, i));
         auto overflow_row = eng() % 2 == 1;
         auto max_rows_to_group_by = eng() % 1000;
         auto group_by_overflow_mode = static_cast<OverflowMode>(eng() % 3);
         auto group_by_two_level_threshold = eng() % 1000;
         auto group_by_two_level_threshold_bytes = eng() % 1000;
         auto max_bytes_before_external_group_by = eng() % 1000;
+        auto enable_adaptive_spill = eng() % 2;
         auto spill_buffer_bytes_before_external_group_by = eng() % 1000;
         auto empty_result_for_aggregation_by_empty_set = eng() % 2 == 1;
         auto tmp_volume = context ? context->getTemporaryVolume() : nullptr;
@@ -451,6 +453,7 @@ public:
             group_by_two_level_threshold,
             group_by_two_level_threshold_bytes,
             max_bytes_before_external_group_by,
+            enable_adaptive_spill,
             spill_buffer_bytes_before_external_group_by,
             empty_result_for_aggregation_by_empty_set,
             tmp_volume,
@@ -524,7 +527,6 @@ public:
     {
         Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
         AddressInfo local_address("localhost", 0, "test", "123456");
-        PlanSegmentInputs inputs;
 
         auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
         input->setExchangeParallelSize(2);
@@ -532,6 +534,22 @@ public:
         input->setPlanSegmentId(4);
         input->insertSourceAddress(local_address);
         return input;
+    }
+
+    static std::shared_ptr<PlanSegmentOutput> generatePlanSegmentOutput(std::default_random_engine & eng)
+    {
+        Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
+        auto output = std::make_shared<PlanSegmentOutput>(header, PlanSegmentType::EXCHANGE);
+        output->setExchangeParallelSize(2);
+        output->setExchangeId(3);
+        output->setPlanSegmentId(4);
+        output->setKeepOrder(true);
+        output->setShuffleFunctionName("bucket");
+        Array params;
+        params.emplace_back(generateField(eng));
+        params.emplace_back(generateField(eng));
+        output->setShuffleFunctionParams(params);
+        return output;
     }
 
     static WindowFrame generateWindowFrame(std::default_random_engine & eng)

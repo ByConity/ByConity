@@ -33,6 +33,7 @@
 #include <Parsers/formatAST.h>
 #include <Interpreters/misc.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
 #include <common/map.h>
 #include <iterator>
@@ -41,6 +42,7 @@
 #include <fmt/format.h>
 #include <Core/Names.h>
 
+#include <AggregateFunctions/AggregateBitmapExpression_fwd.h>
 #include <Interpreters/PartitionPredicateVisitor.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Optimizer/PredicateUtils.h>
@@ -105,6 +107,7 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     , column_sizes{std::move(column_sizes_)}
     , metadata_snapshot{metadata_snapshot_}
     , enable_ab_index_optimization{context_->getSettingsRef().enable_ab_index_optimization}
+    , enable_implicit_column_prewhere_push{context_->getSettingsRef().enable_implicit_column_prewhere_push}
     , materialize_strategy{materialize_strategy_}
     , aggresive_pushdown{context_->getSettingsRef().late_materialize_aggressive_push_down}
     , partition_columns(metadata_snapshot_->getPartitionKey().column_names)
@@ -217,8 +220,10 @@ void MergeTreeWhereOptimizer::analyzeImpl(Conditions & res, const ASTPtr & node,
                 || cond.identifiers.size() < queried_columns.size());
 
         if (cond.viable)
+        {
             cond.good = isConditionGood(node);
-
+            LOG_DEBUG(log, "MergeTreeWhereOptimizer: analyzeImpl identifiers: {}, column_size:{}", boost::join(cond.identifiers, ","), std::to_string(cond.columns_size));
+        }
         res.emplace_back(std::move(cond));
     }
 }
@@ -334,7 +339,7 @@ bool MergeTreeWhereOptimizer::isArraySetCheck(const ASTPtr & condition, bool) co
 
                 const ColumnDescription & column = columns.get(identifier_name);
 
-                if (!column.type->isBitmapIndex())
+                if (!column.type->isBitmapIndex() && !column.type->isSegmentBitmapIndex())
                     return false;
             }
 
@@ -395,7 +400,7 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
         size_t array_set_check_function_numbers = 0;
         for (auto it = where_conditions.begin(); it != where_conditions.end();)
         {
-            if (containsArraySetCheck(it->node))
+            if (isArraySetCheck(it->node))
             {
                 array_set_check_function_numbers++;
             }
@@ -429,7 +434,7 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
         if (!it->viable)
             break;
 
-        if (containsArraySetCheck(it->node))
+        if (isArraySetCheck(it->node))
             break;
 
         bool moved_enough = false;
@@ -685,7 +690,7 @@ bool MergeTreeWhereOptimizer::isConstant(const ASTPtr & expr) const
 bool MergeTreeWhereOptimizer::isSubsetOfTableColumns(const NameSet & identifiers) const
 {
     for (const auto & identifier : identifiers)
-        if (table_columns.count(identifier) == 0)
+        if (table_columns.count(identifier) == 0 && !(enable_implicit_column_prewhere_push && isMapImplicitKey(identifier)))
             return false;
 
     return true;
@@ -707,6 +712,10 @@ bool MergeTreeWhereOptimizer::cannotBeMoved(const ASTPtr & ptr, bool is_final) c
 
         /// indexHint is a special function that it does not make sense to transfer to PREWHERE
         if ("indexHint" == function_ptr->name)
+            return true;
+
+        // These functions can cause performance degradation
+        if ("match" == function_ptr->name || "get_json_object" == function_ptr->name)
             return true;
     }
     else if (auto opt_name = IdentifierSemantic::getColumnName(ptr))
@@ -811,6 +820,60 @@ std::vector<ASTPtr> && MergeTreeWhereOptimizer::getAtomicPredicatesExpressions()
     return std::move(atomic_predicates_expr);
 }
 
+Names getBitMapParameterValues(String expression)
+{
+    Names values;
+    expression += "#";
+    size_t max_index = expression.size();
+    size_t pre_index = max_index;
+    for (size_t i = 0; i < max_index; ++i)
+    {
+        if (BITENGINE_EXPRESSION_KEYWORDS.count(expression[i]))
+        {
+            if (pre_index != max_index)
+            {
+                if (pre_index == 0 || (pre_index > 0 && expression[pre_index - 1] != '_'))
+                    values.push_back(expression.substr(pre_index, i - pre_index));
+                pre_index = max_index;
+            }
+        }
+        else if (pre_index == max_index && expression[i] != BITENGINE_SPECIAL_KEYWORD)
+            pre_index = i;
+    }
+    return values;
+}
+
+/** For parameters in bitmap**** family aggregation functions, we construct an 'In' functions
+  * for example, bitmapCount('1 | 2 & 3')(a, b), we will construct 'a in (1, 2, 3)' expression.
+  */
+std::pair<ASTPtr, size_t> createInFunctionForBitMapParameter(const String & index_arg, const std::set<Field> & parameter_values)
+{
+    auto tuple_func = std::make_shared<ASTFunction>();
+    tuple_func->name = "tuple";
+    tuple_func->arguments = std::make_shared<ASTExpressionList>();
+    tuple_func->children.push_back(tuple_func->arguments);
+
+    for (const auto & field : parameter_values)
+    {
+        tuple_func->arguments->children.push_back(std::make_shared<ASTLiteral>(field));
+    }
+
+    size_t total_in_elements = tuple_func->arguments->children.size();
+
+    /// for case like bitmapCount('')(tag_id, bitmap)
+    if (total_in_elements == 0U)
+        return {nullptr, 0};
+
+    auto in_func = std::make_shared<ASTFunction>();
+    in_func->name = "in";
+    in_func->arguments = std::make_shared<ASTExpressionList>();
+    in_func->arguments->children.push_back(std::make_shared<ASTIdentifier>(index_arg));
+    in_func->arguments->children.push_back(tuple_func);
+    in_func->children.push_back(in_func->arguments);
+
+    return {in_func, total_in_elements};
+}
+
 void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context)
 {
     ASTSelectQuery * select = query->as<ASTSelectQuery>();
@@ -846,7 +909,7 @@ void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryI
 
         push_filter = PredicateUtils::combineConjuncts(mapped_pushable_conjuncts);
     }
-    if (!PredicateUtils::isTruePredicate(push_filter))
+    if (push_filter && !PredicateUtils::isTruePredicate(push_filter))
     {
         if (auto * merge_tree_data = dynamic_cast<MergeTreeCloudData *>(storage.get()))
         {

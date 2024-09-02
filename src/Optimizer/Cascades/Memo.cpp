@@ -31,21 +31,11 @@ GroupExprPtr Memo::insertGroupExpr(GroupExprPtr group_expr, CascadesContext & co
         return nullptr;
     }
 
-    if (group_expr->getStep()->getType() == IQueryPlanStep::Type::Join)
-    {
-        const auto * join = dynamic_cast<const JoinStep *>(group_expr->getStep().get());
-        if (join->isMagic())
-        {
-            groups[group_expr->getChildrenGroups()[1]]->setMagic(true);
-        }
-    }
-
-    // Lookup in hash table
     auto it = group_expressions.find(group_expr);
     // duplicate group expression
     if (it != group_expressions.end())
     {
-        return *it;
+        return it->first;
     }
 
     // New expression, so try to insert into an existing group or
@@ -54,19 +44,25 @@ GroupExprPtr Memo::insertGroupExpr(GroupExprPtr group_expr, CascadesContext & co
     if (target == UNDEFINED_GROUP)
     {
         group_id = addNewGroup();
-        // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "New Group Id {}; Rule Type {}",  group_id, static_cast<int>(group_expr->getProduceRule()));
+        // LOG_DEBUG(
+        //     context.getLog(),
+        //     "New Group Id {} Rule Type: {}, group_expr step hash: {}, group_expr hash: {}",
+        //     group_id,
+        //     group_expr->getProduceRule(),
+        //     group_expr->getStep()->hash(),
+        //     group_expr->hash());
     }
     else
     {
         group_id = target;
     }
-    group_expr->setGroupId(target);
+    group_expr->setGroupId(group_id);
 
     auto group = getGroupById(group_id);
     group->addExpression(group_expr, context);
 
     // must after group.addexpression because this function can change step
-    group_expressions.insert(group_expr);
+    group_expressions[group_expr] = group_id;
     return group_expr;
 }
 

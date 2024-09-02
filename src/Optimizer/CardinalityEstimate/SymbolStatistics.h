@@ -28,11 +28,11 @@ class SymbolStatistics;
 using SymbolStatisticsPtr = std::shared_ptr<SymbolStatistics>;
 
 // export symbols
-using Statistics::OverlappedRange;
-using Statistics::OverlappedRanges;
 using Statistics::Bucket;
 using Statistics::Buckets;
 using Statistics::Histogram;
+using Statistics::OverlappedRange;
+using Statistics::OverlappedRanges;
 
 namespace Statistics
 {
@@ -69,7 +69,7 @@ public:
         return std::make_shared<SymbolStatistics>(ndv, min, max, null_counts, avg_len, histogram.copy(), type, db_table_column, unknown);
     }
 
-    SymbolStatistics & operator+(const SymbolStatistics & other)
+    SymbolStatistics & operator+=(const SymbolStatistics & other)
     {
         ndv += other.ndv;
         min = min < other.min ? min : other.min;
@@ -94,6 +94,7 @@ public:
     size_t getOutputSizeInBytes();
 
     void setNdv(UInt64 ndv_) { ndv = ndv_; }
+    void setMax(Float64 max_) { max = max_; }
     void setType(const DataTypePtr & type_)
     {
         type = type_;
@@ -153,7 +154,7 @@ public:
     Poco::JSON::Object::Ptr toJson() const;
 
 private:
-    // number of distinct values
+        // number of distinct values
     UInt64 ndv;
 
     // minimum value

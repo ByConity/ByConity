@@ -44,12 +44,18 @@ public:
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
 
+    std::optional<size_t> source_index;
+    std::optional<size_t> source_count;
+
     /// Function to call if the part is suspected to contain corrupt data.
     using BrokenPartCallback = std::function<void (const String &)>;
 
     using PinnedPartUUIDsPtr = std::shared_ptr<const PinnedPartUUIDs>;
 
     using MetaStorePtr = std::shared_ptr<MergeTreeMeta>;
+
+    using MergeTreePartitions = std::vector<std::shared_ptr<MergeTreePartition>>;
+    using ServerDataParts = std::unordered_map<String, ServerDataPartsWithDBM>;
 
     /// Alter conversions which should be applied on-fly for part. Build from of
     /// the most recent mutation commands for part. Now we have only rename_map
@@ -139,7 +145,7 @@ public:
         Graphite::Params graphite_params;
 
         /// Check that needed columns are present and have correct types.
-        void check(const StorageInMemoryMetadata & metadata, bool has_unique_key) const;
+        void check(const StorageInMemoryMetadata & metadata, bool attach) const;
 
         String getModeName() const;
 
@@ -166,7 +172,7 @@ public:
 
     StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
     virtual const String& getRelativeDataPath(StorageLocation location) const;
-    virtual void setRelativeDataPath(StorageLocation location, const String& rel_path);
+    void setRelativeDataPath(StorageLocation location, const String & rel_path);
 
     bool supportsFinal() const override
     {
@@ -195,6 +201,11 @@ public:
     /// A global unique id for the storage. If storage UUID is not empty, use the storage UUID. Otherwise, use the address of current object.
     String getStorageUniqueID() const;
 
+    /// If uuid is empty, throw exception
+    UUID getCnchStorageUUID() const;
+
+    const MergingParams & getMergingParams() const { return merging_params; }
+
     //// Data parts
     /// Returns a copy of the list so that the caller shouldn't worry about locks.
     DataParts getDataParts(const DataPartStates & affordable_states) const;
@@ -212,9 +223,13 @@ public:
     /// Returns all parts in specified partition
     DataPartsVector getDataPartsVectorInPartition(DataPartState /*state*/, const String & /*partition_id*/) const;
 
+    MergeTreePartitions getAllPartitions() const;
+
     /// Returns Committed parts
     DataParts getDataParts() const;
     DataPartsVector getDataPartsVector() const;
+
+    ServerDataPartsVector getServerDataPartsInPartitions(const Strings & required_partitions);
 
     /// Returns the part with the given name and state or nullptr if no such part.
     DataPartPtr getPartIfExists(const String & part_name, const DataPartStates & valid_states);
@@ -246,6 +261,8 @@ public:
     {
         auto lock = lockPartsRead();
         const auto it = column_sizes.find(name);
+        if (it == std::end(column_sizes))
+            LOG_TRACE(log, "Can not get column compressed size:{}", name);
         return it == std::end(column_sizes) ? 0 : it->second.data_compressed;
     }
 
@@ -255,12 +272,16 @@ public:
         return column_sizes;
     }
 
+    std::pair<DataPartsVector, double> getCalculatedPartsAndRatio() const;
+
     /// Calculates column sizes in compressed form for the current state of data_parts. Call with data_parts mutex locked.
     void calculateColumnSizesImpl();
 
     /// Adds or subtracts the contribution of the part to compressed column sizes.
     void addPartContributionToColumnSizes(const DataPartPtr & part);
     void removePartContributionToColumnSizes(const DataPartPtr & part);
+    ColumnSize getMapColumnSizes(const DataPartPtr & part, const String & map_implicit_column_name) const;
+
 
     /// For ATTACH/DETACH/DROP PARTITION.
     String getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr context) const;
@@ -375,6 +396,8 @@ public:
 
     Block getSampleBlockWithVirtualColumns() const;
 
+    Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
+
     /// Construct a block consisting only of possible virtual columns for part pruning.
     /// If one_part is true, fill in at most one part.
     Block getBlockWithVirtualPartColumns(const DataPartsVector & parts, bool one_part) const;
@@ -394,8 +417,9 @@ public:
     /// Overridden in StorageReplicatedMergeTree
     virtual bool unlockSharedData(const IMergeTreeDataPart &) const { return true; }
 
-    bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
-    UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
+    bool isBucketTable() const override { return getInMemoryMetadataPtr()->isClusterByKeyDefined(); }
+    TableDefinitionHash getTableHashForClusterBy() const override; // to compare table engines efficiently
+    bool isTableClustered(ContextPtr context_) const override;
 
     /// Snapshot for MergeTree contains the current set of data parts
     /// at the moment of the start of query.
@@ -413,6 +437,9 @@ public:
 
     virtual bool supportsOptimizer() const override { return true; }
 
+    virtual bool supportIntermedicateResultCache() const override { return true; }
+    ColumnSize calculateMapColumnSizesImpl(const String & map_implicit_column_name) const;
+
     void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
 
     // TODO: @lianwenlong not thread safe if storage cache enabled
@@ -420,6 +447,27 @@ public:
 
     /// The same as above but does not hold vector of data parts.
     virtual StorageSnapshotPtr getStorageSnapshotWithoutParts(const StorageMetadataPtr & metadata_snapshot) const;
+
+    ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
+
+    /// partition filters
+    /// TODO: make partition_list constant
+    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const;
+
+    Strings selectPartitionsByPredicate(
+        const SelectQueryInfo & query_info,
+        std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
+        const Names & column_names_to_return,
+        ContextPtr local_context) const;
+
+    /**
+     * @param parts input parts, must be sorted in PartComparator order
+     */
+    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true) const;
+    void getDeleteBitmapMetaForCnchParts(MutableMergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
+    void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
+    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
+    void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
 
 protected:
     friend class IMergeTreeDataPart;
@@ -547,9 +595,6 @@ protected:
 
     void checkProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false) const;
 
-    /// Check version column constrains when create table
-    void checkVersionColumnConstraint();
-
     void setProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false);
 
     void checkPartitionKeyAndInitMinMax(const KeyDescription & new_partition_key);
@@ -574,6 +619,14 @@ protected:
 
     /// Returns default settings for storage with possible changes from global config.
     virtual std::unique_ptr<MergeTreeSettings> getDefaultSettings() const = 0;
+
+    /// track runtime server parts by partition id. Used when query by table version
+    MergeTreePartitions data_partitions;
+    // Server dataparts with delete bitmap. should be protected by data part lock
+    ServerDataParts server_data_parts;
+
+    mutable std::mutex server_data_mutex;
+    mutable std::atomic<bool> has_server_part_to_load{false};
 
 private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.

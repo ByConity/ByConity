@@ -35,10 +35,11 @@ public:
             double remerge_lowered_memory_bytes_ratio_,
             size_t max_bytes_before_external_sort_,
             VolumePtr tmp_volume_,
-            size_t min_free_disk_space_);
+            size_t min_free_disk_space_,
+            bool enable_adaptive_spill_);
 
     explicit MergeSortingStep(const DataStream & input_stream, const SortDescription & description_, UInt64 limit_)
-        : MergeSortingStep(input_stream, description_, 0, limit_, 0, 0, 0, nullptr, 0)
+        : MergeSortingStep(input_stream, description_, 0, limit_, 0, 0, 0, nullptr, 0, false)
     {
     }
 
@@ -51,6 +52,7 @@ public:
     size_t getMaxBytesBeforeRemerge() const { return max_bytes_before_remerge; }
     double getRemergeLoweredMemoryBytesRatio() const { return remerge_lowered_memory_bytes_ratio; }
     size_t getMaxBytesBeforeExternalSort() const { return max_bytes_before_external_sort; }
+    bool isAdaptiveSpillEnabled() const { return enable_adaptive_spill; }
     VolumePtr getVolumPtr() const { return tmp_volume; }
     size_t getMinFreeDiskSpace() const { return min_free_disk_space; }
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
@@ -76,6 +78,7 @@ private:
     size_t max_bytes_before_external_sort;
     VolumePtr tmp_volume;
     size_t min_free_disk_space;
+    bool enable_adaptive_spill;
 };
 
 }

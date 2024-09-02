@@ -29,7 +29,79 @@
 namespace DB
 {
 
-using Aliases = std::unordered_map<String, ASTPtr>;
-using MultipleAliases = std::unordered_map<String, std::vector<String>>;
+class Aliases
+{
+public:
+    ASTPtr & operator[](const String & name)
+    {
+        return getImpl(name, true);
+    }
+    const ASTPtr & operator[](const String & name) const
+    {
+        return const_cast<Aliases *>(this)->operator[](name);
+    }
+    ASTPtr & at(const String & name)
+    {
+        return getImpl(name, false);
+    }
+    const ASTPtr & at(const String & name) const
+    {
+        return const_cast<Aliases *>(this)->at(name);
+    }
 
+    auto count(const String & name) const
+    {
+        checkSingleton(name);
+        return names_to_asts.count(name);
+    }
+    auto contains(const String & name) const
+    {
+        checkSingleton(name);
+        return names_to_asts.contains(name);
+    }
+    auto find(const String & name)
+    {
+        checkSingleton(name);
+        return names_to_asts.find(name);
+    }
+    auto find(const String & name) const
+    {
+        checkSingleton(name);
+        return names_to_asts.find(name);
+    }
+    auto begin()
+    {
+        checkSingleton();
+        return names_to_asts.begin();
+    }
+    auto begin() const
+    {
+        checkSingleton();
+        return names_to_asts.begin();
+    }
+    auto end()
+    {
+        return names_to_asts.end();
+    }
+    auto end() const
+    {
+        return names_to_asts.end();
+    }
+    auto empty() const
+    {
+        return names_to_asts.empty();
+    }
+    template <class... Args>
+    auto emplace(Args &&... args)
+    {
+        return names_to_asts.emplace(std::forward<Args>(args)...);
+    }
+
+private:
+    void checkSingleton() const;
+    void checkSingleton(const String & name) const;
+    ASTPtr & getImpl(const String & name, bool insert_if_not_exists);
+
+    std::unordered_multimap<String, ASTPtr> names_to_asts;
+};
 }

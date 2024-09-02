@@ -85,6 +85,7 @@ public:
     PlanNodeCost visitTopNFilteringStep(const TopNFilteringStep & step, CostContext & context) override;
     PlanNodeCost visitFillingStep(const FillingStep & step, CostContext & context) override;
     PlanNodeCost visitReadStorageRowCountStep(const ReadStorageRowCountStep & step, CostContext & context) override;
+    PlanNodeCost visitIntermediateResultCacheStep(const IntermediateResultCacheStep & step, CostContext & context) override;
 };
 
 struct CostWithCTEReferenceCounts

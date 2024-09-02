@@ -140,7 +140,7 @@ bool IterativeRewriter::exploreNode(PlanNodePtr & node, IterativeRewriterContext
                             GraphvizPrinter::printLogicalPlan(
                                 ctx.plan,
                                 ctx.globalContext,
-                                "Iterative_" + name() + "_" + std::to_string(ctx.rule_apply_count++) + "_" + rule->getName() + "_"
+                                std::to_string(ctx.globalContext->getRuleId()) + "_Iterative_" + name() + "_" + std::to_string(ctx.rule_apply_count++) + "_" + rule->getName() + "_"
                                     + std::to_string(node_id) + "_" + std::to_string(node->getId()));
                         }
                     }

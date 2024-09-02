@@ -3,36 +3,48 @@
 #include <Advisor/AdvisorContext.h>
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/SignatureUsage.h>
+#include <Advisor/WorkloadQuery.h>
 #include <Analyzers/ASTEquals.h>
 #include <Core/Names.h>
 #include <Core/QualifiedTableName.h>
 #include <Core/Types.h>
-#include <Common/SipHash.h>
 #include <Interpreters/Context_fwd.h>
 #include <Optimizer/CostModel/PlanNodeCost.h>
+#include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Signature/PlanSignature.h>
+#include <Optimizer/SimpleExpressionRewriter.h>
 #include <Optimizer/SimplifyExpressions.h>
 #include <Optimizer/SymbolTransformMap.h>
+#include <Optimizer/SymbolsExtractor.h>
+#include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/IAST.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/formatAST.h>
-#include <QueryPlan/PlanNode.h>
-#include <QueryPlan/PlanVisitor.h>
-#include <QueryPlan/Void.h>
-#include <Poco/Logger.h>
-
-#include <QueryPlan/TableScanStep.h>
+#include <QueryPlan/AggregatingStep.h>
+#include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/JoinStep.h>
+#include <QueryPlan/PlanNode.h>
+#include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <QueryPlan/AggregatingStep.h>
+#include <QueryPlan/TableScanStep.h>
+#include <QueryPlan/Void.h>
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Stringifier.h>
+#include <Poco/Logger.h>
+#include <Common/SipHash.h>
+#include "QueryPlan/PlanPrinter.h"
 
 #include <algorithm>
-#include <optional>
 #include <memory>
+#include <optional>
 #include <stack>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -41,203 +53,150 @@
 namespace DB
 {
 
-class MaterializedViewAdvise : public IWorkloadAdvise
-{
-public:
-    explicit MaterializedViewAdvise(QualifiedTableName table_,
-                                    String sql_,
-                                    double benefit_)
-        : table(std::move(table_)), sql(std::move(sql_)), benefit(benefit_) {}
-
-    String apply(WorkloadTables &) override { return ""; }
-    QualifiedTableName getTable() override { return table; }
-    String getAdviseType() override { return "MaterializedView"; }
-    String getOriginalValue() override { return ""; }
-    String getOptimizedValue() override { return sql; }
-    double getBenefit() override {return benefit; }
-
-    QualifiedTableName table;
-    String sql;
-    double benefit;
-};
-
 namespace
 {
-    void addSkipSignaturesRecursive(const PlanSignature & signature, std::unordered_set<PlanSignature> & dependents, const SignatureUsages & usages)
-    {
-        if (dependents.contains(signature))
-            return;
-
-        dependents.insert(signature);
-
-        // add children recursively
-        std::stack<PlanSignature> signature_stack;
-        signature_stack.push(signature);
-        while (!signature_stack.empty())
-        {
-            auto sig = signature_stack.top();
-            signature_stack.pop();
-            for (const auto & child : usages.at(sig).getChildren())
-            {
-                if (dependents.contains(child))
-                    continue;
-                dependents.insert(child);
-                signature_stack.push(child);
-            }
-        }
-
-        // add parent recursively
-        signature_stack.push(signature);
-        while (!signature_stack.empty())
-        {
-            auto sig = signature_stack.top();
-            signature_stack.pop();
-            for (const auto & [parent, usage_info] : usages)
-            {
-                if (dependents.contains(parent))
-                    continue;
-                if (usage_info.getChildren().contains(sig))
-                {
-                    dependents.insert(parent);
-                    signature_stack.push(parent);
-                }
-            }
-        }
-    }
-
-    WorkloadAdvises collectAdvises(std::unordered_multimap<QualifiedTableName, MaterializedViewCandidateWithBenefit> && candidates_by_table)
-    {
-        WorkloadAdvises res;
-        // currently for each table, we only recommend one view with agg and one view without agg
-        for (auto it = candidates_by_table.begin(); it != candidates_by_table.end();)
-        {
-            const auto & table = it->first;
-            auto [begin, end] = candidates_by_table.equal_range(table);
-            if (std::distance(begin, end) == 1)
-            {
-                auto & view_with_benefit = begin->second;
-                res.emplace_back(std::make_shared<MaterializedViewAdvise>(table, view_with_benefit.first.toSQL(), view_with_benefit.second));
-            }
-            else
-            {
-                std::vector<MaterializedViewCandidateWithBenefit> views;
-                for (auto inner_it = begin; inner_it != end; ++inner_it)
-                {
-                    auto & view_with_benefit = inner_it->second;
-                    bool merged = false;
-                    for (auto & existing : views)
-                    {
-                        merged |= existing.first.tryMerge(view_with_benefit.first);
-                        if (merged)
-                        {
-                            // update benefit
-                            existing.second = std::max(existing.second, view_with_benefit.second);
-                            break;
-                        }
-                    }
-                    if (!merged)
-                        views.emplace_back(view_with_benefit);
-                }
-
-                for (auto & view : views)
-                    res.emplace_back(std::make_shared<MaterializedViewAdvise>(table, view.first.toSQL(), view.second));
-            }
-            it = end;
-        }
-
-        return res;
-    }
-
-    ASTPtr toAST(const QualifiedTableName & table)
-    {
-        auto table_expression = std::make_shared<ASTTableExpression>();
-        auto ast = std::make_shared<ASTTableIdentifier>(table.database, table.table);
-        table_expression->database_and_table_name = ast;
-        table_expression->children.push_back(ast);
-        auto table_element = std::make_shared<ASTTablesInSelectQueryElement>();
-        table_element->table_expression = table_expression;
-        table_element->children.push_back(table_expression);
-        return table_element;
-    }
-
-    ASTs toVector(MaterializedViewCandidate::EqASTBySerializeSet && asts)
-    {
-        ASTs res{};
-        for (const auto & ast : asts)
-            res.emplace_back(ast.getAST());
-        return res;
-    }
-
-    using SignatureToCandidate = std::pair<PlanSignature, MaterializedViewCandidateWithBenefit>;
+    // MV size is very important because it also consumes storage, so we give more importance to the MV size
+    constexpr float MV_SCAN_COST_SCALE_UP = 3.0;
+    // min size of table for its mv to be recommended
+    // constexpr size_t ADVISE_MIN_TABLE_SIZE = 10000;
 }
 
 WorkloadAdvises MaterializedViewAdvisor::analyze(AdvisorContext & context) const
 {
-    std::vector<SignatureToCandidate> candidates;
-    for (const auto & [signature, usage_info] : context.signature_usages)
+    std::unordered_set<PlanSignature> blacklist;
+    std::unordered_map<QualifiedTableName, std::vector<MaterializedViewCandidate>> candidates_by_table;
+    for (const auto & [signature, queries] : context.signature_usages.signature_to_query_map)
     {
-        std::optional<MaterializedViewCandidateWithBenefit> candidate = buildCandidate(usage_info, context.session_context);
+        if (blacklist.contains(signature))
+            continue;
+        const PlanNodePtr & query_plan = queries[0].first;
+        const auto & query = queries[0].second;
+        if (query_plan->getStep()->getType() == IQueryPlanStep::Type::TableScan)
+            continue;
 
+        auto benefit = calculateMaterializeBenefit(query_plan, query, context.session_context).value_or(1.);
+        if (benefit < 0)
+            continue;
+        double total_benefit = queries.size() * benefit;
+
+        std::vector<String> related_queries;
+        for (const auto & item : queries)
+            related_queries.emplace_back(item.second->getQueryId());
+
+        std::optional<MaterializedViewCandidate> candidate
+            = MaterializedViewCandidate::from(query_plan, related_queries, signature, total_benefit, only_aggregate, ignore_filter);
         if (!candidate.has_value())
-            continue;
+                    continue;
+                
+        QueryPlan plan{query_plan, std::make_shared<PlanNodeIdAllocator>()};
+        addChildrenToBlacklist(query_plan, context.signature_usages.plan_to_signature_map, blacklist);
 
-        if (agg_only && !candidate.value().first.containsAggregate())
-            continue;
-
-        candidates.emplace_back(std::make_pair(signature, candidate.value()));
+        bool merged = false;
+        auto & candidates = candidates_by_table[candidate->table_name];
+        for (auto & other : candidates)
+            {
+                if (blacklist.contains(other.plan_signature))
+                    continue;
+                
+            if (other.tryMerge(*candidate))
+                {
+                    merged = true;
+                break;
+                }
+            }
+        if (!merged)
+            candidates.emplace_back(*candidate);
     }
 
-    // sort desc by benefit desc
-    std::sort(candidates.begin(), candidates.end(),
-              [](const auto & lhs, const auto & rhs)
-              {
-                  auto lhs_benefit = lhs.second.second;
-                  auto rhs_benefit = rhs.second.second;
-                  if (lhs_benefit == rhs_benefit)
-                      return lhs.first > rhs.first;
-                  return lhs_benefit > rhs_benefit;
-              });
-    // collect by table and skip related signatures
-    std::unordered_set<PlanSignature> skip_signatures{};
-    std::unordered_multimap<QualifiedTableName, MaterializedViewCandidateWithBenefit> candidates_by_table;
-    for (auto & [signature, candidate] : candidates)
+    WorkloadAdvises res;
+    for (const auto & candidates : candidates_by_table)
     {
-        if (skip_signatures.contains(signature))
-            continue;
-        // add descendant and ancestors to skip_signatures
-        addSkipSignaturesRecursive(signature, skip_signatures, context.signature_usages);
-        candidates_by_table.emplace(candidate.first.getTableName(), std::move(candidate));
+            for (const auto & candidate : candidates.second)
+        {
+            if (candidate.related_queries.size() <= 1)
+                continue;
+            if (blacklist.contains(candidate.plan_signature))
+                continue;
+            res.emplace_back(std::make_shared<MaterializedViewAdvise>(
+                candidates.first,
+                candidate.toSql(output_type),
+                getRelatedQueries(candidate.related_queries, context),
+                candidate.total_cost));
+        }
     }
 
-    return collectAdvises(std::move(candidates_by_table));
+    std::sort(res.begin(), res.end(), [&](const auto & a, const auto & b) { return a->getBenefit() > b->getBenefit(); });
+    return res;
 }
 
-namespace
+    std::optional<double>
+MaterializedViewAdvisor::calculateMaterializeBenefit(const PlanNodePtr & node, const WorkloadQueryPtr & query, ContextPtr context)
 {
+    if (!query->getCosts().contains(node->getId()))
+        return std::nullopt;
+    auto original_cost = query->getCosts().at(node->getId());
+    auto node_stats = node->getStatistics();
+    if (!node_stats)
+        return std::nullopt;
+
+    // see TableScanCost.h
+    PlanNodeCost scan_output_cost = PlanNodeCost::cpuCost(node_stats.value()->getRowCount()) * CostModel{*context}.getTableScanCostWeight();
+    double scaled_mv_scan_cost = MV_SCAN_COST_SCALE_UP * scan_output_cost.getCost();
+    return original_cost - scaled_mv_scan_cost;
+}
+
+void MaterializedViewAdvisor::addChildrenToBlacklist(
+    PlanNodePtr node, const PlanNodeToSignatures & signatures, std::unordered_set<PlanSignature> & blacklist)
+{
+    for (const auto & child : node->getChildren())
+    {
+                  if (auto it = signatures.find(child); it != signatures.end())
+            blacklist.emplace(it->second);
+        addChildrenToBlacklist(child, signatures, blacklist);
+    }
+}
+
+std::vector<String> MaterializedViewAdvisor::getRelatedQueries(const std::vector<String> & related_query_ids, AdvisorContext & context)
+{
+        std::vector<String> queries;
+
+    std::set<String> unique_query_ids(related_query_ids.begin(), related_query_ids.end());
+    for (const auto & id : unique_query_ids)
+    {
+        if (auto it = context.query_id_to_query.find(id); it != context.query_id_to_query.end())
+            queries.emplace_back(it->second->getSQL());
+    }
+
+    return queries;
+}
+
 class MaterializedViewCandidateBuilder : public PlanNodeVisitor<void, Void>
 {
 public:
-    bool isValid() const { return is_valid; }
-    std::optional<MaterializedViewCandidate> build(const SymbolTransformMap & symbol_map)
+    bool isValid() const
     {
-        if (!is_valid || !table || output_symbols.empty())
-            return std::nullopt;
-
-        auto table_name = table.value();
-        MaterializedViewCandidate::EqASTBySerializeSet wheres{};
-        MaterializedViewCandidate::EqASTBySerializeSet group_bys{};
-        MaterializedViewCandidate::EqASTBySerializeSet outputs{};
-        if (where_filter)
-            wheres.emplace(MaterializedViewCandidate::EqASTBySerialize(symbol_map.inlineReferences(where_filter)));
-        for (const auto & symbol : grouping_symbols)
-            group_bys.emplace(MaterializedViewCandidate::EqASTBySerialize(symbol_map.inlineReferences(symbol)));
-        for (const auto & symbol : output_symbols)
-            outputs.emplace(MaterializedViewCandidate::EqASTBySerialize(symbol_map.inlineReferences(symbol)));
-
-        return std::make_optional(MaterializedViewCandidate(
-            std::move(table_name), contains_aggregate, std::move(wheres), std::move(group_bys), std::move(outputs)));
+        return is_valid && table.has_value();
     }
-
+    const Names & getOutputSymbols() const
+    {
+        return output_symbols;
+    }
+    const Names & getGroupingSymbols() const
+    {
+        return grouping_symbols;
+    }
+    const ASTPtr & getWhere() const
+    {
+        return where_filter;
+    }
+    const QualifiedTableName & getTableName() const
+    {
+        return *table;
+    }
+    std::shared_ptr<AggregatingStep> getAggregate() const
+    {
+        return aggregate;
+    }
 
 protected:
     void processChildren(PlanNodeBase & node, Void & context)
@@ -249,7 +208,9 @@ protected:
             VisitorUtil::accept(*child, *this, context);
         }
     }
+
     void visitPlanNode(PlanNodeBase &, Void &) override { invalidate(); }
+
     void visitTableScanNode(TableScanNode & node, Void &) override
     {
         if (table.has_value())
@@ -262,10 +223,11 @@ protected:
         for (const auto & out_column : table_step->getOutputStream().header)
             output_symbols.emplace_back(out_column.name);
     }
+
     void visitFilterNode(FilterNode & node, Void & context) override
     {
         processChildren(node, context);
-        if (!is_valid || contains_aggregate)
+        if (!is_valid || aggregate)
         {
             invalidate();
             return;
@@ -278,6 +240,7 @@ protected:
             conjuncts.emplace_back(std::move(where_filter));
         where_filter = PredicateUtils::combineConjuncts(conjuncts);
     }
+
     void visitProjectionNode(ProjectionNode & node, Void & context) override
     {
         processChildren(node, context);
@@ -288,27 +251,29 @@ protected:
         for (const auto & out_column : projection_step->getOutputStream().header)
             output_symbols.emplace_back(out_column.name);
     }
+
     void visitAggregatingNode(AggregatingNode & node, Void & context) override
     {
         processChildren(node, context);
         auto agg_step = dynamic_pointer_cast<AggregatingStep>(node.getStep());
-        if (!is_valid || contains_aggregate || agg_step->isGroupingSet())
+        if (!is_valid || aggregate || agg_step->isGroupingSet())
         {
             invalidate();
             return;
         }
 
-        contains_aggregate = true;
+        aggregate = agg_step;
         grouping_symbols = agg_step->getKeys();
         output_symbols.clear();
         for (const auto & out_column : agg_step->getOutputStream().header)
             output_symbols.emplace_back(out_column.name);
     }
+
     void visitExchangeNode(ExchangeNode & node, Void & context) override { return processChildren(node, context); }
 
 private:
     bool is_valid = true;
-    bool contains_aggregate = false;
+    std::shared_ptr<AggregatingStep> aggregate = nullptr;
     std::optional<QualifiedTableName> table = std::nullopt;
     ASTPtr where_filter;
     Names grouping_symbols;
@@ -316,124 +281,166 @@ private:
 
     void invalidate() { is_valid = false; }
 };
-}
 
-MaterializedViewCandidate::EqASTBySerialize::EqASTBySerialize(ASTPtr _ast): ast(_ast)
+class TableColumnToIdentifierRewriter : public SimpleExpressionRewriter<Void>
 {
-    if (!ast)
-        return;
-    SipHash hasher;
-    std::string str = serializeAST(*ast);
-    hasher.update(str);
-    hash = hasher.get64();
-}
+public:
+    static ASTPtr rewrite(ASTPtr expr)
+    {
+    TableColumnToIdentifierRewriter rewriter;
+        Void c;
+        return ASTVisitorUtil::accept(expr, rewriter, c);
+    }
 
+    ASTPtr visitASTTableColumnReference(ASTPtr & expr, Void &) override
+    {
+        const auto & name = expr->as<ASTTableColumnReference &>().column_name;
+        return std::make_shared<ASTIdentifier>(name);
+    }
+};
 
-std::optional<MaterializedViewCandidate> MaterializedViewCandidate::from(PlanNodePtr plan)
+std::optional<MaterializedViewCandidate> MaterializedViewCandidate::from(
+    PlanNodePtr plan,
+    const std::vector<String> & related_queries,
+    PlanSignature plan_signature,
+    double total_cost,
+    bool only_aggregate,
+    bool ignore_filter)
 {
     MaterializedViewCandidateBuilder builder;
-    Void c{};
+    Void c;
     VisitorUtil::accept(plan, builder, c);
     if (!builder.isValid())
+        return std::nullopt;
+
+bool contains_aggregate = builder.getAggregate() ? !builder.getAggregate()->getAggregates().empty() : false;
+    if (only_aggregate && !contains_aggregate)
         return std::nullopt;
 
     auto symbol_map = SymbolTransformMap::buildFrom(*plan);
     if (!symbol_map.has_value())
         return std::nullopt;
 
-    return builder.build(symbol_map.value());
+    EqualityASTSet wheres;
+    EqualityASTSet group_bys;
+    EqualityASTSet outputs;
+    if (builder.getWhere())
+    {
+        if (ignore_filter)
+        {
+            auto columns
+                = SymbolsExtractor::extract(TableColumnToIdentifierRewriter::rewrite(symbol_map->inlineReferences(builder.getWhere())));
+            for (const auto & column : columns)
+            {
+                group_bys.emplace(std::make_shared<ASTIdentifier>(column));
+                outputs.emplace(std::make_shared<ASTIdentifier>(column));
+            }
+        }
+        else
+        {
+            wheres.emplace(TableColumnToIdentifierRewriter::rewrite(symbol_map->inlineReferences(builder.getWhere())));
+        }
+    }
+
+    for (const auto & symbol : builder.getGroupingSymbols())
+        group_bys.emplace(TableColumnToIdentifierRewriter::rewrite(symbol_map->inlineReferences(symbol)));
+    for (const auto & symbol : builder.getOutputSymbols())
+        outputs.emplace(TableColumnToIdentifierRewriter::rewrite(symbol_map->inlineReferences(symbol)));
+
+    return MaterializedViewCandidate{
+        plan_signature,
+        builder.getTableName(),
+        total_cost,
+        contains_aggregate,
+        std::move(wheres),
+        std::move(group_bys),
+        std::move(outputs),
+        related_queries};
 }
 
-std::optional<MaterializedViewCandidateWithBenefit> MaterializedViewAdvisor::buildCandidate(const SignatureUsageInfo & usage_info, ContextPtr context) const
+std::string MaterializedViewCandidate::toSql(MaterializedViewAdvisor::OutputType output_type) const
 {
-    // check appeared >=2 times
-    size_t frequency = usage_info.getFrequency();
-    if (frequency < 2)
-        return std::nullopt;
-
-    // check not TableScan
-    PlanNodePtr plan = const_pointer_cast<PlanNodeBase>(usage_info.getPlan());
-    if (plan->getStep()->getType() == IQueryPlanStep::Type::TableScan)
-        return std::nullopt;
-
-    if (auto stats_opt = plan->getStatistics().getStatistics();
-        !stats_opt.has_value() || stats_opt.value()->getRowCount() > ADVISE_MAX_MV_SIZE)
-        return std::nullopt;
-
-    PlanNodePtr table_scan = plan;
-    while (!dynamic_pointer_cast<TableScanNode>(table_scan) && !table_scan->getChildren().empty())
-        table_scan = table_scan->getChildren().front();
-    if (!dynamic_pointer_cast<TableScanNode>(table_scan))
-        return std::nullopt;
-    if (auto stats_opt = table_scan->getStatistics().getStatistics();
-        !stats_opt.has_value() || stats_opt.value()->getRowCount() < ADVISE_MIN_TABLE_SIZE)
-        return std::nullopt;
-
-    std::optional<double> benefit_opt = getMaterializeBenefit(plan, usage_info.getCost(), context);
-    if (!benefit_opt.has_value())
-        return std::nullopt;
-
-    std::optional<MaterializedViewCandidate> candidate = MaterializedViewCandidate::from(plan);
-    if (!candidate.has_value())
-        return std::nullopt;
-
-    return std::make_optional(std::make_pair(std::move(candidate.value()), frequency * benefit_opt.value()));
+    if (output_type == MaterializedViewAdvisor::OutputType::PROJECTION)
+        return toProjection();
+    return toQuery();
 }
 
-std::string MaterializedViewCandidate::toSQL()
+std::string MaterializedViewCandidate::toQuery() const
 {
     auto select = std::make_shared<ASTSelectQuery>();
     select->setExpression(ASTSelectQuery::Expression::TABLES, std::make_shared<ASTTablesInSelectQuery>());
-    select->tables()->children.emplace_back(toAST(table_name));
+    
+    auto table_expression = std::make_shared<ASTTableExpression>();
+    auto ast = std::make_shared<ASTTableIdentifier>(table_name.database, table_name.table);
+    table_expression->database_and_table_name = ast;
+    table_expression->children.push_back(ast);
+    auto table_element = std::make_shared<ASTTablesInSelectQueryElement>();
+    table_element->table_expression = table_expression;
+    table_element->children.push_back(table_expression);
+    select->tables()->children.emplace_back(table_element);
 
     auto output_list = std::make_shared<ASTExpressionList>();
-    for (const auto & ast : toVector(std::move(outputs)))
-        output_list->children.emplace_back(ast);
-    select->setExpression(ASTSelectQuery::Expression::SELECT, output_list);
+    for (const auto & item : outputs)
+        output_list->children.emplace_back(item->clone());
+    select->setExpression(ASTSelectQuery::Expression::SELECT, output_list->clone());
 
-    // todo: better merging for filters, e.g. combine equals -> in
-    if (wheres.size() > 1)
+    if (!wheres.empty())
     {
-        auto coalesced_predicates = makeASTFunction("or");
-        for (const auto & filter : toVector(std::move(wheres)))
-            coalesced_predicates->arguments->children.emplace_back(filter);
-        select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(coalesced_predicates));
-    }
-    else if (wheres.size() == 1)
-    {
-        ASTPtr where = toVector(std::move(wheres)).front();
-        select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
+        std::vector<ConstASTPtr> disjucts;
+        for (const auto & filter : wheres)
+            disjucts.emplace_back(filter.getPtr());
+        select->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineDisjuncts(disjucts));
     }
 
     if (!group_bys.empty())
     {
         auto group_by = std::make_shared<ASTExpressionList>();
-        for (const auto & ast : toVector(std::move(group_bys)))
-            group_by->children.emplace_back(ast);
-        select->setExpression(ASTSelectQuery::Expression::GROUP_BY, std::move(group_by));
+        for (const auto & item : group_bys)
+            group_by->children.emplace_back(item->clone());
+        select->setExpression(ASTSelectQuery::Expression::GROUP_BY, group_by);
     }
 
     return serializeAST(*select);
 }
 
-std::optional<double> MaterializedViewAdvisor::getMaterializeBenefit(std::shared_ptr<const PlanNodeBase> root,
-                                                                     std::optional<double> original_cost,
-                                                                     ContextPtr context) const
+std::string MaterializedViewCandidate::toProjection() const
 {
-    if (!original_cost.has_value())
-        return std::nullopt;
-    auto node_stats_est = root->getStatistics();
-    if (!node_stats_est)
-        return std::nullopt;
-    auto node_stats = node_stats_est.getStatistics();
-    if (!node_stats || !node_stats.value())
-        return std::nullopt;
-    // see TableScanCost.h
-    PlanNodeCost scan_output_cost = PlanNodeCost::cpuCost(node_stats.value()->getRowCount()) * CostModel{*context}.getTableScanCostWeight();
-    double scaled_mv_scan_cost = MV_SCAN_COST_SCALE_UP * scan_output_cost.getCost();
-    if (original_cost.value() <= scaled_mv_scan_cost)
-        return std::nullopt;
-    return original_cost.value() - scaled_mv_scan_cost;
+    auto select = std::make_shared<ASTSelectQuery>();
+    {
+        auto output_list = std::make_shared<ASTExpressionList>();
+        for (const auto & ast : outputs)
+            output_list->children.emplace_back(ast->clone());
+        select->setExpression(ASTSelectQuery::Expression::SELECT, output_list->clone());
+    }
+    if (!wheres.empty())
+    {
+        std::vector<ConstASTPtr> disjucts;
+        for (const auto & filter : wheres)
+            disjucts.emplace_back(filter.getPtr());
+        select->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineDisjuncts(disjucts));
+    }
+    if (!group_bys.empty())
+    {
+        auto group_by = std::make_shared<ASTExpressionList>();
+        for (const auto & ast : group_bys)
+            group_by->children.emplace_back(ast->clone());
+        select->setExpression(ASTSelectQuery::Expression::GROUP_BY, group_by);
+    }
+
+    auto command = std::make_shared<ASTAlterCommand>();
+    command->type = ASTAlterCommand::Type::ADD_PROJECTION;
+    command->projection_decl = select;
+
+    auto alter = std::make_shared<ASTAlterQuery>();
+    alter->alter_object = ASTAlterQuery::AlterObjectType::TABLE;
+    alter->database = table_name.database;
+    alter->table = table_name.table;
+    auto command_list = std::make_shared<ASTExpressionList>();
+    command_list->children.emplace_back(command);
+    alter->command_list = command_list.get();
+    alter->children.emplace_back(command_list);
+
+    return serializeAST(*alter);
 }
 
 bool MaterializedViewCandidate::tryMerge(const MaterializedViewCandidate & other)
@@ -441,20 +448,34 @@ bool MaterializedViewCandidate::tryMerge(const MaterializedViewCandidate & other
     // cannot merge mv on different tables
     if (table_name != other.table_name)
         return false;
+
     // cannot merge different wheres
-    if (wheres != other.wheres)
+    if (other.wheres.size() != wheres.size())
         return false;
+    if (!std::all_of(other.wheres.begin(), other.wheres.end(), [&](const auto & predicate) { return wheres.contains(predicate); }))
+        return false;
+
     // cannot merge mv containing agg vs mv not containing agg
     if (contains_aggregate ^ other.contains_aggregate)
         return false;
     // cannot merge mv with group by vs mv without group by
     if (group_bys.empty() ^ other.group_bys.empty())
         return false;
-
+if (!std::all_of(other.group_bys.begin(), other.group_bys.end(), [&](const auto & predicate) { return group_bys.contains(predicate); })
+        && !std::all_of(group_bys.begin(), group_bys.end(), [&](const auto & predicate) { return other.group_bys.contains(predicate); }))
+    {
+        return false;
+    }
     for (const auto & group_by : other.group_bys)
         group_bys.emplace(group_by);
+
     for (const auto & output : other.outputs)
         outputs.emplace(output);
+
+    for (const auto & query_id : other.related_queries)
+        related_queries.emplace_back(query_id);
+
+    total_cost += other.total_cost;
     return true;
 }
 

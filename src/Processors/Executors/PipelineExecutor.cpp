@@ -28,9 +28,12 @@
 #include <Common/setThreadName.h>
 #include <Common/MemoryTracker.h>
 #include <Processors/Executors/PipelineExecutor.h>
+
 #include <Processors/printPipeline.h>
 #include <Processors/ISource.h>
 #include <Processors/ReadProgressCallback.h>
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/DistributedStages/PlanSegmentReport.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -146,14 +149,35 @@ void PipelineExecutor::addJob(ExecutingGraph::Node * execution_state)
     {
         try
         {
-            // Stopwatch watch;
             executeJob(execution_state->processor);
-            // execution_state->execution_time_ns += watch.elapsed();
-
             ++execution_state->num_executed_jobs;
         }
         catch (...)
         {
+            auto query_context = DB::CurrentThread::get().getQueryContext();
+            if (query_context)
+            {
+                bool bsp_mode = query_context->getSettingsRef().bsp_mode;
+                auto segment_id = query_context->getPlanSegmentInstanceId().segment_id;
+                auto exception_handler = query_context->getPlanSegmentExHandler();
+                if (!bsp_mode && segment_id != std::numeric_limits<UInt32>::max() && segment_id != 0
+                    && exception_handler->setException(std::current_exception()))
+                {
+                    int exception_code = getCurrentExceptionCode();
+                    auto exception_message = getCurrentExceptionMessage(false);
+
+                    auto execution_address = AddressInfo(
+                        getHostIPFromEnv(),
+                        query_context->getTCPPort(),
+                        "",
+                        "",
+                        query_context->getExchangePort());
+                    auto result
+                        = convertFailurePlanSegmentStatusToResult(query_context, execution_address, exception_code, exception_message);
+                    reportExecutionResult(result);
+                }
+            }
+
             execution_state->exception = std::current_exception();
         }
     };
@@ -498,6 +522,7 @@ void collectProfileMetricRequest(
 }
 
 void reportToCoordinator(
+    Poco::Logger * log,
     const AddressInfo & coordinator_address,
     const AddressInfo & current_address,
     const IProcessor * processor,
@@ -508,7 +533,7 @@ void reportToCoordinator(
     try
     {
         auto address = extractExchangeHostPort(coordinator_address);
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::ReportProcessorProfileMetricRequest request;
@@ -516,7 +541,7 @@ void reportToCoordinator(
         collectProfileMetricRequest(request, current_address, processor, query_id, finish_time, segment_id);
         manager.reportProcessorProfileMetrics(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(&Poco::Logger::get("PipelineExecutor"), "Processor-{} send profile metrics to coordinator successfully.", request.id());
+        LOG_TRACE(log, "Processor-{} send profile metrics to coordinator successfully.", request.id());
     }
     catch (...)
     {
@@ -525,6 +550,7 @@ void reportToCoordinator(
 }
 
 void reportToCoordinator(
+    Poco::Logger * log,
     const AddressInfo & coordinator_address,
     const AddressInfo & current_address,
     const Processors & processors,
@@ -535,7 +561,7 @@ void reportToCoordinator(
     try
     {
         auto address = extractExchangeHostPort(coordinator_address);
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::BatchReportProcessorProfileMetricRequest requests;
@@ -548,7 +574,7 @@ void reportToCoordinator(
         }
         manager.batchReportProcessorProfileMetrics(&cntl, &requests, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(&Poco::Logger::get("PipelineExecutor"), "Batch processors send profile metrics to coordinator successfully.");
+        LOG_TRACE(log, "Batch processors send profile metrics to coordinator successfully.");
     }
     catch (...)
     {
@@ -577,7 +603,7 @@ void PipelineExecutor::reportProcessorProfileOnCancel(const Processors & process
 
         auto finish_time = std::chrono::system_clock::now();
         if (segment_id > 0)
-            reportToCoordinator(coordinator_address, current_address, processors_, query_id, finish_time, segment_id);
+            reportToCoordinator(log, coordinator_address, current_address, processors_, query_id, finish_time, segment_id);
     }
 }
 
@@ -601,7 +627,7 @@ void PipelineExecutor::reportProcessorProfile(const IProcessor * processor) cons
         }
 
         if (segment_id > 0)
-            reportToCoordinator(coordinator_address, current_address, processor, query_id, std::chrono::system_clock::now(), segment_id);
+            reportToCoordinator(log, coordinator_address, current_address, processor, query_id, std::chrono::system_clock::now(), segment_id);
     }
 }
 

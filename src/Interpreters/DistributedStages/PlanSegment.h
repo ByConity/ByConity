@@ -23,6 +23,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/StorageID.h>
 #include <Protos/EnumMacros.h>
 #include <Protos/enum.pb.h>
@@ -127,14 +128,17 @@ protected:
     Names shuffle_keys;
 };
 
+using PlanSegmentSet = std::unordered_set<PlanSegmentInstanceId>;
+
 class PlanSegmentInput : public IPlanSegment
 {
 public:
     PlanSegmentInput(const Block & header_, const PlanSegmentType & type_)
     : IPlanSegment(header_, type_) {}
 
-    PlanSegmentInput(const PlanSegmentType & type_)
-    : IPlanSegment(type_) {}
+    explicit PlanSegmentInput(const PlanSegmentType & type_) : IPlanSegment(type_)
+    {
+    }
 
     PlanSegmentInput() = default;
 
@@ -144,18 +148,9 @@ public:
 
     void insertSourceAddress(const AddressInfo & address_info) { source_addresses.push_back(address_info); }
 
-    void insertSourceAddresses(AddressInfos & address_infos, bool unique = false)
+    void insertSourceAddresses(AddressInfos & address_infos)
     {
-        if (unique)
-        {
-            std::sort(address_infos.begin(), address_infos.end());
-            auto last = std::unique(address_infos.begin(), address_infos.end());
-            source_addresses.insert(source_addresses.end(), address_infos.begin(), last);
-        }
-        else
-        {
-            source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end());
-        }
+        source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end());
     }
 
     const AddressInfos & getSourceAddress() const { return source_addresses; }
@@ -177,11 +172,15 @@ public:
 
     void setStorageID(const StorageID & storage_id_) { storage_id = storage_id_;}
 
+    void setStable(bool stable_) { stable = stable_; }
+    bool isStable() const { return stable; }
+
 private:
-    size_t parallel_index = 0;
+    size_t parallel_index = std::numeric_limits<size_t>::max(); ///  no longer used
     bool keep_order = false;
     AddressInfos source_addresses;
     std::optional<StorageID> storage_id;
+    bool stable = false;
 };
 
 using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;
@@ -215,10 +214,18 @@ public:
 
     String toString(size_t indent = 0) const override;
 
+    void setShuffleFunctionName(const String & shuffle_function_name_) { shuffle_function_name = shuffle_function_name_; }
+
+    const String & getShuffleFunctionName() { return shuffle_function_name; }
+
+    void setShuffleFunctionParams(const Array & shuffle_func_params_) { shuffle_func_params = shuffle_func_params_; }
+    const Array & getShuffleFunctionParams() { return shuffle_func_params; }
+
 private:
     String shuffle_function_name = "cityHash64";
     size_t parallel_size;
     bool keep_order = false;
+    Array shuffle_func_params;
 };
 
 using PlanSegmentOutputPtr = std::shared_ptr<PlanSegmentOutput>;

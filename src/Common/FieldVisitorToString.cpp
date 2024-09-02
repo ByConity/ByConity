@@ -72,6 +72,13 @@ static String formatFloat(const Float64 x)
     return { buffer, buffer + builder.position() };
 }
 
+template <typename T>
+static inline String formatDecimal(const DecimalField<T> & x)
+{
+    WriteBufferFromOwnString buf;
+    writeText(x.getValue(), x.getScale(), buf, true);
+    return buf.str();
+}
 
 String FieldVisitorToString::operator() (const Null &) const { return "NULL"; }
 String FieldVisitorToString::operator() (const NegativeInfinity &) const { return "-Inf"; }
@@ -178,5 +185,11 @@ String FieldVisitorToString::operator() (const Object & x) const
     return wb.str();
 
 }
+
+
+String DecimalFieldVisitorToString::operator() (const DecimalField<Decimal32> & x) const { return formatDecimal(x); }
+String DecimalFieldVisitorToString::operator() (const DecimalField<Decimal64> & x) const { return formatDecimal(x); }
+String DecimalFieldVisitorToString::operator() (const DecimalField<Decimal128> & x) const { return formatDecimal(x); }
+String DecimalFieldVisitorToString::operator() (const DecimalField<Decimal256> & x) const { return formatDecimal(x); }
 
 }

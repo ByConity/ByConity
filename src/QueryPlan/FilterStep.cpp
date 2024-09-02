@@ -175,26 +175,39 @@ void FilterStep::toProto(Protos::FilterStep & proto, bool) const
 
 std::shared_ptr<IQueryPlanStep> FilterStep::copy(ContextPtr) const
 {
-    return std::make_shared<FilterStep>(input_streams[0], filter, remove_filter_column);
+    return std::make_shared<FilterStep>(input_streams[0], filter->clone(), remove_filter_column);
 }
 
-ConstASTPtr
-FilterStep::rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & /*pipeline*/, const BuildQueryPipelineSettings & build_context)
+ConstASTPtr FilterStep::rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline &, const BuildQueryPipelineSettings & build_context)
 {
     auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
     if (filters.first.empty())
         return filter;
 
+    bool only_bf = build_context.context->getSettingsRef().enable_rewrite_bf_into_prewhere;
+
     std::vector<ConstASTPtr> predicates = std::move(filters.second);
-    for (auto & runtime_filter : filters.first)
+
+    if (build_context.context->getSettingsRef().enable_two_stages_prewhere)
     {
-        auto description = RuntimeFilterUtils::extractDescription(runtime_filter).value();
-        auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForFilter(
-            description, build_context.context->getInitialQueryId());
-        predicates.insert(predicates.end(), runtime_filters.begin(), runtime_filters.end());
+        //skip all runtime_filters in FilterStep, since all runtime_filters has been moved into TableScanStep.
+    }
+    else
+    {
+        for (auto & runtime_filter : filters.first)
+        {
+            auto description = RuntimeFilterUtils::extractDescription(runtime_filter).value();
+            auto runtime_filters
+                = RuntimeFilterUtils::createRuntimeFilterForFilter(description, build_context.context->getInitialQueryId(), only_bf);
+            predicates.insert(predicates.end(), runtime_filters.begin(), runtime_filters.end());
+        }
     }
 
     return PredicateUtils::combineConjuncts(predicates);
 }
 
+void FilterStep::prepare(const PreparedStatementContext & prepared_context)
+{
+    prepared_context.prepare(filter);
+}
 }

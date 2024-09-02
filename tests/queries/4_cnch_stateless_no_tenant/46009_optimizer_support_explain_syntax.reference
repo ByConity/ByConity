@@ -16,5 +16,5 @@ WHERE (a < 10) AND (a IN ((
 ) AS t3))
 GROUP BY a
 SELECT name
-FROM cnch(\'server\', \'system.settings\')
-SETTINGS enable_optimizer = 0
+FROM system.settings
+SETTINGS enable_optimizer = 1

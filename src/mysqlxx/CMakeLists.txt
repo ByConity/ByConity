@@ -37,6 +37,7 @@ target_link_libraries (mysqlxx
     PRIVATE
         ${MYSQLCLIENT_LIBRARIES}
         ${ZLIB_LIBRARIES}
+        roaring
 )
 
 if(OPENSSL_LIBRARIES)

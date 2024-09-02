@@ -43,3 +43,6 @@ select unique table
 10001	5	500
 10002	4	400
 10003	2	200
+
+execute DELETE FROM with delete bitmap depth issue
+30

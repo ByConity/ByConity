@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <AggregateFunctions/IAggregateFunction.h>
 
 #include <Columns/IColumn.h>
@@ -145,6 +146,12 @@ public:
     size_t size() const override
     {
         return getData().size();
+    }
+
+    void tryToFlushZeroCopyBuffer() const override
+    {
+        if (src)
+            src->tryToFlushZeroCopyBuffer();
     }
 
     MutableColumnPtr cloneEmpty() const override;

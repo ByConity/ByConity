@@ -1,0 +1,22 @@
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Inner Join
+            │     Condition: p_date == p_date_1
+            │     Runtime Filters Builder: {p_date_1}
+            ├─ TableScan 51004_partition_runtime_filter.51004_t1
+            │        Partition filter: Runtime Filters: {p_date}
+            │        Outputs: [p_date]
+            └─ Broadcast Exchange
+               └─ Projection
+                  │     Expressions: [p_date_1]
+                  └─ Filter
+                     │     Condition: id = 5
+                     └─ TableScan 51004_partition_runtime_filter.51004_t2
+                              Where: id = 5
+                              Outputs: [id], p_date_1:=p_date
+2000

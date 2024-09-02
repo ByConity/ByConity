@@ -21,5 +21,5 @@ INSERT INTO t_adaptive_merge SELECT number, number FROM numbers(3);
 
 OPTIMIZE TABLE t_adaptive_merge;
 
-SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() AND table = 't_adaptive_merge' AND active SETTINGS enable_multiple_tables_for_cnch_parts = 1;
+SELECT count() FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 't_adaptive_merge' AND active SETTINGS enable_multiple_tables_for_cnch_parts = 1;
 DROP TABLE t_adaptive_merge;

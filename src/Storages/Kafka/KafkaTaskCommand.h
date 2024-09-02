@@ -53,6 +53,7 @@ struct KafkaTaskCommand
 
     /// partition-list of topics for each consumer
     cppkafka::TopicPartitionList tpl;
+    std::set<cppkafka::TopicPartition> sample_partitions;
 
     static const char * typeToString(Type type)
     {
@@ -93,6 +94,7 @@ struct KafkaConsumerRunningInfo
     String table_suffix;
     String worker_client_info;
     cppkafka::TopicPartitionList partitions;
+    cppkafka::TopicPartitionList sample_partitions;
 };
 
 } // namespace DB

@@ -16,6 +16,8 @@
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/EqualityASTMap.h>
 #include <Common/Exception.h>
+#include <Parsers/ASTIdentifier.h>
+#include <DataTypes/DataTypeNothing.h>
 
 namespace DB::Predicate
 {
@@ -266,7 +268,7 @@ DataTypePtr DomainVisitor<T>::checkedTypeLookup(const T & symbol) const
     if constexpr (std::is_same_v<T, String>)
         type = column_types.at(symbol);
     else
-        type = type_analyzer.getType(symbol);
+        type = type_analyzer.getTypeWithoutCheck(symbol);
     if (!type)
         throw Exception("Types is missing info for symbol", DB::ErrorCodes::LOGICAL_ERROR);
     return type;
@@ -327,6 +329,25 @@ ExtractionResult<T> DomainVisitor<T>::visitASTLiteral(ASTPtr & node, const bool 
     else if (literal->value.isNull())
         return ExtractionResult<T>(TupleDomain<T>::none(), PredicateConst::TRUE_VALUE);
 
+    return visitNode(node, complement);
+}
+
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitASTIdentifier(ASTPtr & node, const bool & complement)
+{
+    if (!complement) // id / not(not(id)) -> toBool(id)
+    {
+        if (auto type = type_analyzer.getType(node))
+        {
+            if (auto inner_type = removeNullable(removeLowCardinality(type)))
+            {
+                if (!inner_type->equals(DataTypeUInt8()) && !inner_type->equals(DataTypeNothing()))
+                {
+                    return ExtractionResult<T>(TupleDomain<T>::all(), makeASTFunction("toBool", node));
+                }
+            }
+        }
+    }
     return visitNode(node, complement);
 }
 
@@ -480,8 +501,8 @@ std::optional<NormalizedSimpleComparison> DomainVisitor<T>::toNormalizedSimpleCo
     if (left.has_value() == right.has_value())
         return std::nullopt;
 
-    DataTypePtr left_type = left.has_value() ? left->first : type_analyzer.getType(ast_fun->arguments->children[0]);
-    DataTypePtr right_type = right.has_value() ? right->first : type_analyzer.getType(ast_fun->arguments->children[1]);
+    DataTypePtr left_type = left.has_value() ? left->first : type_analyzer.getTypeWithoutCheck(ast_fun->arguments->children[0]);
+    DataTypePtr right_type = right.has_value() ? right->first : type_analyzer.getTypeWithoutCheck(ast_fun->arguments->children[1]);
     //TODO: not support float32(symbol) comparator float32(value)
     /** get the superType for leftType and right Type,
      * if the identifier's type is narrow type, then return std::nullopt;
@@ -809,6 +830,9 @@ ExtractionResult<T> DomainVisitor<T>::visitInFunction(ASTPtr & node, const bool 
     if (value_list.empty())
         throw Exception("InListExpression should never be empty", DB::ErrorCodes::LOGICAL_ERROR);
 
+    if (value_list.size() >= 100)
+        return visitNode(node, complement);
+
     auto dir_extraction_result = processSimpleInPredicate(node, complement);
 
     if (dir_extraction_result.has_value())
@@ -841,7 +865,7 @@ std::optional<ExtractionResult<T>> DomainVisitor<T>::processSimpleInPredicate(AS
     if (!symbol)
         return std::nullopt;
 
-    DataTypePtr sym_type = type_analyzer.getType(in_fun->arguments->children[0]);
+    DataTypePtr sym_type = type_analyzer.getTypeWithoutCheck(in_fun->arguments->children[0]);
 
     if (!isTypeOrderable(sym_type) && !isTypeComparable(sym_type))
     {
@@ -927,7 +951,7 @@ ExtractionResult<T> DomainVisitor<T>::visitLikeFunction(ASTPtr & node, const boo
         return visitNode(node, complement);
 
     //TODO: support FixedString, why?
-    DataTypePtr type = type_analyzer.getType(left);
+    DataTypePtr type = type_analyzer.getTypeWithoutCheck(left);
     if (type->getTypeId() != TypeIndex::String)
         return visitNode(node, complement);
 
@@ -961,7 +985,7 @@ ExtractionResult<T> DomainVisitor<T>::visitStartsWithFunction(ASTPtr & node, con
     auto * ast_fun = node->as<ASTFunction>();
     ASTPtr & target = ast_fun->arguments->children[0];
     ASTPtr & prefix = ast_fun->arguments->children[1];
-    DataTypePtr type = type_analyzer.getType(target);
+    DataTypePtr type = type_analyzer.getTypeWithoutCheck(target);
 
     auto symbol = checkAndGetSymbol(target);
 

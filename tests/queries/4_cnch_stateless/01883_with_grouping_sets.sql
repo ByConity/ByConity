@@ -46,7 +46,7 @@ DROP TABLE grouping_sets;
 EXPLAIN PIPELINE
 SELECT SUM(number) as sum_value, count() AS count_value from numbers_mt(1000000)
 GROUP BY GROUPING SETS ((number % 10), (number % 100))
-ORDER BY sum_value, count_value SETTINGS max_threads=3;
+ORDER BY sum_value, count_value SETTINGS max_threads=3, enable_optimizer=0;
 
 SELECT SUM(number) as sum_value, count() AS count_value from numbers_mt(1000000)
 GROUP BY GROUPING SETS ((number % 10), (number % 100))

@@ -20,11 +20,11 @@ public:
                         "  name Nullable(String),"
                         "  salary Nullable(Float64),"
                         "  commission Nullable(UInt32)"
-                        ") ENGINE=Memory();");
+                        ") ENGINE=CnchMergeTree() order by empid;");
         tester->execute("CREATE TABLE IF NOT EXISTS depts("
                         "  deptno UInt32 not null,"
                         "  name Nullable(String)"
-                        ") ENGINE=Memory();");
+                        ") ENGINE=CnchMergeTree() order by deptno;");
     }
 
 
@@ -106,9 +106,9 @@ TEST_F(ColumnUsageTest, testNestedJoin)
 
 TEST_F(ColumnUsageTest, testNestedJoinCountAll)
 {
-    tester->execute("CREATE TABLE IF NOT EXISTS A(a UInt32 not null, b UInt32 not null) ENGINE=Memory();");
-    tester->execute("CREATE TABLE IF NOT EXISTS B(b UInt32 not null, c UInt32 not null) ENGINE=Memory();");
-    tester->execute("CREATE TABLE IF NOT EXISTS C(c UInt32 not null, d UInt32 not null) ENGINE=Memory();");
+    tester->execute("CREATE TABLE IF NOT EXISTS A(a UInt32 not null, b UInt32 not null) ENGINE=CnchMergeTree() order by tuple();");
+    tester->execute("CREATE TABLE IF NOT EXISTS B(b UInt32 not null, c UInt32 not null) ENGINE=CnchMergeTree() order by tuple();");
+    tester->execute("CREATE TABLE IF NOT EXISTS C(c UInt32 not null, d UInt32 not null) ENGINE=CnchMergeTree() order by tuple();");
 
     auto column_usages = buildColumnUsagesFromSQL({"select * from A, B, C where A.b = B.b and B.c = C.c"});
 

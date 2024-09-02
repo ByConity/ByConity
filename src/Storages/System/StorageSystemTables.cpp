@@ -32,7 +32,7 @@
 #include <Access/ContextAccess.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/queryToString.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/typeid_cast.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -90,14 +90,24 @@ StorageSystemTables::StorageSystemTables(const StorageID & table_id_)
 static ColumnPtr getFilteredDatabases(const SelectQueryInfo & query_info, ContextPtr context)
 {
     MutableColumnPtr column = ColumnString::create();
+    String tenant_id = context->getTenantId();
 
     const auto databases = DatabaseCatalog::instance().getDatabases(context);
     for (const auto & database_name : databases | boost::adaptors::map_keys)
     {
+        String database_strip_tenantid = database_name;
         if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
             continue; /// We don't want to show the internal database for temporary tables in system.tables
 
-        column->insert(database_name);
+        if (!tenant_id.empty())
+        {
+            if (startsWith(database_name, tenant_id + "."))
+                database_strip_tenantid = getOriginalDatabaseName(database_name, tenant_id);
+            // Will skip database of other tenants.
+            else if (database_name.find(".") != std::string::npos || !DatabaseCatalog::isDefaultVisibleSystemDatabase(database_name))
+                continue;
+        }
+        column->insert(database_strip_tenantid);
     }
 
     Block block { ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "database") };
@@ -227,7 +237,7 @@ protected:
                         {
                             auto temp_db = DatabaseCatalog::instance().getDatabaseForTemporaryTables();
                             ASTPtr ast = temp_db ? temp_db->tryGetCreateTableQuery(table.second->getStorageID().getTableName(), context) : nullptr;
-                            res_columns[res_index++]->insert(ast ? queryToString(ast) : "");
+                            res_columns[res_index++]->insert(ast ? ast->formatWithHiddenSecrets() : "");
                         }
 
                         // engine_full
@@ -289,7 +299,7 @@ protected:
                 return Chunk(std::move(res_columns), num_rows);
             }
 
-            const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, database_name);
+            const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, formatTenantDatabaseName(database_name));
 
             const bool need_lock_structure = needLockStructure(database, getPort().getHeader());
 
@@ -303,7 +313,7 @@ protected:
                     else
                     {
                         if (!cnch_tables_snapshot)
-                            cnch_tables_snapshot = context->getCnchCatalog()->getAllTables();
+                            loadCnchTableSnapshot();
                         tables_it = cnch_db->getTablesIteratorWithCommonSnapshot(context, *cnch_tables_snapshot);
                     }
                 }
@@ -314,7 +324,7 @@ protected:
             for (; rows_count < max_block_size && tables_it->isValid(); tables_it->next())
             {
                 auto table_name = tables_it->name();
-                if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, database_name, table_name))
+                if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, formatTenantDatabaseName(database_name), table_name))
                     continue;
 
                 StoragePtr table = nullptr;
@@ -415,7 +425,7 @@ protected:
                     }
 
                     if (columns_mask[src_index++])
-                        res_columns[res_index++]->insert(ast ? queryToString(ast) : "");
+                        res_columns[res_index++]->insert(ast ? ast->formatWithHiddenSecrets() : "");
 
                     if (columns_mask[src_index++])
                     {
@@ -423,7 +433,7 @@ protected:
 
                         if (ast_create && ast_create->storage)
                         {
-                            engine_full = queryToString(*ast_create->storage);
+                            engine_full = ast_create->storage->formatWithHiddenSecrets();
 
                             static const char * const extra_head = " ENGINE = ";
                             if (startsWith(engine_full, extra_head))
@@ -437,7 +447,7 @@ protected:
                     {
                         String as_select;
                         if (ast_create && ast_create->select)
-                            as_select = queryToString(*ast_create->select);
+                            as_select = ast_create->select->formatWithHiddenSecrets();
                         res_columns[res_index++]->insert(as_select);
                     }
                 }
@@ -452,7 +462,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getPartitionKeyAST()))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatWithHiddenSecrets());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -460,7 +470,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getSortingKey().expression_list_ast))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatWithHiddenSecrets());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -468,7 +478,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getPrimaryKey().expression_list_ast))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatWithHiddenSecrets());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -476,7 +486,7 @@ protected:
                 if (columns_mask[src_index++])
                 {
                     if (metadata_snapshot && (expression_ptr = metadata_snapshot->getSamplingKeyAST()))
-                        res_columns[res_index++]->insert(queryToString(expression_ptr));
+                        res_columns[res_index++]->insert(expression_ptr->formatWithHiddenSecrets());
                     else
                         res_columns[res_index++]->insertDefault();
                 }
@@ -549,6 +559,23 @@ protected:
         UInt64 num_rows = res_columns.at(0)->size();
         return Chunk(std::move(res_columns), num_rows);
     }
+
+    void loadCnchTableSnapshot()
+    {
+        String tenant_id = context->getTenantId();
+        // speed up table scan if the tenant only owns few tables.
+        if (!tenant_id.empty())
+        {
+            auto tableIDs = context->getCnchCatalog()->getTablesIDByTenant(tenant_id);
+            if (tableIDs.size() <= context->getSettingsRef().scan_all_table_threshold)
+            {
+                cnch_tables_snapshot = context->getCnchCatalog()->getTablesByIDs(tableIDs);
+                return;
+            }
+        }
+        cnch_tables_snapshot = context->getCnchCatalog()->getAllTables();
+    }
+
 private:
     std::vector<UInt8> columns_mask;
     UInt64 max_block_size;

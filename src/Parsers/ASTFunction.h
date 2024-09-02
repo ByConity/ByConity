@@ -61,6 +61,18 @@ public:
     /// do not print empty parentheses if there are no args - compatibility with new AST for data types and engine names.
     bool no_empty_args = false;
 
+    /// Specifies where this function-like expression is used.
+    enum class Kind : UInt8
+    {
+        ORDINARY_FUNCTION,
+        WINDOW_FUNCTION,
+        LAMBDA_FUNCTION,
+        TABLE_ENGINE,
+        DATABASE_ENGINE,
+        BACKUP_NAME,
+    };
+    Kind kind = Kind::ORDINARY_FUNCTION;
+
     /** Get text identifying the AST node. */
     String getID(char delim) const override;
 
@@ -79,7 +91,9 @@ public:
     void serialize(WriteBuffer & buf) const override;
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
+    static std::shared_ptr<ASTFunction> makeASTFunctionWithVectorArgs(const String & name, std::vector<ASTPtr> && args);
 
+    bool hasSecretParts() const override;
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;

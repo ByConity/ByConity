@@ -616,6 +616,8 @@ void removeUnneededColumnsFromSelectClause(const ASTSelectQuery * select_query, 
         }
         else if (select_query->distinct || hasArrayJoin(elem))
         {
+            /// ARRAY JOIN cannot be optimized out since it may change number of rows,
+            /// so as DISTINCT.
             new_elements.push_back(elem);
         }
         else
@@ -933,23 +935,25 @@ TreeRewriterResult::TreeRewriterResult(
     const NamesAndTypesList & source_columns_,
     ConstStoragePtr storage_,
     const StorageSnapshotPtr & storage_snapshot_,
+    bool extend_objects,
     bool add_special)
     : storage(storage_)
     , storage_snapshot(storage_snapshot_)
     , source_columns(source_columns_)
 {
-    collectSourceColumns(add_special);
+    collectSourceColumns(extend_objects, add_special);
     is_remote_storage = storage && storage->isRemote();
 }
 
 /// Add columns from storage to source_columns list. Deduplicate resulted list.
 /// Special columns are non physical columns, for example ALIAS
-void TreeRewriterResult::collectSourceColumns(bool add_special)
+void TreeRewriterResult::collectSourceColumns(bool extend_objects, bool add_special)
 {
     if (storage)
     {
         auto options = GetColumnsOptions(add_special ? GetColumnsOptions::All : GetColumnsOptions::AllPhysical);
-        options.withExtendedObjects();
+        if (extend_objects)
+            options.withExtendedObjects();
         if (storage->supportsSubcolumns())
             options.withSubcolumns();
 
@@ -1070,6 +1074,7 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
             partition_source_columns.push_back("_partition_id");
             partition_source_columns.push_back("_part_uuid");
             partition_source_columns.push_back("_partition_value");
+            partition_source_columns.push_back("_bucket_number");
             optimize_trivial_count = true;
             for (const auto & required_column : required)
             {
@@ -1452,7 +1457,7 @@ TreeRewriterResultPtr TreeRewriter::analyze(
 
     const auto & settings = getContext()->getSettingsRef();
 
-    TreeRewriterResult result(source_columns, storage, storage_snapshot, false);
+    TreeRewriterResult result(source_columns, storage, storage_snapshot, true, false);
 
     normalize(
         query,

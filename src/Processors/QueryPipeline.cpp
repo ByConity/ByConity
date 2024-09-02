@@ -22,12 +22,14 @@
 #include <Processors/QueryPipeline.h>
 
 #include <IO/WriteHelpers.h>
+#include <Interpreters/ConcurrentHashJoin.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IJoin.h>
 #include <Processors/DelayedPortsProcessor.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/Formats/IOutputFormat.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 #include <Processors/LimitTransform.h>
 #include <Processors/ReadProgressCallback.h>
 #include <Processors/ResizeProcessor.h>
@@ -47,6 +49,8 @@
 #include <Processors/Transforms/TotalsHavingTransform.h>
 #include <Common/CurrentThread.h>
 #include <Common/typeid_cast.h>
+
+#include <sys/eventfd.h>
 
 namespace DB
 {
@@ -399,6 +403,22 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
 
     /// This counter is needed for every Joining except totals, to decide which Joining will generate non joined rows.
     auto finish_counter = std::make_shared<JoiningTransform::FinishCounter>(num_streams);
+    auto finish_pipe = std::make_shared<std::vector<JoiningTransform::EventFdStruct>>();
+    if (join->getType() == JoinType::PARALLEL_HASH)
+    {
+        for (size_t i = 0; i < num_streams; i++)
+        {
+            finish_pipe->push_back({-1});
+        }
+
+        for (size_t i = 0; i < num_streams; i++)
+        {
+            int event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+            if (-1 == event_fd)
+                throwFromErrno("Cannot create event_fd for ConcurrentJoin", ErrorCodes::CANNOT_OPEN_FILE);
+            (*finish_pipe)[i].event_fd = event_fd;
+        }
+    }
 
     auto lit = left->pipe.output_ports.begin();
     auto rit = right->pipe.output_ports.begin();
@@ -430,13 +450,13 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        auto joining = std::make_shared<JoiningTransform>(left->getHeader(), join, max_block_size, false, default_totals, join_parallel_left_right, finish_counter);
+        auto joining = std::make_shared<JoiningTransform>(left->getHeader(), join, max_block_size, false, default_totals, join_parallel_left_right,finish_counter, num_streams, i, finish_pipe);
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());
         if (delayed_root)
         {
             // Process delayed joined blocks when all JoiningTransform are finished.
-            auto delayed = std::make_shared<DelayedJoinedBlocksWorkerTransform>(joined_header);
+            auto delayed = std::make_shared<DelayedJoinedBlocksWorkerTransform>(left_header, joined_header, max_block_size, join);
             if (delayed->getInputs().size() != 1 || delayed->getOutputs().size() != 1)
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "DelayedJoinedBlocksWorkerTransform should have one input and one output");
 
@@ -583,15 +603,6 @@ void QueryPipeline::setProcessListElement(QueryStatus * elem)
     {
         if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
             source->setProcessListElement(elem);
-    }
-}
-
-void QueryPipeline::setInternalProgressCallback(const ProgressCallback & callback)
-{
-    for (auto & processor : pipe.processors)
-    {
-        if (auto * source = dynamic_cast<ISourceWithProgress *>(processor.get()))
-            source->setInternalProgressCallback(callback);
     }
 }
 
@@ -758,6 +769,33 @@ void QueryPipeline::setCollectedProcessors(Processors * processors)
     pipe.collected_processors = processors;
 }
 
+const CacheHolderPtr QueryPipeline::getCacheHolder() const
+{
+    return pipe.holder.cache_holder;
+}
+
+void QueryPipeline::setWriteCacheComplete(const ContextPtr & context)
+{
+    if (!pipe.holder.cache_holder)
+        return;
+
+    auto cache = context->getIntermediateResultCache();
+    auto & write_cache = pipe.holder.cache_holder->write_cache;
+    for (auto cache_key : write_cache)
+        cache->setComplete(cache_key);
+    write_cache.clear();
+}
+
+void QueryPipeline::clearUncompletedCache(const ContextPtr & context)
+{
+    if (!pipe.holder.cache_holder)
+        return;
+
+    auto cache = context->getIntermediateResultCache();
+    auto & write_cache = pipe.holder.cache_holder->write_cache;
+    for (auto cache_key : write_cache)
+        cache->eraseUncompletedCache(cache_key);
+}
 
 QueryPipelineProcessorsCollector::QueryPipelineProcessorsCollector(QueryPipeline & pipeline_, IQueryPlanStep * step_)
     : pipeline(pipeline_), step(step_)

@@ -46,6 +46,7 @@
 #include <cmath>
 #include <ctime>
 #include <numeric>
+#include <optional>
 #include <boost/algorithm/string/replace.hpp>
 
 
@@ -185,12 +186,19 @@ static bool needSyncPart(size_t input_rows, size_t input_bytes, const MergeTreeS
         || (settings.min_compressed_bytes_to_fsync_after_merge && input_bytes >= settings.min_compressed_bytes_to_fsync_after_merge));
 }
 
+static bool isDeleteCommand(const MutationCommands & commands)
+{
+    return commands.size() == 1 && commands.front().type == MutationCommand::FAST_DELETE;
+}
+
 IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryParts(
     const ManipulationTaskParams & params,
     ManipulationListEntry & manipulation_entry,
     ContextPtr context,
     TableLockHolder & holder)
 {
+    is_delete_command = isDeleteCommand(*params.mutation_commands);
+
     auto metadata_snapshot = params.storage->getInMemoryMetadataPtr();
     // auto mutable_metadata = const_pointer_cast<StorageInMemoryMetadata>(metadata_snapshot);
     auto * table = dynamic_cast<MergeTreeMetaBase *>(params.storage.get());
@@ -200,6 +208,7 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
 
     IMutableMergeTreeDataPartsVector new_partial_parts;
     new_partial_parts.reserve(params.source_data_parts.size());
+    auto table_definition_hash = table->getTableHashForClusterBy();
     for (const auto & part : params.source_data_parts)
     {
         auto estimated_space_for_result = static_cast<size_t>(part->getBytesOnDisk() * DISK_USAGE_COEFFICIENT_TO_RESERVE);
@@ -221,7 +230,7 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
         if (params.is_bucket_table) 
         {
             // NOTE: Assuming that PARTITION BY and ORDER BY are immutable
-            if (part->table_definition_hash != table->getTableHashForClusterBy())
+            if (!table_definition_hash.match(part->table_definition_hash))
                 new_partial_parts.back()->bucket_number = -1;
             else
                 new_partial_parts.back()->bucket_number = part->bucket_number;
@@ -230,11 +239,6 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
     }
 
     return new_partial_parts;
-}
-
-bool isDeleteCommand(const MutationCommands & commands)
-{
-    return commands.size() == 1 && commands.front().type == MutationCommand::FAST_DELETE;
 }
 
 IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
@@ -314,8 +318,9 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
 
     /// It shouldn't be changed by mutation.
     new_data_part->index_granularity_info = source_part->index_granularity_info;
-    new_data_part->setColumns(getColumnsForNewDataPart(source_part, updated_header, storage_columns, for_file_renames, isDeleteCommand(commands)));
+    new_data_part->setColumns(getColumnsForNewDataPart(source_part, updated_header, storage_columns, for_file_renames, is_delete_command));
     new_data_part->partition.assign(source_part->partition);
+    new_data_part->row_exists_count = source_part->row_exists_count;
 
     LOG_TRACE(log, "Mutating part {} to mutation version {}", source_part->name, new_data_part->info.mutation);
 
@@ -866,7 +871,7 @@ std::set<MergeTreeProjectionPtr> MergeTreeDataMutator::getProjectionsToRecalcula
 // 1. get projection pipeline and a sink to write parts
 // 2. build an executor that can write block to the input stream (actually we can write through it to generate as many parts as possible)
 // 3. finalize the pipeline so that all parts are merged into one part
-void MergeTreeDataMutator::writeWithProjections(
+std::optional<size_t> MergeTreeDataMutator::writeWithProjections(
     MergeTreeData::MutableDataPartPtr new_data_part,
     const StorageMetadataPtr & metadata_snapshot,
     const MergeTreeProjections & projections_to_build,
@@ -879,6 +884,7 @@ void MergeTreeDataMutator::writeWithProjections(
     ContextPtr context,
     IMergeTreeDataPart::MinMaxIndex * minmax_idx)
 {
+    std::optional<size_t> row_exists_count = is_delete_command ? std::make_optional(0ull) : std::nullopt;
     size_t block_num = 0;
     Block block;
     std::map<String, MergeTreeData::MutableDataPartsVector> projection_parts;
@@ -894,6 +900,17 @@ void MergeTreeDataMutator::writeWithProjections(
     {  
         if (minmax_idx)
             minmax_idx->update(block, data.getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));
+
+        /// Count how many rows are existing when writing blocks. It will be stored in part metadata.
+        if (is_delete_command)
+        {
+            auto row_exists_column = block.getByName(RowExistsColumn::ROW_EXISTS_COLUMN.name).column;
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                if (row_exists_column->getBool(i))
+                    ++*row_exists_count;
+            }
+        }
 
         out.write(block);
 
@@ -1031,6 +1048,9 @@ void MergeTreeDataMutator::writeWithProjections(
             }
         }
     }
+
+    LOG_TRACE(log, "Count existing rows when writing new part: {}", row_exists_count.has_value() ? row_exists_count.value() : -1);
+    return row_exists_count;
 }
 
 void MergeTreeDataMutator::mutateAllPartColumns(
@@ -1160,7 +1180,7 @@ void MergeTreeDataMutator::mutateSomePartColumns(
     out.writePrefix();
 
     std::vector<MergeTreeProjectionPtr> projections_to_build(projections_to_recalc.begin(), projections_to_recalc.end());
-    writeWithProjections(
+    auto row_exists_count = writeWithProjections(
         new_data_part,
         metadata_snapshot,
         projections_to_build,
@@ -1175,8 +1195,11 @@ void MergeTreeDataMutator::mutateSomePartColumns(
     mutating_stream->readSuffix();
 
     auto changed_checksums = out.writeSuffixAndGetChecksums(new_data_part, *(new_data_part->getChecksums()), need_sync);
-
     new_data_part->checksums_ptr->add(std::move(changed_checksums));
+
+    /// New part's row_exists_count should be updated if it's DELETE mutation, otherwise it use source part's value.
+    if (row_exists_count.has_value())
+        new_data_part->row_exists_count = row_exists_count;
 }
 
 void MergeTreeDataMutator::finalizeMutatedPart(

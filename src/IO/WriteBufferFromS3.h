@@ -66,6 +66,21 @@ public:
 protected:
     void finalizeImpl() override;
 
+    WriteBuffer * inplaceReconstruct(const String & out_path, [[maybe_unused]] std::unique_ptr<WriteBuffer> nested) override
+    {
+        std::shared_ptr<Aws::S3::S3Client> client_ptr_tmp = std::move(this->client_ptr);
+        const Poco::URI out_uri(out_path);
+        const String & bucket_tmp = out_uri.getHost();
+        const String & key_tmp = out_uri.getPath().substr(1);
+        size_t minimum_upload_part_size_tmp = this->minimum_upload_part_size;
+        size_t max_single_part_upload_size_tmp = this->max_single_part_upload_size;
+
+        // Call the destructor explicitly but does not free memory
+        this->~WriteBufferFromS3();
+        new (this) WriteBufferFromS3(client_ptr_tmp, bucket_tmp, key_tmp, minimum_upload_part_size_tmp, max_single_part_upload_size_tmp);
+        return this;
+    }
+
 private:
     void allocateBuffer();
 

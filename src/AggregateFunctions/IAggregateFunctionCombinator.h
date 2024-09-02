@@ -44,6 +44,15 @@ public:
         return arguments;
     }
 
+    /**
+      * This overload provides more information to the combinator to decide how to transform arguments.
+      * In particular, we can use this overload to implement variadic arguments, by having a num_arguments parameter in parameters.
+      */
+    virtual DataTypes transformArguments(const DataTypes & arguments, const Array & parameters [[maybe_unused]]) const
+    {
+        return transformArguments(arguments);
+    }
+
     /** From the parameters for combined function,
       *  get the parameters for nested function.
       * If arguments are not suitable for combined function, throw an exception.

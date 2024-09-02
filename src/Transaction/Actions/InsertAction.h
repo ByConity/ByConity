@@ -20,6 +20,7 @@
 #include <Transaction/Actions/IAction.h>
 #include <Transaction/TransactionCommon.h>
 #include <cppkafka/cppkafka.h>
+#include <CloudServices/CnchDedupHelper.h>
 
 namespace DB
 {
@@ -62,11 +63,18 @@ public:
 
     UInt32 getSize() const override { return parts.size() + delete_bitmaps.size() + staged_parts.size(); }
 
+    std::set<Int64> getBucketNumbers() const;
+
+    void checkAndSetDedupMode(CnchDedupHelper::DedupMode dedup_mode_);
+
+    CnchDedupHelper::DedupTaskPtr getDedupTask() const;
+
 private:
     const StoragePtr table;
     MutableMergeTreeDataPartsCNCHVector parts;
     DeleteBitmapMetaPtrVector delete_bitmaps;
     MutableMergeTreeDataPartsCNCHVector staged_parts;
+    CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
 
     bool executed{false};
     Poco::Logger * log{&Poco::Logger::get("InsertAction")};

@@ -82,6 +82,8 @@ public:
             //partial const column
             columns_holder[idx] = arguments[idx].column->convertToFullColumnIfConst();
             const IColumn * column = columns_holder[idx].get();
+            if (auto null_col = checkAndGetColumn<ColumnNullable>(column))
+                column = null_col->getNestedColumnPtr().get();
 
             if (!(executeNumber<UInt8>(*column, out_vec, idx, input_rows_count, size_per_row)
                   || executeNumber<UInt16>(*column, out_vec, idx, input_rows_count, size_per_row)

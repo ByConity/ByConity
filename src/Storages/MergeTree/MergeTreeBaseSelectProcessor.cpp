@@ -36,7 +36,13 @@
 #include <DataTypes/MapHelpers.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <fmt/core.h>
+#include <common/logger_useful.h>
+#include <Processors/IntermediateResult/OwnerInfo.h>
 
+namespace ProfileEvents
+{
+extern const Event PrewhereSelectedRows;
+}
 
 namespace DB
 {
@@ -64,6 +70,8 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     , stream_settings(stream_settings_)
     , virt_column_names(virt_column_names_)
     , partition_value_type(storage.getPartitionValueType())
+    , support_intermedicate_result_cache(storage.supportIntermedicateResultCache())
+
 {
     header_without_virtual_columns = getPort().getHeader();
 
@@ -117,6 +125,12 @@ Chunk MergeTreeBaseSelectProcessor::generate()
         if (res.hasRows())
         {
             injectVirtualColumns(res, task.get(), partition_value_type, virt_column_names);
+            if (support_intermedicate_result_cache)
+            {
+                OwnerInfo owner_info{task->data_part->name, static_cast<time_t>(task->data_part->commit_time.toSecond())};
+                res.setOwnerInfo(std::move(owner_info));
+            }
+
             return res;
         }
     }
@@ -164,7 +178,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
 
     if (!task->task_columns.bitmap_index_columns.empty())
     {
-        index_executor = index_context ? 
+        index_executor = index_context ?
             index_context->getIndexExecutor(
                 task->data_part,
                 task->data_part->index_granularity,
@@ -184,10 +198,10 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
     else
     {
         /**
-         * if the current task has no bitmap-index (the current part has no bitmap-index), 
+         * if the current task has no bitmap-index (the current part has no bitmap-index),
          * but still has a bitmap-index reader,
          * it means the current thread read a part with bitmap-index before, thus we need reset bitmap-index.
-         * 
+         *
          */
         if (index_executor)
             index_executor.reset();
@@ -203,7 +217,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
         index_executor.get(),
         avg_value_size_hints,
         profile_callback,
-        internal_progress_callback);
+        [&](const Progress& value) { progress(value); });
 
     if (prewhere_info)
     {
@@ -242,7 +256,7 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
             pre_index_executor.get(),
             avg_value_size_hints,
             profile_callback,
-            internal_progress_callback);
+            [&](const Progress& value) { progress(value); });
     }
 }
 
@@ -327,6 +341,7 @@ Chunk MergeTreeBaseSelectProcessor::readFromPartImpl()
     UInt64 num_filtered_rows = read_result.numReadRows() - read_result.num_rows;
 
     progress({ read_result.numReadRows(), read_result.numBytesRead() });
+    ProfileEvents::increment(ProfileEvents::PrewhereSelectedRows, read_result.num_rows);
 
     if (task->size_predictor)
     {
@@ -399,6 +414,7 @@ namespace
         virtual void insertArrayOfStringsColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertStringColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUInt64Column(const ColumnPtr & column, const String & name) = 0;
+        virtual void insertInt64Column(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUInt8Column(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUUIDColumn(const ColumnPtr & column, const String & name) = 0;
 
@@ -484,6 +500,16 @@ static void injectVirtualColumnsImpl(
 
                 inserter.insertArrayOfStringsColumn(column, virtual_column_name);
             }
+            else if (virtual_column_name == "_bucket_number")
+            {
+                ColumnPtr column;
+                if (rows)
+                    column = DataTypeInt64().createColumnConst(rows, task->data_part->bucket_number)->convertToFullColumnIfConst();
+                else
+                    column = DataTypeInt64().createColumn();
+
+                inserter.insertInt64Column(column, virtual_column_name);
+            }
             else if (virtual_column_name == "_partition_id")
             {
                 ColumnPtr column;
@@ -525,7 +551,12 @@ namespace
         {
             block.insert({column, std::make_shared<DataTypeUInt64>(), name});
         }
-        
+
+        void insertInt64Column(const ColumnPtr & column, const String & name) final
+        {
+            block.insert({column, std::make_shared<DataTypeInt64>(), name});
+        }
+
         void insertUInt8Column(const ColumnPtr & column, const String & name) final
         {
             block.insert({column, std::make_shared<DataTypeUInt8>(), name});
@@ -574,6 +605,11 @@ namespace
         }
 
         void insertUInt64Column(const ColumnPtr & column, const String &) final
+        {
+            columns.push_back(column);
+        }
+
+        void insertInt64Column(const ColumnPtr & column, const String &) final
         {
             columns.push_back(column);
         }

@@ -81,9 +81,11 @@ struct ReadBufferFromHDFS::ReadBufferFromHDFSImpl : public BufferWithOwnMemory<S
 
         int bytes_read = hdfsRead(fs.get(), fin, internal_buffer.begin(), internal_buffer.size());
         if (bytes_read < 0)
+        {
             throw Exception(ErrorCodes::NETWORK_ERROR,
                 "Fail to read from HDFS: {}, file path: {}. Error: {}",
                 hdfs_uri, hdfs_file_path, std::string(hdfsGetLastError()));
+        }
 
         working_buffer.resize(bytes_read);
         offset += bytes_read;

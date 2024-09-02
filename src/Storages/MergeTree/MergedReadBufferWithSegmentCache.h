@@ -26,6 +26,7 @@
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <IO/ReadBufferFromRpcStreamFile.h>
+#include "Common/typeid_cast.h"
 #include "Storages/MergeTree/MergeTreeSuffix.h"
 
 namespace DB
@@ -58,6 +59,40 @@ public:
 
     void setReadUntilPosition(size_t position) override;
     void setReadUntilEnd() override;
+
+    template<typename T>
+    size_t readZeroCopy(ZeroCopyBuffer<T> &data_refs, size_t n, bool &incomplete_read) 
+    {
+        size_t bytes_copied = 0;
+        incomplete_read = false;
+
+        while (bytes_copied < n && !eof())
+        {
+            // since there are multiple segment as well as the remote read, so the active buffer would change when execute nextImpl(). We need to judge the current buffer type for each copy
+            if (auto * cached_bf = typeid_cast<CachedCompressedReadBuffer *>(&activeBuffer()))
+            {
+                size_t bytes_to_copy = std::min(static_cast<size_t>(working_buffer.end() - pos), n - bytes_copied);
+                data_refs.add(reinterpret_cast<const T *>(pos), bytes_to_copy / sizeof(T), cached_bf->getOwnedCell());
+                pos += bytes_to_copy;
+                bytes_copied += bytes_to_copy;
+            }
+            else 
+            {
+                incomplete_read = true;
+                return bytes_copied;
+            }
+        }
+
+        if (bytes_copied % sizeof(T)) 
+        {
+            incomplete_read = true;
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Read incompleted data while readZeroCopy, bytes_copied is {}, sizeof(T) is {}", bytes_copied, sizeof(T));
+        }
+        
+        return bytes_copied;
+    }
+
+    bool isInternalCachedCompressedReadBuffer() { return typeid_cast<CachedCompressedReadBuffer *>(&activeBuffer()) != nullptr; }
 
 private:
     class DualCompressedReadBuffer
@@ -116,7 +151,7 @@ private:
     MergeTreeReaderSettings settings;
     UncompressedCache* uncompressed_cache;
     ReadBufferFromFileBase::ProfileCallback profile_callback;
-    ProgressCallback internal_progress_callback;
+    ProgressCallback progress_callback;
     clockid_t clock_type;
 
     size_t total_segment_count;

@@ -86,6 +86,15 @@ MergingAggregatedStep::MergingAggregatedStep(
     , memory_efficient_merge_threads(memory_efficient_merge_threads_)
     , should_produce_results_in_order_of_bucket_number(!(params->final) && memory_efficient_aggregation)
 {
+    NameSet output_names;
+    for (const auto & key : keys)
+        if (!output_names.emplace(key).second)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "duplicate group by key: {}", key);
+
+    for (const auto & aggregate : params->params.aggregates)
+        if (!output_names.emplace(aggregate.column_name).second)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "duplicate aggreagte function output name: {}", aggregate.column_name);
+
     /// Aggregation keys are distinct
     for (auto key : params->params.keys)
         output_stream->distinct_columns.insert(params->params.intermediate_header.getByPosition(key).name);

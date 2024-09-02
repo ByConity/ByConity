@@ -15,7 +15,6 @@ SELECT countDistinct(l_partkey) AS a
 FROM test48024
 GROUP BY l_suppkey;
 
-set enable_runtime_filter=1; -- TODO(WangTao): remove this
 EXPLAIN
 SELECT *
 FROM

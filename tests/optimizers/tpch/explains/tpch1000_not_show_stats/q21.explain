@@ -15,86 +15,75 @@ Projection
                   └─ Aggregating
                      │     Group by: {s_name}
                      │     Aggregates: expr#count():=AggNull(count)()
-                     └─ Projection
-                        │     Expressions: [s_name]
-                        └─ Filter
-                           │     Condition: count_non_null_value_1 <= 0
-                           └─ Aggregating
-                              │     Group by: {s_suppkey, n_nationkey, l_orderkey, assign_unique_id_symbol, l_suppkey, n_name, s_name, l_commitdate, s_nationkey, l_receiptdate, o_orderkey, _exists_subquery, o_orderstatus, assign_unique_id_symbol_1}
-                              │     Aggregates: count_non_null_value_1:=AggNull(countIf)(build_side_non_null_symbol_1)
-                              └─ Projection
-                                 │     Expressions: [_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol_1:=cast(multiIf(if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = 1, 1, if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
-                                 └─ Right (PARALLEL_HASH) Join
+                     └─ Inner (PARALLEL_HASH) Join
+                        │     Condition: o_orderkey == l_orderkey
+                        ├─ Repartition Exchange
+                        │  │     Partition by: {o_orderkey}
+                        │  └─ Projection
+                        │     │     Expressions: [o_orderkey]
+                        │     └─ Filter
+                        │        │     Condition: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
+                        │        └─ TableScan tpch1000.orders
+                        │                 Where: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
+                        │                 Outputs: [o_orderkey, o_orderstatus]
+                        └─ Repartition Exchange
+                           │     Partition by: {l_orderkey}
+                           └─ Right Semi (PARALLEL_HASH) Join
+                              │     Condition: l_orderkey_1 == l_orderkey
+                              │     Filter: l_suppkey_1 != l_suppkey
+                              │     Runtime Filters Builder: {l_orderkey}
+                              ├─ Repartition Exchange
+                              │  │     Partition by: {l_orderkey_1}
+                              │  └─ Filter
+                              │     │     Condition: Runtime Filters: {l_orderkey_1}
+                              │     └─ TableScan tpch1000.lineitem
+                              │              Where: Runtime Filters: {l_orderkey}
+                              │              Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
+                              └─ Repartition Exchange
+                                 │     Partition by: {l_orderkey}
+                                 └─ Right Anti (PARALLEL_HASH) Join
                                     │     Condition: l_orderkey_2 == l_orderkey
+                                    │     Filter: l_suppkey_2 != l_suppkey
                                     │     Runtime Filters Builder: {l_orderkey}
                                     ├─ Repartition Exchange
                                     │  │     Partition by: {l_orderkey_2}
                                     │  └─ Projection
-                                    │     │     Expressions: [l_orderkey_2, l_suppkey_2], build_side_non_null_symbol_1:=1
+                                    │     │     Expressions: [l_orderkey_2, l_suppkey_2]
                                     │     └─ Filter
                                     │        │     Condition: l_receiptdate_2 > l_commitdate_2 Runtime Filters: {l_orderkey_2}
                                     │        └─ TableScan tpch1000.lineitem
                                     │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey}
                                     │                 Outputs: l_orderkey_2:=l_orderkey, l_suppkey_2:=l_suppkey, l_commitdate_2:=l_commitdate, l_receiptdate_2:=l_receiptdate
-                                    └─ AssignUniqueId
-                                       └─ Projection
-                                          │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], _exists_subquery:=count_non_null_value > 0
-                                          └─ Filter
-                                             │     Condition: count_non_null_value > 0
-                                             └─ Aggregating
-                                                │     Group by: {o_orderstatus, o_orderkey, l_receiptdate, s_nationkey, l_suppkey, l_commitdate, s_name, n_name, l_orderkey, n_nationkey, s_suppkey, assign_unique_id_symbol}
-                                                │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
-                                                └─ Projection
-                                                   │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol:=cast(multiIf(if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
-                                                   └─ Right (PARALLEL_HASH) Join
-                                                      │     Condition: l_orderkey_1 == l_orderkey
-                                                      │     Runtime Filters Builder: {l_orderkey}
-                                                      ├─ Repartition Exchange
-                                                      │  │     Partition by: {l_orderkey_1}
-                                                      │  └─ Projection
-                                                      │     │     Expressions: [l_orderkey_1, l_suppkey_1], build_side_non_null_symbol:=1
-                                                      │     └─ Filter
-                                                      │        │     Condition: Runtime Filters: {l_orderkey_1}
-                                                      │        └─ TableScan tpch1000.lineitem
-                                                      │                 Where: Runtime Filters: {l_orderkey}
-                                                      │                 Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
-                                                      └─ AssignUniqueId
-                                                         └─ Inner (PARALLEL_HASH) Join
-                                                            │     Condition: o_orderkey == l_orderkey
-                                                            │     Runtime Filters Builder: {l_orderkey}
-                                                            ├─ Repartition Exchange
-                                                            │  │     Partition by: {o_orderkey}
-                                                            │  └─ Filter
-                                                            │     │     Condition: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
-                                                            │     └─ TableScan tpch1000.orders
-                                                            │              Where: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
-                                                            │              Outputs: [o_orderkey, o_orderstatus]
-                                                            └─ Repartition Exchange
-                                                               │     Partition by: {l_orderkey}
-                                                               └─ Inner Join
-                                                                  │     Condition: l_suppkey == s_suppkey
-                                                                  │     Runtime Filters Builder: {s_suppkey}
-                                                                  ├─ Repartition Exchange
-                                                                  │  │     Partition by: {l_suppkey}
-                                                                  │  └─ Filter
-                                                                  │     │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
-                                                                  │     └─ TableScan tpch1000.lineitem
-                                                                  │              Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
-                                                                  │              Outputs: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
-                                                                  └─ Repartition Exchange
-                                                                     │     Partition by: {s_suppkey}
-                                                                     └─ Inner Join
-                                                                        │     Condition: s_nationkey == n_nationkey
-                                                                        │     Runtime Filters Builder: {n_nationkey}
-                                                                        ├─ Filter
-                                                                        │  │     Condition: Runtime Filters: {s_nationkey}
-                                                                        │  └─ TableScan tpch1000.supplier
-                                                                        │           Where: Runtime Filters: {s_nationkey}
-                                                                        │           Outputs: [s_suppkey, s_name, s_nationkey]
-                                                                        └─ Broadcast Exchange
-                                                                           └─ Filter
-                                                                              │     Condition: n_name = 'SAUDI ARABIA'
-                                                                              └─ TableScan tpch1000.nation
-                                                                                       Where: n_name = 'SAUDI ARABIA'
-                                                                                       Outputs: [n_nationkey, n_name]
+                                    └─ Repartition Exchange
+                                       │     Partition by: {l_orderkey}
+                                       └─ Inner Join
+                                          │     Condition: l_suppkey == s_suppkey
+                                          │     Runtime Filters Builder: {s_suppkey}
+                                          ├─ Repartition Exchange
+                                          │  │     Partition by: {l_suppkey}
+                                          │  └─ Projection
+                                          │     │     Expressions: [l_orderkey, l_suppkey]
+                                          │     └─ Filter
+                                          │        │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                                          │        └─ TableScan tpch1000.lineitem
+                                          │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                                          │                 Outputs: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
+                                          └─ Repartition Exchange
+                                             │     Partition by: {s_suppkey}
+                                             └─ Inner Join
+                                                │     Condition: s_nationkey == n_nationkey
+                                                │     Runtime Filters Builder: {n_nationkey}
+                                                ├─ Filter
+                                                │  │     Condition: Runtime Filters: {s_nationkey}
+                                                │  └─ TableScan tpch1000.supplier
+                                                │           Where: Runtime Filters: {s_nationkey}
+                                                │           Outputs: [s_suppkey, s_name, s_nationkey]
+                                                └─ Broadcast Exchange
+                                                   └─ Projection
+                                                      │     Expressions: [n_nationkey]
+                                                      └─ Filter
+                                                         │     Condition: n_name = 'SAUDI ARABIA'
+                                                         └─ TableScan tpch1000.nation
+                                                                  Where: n_name = 'SAUDI ARABIA'
+                                                                  Outputs: [n_nationkey, n_name]
 note: Runtime Filter is applied for 5 times.

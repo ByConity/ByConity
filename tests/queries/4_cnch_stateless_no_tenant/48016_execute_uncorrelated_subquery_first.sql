@@ -28,7 +28,6 @@ select a from uncorrelated WHERE EXISTS(select a from uncorrelated2 where a < 10
 select a from uncorrelated WHERE NOT EXISTS(select a from uncorrelated2 where a > 10) order by a;
 
 set enable_execute_uncorrelated_subquery=1;
-set bsp_mode=0; -- Todo(wangtao.vip): remove this
 select * from uncorrelated where uncorrelated.a < (select count() from uncorrelated2) order by a,b;
 select * from uncorrelated where uncorrelated.a < (select 10) order by a,b;
 select * from uncorrelated where uncorrelated.a < (select 10 + 1) order by a,b;

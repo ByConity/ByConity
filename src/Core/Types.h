@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <unordered_set>
 #include <common/strong_typedef.h>
 #include <common/extended_types.h>
 #include <common/defines.h>
@@ -149,6 +150,7 @@ template <> inline constexpr TypeIndex TypeId<IPv6> = TypeIndex::IPv6;
 
 /// Not a data type in database, defined just for convenience.
 using Strings = std::vector<String>;
+using TypeIndexesSet = std::unordered_set<TypeIndex>;
 
 /// Own FieldType for Decimal.
 /// It is only a "storage" for decimal. To perform operations, you also have to provide a scale (number of digits after point).
@@ -255,6 +257,9 @@ concept is_over_big_int =
     || std::is_same_v<T, UInt256>
     || std::is_same_v<T, Decimal128>
     || std::is_same_v<T, Decimal256>;
+
+template <class T>
+concept is_over_big_decimal = is_decimal<T> && is_over_big_int<typename T::NativeType>;
 
 template <> inline constexpr const char * TypeName<Decimal32> = "Decimal32";
 template <> inline constexpr const char * TypeName<Decimal64> = "Decimal64";

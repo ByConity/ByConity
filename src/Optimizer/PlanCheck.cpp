@@ -77,7 +77,7 @@ Void SymbolChecker::visitProjectionNode(ProjectionNode & node, ContextMutablePtr
 {
     VisitorUtil::accept(node.getChildren()[0], *this, context);
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     const auto & input_header = node.getChildren()[0]->getStep()->getOutputStream().header;
     auto names_and_types = input_header.getNamesAndTypes();
     auto type_analyzer = TypeAnalyzer::create(context, names_and_types);

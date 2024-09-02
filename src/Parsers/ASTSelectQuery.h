@@ -119,7 +119,10 @@ public:
     ASTPtr & refTables()    { return getExpression(Expression::TABLES); }
     ASTPtr & refPrewhere()  { return getExpression(Expression::PREWHERE); }
     ASTPtr & refWhere()     { return getExpression(Expression::WHERE); }
+    ASTPtr & refGroupBy() { return getExpression(Expression::GROUP_BY); }
     ASTPtr & refHaving()    { return getExpression(Expression::HAVING); }
+    ASTPtr & refWindow() { return getExpression(Expression::WINDOW); }
+    ASTPtr & refOrderBy() { return getExpression(Expression::ORDER_BY); }
     ASTPtr & refLimitLength()   { return getExpression(Expression::LIMIT_LENGTH); }
 
     const ASTPtr with()           const { return getExpression(Expression::WITH); }

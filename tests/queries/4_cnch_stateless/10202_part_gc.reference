@@ -2,7 +2,7 @@ after part gc and drop cache
 1
 2
 after first gc
-#tombstones	2
+#tombstones	1
 after second gc
 #tombstones	0
 1

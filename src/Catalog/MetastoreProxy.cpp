@@ -13,8 +13,6 @@
  * limitations under the License.
  */
 
-#include <Catalog/MetastoreProxy.h>
-#include <Protos/DataModelHelpers.h>
 #include <cstddef>
 #include <random>
 #include <sstream>
@@ -22,17 +20,21 @@
 #include <string.h>
 #include <Catalog/MetastoreCommon.h>
 #include <Catalog/MetastoreProxy.h>
-#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#include <Catalog/LargeKVHandler.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
-#include <common/types.h>
-#include <common/logger_useful.h>
-#include <Catalog/MetastoreByteKVImpl.h>
-#include <Interpreters/executeQuery.h>
+#include <Protos/plan_node.pb.h>
+#include <Statistics/StatisticsBase.h>
 #include <Storages/MergeTree/IMetastore.h>
 #include <Storages/StorageSnapshot.h>
-#include <Statistics/StatisticsBase.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
+#include "Interpreters/DistributedStages/PlanSegmentInstance.h"
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/adaptors.hpp>
 
 namespace DB::ErrorCodes
 {
@@ -298,7 +300,7 @@ std::shared_ptr<Protos::TableIdentifier> MetastoreProxy::getTableID(const String
     return res;
 }
 
-std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> MetastoreProxy::getTableIDs(const String & name_space, 
+std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> MetastoreProxy::getTableIDs(const String & name_space,
         const std::vector<std::pair<String, String>> & db_table_pairs)
 {
     Strings keys;
@@ -307,12 +309,14 @@ std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> Metastore
         keys.push_back(tableUUIDMappingKey(name_space, pair.first, pair.second));
     }
 
-    std::shared_ptr<std::vector<std::shared_ptr<Protos::TableIdentifier>>> res(new std::vector<std::shared_ptr<Protos::TableIdentifier>>());
+    auto res = std::make_shared<std::vector<std::shared_ptr<Protos::TableIdentifier>>>(std::vector<std::shared_ptr<Protos::TableIdentifier>>{});
 
     auto values = metastore_ptr->multiGet(keys);
     for (const auto & value : values)
     {
-        res->emplace_back(new Protos::TableIdentifier);
+        if (value.first.empty())
+            continue;
+        res->emplace_back(std::make_shared<Protos::TableIdentifier>());
         res->back()->ParseFromString(std::move(value.first));
     }
 
@@ -340,8 +344,16 @@ void MetastoreProxy::createTable(const String & name_space, const UUID & db_uuid
 
     BatchCommitRequest batch_write;
     batch_write.AddPut(SinglePutRequest(nonHostUpdateKey(name_space, uuid), "0", true));
-    // insert table meta
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, uuid, table_data.commit_time()), serialized_meta, true));
+
+    // insert table meta. Handle by largeKVHandler in case the table meta exceeds KV size limitation
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, uuid, table_data.commit_time()),
+        serialized_meta,
+        true/*if_not_exists*/);
+
     /// add dependency mapping if need
     for (const String & dependency : dependencies)
         batch_write.AddPut(SinglePutRequest(viewDependencyKey(name_space, dependency, uuid), uuid));
@@ -392,39 +404,59 @@ void MetastoreProxy::createTable(const String & name_space, const UUID & db_uuid
 
 void MetastoreProxy::createUDF(const String & name_space, const DB::Protos::DataModelUDF & udf_data)
 {
-    const String & database = udf_data.database();
+    const String & prefix = udf_data.prefix_name();
     const String & name = udf_data.function_name();
     String serialized_meta;
     udf_data.SerializeToString(&serialized_meta);
 
     try
     {
-        metastore_ptr->put(udfStoreKey(name_space, database, name), serialized_meta, true);
+        metastore_ptr->put(udfStoreKey(name_space, prefix, name), serialized_meta, true);
     }
     catch (Exception & e)
     {
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE) {
-            throw Exception("UDF with function name - " + name + " in database - " +  database + " already exists.", ErrorCodes::FUNCTION_ALREADY_EXISTS);
+            throw Exception("UDF with function name - " + name + " with prefix - " +  prefix + " already exists.", ErrorCodes::FUNCTION_ALREADY_EXISTS);
         }
         throw;
     }
 }
 
-void MetastoreProxy::dropUDF(const String & name_space, const String &db_name, const String &function_name)
+void MetastoreProxy::dropUDF(const String & name_space, const String &resolved_name)
 {
-    metastore_ptr->drop(udfStoreKey(name_space, db_name, function_name));
+    metastore_ptr->drop(udfStoreKey(name_space, resolved_name));
 }
 
 void MetastoreProxy::updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts)
 {
-    metastore_ptr->put(tableStoreKey(name_space, table_uuid, ts), table_info_new);
+    if (table_info_new.size() > metastore_ptr->getMaxKVSize())
+    {
+        BatchCommitRequest batch_write;
+        addPotentialLargeKVToBatchwrite(
+            metastore_ptr,
+            batch_write,
+            name_space,
+            tableStoreKey(name_space, table_uuid, ts),
+            table_info_new);
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
+    else
+        metastore_ptr->put(tableStoreKey(name_space, table_uuid, ts), table_info_new);
 }
 
 void MetastoreProxy::updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data)
 {
     BatchCommitRequest batch_write;
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table_id.database(), table_id.name()), table_id.SerializeAsString()));
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_id.uuid(), table_data.commit_time()), table_data.SerializeAsString()));
+
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, table_id.uuid(), table_data.commit_time()),
+        table_data.SerializeAsString());
+
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -434,7 +466,10 @@ void MetastoreProxy::getTableByUUID(const String & name_space, const String & ta
     auto it = metastore_ptr->getByPrefix(tableStorePrefix(name_space, table_uuid));
     while(it->next())
     {
-        tables_info.emplace_back(it->value());
+        String table_meta = it->value();
+        /// NOTE: Too many large KVs will cause severe performance regression. It rarely happens
+        tryGetLargeValue(metastore_ptr, name_space, it->key(), table_meta);
+        tables_info.emplace_back(std::move(table_meta));
     }
 }
 
@@ -463,8 +498,14 @@ Strings MetastoreProxy::getUDFsMetaByName(const String & name_space, const std::
 
 std::vector<std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getAllTablesId(const String & name_space, const String & db)
 {
+    return getTablesIdByPrefix(name_space, db.empty() ? escapeString(db) : escapeString(db) + "_");
+}
+
+std::vector<std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getTablesIdByPrefix(const String & name_space, const String & prefix)
+{
     std::vector<std::shared_ptr<Protos::TableIdentifier>> res;
-    auto it = metastore_ptr->getByPrefix(tableUUIDMappingPrefix(name_space, db));
+    String meta_prefix = tableUUIDMappingPrefix(name_space) + prefix;
+    auto it = metastore_ptr->getByPrefix(meta_prefix);
     while(it->next())
     {
         std::shared_ptr<Protos::TableIdentifier> identifier_ptr(new Protos::TableIdentifier());
@@ -485,6 +526,109 @@ Strings MetastoreProxy::getAllDependence(const String & name_space, const String
     return res;
 }
 
+std::vector<std::shared_ptr<Protos::VersionedPartitions>> MetastoreProxy::getMvBaseTables(const String & name_space, const String & uuid)
+{
+    std::vector<std::shared_ptr<Protos::VersionedPartitions>> res;
+    auto it = metastore_ptr->getByPrefix(matViewBaseTablesPrefix(name_space, uuid));
+    while(it->next())
+    {
+        std::shared_ptr<Protos::VersionedPartitions> identifier_ptr(new Protos::VersionedPartitions());
+        identifier_ptr->add_versioned_partition()->ParseFromString(it->value());
+        StorageID storage_id = RPCHelpers::createStorageID(identifier_ptr->versioned_partition(0).storage_id());
+        RPCHelpers::fillStorageID(storage_id, *identifier_ptr->mutable_storage_id());
+        if (!res.empty()
+            && identifier_ptr->storage_id().uuid().low() == res.back()->storage_id().uuid().low()
+            && identifier_ptr->storage_id().uuid().high() == res.back()->storage_id().uuid().high())
+        {
+            for (const auto & p : identifier_ptr->versioned_partition())
+                res.back()->add_versioned_partition()->CopyFrom(p);
+        }
+        else
+            res.push_back(identifier_ptr);
+    }
+    return res;
+}
+
+String MetastoreProxy::getMvMetaVersion(const String & name_space, const String & uuid)
+{
+    String mv_meta_version_ts;
+    metastore_ptr->get(matViewVersionKey(name_space, uuid), mv_meta_version_ts);
+    LOG_TRACE(&Poco::Logger::get("MetaStore"), "get mv meta, version {}.", mv_meta_version_ts);
+    if (mv_meta_version_ts.empty())
+        return "";
+
+    return mv_meta_version_ts;
+}
+
+BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_space, const String & uuid,
+    std::vector<std::shared_ptr<Protos::VersionedPartition>> add_partitions,
+    std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions,
+    String mv_version_ts)
+{
+    LOG_TRACE(&Poco::Logger::get("MetaStore"), "construct mv meta, version {}.", mv_version_ts);
+
+    BatchCommitRequest multi_write;
+    for (const auto & add : add_partitions)
+    {
+        String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(add->storage_id().uuid()));
+        String value;
+        add->SerializeToString(&value);
+        String key = matViewBaseTablesKey(name_space, uuid, base_uuid, add->partition());
+        multi_write.AddPut(SinglePutRequest(key, value));
+        LOG_TRACE(&Poco::Logger::get("MetaStore"), "add key {} value size {}.", key, value.size());
+    }
+
+    multi_write.AddPut(SinglePutRequest(matViewVersionKey(name_space, uuid), mv_version_ts));
+
+    for (const auto & drop : drop_partitions)
+    {
+        String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(drop->storage_id().uuid()));
+        String value;
+        drop->SerializeToString(&value);
+        String key = matViewBaseTablesKey(name_space, uuid, base_uuid, drop->partition());
+        multi_write.AddDelete(SinglePutRequest(key, value));
+        LOG_TRACE(&Poco::Logger::get("MetaStore"), "drop key {}.", key);
+    }
+
+    return multi_write;
+}
+
+void MetastoreProxy::updateMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+{
+    for (const auto & ele : versioned_partitions)
+    {
+        if (!ele->versioned_partition().empty())
+        {
+            String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(ele->storage_id().uuid()));
+            for (const auto & p : ele->versioned_partition())
+            {
+                String serialized_meta;
+                p.SerializeToString(&serialized_meta);
+                metastore_ptr->put(matViewBaseTablesKey(name_space, uuid, base_uuid, p.partition()), serialized_meta);
+                LOG_TRACE(&Poco::Logger::get("MetaStore"), "value size {}.", serialized_meta.size());
+            }
+        }
+    }
+}
+
+void MetastoreProxy::cleanMvMeta(const String & name_space, const String & uuid)
+{
+    metastore_ptr->clean(matViewVersionKey(name_space, uuid));
+    metastore_ptr->clean(matViewBaseTablesPrefix(name_space, uuid));
+}
+
+void MetastoreProxy::dropMvMeta(const String & name_space, const String & uuid, std::vector<std::shared_ptr<Protos::VersionedPartitions>> versioned_partitions)
+{
+    for (const auto & ele : versioned_partitions)
+    {
+        if (!ele->versioned_partition().empty())
+        {
+            String base_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(ele->storage_id().uuid()));
+            for (const auto & p : ele->versioned_partition())
+                metastore_ptr->drop(matViewBaseTablesKey(name_space, uuid, base_uuid, p.partition()));
+        }
+    }
+}
 
 IMetaStore::IteratorPtr MetastoreProxy::getTrashTableIDIterator(const String & name_space, uint32_t iterator_internal_batch_size)
 {
@@ -719,10 +863,14 @@ void MetastoreProxy::prepareRenameTable(const String & name_space,
         RPCHelpers::fillUUID(to_db_uuid, *identifier.mutable_db_uuid());
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, to_table.database(), to_table.name()), identifier.SerializeAsString(), true));
 
-    String meta_data;
-    to_table.SerializeToString(&meta_data);
     /// add new table meta data with new name
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_uuid, to_table.commit_time()), meta_data, true));
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, table_uuid, to_table.commit_time()),
+        to_table.SerializeAsString(),
+        true/*if_not_exists*/);
 }
 
 bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add)
@@ -730,7 +878,14 @@ bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataMod
     BatchCommitRequest batch_write;
 
     String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table.uuid()));
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_uuid, table.commit_time()), table.SerializeAsString(), true));
+
+    addPotentialLargeKVToBatchwrite(
+        metastore_ptr,
+        batch_write,
+        name_space,
+        tableStoreKey(name_space, table_uuid, table.commit_time()),
+        table.SerializeAsString(),
+        true/*if_not_exists*/);
 
     Protos::TableIdentifier identifier;
     identifier.set_database(table.database());
@@ -810,14 +965,22 @@ void MetastoreProxy::setNonHostUpdateTimeStamp(const String & name_space, const 
     metastore_ptr->put(nonHostUpdateKey(name_space, table_uuid), toString(pts));
 }
 
-void MetastoreProxy::prepareAddDataParts(const String & name_space, const String & table_uuid, const Strings & current_partitions,
-        const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, BatchCommitRequest & batch_write,
-        const std::vector<String> & expected_parts, bool update_sync_list)
+void MetastoreProxy::prepareAddDataParts(
+    const String & name_space,
+    const String & table_uuid,
+    const Strings & current_partitions,
+    std::unordered_set<String> & deleting_partitions,
+    const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
+    BatchCommitRequest & batch_write,
+    const std::vector<String> & expected_parts,
+    const UInt64 txn_id,
+    bool update_sync_list,
+    bool write_manifest)
 {
     if (parts.empty())
         return;
 
-    std::unordered_set<String> existing_partitions{current_partitions.begin(), current_partitions.end()};
+    std::unordered_set<String> partitions_found_in_deleting_set;
     std::unordered_map<String, String > partition_map;
 
     UInt64 commit_time = 0;
@@ -835,30 +998,43 @@ void MetastoreProxy::prepareAddDataParts(const String & name_space, const String
         String part_meta = it->SerializeAsString();
 
         batch_write.AddPut(SinglePutRequest(dataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_parts[it - parts.begin()]));
+        if (write_manifest)
+            batch_write.AddPut(SinglePutRequest(manifestKeyForPart(name_space, table_uuid, txn_id, info_ptr->getPartName()), part_meta));
 
-        if (!existing_partitions.count(info_ptr->partition_id) && !partition_map.count(info_ptr->partition_id))
+        if (deleting_partitions.count(info_ptr->partition_id) && !partitions_found_in_deleting_set.count(info_ptr->partition_id))
+            partitions_found_in_deleting_set.emplace(info_ptr->partition_id);
+
+        if (!partition_map.count(info_ptr->partition_id))
             partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
     }
 
     if (update_sync_list)
         batch_write.AddPut(SinglePutRequest(syncListKey(name_space, table_uuid, commit_time), std::to_string(commit_time)));
 
+    // Prepare partition metadata. Skip those already exists non-deleting partitions
+    for (const auto & exist_partition : current_partitions)
+    {
+        auto it = partition_map.find(exist_partition);
+        if (it != partition_map.end() && !partitions_found_in_deleting_set.count(exist_partition))
+            partition_map.erase(it);
+    }
+
     Protos::PartitionMeta partition_model;
     for (auto it = partition_map.begin(); it != partition_map.end(); it++)
     {
-        std::stringstream ss;
-        /// To keep the partitions have the same order as data parts in bytekv, we add an extra "_" in the key of partition meta
-        ss << tablePartitionInfoPrefix(name_space, table_uuid) << it->first << '_';
-
         partition_model.set_id(it->first);
         partition_model.set_partition_minmax(it->second);
 
-        batch_write.AddPut(SinglePutRequest(ss.str(), partition_model.SerializeAsString()));
+        batch_write.AddPut(SinglePutRequest(tablePartitionInfoKey(name_space, table_uuid, it->first), partition_model.SerializeAsString()));
     }
+
+    partitions_found_in_deleting_set.swap(deleting_partitions);
 }
 
 void MetastoreProxy::prepareAddStagedParts(
-    const String & name_space, const String & table_uuid,
+    const String & name_space,
+    const String & table_uuid,
+    const Strings & current_partitions,
     const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
     BatchCommitRequest & batch_write,
     const std::vector<String> & expected_staged_parts)
@@ -866,6 +1042,7 @@ void MetastoreProxy::prepareAddStagedParts(
     if (parts.empty())
         return;
 
+    std::unordered_map<String, String> partition_map;
     size_t expected_staged_part_size = expected_staged_parts.size();
     if (expected_staged_part_size != static_cast<size_t>(parts.size()))
         throw Exception("Staged part size wants to write does not match the expected staged part size.", ErrorCodes::LOGICAL_ERROR);
@@ -875,6 +1052,30 @@ void MetastoreProxy::prepareAddStagedParts(
         auto info_ptr = createPartInfoFromModel(it->part_info());
         String part_meta = it->SerializeAsString();
         batch_write.AddPut(SinglePutRequest(stagedDataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_staged_parts[it - parts.begin()]));
+
+        if (!partition_map.count(info_ptr->partition_id))
+            partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
+    }
+
+    // Prepare partition metadata. Skip those already exists partitions
+    for (const auto & exist_partition : current_partitions)
+    {
+        auto it = partition_map.find(exist_partition);
+        if (it != partition_map.end())
+            partition_map.erase(it);
+    }
+
+    Protos::PartitionMeta partition_model;
+    for (auto & it : partition_map)
+    {
+        std::stringstream ss;
+        /// To keep the partitions have the same order as data parts in bytekv, we add an extra "_" in the key of partition meta
+        ss << tablePartitionInfoPrefix(name_space, table_uuid) << it.first << '_';
+
+        partition_model.set_id(it.first);
+        partition_model.set_partition_minmax(it.second);
+
+        batch_write.AddPut(SinglePutRequest(ss.str(), partition_model.SerializeAsString()));
     }
 }
 
@@ -893,6 +1094,12 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
     metastore_ptr->clean(detachedPartPrefix(name_space, uuid));
     metastore_ptr->clean(partitionPartsMetricsSnapshotPrefix(name_space,uuid, ""));
     metastore_ptr->clean(tableTrashItemsMetricsSnapshotPrefix(name_space, uuid));
+}
+
+void MetastoreProxy::dropAllMutationsInTable(const String & name_space, const String & uuid)
+{
+    /// clear mutations metadata
+    metastore_ptr->clean(tableMutationPrefix(name_space, uuid));
 }
 
 void MetastoreProxy::dropAllDeleteBitmapInTable(const String & name_space, const String & uuid)
@@ -1133,7 +1340,7 @@ bool MetastoreProxy::updateTransactionRecordWithBinlog(const String & name_space
 std::pair<bool, String> MetastoreProxy::MetastoreProxy::updateTransactionRecordWithRequests(
     SinglePutRequest & txn_request, BatchCommitRequest & requests, BatchCommitResponse & response)
 {
-    if (requests.puts.empty())
+    if (requests.puts.empty() && requests.deletes.empty())
     {
         return metastore_ptr->putCAS(
             String(txn_request.key), String(txn_request.value), String(*txn_request.expected_value), true);
@@ -1335,7 +1542,14 @@ std::unordered_set<UInt64> MetastoreProxy::getActiveTransactionsSet()
     return res;
 }
 
-void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & rpc_address, const String & uuid, UndoResources & resources)
+void MetastoreProxy::writeUndoBuffer(
+    const String & name_space,
+    const UInt64 & txnID,
+    const String & rpc_address,
+    const String & uuid,
+    UndoResources & resources,
+    PlanSegmentInstanceId instance_id,
+    bool write_undo_buffer_new_key)
 {
     if (resources.empty())
         return;
@@ -1345,19 +1559,36 @@ void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & t
     for (auto & resource : resources)
     {
         resource.setUUID(uuid);
-        batch_write.AddPut(SinglePutRequest(undoBufferStoreKey(name_space, txnID, rpc_address, resource), resource.serialize()));
+        batch_write.AddPut(
+            SinglePutRequest(undoBufferStoreKey(name_space, txnID, rpc_address, resource, instance_id, write_undo_buffer_new_key), resource.serialize()));
     }
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
 void MetastoreProxy::clearUndoBuffer(const String & name_space, const UInt64 & txnID)
 {
-    metastore_ptr->clean(undoBufferKey(name_space, txnID));
+    /// Clean both new and old keys
+    metastore_ptr->clean(undoBufferKeyPrefix(name_space, txnID, true));
+    metastore_ptr->clean(undoBufferKeyPrefix(name_space, txnID, false));
 }
 
-IMetaStore::IteratorPtr MetastoreProxy::getUndoBuffer(const String & name_space, UInt64 txnID)
+void MetastoreProxy::clearUndoBuffer(
+    const String & name_space, const UInt64 & txnID, const String & rpc_address, PlanSegmentInstanceId instance_id)
 {
-    return metastore_ptr->getByPrefix(undoBufferKey(name_space, txnID));
+    /// Clean both new and old keys
+    metastore_ptr->clean(undoBufferSegmentInstanceKey(name_space, txnID, rpc_address, instance_id, true));
+    metastore_ptr->clean(undoBufferSegmentInstanceKey(name_space, txnID, rpc_address, instance_id, false));
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getUndoBuffer(const String & name_space, UInt64 txnID, bool write_undo_buffer_new_key)
+{
+    return metastore_ptr->getByPrefix(undoBufferKeyPrefix(name_space, txnID, write_undo_buffer_new_key));
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getUndoBuffer(
+    const String & name_space, UInt64 txnID, const String & rpc_address, PlanSegmentInstanceId instance_id, bool write_undo_buffer_new_key)
+{
+    return metastore_ptr->getByPrefix(undoBufferSegmentInstanceKey(name_space, txnID, rpc_address, instance_id, write_undo_buffer_new_key));
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getAllUndoBuffer(const String & name_space)
@@ -1648,6 +1879,20 @@ void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uu
     else if (type == CnchBGThreadType::ObjectSchemaAssemble)
         metastore_ptr->put(
             objectSchemaAssembleBGJobStatusKey(name_space, uuid),
+            String {BGJobStatusInCatalog::serializeToChar(status)}
+        );
+    else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+        metastore_ptr->put(
+            refreshViewBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)});
+    else if (type == CnchBGThreadType::PartMover)
+        metastore_ptr->put(
+            partMoverBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
+    else if (type == CnchBGThreadType::ManifestCheckpoint)
+        metastore_ptr->put(
+            checkpointBGJobStatusKey(name_space, uuid),
             String{BGJobStatusInCatalog::serializeToChar(status)}
         );
     else
@@ -1671,6 +1916,12 @@ std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & 
         metastore_ptr->get(dedupWorkerBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::ObjectSchemaAssemble)
         metastore_ptr->get(objectSchemaAssembleBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+        metastore_ptr->get(refreshViewBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::PartMover)
+        metastore_ptr->get(partMoverBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::ManifestCheckpoint)
+        metastore_ptr->get(checkpointBGJobStatusKey(name_space, uuid), status_store_data);
     else
         throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
 
@@ -1707,6 +1958,12 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
                 return metastore_ptr->getByPrefix(allDedupWorkerBGJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::ObjectSchemaAssemble)
                 return metastore_ptr->getByPrefix(allObjectSchemaAssembleBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::CnchRefreshMaterializedView)
+                return metastore_ptr->getByPrefix(allRefreshViewJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::PartMover)
+                return metastore_ptr->getByPrefix(allPartMoverBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::ManifestCheckpoint)
+                return metastore_ptr->getByPrefix(allCheckpointBGJobStatusKeyPrefix(name_space));
             else
                 throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
         };
@@ -1751,6 +2008,15 @@ void MetastoreProxy::dropBGJobStatus(const String & name_space, const String & u
         case CnchBGThreadType::ObjectSchemaAssemble:
             metastore_ptr->drop(objectSchemaAssembleBGJobStatusKey(name_space, uuid));
             break;
+        case CnchBGThreadType::CnchRefreshMaterializedView:
+            metastore_ptr->drop(dedupWorkerBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::PartMover:
+            metastore_ptr->drop(partMoverBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::ManifestCheckpoint:
+            metastore_ptr->drop(checkpointBGJobStatusKey(name_space, uuid));
+            break;
         default:
             throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
     }
@@ -1771,10 +2037,14 @@ IMetaStore::IteratorPtr MetastoreProxy::getMetaInRange(const String & prefix, co
     return metastore_ptr->getByRange(prefix + range_start, prefix + range_end, include_start, include_end);
 }
 
-void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const String & table_uuid,
-                                             const DeleteBitmapMetaPtrVector & bitmaps,
-                                             BatchCommitRequest & batch_write,
-                                             const std::vector<String> & expected_bitmaps)
+void MetastoreProxy::prepareAddDeleteBitmaps(
+    const String & name_space,
+    const String & table_uuid,
+    const DeleteBitmapMetaPtrVector & bitmaps,
+    BatchCommitRequest & batch_write,
+    const UInt64 txn_id, 
+    const std::vector<String> & expected_bitmaps,
+    bool write_manifest)
 {
     size_t expected_bitmaps_size = expected_bitmaps.size();
     if (expected_bitmaps_size > 0 && expected_bitmaps_size != static_cast<size_t>(bitmaps.size()))
@@ -1784,11 +2054,14 @@ void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const St
     for (const auto & dlb_ptr : bitmaps)
     {
         const Protos::DataModelDeleteBitmap & model = *(dlb_ptr->getModel());
+        String serialized_data = model.SerializeAsString();
         if (expected_bitmaps_size == 0)
-            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString()));
+            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), serialized_data));
         else
-            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString(), expected_bitmaps[idx]));
-
+            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), serialized_data, expected_bitmaps[idx]));
+        
+        if (write_manifest)
+            batch_write.AddPut(SinglePutRequest(manifestKeyForDeleteBitmap(name_space, table_uuid, txn_id, dataModelName(model)), serialized_data));
         ++idx;
     }
 }
@@ -1890,8 +2163,11 @@ void MetastoreProxy::updateTableStatistics(
         batch_write.AddPut(SinglePutRequest(tag_key, std::to_string(static_cast<UInt64>(tag))));
     }
 
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 void MetastoreProxy::removeTableStatistics(const String & name_space, const String & uuid)
@@ -1915,8 +2191,12 @@ void MetastoreProxy::removeTableStatistics(const String & name_space, const Stri
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 
@@ -1953,9 +2233,11 @@ void MetastoreProxy::updateColumnStatistics(const String & name_space, const Str
         // TODO: currently keep it just for front&back-compatibility
         batch_write.AddPut(SinglePutRequest(columnStatisticTagKey(name_space, uuid, column, tag), std::to_string(static_cast<UInt64>(tag))));
     }
-
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 
@@ -2039,8 +2321,12 @@ void MetastoreProxy::removeColumnStatistics(const String & name_space, const Str
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
 void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const String & uuid)
@@ -2063,11 +2349,14 @@ void MetastoreProxy::removeAllColumnStatistics(const String & name_space, const 
             batch_write.AddDelete(iter->key());
         }
     }
-    BatchCommitResponse resp;
-    metastore_ptr->batchWrite(batch_write, resp);
+    if (!batch_write.isEmpty())
+    {
+        BatchCommitResponse resp;
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
 }
 
-void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindingItemPtr& data)
+void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindingItemPtr & data)
 {
     BatchCommitRequest batch_write;
 
@@ -2077,7 +2366,8 @@ void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindin
     sql_binding.set_pattern(data->pattern);
     sql_binding.set_serialized_ast(data->serialized_ast);
     sql_binding.set_timestamp(data->timestamp);
-    batch_write.AddPut(SinglePutRequest(SQLBindingKey(name_space, UUIDHelpers::UUIDToString(data->uuid), data->is_regular_expression), sql_binding.SerializeAsString()));
+    sql_binding.set_tenant_id(data->tenant_id);
+    batch_write.AddPut(SinglePutRequest(SQLBindingKey(name_space, UUIDHelpers::UUIDToString(data->uuid), data->tenant_id, data->is_regular_expression), sql_binding.SerializeAsString()));
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -2091,7 +2381,7 @@ SQLBindings MetastoreProxy::getSQLBindings(const String & name_space)
     {
         Protos::SQLBinding sql_binding;
         sql_binding.ParseFromString(it->value());
-        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp(), sql_binding.tenant_id());
         res.emplace_back(binding);
     }
 
@@ -2107,17 +2397,17 @@ SQLBindings MetastoreProxy::getReSQLBindings(const String & name_space, const bo
     {
         Protos::SQLBinding sql_binding;
         sql_binding.ParseFromString(it->value());
-        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp(), sql_binding.tenant_id());
         res.emplace_back(binding);
     }
 
     return res;
 }
 
-SQLBindingItemPtr MetastoreProxy::getSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression)
+SQLBindingItemPtr MetastoreProxy::getSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression)
 {
     String value;
-    auto binding_key = SQLBindingKey(name_space, uuid, is_re_expression);
+    auto binding_key = SQLBindingKey(name_space, uuid, tenant_id, is_re_expression);
     metastore_ptr->get(binding_key, value);
 
     if (value.empty())
@@ -2125,14 +2415,64 @@ SQLBindingItemPtr MetastoreProxy::getSQLBinding(const String & name_space, const
 
     Protos::SQLBinding sql_binding;
     sql_binding.ParseFromString(value);
-    SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+    SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp(), sql_binding.tenant_id());
     return binding;
 }
 
-void MetastoreProxy::removeSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression)
+void MetastoreProxy::removeSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression)
 {
     BatchCommitRequest batch_write;
-    batch_write.AddDelete(SQLBindingKey(name_space, uuid, is_re_expression));
+    batch_write.AddDelete(SQLBindingKey(name_space, uuid, tenant_id, is_re_expression));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
+void MetastoreProxy::updatePreparedStatement(const String & name_space, const PreparedStatementItemPtr & data)
+{
+    BatchCommitRequest batch_write;
+
+    Protos::PreparedStatementItem prepared_statement;
+    prepared_statement.set_name(data->name);
+    prepared_statement.set_create_statement(data->create_statement);
+    batch_write.AddPut(SinglePutRequest(preparedStatementKey(name_space, data->name), prepared_statement.SerializeAsString()));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
+PreparedStatements MetastoreProxy::getPreparedStatements(const String & name_space)
+{
+    PreparedStatements res;
+    auto prepared_prefix = preparedStatementPrefix(name_space);
+    auto it = metastore_ptr->getByPrefix(prepared_prefix);
+    while (it->next())
+    {
+        Protos::PreparedStatementItem prepared_statement;
+        prepared_statement.ParseFromString(it->value());
+        PreparedStatementItemPtr statement = std::make_shared<PreparedStatementItem>(prepared_statement.name(), prepared_statement.create_statement());
+        res.emplace_back(statement);
+    }
+
+    return res;
+}
+PreparedStatementItemPtr MetastoreProxy::getPreparedStatement(const String & name_space, const String & name)
+{
+    String value;
+    auto prepared_statement_key = preparedStatementKey(name_space, name);
+    metastore_ptr->get(prepared_statement_key, value);
+
+    if (value.empty())
+        return nullptr;
+
+    Protos::PreparedStatementItem prepared_statement;
+    prepared_statement.ParseFromString(value);
+    PreparedStatementItemPtr prepared = std::make_shared<PreparedStatementItem>(prepared_statement.name(), prepared_statement.create_statement());
+    return prepared;
+}
+
+void MetastoreProxy::removePreparedStatement(const String & name_space, const String & name)
+{
+    BatchCommitRequest batch_write;
+    batch_write.AddDelete(preparedStatementKey(name_space, name));
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -2499,7 +2839,7 @@ void MetastoreProxy::attachDetachedParts(
         Protos::PartitionMeta partition_model;
         for (const auto& [partition_id, partition_minmax] : partition_map)
         {
-            String partition_key = tablePartitionInfoPrefix(name_space, to_uuid) + partition_id + "_";
+            String partition_key = tablePartitionInfoKey(name_space, to_uuid, partition_id);
             partition_model.set_id(partition_id);
             partition_model.set_partition_minmax(partition_minmax);
 
@@ -2835,9 +3175,9 @@ IMetaStore::IteratorPtr MetastoreProxy::getDetachedDeleteBitmapsInRange(
     return metastore_ptr->getByRange(prefix + range_start, prefix + range_end, include_start, include_end);
 }
 
-IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
+IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit, const String & start_key)
 {
-    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
+    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit, DEFAULT_SCAN_BATCH_COUNT, start_key);
 }
 
 String MetastoreProxy::extractTxnIDFromPartialSchemaKey(const String &partial_schema_key)
@@ -2865,7 +3205,7 @@ SerializedObjectSchema MetastoreProxy::getObjectPartialSchema(const String &name
     metastore_ptr->get(partialSchemaKey(name_space, table_uuid, txn_id), partial_schema);
     if (partial_schema.empty())
         return "";
-    
+
     return partial_schema;
 }
 
@@ -2891,7 +3231,7 @@ SerializedObjectSchema MetastoreProxy::getObjectAssembledSchema(const String &na
     metastore_ptr->get(assembledSchemaKey(name_space, table_uuid), assembled_schema);
     if (assembled_schema.empty())
         return "";
-    
+
     return assembled_schema;
 }
 
@@ -2998,12 +3338,179 @@ String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, con
     return value;
 }
 
+Strings MetastoreProxy::removePartitions(const String & name_space, const String & table_uuid, const PartitionWithGCStatus & partitions)
+{
+    Strings request_keys;
+    for (const auto & p : partitions)
+        request_keys.emplace_back(tablePartitionInfoKey(name_space, table_uuid, p.first));
+
+    auto partitions_meta = metastore_ptr->multiGet(request_keys);
+
+    Poco::Logger * log = &Poco::Logger::get(__func__);
+
+    Strings res;
+    // try commit all partitions with CAS in one batch
+    BatchCommitRequest batch_write;
+    for (const auto & metadata : partitions_meta)
+    {
+        Protos::PartitionMeta partition_meta;
+        partition_meta.ParseFromString(metadata.first);
+
+        if (auto it = partitions.find(partition_meta.id()); it!=partitions.end() && partition_meta.gctime() == it->second)
+        {
+            res.push_back(partition_meta.id());
+            batch_write.AddDelete(tablePartitionInfoKey(name_space, table_uuid, partition_meta.id()), metadata.first, metadata.second);
+        }
+    }
+
+    BatchCommitResponse resp;
+    auto cas_commit_success = metastore_ptr->batchWrite(batch_write, resp);
+
+    // try again with deleting one by one if fails to commit in batch
+    if (!cas_commit_success)
+    {
+        LOG_WARNING(log, "CAS remove {} partitions failed. Will try to delete them one by one." , res.size());
+        res.clear();
+        for (const auto & metadata : partitions_meta)
+        {
+            Protos::PartitionMeta partition_meta;
+            partition_meta.ParseFromString(metadata.first);
+            try
+            {
+                if (auto it = partitions.find(partition_meta.id()); it!=partitions.end() && partition_meta.gctime() == it->second)
+                {
+                    metastore_ptr->drop(tablePartitionInfoKey(name_space, table_uuid, partition_meta.id()), metadata.first);
+                }
+                res.push_back(partition_meta.id());
+            }
+            catch (const Exception & e)
+            {
+                throw e;
+            }
+        }
+    }
+    return res;
+}
+
+String MetastoreProxy::getByKey(const String & key)
+{
+    String meta_str;
+    metastore_ptr->get(key, meta_str);
+    return meta_str;
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getByPrefix(const String & prefix, size_t limit)
+{
+    return metastore_ptr->getByPrefix(prefix, limit);
+}
+
+// Sensitive Resources
+void MetastoreProxy::putSensitiveResource(const String & name_space, const String & database, const String & table, const String & column, const String & target, bool value) const
+{
+    String data;
+    auto res = std::make_shared<Protos::DataModelSensitiveDatabase>();
+
+    metastore_ptr->get(sensitiveResourceKey(name_space, database), data);
+
+    if (!data.empty())
+        res->ParseFromString(data);
+
+    if (!database.empty())
+    {
+        res->set_database(database);
+        if (target == "DATABASE")
+            res->set_is_sensitive(value);
+    }
+
+    Protos::DataModelSensitiveTable * current_table = nullptr;
+    if (!table.empty())
+    {
+        // get existing table from database if its already there
+        bool found = false;
+        for (auto & table_from_meta : *res->mutable_tables())
+        {
+            if (table_from_meta.table() == table)
+            {
+                current_table = &table_from_meta;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            current_table = res->add_tables();
+        current_table->set_table(table);
+        if (target == "TABLE")
+            current_table->set_is_sensitive(value);
+    }
+
+    if (target == "COLUMN" && !column.empty())
+    {
+        Strings new_columns_for_meta(current_table->sensitive_columns().begin(), current_table->sensitive_columns().end());
+        current_table->clear_sensitive_columns();
+        for (auto & col : new_columns_for_meta)
+        {
+            if (col != column)
+                current_table->add_sensitive_columns(col);
+        }
+        if (value)
+            current_table->add_sensitive_columns(column);
+    }
+
+    metastore_ptr->put(sensitiveResourceKey(name_space, database), res->SerializeAsString());
+}
+
+std::shared_ptr<Protos::DataModelSensitiveDatabase> MetastoreProxy::getSensitiveResource(const String & name_space, const String & database) const
+{
+    String data;
+    auto res = std::make_shared<Protos::DataModelSensitiveDatabase>();
+
+    metastore_ptr->get(sensitiveResourceKey(name_space, database), data);
+
+    if (!data.empty())
+        res->ParseFromString(data);
+
+    return res;
+}
+
 // Access Entities
 String MetastoreProxy::getAccessEntity(EntityType type, const String & name_space, const String & name) const
 {
     String data;
-    metastore_ptr->get(accessEntityKey(type, name_space, name), data);
+    String access_entity_key = accessEntityKey(type, name_space, name);
+    metastore_ptr->get(access_entity_key, data);
+    tryGetLargeValue(metastore_ptr, name_space, access_entity_key, data);
     return data;
+}
+
+std::vector<std::pair<String, UInt64>> MetastoreProxy::getEntities(EntityType type, const String & name_space, const std::unordered_set<UUID> & ids) const
+{
+    Strings requests;
+
+    requests.reserve(ids.size());
+
+    for (const auto & id : ids)
+        requests.push_back(accessEntityUUIDNameMappingKey(name_space, UUIDHelpers::UUIDToString(id)));
+
+    auto response = metastore_ptr->multiGet(requests);
+
+    requests.clear();
+    for (const auto & [s, version] : response)
+    {
+        if (s.empty())
+            continue;
+        requests.push_back(accessEntityKey(type, name_space, s));
+    }
+
+    auto res = metastore_ptr->multiGet(requests);
+
+    for (size_t i=0; i<res.size(); i++)
+    {
+        // try parse large value
+        String & value = res[i].first;
+        tryGetLargeValue(metastore_ptr, name_space, requests[i], value);
+    }
+
+    return res;
 }
 
 Strings MetastoreProxy::getAllAccessEntities(EntityType type, const String & name_space) const
@@ -3012,7 +3519,10 @@ Strings MetastoreProxy::getAllAccessEntities(EntityType type, const String & nam
     auto it = metastore_ptr->getByPrefix(accessEntityPrefix(type, name_space));
     while (it->next())
     {
-        models.push_back(it->value());
+        String value = it->value();
+        /// NOTE: Too many large KVs will cause severe performance regression.
+        tryGetLargeValue(metastore_ptr, name_space, it->key(), value);
+        models.push_back(std::move(value));
     }
     return models;
 }
@@ -3040,12 +3550,30 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
     auto is_rename = !old_access_entity.name().empty() && new_access_entity.name() != old_access_entity.name();
-    auto put_access_entity_request = SinglePutRequest(accessEntityKey(type, name_space, new_access_entity.name()), new_access_entity.SerializeAsString(), !replace_if_exists);
     String uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(new_access_entity.uuid()));
     String serialized_old_access_entity = old_access_entity.SerializeAsString();
     if (!serialized_old_access_entity.empty() && !is_rename)
-        put_access_entity_request.expected_value = serialized_old_access_entity;
-    batch_write.AddPut(put_access_entity_request);
+    {
+        addPotentialLargeKVToBatchwrite(
+            metastore_ptr,
+            batch_write,
+            name_space,
+            accessEntityKey(type, name_space, new_access_entity.name()),
+            new_access_entity.SerializeAsString(),
+            !replace_if_exists,
+            serialized_old_access_entity);
+    }
+    else
+    {
+        addPotentialLargeKVToBatchwrite(
+            metastore_ptr,
+            batch_write,
+            name_space,
+            accessEntityKey(type, name_space, new_access_entity.name()),
+            new_access_entity.SerializeAsString(),
+            !replace_if_exists);
+    }
+
     batch_write.AddPut(SinglePutRequest(accessEntityUUIDNameMappingKey(name_space, uuid), new_access_entity.name(), !replace_if_exists));
     if (is_rename)
         batch_write.AddDelete(accessEntityKey(type, name_space, old_access_entity.name())); // delete old one in case of rename
@@ -3055,21 +3583,22 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
     }
     catch (Exception & e)
     {
+        auto puts_size = batch_write.puts.size();
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
-            if (resp.puts.count(0) && replace_if_exists && !serialized_old_access_entity.empty())
+            if (resp.puts.count(puts_size-2) && replace_if_exists && !serialized_old_access_entity.empty())
             {
                 throw Exception(
                     "Access Entity has recently been changed in catalog. Please try the request again.",
                     ErrorCodes::METASTORE_ACCESS_ENTITY_CAS_ERROR);
             }
-            else if (resp.puts.count(0) && !replace_if_exists)
+            else if (resp.puts.count(puts_size-2) && !replace_if_exists)
             {
                 throw Exception(
                     "Access Entity with the same name already exists in catalog. Please use another name and try again.",
                     ErrorCodes::METASTORE_ACCESS_ENTITY_EXISTS_ERROR);
             }
-            else if (resp.puts.count(1) && !replace_if_exists)
+            else if (resp.puts.count(puts_size-1) && !replace_if_exists)
             {
                 throw Exception(
                     "Access Entity with the same UUID already exists in catalog. Please use another name and try again.",

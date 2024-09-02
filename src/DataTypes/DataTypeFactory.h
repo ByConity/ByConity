@@ -25,7 +25,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <Common/IFactoryWithAliases.h>
 #include <DataTypes/DataTypeCustom.h>
-
+#include <DataTypes/DataTypeCache.h>
 
 #include <functional>
 #include <memory>
@@ -51,6 +51,8 @@ private:
 
 public:
     static DataTypeFactory & instance();
+
+    DataTypeCache data_type_cache;
 
     DataTypePtr get(const String & full_name, const UInt16 flags = 0) const;
     DataTypePtr get(const String & family_name, const ASTPtr & parameters, const UInt16 flags = 0) const;

@@ -8,16 +8,21 @@
 #include <Access/EnabledRolesInfo.h>
 #include <Access/EnabledSettings.h>
 #include <Access/SettingsProfilesInfo.h>
+#include <Access/KVAccessStorage.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Common/Exception.h>
 #include <Common/quoteString.h>
 #include <Core/Settings.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/range/algorithm/set_algorithm.hpp>
+#include <boost/range/algorithm/copy.hpp>
 #include <assert.h>
+#include <unordered_set>
 
 
 namespace DB
@@ -28,12 +33,58 @@ namespace ErrorCodes
     extern const int READONLY;
     extern const int QUERY_IS_PROHIBITED;
     extern const int FUNCTION_NOT_ALLOWED;
+    extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_USER;
 }
 
 
 namespace
 {
+    static const std::unordered_set<std::string_view> always_accessible_tables {
+        /// Constant tables
+        "one",
+
+        /// "numbers", "numbers_mt", "zeros", "zeros_mt" were excluded because they can generate lots of values and
+        /// that can decrease performance in some cases.
+
+        "contributors",
+        "licenses",
+        "time_zones",
+        "collations",
+
+        "formats",
+        "privileges",
+        "data_type_families",
+        "table_engines",
+        "table_functions",
+        "aggregate_function_combinators",
+
+        "functions", /// Can contain user-defined functions
+        "cnch_user_defined_functions",
+
+        /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
+        "databases",
+        "tables",
+        "columns",
+        "mutations",
+        "users",
+
+        /// Specific to the current session
+        "settings",
+        "current_roles",
+        "enabled_roles",
+        "quota_usage",
+        "processes",
+
+        /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
+        /// For IDE tools to get schema info
+        "cnch_databases",
+        "cnch_tables",
+        "cnch_columns",
+        "cnch_parts",
+        "data_skipping_indices"
+    };
+
     AccessRights mixAccessRightsFromUserAndRoles(const User & user, const EnabledRolesInfo & roles_info)
     {
         AccessRights res = user.access;
@@ -41,8 +92,14 @@ namespace
         return res;
     }
 
+    SensitiveAccessRights mixSensitiveAccessRightsFromUserAndRoles(const User & user, const EnabledRolesInfo & roles_info)
+    {
+        SensitiveAccessRights res = user.sensitive_access;
+        res.makeUnion(roles_info.sensitive_access);
+        return res;
+    }
 
-    AccessRights addImplicitAccessRights(const AccessRights & access, const AccessControlManager & manager)
+    AccessRights addImplicitAccessRights(const AccessRights & access, const AccessControlManager & manager, bool has_tenant_id_in_username)
     {
         AccessFlags max_flags;
 
@@ -130,42 +187,9 @@ namespace
         res.modifyFlags(modifier);
 
         /// If "select_from_system_db_requires_grant" is enabled we provide implicit grants only for a few tables in the system database.
-        if (manager.doesSelectFromSystemDatabaseRequireGrant())
+        if (manager.doesSelectFromSystemDatabaseRequireGrant() || has_tenant_id_in_username)
         {
-            const char * always_accessible_tables[] = {
-                /// Constant tables
-                "one",
-
-                /// "numbers", "numbers_mt", "zeros", "zeros_mt" were excluded because they can generate lots of values and
-                /// that can decrease performance in some cases.
-
-                "contributors",
-                "licenses",
-                "time_zones",
-                "collations",
-
-                "formats",
-                "privileges",
-                "data_type_families",
-                "table_engines",
-                "table_functions",
-                "aggregate_function_combinators",
-
-                "functions", /// Can contain user-defined functions
-
-                /// The following tables hide some rows if the current user doesn't have corresponding SHOW privileges.
-                "databases",
-                "tables",
-                "columns",
-
-                /// Specific to the current session
-                "settings",
-                "current_roles",
-                "enabled_roles",
-                "quota_usage"
-            };
-
-            for (const auto * table_name : always_accessible_tables)
+            for (const auto & table_name : always_accessible_tables)
                 res.grant(AccessType::SELECT, DatabaseCatalog::SYSTEM_DATABASE, table_name);
 
             if (max_flags.contains(AccessType::SHOW_USERS))
@@ -195,6 +219,18 @@ namespace
             res.grant(AccessType::SELECT, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
         }
 
+        if (!manager.doesSelectFromMySQLRequireGrant())
+        {
+            res.grant(AccessType::SELECT, DatabaseCatalog::MYSQL);
+            res.grant(AccessType::SELECT, DatabaseCatalog::MYSQL_UPPERCASE);
+        }
+        // information_schema is always visible
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA);
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE);
+
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::MYSQL);
+        res.grant(AccessType::SHOW_DATABASES, DatabaseCatalog::MYSQL_UPPERCASE);
+
         return res;
     }
 
@@ -213,24 +249,67 @@ namespace
     std::string_view getDatabase(const std::string_view & arg1, const OtherArgs &...) { return arg1; }
 }
 
+bool ContextAccess::isAlwaysAccessibleTableInSystem(const std::string_view & table) const
+{
+    if (!params.has_tenant_id_in_username)
+        return true;
+
+    return always_accessible_tables.contains(table);
+}
 
 ContextAccess::ContextAccess(const AccessControlManager & manager_, const Params & params_)
     : manager(&manager_)
     , params(params_)
 {
+}
+
+void ContextAccess::initialize(bool load_roles)
+{
+    if (!params.user_id)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "No user in current context, it's a bug");
+
     std::lock_guard lock{mutex};
 
     subscription_for_user_change = manager->subscribeForChanges(
-        *params.user_id, [this](const UUID &, const AccessEntityPtr & entity)
-    {
-        UserPtr changed_user = entity ? typeid_cast<UserPtr>(entity) : nullptr;
-        std::lock_guard lock2{mutex};
-        setUser(changed_user);
-    });
+        *params.user_id,
+        [weak_ptr = weak_from_this()](const UUID &, const AccessEntityPtr & entity)
+        {
+            auto ptr = weak_ptr.lock();
+            if (!ptr)
+                return;
+            UserPtr changed_user = entity ? typeid_cast<UserPtr>(entity) : nullptr;
+            std::lock_guard lock2{ptr->mutex};
+            ptr->setUser(changed_user);
+        });
 
-    setUser(manager->read<User>(*params.user_id));
+
+    auto user_ = manager->read<User>(*params.user_id);
+    if (load_roles && params.use_default_roles)
+        loadRoles(user_);
+    setUser(user_);
 }
 
+void ContextAccess::loadRoles(const UserPtr & user_) const
+{
+    std::unordered_set<UUID> ids;
+    ids.reserve(user_->default_roles.ids.size() + user_->default_roles.except_ids.size() + params.current_roles.size());
+    boost::range::copy(user_->default_roles.ids, std::inserter(ids, ids.end()));
+    boost::range::copy(user_->default_roles.except_ids, std::inserter(ids, ids.end()));
+    boost::range::copy(params.current_roles, std::inserter(ids, ids.end()));
+
+    if (ids.empty())
+        return;
+
+    for (const auto & storage : *const_cast<AccessControlManager *>(manager)->getStoragesPtr())
+    {
+        auto kv = typeid_cast<std::shared_ptr<KVAccessStorage>>(storage);
+        if (!kv)
+            continue;
+
+        kv->loadEntities(IAccessEntity::Type::ROLE, ids);
+        break;
+    }
+}
 
 void ContextAccess::setUser(const UserPtr & user_) const
 {
@@ -242,6 +321,7 @@ void ContextAccess::setUser(const UserPtr & user_) const
         subscription_for_roles_changes = {};
         access = nullptr;
         access_with_implicit = nullptr;
+        sensitive_access = nullptr;
         enabled_roles = nullptr;
         roles_info = nullptr;
         enabled_row_policies = nullptr;
@@ -254,6 +334,7 @@ void ContextAccess::setUser(const UserPtr & user_) const
     trace_log = &Poco::Logger::get("ContextAccess (" + user_name + ")");
 
     std::vector<UUID> current_roles, current_roles_with_admin_option;
+
     if (params.use_default_roles)
     {
         current_roles = user->granted_roles.findGranted(user->default_roles);
@@ -294,7 +375,8 @@ void ContextAccess::setRolesInfo(const std::shared_ptr<const EnabledRolesInfo> &
 void ContextAccess::calculateAccessRights() const
 {
     access = std::make_shared<AccessRights>(mixAccessRightsFromUserAndRoles(*user, *roles_info));
-    access_with_implicit = std::make_shared<AccessRights>(addImplicitAccessRights(*access, *manager));
+    access_with_implicit = std::make_shared<AccessRights>(addImplicitAccessRights(*access, *manager, params.has_tenant_id_in_username));
+    sensitive_access = std::make_shared<SensitiveAccessRights>(mixSensitiveAccessRightsFromUserAndRoles(*user, *roles_info));
 
     if (trace_log)
     {
@@ -306,6 +388,7 @@ void ContextAccess::calculateAccessRights() const
         }
         LOG_TRACE(trace_log, "Settings: readonly={}, allow_ddl={}, allow_introspection_functions={}", params.readonly, params.allow_ddl, params.allow_introspection);
         LOG_TRACE(trace_log, "List of all grants: {}", access->toString());
+        LOG_TRACE(trace_log, "List of all sensitive grants: {}", sensitive_access->toString());
         LOG_TRACE(trace_log, "List of all grants including implicit: {}", access_with_implicit->toString());
     }
 }
@@ -422,6 +505,120 @@ std::shared_ptr<const AccessRights> ContextAccess::getAccessRightsWithImplicit()
     return nothing_granted;
 }
 
+std::shared_ptr<const SensitiveAccessRights> ContextAccess::getSensitiveAccessRights() const
+{
+    std::lock_guard lock{mutex};
+    if (sensitive_access)
+        return sensitive_access;
+    static const auto nothing_granted = std::make_shared<SensitiveAccessRights>();
+    return nothing_granted;
+}
+
+bool ContextAccess::isSensitiveImpl(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table = {}, const std::vector<std::string_view> & columns = {}) const
+{
+    auto sensitive_resource = manager->sensitive_resource_getter(formatTenantDatabaseName(std::string(database)));
+    if (!sensitive_resource)
+        return false;
+
+    if (!columns.empty())
+    {
+        // Find table belonging to columns and check that all input columns are sensitive
+        for (const auto & sensitive_table : sensitive_resource->tables())
+        {
+            if (sensitive_table.table() != table)
+                continue;
+
+            std::unordered_set<std::string_view> sensitive_columns(sensitive_table.sensitive_columns().cbegin(), sensitive_table.sensitive_columns().cend());
+
+            for (const auto & col : columns)
+            {
+                if (sensitive_columns.contains(col))
+                    cols.insert(col);
+            }
+
+            if (!cols.empty())
+                    return true;
+        }
+    }
+
+    if (!table.empty())
+    {
+        for (auto & sensitive_table : sensitive_resource->tables())
+        {
+            if (sensitive_table.table() == table)
+                return sensitive_table.is_sensitive();
+        }
+    }
+
+    if (!database.empty())
+    {
+        return sensitive_resource->is_sensitive();
+    }
+
+    return false;
+}
+
+template <typename... Args>
+bool ContextAccess::checkSensitivePermissions(std::unordered_set<std::string_view> & cols, const Args &... args) const
+{
+    auto tenant_id = getCurrentTenantId();
+
+    // Only apply sensitive permission checks on tenanted users only
+    if (tenant_id.empty())
+        return false;
+
+    // Only enable sensitive permission check for selected tenants
+    if (!params.enable_sensitive_permission)
+        return false;
+
+    return isSensitive(cols, args...);
+}
+
+template <bool throw_if_denied, typename... Args>
+static bool checkTenantsAccess(const Args &... args)
+{
+    if constexpr (sizeof...(args) >= 1)
+    {
+        const auto & tuple = std::make_tuple(args...);
+        const auto & database = std::get<0>(tuple);
+
+        if (!current_thread)
+            return true;
+
+        /* always disable access to default database for tenants */
+        if (database == "default" || database == "cnch_system")
+        {
+            const auto ctx = current_thread->getQueryContext();
+
+            if (!ctx)
+                return true;
+
+            if (ctx->getAccess()->getParams().has_tenant_id_in_username)
+            {
+                if constexpr (throw_if_denied)
+                    throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database {} not found.", database);
+                return false;
+            }
+        }
+
+        if constexpr (sizeof...(args) >= 2)
+        {
+            /* always disable access to system tables for tenants */
+            if (database != "system")
+                return true;
+
+            const auto ctx = current_thread->getQueryContext();
+
+            if (!ctx)
+                return true;
+
+            const auto & table = std::get<1>(tuple);
+            return ctx->getAccess()->isAlwaysAccessibleTableInSystem(table);
+        }
+    }
+
+    return true;
+}
 
 template <bool throw_if_denied, bool grant_option, typename... Args>
 bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args &... args) const
@@ -460,10 +657,21 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
 
     auto acs = getAccessRightsWithImplicit();
     bool granted;
+    bool check_sensitive_permissions = false;
+    std::unordered_set<std::string_view> sensitive_columns;
+
     if constexpr (grant_option)
         granted = acs->hasGrantOption(flags, args...);
+    else if (checkSensitivePermissions(sensitive_columns, args...))
+    {
+        check_sensitive_permissions = true;
+        granted = getSensitiveAccessRights()->isGranted(sensitive_columns, flags, args...);
+    }
     else
         granted = acs->isGranted(flags, args...);
+
+    if (granted)
+        granted = checkTenantsAccess<throw_if_denied>(args...);
 
     if (!granted)
     {
@@ -478,7 +686,8 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
         }
 
         return access_denied(
-            "Not enough privileges. To execute this query it's necessary to have grant "
+            "Not enough privileges. To execute this query it's necessary to have grant"
+                + (check_sensitive_permissions && !grant_option ? std::string("(sensitive) ") : std::string(" "))
                 + AccessRightsElement{flags, args...}.toStringWithoutOptions() + (grant_option ? " WITH GRANT OPTION" : ""),
             ErrorCodes::ACCESS_DENIED);
     }
@@ -490,14 +699,18 @@ bool ContextAccess::checkAccessImplHelper(const AccessFlags & flags, const Args 
             | AccessType::TRUNCATE;
 
         const AccessFlags dictionary_ddl = AccessType::CREATE_DICTIONARY | AccessType::DROP_DICTIONARY;
+        const AccessFlags function_ddl = AccessType::CREATE_FUNCTION | AccessType::DROP_FUNCTION;
+        const AccessFlags binding_ddl = AccessType::CREATE_BINDING | AccessType::DROP_BINDING;
+        const AccessFlags prepared_statement_ddl = AccessType::CREATE_PREPARED_STATEMENT | AccessType::DROP_PREPARED_STATEMENT;
         const AccessFlags table_and_dictionary_ddl = table_ddl | dictionary_ddl;
+        const AccessFlags table_and_dictionary_and_function_ddl_and_binding = table_ddl | dictionary_ddl | function_ddl | binding_ddl | prepared_statement_ddl;
         const AccessFlags write_table_access = AccessType::INSERT | AccessType::OPTIMIZE;
         const AccessFlags write_dcl_access = AccessType::ACCESS_MANAGEMENT - AccessType::SHOW_ACCESS;
 
-        const AccessFlags not_readonly_flags = write_table_access | table_and_dictionary_ddl | write_dcl_access | AccessType::SYSTEM | AccessType::KILL_QUERY;
+        const AccessFlags not_readonly_flags = write_table_access | table_and_dictionary_and_function_ddl_and_binding | write_dcl_access | AccessType::SYSTEM | AccessType::KILL_QUERY;
         const AccessFlags not_readonly_1_flags = AccessType::CREATE_TEMPORARY_TABLE;
 
-        const AccessFlags ddl_flags = table_ddl | dictionary_ddl;
+        const AccessFlags ddl_flags = table_ddl | dictionary_ddl | function_ddl | binding_ddl | prepared_statement_ddl;
         const AccessFlags introspection_flags = AccessType::INTROSPECTION;
     };
     static const PrecalculatedFlags precalc;
@@ -586,6 +799,13 @@ bool ContextAccess::checkAccessImpl(const AccessRightsElements & elements) const
             return false;
     return true;
 }
+
+bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & /*cols*/) const { return false; }
+bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database) const { return isSensitiveImpl(cols, database); }
+bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table) const { return isSensitiveImpl(cols, database, table); }
+bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::string_view & column) const { return isSensitiveImpl(cols, database, table, {column}); }
+bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const { return isSensitiveImpl(cols, database, table, columns); }
+bool ContextAccess::isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const Strings & columns) const { return isSensitiveImpl(cols, database, table, {columns.begin(), columns.end()}); }
 
 bool ContextAccess::isGranted(const AccessFlags & flags) const { return checkAccessImpl<false, false>(flags); }
 bool ContextAccess::isGranted(const AccessFlags & flags, const std::string_view & database) const { return checkAccessImpl<false, false>(flags, database); }
@@ -726,5 +946,10 @@ void ContextAccess::checkAdminOption(const UUID & role_id, const std::unordered_
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids) const { checkAdminOptionImpl<true>(role_ids); }
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids, const Strings & names_of_roles) const { checkAdminOptionImpl<true>(role_ids, names_of_roles); }
 void ContextAccess::checkAdminOption(const std::vector<UUID> & role_ids, const std::unordered_map<UUID, String> & names_of_roles) const { checkAdminOptionImpl<true>(role_ids, names_of_roles); }
+
+bool ContextAccessParams::dependsOnSettingName(std::string_view setting_name)
+{
+    return (setting_name == "readonly") || (setting_name == "allow_ddl") || (setting_name == "allow_introspection_functions");
+}
 
 }

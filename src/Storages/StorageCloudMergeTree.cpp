@@ -23,8 +23,12 @@
 #include <Interpreters/TreeRewriter.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <Processors/Pipe.h>
+#include <Processors/Sources/SourceFromInputStream.h>
+#include <Processors/Sources/NullSource.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <Storages/IStorage.h>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
@@ -40,13 +44,18 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
+namespace ProfileEvents
+{
+    extern const Event PrunedPartitions;
+    extern const Event PreparePartsForReadMilliseconds;
+}
+
 namespace DB
 {
 
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
-    extern const int SUPPORT_IS_DISABLED;
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
@@ -54,7 +63,6 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     const StorageID & table_id_,
     String cnch_database_name_,
     String cnch_table_name_,
-    const String & relative_data_path_,
     const StorageInMemoryMetadata & metadata_,
     ContextMutablePtr context_,
     const String & date_column_name_,
@@ -62,7 +70,6 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeCloudData( // NOLINT
         table_id_,
-        relative_data_path_,
         metadata_,
         context_,
         date_column_name_,
@@ -71,20 +78,14 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     , cnch_database_name(std::move(cnch_database_name_))
     , cnch_table_name(std::move(cnch_table_name_))
 {
-    const String & cnch_uuid = getSettings()->cnch_table_uuid.toString();
-    String relative_table_path(cnch_uuid);
-
-    if (relative_table_path.empty())
-        relative_table_path = UUIDHelpers::UUIDToString(table_id_.uuid);
-
-    relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getTableRelativePathOnDisk(relative_table_path);
-
-    if (relative_data_path_.empty() || relative_table_path.empty())
-        MergeTreeMetaBase::setRelativeDataPath(IStorage::StorageLocation::MAIN, relative_table_path);
-
-    relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
-
+    setServerVwName(getSettings()->cnch_server_vw);
+    setInMemoryMetadata(metadata_);
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
+
+    String cnch_uuid = UUIDHelpers::UUIDToString(getCnchStorageUUID());
+    String relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getTableRelativePathOnDisk(cnch_uuid);
+    MergeTreeMetaBase::setRelativeDataPath(IStorage::StorageLocation::MAIN, relative_table_path);
+    relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
 
     if (getInMemoryMetadataPtr()->hasUniqueKey() && getSettings()->cloud_enable_dedup_worker)
         dedup_worker = std::make_unique<CloudMergeTreeDedupWorker>(*this);
@@ -116,6 +117,9 @@ void StorageCloudMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
+    // need create IMergeTreeDataPart from loaded server parts when query with table version
+    prepareDataPartsForRead(local_context, query_info, column_names);
+
     if (auto plan = MergeTreeDataSelectExecutor(*this).read(
             column_names, storage_snapshot, query_info, local_context, max_block_size, num_streams, processed_stage))
         query_plan = std::move(*plan);
@@ -130,20 +134,24 @@ Pipe StorageCloudMergeTree::read(
     const size_t max_block_size,
     const unsigned num_streams)
 {
+    // need create IMergeTreeDataPart from loaded server parts when query with table version
+    prepareDataPartsForRead(local_context, query_info, column_names);
+
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
         QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
 
-BlockOutputStreamPtr StorageCloudMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+BlockOutputStreamPtr StorageCloudMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
-    bool enable_staging_area = metadata_snapshot->hasUniqueKey() && (getSettings()->cloud_enable_staging_area || local_context->getSettingsRef().enable_staging_area_for_write);
-
-    if (enable_staging_area && local_context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
-        throw Exception("Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed", ErrorCodes::SUPPORT_IS_DISABLED);
-
-    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context), enable_staging_area);
+    ASTPtr overwrite_partition;
+    if (query)
+    {
+        if (auto * insert_query = dynamic_cast<ASTInsertQuery *>(query.get()))
+            overwrite_partition = insert_query->is_overwrite ? insert_query->overwrite_partition : nullptr;
+    }
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context), overwrite_partition);
 }
 
 ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskParams & input_params, ContextPtr task_context)
@@ -190,7 +198,8 @@ void StorageCloudMergeTree::checkAlterPartitionIsPossible(const PartitionCommand
 Pipe StorageCloudMergeTree::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
-    ContextPtr local_context)
+    ContextPtr local_context,
+    const ASTPtr & /* query */)
 {
     if (commands.size() > 1U)
         throw Exception(
@@ -739,6 +748,38 @@ bool StorageCloudMergeTree::getQueryProcessingStageWithAggregateProjection(
 std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() const
 {
     return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
+
+void StorageCloudMergeTree::prepareDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)
+{
+    Stopwatch watch;
+
+    std::lock_guard<std::mutex> lock(server_data_mutex);
+
+    if (!has_server_part_to_load)
+        return;
+
+    auto partition_list = getAllPartitions();
+
+    if (partition_list.empty())
+        return;
+
+    Strings required_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names, local_context);
+
+    SCOPE_EXIT({
+        ProfileEvents::increment(ProfileEvents::PrunedPartitions, required_partitions.size());
+        ProfileEvents::increment(ProfileEvents::PreparePartsForReadMilliseconds, watch.elapsedMilliseconds());
+    });
+
+    size_t loaded_parts_count = loadFromServerPartsInPartition(required_partitions);
+
+    /// data part only need to be loaded once
+    has_server_part_to_load = false;
+
+    LOG_TRACE(log, "Loaded {} data parts in {} partitions elapsed {}ms.",
+        loaded_parts_count,
+        required_partitions.size(),
+        watch.elapsedMilliseconds());
 }
 
 }

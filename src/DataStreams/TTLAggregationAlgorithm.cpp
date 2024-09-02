@@ -20,6 +20,7 @@
  */
 
 #include <DataStreams/TTLAggregationAlgorithm.h>
+#include <Core/SettingsEnums.h>
 
 namespace DB
 {
@@ -51,11 +52,26 @@ TTLAggregationAlgorithm::TTLAggregationAlgorithm(
     columns_for_aggregator.resize(description.aggregate_descriptions.size());
     const Settings & settings = storage_.getContext()->getSettingsRef();
 
-    Aggregator::Params params(header, keys, aggregates,
-        false, settings.max_rows_to_group_by, settings.group_by_overflow_mode, 0, 0,
-        settings.max_bytes_before_external_group_by, settings.spill_buffer_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set,
-        storage_.getContext()->getTemporaryVolume(), settings.max_threads, settings.min_free_disk_space_for_temporary_data,
-        settings.compile_aggregate_expressions, settings.min_count_to_compile_aggregate_expression, {}, settings.enable_lc_group_by_opt);
+    Aggregator::Params params(
+        header, 
+        keys, 
+        aggregates,
+        false, 
+        settings.max_rows_to_group_by, 
+        settings.group_by_overflow_mode, 
+        0, 
+        0,
+        settings.max_bytes_before_external_group_by, 
+        settings.spill_mode == SpillMode::AUTO,
+        settings.spill_buffer_bytes_before_external_group_by, 
+        settings.empty_result_for_aggregation_by_empty_set,
+        storage_.getContext()->getTemporaryVolume(), 
+        settings.max_threads, 
+        settings.min_free_disk_space_for_temporary_data,
+        settings.compile_aggregate_expressions, 
+        settings.min_count_to_compile_aggregate_expression, 
+        {}, 
+        settings.enable_lc_group_by_opt);
 
     aggregator = std::make_unique<Aggregator>(params);
 

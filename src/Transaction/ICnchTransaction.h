@@ -36,6 +36,8 @@
 #include <common/logger_useful.h>
 #include "Transaction/LockRequest.h"
 #include <bthread/recursive_mutex.h>
+#include <Catalog/MetastoreCommon.h>
+#include <Protos/data_models.pb.h>
 
 #if USE_MYSQL
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
@@ -48,6 +50,8 @@ namespace DB
 {
 struct TxnCleanTask;
 class CnchLockHolder;
+using CnchLockHolderPtr = std::shared_ptr<CnchLockHolder>;
+using CnchLockHolderPtrs = std::vector<CnchLockHolderPtr>;
 
 namespace ErrorCodes
 {
@@ -56,10 +60,18 @@ namespace ErrorCodes
 
 bool isReadOnlyTransaction(const DB::IAST * ast);
 
-class ICnchTransaction : public TypePromotion<ICnchTransaction>, public WithContext
+class ICnchTransaction : public std::enable_shared_from_this<ICnchTransaction>, public TypePromotion<ICnchTransaction>, public WithContext
 {
 public:
+    friend class Catalog::Catalog;
     friend class CnchLockHolder;
+    // insert action.
+    struct TransFunction
+    {
+        std::function<Catalog::BatchCommitRequest(ContextPtr context)> commit_func;
+        std::function<Catalog::BatchCommitRequest(ContextPtr context)> abort_func;
+    };
+
     explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_), global_context(context_->getGlobalContext()) { }
     explicit ICnchTransaction(const ContextPtr & context_, TransactionRecord record)
         : WithContext(context_), global_context(context_->getGlobalContext()), txn_record(std::move(record))
@@ -84,6 +96,12 @@ public:
 
     CnchTransactionStatus getStatus() const;
 
+    void setCommitMode(const TransactionCommitMode & mode) { commit_mode = mode; }
+    TransactionCommitMode getCommitMode() const { return commit_mode;}
+
+    void setCommitTs(const TxnTimestamp & commit_time_) { commit_time = commit_time_; }
+    TxnTimestamp getCommitTs() const { return commit_time; }
+
     bool isReadOnly() const { return txn_record.isReadOnly(); }
     void setReadOnly(bool read_only) { txn_record.read_only = read_only; }
 
@@ -104,6 +122,13 @@ public:
     {
         return std::make_shared<TAction>(global_context, txn_record.txnID(), std::forward<Args>(args)...);
     }
+
+    template <typename TAction, typename... Args>
+    ActionPtr createActionWithLocalContext(const ContextPtr & local_context, Args &&... args) const
+    {
+        return std::make_shared<TAction>(local_context, txn_record.txnID(), std::forward<Args>(args)...);
+    }
+
     template <typename... Args>
     IntentLockPtr createIntentLock(const String & lock_prefix, Args &&... args) const
     {
@@ -149,8 +174,8 @@ public:
         throw Exception("getKafkaConsumerIndex is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
-    const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
+    // void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
+    // const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
 
 #if USE_MYSQL
     void setBinlogName(String binlog_name_) { binlog_name = std::move(binlog_name_); }
@@ -194,26 +219,40 @@ public:
     // Clean intermediate parts synchronously
     virtual void removeIntermediateData() { }
 
-    std::shared_ptr<CnchLockHolder> createLockHolder(std::vector<LockInfoPtr> && elems);
+    void appendLockHolder(CnchLockHolderPtr & lock_holder);
 
     bool force_clean_by_dm = false;
 
     DatabasePtr tryGetDatabaseViaCache(const String & database_name);
     void addDatabaseIntoCache(DatabasePtr db);
 
+    void addCommitAbortFunc(std::function<Catalog::BatchCommitRequest (ContextPtr context)> commit_f, std::function<Catalog::BatchCommitRequest (ContextPtr context)> abort_f)
+    {
+        extern_commit_functions.push_back({commit_f, abort_f});
+    }
+
+    // serialize the transaction for remote commit (in sequential mode).
+    void serialize(Protos::TransactionMetadata & txn_meta) const;
+
     bool async_post_commit = false;
 protected:
     void setStatus(CnchTransactionStatus status);
     void setTransactionRecord(TransactionRecord record);
     void assertLockAcquired() const;
-    void setLockHolder(std::shared_ptr<CnchLockHolder> p) { lock_holder = p; }
 
-protected:
+    /// Clean CurrentlyMergingPartsTagger for merge txn after the txn finished.
+    void tryCleanMergeTagger();
+
     /// Transaction still needs global context because the query context will expired after query is finished, but
     /// the transaction still running even query is finished.
     ContextPtr global_context;
     TransactionRecord txn_record;
     UUID main_table_uuid{UUIDHelpers::Nil};
+
+    // independent mode by default.
+    TransactionCommitMode commit_mode = TransactionCommitMode::INDEPENDENT;
+    // runtime variable set when committing the transaction.
+    TxnTimestamp commit_time {0};
 
     /// for committing offsets
     String consumer_group;
@@ -225,7 +264,10 @@ protected:
 #endif
 
     InsertionLabelPtr insertion_label;
-    std::weak_ptr<CnchLockHolder> lock_holder;
+    CnchLockHolderPtrs lock_holders; /// Currently it only serve for unique dedup stage
+
+    std::vector<TransFunction> extern_commit_functions;
+
 
 private:
     String creator;

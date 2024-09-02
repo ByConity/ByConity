@@ -18,6 +18,12 @@ public:
 
     off_t seek(off_t off, int whence) override;
 
+    bool isWithFileSize() const { return dynamic_cast<const WithFileSize *>(impl.get()) != nullptr; }
+
+    const ReadBuffer & getWrappedReadBuffer() const { return *impl; }
+
+    ReadBuffer & getWrappedReadBuffer() { return *impl; }
+
     bool nextImpl() override;
 
     size_t readBig(char * to, size_t n) override;

@@ -70,6 +70,12 @@ public:
     // If an error has occurred, return it.  Else return an ok status.
     virtual Status status() const override;
 
+    // If an error has occurred, return the abnormal index
+    int getAbnormalIndex() const;
+
+    // Check duplicate key
+    int checkDuplicateForKey(const Slice & target) const;
+
 private:
     inline int Compare(const Slice & a, const Slice & b) const { return comparator_->Compare(a, b); }
     void FindSmallest();

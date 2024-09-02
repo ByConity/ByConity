@@ -43,7 +43,7 @@ Void ExpressionVisitor::visitPlanNode(PlanNodeBase & node, std::vector<ConstASTP
 Void ExpressionVisitor::visitProjectionNode(ProjectionNode & node, std::vector<ConstASTPtr> & expressions)
 {
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     for (auto & ass : assignments)
     {
         expressions.emplace_back(ass.second->clone());
@@ -103,7 +103,7 @@ ConstASTSet SubExpressionExtractor::extract(ConstASTPtr node)
 
 Void SubExpressionVisitor::visitNode(const ConstASTPtr & node, ConstASTSet & context)
 {
-    for (ConstASTPtr child : node->children)
+    for (const auto & child : node->children)
     {
         ASTVisitorUtil::accept(child, *this, context);
     }

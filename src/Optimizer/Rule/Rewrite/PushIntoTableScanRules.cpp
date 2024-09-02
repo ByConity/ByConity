@@ -13,20 +13,19 @@
  * limitations under the License.
  */
 
-#include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
-
-#include <Interpreters/pushFilterIntoStorage.h>
+#include <Optimizer/CardinalityEstimate/FilterEstimator.h>
+#include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Patterns.h>
+#include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include "Parsers/ASTSelectQuery.h"
-#include <Optimizer/CardinalityEstimate/FilterEstimator.h>
-#include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 
 namespace DB
 {
@@ -44,9 +43,9 @@ namespace
     }
 }
 
-PatternPtr PushStorageFilter::getPattern() const
+ConstRefPatternPtr PushStorageFilter::getPattern() const
 {
-    return Patterns::filter()
+    static auto pattern = Patterns::filter()
         .withSingle(Patterns::tableScan().matchingStep<TableScanStep>([](const auto & step) {
             // check repeat calls
             const auto & query_info = step.getQueryInfo();
@@ -54,6 +53,7 @@ PatternPtr PushStorageFilter::getPattern() const
             return !(query_info.partition_filter || select_query->where());
         }))
         .result();
+    return pattern;
 }
 
 TransformResult PushStorageFilter::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -128,9 +128,7 @@ ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr q
 
     // push filter into storage
     if (!PredicateUtils::isTruePredicate(push_filter))
-    {
-        push_filter = pushFilterIntoStorage(push_filter, table_step.getStorage(), table_step.getQueryInfo(), storage_statistics, table_step.getOutputStream().getNamesAndTypes(), context);
-    }
+        push_filter = table_step.getStorage()->applyFilter(push_filter, table_step.getQueryInfo(), context, storage_statistics);
 
     // construnct the remaing filter
     auto mapper = SymbolMapper::simpleMapper(column_to_alias);
@@ -138,12 +136,13 @@ ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr q
     return PredicateUtils::combineConjuncts(non_pushable_conjuncts);
 }
 
-PatternPtr PushLimitIntoTableScan::getPattern() const
+ConstRefPatternPtr PushLimitIntoTableScan::getPattern() const
 {
-    return Patterns::limit()
+    static auto pattern = Patterns::limit()
         .matchingStep<LimitStep>([](auto const & limit_step) { return !limit_step.isAlwaysReadTillEnd(); })
         .withSingle(Patterns::tableScan())
         .result();
+    return pattern;
 }
 
 TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -151,10 +150,13 @@ TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Ca
     const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
     auto table_scan = node->getChildren()[0];
 
+    if (limit_step->hasPreparedParam())
+        return {};
+
     auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
 
-    auto * table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
-    bool applied = table_step->setLimit(limit_step->getLimit() + limit_step->getOffset(), rule_context.context);
+    auto table_step = dynamic_cast<TableScanStep *>(copy_table_step.get());
+    bool applied = table_step->setLimit(limit_step->getLimitValue() + limit_step->getOffsetValue(), rule_context.context);
     if (!applied)
         return {}; // repeat calls
 
@@ -164,12 +166,13 @@ TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Ca
 }
 
 
-PatternPtr PushAggregationIntoTableScan::getPattern() const
+ConstRefPatternPtr PushAggregationIntoTableScan::getPattern() const
 {
-    return Patterns::aggregating()
+    static auto pattern = Patterns::aggregating()
         .matchingStep<AggregatingStep>([](auto & step) { return !step.isGroupingSet(); })
         .withSingle(Patterns::tableScan())
         .result();
+    return pattern;
 }
 
 TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -191,11 +194,12 @@ TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, co
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
-PatternPtr PushProjectionIntoTableScan::getPattern() const
+ConstRefPatternPtr PushProjectionIntoTableScan::getPattern() const
 {
-    return Patterns::project().withSingle(
-               Patterns::tableScan().matchingStep<TableScanStep>(
-                   [](const auto & step) { return !step.getPushdownAggregation(); })).result();
+    static auto pattern = Patterns::project()
+        .withSingle(Patterns::tableScan().matchingStep<TableScanStep>([](const auto & step) { return !step.getPushdownAggregation(); }))
+        .result();
+    return pattern;
 }
 
 TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -217,11 +221,12 @@ TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, con
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
-PatternPtr PushFilterIntoTableScan::getPattern() const
+ConstRefPatternPtr PushFilterIntoTableScan::getPattern() const
 {
-    return Patterns::filter().withSingle(
+    static auto pattern = Patterns::filter().withSingle(
                Patterns::tableScan().matchingStep<TableScanStep>(
                    [](const auto & step) { return !step.getPushdownProjection() && !step.getPushdownAggregation(); })).result();
+    return pattern;
 }
 
 TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -254,11 +259,12 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
-PatternPtr PushIndexProjectionIntoTableScan::getPattern() const
+ConstRefPatternPtr PushIndexProjectionIntoTableScan::getPattern() const
 {
-    return Patterns::project().withSingle(
+    static auto pattern = Patterns::project().withSingle(
                Patterns::tableScan().matchingStep<TableScanStep>(
                    [](const auto & step) { return !step.getPushdownAggregation() ; })).result();
+    return pattern;
 }
 
 TransformResult PushIndexProjectionIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -292,7 +298,7 @@ TransformResult PushIndexProjectionIntoTableScan::transformImpl(PlanNodePtr node
     {
         if (const auto * func = assignment.second->as<ASTFunction>())
         {
-            if (Poco::toLower(func->name) == "arraysetcheck")
+            if (functionCanUseBitmapIndex(*func))
             {
                 b_assignments.emplace_back(assignment);
                 // b_name_to_type.emplace(assignment.first, all_name_to_type.at(assignment.first));

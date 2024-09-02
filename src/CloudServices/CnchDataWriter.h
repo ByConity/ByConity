@@ -16,15 +16,17 @@
 #pragma once
 
 #include <memory>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Transaction/Actions/S3AttachMetaAction.h>
 #include <Transaction/TxnTimestamp.h>
 #include <WorkerTasks/ManipulationType.h>
-#include <Transaction/Actions/S3AttachMetaAction.h>
 #include <cppkafka/cppkafka.h>
 #include <cppkafka/topic_partition_list.h>
-#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#include <CloudServices/CnchDedupHelper.h>
 
 namespace DB
 {
@@ -35,7 +37,9 @@ struct DumpedData
     MutableMergeTreeDataPartsCNCHVector parts;
     DeleteBitmapMetaPtrVector bitmaps;
     MutableMergeTreeDataPartsCNCHVector staged_parts;
+    CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
 
+    bool isEmpty();
     void extend(DumpedData && data);
 };
 
@@ -50,7 +54,8 @@ public:
         String task_id_ = {},
         String consumer_group_ = {},
         const cppkafka::TopicPartitionList & tpl_ = {},
-        const MySQLBinLogInfo & binlog = {});
+        const MySQLBinLogInfo & binlog_ = {},
+        UInt64 peak_memory_usage_ = 0);
 
     ~CnchDataWriter();
 
@@ -71,7 +76,6 @@ public:
     // server side only
     void commitPreparedCnchParts(const DumpedData & data, const std::unique_ptr<S3AttachPartsInfo>& s3_parts_info = nullptr);
 
-
     /// Convert staged parts to visible parts along with the given delete bitmaps.
     void publishStagedParts(const MergeTreeDataPartsCNCHVector & staged_parts, const LocalDeleteBitmaps & bitmaps_to_dump);
 
@@ -83,6 +87,14 @@ public:
     void commitDumpedParts(const DumpedData & dumped_data);
 
     void preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts);
+
+    void setPeakMemoryUsage(UInt64 peak_memory_usage_) { peak_memory_usage = peak_memory_usage_; }
+
+    void setDedupMode(CnchDedupHelper::DedupMode dedup_mode_)
+    {
+        dedup_mode = dedup_mode_;
+        res.dedup_mode = dedup_mode;
+    }
 
     DumpedData res;
 
@@ -96,12 +108,19 @@ private:
     cppkafka::TopicPartitionList tpl;
     MySQLBinLogInfo binlog;
 
-    UUID newPartID(const MergeTreePartInfo & part_info, UInt64 txn_timestamp);
     /// dump with thread pool
     std::unique_ptr<ThreadPool> thread_pool;
     ExceptionHandler handler;
     std::atomic_bool cancelled{false};
     mutable std::mutex write_mutex;
+
+    PlanSegmentInstanceId instance_id{};
+
+    UInt64 peak_memory_usage;
+
+    CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
+
+    UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp);
 };
 
 }

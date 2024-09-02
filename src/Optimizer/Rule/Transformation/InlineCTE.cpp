@@ -21,14 +21,18 @@
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Rule/Rules.h>
+#include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/PlanNode.h>
 
 namespace DB
 {
-PatternPtr InlineCTE::getPattern() const
+ConstRefPatternPtr InlineCTE::getPattern() const
 {
-    return Patterns::cte().result();
+    static auto pattern = Patterns::cte().result();
+    return pattern;
 }
 
 TransformResult InlineCTE::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -38,12 +42,13 @@ TransformResult InlineCTE::transformImpl(PlanNodePtr node, const Captures &, Rul
         return {}; // InlineCTEWithFilter
 
     auto inlined_plan = cte_step->toInlinedPlanNode(context.cte_info, context.context);
-    return {InlineCTE::reoptimize(inlined_plan, context.cte_info, context.context)};
+    return InlineCTE::reoptimize(cte_step->getId(), inlined_plan, context.cte_info, context.context);
 }
 
-PatternPtr InlineCTEWithFilter::getPattern() const
+ConstRefPatternPtr InlineCTEWithFilter::getPattern() const
 {
-    return Patterns::filter().withSingle(Patterns::cte()).result();
+    static auto pattern = Patterns::filter().withSingle(Patterns::cte()).result();
+    return pattern;
 }
 
 TransformResult InlineCTEWithFilter::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -55,11 +60,15 @@ TransformResult InlineCTEWithFilter::transformImpl(PlanNodePtr node, const Captu
 
     auto inlined_plan
         = PlanNodeBase::createPlanNode(node->getId(), node->getStep(), {cte_step->toInlinedPlanNode(context.cte_info, context.context)});
-    return {InlineCTE::reoptimize(inlined_plan, context.cte_info, context.context)};
+    return InlineCTE::reoptimize(cte_step->getId(), inlined_plan, context.cte_info, context.context);
 }
 
-PlanNodePtr InlineCTE::reoptimize(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
+PlanNodePtr InlineCTE::reoptimize(CTEId cte_id, const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
 {
+    if (context->getSettingsRef().print_graphviz)
+        GraphvizPrinter::printLogicalPlan(
+            *node, context, std::to_string(context->getRuleId()) + "_cte_" + std::to_string(cte_id) + "_inlined");
+
     static Rewriters rewriters
         = {std::make_shared<ColumnPruning>(),
            std::make_shared<PredicatePushdown>(false, true),

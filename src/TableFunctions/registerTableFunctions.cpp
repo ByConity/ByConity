@@ -42,6 +42,7 @@ void registerTableFunctions()
 
 #if USE_AWS_S3
     registerTableFunctionS3(factory);
+    registerTableFunctionCnchS3(factory);
     registerTableFunctionCOS(factory);
 #endif
 

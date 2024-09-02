@@ -38,6 +38,11 @@ CloudMergeTreeMergeTask::CloudMergeTreeMergeTask(
     : ManipulationTask(std::move(params_), std::move(context_))
     , storage(storage_)
 {
+    if (/*params.source_parts.empty() && */params.source_data_parts.empty())
+        throw Exception("Expected non-empty source parts in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
+
+    if (params.new_part_names.empty())
+        throw Exception("Expected non-empty new part names in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void CloudMergeTreeMergeTask::executeImpl()
@@ -81,6 +86,7 @@ void CloudMergeTreeMergeTask::executeImpl()
         /// rows_count and bytes_on_disk is required for parts info statistics.
         drop_part->covered_parts_rows = part->rows_count;
         drop_part->covered_parts_size = part->bytes_on_disk;
+        drop_part->last_modification_time = part->last_modification_time? part->last_modification_time : part->commit_time;
         temp_parts.push_back(std::move(drop_part));
     }
 
@@ -93,7 +99,16 @@ void CloudMergeTreeMergeTask::executeImpl()
     if (isCancelled(heartbeat_timeout))
         throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);
 
-    CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Merge, params.task_id);
+    UInt64 peak_memory_usage = 0;
+
+    ManipulationListElement * manipulation_list_element = getManipulationListElement();
+    if (manipulation_list_element)
+    {
+        peak_memory_usage = manipulation_list_element->getMemoryTracker().getPeak();
+    }
+
+    CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Merge, params.task_id,
+        /*consumer_group_*/ {}, /*tpl_*/ {}, /*binlog*/ {}, peak_memory_usage);
     DumpedData data = cnch_writer.dumpAndCommitCnchParts(temp_parts);
     auto commit_time = getContext()->getCurrentTransaction()->commitV2();
     for (const auto & part : data.parts)
@@ -101,7 +116,8 @@ void CloudMergeTreeMergeTask::executeImpl()
         MergeMutateAction::updatePartData(part, commit_time);
         part->relative_path = part->info.getPartNameWithHintMutation();
     }
-    cnch_writer.preload(data.parts);
+    if (params.parts_preload_level)
+        cnch_writer.preload(data.parts);
 }
 
 }

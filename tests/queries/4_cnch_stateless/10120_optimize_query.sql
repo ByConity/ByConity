@@ -15,6 +15,6 @@ OPTIMIZE TABLE test_optimize_10120 PARTITION ID 'all';
 
 SELECT * FROM test_optimize_10120;
 
-SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() AND table = 'test_optimize_10120' AND part_type = 'VisiblePart';
+SELECT count() FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 'test_optimize_10120' AND part_type = 'VisiblePart';
 
 DROP TABLE test_optimize_10120;

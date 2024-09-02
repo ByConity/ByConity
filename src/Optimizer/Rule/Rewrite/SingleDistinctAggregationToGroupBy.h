@@ -34,7 +34,7 @@ public:
     {
         return context->getSettingsRef().enable_single_distinct_to_group_by;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     static const std::set<String> distinct_func;

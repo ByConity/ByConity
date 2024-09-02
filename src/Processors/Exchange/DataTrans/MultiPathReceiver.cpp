@@ -1,24 +1,27 @@
 #include <Compression/CompressedReadBuffer.h>
 #include <Core/Block.h>
 #include <DataStreams/NativeBlockInputStream.h>
-#include <Processors/Exchange/DataTrans/NativeChunkInputStream.h>
+#include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Brpc/ReadBufferFromBrpcBuf.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
 #include <Processors/Exchange/DataTrans/MultiPathReceiver.h>
+#include <Processors/Exchange/DataTrans/NativeChunkInputStream.h>
+#include <Processors/Exchange/DeserializeBufTransform.h>
 #include <Processors/Exchange/ExchangeUtils.h>
-#include <Processors/Exchange/DataTrans/Brpc/ReadBufferFromBrpcBuf.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Logger.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
-#include <common/types.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <atomic>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -33,17 +36,22 @@ namespace ErrorCodes
 {
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int LOGICAL_ERROR;
-    extern const int TIMEOUT_EXCEEDED;
 }
 
 MultiPathReceiver::MultiPathReceiver(
-    MultiPathQueuePtr collector_, BroadcastReceiverPtrs sub_receivers_, Block header_, String name_, bool enable_block_compress_)
-    : collector(std::move(collector_))
+    MultiPathQueuePtr collector_,
+    BroadcastReceiverPtrs sub_receivers_,
+    Block header_,
+    String name_,
+    MultiPathReceiverOptions options_,
+    ContextPtr context_)
+    : IBroadcastReceiver(options_.enable_metrics)
+    , collector(std::move(collector_))
     , sub_receivers(std::move(sub_receivers_))
     , header(header_)
     , name(std::move(name_))
-    , enable_block_compress(enable_block_compress_)
     , logger(&Poco::Logger::get("MultiPathReceiver"))
+    , context(context_)
 {
     for (auto & sub_receiver : sub_receivers)
     {
@@ -64,7 +72,7 @@ MultiPathReceiver::~MultiPathReceiver()
     try
     {
         auto status = finish(BroadcastStatusCode::RECV_UNKNOWN_ERROR, "MultiPathReceiver destroyed");
-        if (status.is_modifer && status.code > 0 && status.code != BroadcastStatusCode::RECV_CANCELLED)
+        if (status.is_modified_by_operator && status.code > 0 && status.code != BroadcastStatusCode::RECV_CANCELLED)
         {
             LOG_ERROR(logger, "MultiPathReceiver unexpected error, status.code {} status.message {}", status.code, status.message);
         }
@@ -88,6 +96,7 @@ void MultiPathReceiver::registerToSendersAsync(UInt32 timeout_ms)
     bool expected = false;
     if (registering.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
     {
+        register_s.restart();
         async_results.clear();
         async_results.reserve(sub_receivers.size());
 
@@ -104,7 +113,7 @@ void MultiPathReceiver::registerToSendersAsync(UInt32 timeout_ms)
     {
         std::unique_lock lock(wait_register_mutex);
         if (!wait_register_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms + 100), [&] { return inited.load(std::memory_order_acquire); }))
-            throw Exception("Wait register timeout for " + name + " for query" + CurrentThread::getQueryId().toString(), ErrorCodes::TIMEOUT_EXCEEDED);
+            throw Exception("Wait register timeout for " + name + " for query" + CurrentThread::getQueryId().toString(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     }
 }
 
@@ -128,6 +137,15 @@ void MultiPathReceiver::registerToSendersJoin()
                 *res.request);
             continue;
         }
+        if (res.cntl->Failed())
+        {
+            LOG_ERROR(
+                logger,
+                "register failed for query_id:{} exchange_id:{} err_msg:{}",
+                res.request->query_id(),
+                res.request->exchange_id(),
+                res.cntl->ErrorText());
+        }
         res.channel->assertController(*res.cntl, ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         LOG_TRACE(
             logger,
@@ -135,6 +153,8 @@ void MultiPathReceiver::registerToSendersJoin()
             butil::endpoint2str(res.cntl->remote_side()).c_str(),
             *res.request);
     }
+    if (enable_receiver_metrics)
+        receiver_metrics.register_time_ms << register_s.elapsedMilliseconds();
     async_results.clear();
     inited.store(true, std::memory_order_release);
     wait_register_cv.notify_all();
@@ -167,6 +187,7 @@ void MultiPathReceiver::registerToSenders(UInt32 timeout_ms)
     bool expected = false;
     if (registering.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
     {
+        register_s.restart();
         async_results.clear();
         async_results.reserve(sub_receivers.size());
         std::exception_ptr exception;
@@ -234,17 +255,20 @@ void MultiPathReceiver::registerToSenders(UInt32 timeout_ms)
         inited.store(true, std::memory_order_release);
         wait_register_cv.notify_all();
         LOG_DEBUG(logger, fmt::format("{} register to sender successfully", name));
+        if (enable_receiver_metrics)
+            receiver_metrics.register_time_ms << register_s.elapsedMilliseconds();
     }
     else
     {
         std::unique_lock lock(wait_register_mutex);
         if (!wait_register_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms + 100), [&] { return inited.load(std::memory_order_acquire); }))
-            throw Exception("Wait register timeout for " + name, ErrorCodes::TIMEOUT_EXCEEDED);
+            throw Exception("Wait register timeout for " + name, ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     }
 }
 
 RecvDataPacket MultiPathReceiver::recv(timespec timeout_ts)
 {
+    Stopwatch s;
     MultiPathDataPacket data_packet;
     if (!collector->tryPopUntil(data_packet, timeout_ts))
     {
@@ -256,30 +280,23 @@ RecvDataPacket MultiPathReceiver::recv(timespec timeout_ts)
             = finish(collector_closed ? BroadcastStatusCode::RECV_UNKNOWN_ERROR : BroadcastStatusCode::RECV_TIMEOUT, error_msg);
         return current_status;
     }
-    if (std::holds_alternative<RawPacket>(data_packet))
+    if (std::holds_alternative<DataPacket>(data_packet))
     {
-        RawPacket io_buf_ptr = std::move(std::get<RawPacket>(data_packet));
-        auto read_buffer = std::make_unique<ReadBufferFromBrpcBuf>(*io_buf_ptr);
-        std::unique_ptr<ReadBuffer> buf;
-        if (enable_block_compress)
-            buf = std::make_unique<CompressedReadBuffer>(*read_buffer);
-        else
-            buf = std::move(read_buffer);
-        NativeChunkInputStream chunk_in(*buf, header);
-        Chunk chunk = chunk_in.readImpl();
-        return RecvDataPacket(std::move(chunk));
-    }
-    else if (std::holds_alternative<Chunk>(data_packet))
-    {
-        Chunk receive_chunk = std::move(std::get<Chunk>(data_packet));
+        auto & normal_packet = std::get<DataPacket>(data_packet);
+        Chunk receive_chunk = std::move(normal_packet.chunk);
         if (enable_receiver_metrics)
         {
-            receiver_metrics.recv_rows << receive_chunk.getNumRows();
-            receiver_metrics.recv_bytes << receive_chunk.bytes();
-            receiver_metrics.recv_counts << 1;
+            auto info = std::dynamic_pointer_cast<const DeserializeBufTransform::IOBufChunkInfoWithReceiver>(receive_chunk.getChunkInfo());
+            if (info)
+            {
+                if (auto sub_receiver = info->receiver.lock())
+                    sub_receiver->addToMetricsMaybe(s.elapsedMilliseconds(), 0, 1, receive_chunk);
+            }
         }
         return RecvDataPacket(std::move(receive_chunk));
-    } else {
+    }
+    else
+    {
         SendDoneMark receiver_name = std::get<SendDoneMark>(data_packet);
         bool all_receiver_done = false;
         {
@@ -324,7 +341,7 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
         for (auto & receiver : sub_receivers)
         {
             auto res = receiver->finish(status_code, message);
-            if (res.is_modifer)
+            if (res.is_modified_by_operator)
                 is_modifer = true;
             else if (static_cast<int>(old_status.code) < static_cast<int>(res.code))
             {
@@ -354,13 +371,13 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
         {
             auto res = *new_status_ptr;
             receiver_metrics.finish_code.store(new_status_ptr->code, std::memory_order_relaxed);
-            res.is_modifer = true;
+            res.is_modified_by_operator = true;
             if (old_status.code > 0)
             {
                 String err_status_summary;
                 for (auto & err : err_status)
                     err_status_summary += (fmt::format("[code:{} msg:{} name:{}]", err.second.code, err.second.message, err.first) + ",");
-                res.message = fmt::format("{} received subreiver error, summary: ", getName(), err_status_summary);
+                res.message = fmt::format("{} received subreceiver error, summary: ", getName(), err_status_summary);
             }
             return res;
         }

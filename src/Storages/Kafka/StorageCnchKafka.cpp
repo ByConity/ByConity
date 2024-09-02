@@ -32,6 +32,9 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/CnchWorkerTransaction.h>
 
+#include <rapidjson/document.h>
+#include <rapidjson/error/en.h>
+
 namespace DB
 {
 
@@ -175,6 +178,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     /// Apply alter commands to create-sql
     {
         String create_table_query = getCreateTableSql();
+        alter_act.setOldSchema(create_table_query);
         ParserCreateQuery parser;
         ASTPtr ast = parseQuery(parser, create_table_query, local_context->getSettingsRef().max_query_size
             , local_context->getSettingsRef().max_parser_depth);
@@ -217,6 +221,9 @@ StoragePtr StorageCnchKafka::tryGetTargetTable()
         if (!mv)
             throw Exception("Dependence for CnchKafka should be MaterializedView, but got "
                             + view->getName(), ErrorCodes::LOGICAL_ERROR);
+        
+        if (mv->async())
+           continue;
 
         /// target_table should be CnchMergeTree now, but it may be some other new types
         auto target_table = mv->getTargetTable();
@@ -225,6 +232,106 @@ StoragePtr StorageCnchKafka::tryGetTargetTable()
     }
 
     return nullptr;
+}
+
+static std::vector<Int32> generateRandomSequence(const size_t range, const size_t sample_count)
+{
+    std::vector<Int32> res(range);
+    std::iota(res.begin(), res.end(), 0);
+
+    std::mt19937 g(std::random_device{}());
+    std::shuffle(res.begin(), res.end(), g);
+
+    return std::vector<Int32>(res.begin(), res.begin() + std::min(range, sample_count));
+}
+
+static void generateSamplePartitionsList(std::set<cppkafka::TopicPartition> & res,
+                                        const std::map<String, size_t> & num_partitions_of_topics,
+                                        size_t required_sample_count = 0, const Float64 sample_ration = 1.0)
+{
+    for (const auto & [topic, partition_cnt] : num_partitions_of_topics)
+    {
+        if (required_sample_count == 0)
+            required_sample_count = std::ceil(partition_cnt * sample_ration);
+
+        const auto & sample_list = generateRandomSequence(partition_cnt, required_sample_count);
+        for (const auto partition : sample_list)
+            res.emplace(cppkafka::TopicPartition{topic, partition});
+    }
+}
+
+std::set<cppkafka::TopicPartition> StorageCnchKafka::getSampleConsumingPartitionList([[maybe_unused]]const std::map<String, size_t> & num_partitions_of_topics)
+{
+    if (!sample_consuming_partitions_list.empty() || settings.sample_consuming_params.value.empty())
+        return sample_consuming_partitions_list;
+
+    const String & sample_params = settings.sample_consuming_params.value;
+    using namespace rapidjson;
+    Document document;
+    ParseResult ok = document.Parse(sample_params.c_str());
+    if (!ok)
+        throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                String("JSON parse error ") + GetParseError_En(ok.Code()) + " " + DB::toString(ok.Offset()));
+
+    static std::set<String> sample_params_options{"sample_partitions_list", "sample_partitions_ratio", "sample_partitions_count"};
+    const auto & obj = document.GetObject();
+    if (obj.MemberCount() != 1)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                String("Only one param can be acceptted by sample_consuming_params but got ") + toString(obj.MemberCount()));
+
+    const auto & member = obj.MemberBegin();
+    auto && key = member->name.GetString();
+    if (!sample_params_options.contains(key))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "Unsupported param " + String(key) + " for sample consuming");
+
+    if (String(key) == "sample_partitions_ratio")
+    {
+        auto && value = member->value.GetFloat();
+        if (value <= 0.0 and value > 1.0)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid sample partitions ration: " + toString(value));
+        LOG_DEBUG(log, "get sample consuming param: sample_partitions_ratio {}", value);
+
+        generateSamplePartitionsList(sample_consuming_partitions_list, num_partitions_of_topics, 0, value);
+    }
+    else if (String(key) == "sample_partitions_count")
+    {
+        auto && value = member->value.GetInt();
+        LOG_DEBUG(log, "get sample consuming param: sample_partitions_count {}", value);
+
+        generateSamplePartitionsList(sample_consuming_partitions_list, num_partitions_of_topics, value);
+    }
+    else /// "sample_partitions_list"
+    {
+        if (member->value.IsArray())
+        {
+            if (num_partitions_of_topics.size() > 1)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                            "The CnchKafka table has more than one topic, you should set sample_partitions_list with topic name");
+
+            const String & topic_name = num_partitions_of_topics.begin()->first;
+            for (auto & v : member->value.GetArray())
+            {
+                LOG_DEBUG(log, "get sample consuming param list with partition #{}", v.GetInt());
+                sample_consuming_partitions_list.emplace(cppkafka::TopicPartition{topic_name, v.GetInt()});
+            }
+        }
+        else if (member->value.IsObject())
+        {
+            for (auto & m : member->value.GetObject())
+            {
+                auto && k = m.name.GetString();
+                auto && v = m.value.GetInt();
+                LOG_DEBUG(log, "get sample consuming param list member: {}:{}", k, v);
+                sample_consuming_partitions_list.emplace(cppkafka::TopicPartition{k, v});
+            }
+        }
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "the value of sample_partitions_list should be either Array or Object");
+    }
+
+    return sample_consuming_partitions_list;
 }
 
 }

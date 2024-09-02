@@ -89,6 +89,7 @@ class IBlockOutputStream;
   */
 
 using AggregatedDataWithoutKey = AggregateDataPtr;
+using AggregateFuncStats = PODArray<AggregateDataPtr>;
 
 using AggregatedDataWithUInt8Key = FixedImplicitZeroHashMapWithCalculatedSize<UInt8, AggregateDataPtr>;
 using AggregatedDataWithUInt16Key = FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>;
@@ -103,6 +104,9 @@ using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDat
 using AggregatedDataWithKeys64 = AggregatedDataWithUInt64Key;
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
+
+using AggregatedDataWithUInt8KeyTwoLevel = TwoLevelHashMap<UInt8, AggregateDataPtr, HashCRC32<UInt8>>;
+using AggregatedDataWithUInt16KeyTwoLevel = TwoLevelHashMap<UInt16, AggregateDataPtr, HashCRC32<UInt16>>;
 
 using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
@@ -560,10 +564,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys256>>                   keys256;
     std::unique_ptr<AggregationMethodSerialized<AggregatedDataWithStringKey>>                serialized;
 
+    std::unique_ptr<AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8KeyTwoLevel, false>>           key8_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16KeyTwoLevel, false>>         key16_two_level;
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>> key32_two_level;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>> key64_two_level;
     std::unique_ptr<AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>       key_string_two_level;
     std::unique_ptr<AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>>  key_fixed_string_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt16KeyTwoLevel, false, false, false>>  keys16_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>>           keys32_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>>           keys64_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>           keys128_two_level;
@@ -617,10 +624,13 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(keys128,                    false) \
         M(keys256,                    false) \
         M(serialized,                 false) \
+        M(key8_two_level,             true) \
+        M(key16_two_level,            true) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
         M(key_string_two_level,       true) \
         M(key_fixed_string_two_level, true) \
+        M(keys16_two_level,          true) \
         M(keys32_two_level,          true) \
         M(keys64_two_level,          true) \
         M(keys128_two_level,          true) \
@@ -772,10 +782,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     }
 
     #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M) \
+        M(key8)             \
+        M(key16)            \
         M(key32)            \
         M(key64)            \
         M(key_string)       \
         M(key_fixed_string) \
+        M(keys16)           \
         M(keys32)           \
         M(keys64)           \
         M(keys128)          \
@@ -792,9 +805,6 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(low_cardinality_key_fixed_string) \
 
     #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL(M) \
-        M(key8)             \
-        M(key16)            \
-        M(keys16)           \
         M(key64_hash64)     \
         M(key_string_hash64)\
         M(key_fixed_string_hash64) \
@@ -826,10 +836,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     void convertToTwoLevel();
 
     #define APPLY_FOR_VARIANTS_TWO_LEVEL(M) \
+        M(key8_two_level)             \
+        M(key16_two_level)            \
         M(key32_two_level)            \
         M(key64_two_level)            \
         M(key_string_two_level)       \
         M(key_fixed_string_two_level) \
+        M(keys16_two_level)           \
         M(keys32_two_level)           \
         M(keys64_two_level)           \
         M(keys128_two_level)          \
@@ -869,6 +882,25 @@ struct AggregatedDataVariants : private boost::noncopyable
             case Type::NAME: return true;
 
             APPLY_FOR_LOW_CARDINALITY_VARIANTS(M)
+        #undef M
+            default:
+                return false;
+        }
+    }
+
+    #define APPLY_FOR_VARIANTS_SMALL_KEYS(M) \
+        M(key8) \
+        M(key16) \
+        M(keys16) \
+
+    bool isSmallKeys() const
+    {
+        switch (type)
+        {
+        #define M(NAME) \
+            case Type::NAME: return true;
+
+            APPLY_FOR_VARIANTS_SMALL_KEYS(M)
         #undef M
             default:
                 return false;
@@ -964,6 +996,8 @@ public:
         /// Settings to flush temporary data to the filesystem (external aggregation).
         const size_t max_bytes_before_external_group_by;        /// 0 - do not use external aggregation.
 
+        const bool enable_adaptive_spill; 
+
         /// Control the size of the memory in the agg stage when flushing the disk (external aggregation).
         const size_t spill_buffer_bytes_before_external_group_by;
 
@@ -991,6 +1025,7 @@ public:
             bool overflow_row_, size_t max_rows_to_group_by_, OverflowMode group_by_overflow_mode_,
             size_t group_by_two_level_threshold_, size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
+            bool enable_adaptive_spill_,
             size_t spill_buffer_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
             VolumePtr tmp_volume_, size_t max_threads_,
@@ -999,26 +1034,34 @@ public:
             size_t min_count_to_compile_aggregate_expression_,
             const Block & intermediate_header_ = {},
             bool enable_lc_group_by_opt_ = false)
-            : src_header(src_header_),
-            intermediate_header(intermediate_header_),
-            keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
-            overflow_row(overflow_row_), max_rows_to_group_by(max_rows_to_group_by_), group_by_overflow_mode(group_by_overflow_mode_),
-            group_by_two_level_threshold(group_by_two_level_threshold_), group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_),
-            max_bytes_before_external_group_by(max_bytes_before_external_group_by_),
-            spill_buffer_bytes_before_external_group_by(spill_buffer_bytes_before_external_group_by_),
-            empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_),
-            tmp_volume(tmp_volume_), max_threads(max_threads_),
-            min_free_disk_space(min_free_disk_space_),
-            compile_aggregate_expressions(compile_aggregate_expressions_),
-            min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
-            enable_lc_group_by_opt(enable_lc_group_by_opt_)
+            : src_header(src_header_)
+            , intermediate_header(intermediate_header_)
+            , keys(keys_)
+            , aggregates(aggregates_)
+            , keys_size(keys.size())
+            , aggregates_size(aggregates.size())
+            , overflow_row(overflow_row_)
+            , max_rows_to_group_by(max_rows_to_group_by_)
+            , group_by_overflow_mode(group_by_overflow_mode_)
+            , group_by_two_level_threshold(group_by_two_level_threshold_)
+            , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
+            , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
+            , enable_adaptive_spill(enable_adaptive_spill_)
+            , spill_buffer_bytes_before_external_group_by(spill_buffer_bytes_before_external_group_by_)
+            , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
+            , tmp_volume(tmp_volume_)
+            , max_threads(max_threads_)
+            , min_free_disk_space(min_free_disk_space_)
+            , compile_aggregate_expressions(compile_aggregate_expressions_)
+            , min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_)
+            , enable_lc_group_by_opt(enable_lc_group_by_opt_)
         {
         }
 
         /// Only parameters that matter during merge.
         Params(const Block & intermediate_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_, bool overflow_row_, size_t max_threads_)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, 10485760, false, nullptr, max_threads_, 0, false, 0)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, 10485760, false, nullptr, max_threads_, 0, false, 0)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1121,6 +1164,25 @@ public:
     /// Get data structure of the result.
     Block getHeader(bool final) const;
 
+    void turnOnAggStreaming()
+    {
+        is_agg_streaming = true;
+    }
+    void turnOffAggStreaming()
+    {
+        is_agg_streaming = false;
+    }
+
+    void turnOnAggConvertingForCache()
+    {
+        is_agg_converting_for_cache = true;
+    }
+
+    bool isWithoutKey() const
+    {
+        return method_chosen == AggregatedDataVariants::Type::without_key;
+    }
+
     static void chooseAggregationMethodByOption(
         const ChooseMethodOption & option,
         Sizes & key_sizes,
@@ -1132,8 +1194,14 @@ private:
     friend class ConvertingAggregatedToChunksTransform;
     friend class ConvertingAggregatedToChunksSource;
     friend class AggregatingInOrderTransform;
+    friend class AggregatingStreamingTransform;
+    friend class MergingAggregatedStreamingTransform;
+    friend class PreAggregatingTransform;
 
     Params params;
+
+    bool is_agg_streaming = false;
+    bool is_agg_converting_for_cache = false;
 
     AggregatedDataVariants::Type method_chosen;
     Sizes key_sizes;
@@ -1176,6 +1244,12 @@ private:
 
     /// For external aggregation.
     mutable TemporaryFiles temporary_files;
+
+    constexpr static const double large_midstate_estimate_by_input_ratio = 10.0;
+
+    mutable size_t delta_bytes_of_large_midstate_agg_inputs = 0;
+
+    mutable bool spilled = false;
 
 #if USE_EMBEDDED_COMPILER
     std::shared_ptr<CompiledAggregateFunctionsHolder> compiled_aggregate_functions_holder;

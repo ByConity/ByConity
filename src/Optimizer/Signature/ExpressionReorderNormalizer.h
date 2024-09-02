@@ -22,6 +22,7 @@ public:
     static void reorder(NamesWithAliases & name_alias);
     static void reorder(Assignments & assignments);
     static void reorder(AggregateDescriptions & descriptions);
+    static void reorder(ColumnsWithTypeAndName & columnas);
     static size_t reorder(ASTPtr & ast);
 
 protected:

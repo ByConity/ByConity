@@ -76,6 +76,9 @@ public:
         ASTPtr compression_codec_desc;
 
         bool shall_participate_in_merges = true;
+
+        /// The depth of the part chain. Convert the part chain to a new base part when the chain is long.
+        size_t chain_depth = 0;
     };
 
     /// Parts are belong to partitions. Only parts within same partition could be merged.

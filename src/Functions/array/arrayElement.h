@@ -18,6 +18,7 @@
 #include <Columns/ColumnMap.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -30,6 +31,11 @@ namespace ArrayImpl
 
 /** arrayElement(arr, i) - get the array element by index. If index is not constant and out of range - return default value of data type.
   * The index begins with 1. Also, the index can be negative - then it is counted from the end of the array.
+  *
+  * under mysql dialect, if the first argument is array
+  * * always returns nullable result
+  * * throw exceptions if the index is 0
+  * * returns NULL if the index is NULL or out of range
   */
 class FunctionArrayElement : public IFunction
 {
@@ -37,18 +43,28 @@ public:
     static constexpr auto name = "arrayElement";
     static FunctionPtr create(ContextPtr context);
 
+    explicit FunctionArrayElement(ContextPtr context)
+    {
+        is_mysql_dialect = context && context->getSettingsRef().dialect_type == DialectType::MYSQL;
+    }
+
     String getName() const override;
 
     bool useDefaultImplementationForConstants() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
+    bool useDefaultImplementationForNulls() const override { return !is_mysql_dialect; }
     size_t getNumberOfArguments() const override { return 2; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override;
 
 private:
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, bool is_mysql) const;
+
     friend class FunctionMapElement;
+
+    bool is_mysql_dialect;
 
     ColumnPtr perform(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type,
                       ArrayImpl::NullMapBuilder & builder, size_t input_rows_count) const;
@@ -86,7 +102,7 @@ private:
      *  Currently implemented just as linear search in array.
      *  However, optimizations are possible.
      */
-    ColumnPtr executeMap(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const;
+    ColumnPtr executeMap(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, ColumnPtr index_null_map_col) const;
 
     using Offsets = ColumnArray::Offsets;
 
@@ -101,11 +117,11 @@ private:
     static bool matchKeyToIndexString(
         const IColumn & data, const Offsets & offsets, bool is_key_const,
         const IColumn & index, PaddedPODArray<UInt64> & matched_idxs);
- 
+
     static bool matchKeyToIndexStringConst(
         const IColumn & data, const Offsets & offsets,
          const Field & index, PaddedPODArray<UInt64> & matched_idxs);
- 
+
      template <typename Matcher>
      static void executeMatchKeyToIndex(const Offsets & offsets,
          PaddedPODArray<UInt64> & matched_idxs, const Matcher & matcher);

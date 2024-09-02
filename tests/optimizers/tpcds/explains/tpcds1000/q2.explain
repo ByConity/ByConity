@@ -1,128 +1,80 @@
-Projection Est. 2562 rows
+Projection Est. 637 rows
 │     Expressions: d_week_seq1:=d_week_seq_1, round(divide(fri_sales1, fri_sales2), 2):=`expr#round(divide(fri_sales1, fri_sales2), 2)`, round(divide(mon_sales1, mon_sales2), 2):=`expr#round(divide(mon_sales1, mon_sales2), 2)`, round(divide(sat_sales1, sat_sales2), 2):=`expr#round(divide(sat_sales1, sat_sales2), 2)`, round(divide(sun_sales1, sun_sales2), 2):=`expr#round(divide(sun_sales1, sun_sales2), 2)`, round(divide(thu_sales1, thu_sales2), 2):=`expr#round(divide(thu_sales1, thu_sales2), 2)`, round(divide(tue_sales1, tue_sales2), 2):=`expr#round(divide(tue_sales1, tue_sales2), 2)`, round(divide(wed_sales1, wed_sales2), 2):=`expr#round(divide(wed_sales1, wed_sales2), 2)`
-└─ Sorting Est. 2562 rows
+└─ Sorting Est. 637 rows
    │     Order by: {d_week_seq_1 ASC NULLS LAST}
-   └─ Gather Exchange Est. 2562 rows
-      └─ Sorting Est. 2562 rows
+   └─ Gather Exchange Est. 637 rows
+      └─ Sorting Est. 637 rows
          │     Order by: {d_week_seq_1 ASC NULLS LAST}
-         └─ Projection Est. 2562 rows
+         └─ Projection Est. 637 rows
             │     Expressions: [d_week_seq_1], expr#round(divide(fri_sales1, fri_sales2), 2):=round(`expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_1` / `expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_2`, 2), expr#round(divide(mon_sales1, mon_sales2), 2):=round(`expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_1` / `expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_2`, 2), expr#round(divide(sat_sales1, sat_sales2), 2):=round(`expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_1` / `expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_2`, 2), expr#round(divide(sun_sales1, sun_sales2), 2):=round(`expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_1` / `expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_2`, 2), expr#round(divide(thu_sales1, thu_sales2), 2):=round(`expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_1` / `expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_2`, 2), expr#round(divide(tue_sales1, tue_sales2), 2):=round(`expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_1` / `expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_2`, 2), expr#round(divide(wed_sales1, wed_sales2), 2):=round(`expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_1` / `expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_2`, 2)
-            └─ Inner Join Est. 2562 rows
-               │     Condition: d_week_seq_1 == minus(d_week_seq_3, 53)
-               │     Runtime Filters Builder: {minus(d_week_seq_3, 53)}
-               ├─ Inner Join Est. 365 rows
-               │  │     Condition: d_week_seq_2 == d_week_seq_1
-               │  │     Runtime Filters Builder: {d_week_seq_1}
-               │  ├─ Repartition Exchange Est. 365 rows
-               │  │  │     Partition by: {d_week_seq_2}
-               │  │  └─ Filter Est. 365 rows
-               │  │     │     Condition: d_year = 2001 Runtime Filters: {d_week_seq_2}
-               │  │     └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │  │              Where: d_year = 2001 Runtime Filters: {d_week_seq}
-               │  │              Outputs: [d_year], d_week_seq_2:=d_week_seq
-               │  └─ MergingAggregated Est. 52 rows
-               │     └─ Repartition Exchange Est. 52 rows
-               │        │     Partition by: {d_week_seq_1}
-               │        └─ Aggregating Est. 52 rows
-               │           │     Group by: {d_week_seq_1}
-               │           │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_1:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_1:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_1:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_1:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_1:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_1:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_1:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1)
-               │           └─ Projection Est. 10762648 rows
-               │              │     Expressions: [d_week_seq_1], expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Friday', ws_ext_sales_price_2, NULL), expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Monday', ws_ext_sales_price_2, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Saturday', ws_ext_sales_price_2, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Sunday', ws_ext_sales_price_2, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Thursday', ws_ext_sales_price_2, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Tuesday', ws_ext_sales_price_2, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Wednesday', ws_ext_sales_price_2, NULL)
-               │              └─ Inner Join Est. 214286151 rows
-               │                 │     Condition: ws_sold_date_sk_2 == d_date_sk_1
-               │                 │     Runtime Filters Builder: {d_date_sk_1}
-               │                 ├─ Union Est. 2159980792 rows
-               │                 │  │     OutputToInputs: ws_ext_sales_price_2 = [ws_ext_sales_price_3,cs_ext_sales_price_1], ws_sold_date_sk_2 = [ws_sold_date_sk_3,cs_sold_date_sk_1]
-               │                 │  ├─ Filter Est. 720000376 rows
-               │                 │  │  │     Condition: Runtime Filters: {ws_sold_date_sk_3}
-               │                 │  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-               │                 │  │           Where: Runtime Filters: {ws_sold_date_sk}
-               │                 │  │           Outputs: ws_sold_date_sk_3:=ws_sold_date_sk, ws_ext_sales_price_3:=ws_ext_sales_price
-               │                 │  └─ Filter Est. 1439980416 rows
-               │                 │     │     Condition: Runtime Filters: {cs_sold_date_sk_1}
-               │                 │     └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-               │                 │              Where: Runtime Filters: {cs_sold_date_sk}
-               │                 │              Outputs: cs_sold_date_sk_1:=cs_sold_date_sk, cs_ext_sales_price_1:=cs_ext_sales_price
-               │                 └─ Broadcast Exchange Est. 363 rows
-               │                    └─ Inner Join Est. 363 rows
-               │                       │     Condition: d_week_seq_1 == d_week_seq_6
-               │                       │     Runtime Filters Builder: {d_week_seq_6}
-               │                       ├─ Filter Est. 73049 rows
-               │                       │  │     Condition: Runtime Filters: {d_week_seq_1}
-               │                       │  └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │                       │           Where: Runtime Filters: {d_week_seq}
-               │                       │           Outputs: d_date_sk_1:=d_date_sk, d_week_seq_1:=d_week_seq, d_day_name_1:=d_day_name
-               │                       └─ Broadcast Exchange Est. 52 rows
-               │                          └─ MergingAggregated Est. 52 rows
-               │                             └─ Repartition Exchange Est. 52 rows
-               │                                │     Partition by: {d_week_seq_6}
-               │                                └─ Aggregating Est. 52 rows
-               │                                   │     Group by: {d_week_seq_6}
-               │                                   └─ Projection Est. 365 rows
-               │                                      │     Expressions: d_week_seq_6:=d_week_seq_2
-               │                                      └─ Filter Est. 365 rows
-               │                                         │     Condition: d_year = 2001 Runtime Filters: {d_week_seq_2}
-               │                                         └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │                                                  Where: d_year = 2001 Runtime Filters: {d_week_seq}
-               │                                                  Outputs: [d_year], d_week_seq_2:=d_week_seq
-               └─ Repartition Exchange Est. 365 rows
-                  │     Partition by: {minus(d_week_seq_3, 53)}
-                  └─ Projection Est. 365 rows
-                     │     Expressions: [expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_2], minus(d_week_seq_3, 53):=d_week_seq_3 - 53
-                     └─ Inner Join Est. 365 rows
-                        │     Condition: d_week_seq_4 == d_week_seq_3
-                        │     Runtime Filters Builder: {d_week_seq_3}
-                        ├─ Repartition Exchange Est. 365 rows
-                        │  │     Partition by: {d_week_seq_4}
-                        │  └─ Filter Est. 365 rows
-                        │     │     Condition: d_year_1 = 2002 Runtime Filters: {d_week_seq_4}
-                        │     └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                        │              Where: d_year = 2002 Runtime Filters: {d_week_seq}
-                        │              Outputs: d_week_seq_4:=d_week_seq, d_year_1:=d_year
-                        └─ MergingAggregated Est. 52 rows
-                           └─ Repartition Exchange Est. 52 rows
-                              │     Partition by: {d_week_seq_3}
-                              └─ Aggregating Est. 52 rows
-                                 │     Group by: {d_week_seq_3}
-                                 │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_2:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_2), expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_2:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_2), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_2:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_2), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_2:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_2), expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_2:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_2), expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_2:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_2), expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_2:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_2)
-                                 └─ Projection Est. 10762648 rows
-                                    │     Expressions: [d_week_seq_3], expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_2:=multiIf(d_day_name_2 = 'Friday', ws_ext_sales_price_4, NULL), expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_2:=multiIf(d_day_name_2 = 'Monday', ws_ext_sales_price_4, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_2:=multiIf(d_day_name_2 = 'Saturday', ws_ext_sales_price_4, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_2:=multiIf(d_day_name_2 = 'Sunday', ws_ext_sales_price_4, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_2:=multiIf(d_day_name_2 = 'Thursday', ws_ext_sales_price_4, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_2:=multiIf(d_day_name_2 = 'Tuesday', ws_ext_sales_price_4, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_2:=multiIf(d_day_name_2 = 'Wednesday', ws_ext_sales_price_4, NULL)
-                                    └─ Inner Join Est. 214286151 rows
-                                       │     Condition: ws_sold_date_sk_4 == d_date_sk_2
-                                       │     Runtime Filters Builder: {d_date_sk_2}
-                                       ├─ Union Est. 2159980792 rows
-                                       │  │     OutputToInputs: ws_ext_sales_price_4 = [ws_ext_sales_price_5,cs_ext_sales_price_2], ws_sold_date_sk_4 = [ws_sold_date_sk_5,cs_sold_date_sk_2]
-                                       │  ├─ Filter Est. 720000376 rows
-                                       │  │  │     Condition: Runtime Filters: {ws_sold_date_sk_5}
-                                       │  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-                                       │  │           Where: Runtime Filters: {ws_sold_date_sk}
-                                       │  │           Outputs: ws_sold_date_sk_5:=ws_sold_date_sk, ws_ext_sales_price_5:=ws_ext_sales_price
-                                       │  └─ Filter Est. 1439980416 rows
-                                       │     │     Condition: Runtime Filters: {cs_sold_date_sk_2}
-                                       │     └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-                                       │              Where: Runtime Filters: {cs_sold_date_sk}
-                                       │              Outputs: cs_sold_date_sk_2:=cs_sold_date_sk, cs_ext_sales_price_2:=cs_ext_sales_price
-                                       └─ Broadcast Exchange Est. 363 rows
-                                          └─ Inner Join Est. 363 rows
-                                             │     Condition: d_week_seq_3 == d_week_seq_8
-                                             │     Runtime Filters Builder: {d_week_seq_8}
-                                             ├─ Filter Est. 73049 rows
-                                             │  │     Condition: Runtime Filters: {d_week_seq_3}
-                                             │  └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                             │           Where: Runtime Filters: {d_week_seq}
-                                             │           Outputs: d_date_sk_2:=d_date_sk, d_week_seq_3:=d_week_seq, d_day_name_2:=d_day_name
-                                             └─ Broadcast Exchange Est. 52 rows
-                                                └─ MergingAggregated Est. 52 rows
-                                                   └─ Repartition Exchange Est. 52 rows
-                                                      │     Partition by: {d_week_seq_8}
-                                                      └─ Aggregating Est. 52 rows
-                                                         │     Group by: {d_week_seq_8}
-                                                         └─ Projection Est. 365 rows
-                                                            │     Expressions: d_week_seq_8:=d_week_seq_4
-                                                            └─ Filter Est. 365 rows
-                                                               │     Condition: d_year_1 = 2002
-                                                               └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                                                        Where: d_year = 2002
-                                                                        Outputs: d_week_seq_4:=d_week_seq, d_year_1:=d_year
-note: Magic Set is applied for 2 parts.
-note: Runtime Filter is applied for 11 times.
+            └─ Inner Join Est. 637 rows
+               │     Condition: expr#cast(d_week_seq_1, 'Int32') == expr#cast(minus(d_week_seq_3, 53), 'Int32')
+               ├─ Repartition Exchange Est. 91 rows
+               │  │     Partition by: {expr#cast(d_week_seq_1, 'Int32')}
+               │  └─ Projection Est. 91 rows
+               │     │     Expressions: [d_week_seq_1, expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_1, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_1, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_1, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_1, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_1, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_1, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_1], expr#cast(d_week_seq_1, 'Int32'):=cast(d_week_seq_1, 'Int32')
+               │     └─ Filter Est. 182 rows
+               │        │     Condition: (d_week_seq_2 = d_week_seq_1) AND (d_year = 2001)
+               │        └─ Buffer Est. 728 rows
+               │           └─ CTERef[1] Est. 728 rows
+               └─ Repartition Exchange Est. 91 rows
+                  │     Partition by: {expr#cast(minus(d_week_seq_3, 53), 'Int32')}
+                  └─ Projection Est. 91 rows
+                     │     Expressions: [expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_2], expr#cast(minus(d_week_seq_3, 53), 'Int32'):=cast(d_week_seq_3 - 53, 'Int32')
+                     └─ Filter Est. 182 rows
+                        │     Condition: (d_week_seq_4 = d_week_seq_3) AND (d_year_1 = cast(2002, 'UInt32'))
+                        └─ Buffer Est. 728 rows
+                           └─ CTERef[1] Est. 728 rows
+CTEDef [1]
+   Projection Est. 728 rows
+   │     Expressions: [d_week_seq_2, d_year], d_week_seq_1:=d_week_seq_2, expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_3`, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_1:=`expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_3`
+   └─ Inner Join Est. 728 rows
+      │     Condition: d_week_seq_2 == d_week_seq_5
+      ├─ Buffer Est. 728 rows
+      │  └─ CTERef[2] Est. 728 rows
+      └─ MergingAggregated Est. 104 rows
+         └─ Repartition Exchange Est. 104 rows
+            │     Partition by: {d_week_seq_5}
+            └─ Aggregating Est. 104 rows
+               │     Group by: {d_week_seq_5}
+               │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1), expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_3:=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1)
+               └─ Projection Est. 150677080 rows
+                  │     Expressions: [d_week_seq_5], expr#multiIf(equals(d_day_name, 'Friday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Friday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Monday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Monday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Saturday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Sunday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Thursday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Tuesday', ws_ext_sales_price_3, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL)_1:=multiIf(d_day_name_1 = 'Wednesday', ws_ext_sales_price_3, NULL)
+                  └─ Inner Join Est. 150677080 rows
+                     │     Condition: ws_sold_date_sk_3 == d_date_sk_1
+                     │     Runtime Filters Builder: {d_date_sk_1}
+                     ├─ Union Est. 2159980792 rows
+                     │  │     OutputToInputs: ws_ext_sales_price_3 = [ws_ext_sales_price_2,cs_ext_sales_price_1], ws_sold_date_sk_3 = [ws_sold_date_sk_2,cs_sold_date_sk_1]
+                     │  ├─ Filter Est. 720000376 rows
+                     │  │  │     Condition: Runtime Filters: {ws_sold_date_sk_2}
+                     │  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
+                     │  │           Where: Runtime Filters: {ws_sold_date_sk}
+                     │  │           Outputs: ws_sold_date_sk_2:=ws_sold_date_sk, ws_ext_sales_price_2:=ws_ext_sales_price
+                     │  └─ Filter Est. 1439980416 rows
+                     │     │     Condition: Runtime Filters: {cs_sold_date_sk_1}
+                     │     └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                     │              Where: Runtime Filters: {cs_sold_date_sk}
+                     │              Outputs: cs_sold_date_sk_1:=cs_sold_date_sk, cs_ext_sales_price_1:=cs_ext_sales_price
+                     └─ Broadcast Exchange Est. 5095 rows
+                        └─ Left Semi Join Est. 5095 rows
+                           │     Condition: d_week_seq_5 == d_week_seq_2
+                           │     Runtime Filters Builder: {d_week_seq_2}
+                           ├─ Filter Est. 73049 rows
+                           │  │     Condition: Runtime Filters: {d_week_seq_5}
+                           │  └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │           Where: Runtime Filters: {d_week_seq}
+                           │           Outputs: d_date_sk_1:=d_date_sk, d_week_seq_5:=d_week_seq, d_day_name_1:=d_day_name
+                           └─ Broadcast Exchange Est. 728 rows
+                              └─ Buffer Est. 728 rows
+                                 └─ CTERef[2] Est. 728 rows
+CTEDef [2]
+   Repartition Exchange Est. 728 rows
+   │     Partition by: {d_week_seq_2}
+   └─ Filter Est. 728 rows
+      │     Condition: (d_year = 2001) OR (d_year = cast(2002, 'UInt32'))
+      └─ TableScan tpcds1000.date_dim Est. 73049 rows
+               Where: (d_year = 2001) OR (d_year = cast(2002, 'UInt32'))
+               Outputs: [d_year], d_week_seq_2:=d_week_seq
+note: Magic Set is applied for 1 parts.
+note: Runtime Filter is applied for 3 times.
+note: CTE(Common Table Expression) is applied for 4 times.

@@ -14,6 +14,7 @@
  */
 
 #include "DiskCacheFactory.h"
+#include <cstddef>
 #include <memory>
 
 #include <Disks/IStoragePolicy.h>
@@ -21,8 +22,9 @@
 #include <Storages/DiskCache/DiskCacheLRU.h>
 #include <Storages/DiskCache/DiskCacheSettings.h>
 #include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
-#include "common/logger_useful.h"
-#include "Storages/DiskCache/IDiskCache.h"
+#include <common/logger_useful.h>
+#include <Disks/SingleDiskVolume.h>
+#include <Storages/DiskCache/IDiskCache.h>
 
 namespace DB
 {
@@ -32,10 +34,6 @@ void DiskCacheFactory::init(Context & context)
     if (!caches.empty())
         throw Exception("Can't repeat register DiskCache!", DB::ErrorCodes::LOGICAL_ERROR);
     const auto & config = context.getConfigRef();
-
-    // TODO(jiashuo): suppport multi volume
-    VolumePtr disk_cache_volume = context.getStoragePolicy("default")->getVolume(0);
-    auto throttler = context.getDiskCacheThrottler();
 
     /// init pool
     IDiskCache::init(context);
@@ -47,67 +45,21 @@ void DiskCacheFactory::init(Context & context)
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys(DiskCacheSettings::root, keys);
         for (const auto & key : keys)
-        {
-            DiskCacheSettings cache_settings;
-            cache_settings.loadFromConfig(config, key);
-            LOG_DEBUG(log, fmt::format("Creating DiskCache of {} kind by setting: {}", key, cache_settings.toString()));
-            if (!cache_settings.meta_cache_size_ratio)
-            {
-                auto disk_cache = std::make_shared<DiskCacheLRU>(
-                    key, disk_cache_volume, throttler, cache_settings, std::make_shared<DiskCacheSimpleStrategy>(cache_settings));
-                caches.emplace(stringToDiskCacheType(key), disk_cache);
-                LOG_DEBUG(log, fmt::format("Registered `{}` single disk cache", key));
-            }
-            else
-            {
-                auto strategy = std::make_shared<DiskCacheSimpleStrategy>(cache_settings);
-
-                auto meta_disk_cache = std::make_shared<DiskCacheLRU>(
-                    key, disk_cache_volume, throttler, cache_settings, strategy, IDiskCache::DataType::META);
-                auto data_disk_cache = std::make_shared<DiskCacheLRU>(
-                    key, disk_cache_volume, throttler, cache_settings, strategy, IDiskCache::DataType::DATA);
-                caches.emplace(
-                    stringToDiskCacheType(key),
-                    std::make_shared<MultiDiskCache>(
-                        key, disk_cache_volume, throttler, cache_settings, strategy, meta_disk_cache, data_disk_cache));
-                LOG_DEBUG(log, fmt::format("Registered `{}` multi disk cache", key));
-            }
-        }
+            addNewCache(context, key, false);
     }
 
     // create dafault cache for MergeTree Diskcache
-    DiskCacheSettings cache_settings;
-    cache_settings.loadFromConfig(config, "MergeTree");
-    
     if (caches.find(DiskCacheType::MergeTree) == caches.end())
     {
-        LOG_TRACE(
-            log,
-            fmt::format(
-                "Creating DiskCache of {} kind by default setting: {}",
-                diskCacheTypeToString(DiskCacheType::MergeTree),
-                cache_settings.toString()));
-        if (!cache_settings.meta_cache_size_ratio)
-        {
-            auto disk_cache = std::make_shared<DiskCacheLRU>(
-                "MergeTree", disk_cache_volume, throttler, cache_settings, std::make_shared<DiskCacheSimpleStrategy>(cache_settings));
-            caches.emplace(DiskCacheType::MergeTree, disk_cache);
-            LOG_DEBUG(log, "Registered default `MergeTree` single disk cache");
-        }
-        else
-        {
-            auto strategy = std::make_shared<DiskCacheSimpleStrategy>(cache_settings);
+        LOG_TRACE(log, "Creating default DiskCache of {}", diskCacheTypeToString(DiskCacheType::MergeTree));
+        addNewCache(context, diskCacheTypeToString(DiskCacheType::MergeTree), true);
+    }
 
-            auto meta_disk_cache = std::make_shared<DiskCacheLRU>(
-                "MergeTree", disk_cache_volume, throttler, cache_settings, strategy, IDiskCache::DataType::META);
-            auto data_disk_cache = std::make_shared<DiskCacheLRU>(
-                "MergeTree", disk_cache_volume, throttler, cache_settings, strategy, IDiskCache::DataType::DATA);
-            caches.emplace(
-                DiskCacheType::MergeTree,
-                std::make_shared<MultiDiskCache>(
-                    "MergeTree", disk_cache_volume, throttler, cache_settings, strategy, meta_disk_cache, data_disk_cache));
-            LOG_DEBUG(log, "Registered default `MergeTree` multi disk cache");
-        }
+    // create default manifest file cache if it does not exists
+    if (caches.find(DiskCacheType::Manifest) == caches.end())
+    {
+        LOG_TRACE(log, "Creating default DiskCache of {}", diskCacheTypeToString(DiskCacheType::Manifest));
+        addNewCache(context, diskCacheTypeToString(DiskCacheType::Manifest), true);
     }
 }
 
@@ -121,6 +73,8 @@ std::string diskCacheTypeToString(const DiskCacheType type)
             return "MergeTree";
         case DiskCacheType::Hive:
             return "Hive";
+        case DiskCacheType::Manifest:
+            return "Manifest";
     }
 
     return "InvalidDiskCacheType";
@@ -137,6 +91,9 @@ DiskCacheType stringToDiskCacheType(const std::string & type)
     if (type == "parquet" || type == "Hive") // `parquet` for compatible with old config
         return DiskCacheType::Hive;
 
+    if (type == "Manifest")
+        return DiskCacheType::Manifest;
+
     throw Poco::Exception("Invalid strategy name: " + type + " should be `simple`, `parquet`, `File`, `MergeTree`, `Hive`", ErrorCodes::BAD_ARGUMENTS);
 }
 
@@ -151,5 +108,63 @@ void DiskCacheFactory::shutdown()
     IDiskCache::close();
 }
 
+void DiskCacheFactory::addNewCache(Context & context, const std::string & cache_name, bool create_default)
+{
+    Poco::Logger * log{&Poco::Logger::get("DiskCacheFactory")};
+
+    DiskCacheSettings cache_settings;
+    auto throttler = context.getDiskCacheThrottler();
+
+    const auto & config = context.getConfigRef();
+    cache_settings.loadFromConfig(config, cache_name);
+
+    VolumePtr disk_cache_volume = context.getStoragePolicy(cache_settings.disk_policy)->getVolumeByName("local", true);
+
+    auto total_space_unlimited = disk_cache_volume->getTotalSpace(true);
+    auto total_space_limited = disk_cache_volume->getTotalSpace(false);
+
+    if (create_default)
+    {
+        cache_settings.lru_max_size = std::min(
+            static_cast<size_t>(total_space_unlimited.bytes * (cache_settings.lru_max_percent * 1.0 / 100)), cache_settings.lru_max_size);
+        cache_settings.lru_max_nums = std::min(
+            static_cast<size_t>(total_space_unlimited.inodes * (cache_settings.lru_max_percent * 1.0 / 100)), cache_settings.lru_max_nums);
+    }
+    else
+    {
+        cache_settings.lru_max_size = std::min(
+            total_space_limited.bytes,
+            std::min(
+                static_cast<size_t>(total_space_unlimited.bytes * (cache_settings.lru_max_percent * 1.0 / 100)),
+                cache_settings.lru_max_size));
+        cache_settings.lru_max_nums = std::min(
+            total_space_limited.inodes,
+            std::min(
+                static_cast<size_t>(total_space_unlimited.inodes * (cache_settings.lru_max_percent * 1.0 / 100)),
+                cache_settings.lru_max_nums));
+    }
+
+    if (!cache_settings.meta_cache_size_ratio)
+    {
+        auto disk_cache = std::make_shared<DiskCacheLRU>(
+            cache_name, disk_cache_volume, throttler, cache_settings, std::make_shared<DiskCacheSimpleStrategy>(cache_settings));
+        caches.emplace(stringToDiskCacheType(cache_name), disk_cache);
+        LOG_DEBUG(log, fmt::format("Registered `{}` single disk cache", cache_name));
+    }
+    else
+    {
+        auto strategy = std::make_shared<DiskCacheSimpleStrategy>(cache_settings);
+
+        auto meta_disk_cache = std::make_shared<DiskCacheLRU>(
+            cache_name, disk_cache_volume, throttler, cache_settings, strategy, IDiskCache::DataType::META);
+        auto data_disk_cache = std::make_shared<DiskCacheLRU>(
+            cache_name, disk_cache_volume, throttler, cache_settings, strategy, IDiskCache::DataType::DATA);
+        caches.emplace(
+            stringToDiskCacheType(cache_name),
+            std::make_shared<MultiDiskCache>(
+                cache_name, disk_cache_volume, throttler, cache_settings, strategy, meta_disk_cache, data_disk_cache));
+        LOG_DEBUG(log, fmt::format("Registered `{}` multi disk cache", cache_name));
+    }
+}
 
 }

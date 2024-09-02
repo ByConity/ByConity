@@ -37,6 +37,14 @@ public:
         finalize();
         return value;
     }
+
+    WriteBuffer * inplaceReconstruct([[maybe_unused]] const String & out_path, [[maybe_unused]] std::unique_ptr<WriteBuffer> nested) override
+    {
+        // Call the destructor explicitly but does not free memory
+        this->~WriteBufferFromOwnString();
+        new (this) WriteBufferFromOwnString();
+        return this;
+    }
 };
 
 }

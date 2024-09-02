@@ -1,11 +1,11 @@
-Projection Est. 1052850 rows
+Projection Est. 73113 rows
 │     Expressions: [c_first_name, c_last_name, c_preferred_cust_flag, c_salutation, ss_ticket_number], cnt:=`expr#count()`
-└─ Sorting Est. 1052850 rows
+└─ Sorting Est. 73113 rows
    │     Order by: {expr#count() DESC NULLS LAST, c_last_name ASC NULLS LAST}
-   └─ Gather Exchange Est. 1052850 rows
-      └─ Sorting Est. 1052850 rows
+   └─ Gather Exchange Est. 73113 rows
+      └─ Sorting Est. 73113 rows
          │     Order by: {expr#count() DESC NULLS LAST, c_last_name ASC NULLS LAST}
-         └─ Inner Join Est. 1052850 rows
+         └─ Inner Join Est. 73113 rows
             │     Condition: c_customer_sk == ss_customer_sk
             │     Runtime Filters Builder: {ss_customer_sk}
             ├─ Repartition Exchange Est. 2000000 rows
@@ -15,20 +15,20 @@ Projection Est. 1052850 rows
             │     └─ TableScan tpcds100.customer Est. 2000000 rows
             │              Where: Runtime Filters: {c_customer_sk}
             │              Outputs: [c_customer_sk, c_salutation, c_first_name, c_last_name, c_preferred_cust_flag]
-            └─ Repartition Exchange Est. 1049110 rows
+            └─ Repartition Exchange Est. 72854 rows
                │     Partition by: {ss_customer_sk}
-               └─ Filter Est. 1049110 rows
+               └─ Filter Est. 72854 rows
                   │     Condition: (`expr#count()` >= 1) AND (`expr#count()` <= 5)
-                  └─ MergingAggregated Est. 1165678 rows
-                     └─ Repartition Exchange Est. 1165678 rows
+                  └─ MergingAggregated Est. 291419 rows
+                     └─ Repartition Exchange Est. 291419 rows
                         │     Partition by: {ss_ticket_number, ss_customer_sk}
-                        └─ Aggregating Est. 1165678 rows
+                        └─ Aggregating Est. 291419 rows
                            │     Group by: {ss_ticket_number, ss_customer_sk}
                            │     Aggregates: expr#count():=AggNull(count)()
-                           └─ Inner Join Est. 1165678 rows
+                           └─ Inner Join Est. 291419 rows
                               │     Condition: ss_store_sk == s_store_sk
                               │     Runtime Filters Builder: {s_store_sk}
-                              ├─ Inner Join Est. 2492568 rows
+                              ├─ Inner Join Est. 623142 rows
                               │  │     Condition: ss_hdemo_sk == hd_demo_sk
                               │  │     Runtime Filters Builder: {hd_demo_sk}
                               │  ├─ Inner Join Est. 11216559 rows
@@ -40,21 +40,27 @@ Projection Est. 1052850 rows
                               │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
                               │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_store_sk, ss_ticket_number]
                               │  │  └─ Broadcast Exchange Est. 72 rows
-                              │  │     └─ Filter Est. 72 rows
-                              │  │        │     Condition: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
-                              │  │        └─ TableScan tpcds100.date_dim Est. 73049 rows
-                              │  │                 Where: (d_dom >= 1) AND (d_dom <= 2) AND (d_year IN (1999, 2000, 2001))
-                              │  │                 Outputs: [d_date_sk, d_year, d_dom]
-                              │  └─ Broadcast Exchange Est. 1600 rows
-                              │     └─ Filter Est. 1600 rows
-                              │        │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.)
-                              │        └─ TableScan tpcds100.household_demographics Est. 7200 rows
-                              │                 Where: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.)
-                              │                 Outputs: [hd_demo_sk, hd_buy_potential, hd_dep_count, hd_vehicle_count]
+                              │  │     └─ Projection Est. 72 rows
+                              │  │        │     Expressions: [d_date_sk]
+                              │  │        └─ Filter Est. 72 rows
+                              │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
+                              │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+                              │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
+                              │  │                    Outputs: [d_date_sk, d_year, d_dom]
+                              │  └─ Broadcast Exchange Est. 400 rows
+                              │     └─ Projection Est. 400 rows
+                              │        │     Expressions: [hd_demo_sk]
+                              │        └─ Filter Est. 400 rows
+                              │           │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.) AND (hd_vehicle_count > 0)
+                              │           └─ TableScan tpcds100.household_demographics Est. 7200 rows
+                              │                    Where: (hd_buy_potential IN ('>10000', 'Unknown')) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > 1.) AND (hd_vehicle_count > 0)
+                              │                    Outputs: [hd_demo_sk, hd_buy_potential, hd_dep_count, hd_vehicle_count]
                               └─ Broadcast Exchange Est. 94 rows
-                                 └─ Filter Est. 94 rows
-                                    │     Condition: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
-                                    └─ TableScan tpcds100.store Est. 402 rows
-                                             Where: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
-                                             Outputs: [s_store_sk, s_county]
+                                 └─ Projection Est. 94 rows
+                                    │     Expressions: [s_store_sk]
+                                    └─ Filter Est. 94 rows
+                                       │     Condition: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
+                                       └─ TableScan tpcds100.store Est. 402 rows
+                                                Where: s_county IN ('Bronx County', 'Franklin Parish', 'Orange County', 'Williamson County')
+                                                Outputs: [s_store_sk, s_county]
 note: Runtime Filter is applied for 4 times.

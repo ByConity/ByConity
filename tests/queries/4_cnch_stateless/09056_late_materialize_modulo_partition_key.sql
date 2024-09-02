@@ -8,7 +8,7 @@ PARTITION BY id % 200 ORDER BY id
 SETTINGS enable_late_materialize = 1;
 INSERT INTO table1 SELECT number-205, number FROM numbers(10);
 INSERT INTO table1 SELECT number-205, number FROM numbers(400, 10);
-SELECT toInt64(partition) as p FROM system.cnch_parts WHERE table='table1' and database=currentDatabase() ORDER BY p;
+SELECT toInt64(partition) as p FROM system.cnch_parts WHERE table='table1' and database=currentDatabase(1) ORDER BY p;
 
 select 'where id % 200 = +-2:';
 select id from table1 where id % 200 = 2 OR id % 200 = -2 order by id;
@@ -25,7 +25,7 @@ PARTITION BY (toInt32(id / 2) % 3, id % 200) ORDER BY id
 SETTINGS enable_late_materialize = 1;
 INSERT INTO table2 SELECT number-205, number FROM numbers(10);
 INSERT INTO table2 SELECT number-205, number FROM numbers(400, 10);
-SELECT partition as p FROM system.cnch_parts WHERE table='table2' and database=currentDatabase() ORDER BY p;
+SELECT partition as p FROM system.cnch_parts WHERE table='table2' and database=currentDatabase(1) ORDER BY p;
 
 SELECT 'recursive modulo partition key:';
 DROP TABLE IF EXISTS table3;
@@ -35,12 +35,12 @@ PARTITION BY (id % 200, (id % 200) % 10, toInt32(round((id % 200) / 2, 0))) ORDE
 SETTINGS enable_late_materialize = 1;
 INSERT INTO table3 SELECT number-205, number FROM numbers(10);
 INSERT INTO table3 SELECT number-205, number FROM numbers(400, 10);
-SELECT partition as p FROM system.cnch_parts WHERE table='table3' and database=currentDatabase() ORDER BY p;
+SELECT partition as p FROM system.cnch_parts WHERE table='table3' and database=currentDatabase(1) ORDER BY p;
 
 -- DETACH TABLE table3;
 -- ATTACH TABLE table3;
 SELECT 'After detach:';
-SELECT partition as p FROM system.cnch_parts WHERE table='table3' and database=currentDatabase() ORDER BY p;
+SELECT partition as p FROM system.cnch_parts WHERE table='table3' and database=currentDatabase(1) ORDER BY p;
 
 SELECT 'Indexes:';
 DROP TABLE IF EXISTS table4;

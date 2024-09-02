@@ -32,6 +32,7 @@ public:
     String getName() const override { return "ParquetBlockOutputFormat"; }
     void consume(Chunk) override;
     void finalize() override;
+    void customReleaseBuffer() override;
 
     String getContentType() const override { return "application/octet-stream"; }
 

@@ -5,44 +5,49 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 91510 rows
+      └─ Gather Exchange Est. 91212 rows
          └─ Sorting Est. 100 rows
             │     Order by: {i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 91510 rows
-               └─ Repartition Exchange Est. 91510 rows
+            └─ MergingAggregated Est. 91212 rows
+               └─ Repartition Exchange Est. 91212 rows
                   │     Partition by: {i_item_id, i_item_desc, i_current_price}
-                  └─ Aggregating Est. 91510 rows
+                  └─ Aggregating Est. 91212 rows
                      │     Group by: {i_item_id, i_item_desc, i_current_price}
-                     └─ Inner Join Est. 49346709 rows
-                        │     Condition: ss_item_sk == i_item_sk
+                     └─ Inner Join Est. 54020977 rows
+                        │     Condition: ss_item_sk == inv_item_sk
+                        │     Runtime Filters Builder: {inv_item_sk}
                         ├─ Filter Est. 287997024 rows
                         │  │     Condition: Runtime Filters: {ss_item_sk}
                         │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                         │           Where: Runtime Filters: {ss_item_sk}
                         │           Outputs: [ss_item_sk]
-                        └─ Broadcast Exchange Est. 34944 rows
-                           └─ Inner Join Est. 34944 rows
-                              │     Condition: inv_date_sk == d_date_sk
-                              │     Runtime Filters Builder: {d_date_sk}
-                              ├─ Inner Join Est. 62659 rows
-                              │  │     Condition: inv_item_sk == i_item_sk
-                              │  │     Runtime Filters Builder: {i_item_sk}
-                              │  ├─ Filter Est. 159976648 rows
-                              │  │  │     Condition: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
-                              │  │  └─ TableScan tpcds100.inventory Est. 399330000 rows
-                              │  │           Where: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
-                              │  │           Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
-                              │  └─ Broadcast Exchange Est. 32 rows
-                              │     └─ Filter Est. 32 rows
-                              │        │     Condition: (i_current_price >= 62.) AND (i_current_price <= 92.) AND (i_manufact_id IN (129, 270, 423, 821))
-                              │        └─ TableScan tpcds100.item Est. 204000 rows
-                              │                 Where: (i_current_price >= 62.) AND (i_current_price <= 92.) AND (i_manufact_id IN (129, 270, 423, 821))
-                              │                 Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_manufact_id]
-                              └─ Broadcast Exchange Est. 59 rows
+                        └─ Inner Join Est. 38254 rows
+                           │     Condition: inv_date_sk == d_date_sk
+                           │     Runtime Filters Builder: {d_date_sk}
+                           ├─ Inner Join Est. 62658 rows
+                           │  │     Condition: inv_item_sk == i_item_sk
+                           │  │     Runtime Filters Builder: {i_item_sk}
+                           │  ├─ Projection Est. 145478163 rows
+                           │  │  │     Expressions: [inv_date_sk, inv_item_sk]
+                           │  │  └─ Filter Est. 145478163 rows
+                           │  │     │     Condition: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
+                           │  │     └─ TableScan tpcds100.inventory Est. 399330000 rows
+                           │  │              Where: (inv_quantity_on_hand >= 100) AND (inv_quantity_on_hand <= 500) Runtime Filters: {inv_date_sk, inv_item_sk}
+                           │  │              Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
+                           │  └─ Projection Est. 32 rows
+                           │     │     Expressions: [i_current_price, i_item_desc, i_item_id, i_item_sk]
+                           │     └─ Filter Est. 32 rows
+                           │        │     Condition: (i_manufact_id IN (129, 270, 423, 821)) AND (i_current_price >= 62.) AND (i_current_price <= 92.)
+                           │        └─ TableScan tpcds100.item Est. 204000 rows
+                           │                 Where: (i_manufact_id IN (129, 270, 423, 821)) AND (i_current_price >= 62.) AND (i_current_price <= 92.)
+                           │                 Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_manufact_id]
+                           └─ Broadcast Exchange Est. 59 rows
+                              └─ Projection Est. 59 rows
+                                 │     Expressions: [d_date_sk]
                                  └─ Filter Est. 59 rows
-                                    │     Condition: (d_date >= cast(11102, 'Date')) AND (d_date <= cast(11162, 'Date'))
+                                    │     Condition: (d_date >= cast(11102, 'Date32')) AND (d_date <= cast(11162, 'Date32'))
                                     └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                             Where: (d_date >= cast(11102, 'Date')) AND (d_date <= cast(11162, 'Date'))
+                                             Where: (d_date >= cast(11102, 'Date32')) AND (d_date <= cast(11162, 'Date32'))
                                              Outputs: [d_date_sk, d_date]
 note: Runtime Filter is applied for 3 times.

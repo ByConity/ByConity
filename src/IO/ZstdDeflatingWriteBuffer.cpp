@@ -31,8 +31,9 @@ namespace ErrorCodes
 }
 
 ZstdDeflatingWriteBuffer::ZstdDeflatingWriteBuffer(
-    std::unique_ptr<WriteBuffer> out_, int compression_level, size_t buf_size, char * existing_memory, size_t alignment)
+    std::unique_ptr<WriteBuffer> out_, int compression_level_, size_t buf_size, char * existing_memory, size_t alignment)
     : BufferWithOwnMemory<WriteBuffer>(buf_size, existing_memory, alignment), out(std::move(out_))
+    , compression_level(compression_level_)
 {
     cctx = ZSTD_createCCtx();
     if (cctx == nullptr)
@@ -54,10 +55,9 @@ ZstdDeflatingWriteBuffer::~ZstdDeflatingWriteBuffer()
     /// FIXME move final flush into the caller
     MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
 
-    finish();
-
     try
     {
+        finish();
         int err = ZSTD_freeCCtx(cctx);
         /// This is just in case, since it is impossible to get an error by using this wrapper.
         if (unlikely(err))

@@ -29,5 +29,12 @@ SELECT DISTINCT
 FROM dwm_cprf_jarvis_anr_bg_task_hi
 ORDER BY current_time_ms DESC;
 
+SELECT DISTINCT
+    toDateTime(current_time_ms) as time1,
+    device_id as d1,
+    device_id as d2
+FROM dwm_cprf_jarvis_anr_bg_task_hi
+ORDER BY time1 DESC;
+
 DROP TABLE IF EXISTS dwm_cprf_jarvis_anr_bg_task_hi;
 DROP TABLE IF EXISTS dwm_cprf_jarvis_anr_bg_task_hi_local;

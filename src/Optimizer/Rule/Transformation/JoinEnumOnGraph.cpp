@@ -30,7 +30,7 @@
 
 namespace DB
 {
-PatternPtr JoinEnumOnGraph::getPattern() const
+ConstRefPatternPtr JoinEnumOnGraph::getPattern() const
 {
     (void)support_filter;
     // return Patterns::join()
@@ -38,11 +38,13 @@ PatternPtr JoinEnumOnGraph::getPattern() const
     //         [&](const JoinStep & s) { return s.supportReorder(support_filter) && !s.isSimpleReordered() && !s.isOrdered(); })
     //     .with(Patterns::tree(), Patterns::tree())
     //     .result();
-    return Patterns::multiJoin()
+    static auto pattern = Patterns::multiJoin()
         .result();
+    return pattern;
 }
 
-static std::pair<Names, Names> createJoinCondition(const UnionFind<String> & union_find, const std::vector<std::pair<String, String>> & edges)
+static std::pair<Names, Names>
+createJoinCondition(const UnionFind<String> & union_find, const std::vector<std::pair<String, String>> & edges)
 {
     // extract equivalent map{representative symbol, all the symbols in the same equivalent set}
     std::unordered_map<String, std::vector<String>> left_set_to_symbols;
@@ -159,7 +161,8 @@ static std::set<String> createPossibleSymbols(const std::vector<GroupId> & group
 }
 
 
-ASTPtr JoinEnumOnGraph::getJoinFilter(const ASTPtr & all_filter, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context)
+ConstASTs JoinEnumOnGraph::getJoinFilter(
+    const ASTPtr & all_filter, std::set<String> & left_symbols, std::set<String> & right_symbols, ContextMutablePtr & context)
 {
     auto all_filter_inference = EqualityInference::newInstance(all_filter, context);
     auto non_inferrable_conjuncts = EqualityInference::nonInferrableConjuncts(all_filter, context);
@@ -184,7 +187,7 @@ ASTPtr JoinEnumOnGraph::getJoinFilter(const ASTPtr & all_filter, std::set<String
     auto straddling = join_inference.partitionedBy(left_symbols).getScopeStraddlingEqualities();
     join_predicates_builder.insert(join_predicates_builder.end(), straddling.begin(), straddling.end());
 
-    return PredicateUtils::combineConjuncts(join_predicates_builder);
+    return join_predicates_builder;
 }
 
 
@@ -210,7 +213,8 @@ static GroupId buildJoinNode(
     auto right_possible_output = createPossibleSymbols(right_groups, context);
     // create join filter
     ContextMutablePtr ptr = context->getOptimizerContext().getContext();
-    auto filter = JoinEnumOnGraph::getJoinFilter(all_filter, left_possible_output, right_possible_output, ptr);
+    auto filter
+        = PredicateUtils::combineConjuncts(JoinEnumOnGraph::getJoinFilter(all_filter, left_possible_output, right_possible_output, ptr));
     auto filter_symbols = SymbolsExtractor::extract(filter);
 
     // build left node, using first group
@@ -237,6 +241,12 @@ static GroupId buildJoinNode(
     }
     auto right_id = buildJoinNode(context, right_groups, union_find, graph, require_right, all_filter);
 
+    if (left_id > right_id)
+    {
+        join_keys = {join_keys.second, join_keys.first};
+        std::swap(left_id, right_id);
+    }
+
     auto join_node = createJoinNode(context, left_id, right_id, join_keys, require_names, filter);
     GroupExprPtr join_expr;
     context->getOptimizerContext().recordPlanNodeIntoGroup(join_node, join_expr, RuleType::JOIN_ENUM_ON_GRAPH);
@@ -246,17 +256,16 @@ static GroupId buildJoinNode(
     context->getOptimizerContext().recordPlanNodeIntoGroup(join_node, join_expr, RuleType::JOIN_ENUM_ON_GRAPH, join_expr->getGroupId());
     join_expr->setRuleExplored(RuleType::INNER_JOIN_COMMUTATION);
 
-    // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "JoinEnumOnGraph generate new join in new group id={}", join_expr->getGroupId());
     return join_expr->getGroupId();
 }
 
 TransformResult JoinEnumOnGraph::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    auto group = context.optimization_context->getOptimizerContext().getMemo().getGroupById(context.group_id);
-
+    auto group_id = context.group_id;
+    auto group = context.optimization_context->getOptimizerContext().getMemo().getGroupById(group_id);
 
     const auto * join_step = dynamic_cast<const MultiJoinStep *>(node->getStep().get());
-    
+
     if (join_step->getGraph().getNodes().size() > context.context->getSettingsRef().max_graph_reorder_size)
         return {};
 
@@ -271,14 +280,14 @@ TransformResult JoinEnumOnGraph::transformImpl(PlanNodePtr node, const Captures 
     const auto & source_to_root = context.optimization_context->getMemo().getSourceToJoinRoot();
     intersection.flip();
     bool found_root = true;
-    for (auto group_id : join_step->getGraph().getNodes())
+    for (auto left_group_id : join_step->getGraph().getNodes())
     {
-        if (!source_to_root.contains(group_id))
+        if (!source_to_root.contains(left_group_id))
         {
             found_root = false;
             break;
         }
-        intersection &= source_to_root.at(group_id);
+        intersection &= source_to_root.at(left_group_id);
     }
 
     if (intersection.count() && found_root)
@@ -300,8 +309,8 @@ TransformResult JoinEnumOnGraph::transformImpl(PlanNodePtr node, const Captures 
         auto left_possible_output = createPossibleSymbols(left_groups, context.optimization_context);
         auto right_possible_output = createPossibleSymbols(right_groups, context.optimization_context);
         // create join filter
-        auto filter = PredicateUtils::combineConjuncts(std::vector<ASTPtr>{
-            getJoinFilter(graph.getFilter(), left_possible_output, right_possible_output, context.context)});
+        auto filter = PredicateUtils::combineConjuncts(
+            getJoinFilter(graph.getFilter(), left_possible_output, right_possible_output, context.context));
         auto filter_symbols = SymbolsExtractor::extract(filter);
 
         // build left node
@@ -314,8 +323,8 @@ TransformResult JoinEnumOnGraph::transformImpl(PlanNodePtr node, const Captures 
                 require_left.insert(symbol);
             }
         }
-        auto new_left_id = buildJoinNode(
-            context.optimization_context, left_groups, graph.getUnionFind(), graph, require_left, graph.getFilter());
+        auto new_left_id
+            = buildJoinNode(context.optimization_context, left_groups, graph.getUnionFind(), graph, require_left, graph.getFilter());
 
         // build right node
         std::set<String> require_right = output_names;
@@ -327,8 +336,8 @@ TransformResult JoinEnumOnGraph::transformImpl(PlanNodePtr node, const Captures 
                 require_right.insert(symbol);
             }
         }
-        auto new_right_id = buildJoinNode(
-            context.optimization_context, right_groups, graph.getUnionFind(), graph, require_right, graph.getFilter());
+        auto new_right_id
+            = buildJoinNode(context.optimization_context, right_groups, graph.getUnionFind(), graph, require_right, graph.getFilter());
 
 
         result.emplace_back(createJoinNode(context.optimization_context, new_left_id, new_right_id, join_keys, output_names, filter));

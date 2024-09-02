@@ -161,6 +161,7 @@ void ResourceManagerClient::updateVirtualWarehouse(const std::string & vw_name, 
 	{
         request.set_vw_name(vw_name);
         alter_settings.fillProto(*request.mutable_vw_settings());
+        LOG_TRACE(log, "update warehouse request : {}", request.ShortDebugString());
 
         stub_->updateVirtualWarehouse(&cntl, &request, &response, nullptr);
 
@@ -216,14 +217,14 @@ void ResourceManagerClient::getAllVirtualWarehouses(std::vector<VirtualWarehouse
 }
 
 void ResourceManagerClient::createWorkerGroup(
-    [[maybe_unused]] const String & worker_group_id, bool if_not_exists, const String & vw_name, const WorkerGroupData & worker_group_data)
+    [[maybe_unused]] const String & worker_group_id, const String & vw_name, const WorkerGroupData & worker_group_data)
 {
     brpc::Controller cntl;
     Protos::CreateWorkerGroupReq request;
     Protos::CreateWorkerGroupResp response;
-    auto rpc_func = [this, &cntl, &request, &response, &vw_name, &worker_group_data, if_not_exists](std::unique_ptr<Stub> & stub_)
+    auto rpc_func = [this, &cntl, &request, &response, &vw_name, &worker_group_data](std::unique_ptr<Stub> & stub_)
 	{
-        request.set_if_not_exists(if_not_exists);
+        request.set_if_not_exists(false);
         worker_group_data.fillProto(*request.mutable_worker_group_data(), false, false);
         request.set_vw_name(vw_name);
 
@@ -254,14 +255,19 @@ void ResourceManagerClient::dropWorkerGroup(const String & worker_group_id, bool
     callToLeaderWrapper(response, rpc_func);
 }
 
-void ResourceManagerClient::getWorkerGroups(const std::string & vw_name, std::vector<WorkerGroupData> & groups_data)
+void ResourceManagerClient::getWorkerGroups(
+    const std::string & vw_name,
+    std::vector<WorkerGroupData> & groups_data,
+    std::optional<VirtualWarehouseSettings> & settings,
+    std::atomic<UInt64> & last_settings_timestamp)
 {
     brpc::Controller cntl;
     Protos::GetWorkerGroupsReq request;
     Protos::GetWorkerGroupsResp response;
-    auto rpc_func = [this, &cntl, &request, &response, &vw_name](std::unique_ptr<Stub> & stub_)
+    auto rpc_func = [this, &cntl, &request, &response, &vw_name, &last_settings_timestamp](std::unique_ptr<Stub> & stub_)
 	{
         request.set_vw_name(vw_name);
+        request.set_last_settings_timestamp(last_settings_timestamp.load());
         stub_->getWorkerGroups(&cntl, &request, &response, nullptr);
         LOG_TRACE(
             &Poco::Logger::get("adaptiveScheduler"),
@@ -270,11 +276,17 @@ void ResourceManagerClient::getWorkerGroups(const std::string & vw_name, std::ve
         RPCHelpers::checkResponse(response);
     };
 
-    auto process_response = [&groups_data] (Protos::GetWorkerGroupsResp & response_)
+    auto process_response = [&groups_data, &settings, &last_settings_timestamp] (Protos::GetWorkerGroupsResp & response_)
     {
         for (auto & worker_group_data : response_.worker_group_data())
         {
             groups_data.emplace_back(WorkerGroupData::createFromProto(worker_group_data));
+        }
+        if (response_.has_vw_settings())
+        {
+            settings = VirtualWarehouseSettings{};
+            (*settings).parseFromProto(response_.vw_settings());
+            last_settings_timestamp = response_.last_settings_timestamp();
         }
     };
 

@@ -27,16 +27,14 @@ struct TestRule : public Rule
     const static Capture aggregatingCap;
     const static Capture filterCap;
 
-    RuleType getType() const override{
-        return RuleType::NUM_RULES;
-    }
-    String getName() const override{
-        return "NUM_RULES";
-    }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override{
+    RuleType getType() const override { return RuleType::NUM_RULES; }
+    String getName() const override { return "NUM_RULES"; }
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
+    {
         using namespace DB::Patterns;
-        return aggregating().capturedAs(aggregatingCap).withSingle(filter().capturedAs(filterCap)).result();
+        static auto pattern = aggregating().capturedAs(aggregatingCap).withSingle(filter().capturedAs(filterCap)).result();
+        return pattern;
     }
     TransformResult transformImpl(PlanNodePtr, const Captures & captures, RuleContext &) override
     {
@@ -64,17 +62,13 @@ TEST(OptimizerRuleTest, Rule)
     RuleContext ctx{.context = context, .cte_info = cte_info};
 
     PlanNodePtr plan1 = createAggregatingNode(
-        "k1",
-        "sum",
-        false,
-        {createFilterNode("c2", "eq", {createTableScanNode("db1", "t1", {}), createTableScanNode("db1", "t2", {})})});
+        "k1", "sum", false, {createFilterNode("c2", "eq", {createTableScanNode("db1", "t1", {}), createTableScanNode("db1", "t2", {})})});
 
     PlanNodePtr plan2 = createAggregatingNode(
         "k1",
         "sum",
         false,
-        {createJoinNode(
-            ASTTableJoin::Kind::Inner, {"jk1"}, {createTableScanNode("db1", "t1", {}), createTableScanNode("db1", "t2", {})})});
+        {createJoinNode(ASTTableJoin::Kind::Inner, {"jk1"}, {createTableScanNode("db1", "t1", {}), createTableScanNode("db1", "t2", {})})});
     auto res1 = rule.transform(plan1, ctx);
     ASSERT_TRUE(!res1.empty());
     auto & transformed = res1.getPlans()[0];

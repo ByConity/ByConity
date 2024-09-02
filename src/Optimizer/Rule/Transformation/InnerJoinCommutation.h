@@ -43,7 +43,7 @@ public:
     RuleType getType() const override { return RuleType::INNER_JOIN_COMMUTATION; }
     String getName() const override { return "INNER_JOIN_COMMUTATION"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_inner_join_commutation; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     const std::vector<RuleType> & blockRules() const override;
 

@@ -5,6 +5,8 @@
 #include <utility>
 #include <atomic>
 #include <common/types.h>
+#include <metric_helper.h>
+#include <Common/LabelledMetrics.h>
 
 /** Allows to count number of simultaneously happening processes or current value of some metric.
   *  - for high-level profiling.
@@ -38,20 +40,28 @@ namespace CurrentMetrics
     Metric end();
 
     /// Set value of specified metric.
-    inline void set(Metric metric, Value value)
+    inline void set(Metric metric, Value value,  Metrics::MetricType type = Metrics::MetricType::None, LabelledMetrics::MetricLabels labels = {}, time_t ts = {})
     {
         values[metric].store(value, std::memory_order_relaxed);
+        if (type == Metrics::MetricType::Store || type == Metrics::MetricType::TsStore)
+        {
+            Metrics::EmitMetric(type, getSnakeName(metric), value, LabelledMetrics::toString(labels), ts);
+        }
     }
 
     /// Add value for specified metric. You must subtract value later; or see class Increment below.
-    inline void add(Metric metric, Value value = 1)
+    inline void add(Metric metric, Value value = 1, Metrics::MetricType type = Metrics::MetricType::None, LabelledMetrics::MetricLabels labels = {})
     {
         values[metric].fetch_add(value, std::memory_order_relaxed);
+        if (type == Metrics::MetricType::Counter)
+        {
+            Metrics::EmitCounter(getSnakeName(metric), value, LabelledMetrics::toString(labels));
+        }
     }
 
-    inline void sub(Metric metric, Value value = 1)
+    inline void sub(Metric metric, Value value = 1, Metrics::MetricType type = Metrics::MetricType::None, LabelledMetrics::MetricLabels labels = {})
     {
-        add(metric, -value);
+        add(metric, -value, type, labels);
     }
 
     /// For lifetime of object, add amount for specified metric. Then subtract.

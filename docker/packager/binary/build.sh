@@ -50,7 +50,18 @@ if [ -n "$MAKE_DEB" ]; then
   bash -x /build/packages/build
 fi
 
-mv ./programs/clickhouse* /output
+DESTDIR=/output ninja $NINJA_FLAGS install
+# Folders structure looks like this:
+# /output
+#   etc/ (Needed by ByConity docker image)
+#   usr/
+#     bin/ (Needed by ByConity docker image)
+#     cmake/ (same as above)
+#     lib/ (...)
+#     share/ (...)
+#     usr/ (same as above)
+#   byconity-*** (Needed by GitHub Releases)
+#   unit_tests_dbms
 [ -x ./programs/self-extracting/clickhouse ] && mv ./programs/self-extracting/clickhouse /output
 mv ./src/unit_tests_dbms /output ||: # may not exist for some binary builds
 

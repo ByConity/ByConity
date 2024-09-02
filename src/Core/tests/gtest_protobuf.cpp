@@ -1,4 +1,5 @@
 #include <Core/tests/gtest_protobuf_common.h>
+#include <Protos/plan_node_utils.pb.h>
 #include "Interpreters/DistributedStages/PlanSegment.h"
 
 
@@ -192,7 +193,7 @@ TEST_F(ProtobufTest, AggregateDescription)
 {
     std::default_random_engine eng(42);
     // construct valid object
-    auto obj = generateAggregateDescription(eng);
+    auto obj = generateAggregateDescription(eng, 6);
     // serialize to protobuf
     Protos::AggregateDescription pb;
     obj.toProto(pb);
@@ -306,6 +307,23 @@ TEST_F(ProtobufTest, PlanSegmentInput)
     compareProto(pb, pb2);
 }
 
+TEST_F(ProtobufTest, PlanSegmentOutput)
+{
+    std::default_random_engine eng(42);
+    // construct valid step
+    auto output = generatePlanSegmentOutput(eng);
+    // serialize to protobuf
+    Protos::PlanSegmentOutput pb;
+    output->toProto(pb);
+    // deserialize from protobuf
+    auto output2 = std::make_shared<PlanSegmentOutput>();
+    output2->fillFromProto(pb);
+    // re-serialize to protobuf
+    Protos::PlanSegmentOutput pb2;
+    output2->toProto(pb2);
+    compareProto(pb, pb2);
+}
+
 TEST_F(ProtobufTest, InputOrderInfo)
 {
     std::default_random_engine eng(42);
@@ -316,7 +334,7 @@ TEST_F(ProtobufTest, InputOrderInfo)
     Protos::InputOrderInfo pb;
     step->toProto(pb);
     // deserialize from protobuf
-    auto step2 = InputOrderInfo::fromProto(pb, context);
+    auto step2 = InputOrderInfo::fromProto(pb);
     // re-serialize to protobuf
     Protos::InputOrderInfo pb2;
     step2->toProto(pb2);

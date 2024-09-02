@@ -20,6 +20,7 @@
 #include <ResourceManagement/QueryScheduler.h>
 #include <ResourceManagement/SharedWorkerGroup.h>
 #include <Common/Config/ConfigProcessor.h>
+#include <Protos/resource_manager_rpc.pb.h>
 
 #include <vector>
 #include <map>
@@ -111,6 +112,8 @@ public:
     void setLastBorrowTimestamp(UInt64 last_borrow_timestamp_) { last_borrow_timestamp = last_borrow_timestamp_; }
     void setLastLendTimestamp(UInt64 last_lend_timestamp_) { last_lend_timestamp = last_lend_timestamp_; }
 
+    UInt64 getLastSettingsTimestamp() const { return last_settings_timestamp.load(); }
+
 private:
     const WorkerGroupPtr & getWorkerGroupImpl(const String & id, ReadLock & rlock);
     const WorkerGroupPtr & getWorkerGroupExclusiveImpl(const String & id, WriteLock & wlock);
@@ -139,6 +142,8 @@ private:
     std::unordered_map<String, size_t> lent_groups; // Map of group_id to lend count
     UInt64 last_borrow_timestamp{0};
     UInt64 last_lend_timestamp{0};
+
+    std::atomic<UInt64> last_settings_timestamp{0};
 
     std::unique_ptr<QueryScheduler> query_scheduler;
 

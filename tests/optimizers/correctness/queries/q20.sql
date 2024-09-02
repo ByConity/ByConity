@@ -1,18 +1,20 @@
--- test limit push
+set enable_push_partial_agg=0;
 select
-    sum(2)
+    count()
 from
-    q17_t3
-settings enable_push_partial_agg = 1;
+(
+    select /*+enable_push_partial_agg*/
+        sum(a)
+    from q17_t3
+    group by a
+);
 
-select /*+enable_push_partial_agg(sum)*/
-    sum(2)
+select /*+enable_push_partial_agg*/
+    count()
 from
-    q17_t3
-settings enable_push_partial_agg = 0;
-
-select /*+disable_push_partial_agg(sum)*/
-    sum(2)
-from
-    q17_t3
-settings enable_push_partial_agg = 1;
+(
+    select
+        sum(a)
+    from q17_t3
+    group by a
+);

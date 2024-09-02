@@ -26,6 +26,8 @@ public:
 
     bool needStructureConversion() const override { return false; }
 
+    bool isPreviledgedFunction() const override { return true; }
+
 private:
     StoragePtr executeImpl(const ASTPtr & ast_function, ContextPtr context, const std::string & table_name, ColumnsDescription cached_columns) const override;
     const char * getStorageTypeName() const override { return "Distributed"; }

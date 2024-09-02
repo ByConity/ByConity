@@ -60,6 +60,13 @@ public:
         return convertToFullColumn();
     }
 
+    void tryToFlushZeroCopyBuffer() const override
+    {
+        
+        if (data) 
+            data->tryToFlushZeroCopyBuffer();
+    }
+
     ColumnPtr removeLowCardinality() const;
 
     std::string getName() const override

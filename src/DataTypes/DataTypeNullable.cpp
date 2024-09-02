@@ -45,6 +45,8 @@ bool DataTypeNullable::onlyNull() const
 
 MutableColumnPtr DataTypeNullable::createColumn() const
 {
+    nested_data_type->enable_zero_cpy_read = enable_zero_cpy_read;
+    // TODO support null_map zero_copy
     return ColumnNullable::create(nested_data_type->createColumn(), ColumnUInt8::create());
 }
 

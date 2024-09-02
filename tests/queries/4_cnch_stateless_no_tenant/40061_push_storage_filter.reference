@@ -5,11 +5,13 @@ explain select a from t40061 where p_date >= '2023-01-01';
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: p_date >= cast(19358, \'Date\')
-      └─ TableScan test.t40061 Est. ? rows
-               Where: p_date >= cast(19358, \'Date\')
-               Outputs: [p_date, a]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: p_date >= cast(19358, \'Date\')
+         └─ TableScan test.t40061 Est. ? rows
+                  Where: p_date >= cast(19358, \'Date\')
+                  Outputs: [p_date, a]
 explain select a, p_date from t40061 where p_date >= '2023-01-01';
 Projection Est. ? rows
 │     Expressions: [a, p_date]
@@ -23,46 +25,56 @@ explain select a from t40061 where b > 0 AND p_date >= '2023-01-01';
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: (b > 0) AND (p_date >= cast(19358, \'Date\'))
-      └─ TableScan test.t40061 Est. ? rows
-               Where: (b > 0) AND (p_date >= cast(19358, \'Date\'))
-               Outputs: [p_date, a, b]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: (b > 0) AND (p_date >= cast(19358, \'Date\'))
+         └─ TableScan test.t40061 Est. ? rows
+                  Where: (b > 0) AND (p_date >= cast(19358, \'Date\'))
+                  Outputs: [p_date, a, b]
 explain select s.a, t.a from (select a from t40061 where b > 0 AND p_date >= '2023-01-01') s, (select a from t40061 where b > 1 AND p_date >= '2023-01-01') t;
 Projection Est. ? rows
 │     Expressions: [a], t.a:=a_1
 └─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: 
-      ├─ Filter Est. ? rows
-      │  │     Condition: (b > 0) AND (p_date >= cast(19358, \'Date\'))
-      │  └─ TableScan test.t40061 Est. ? rows
-      │           Where: (b > 0) AND (p_date >= cast(19358, \'Date\'))
-      │           Outputs: [p_date, a, b]
+      ├─ Projection Est. ? rows
+      │  │     Expressions: [a]
+      │  └─ Filter Est. ? rows
+      │     │     Condition: (b > 0) AND (p_date >= cast(19358, \'Date\'))
+      │     └─ TableScan test.t40061 Est. ? rows
+      │              Where: (b > 0) AND (p_date >= cast(19358, \'Date\'))
+      │              Outputs: [p_date, a, b]
       └─ Broadcast Exchange Est. ? rows
-         └─ Filter Est. ? rows
-            │     Condition: (b_1 > 1) AND (p_date_1 >= cast(19358, \'Date\'))
-            └─ TableScan test.t40061 Est. ? rows
-                     Where: (b > 1) AND (p_date >= cast(19358, \'Date\'))
-                     Outputs: p_date_1:=p_date, a_1:=a, b_1:=b
+         └─ Projection Est. ? rows
+            │     Expressions: [a_1]
+            └─ Filter Est. ? rows
+               │     Condition: (b_1 > 1) AND (p_date_1 >= cast(19358, \'Date\'))
+               └─ TableScan test.t40061 Est. ? rows
+                        Where: (b > 1) AND (p_date >= cast(19358, \'Date\'))
+                        Outputs: p_date_1:=p_date, a_1:=a, b_1:=b
 explain select a from t40061 where toYear(p_date) >= 2023;
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: toYear(p_date) >= 2023
-      └─ TableScan test.t40061 Est. ? rows
-               Where: toYear(p_date) >= 2023
-               Outputs: [p_date, a]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: toYear(p_date) >= 2023
+         └─ TableScan test.t40061 Est. ? rows
+                  Where: toYear(p_date) >= 2023
+                  Outputs: [p_date, a]
 explain select a from t40061 where toYear(p_date) >= 2023 AND b > 0 AND p_date >= '2023-01-01' AND a + 1 > 0;
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: (toYear(p_date) >= 2023) AND (b > 0) AND (p_date >= cast(19358, \'Date\')) AND ((a + 1) > 0)
-      └─ TableScan test.t40061 Est. ? rows
-               Where: (toYear(p_date) >= 2023) AND (b > 0) AND (p_date >= cast(19358, \'Date\')) AND ((a + 1) > 0)
-               Outputs: [p_date, a, b]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: (toYear(p_date) >= 2023) AND (b > 0) AND (p_date >= cast(19358, \'Date\')) AND ((a + 1) > 0)
+         └─ TableScan test.t40061 Est. ? rows
+                  Where: (toYear(p_date) >= 2023) AND (b > 0) AND (p_date >= cast(19358, \'Date\')) AND ((a + 1) > 0)
+                  Outputs: [p_date, a, b]
 SET enable_partition_filter_push_down = 1;
 SET enable_optimizer_early_prewhere_push_down = 0;
 explain select a from t40061 where p_date >= '2023-01-01';
@@ -83,31 +95,37 @@ explain select a from t40061 where b > 0 AND p_date >= '2023-01-01';
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: b > 0
-      └─ TableScan test.t40061 Est. ? rows
-               Partition filter: p_date >= cast(19358, \'Date\')
-               Where: b > 0
-               Outputs: [a, b]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: b > 0
+         └─ TableScan test.t40061 Est. ? rows
+                  Partition filter: p_date >= cast(19358, \'Date\')
+                  Where: b > 0
+                  Outputs: [a, b]
 explain select s.a, t.a from (select a from t40061 where b > 0 AND p_date >= '2023-01-01') s, (select a from t40061 where b > 1 AND p_date >= '2023-01-01') t;
 Projection Est. ? rows
 │     Expressions: [a], t.a:=a_1
 └─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: 
-      ├─ Filter Est. ? rows
-      │  │     Condition: b > 0
-      │  └─ TableScan test.t40061 Est. ? rows
-      │           Partition filter: p_date >= cast(19358, \'Date\')
-      │           Where: b > 0
-      │           Outputs: [a, b]
+      ├─ Projection Est. ? rows
+      │  │     Expressions: [a]
+      │  └─ Filter Est. ? rows
+      │     │     Condition: b > 0
+      │     └─ TableScan test.t40061 Est. ? rows
+      │              Partition filter: p_date >= cast(19358, \'Date\')
+      │              Where: b > 0
+      │              Outputs: [a, b]
       └─ Broadcast Exchange Est. ? rows
-         └─ Filter Est. ? rows
-            │     Condition: b_1 > 1
-            └─ TableScan test.t40061 Est. ? rows
-                     Partition filter: p_date >= cast(19358, \'Date\')
-                     Where: b > 1
-                     Outputs: a_1:=a, b_1:=b
+         └─ Projection Est. ? rows
+            │     Expressions: [a_1]
+            └─ Filter Est. ? rows
+               │     Condition: b_1 > 1
+               └─ TableScan test.t40061 Est. ? rows
+                        Partition filter: p_date >= cast(19358, \'Date\')
+                        Where: b > 1
+                        Outputs: a_1:=a, b_1:=b
 explain select a from t40061 where toYear(p_date) >= 2023;
 Projection Est. ? rows
 │     Expressions: [a]
@@ -119,12 +137,14 @@ explain select a from t40061 where toYear(p_date) >= 2023 AND b > 0 AND p_date >
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: (b > 0) AND ((a + 1) > 0)
-      └─ TableScan test.t40061 Est. ? rows
-               Partition filter: (toYear(p_date) >= 2023) AND (p_date >= cast(19358, \'Date\'))
-               Where: (b > 0) AND ((a + 1) > 0)
-               Outputs: [a, b]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: (b > 0) AND ((a + 1) > 0)
+         └─ TableScan test.t40061 Est. ? rows
+                  Partition filter: (toYear(p_date) >= 2023) AND (p_date >= cast(19358, \'Date\'))
+                  Where: (b > 0) AND ((a + 1) > 0)
+                  Outputs: [a, b]
 SET enable_partition_filter_push_down = 1;
 SET enable_optimizer_early_prewhere_push_down = 1;
 explain select a from t40061 where p_date >= '2023-01-01';
@@ -145,31 +165,37 @@ explain select a from t40061 where b > 0 AND p_date >= '2023-01-01';
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: b > 0
-      └─ TableScan test.t40061 Est. ? rows
-               Partition filter: p_date >= cast(19358, \'Date\')
-               Where: b > 0
-               Outputs: [a, b]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: b > 0
+         └─ TableScan test.t40061 Est. ? rows
+                  Partition filter: p_date >= cast(19358, \'Date\')
+                  Where: b > 0
+                  Outputs: [a, b]
 explain select s.a, t.a from (select a from t40061 where b > 0 AND p_date >= '2023-01-01') s, (select a from t40061 where b > 1 AND p_date >= '2023-01-01') t;
 Projection Est. ? rows
 │     Expressions: [a], t.a:=a_1
 └─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: 
-      ├─ Filter Est. ? rows
-      │  │     Condition: b > 0
-      │  └─ TableScan test.t40061 Est. ? rows
-      │           Partition filter: p_date >= cast(19358, \'Date\')
-      │           Where: b > 0
-      │           Outputs: [a, b]
+      ├─ Projection Est. ? rows
+      │  │     Expressions: [a]
+      │  └─ Filter Est. ? rows
+      │     │     Condition: b > 0
+      │     └─ TableScan test.t40061 Est. ? rows
+      │              Partition filter: p_date >= cast(19358, \'Date\')
+      │              Where: b > 0
+      │              Outputs: [a, b]
       └─ Broadcast Exchange Est. ? rows
-         └─ Filter Est. ? rows
-            │     Condition: b_1 > 1
-            └─ TableScan test.t40061 Est. ? rows
-                     Partition filter: p_date >= cast(19358, \'Date\')
-                     Where: b > 1
-                     Outputs: a_1:=a, b_1:=b
+         └─ Projection Est. ? rows
+            │     Expressions: [a_1]
+            └─ Filter Est. ? rows
+               │     Condition: b_1 > 1
+               └─ TableScan test.t40061 Est. ? rows
+                        Partition filter: p_date >= cast(19358, \'Date\')
+                        Where: b > 1
+                        Outputs: a_1:=a, b_1:=b
 explain select a from t40061 where toYear(p_date) >= 2023;
 Projection Est. ? rows
 │     Expressions: [a]
@@ -181,12 +207,14 @@ explain select a from t40061 where toYear(p_date) >= 2023 AND b > 0 AND p_date >
 Projection Est. ? rows
 │     Expressions: [a]
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: (b > 0) AND ((a + 1) > 0)
-      └─ TableScan test.t40061 Est. ? rows
-               Partition filter: (toYear(p_date) >= 2023) AND (p_date >= cast(19358, \'Date\'))
-               Where: (b > 0) AND ((a + 1) > 0)
-               Outputs: [a, b]
+   └─ Projection Est. ? rows
+      │     Expressions: [a]
+      └─ Filter Est. ? rows
+         │     Condition: (b > 0) AND ((a + 1) > 0)
+         └─ TableScan test.t40061 Est. ? rows
+                  Partition filter: (toYear(p_date) >= 2023) AND (p_date >= cast(19358, \'Date\'))
+                  Where: (b > 0) AND ((a + 1) > 0)
+                  Outputs: [a, b]
 SET enable_optimizer = 0;
 SET enable_partition_filter_push_down = 0;
 -- SET enable_early_partition_pruning = 0;

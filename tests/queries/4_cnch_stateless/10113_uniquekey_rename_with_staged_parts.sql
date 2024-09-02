@@ -13,9 +13,10 @@ INSERT INTO u10113_rename VALUES (3, 103, 1, 'b', 1), (4, 104, 2, 'b', 1), (5, 1
 
 SELECT '-- before rename --';
 system sync dedup worker u10113_rename;
-SELECT 'dedup worker status:', table, is_active from system.cnch_dedup_workers where database=currentDatabase() and table='u10113_rename';
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10113_rename' and to_publish;
-SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase() and table='u10113_rename' and active;
+-- Currently, cnch_dedup_workers can only query the DedupWorkerManager on the current server. Consider aligning with cnch-1.4 in the future
+SELECT 'dedup worker status:', table, is_active from cnch(server, system.cnch_dedup_workers) where table='u10113_rename';
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase(0) and table = 'u10113_rename' and to_publish;
+SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase(1) and table='u10113_rename' and active;
 SELECT * FROM u10113_rename order by k1, k2;
 
 SELECT '-- rename in same database and insert some values';
@@ -24,8 +25,8 @@ INSERT INTO u10113_rename2 VALUES (6, 106, 3, 'a', 1), (7, 107, 3, 'b', 1), (8, 
 
 SELECT '-- after rename --';
 system sync dedup worker u10113_rename2;
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10113_rename2' and to_publish;
-SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase() and table='u10113_rename2' and active;
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase(0) and table = 'u10113_rename2' and to_publish;
+SELECT '#parts:', count() FROM system.cnch_parts where database=currentDatabase(1) and table='u10113_rename2' and active;
 SELECT * FROM u10113_rename2 order by k1, k2;
 
 DROP TABLE IF EXISTS u10113_rename;

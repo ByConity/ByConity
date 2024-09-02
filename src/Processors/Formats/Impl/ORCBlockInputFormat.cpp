@@ -1,5 +1,11 @@
 #include "ORCBlockInputFormat.h"
 #include <boost/algorithm/string/case_conv.hpp>
+#include <unordered_map>
+#include "common/logger_useful.h"
+#include "DataTypes/NestedUtils.h"
+#include "Processors/Formats/Impl/LMNativeORCBlockInputFormat.h"
+#include "Processors/Formats/Impl/OrcCommon.h"
+#include "Storages/IStorage.h"
 #if USE_ORC
 
 #include <Formats/FormatFactory.h>
@@ -20,12 +26,12 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-// #define THROW_ARROW_NOT_OK(status)                                     \
-//     do                                                                 \
-//     {                                                                  \
-//         if (::arrow::Status _s = (status); !_s.ok())                   \
-//             throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
-//     } while (false)
+#define THROW_ARROW_NOT_OK(status)                                     \
+    do                                                                 \
+    {                                                                  \
+        if (::arrow::Status _s = (status); !_s.ok())                   \
+            throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
+    } while (false)
 
 ORCBlockInputFormat::ORCBlockInputFormat(ReadBuffer & in_, Block header_, const FormatSettings & format_settings_)
     : IInputFormat(std::move(header_), in_), format_settings(format_settings_)
@@ -42,7 +48,7 @@ Chunk ORCBlockInputFormat::generate()
         prepareReader();
 
     const auto & skip_stripes = format_settings.orc.skip_stripes;
-    while (!skip_stripes.empty() && stripe_current < stripe_total && skip_stripes.at(stripe_current))
+    while (!skip_stripes.empty() && stripe_current < stripe_total && skip_stripes.contains(stripe_current))
         ++stripe_current;
 
     if (stripe_current >= stripe_total)
@@ -163,17 +169,55 @@ void ORCBlockInputFormat::prepareReader()
         format_settings.orc.import_nested,
         format_settings.orc.allow_missing_columns,
         format_settings.null_as_default,
+        format_settings.date_time_overflow_behavior,
         format_settings.orc.case_insensitive_column_matching);
 
     include_indices = getColumnIndices(schema, getPort().getHeader(), format_settings.orc.case_insensitive_column_matching, format_settings.orc.import_nested);
 }
 
-void registerInputFormatProcessorORC(FormatFactory & factory)
+IStorage::ColumnSizeByName ORCBlockInputFormat::getColumnSizes()
+{
+    std::atomic_int is_stopped = false;
+    THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
+                           asArrowFile(in, format_settings, is_stopped, "ORC", ORC_MAGIC_BYTES), arrow::default_memory_pool())
+                           .Value(&file_reader));
+    auto * orc_reader = file_reader->GetRawORCReader();
+    if (!orc_reader)
+    {
+        LOG_INFO(&Poco::Logger::get("ORCBlockInputFormat"), "cannot get columns size, raw reader ptr is nullptr.");
+        return {};
+    }
+    return getOrcColumnsSize(*orc_reader);
+}
+
+void ORCBlockInputFormat::setQueryInfo([[maybe_unused]] const SelectQueryInfo & query_info, [[maybe_unused]] ContextPtr local_context)
+{
+    // if(auto select_query = dynamic_cast<ASTSelectQuery*>(query_info.query.get()); select_query)
+    // {
+    //     if(select_query->prewhere())
+    //     {
+    //         throw Exception(ErrorCodes::BAD_ARGUMENTS, "NativeORCBlockInputFormat does not support prewhere");
+    //     }
+    // }
+}
+
+
+void registerInputFormatProcessorORC(FormatFactory &factory)
 {
     factory.registerInputFormatProcessor(
-        "ORC", [](ReadBuffer & buf, const Block & sample, const RowInputFormatParams &, const FormatSettings & settings) {
-            return std::make_shared<ORCBlockInputFormat>(buf, sample, settings);
-        });
+            "ORC",
+            [](ReadBuffer &buf,
+                const Block &sample,
+                const RowInputFormatParams &,
+                const FormatSettings & settings)
+            {
+                InputFormatPtr res;
+                if (settings.orc.use_fast_decoder == 2)
+                    res = std::make_shared<LMNativeORCBlockInputFormat>(buf, sample, settings);
+                else
+                    res = std::make_shared<ORCBlockInputFormat>(buf, sample, settings);
+                return res;
+            });
     factory.markFormatAsColumnOriented("ORC");
 }
 }

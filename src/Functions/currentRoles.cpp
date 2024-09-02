@@ -10,6 +10,7 @@
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeArray.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 
 namespace DB
@@ -55,6 +56,7 @@ namespace
 
             /// We sort the names because the result of the function should not depend on the order of UUIDs.
             std::sort(role_names.begin(), role_names.end());
+            std::for_each(role_names.begin(), role_names.end(), [](auto &str) {str = getOriginalEntityName(str);});
         }
 
         size_t getNumberOfArguments() const override { return 0; }

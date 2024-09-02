@@ -101,6 +101,34 @@ inline const char * getLoopbackIPFromEnv()
     return loopback_ip;
 }
 
+inline const char * getConsulIPFromEnv()
+{
+    const auto get_consul_ip_lambda = []() -> const char * {
+        {
+            const char * consul_http_ipv6 = getenv("CONSUL_HTTP_HOST");
+            if (consul_http_ipv6 && consul_http_ipv6[0])
+                return consul_http_ipv6;
+        }
+
+        {
+            const char * byted_ipv6 = getenv("BYTED_HOST_IPV6");
+            if (byted_ipv6 && byted_ipv6[0])
+                return byted_ipv6;
+        }
+
+        {
+            const char * my_ipv6 = getenv("MY_HOST_IPV6");
+            if (my_ipv6 && my_ipv6[0])
+                return my_ipv6;
+        }
+
+        return "::1";
+    };
+
+    static const char * consul_ip = get_consul_ip_lambda();
+    return consul_ip;
+}
+
 inline std::string addBracketsIfIpv6(const std::string & host_name)
 {
     if (host_name.find_first_of(':') != std::string::npos && !host_name.empty() && host_name.back() != ']')
@@ -215,6 +243,24 @@ public:
 };
 
 std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports);
+
+struct WGWorkerInfo
+{
+    WGWorkerInfo(const String & worker_id_, size_t num_workers_, size_t index_)
+        : worker_id(worker_id_), num_workers(num_workers_), index(index_) {}
+
+    bool operator==(const WGWorkerInfo & other) const
+    {
+        return (worker_id == other.worker_id) && (num_workers == other.num_workers) && (index == other.index);
+    }
+
+    String worker_id;
+    UInt64 num_workers;
+    UInt64 index;
+};
+
+using WGWorkerInfoPtr = std::shared_ptr<WGWorkerInfo>;
+
 }
 
 namespace std

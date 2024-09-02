@@ -57,7 +57,7 @@ public:
     ASTPtr getClusterByKey();
     void updateClusterByKey(const ASTPtr & cluster_by_key);
 
-    WorkloadTableStats getStats() const { return stats; }
+    WorkloadTableStats & getStats() { return stats; }
 
 private:
     const StoragePtr storage;

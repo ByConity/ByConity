@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <Poco/Logger.h>
+#include <Poco/Util/AbstractConfiguration.h>
 
 #include <Storages/DiskCache/AbstractCache.h>
 #include <Storages/DiskCache/BlockCacheReinsertionPolicy.h>
@@ -16,13 +17,13 @@
 #include <common/types.h>
 #include <common/unit.h>
 
-namespace ErrorCodes
-{
-const extern int BAD_ARGUMENTS;
-}
-
 namespace DB
 {
+namespace ErrorCodes
+{
+    const extern int BAD_ARGUMENTS;
+}
+
 class BlockCacheReinsertionConfig
 {
 public:

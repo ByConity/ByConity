@@ -33,17 +33,12 @@ ManipulationTask::ManipulationTask(ManipulationTaskParams params_, ContextPtr co
     : params(std::move(params_))
     , context(std::move(context_))
 {
-    if (/*params.source_parts.empty() && */params.source_data_parts.empty())
-        throw Exception("Expected non-empty source parts in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
-
-    if (params.new_part_names.empty())
-        throw Exception("Expected non-empty new part names in ManipulationTaskParams", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void ManipulationTask::setManipulationEntry()
 {
     auto global_context = context->getGlobalContext();
-    manipulation_entry = global_context->getManipulationList().insert(params, false);
+    manipulation_entry = global_context->getManipulationList().insert(params, false, global_context);
 
     auto * element = manipulation_entry->get();
     element->related_node = context->getClientInfo().current_address.toString() + ":" + toString(params.rpc_port);
@@ -51,6 +46,13 @@ void ManipulationTask::setManipulationEntry()
 
 void ManipulationTask::execute()
 {
+    /// Make out memory tracker a parent of current thread memory tracker
+    std::optional<ThreadGroupSwitcher> switcher;
+    if (manipulation_entry)
+    {
+        switcher.emplace((*manipulation_entry)->thread_group);
+    }
+
     executeImpl();
 }
 

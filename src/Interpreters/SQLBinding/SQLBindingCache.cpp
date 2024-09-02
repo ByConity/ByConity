@@ -11,6 +11,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int TIMEOUT_EXCEEDED;
+    extern const int BINDING_NOT_EXISTS;
+    extern const int BINDING_ALREADY_EXISTS;
 }
 
 void BindingCacheManager::initializeGlobalBinding(ContextMutablePtr & context)
@@ -75,29 +77,57 @@ BindingCacheManager::CacheType & BindingCacheManager::getReCacheInstance()
     return *re_binding_cache;
 }
 
-void BindingCacheManager::addReBinding(const UUID & id, const SQLBindingObject & binding)
+void BindingCacheManager::addSqlBinding(const UUID & id, const SQLBindingObject & binding, bool throw_if_exists, bool or_replace)
 {
-    if (re_keys_mutex.try_lock_for(std::chrono::milliseconds(1000)))
-    {
-        re_bindings_order_list.remove(id);
-        re_bindings_order_list.emplace_back(id);
-        re_binding_cache->add(id, binding);
-        re_keys_mutex.unlock();
-    }
-    else
-        throw Exception("get ReBinding cache local failed", ErrorCodes::TIMEOUT_EXCEEDED);
+    if (!hasSqlBinding(id) || or_replace)
+        sql_binding_cache->add(id, binding);
+    else if (throw_if_exists)
+        throw Exception(ErrorCodes::BINDING_ALREADY_EXISTS, "SQL binding already exists");
 }
 
-void BindingCacheManager::removeReBinding(const UUID & id)
+void BindingCacheManager::addReBinding(const UUID & id, const SQLBindingObject & binding, bool throw_if_exists, bool or_replace)
 {
-    if (re_keys_mutex.try_lock_for(std::chrono::milliseconds(1000)))
+    if (!hasReBinding(id) || or_replace)
     {
-        re_bindings_order_list.remove(id);
-        re_binding_cache->remove(id);
-        re_keys_mutex.unlock();
+        if (re_keys_mutex.try_lock_for(std::chrono::milliseconds(1000)))
+        {
+            re_bindings_order_list.remove(id);
+            re_bindings_order_list.emplace_back(id);
+            re_binding_cache->add(id, binding);
+            re_keys_mutex.unlock();
+        }
+        else
+            throw Exception("add ReBinding cache failed", ErrorCodes::TIMEOUT_EXCEEDED);
     }
-    else
-        throw Exception("get ReBinding cache local failed", ErrorCodes::TIMEOUT_EXCEEDED);
+    else if (throw_if_exists)
+        throw Exception(ErrorCodes::BINDING_ALREADY_EXISTS, "Re binding already exists");
+
+}
+
+void BindingCacheManager::removeSqlBinding(const UUID & id, bool throw_if_not_exists)
+{
+    if (hasSqlBinding(id))
+        sql_binding_cache->remove(id);
+    else if (throw_if_not_exists)
+        throw Exception(ErrorCodes::BINDING_NOT_EXISTS, "SQL binding not exists");
+}
+
+void BindingCacheManager::removeReBinding(const UUID & id, bool throw_if_not_exists)
+{
+    if (hasReBinding(id))
+    {
+        if (re_keys_mutex.try_lock_for(std::chrono::milliseconds(1000)))
+        {
+            re_bindings_order_list.remove(id);
+            re_binding_cache->remove(id);
+            re_keys_mutex.unlock();
+        }
+        else
+            throw Exception("remove ReBinding cache failed", ErrorCodes::TIMEOUT_EXCEEDED);
+    }
+    else if (throw_if_not_exists)
+        throw Exception(ErrorCodes::BINDING_NOT_EXISTS, "Re binding not exists");
+
 }
 
 void BindingCacheManager::updateGlobalBindingsFromCatalog(const ContextPtr & context)
@@ -125,10 +155,10 @@ void BindingCacheManager::updateGlobalBindingsFromCatalog(const ContextPtr & con
             if (binding->is_regular_expression)
             {
                 auto re_ptr = std::make_shared<boost::regex>(binding->pattern);
-                manager_instance->addReBinding(binding->uuid, {binding->pattern, nullptr, ast, re_ptr});
+                manager_instance->addReBinding(binding->uuid, {binding->pattern, binding->tenant_id, nullptr, ast, re_ptr}, false, true);
             }
             else
-                global_sql_cache.add(binding->uuid, {binding->pattern, ast, nullptr, nullptr});
+                global_sql_cache.add(binding->uuid, {binding->pattern, binding->tenant_id, ast, nullptr, nullptr});
         }
     }
 }
@@ -155,4 +185,12 @@ bool BindingCacheManager::hasReBinding(const UUID & id)
     return has_re_binding;
 }
 
+String BindingCacheManager::getTenantID(const UUID & id)
+{
+    if (hasSqlBinding(id))
+        return sql_binding_cache->get(id)->tenant_id;
+    else if (hasReBinding(id))
+        return re_binding_cache->get(id)->tenant_id;
+    return "";
+}
 }

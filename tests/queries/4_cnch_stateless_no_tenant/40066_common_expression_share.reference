@@ -19,8 +19,8 @@ Projection Est. ? rows
                │     Expressions: expr#trimBoth(substring(lower(s), 1, 4)):=`expr#trimBoth(substring(lower(s), 1, 4))_1`
                └─ Filter Est. ? rows
                   │     Condition: `expr#modulo(multiply(plus(a, 1), 3), 7)` = 3
-                  └─ TableScan default.ut40066_comexp_x Est. ? rows
-                           Where: (((a + 1) * 3) % 7) = 3
+                  └─ TableScan test.ut40066_comexp_x Est. ? rows
+                           Where: ((((a + 1) * 3) % 7) = 3) AND multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) > 1, 0, 1)
                            Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) > 1, 0, 1)
                            Inline expressions: [expr#modulo(multiply(plus(a, 1), 3), 7):=((a + 1) * 3) % 7, expr#trimBoth(substring(lower(s), 1, 4))_1:=trimBoth(substring(lower(s), 1, 4))]
                            Outputs: 
@@ -52,8 +52,8 @@ Projection Est. ? rows
                   │     Condition: startsWith(`expr#trimBoth(substring(lower(s), 1, 4))_1`, \'aa\')
                   └─ Projection Est. ? rows
                      │     Expressions: expr#trimBoth(substring(lower(s), 1, 4))_1:=trimBoth(substring(lower(s), 1, 4))
-                     └─ TableScan default.ut40066_comexp_x Est. ? rows
-                              Where: startsWith(trimBoth(substring(lower(s), 1, 4)), \'aa\')
+                     └─ TableScan test.ut40066_comexp_x Est. ? rows
+                              Where: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, 0) AND startsWith(trimBoth(substring(lower(s), 1, 4)), \'aa\')
                               Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, 0)
                               Outputs: [s]
 SELECT trim(substring(lower(s), 1, 4)) as key, count() as cnt
@@ -90,7 +90,7 @@ Projection Est. ? rows
                            └─ Aggregating Est. ? rows
                               │     Group by: {}
                               │     Aggregates: expr#max(s):=AggNull(max)(s)
-                              └─ TableScan default.ut40066_comexp_x Est. ? rows
+                              └─ TableScan test.ut40066_comexp_x Est. ? rows
                                        Outputs: [s]
 SELECT trim(substring(lower(s1), 1, 4)) as key, count() as cnt
 FROM
@@ -128,8 +128,8 @@ Projection Est. ? rows
       │           │     Expressions: expr#trimBoth(substring(lower(s), 1, 4)):=`expr#trimBoth(substring(lower(s), 1, 4))_3`
       │           └─ Filter Est. ? rows
       │              │     Condition: `expr#modulo(multiply(plus(a, 1), 3), 7)` <= 3
-      │              └─ TableScan default.ut40066_comexp_x Est. ? rows
-      │                       Where: (((a + 1) * 3) % 7) <= 3
+      │              └─ TableScan test.ut40066_comexp_x Est. ? rows
+      │                       Where: ((((a + 1) * 3) % 7) <= 3) AND multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
       │                       Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
       │                       Inline expressions: [expr#modulo(multiply(plus(a, 1), 3), 7):=((a + 1) * 3) % 7, expr#trimBoth(substring(lower(s), 1, 4))_3:=trimBoth(substring(lower(s), 1, 4))]
       │                       Outputs: 
@@ -143,8 +143,8 @@ Projection Est. ? rows
                   │     Expressions: expr#trimBoth(substring(lower(s), 1, 4))_1:=`expr#trimBoth(substring(lower(s), 1, 4))_4`
                   └─ Filter Est. ? rows
                      │     Condition: `expr#modulo(multiply(plus(a, 1), 3), 7)_1` > 3
-                     └─ TableScan default.ut40066_comexp_x Est. ? rows
-                              Where: (((a + 1) * 3) % 7) > 3
+                     └─ TableScan test.ut40066_comexp_x Est. ? rows
+                              Where: ((((a + 1) * 3) % 7) > 3) AND multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
                               Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
                               Inline expressions: [expr#modulo(multiply(plus(a, 1), 3), 7)_1:=((a + 1) * 3) % 7, expr#trimBoth(substring(lower(s), 1, 4))_4:=trimBoth(substring(lower(s), 1, 4))]
                               Outputs: 
@@ -185,7 +185,7 @@ Projection Est. ? rows
                │     Expressions: expr#trimBoth(substring(lower(s), 1, 4)):=trimBoth(substring(lower(s), 1, 4))
                └─ Filter Est. ? rows
                   │     Condition: (((a + 1) * 3) % 7) = 3
-                  └─ TableScan default.ut40066_comexp_x Est. ? rows
-                           Where: (((a + 1) * 3) % 7) = 3
+                  └─ TableScan test.ut40066_comexp_x Est. ? rows
+                           Where: ((((a + 1) * 3) % 7) = 3) AND multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) > 1, 0, 1)
                            Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) > 1, 0, 1)
                            Outputs: [a, s]

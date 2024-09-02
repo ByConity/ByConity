@@ -115,10 +115,7 @@ createAggregateFunctionNdvBuckets(const std::string & name, const DataTypes & ar
         // TODO: add bounds
         res.reset(createWithNumericBasedType<Function>(*data_type, argument_types, blob));
     }
-    else if (isStringOrFixedString(data_type))
-    {
-        res = std::make_shared<AggregateFunctionCboFamilyForString<NdvBucketsData<String>>>(argument_types, blob);
-    }
+
 
     if (!res)
         throw Exception(

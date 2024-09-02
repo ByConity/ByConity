@@ -99,6 +99,8 @@ public:
 
     virtual bool handleNullItSelf() const { return false; }
 
+    virtual bool returnTypeCanBeNullable() const { return true; }
+
     /// Get the result type.
     virtual DataTypePtr getReturnType() const = 0;
 
@@ -179,6 +181,12 @@ public:
 
     /// Returns true if a function requires Arena to handle own states (see add(), merge(), deserialize()).
     virtual bool allocatesMemoryInArena() const = 0;
+
+    // return false if mid-state won't be very large or not supported yet in current agg func.
+    virtual bool mayAggStateVeryLarge() const { 
+        return false;
+    }
+
 
     /// To calculate step result and store it back to aggregation states
     virtual inline bool needCalculateStep(AggregateDataPtr) const {return true;}
@@ -325,6 +333,14 @@ public:
         const Array & /*params*/, const AggregateFunctionProperties & /*properties*/) const
     {
         return nullptr;
+    }
+        
+    /// For most functions if one of arguments is always NULL, we return NULL (it's implemented in combinator Null),
+    /// but in some functions we can want to process this argument somehow (for example condition argument in If combinator).
+    /// This method returns the set of argument indexes that can be always NULL, they will be skipped in combinator Null.
+    virtual std::unordered_set<size_t> getArgumentsThatCanBeOnlyNull() const
+    {
+        return {};
     }
 
     /** Return the nested function if this is an Aggregate Function Combinator.

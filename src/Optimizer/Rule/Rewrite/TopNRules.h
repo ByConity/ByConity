@@ -13,7 +13,7 @@ public:
     {
         return context->getSettingsRef().enable_create_topn_filtering_for_aggregating;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -27,7 +27,7 @@ public:
     {
         return context->getSettingsRef().enable_push_topn_through_projection;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -41,7 +41,7 @@ public:
     {
         return context->getSettingsRef().enable_push_topn_filtering_through_projection;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -61,7 +61,7 @@ public:
     {
         return context->getSettingsRef().enable_push_topn_filtering_through_union;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };

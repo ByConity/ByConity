@@ -9,15 +9,6 @@ namespace DB
 class HiveHudiFile : public IHiveFile
 {
 public:
-    Features getFeatures() const override
-    {
-        return Features{
-            .support_file_splits = false,
-            .support_file_minmax_index = false,
-            .support_split_minmax_index = false,
-        };
-    }
-
     HiveHudiFile() = default;
 
     HiveHudiFile(

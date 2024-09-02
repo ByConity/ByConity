@@ -5,144 +5,114 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_education_status ASC NULLS LAST, cd_purchase_estimate ASC NULLS LAST, cd_credit_rating ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 314 rows
+      └─ Gather Exchange Est. 3674 rows
          └─ Sorting Est. 100 rows
             │     Order by: {cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_education_status ASC NULLS LAST, cd_purchase_estimate ASC NULLS LAST, cd_credit_rating ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 314 rows
-               └─ Repartition Exchange Est. 314 rows
+            └─ MergingAggregated Est. 3674 rows
+               └─ Repartition Exchange Est. 3674 rows
                   │     Partition by: {cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating}
-                  └─ Aggregating Est. 314 rows
+                  └─ Aggregating Est. 3674 rows
                      │     Group by: {cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating}
                      │     Aggregates: expr#count():=AggNull(count)()
-                     └─ Projection Est. 1077813 rows
-                        │     Expressions: [cd_credit_rating, cd_education_status, cd_gender, cd_marital_status, cd_purchase_estimate]
-                        └─ Filter Est. 1077813 rows
-                           │     Condition: NOT cast(coalesce(build_side_non_null_symbol_2, 0), 'UInt8')
-                           └─ Right Join Est. 1197571 rows
-                              │     Condition: cs_ship_customer_sk == c_customer_sk
+                     └─ Inner Join Est. 479028 rows
+                        │     Condition: cd_demo_sk == c_current_cdemo_sk
+                        │     Runtime Filters Builder: {c_current_cdemo_sk}
+                        ├─ Repartition Exchange Est. 1920800 rows
+                        │  │     Partition by: {cd_demo_sk}
+                        │  └─ Filter Est. 1920800 rows
+                        │     │     Condition: Runtime Filters: {cd_demo_sk}
+                        │     └─ TableScan tpcds1000_sample.customer_demographics Est. 1920800 rows
+                        │              Where: Runtime Filters: {cd_demo_sk}
+                        │              Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating]
+                        └─ Repartition Exchange Est. 477752 rows
+                           │     Partition by: {c_current_cdemo_sk}
+                           └─ Right Semi Join Est. 477752 rows
+                              │     Condition: ss_customer_sk == c_customer_sk
                               │     Runtime Filters Builder: {c_customer_sk}
-                              ├─ Projection Est. 11726307 rows
-                              │  │     Expressions: [cs_ship_customer_sk], build_side_non_null_symbol_2:=1
-                              │  └─ MergingAggregated Est. 11726307 rows
-                              │     └─ Repartition Exchange Est. 11726307 rows
-                              │        │     Partition by: {cs_ship_customer_sk}
-                              │        └─ Aggregating Est. 11726307 rows
-                              │           │     Group by: {cs_ship_customer_sk}
-                              │           └─ Inner Join Est. 70587275 rows
-                              │              │     Condition: cs_sold_date_sk == d_date_sk_2
-                              │              │     Runtime Filters Builder: {d_date_sk_2}
-                              │              ├─ Filter Est. 1439980416 rows
-                              │              │  │     Condition: Runtime Filters: {cs_ship_customer_sk, cs_sold_date_sk}
-                              │              │  └─ TableScan tpcds1000_sample.catalog_sales Est. 1439980416 rows
-                              │              │           Where: Runtime Filters: {cs_ship_customer_sk, cs_sold_date_sk}
-                              │              │           Outputs: [cs_sold_date_sk, cs_ship_customer_sk]
-                              │              └─ Broadcast Exchange Est. 90 rows
-                              │                 └─ Filter Est. 90 rows
-                              │                    │     Condition: (d_year_2 = 2001) AND (d_moy_2 >= 4) AND (d_moy_2 <= 6)
-                              │                    └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                              │                             Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
-                              │                             Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
-                              └─ Filter Est. 1197571 rows
-                                 │     Condition: NOT cast(coalesce(build_side_non_null_symbol_1, 0), 'UInt8')
-                                 └─ Right Join Est. 1330635 rows
-                                    │     Condition: ws_bill_customer_sk == c_customer_sk
+                              ├─ Repartition Exchange Est. 142182622 rows
+                              │  │     Partition by: {ss_customer_sk}
+                              │  └─ Inner Join Est. 142182622 rows
+                              │     │     Condition: ss_sold_date_sk == d_date_sk
+                              │     │     Runtime Filters Builder: {d_date_sk}
+                              │     ├─ Filter Est. 2879987999 rows
+                              │     │  │     Condition: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
+                              │     │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
+                              │     │           Where: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
+                              │     │           Outputs: [ss_sold_date_sk, ss_customer_sk]
+                              │     └─ Broadcast Exchange Est. 90 rows
+                              │        └─ Projection Est. 90 rows
+                              │           │     Expressions: [d_date_sk]
+                              │           └─ Filter Est. 90 rows
+                              │              │     Condition: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= cast(6, 'UInt16'))
+                              │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                              │                       Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= cast(6, 'UInt16'))
+                              │                       Outputs: [d_date_sk, d_year, d_moy]
+                              └─ Repartition Exchange Est. 477752 rows
+                                 │     Partition by: {c_customer_sk}
+                                 └─ Right Anti Join Est. 477752 rows
+                                    │     Condition: cs_ship_customer_sk == c_customer_sk
                                     │     Runtime Filters Builder: {c_customer_sk}
-                                    ├─ Projection Est. 11225727 rows
-                                    │  │     Expressions: [ws_bill_customer_sk], build_side_non_null_symbol_1:=1
-                                    │  └─ MergingAggregated Est. 11225727 rows
-                                    │     └─ Repartition Exchange Est. 11225727 rows
-                                    │        │     Partition by: {ws_bill_customer_sk}
-                                    │        └─ Aggregating Est. 11225727 rows
-                                    │           │     Group by: {ws_bill_customer_sk}
-                                    │           └─ Inner Join Est. 35545822 rows
-                                    │              │     Condition: ws_sold_date_sk == d_date_sk_1
-                                    │              │     Runtime Filters Builder: {d_date_sk_1}
-                                    │              ├─ Filter Est. 720000376 rows
-                                    │              │  │     Condition: Runtime Filters: {ws_bill_customer_sk, ws_sold_date_sk}
-                                    │              │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
-                                    │              │           Where: Runtime Filters: {ws_bill_customer_sk, ws_sold_date_sk}
-                                    │              │           Outputs: [ws_sold_date_sk, ws_bill_customer_sk]
-                                    │              └─ Broadcast Exchange Est. 90 rows
-                                    │                 └─ Filter Est. 90 rows
-                                    │                    │     Condition: (d_year_1 = 2001) AND (d_moy_1 >= 4) AND (d_moy_1 <= 6)
-                                    │                    └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                    │                             Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
-                                    │                             Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
-                                    └─ Inner Join Est. 1330635 rows
-                                       │     Condition: c_customer_sk == ss_customer_sk
-                                       │     Runtime Filters Builder: {ss_customer_sk}
-                                       ├─ Repartition Exchange Est. 1330635 rows
-                                       │  │     Partition by: {c_customer_sk}
-                                       │  └─ Inner Join Est. 1330635 rows
-                                       │     │     Condition: cd_demo_sk == c_current_cdemo_sk
-                                       │     ├─ Repartition Exchange Est. 1920800 rows
-                                       │     │  │     Partition by: {cd_demo_sk}
-                                       │     │  └─ TableScan tpcds1000_sample.customer_demographics Est. 1920800 rows
-                                       │     │           Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating]
-                                       │     └─ Repartition Exchange Est. 1327091 rows
-                                       │        │     Partition by: {c_current_cdemo_sk}
-                                       │        └─ Inner Join Est. 1327091 rows
-                                       │           │     Condition: c_current_addr_sk == ca_address_sk
-                                       │           │     Runtime Filters Builder: {ca_address_sk}
-                                       │           ├─ Repartition Exchange Est. 12000000 rows
-                                       │           │  │     Partition by: {c_current_addr_sk}
-                                       │           │  └─ Filter Est. 12000000 rows
-                                       │           │     │     Condition: Runtime Filters: {c_current_addr_sk, c_customer_sk}
-                                       │           │     └─ TableScan tpcds1000_sample.customer Est. 12000000 rows
-                                       │           │              Where: Runtime Filters: {c_current_addr_sk, c_customer_sk}
-                                       │           │              Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_addr_sk]
-                                       │           └─ Repartition Exchange Est. 583961 rows
-                                       │              │     Partition by: {ca_address_sk}
-                                       │              └─ Filter Est. 583961 rows
-                                       │                 │     Condition: ca_state IN ('GA', 'KY', 'NM')
-                                       │                 └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
-                                       │                          Where: ca_state IN ('GA', 'KY', 'NM')
-                                       │                          Outputs: [ca_address_sk, ca_state]
-                                       └─ Aggregating Est. 1321639 rows
-                                          │     Group by: {ss_customer_sk}
-                                          └─ Inner Join Est. 15903647 rows
-                                             │     Condition: ss_customer_sk == c_customer_sk_1
-                                             │     Runtime Filters Builder: {c_customer_sk_1}
-                                             ├─ Repartition Exchange Est. 142182622 rows
-                                             │  │     Partition by: {ss_customer_sk}
-                                             │  └─ Inner Join Est. 142182622 rows
-                                             │     │     Condition: ss_sold_date_sk == d_date_sk
-                                             │     │     Runtime Filters Builder: {d_date_sk}
-                                             │     ├─ Filter Est. 2879987999 rows
-                                             │     │  │     Condition: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
-                                             │     │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
-                                             │     │           Where: Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
-                                             │     │           Outputs: [ss_sold_date_sk, ss_customer_sk]
-                                             │     └─ Broadcast Exchange Est. 90 rows
-                                             │        └─ Filter Est. 90 rows
-                                             │           │     Condition: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
-                                             │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                                             │                    Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= 6)
-                                             │                    Outputs: [d_date_sk, d_year, d_moy]
-                                             └─ MergingAggregated Est. 1321639 rows
-                                                └─ Repartition Exchange Est. 1321639 rows
-                                                   │     Partition by: {c_customer_sk_1}
-                                                   └─ Aggregating Est. 1321639 rows
-                                                      │     Group by: {c_customer_sk_1}
-                                                      └─ Projection Est. 1327091 rows
-                                                         │     Expressions: c_customer_sk_1:=c_customer_sk
-                                                         └─ Inner Join Est. 1327091 rows
-                                                            │     Condition: c_current_addr_sk == ca_address_sk
-                                                            │     Runtime Filters Builder: {ca_address_sk}
-                                                            ├─ Repartition Exchange Est. 12000000 rows
-                                                            │  │     Partition by: {c_current_addr_sk}
-                                                            │  └─ Filter Est. 12000000 rows
-                                                            │     │     Condition: Runtime Filters: {c_current_addr_sk}
-                                                            │     └─ TableScan tpcds1000_sample.customer Est. 12000000 rows
-                                                            │              Where: Runtime Filters: {c_current_addr_sk}
-                                                            │              Outputs: [c_customer_sk, c_current_addr_sk]
-                                                            └─ Repartition Exchange Est. 583961 rows
-                                                               │     Partition by: {ca_address_sk}
-                                                               └─ Filter Est. 583961 rows
-                                                                  │     Condition: ca_state IN ('GA', 'KY', 'NM')
-                                                                  └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
-                                                                           Where: ca_state IN ('GA', 'KY', 'NM')
-                                                                           Outputs: [ca_address_sk, ca_state]
-note: Magic Set is applied for 1 parts.
-note: Runtime Filter is applied for 9 times.
+                                    ├─ Repartition Exchange Est. 70587275 rows
+                                    │  │     Partition by: {cs_ship_customer_sk}
+                                    │  └─ Inner Join Est. 70587275 rows
+                                    │     │     Condition: cs_sold_date_sk == d_date_sk_2
+                                    │     │     Runtime Filters Builder: {d_date_sk_2}
+                                    │     ├─ Filter Est. 1439980416 rows
+                                    │     │  │     Condition: Runtime Filters: {cs_ship_customer_sk, cs_sold_date_sk}
+                                    │     │  └─ TableScan tpcds1000_sample.catalog_sales Est. 1439980416 rows
+                                    │     │           Where: Runtime Filters: {cs_ship_customer_sk, cs_sold_date_sk}
+                                    │     │           Outputs: [cs_sold_date_sk, cs_ship_customer_sk]
+                                    │     └─ Broadcast Exchange Est. 90 rows
+                                    │        └─ Projection Est. 90 rows
+                                    │           │     Expressions: [d_date_sk_2]
+                                    │           └─ Filter Est. 90 rows
+                                    │              │     Condition: (d_year_2 = 2001) AND (d_moy_2 >= 4) AND (d_moy_2 <= cast(6, 'UInt16'))
+                                    │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                    │                       Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= cast(6, 'UInt16'))
+                                    │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
+                                    └─ Repartition Exchange Est. 796254 rows
+                                       │     Partition by: {c_customer_sk}
+                                       └─ Right Anti Join Est. 796254 rows
+                                          │     Condition: ws_bill_customer_sk == c_customer_sk
+                                          │     Runtime Filters Builder: {c_customer_sk}
+                                          ├─ Repartition Exchange Est. 35545822 rows
+                                          │  │     Partition by: {ws_bill_customer_sk}
+                                          │  └─ Inner Join Est. 35545822 rows
+                                          │     │     Condition: ws_sold_date_sk == d_date_sk_1
+                                          │     │     Runtime Filters Builder: {d_date_sk_1}
+                                          │     ├─ Filter Est. 720000376 rows
+                                          │     │  │     Condition: Runtime Filters: {ws_bill_customer_sk, ws_sold_date_sk}
+                                          │     │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+                                          │     │           Where: Runtime Filters: {ws_bill_customer_sk, ws_sold_date_sk}
+                                          │     │           Outputs: [ws_sold_date_sk, ws_bill_customer_sk]
+                                          │     └─ Broadcast Exchange Est. 90 rows
+                                          │        └─ Projection Est. 90 rows
+                                          │           │     Expressions: [d_date_sk_1]
+                                          │           └─ Filter Est. 90 rows
+                                          │              │     Condition: (d_year_1 = 2001) AND (d_moy_1 >= 4) AND (d_moy_1 <= cast(6, 'UInt16'))
+                                          │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                                          │                       Where: (d_year = 2001) AND (d_moy >= 4) AND (d_moy <= cast(6, 'UInt16'))
+                                          │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                                          └─ Repartition Exchange Est. 1327091 rows
+                                             │     Partition by: {c_customer_sk}
+                                             └─ Inner Join Est. 1327091 rows
+                                                │     Condition: c_current_addr_sk == ca_address_sk
+                                                │     Runtime Filters Builder: {ca_address_sk}
+                                                ├─ Repartition Exchange Est. 12000000 rows
+                                                │  │     Partition by: {c_current_addr_sk}
+                                                │  └─ Filter Est. 12000000 rows
+                                                │     │     Condition: Runtime Filters: {c_current_addr_sk}
+                                                │     └─ TableScan tpcds1000_sample.customer Est. 12000000 rows
+                                                │              Where: Runtime Filters: {c_current_addr_sk}
+                                                │              Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_addr_sk]
+                                                └─ Repartition Exchange Est. 583961 rows
+                                                   │     Partition by: {ca_address_sk}
+                                                   └─ Projection Est. 583961 rows
+                                                      │     Expressions: [ca_address_sk]
+                                                      └─ Filter Est. 583961 rows
+                                                         │     Condition: ca_state IN ('KY', 'GA', 'NM')
+                                                         └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
+                                                                  Where: ca_state IN ('KY', 'GA', 'NM')
+                                                                  Outputs: [ca_address_sk, ca_state]
+note: Runtime Filter is applied for 8 times.

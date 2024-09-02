@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <optional>
 #include <Optimizer/domain.h>
 
 namespace DB::Predicate
@@ -119,7 +120,7 @@ Domain Domain::unionn(const Domain & other) const
     return {std::move(res_value_set), res_null_allowed};
 }
 
-Domain Domain::complement()
+Domain Domain::complement() const
 {
     auto caller = [](const auto & v)->ValueSet
     {
@@ -306,6 +307,52 @@ TupleDomainImpl<T, Hash, Equal> TupleDomainImpl<T, Hash, Equal>::intersect(const
         }
     }
     return TupleDomainImpl(root_domains);
+}
+
+/**
+  * Returns a TupleDomain which contains values in self set but not in other,
+  * it looks like difference of two set in mathematics, or std::set_difference in c++.
+  *
+  * <p>
+  * eg, input: Tuple(Domain[A] ∩ Domain[B]), other: Tuple(Domain'[B] ∩ Domain[C])
+  * result: Tuple(Domain[A] ∩ Domain[B]) - Tuple(Domain[A] ∩ Domain[B])
+  *       = Domain[A] ∩ Domain[B] ∩ (^Domain'[B] ∪ ^Domain[C])
+  *
+  * <p>
+  * Return std::nullopt if the result is dnf, as dnf is useless for pruning.
+  *
+  * <p>
+  * In this case, if we assume ^Domain'[B] is subset of Domain[B], the result is TupleDomain(Domain[A] ∩ Domain[B] ∩ ^Domain[C]).
+  */
+template <typename T, typename Hash, typename Equal>
+std::optional<TupleDomainImpl<T, Hash, Equal>>
+TupleDomainImpl<T, Hash, Equal>::subtract(const TupleDomainImpl<T, Hash, Equal> & other) const
+{
+    if (this->isNone())
+        return none();
+    if (other.isAll())
+        return none();
+    if (other.isNone())
+        return {*this};
+
+    DomainMap domain_map;
+    for (const auto & other_domain : other.getDomains())
+    {
+        auto complement = other_domain.second.complement();
+        if (this->getDomains().contains(other_domain.first))
+        {
+            const auto & self_domain = this->getDomains().at(other_domain.first);
+            complement = self_domain.intersect(complement);
+            if (complement.isNone())
+                continue;
+        }
+
+        if (!domain_map.empty())
+            return std::nullopt;
+
+        domain_map.emplace(other_domain.first, complement);
+    }
+    return TupleDomainImpl{domain_map};
 }
 
 /// Returns the tuple domain that contains all other tuple domains, or {@code std::nullopt} if they are not supersets of each other.

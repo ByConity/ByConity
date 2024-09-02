@@ -5,6 +5,5 @@ SYSTEM START MERGES non_indexed_table;
 INSERT INTO non_indexed_table SELECT toDate('2019-05-27'), number, toString(number), toString(number) FROM numbers(10);
 
 ALTER TABLE non_indexed_table ADD INDEX minmax_x x TYPE minmax GRANULARITY 1;
-ALTER TABLE non_indexed_table MATERIALIZE INDEX minmax_x;
-SELECT sleep(3) FORMAT Null;
+ALTER TABLE non_indexed_table MATERIALIZE INDEX minmax_x  SETTINGS mutations_sync = 1;
 SELECT count() FROM non_indexed_table WHERE x = 1 SETTINGS max_rows_to_read = 1;

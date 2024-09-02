@@ -45,21 +45,22 @@ public:
 class FunctionIsInjective
 {
 public:
-    static bool isInjective(const ConstASTPtr & expr, ContextMutablePtr & context, const NamesAndTypes & input_types);
+    static bool isInjective(const ConstASTPtr & expr, ContextMutablePtr & context, const NamesAndTypes & input_types, const NameSet & partition_cols);
 };
 
-class FunctionIsInjectiveVisitor : public ConstASTVisitor<bool, std::set<String>>
+class FunctionIsInjectiveVisitor : public ConstASTVisitor<bool, NameSet>
 {
 public:
-    FunctionIsInjectiveVisitor(ContextPtr & context_, const std::unordered_map<ASTPtr, ColumnWithType> & expr_types_)
+    FunctionIsInjectiveVisitor(ContextMutablePtr & context_, const std::unordered_map<ASTPtr, ColumnWithType> & expr_types_)
         : context(context_), expr_types(expr_types_)
     {
     }
-    bool visitNode(const ConstASTPtr &, std::set<String> & context) override;
-    bool visitASTFunction(const ConstASTPtr &, std::set<String> & context) override;
+    bool visitNode(const ConstASTPtr &, NameSet & context) override;
+    bool visitASTFunction(const ConstASTPtr &, NameSet & context) override;
+    bool visitASTIdentifier(const ConstASTPtr &, NameSet & context) override;
 
 private:
-    ContextPtr & context;
+    ContextMutablePtr & context;
     std::unordered_map<ASTPtr, ColumnWithType> expr_types;
 };
 }

@@ -41,6 +41,18 @@ String SQLFingerprint::generate(
     return fingerprint_md5_str;
 }
 
+String SQLFingerprint::generateMD5(ASTPtr & ast)
+{
+    auto ast_str = generate(ast);
+    Poco::MD5Engine md5;
+    Poco::DigestOutputStream outstr(md5);
+    outstr << ast_str;
+    outstr.flush();
+    String fingerprint_md5_str = Poco::DigestEngine::digestToHex(md5.digest());
+
+    return fingerprint_md5_str;
+}
+
 String SQLFingerprint::generate(ASTPtr & ast)
 {
     SQLFingerprintRewriter rewriter;

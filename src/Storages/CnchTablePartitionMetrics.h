@@ -59,6 +59,9 @@ public:
         bool validateMetrics() const;
         void update(const ServerDataPartPtr & part, size_t ts, bool positive = true);
         void update(const DeleteBitmapMetaPtr & bitmap, size_t ts, bool positive = true);
+        void update(const Protos::DataModelPart & part, size_t ts, bool positive = true);
+        void update(const Protos::DataModelDeleteBitmap & bitmap, size_t ts, bool positive = true);
+        bool matches(const TableMetricsData & rhs) const;
     };
 
     void recalculate(size_t current_time, ContextPtr context, bool force = false);
@@ -82,6 +85,9 @@ private:
     /// Protected by `recalculating`.
     std::optional<Stopwatch> stopwatch;
     std::atomic<bool> shutdown = false;
+    /// When loading for the first time, we consider this value is false to trigger a more agressive recalculation.
+    /// Protected by `recalculating`.
+    bool recalculateion_miss = false;
 };
 
 /**
@@ -113,6 +119,7 @@ public:
         bool is_deleted{true};
         uint64_t last_update_time{0};
         uint64_t last_snapshot_time{0};
+        uint64_t last_modification_time{0};
 
         PartitionMetricsStore() = default;
         explicit PartitionMetricsStore(const Protos::PartitionPartsMetricsSnapshot & snapshot);
@@ -123,8 +130,10 @@ public:
         Protos::PartitionPartsMetricsSnapshot toSnapshot() const;
         String toString() const { return toSnapshot().ShortDebugString(); }
 
+        void updateLastModificationTime(const Protos::DataModelPart & part_model);
         void update(const Protos::DataModelPart & part_model);
         bool validateMetrics() const;
+        bool matches(const PartitionMetricsStore & rhs) const;
     };
 
     bool validateMetrics();
@@ -145,9 +154,13 @@ public:
     void restoreFromSnapshot(const PartitionMetrics & other);
 
     void recalculateBottomHalf(ContextPtr context);
+    bool finishFirstRecalculation() {return finished_first_recalculation.load();}
 
     PartitionMetrics() = delete;
-    PartitionMetrics(const String & table_uuid_, const String & partition_id_) : table_uuid(table_uuid_), partition_id(partition_id_) { }
+    PartitionMetrics(const String & table_uuid_, const String & partition_id_, bool newly_inserted = false)
+        : table_uuid(table_uuid_), partition_id(partition_id_), finished_first_recalculation(newly_inserted)
+    {
+    }
 
     PartitionMetrics(Protos::PartitionPartsMetricsSnapshot & snapshot, const String & table_uuid_, const String & partition_id_)
         : new_store(snapshot), table_uuid(table_uuid_), partition_id(partition_id_)
@@ -180,6 +193,13 @@ private:
     String table_uuid;
     String partition_id;
     std::shared_mutex mutex;
+    /// Recalculation miss is ture when the current recalculation result matches the data in memory.
+    /// When loading for the first time, we consider this value is false to trigger a more agressive recalculation.
+    /// Protected by `recalculating`.
+    bool recalculateion_miss = false;
+    /// We can consider the statistics is accurate after the first recalculation.
+    /// Such as caller `MaterializedView` needs to know this.
+    std::atomic<bool> finished_first_recalculation = false;
 
     /// Hold a task to recalculate after timeout.
     BackgroundSchedulePool::TaskHolder recalculate_task;

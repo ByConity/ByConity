@@ -1,17 +1,49 @@
 -- { echo }
 EXPLAIN SELECT range(5);
-Projection Est. 1 rows, cost 1.480000e-01
-│     Expressions: range(5):=[0, 1, 2, 3, 4]
-└─ Values Est. 1 rows, cost 7.400000e-02
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: range(5):=`expr#range(5)`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#range(5):=[0, 1, 2, 3, 4]
+   └─ Values Est. 1 rows, cost 7.400000e-02
 EXPLAIN SELECT range(5000);
-Projection Est. 1 rows, cost 1.480000e-01
-│     Expressions: range(5000):=range(5000)
-└─ Values Est. 1 rows, cost 7.400000e-02
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: range(5000):=`expr#range(5000)`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#range(5000):=range(5000)
+   └─ Values Est. 1 rows, cost 7.400000e-02
 EXPLAIN SELECT length(range(5000));
-Projection Est. 1 rows, cost 1.480000e-01
-│     Expressions: length(range(5000)):=cast(5000, \'UInt64\')
-└─ Values Est. 1 rows, cost 7.400000e-02
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: length(range(5000)):=`expr#length(range(5000))`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#length(range(5000)):=cast(5000, \'UInt64\')
+   └─ Values Est. 1 rows, cost 7.400000e-02
 EXPLAIN SELECT range(2000 + 3000);
-Projection Est. 1 rows, cost 1.480000e-01
-│     Expressions: range(plus(2000, 3000)):=range(cast(5000, \'UInt32\'))
-└─ Values Est. 1 rows, cost 7.400000e-02
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: range(plus(2000, 3000)):=`expr#range(plus(2000, 3000))`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#range(plus(2000, 3000)):=range(cast(5000, \'UInt32\'))
+   └─ Values Est. 1 rows, cost 7.400000e-02
+EXPLAIN SELECT mapFromArrays(range(5), range(5));
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: mapFromArrays(range(5), range(5)):=`expr#mapFromArrays(range(5), range(5))`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#mapFromArrays(range(5), range(5)):={0:0, 1:1, 2:2, 3:3, 4:4}
+   └─ Values Est. 1 rows, cost 7.400000e-02
+EXPLAIN SELECT mapFromArrays(range(5000), range(5000));
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: mapFromArrays(range(5000), range(5000)):=`expr#mapFromArrays(range(5000), range(5000))`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#mapFromArrays(range(5000), range(5000)):=mapFromArrays(range(5000), range(5000))
+   └─ Values Est. 1 rows, cost 7.400000e-02
+EXPLAIN SELECT initializeAggregation('sumState', 1);
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: initializeAggregation(\'sumState\', 1):=`expr#initializeAggregation(\'sumState\', 1)`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#initializeAggregation(\'sumState\', 1):=initializeAggregation(\'sumState\', 1)
+   └─ Values Est. 1 rows, cost 7.400000e-02
+EXPLAIN SELECT map(1, initializeAggregation('sumState', 1));
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: map(1, initializeAggregation(\'sumState\', 1)):=`expr#map(1, initializeAggregation(\'sumState\', 1))`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#map(1, initializeAggregation(\'sumState\', 1)):=map(1, initializeAggregation(\'sumState\', 1))
+   └─ Values Est. 1 rows, cost 7.400000e-02

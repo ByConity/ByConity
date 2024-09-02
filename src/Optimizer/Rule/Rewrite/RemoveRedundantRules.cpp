@@ -183,12 +183,13 @@ TransformResult RemoveRedundantEnforceSingleRow::transformImpl(PlanNodePtr node,
     return {};
 }
 
-PatternPtr RemoveRedundantCrossJoin::getPattern() const
+ConstRefPatternPtr RemoveRedundantCrossJoin::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Cross; })
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Cross; })
         .with(Patterns::any(), Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult RemoveRedundantCrossJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -208,9 +209,10 @@ TransformResult RemoveRedundantCrossJoin::transformImpl(PlanNodePtr node, const 
     return {};
 }
 
-PatternPtr RemoveReadNothing::getPattern() const
+ConstRefPatternPtr RemoveReadNothing::getPattern() const
 {
-    return Patterns::any().withSingle(Patterns::readNothing()).result();
+    static auto pattern = Patterns::any().withSingle(Patterns::readNothing()).result();
+    return pattern;
 }
 
 TransformResult RemoveReadNothing::transformImpl(PlanNodePtr, const Captures &, RuleContext &)
@@ -218,13 +220,14 @@ TransformResult RemoveReadNothing::transformImpl(PlanNodePtr, const Captures &, 
     return {};
 }
 
-PatternPtr RemoveRedundantJoin::getPattern() const
+ConstRefPatternPtr RemoveRedundantJoin::getPattern() const
 {
-    return Patterns::join()
+    static auto pattern = Patterns::join()
         .matchingStep<JoinStep>(
-            [&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Inner || s.getKind() == ASTTableJoin::Kind::Cross; })
+            [](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Inner || s.getKind() == ASTTableJoin::Kind::Cross; })
         .withAny(Patterns::readNothing())
         .result();
+    return pattern;
 }
 
 TransformResult RemoveRedundantJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -238,12 +241,13 @@ TransformResult RemoveRedundantJoin::transformImpl(PlanNodePtr node, const Captu
     return {};
 }
 
-PatternPtr RemoveRedundantOuterJoin::getPattern() const
+ConstRefPatternPtr RemoveRedundantOuterJoin::getPattern() const
 {
-    return Patterns::join()
+    static auto pattern = Patterns::join()
         .matchingStep<JoinStep>(
-            [&](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Left || s.getKind() == ASTTableJoin::Kind::Right; })
+            [](const JoinStep & s) { return s.getKind() == ASTTableJoin::Kind::Left || s.getKind() == ASTTableJoin::Kind::Right; })
         .result();
+    return pattern;
 }
 
 TransformResult RemoveRedundantOuterJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext &)
@@ -287,15 +291,16 @@ TransformResult RemoveRedundantOuterJoin::transformImpl(PlanNodePtr node, const 
     return {};
 }
 
-PatternPtr RemoveRedundantLimit::getPattern() const
+ConstRefPatternPtr RemoveRedundantLimit::getPattern() const
 {
-    return Patterns::limit().result();
+    static auto pattern = Patterns::limit().result();
+    return pattern;
 }
 
 TransformResult RemoveRedundantLimit::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
     auto * limit_node = dynamic_cast<LimitNode *>(node.get());
-    if (limit_node->getStep()->getLimit() == 0)
+    if (!limit_node->getStep()->hasPreparedParam() && limit_node->getStep()->getLimitValue() == 0)
     {
         auto null_step = std::make_unique<ReadNothingStep>(limit_node->getStep()->getOutputStream().header);
         auto null_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(null_step));
@@ -305,9 +310,10 @@ TransformResult RemoveRedundantLimit::transformImpl(PlanNodePtr node, const Capt
     return {};
 }
 
-PatternPtr RemoveRedundantAggregate::getPattern() const
+ConstRefPatternPtr RemoveRedundantAggregate::getPattern() const
 {
-    return Patterns::aggregating().result();
+    static auto pattern = Patterns::aggregating().result();
+    return pattern;
 }
 
 TransformResult RemoveRedundantAggregate::transformImpl(PlanNodePtr, const Captures &, RuleContext &)
@@ -315,10 +321,10 @@ TransformResult RemoveRedundantAggregate::transformImpl(PlanNodePtr, const Captu
     return {};
 }
 
-PatternPtr RemoveRedundantAggregateWithReadNothing::getPattern() const
+ConstRefPatternPtr RemoveRedundantAggregateWithReadNothing::getPattern() const
 {
-    return Patterns::aggregating().matchingStep<AggregatingStep>([&](const AggregatingStep & s) { return !s.getKeys().empty(); })
-        .withSingle(Patterns::readNothing()).result();
+    static auto pattern = Patterns::aggregating().matchingStep<AggregatingStep>([](const AggregatingStep & s) { return !s.getKeys().empty(); }).withSingle(Patterns::readNothing()).result();
+    return pattern;
 }
 
 TransformResult RemoveRedundantAggregateWithReadNothing::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -329,9 +335,9 @@ TransformResult RemoveRedundantAggregateWithReadNothing::transformImpl(PlanNodeP
     return {read_nothing_node};
 }
 
-PatternPtr RemoveRedundantTwoApply::getPattern() const
+ConstRefPatternPtr RemoveRedundantTwoApply::getPattern() const
 {
-    return Patterns::filter()
+    static auto pattern = Patterns::filter()
         .withSingle(
             Patterns::apply()
                 .matchingStep<ApplyStep>([](const ApplyStep & apply) { return apply.getSubqueryType() == ApplyStep::SubqueryType::IN; })
@@ -342,6 +348,7 @@ PatternPtr RemoveRedundantTwoApply::getPattern() const
                         .with(Patterns::any(), Patterns::cte()),
                     Patterns::project().withSingle(Patterns::filter().withSingle(Patterns::join().with(Patterns::any(), Patterns::cte())))))
         .result();
+    return pattern;
 }
 
 TransformResult RemoveRedundantTwoApply::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -385,7 +392,8 @@ TransformResult RemoveRedundantTwoApply::transformImpl(PlanNodePtr node, const C
             first_apply->getApplyType(),
             first_apply->getSubqueryType(),
             first_apply->getAssignment(),
-            first_apply->getOuterColumns());
+            first_apply->getOuterColumns(),
+            first_apply->supportSemiAnti());
         auto new_apply_node = PlanNodeBase::createPlanNode(
             context.context->nextNodeId(), new_apply, {second_apply_left, node->getChildren()[0]->getChildren()[1]});
 

@@ -42,8 +42,14 @@ public:
     const ASTPtr & getColumns() const { return children.front(); }
     const ASTPtr & getTotalBucketNumber() const { return children.back(); }
 
+    ASTType getType() const override { return ASTType::ASTClusterByElement; }
+
     String getID(char) const override { return "ClusterByElement"; }
     ASTPtr clone() const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

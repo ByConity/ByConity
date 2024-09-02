@@ -25,6 +25,7 @@
 #include <Transaction/TimestampCacheManager.h>
 #include <Transaction/TransactionCleaner.h>
 #include <Transaction/TransactionCommon.h>
+#include <Transaction/TransactionRecordCache.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/HostWithPorts.h>
 
@@ -76,6 +77,7 @@ public:
               getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_queue_size", 10000),
               getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_dm_max_threads", 32),
               getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_dm_queue_size", 10000)))
+        , finished_or_failed_txn_record_cache(std::make_unique<TransactionRecordCache>(getContext()->getConfigRef().getUInt("size_of_cached_txn_records", 20000)))
         , scan_interval(getContext()->getConfigRef().getInt("cnch_transaction_list_scan_interval", 10 * 60 * 1000)) // default 10 mins
         , log(&Poco::Logger::get("TransactionCoordinator"))
     {
@@ -152,6 +154,7 @@ public:
 
     // TimestampCacheManager & getTsCacheManager() const { return *ts_cache_manager; }
     TransactionCleaner & getTxnCleaner() const { return *txn_cleaner; }
+    TransactionRecordCache * getFinishedOrFailedTxnRecordCache() const { return finished_or_failed_txn_record_cache.get(); }
 
     CnchTransactionStatus getTransactionStatus(const TxnTimestamp & txnID) const;
 
@@ -189,6 +192,7 @@ private:
 
     // TimestampCacheManagerPtr ts_cache_manager;
     TransactionCleanerPtr txn_cleaner;
+    TransactionRecordCachePtr finished_or_failed_txn_record_cache;
 
     // background tasks
     UInt64 scan_interval;

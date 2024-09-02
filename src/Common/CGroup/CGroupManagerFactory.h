@@ -24,6 +24,8 @@ class CGroupManagerFactory
 public:
     static CGroupManager & instance();
     static void loadFromConfig(const Poco::Util::AbstractConfiguration & config);
+    static String getDockerPath();
+
 private:
     static CGroupManagerPtr cgroup_manager_instance;
 };

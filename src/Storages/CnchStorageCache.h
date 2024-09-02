@@ -98,6 +98,16 @@ public:
      * Clear all cached storage.
      */
     void clear();
+
+    /***
+    * Return size of bimap for uuid and table name mapping
+    */
+    size_t uuidNameMappingSize();
+
+    /***
+    * clear mapping between uuid and table name when evict happens.
+    */
+    void onEvict(const Key & key) override;
 };
 
 using CnchStorageCachePtr = std::shared_ptr<CnchStorageCache>;

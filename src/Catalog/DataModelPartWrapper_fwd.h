@@ -21,9 +21,14 @@ namespace DB
 {
 class DataModelPartWrapper;
 class ServerDataPart;
+class DeleteBitmapMeta;
+struct ServerVirtualPart;
 
 using DataModelPartWrapperPtr = std::shared_ptr<DataModelPartWrapper>;
 using DataModelPartWrapperVector = std::vector<DataModelPartWrapperPtr>;
 using ServerDataPartPtr = std::shared_ptr<const ServerDataPart>;
 using ServerDataPartsVector = std::vector<ServerDataPartPtr>;
+using ServerDataPartsWithDBM = std::pair<ServerDataPartsVector, std::vector<std::shared_ptr<DeleteBitmapMeta>>>; // DBM: delete bitmap meta
+using ServerVirtualPartPtr = std::shared_ptr<ServerVirtualPart>;
+using ServerVirtualPartVector = std::vector<ServerVirtualPartPtr>;
 }

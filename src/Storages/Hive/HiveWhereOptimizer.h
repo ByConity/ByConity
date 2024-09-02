@@ -33,7 +33,6 @@ class Logger;
 namespace DB
 {
 class ASTFunction;
-struct SelectQueryInfo;
 struct StorageInMemoryMetadata;
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
@@ -42,7 +41,7 @@ class HiveWhereOptimizer : private boost::noncopyable
 public:
     HiveWhereOptimizer(
         const StorageMetadataPtr & metadata_snapshot_,
-        const SelectQueryInfo & query_info_);
+        const ASTPtr & filter_conditions);
 
     using Conditions = ASTs;
 

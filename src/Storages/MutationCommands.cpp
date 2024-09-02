@@ -192,7 +192,7 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
     {
         MutationCommand res;
         res.ast = command->ptr();
-        res.type = MutationCommand::Type::RECLUSTER;
+        res.type = MutationCommand::Type::MODIFY_CLUSTER_BY;
         return res;
     }
     else if (command->type == ASTAlterCommand::RECLUSTER_PARTITION_WHERE)

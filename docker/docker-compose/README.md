@@ -46,7 +46,7 @@ To access the ByConity cluster with cli
 
 To access HDFS files
 ```bash
-./scripts/hdfs-cli.sh "hdfs -dfs ls /user/clickhouse"
+./scripts/hdfs-cli.sh "hdfs dfs -ls /user/clickhouse"
 ```
 
 To access fdb cli

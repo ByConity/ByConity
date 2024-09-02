@@ -27,7 +27,6 @@ public:
 
     void close() override {}
     const std::string& getName() const override { return name; }
-
 private:
     WriteBuffer & out;
     std::string name = "ORCOutputStream";

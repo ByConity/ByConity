@@ -18,6 +18,7 @@
 #include <Common/Exception.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/VirtualWarehouseQueue.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/VWScheduleAlgo.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
@@ -32,11 +33,6 @@
 namespace Poco
 {
 class Logger;
-}
-
-namespace ErrorCodes
-{
-    extern const int LOGICAL_ERROR;
 }
 
 namespace DB
@@ -123,11 +119,18 @@ public:
     /// So VW handle just forward the request to the target WG handle, or forward to a random WG if it's not specified.
     CnchWorkerClientPtr pickWorker(const String & worker_group_id, bool skip_busy_worker = true);
 
+    void updateSettings(const VirtualWarehouseSettings & settings);
     std::pair<UInt64, CnchWorkerClientPtr> pickWorker(const String & worker_group_id, UInt64 sequence, bool skip_busy_worker = true);
     CnchWorkerClientPtr getWorker();
     CnchWorkerClientPtr getWorkerByHash(const String & key);
+    CnchWorkerClientPtr getWorkerByHostWithPorts(const HostWithPorts & host_ports);
     std::vector<CnchWorkerClientPtr> getAllWorkers();
 
+    VWQueueResultStatus enqueue(VWQueueInfoPtr queue_info, UInt64 timeout_ms)
+    {
+        return queue_manager.enqueue(queue_info, timeout_ms);
+    }
+    VirtualWarehouseQueueManager & getQueueManager() { return queue_manager; }
 private:
     bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);
 
@@ -155,10 +158,12 @@ private:
     size_t force_update_interval_ns = 5ULL * 60 * 1000 * 1000 * 1000;
     size_t try_update_interval_ns = 500ULL * 1000 * 1000;
     std::atomic<UInt64> last_update_time_ns{0};
+    std::atomic<UInt64> last_settings_timestamp{0};
 
     mutable std::mutex state_mutex;
     Container worker_groups;
     std::atomic<size_t> pick_group_sequence = 0; /// round-robin index for pickWorkerGroup.
+    VirtualWarehouseQueueManager queue_manager;
 };
 
 using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;

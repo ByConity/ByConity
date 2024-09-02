@@ -14,6 +14,7 @@
  */
 
 #include <memory>
+#include <optional>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/ExecutePlanElement.h>
 
@@ -27,6 +28,8 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/misc.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 #include <Optimizer/RuntimeFilterUtils.h>
@@ -49,17 +52,17 @@
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/planning_common.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
+#include <Storages/MergeTree/Index/TableScanExecutorWithIndex.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
-#include <Storages/MergeTree/Index/TableScanExecutorWithIndex.h>
-#include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <fmt/format.h>
 #include <Common/FieldVisitorToString.h>
 #include "Interpreters/DatabaseCatalog.h"
 #include <Common/Stopwatch.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
 namespace DB
 {
@@ -229,7 +232,7 @@ class TableScanExecutor
 {
 public:
     TableScanExecutor(TableScanStep & step, const MergeTreeMetaBase & storage_, ContextPtr context_);
-    ExecutePlan buildExecutePlan();
+    ExecutePlan buildExecutePlan(const DistributedPipelineSettings & distributed_settings);
 
 private:
     bool match(ProjectionMatchContext & candidate) const;
@@ -343,7 +346,7 @@ TableScanExecutor::TableScanExecutor(TableScanStep & step, const MergeTreeMetaBa
     match_projection = true;
 }
 
-ExecutePlan TableScanExecutor::buildExecutePlan()
+ExecutePlan TableScanExecutor::buildExecutePlan(const DistributedPipelineSettings & distributed_settings)
 {
     if (!match_projection)
         return {};
@@ -351,6 +354,19 @@ ExecutePlan TableScanExecutor::buildExecutePlan()
     PartGroups part_groups;
     {
         auto parts = storage.getDataPartsVector();
+        if (distributed_settings.source_task_index && distributed_settings.source_task_count)
+        {
+            auto size_before_filtering = parts.size();
+            filterParts(parts, distributed_settings.source_task_index.value(), distributed_settings.source_task_count.value());
+            LOG_TRACE(
+                log,
+                "After filtering(index:{}, count:{}) the number of parts of table {} becomes {} from {}",
+                distributed_settings.source_task_index.value(),
+                distributed_settings.source_task_count.value(),
+                storage.getTableName(),
+                parts.size(),
+                size_before_filtering);
+        }
         parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }), parts.end());
 
         LOG_DEBUG(log, "Num of parts before part pruning: {}", std::to_string(parts.size()));
@@ -638,7 +654,7 @@ void TableScanExecutor::prunePartsByIndex(MergeTreeData::DataPartsVector & parts
         copy_select_query.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
         auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
         interpreter->execute();
-        LOG_TRACE(&Poco::Logger::get("TableScanExecutor::prunePartsByIndex"), "Construct partition filter query {}", queryToString(copy_select));
+        LOG_TRACE(log, "Construct partition filter query {}", queryToString(copy_select));
         MergeTreeDataSelectExecutor::filterPartsByPartition(
             parts, part_values, storage_metadata, storage, interpreter->getQueryInfo(), context, max_added_blocks.get(), log, result.index_stats);
     }
@@ -766,7 +782,8 @@ TableScanStep::TableScanStep(
     Assignments inline_expressions_,
     std::shared_ptr<AggregatingStep> aggregation_,
     std::shared_ptr<ProjectionStep> projection_,
-    std::shared_ptr<FilterStep> filter_)
+    std::shared_ptr<FilterStep> filter_,
+    std::optional<DataStream> output_stream_)
     : ISourceStep(DataStream{}, hints_)
     , storage_id(storage_id_)
     , column_alias(column_alias_)
@@ -779,9 +796,27 @@ TableScanStep::TableScanStep(
     , log(&Poco::Logger::get("TableScanStep"))
     , alias(alias_)
 {
-    storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    storage_id.uuid = storage->getStorageUUID();
-    formatOutputStream(context);
+    bool need_create_output_stream = true;
+    const auto & table_expression = getTableExpression(*query_info.getSelectQuery(), 0);
+    if (table_expression && table_expression->table_function)
+        storage = context->getQueryContext()->executeTableFunction(table_expression->table_function);
+    else
+    {
+        if (storage_id.empty() && context->getSettingsRef().enable_prune_empty_resource)
+        {
+            LOG_DEBUG(log, "Create tableScanStep without storage");
+            need_create_output_stream = false;
+            output_stream = output_stream_;
+            is_null_source = true;
+        }
+        else
+        {
+            storage = DatabaseCatalog::instance().getTable(storage_id, context);
+            storage_id.uuid = storage->getStorageUUID();
+        }
+    }
+    if (need_create_output_stream)
+        formatOutputStream(context);
 }
 
 void TableScanStep::formatOutputStream(ContextPtr context)
@@ -924,76 +959,221 @@ void TableScanStep::rewriteInForBucketTable(ContextPtr context) const
     LOG_TRACE(log, "After rewriteInForBucketTable:\n: {}", query->dumpTree());
 }
 
-bool TableScanStep::rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query)
+void TableScanStep::rewriteDynamicFilter(SelectQueryInfo & select_query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe)
 {
-    if (auto filter = query->getWhere())
+    if (select_query.partition_filter)
     {
-        auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
-        if (filters.first.empty())
-            return false;
+        Stopwatch watch;
 
-        std::vector<ConstASTPtr> prewhere_predicates;
-        std::vector<ConstASTPtr> where_predicates{filters.second.begin(), filters.second.end()};
+        auto [rf_filters, where_predicates] = RuntimeFilterUtils::extractRuntimeFilters(select_query.partition_filter);
         std::vector<RuntimeFilterDescription> descriptions;
-        for (const auto & predicate : filters.first)
+        descriptions.reserve(rf_filters.size());
+        for (const auto & predicate : rf_filters)
             descriptions.emplace_back(RuntimeFilterUtils::extractDescription(predicate).value());
 
-        auto it = std::max_element(descriptions.begin(), descriptions.end(),
-                                   [](const auto & lhs, const auto & rhs) {
-            return lhs.filter_factor < rhs.filter_factor;
+        const auto & query_id = build_settings.distributed_settings.query_id;
+        const auto & setting = build_settings.context->getSettingsRef();
+        size_t wait_ms = use_expand_pipe ? 0 : setting.wait_runtime_filter_timeout;
+        bool enable_bf_in_prewhere = setting.enable_rewrite_bf_into_prewhere;
+        bool enable_range_cover = setting.enable_range_cover;
+        for (auto & description : descriptions)
+        {
+            bool is_range_or_set = false;
+            bool has_bf = false;
+            auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForTableScan(
+                description, query_id, wait_ms, enable_bf_in_prewhere, enable_range_cover, is_range_or_set, has_bf);
+            where_predicates.insert(where_predicates.end(), runtime_filters.begin(), runtime_filters.end());
+        }
+        auto where_dicates = PredicateUtils::combineConjuncts(where_predicates);
+        select_query.partition_filter = !PredicateUtils::isTruePredicate(where_dicates) ? std::move(where_dicates) : nullptr;
+
+        LOG_DEBUG(
+            log,
+            "rewrite partition runtime filter done, cost:{} ms, query:{}",
+            watch.elapsedMilliseconds(),
+            select_query.partition_filter ? queryToString(*select_query.partition_filter) : "null");
+    }
+
+    auto * query = select_query.query->as<ASTSelectQuery>();
+    auto where = query->getWhere();
+    auto prehwere = query->getPrewhere();
+    if (where || prehwere)
+    {
+        auto [rf_filters, where_predicates] = RuntimeFilterUtils::extractRuntimeFilters(where);
+        auto [prewher_rf_filters, prewhere_predicates] = RuntimeFilterUtils::extractRuntimeFilters(prehwere);
+        if (rf_filters.empty() && prewher_rf_filters.empty())
+            return;
+        rf_filters.insert(rf_filters.end(), prewher_rf_filters.begin(), prewher_rf_filters.end());
+
+        std::vector<ConstASTPtr> tmp_prewhere_predicates;
+        std::vector<RuntimeFilterDescription> descriptions;
+        descriptions.reserve(rf_filters.size());
+        for (const auto & predicate : rf_filters)
+            descriptions.emplace_back(RuntimeFilterUtils::extractDescription(predicate).value());
+
+        if (descriptions.empty())
+            return ;
+
+        std::sort(descriptions.begin(), descriptions.end(), [](const auto & lhs, const auto & rhs) {
+            return lhs.filter_factor > rhs.filter_factor;
         });
 
-        for (size_t i = 0; i < filters.first.size(); ++i)
+        const auto & query_id = build_settings.distributed_settings.query_id;
+        const auto & setting = build_settings.context->getSettingsRef();
+        bool enable_2stags_prewhere = setting.enable_two_stages_prewhere;
+        size_t wait_ms = use_expand_pipe ? 0 : setting.wait_runtime_filter_timeout;
+        bool enable_bf_in_prewhere = setting.enable_rewrite_bf_into_prewhere;
+        bool enable_range_cover = setting.enable_range_cover;
+        double adjust_gap = setting.adjust_range_set_filter_rate;
+        std::vector<ASTPtr> rf_predicates(descriptions.size());
+        std::vector<ASTPtr> rf_only_predicates(descriptions.size());
+        std::vector<ASTPtr> rf_range_or_in_predicates(descriptions.size());
+        std::vector<bool> is_range_or_sets(descriptions.size(), false);
+
+        size_t the_prewhere = 0;
+        bool no_check = false; /// use the highest range or set filter
+        Stopwatch watch;
+
+        for (size_t i = 0; i < descriptions.size(); ++i)
         {
-            if (ASTEquality::compareTree(descriptions[i].expr, it->expr) && storage->supportsPrewhere())
-            {
-                prewhere_predicates.emplace_back(filters.first[i]);
+            bool is_range_or_set = false;
+            bool has_bf = false;
+            auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForTableScan(descriptions[i], query_id, wait_ms, enable_bf_in_prewhere,
+                                                                                       enable_range_cover, is_range_or_set, has_bf);
+            if (runtime_filters.empty())
                 continue;
+            is_range_or_sets[i] = is_range_or_set;
+
+            if (enable_2stags_prewhere)
+            {
+                if (has_bf)
+                    rf_only_predicates[i] = runtime_filters.back();
+            }
+            if (is_range_or_set) {
+                if (has_bf) {
+                    std::vector<ASTPtr> cur_rf_range_or_in_predicates = runtime_filters;
+                    cur_rf_range_or_in_predicates.pop_back();
+                    rf_range_or_in_predicates[i] = PredicateUtils::combineConjuncts(cur_rf_range_or_in_predicates);
+                } else {
+                    rf_range_or_in_predicates[i] = PredicateUtils::combineConjuncts(runtime_filters);
+                }
             }
 
-            where_predicates.emplace_back(filters.first[i]);
+            rf_predicates[i] = PredicateUtils::combineConjuncts(runtime_filters);
+            /// Bound the wait time
+            if (wait_ms && watch.elapsedMilliseconds() > wait_ms)
+            {
+                if (the_prewhere == i)
+                {
+                    LOG_DEBUG(log, "rewrite runtime filter time out for prewhere, ignore it: {}", descriptions[i].id);
+                    the_prewhere ++;
+                }
+                wait_ms = 0;
+            }
+
+            if (!no_check && the_prewhere != i && is_range_or_set && the_prewhere < descriptions.size())
+            {
+                /// take the first range filter as prewhere
+                if ((descriptions[i].filter_factor + adjust_gap) > descriptions[the_prewhere].filter_factor)
+                {
+                    the_prewhere = i;
+                    no_check = true;
+                }
+            }
+
+            /// If not enable bloom filter in prewhere, need bypass it
+            if (!enable_bf_in_prewhere && the_prewhere == i && !is_range_or_set)
+            {
+                the_prewhere ++;
+            }
         }
 
-        if (auto prewhere = query->getPrewhere())
-            prewhere_predicates.emplace_back(prewhere);
-
-        if (!prewhere_predicates.empty())
+        for (size_t i = 0; i < descriptions.size(); ++i)
         {
-            auto prewhere = PredicateUtils::combineConjuncts(prewhere_predicates);
-            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query prewhere: {}", prewhere->getColumnName());
-            query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere));
+            if (!rf_predicates[i])
+                continue;
+
+            if (i == the_prewhere && storage->supportsPrewhere() && (enable_bf_in_prewhere || enable_2stags_prewhere)) // TODO use rf_preds or rf_only_pred?
+            {
+                if (rf_only_predicates[i])
+                    tmp_prewhere_predicates.emplace_back(rf_only_predicates[i]); // TODO range pred derived from RF need not push into prewhere
+                else {
+                    tmp_prewhere_predicates.emplace_back(rf_predicates[i]);
+                }
+                // continue; /// TODO: non-in pred can be push into whre
+
+            }
+            else if (is_range_or_sets[i] && storage->supportsPrewhere())
+            {
+                tmp_prewhere_predicates.emplace_back(rf_range_or_in_predicates[i]);
+            }
+            else
+            {
+                where_predicates.emplace_back(rf_predicates[i]);
+            }
+
         }
+
+        for (size_t i = 0; i < descriptions.size(); ++i)
+        {
+            if (!rf_only_predicates[i])
+                continue;
+
+            if (i != the_prewhere)
+            {
+                tmp_prewhere_predicates.emplace_back(rf_only_predicates[i]);
+                continue;
+            }
+        }
+
+        prewhere_predicates.insert(prewhere_predicates.end(), tmp_prewhere_predicates.begin(), tmp_prewhere_predicates.end());
+        auto prewhere_dicates = PredicateUtils::combineConjuncts(prewhere_predicates);
+        if (!PredicateUtils::isTruePredicate(prewhere_dicates))
+            query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere_dicates));
         else
-        {
-            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query prewhere: nullptr");
             query->setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
-        }
 
-        if (!where_predicates.empty())
-        {
-            auto where = PredicateUtils::combineConjuncts(where_predicates);
-            LOG_DEBUG(log, "after rewrite runtime filter into praewhere, query where: {}", where->getColumnName());
-            query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
-        }
+        auto where_dicates = PredicateUtils::combineConjuncts(where_predicates);
+        if (!PredicateUtils::isTruePredicate(where_dicates))
+            query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_dicates));
         else
-        {
-            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query where: nullptr");
             query->setExpression(ASTSelectQuery::Expression::WHERE, nullptr);
-        }
 
-        return true;
+        LOG_DEBUG(log, "rewrite runtime filter done, cost:{} ms, query:{}", watch.elapsedMilliseconds(), queryToString(*query));
     }
-    return false;
 }
 
 void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
 {
+    if (is_null_source)
+    {
+        LOG_DEBUG(log, "Create NullSource from TableScanStep without storage");
+        pipeline.init(Pipe(std::make_shared<NullSource>(output_stream->header)));
+        return;
+    }
     auto * query = query_info.query->as<ASTSelectQuery>();
     bool use_expand_pipe = build_context.is_expand;
-    if (!build_context.is_expand && query->getWhere()
+    if (!build_context.is_expand && (query->getWhere() || query->getPrewhere() || query_info.partition_filter)
         && build_context.context->getSettingsRef().enable_runtime_filter_pipeline_poll)
     {
-        auto && ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getWhere());
+        std::vector<RuntimeFilterId> ids;
+        if (query->getWhere())
+        {
+            auto where_ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getWhere());
+            ids.insert(ids.end(), where_ids.begin(), where_ids.end());
+        }
+        if (query->getPrewhere())
+        {
+            auto prewhere_ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getPrewhere());
+            ids.insert(ids.end(), prewhere_ids.begin(), prewhere_ids.end());
+        }
+
+        if (query_info.partition_filter)
+        {
+            auto prewhere_ids = RuntimeFilterUtils::extractRuntimeFilterId(query_info.partition_filter);
+            ids.insert(ids.end(), prewhere_ids.begin(), prewhere_ids.end());
+        }
+
         if (!ids.empty())
         {
             Pipe pipe(std::make_shared<MergeTreeSelectPrepareProcessor>(
@@ -1025,29 +1205,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
-    bool need_rw = rewriteDynamicFilterIntoPrewhere(query);
-    if (need_rw)
-    {
-        const auto & setting = build_context.context->getSettingsRef();
-        size_t wait_ms = use_expand_pipe ? 0 : setting.wait_runtime_filter_timeout;
-        if (auto where = query->getWhere())
-            query->setExpression(
-                ASTSelectQuery::Expression::WHERE,
-                rewriteRuntimeFilter(
-                    where, build_context.distributed_settings.query_id, wait_ms, false, false, setting.enable_range_cover));
-
-        if (auto prewhere = query->getPrewhere())
-            query->setExpression(
-                ASTSelectQuery::Expression::PREWHERE,
-                rewriteRuntimeFilter(
-                    prewhere,
-                    build_context.distributed_settings.query_id,
-                    wait_ms,
-                    true,
-                    setting.runtime_filter_rewrite_bloom_filter_into_prewhere,
-                    setting.enable_range_cover));
-        LOG_DEBUG(log, "init pipeline stage wait runtime filter cost {} ms", stage_watch.elapsedMillisecondsAsDouble());
-    }
+    /// Rewrite runtime filter
+    rewriteDynamicFilter(query_info, build_context, use_expand_pipe);
 
     // todo support _shard_num rewrite
     // if ()
@@ -1064,20 +1223,36 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         options.ignoreProjections();
 
     stage_watch.restart();
-    ASTPtr partition_filter;
-    if (query_info.partition_filter)
-        partition_filter = query_info.partition_filter->clone();
-    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, options);
-    interpreter->execute(true);
-    query_info = interpreter->getQueryInfo();
-    query_info = fillQueryInfo(build_context.context);
+    if (build_context.context->getSettingsRef().enable_table_scan_build_pipeline_optimization)
+    {
+        fillQueryInfoV2(build_context.context);
+    }
+    else
+    {
+        ASTPtr partition_filter;
+        auto mutable_context = Context::createCopy(build_context.context);
+        if (query_info.partition_filter)
+            partition_filter = query_info.partition_filter->clone();
+        // FIXME: It is used to work around partition keys being chosen as PREWHERE. In long term, we should rely on
+        // enable_partition_filter_push_down = 1 to do the stuff
+        if (mutable_context->getSettingsRef().remove_partition_filter_on_worker)
+            mutable_context->setSetting("enable_partition_filter_push_down", 1U);
+
+        options.cache_info = query_info.cache_info;
+        auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, mutable_context, options);
+        interpreter->execute(true);
+        auto backup_input_order_info = query_info.input_order_info;
+        query_info = interpreter->getQueryInfo();
+        query_info = fillQueryInfo(build_context.context);
+        query_info.input_order_info = backup_input_order_info;
+        if (partition_filter)
+            query_info.partition_filter = partition_filter;
+    }
     LOG_DEBUG(log, "init pipeline stage run time: make up query info, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
     // always do filter underneath, as WHERE filter won't reuse PREWHERE result in optimizer mode
     if (query_info.prewhere_info)
         query_info.prewhere_info->need_filter = true;
-
-    query_info.partition_filter = partition_filter;
 
     if (use_projection_index)
     {
@@ -1124,9 +1299,10 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     stage_watch.restart();
     if (use_optimizer_projection_selection)
-        execute_plan = TableScanExecutor(*this, *merge_tree_storage, build_context.context).buildExecutePlan();
+        execute_plan
+            = TableScanExecutor(*this, *merge_tree_storage, build_context.context).buildExecutePlan(build_context.distributed_settings);
     else if (use_projection_index)
-        execute_plan = TableScanExecutorWithIndex(*this, build_context.context).buildExecutePlan();
+        execute_plan = TableScanExecutorWithIndex(*this, build_context.context).buildExecutePlan(build_context.distributed_settings);
     LOG_DEBUG(log, "init pipeline stage run time: projection match, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
     size_t max_streams = build_context.context->getSettingsRef().max_threads;
@@ -1139,8 +1315,26 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (execute_plan.empty())
     {
         auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), build_context.context);
+        if (auto * cloud_merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
+        {
+            if (build_context.distributed_settings.source_task_index)
+            {
+                cloud_merge_tree->source_index = build_context.distributed_settings.source_task_index;
+                cloud_merge_tree->source_count = build_context.distributed_settings.source_task_count;
+            }
+        }
+        // flag = Output
         auto pipe = storage->read(
-            interpreter->getRequiredColumns(), storage_snapshot, query_info, build_context.context, QueryProcessingStage::Enum::FetchColumns, max_block_size, max_streams);
+            getRequiredColumns(),
+            storage_snapshot,
+            query_info,
+            build_context.context,
+            QueryProcessingStage::Enum::FetchColumns,
+            max_block_size,
+            max_streams);
+
+        if (pipe.getCacheHolder())
+            pipeline.addCacheHolder(pipe.getCacheHolder());
 
         QueryPlanStepPtr step;
         if (pipe.empty())
@@ -1270,7 +1464,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             String pipeline_name = "execute plan read";
             if (plan_element.read_bitmap_index)
                 pipeline_name += "(with index)";
-            aliasColumns(*sub_pipeline, build_context, "execute plan read");
+            aliasColumns(*sub_pipeline, build_context, pipeline_name);
 
             if (pushdown_filter)
                 getPushdownFilterCast()->transformPipeline(*sub_pipeline, build_context);
@@ -1329,6 +1523,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                     settings.group_by_two_level_threshold,
                     settings.group_by_two_level_threshold_bytes,
                     settings.max_bytes_before_external_group_by,
+                    settings.spill_mode == SpillMode::AUTO,
                     settings.spill_buffer_bytes_before_external_group_by,
                     settings.empty_result_for_aggregation_by_empty_set,
                     context->getTemporaryVolume(),
@@ -1362,6 +1557,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                     settings.group_by_two_level_threshold,
                     settings.group_by_two_level_threshold_bytes,
                     settings.max_bytes_before_external_group_by,
+                    settings.spill_mode == SpillMode::AUTO,
                     settings.spill_buffer_bytes_before_external_group_by,
                     settings.empty_result_for_aggregation_by_empty_set,
                     context->getTemporaryVolume(),
@@ -1395,7 +1591,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (!pipes.empty())
     {
         pipe = Pipe::unitePipes(std::move(pipes));
-        pipe.resize(1);
+        if (pushdown_aggregation)
+            pipe.resize(1);
     }
     else
     {
@@ -1455,11 +1652,16 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
     {
         pushdown_filter->toProto(*proto.mutable_pushdown_filter());
     }
+    if (output_stream)
+    {
+        output_stream->toProto(*proto.mutable_output_stream());
+    }
 }
 
 std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
 {
-    auto storage_id = StorageID::fromProto(proto.storage_id(), context);
+    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context)
+                                                                            : StorageID::fromProto(proto.storage_id(), context);
     NamesWithAliases column_alias;
     for (const auto & proto_element : proto.column_alias())
     {
@@ -1475,6 +1677,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
     std::shared_ptr<AggregatingStep> pushdown_aggregation;
     std::shared_ptr<ProjectionStep> pushdown_projection;
     std::shared_ptr<FilterStep> pushdown_filter;
+    std::optional<DataStream> output_stream;
     if (proto.has_pushdown_aggregation())
         pushdown_aggregation = AggregatingStep::fromProto(proto.pushdown_aggregation(), context);
 
@@ -1482,6 +1685,11 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         pushdown_projection = ProjectionStep::fromProto(proto.pushdown_projection(), context);
     if (proto.has_pushdown_filter())
         pushdown_filter = FilterStep::fromProto(proto.pushdown_filter(), context);
+    if (proto.has_output_stream())
+    {
+        output_stream = std::make_optional<DataStream>();
+        output_stream->fillFromProto(proto.output_stream());
+    }
     auto step = std::make_shared<TableScanStep>(
         context,
         storage_id,
@@ -1493,16 +1701,20 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         inline_expressions,
         pushdown_aggregation,
         pushdown_projection,
-        pushdown_filter);
+        pushdown_filter,
+        output_stream);
+
     return step;
 }
 
-std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr /*context*/) const
+std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr) const
 {
     SelectQueryInfo copy_query_info = query_info; // fixme@kaixi: deep copy here
     copy_query_info.query = query_info.query->clone();
-    auto new_prewhere = copy_query_info.query->as<ASTSelectQuery &>().prewhere();
-
+    if (query_info.partition_filter)
+        copy_query_info.partition_filter = query_info.partition_filter->clone();
+    if (query_info.input_order_info)
+        copy_query_info.input_order_info = std::make_shared<InputOrderInfo>(*query_info.input_order_info);
     return std::make_unique<TableScanStep>(
         output_stream.value(),
         storage,
@@ -1550,13 +1762,13 @@ void TableScanStep::allocate(ContextPtr context)
         query_info.syntax_analyzer_result = tree_rewriter_result;
     }
 
+    query_info = fillQueryInfo(context);
     original_table = storage_id.table_name;
     storage_id = storage->prepareTableRead(getRequiredColumns(), query_info, context);
 
     // update query info
     if (query_info.query)
     {
-        query_info = fillQueryInfo(context);
         /// trigger preallocate tables
         // if (!cnch->isOnDemandMode())
         // cnch->read(column_names, query_info, context, processed_stage, max_block_size, 1);
@@ -1622,34 +1834,6 @@ bool TableScanStep::setLimit(size_t limit, const ContextMutablePtr & context)
 size_t TableScanStep::getMaxBlockSize() const
 {
     return max_block_size;
-}
-
-ASTPtr TableScanStep::rewriteRuntimeFilter(
-    const ASTPtr & filter, const String & query_id, size_t wait_ms, bool is_prewhere, bool enable_bf, bool range_cover)
-{
-    if (!filter)
-        return nullptr;
-
-    Stopwatch timer{CLOCK_MONOTONIC_COARSE};
-    timer.start();
-
-    auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
-    if (filters.first.empty())
-        return filter;
-
-    LOG_DEBUG(log, "runtime filter {} before rewrite: {}", is_prewhere ? "prewhere" : "where", filter->getColumnName());
-
-    std::vector<ConstASTPtr> predicates = std::move(filters.second);
-    for (auto & runtime_filter : filters.first)
-    {
-        auto description = RuntimeFilterUtils::extractDescription(runtime_filter).value();
-        auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForTableScan(description, query_id, wait_ms, enable_bf, range_cover);
-        predicates.insert(predicates.end(), runtime_filters.begin(), runtime_filters.end());
-    }
-
-    auto res = PredicateUtils::combineConjuncts(predicates);
-    LOG_DEBUG(log, "runtime filter {} after rewrite: {}. with {} ms", is_prewhere ? "prewhere" : "where", res->getColumnName(), timer.elapsedMilliseconds());
-    return res;
 }
 
 void TableScanStep::aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context, const String & pipeline_name)
@@ -1774,7 +1958,7 @@ Names TableScanStep::getRequiredColumns(GetFlags flags) const
         for (const auto & item : inline_expressions)
         {
             const auto * func = item.second->as<ASTFunction>();
-            if (func && Poco::toLower(func->name) == "arraysetcheck")
+            if (func && functionCanUseBitmapIndex(*func))
                 add_columns_in_expr(item.second);
         }
     }
@@ -1812,5 +1996,54 @@ NameToNameMap TableScanStep::getAliasToColumnMap() const
     for (const auto & column_to_alias : column_alias)
         ret.emplace(column_to_alias.second, column_to_alias.first);
     return ret;
+}
+
+void TableScanStep::prepare(const PreparedStatementContext & prepared_context)
+{
+    prepared_context.prepare(query_info.partition_filter);
+    prepared_context.prepare(query_info.query);
+}
+
+bool TableScanStep::hasFunctionCanUseBitmapIndex() const
+{
+    for (const auto & item : inline_expressions)
+    {
+        const auto * func = item.second->as<ASTFunction>();
+        if (func && functionCanUseBitmapIndex(*func))
+            return true;
+    }
+    return false;
+}
+
+void TableScanStep::fillQueryInfoV2(ContextPtr context)
+{
+    assert(storage);
+    auto required_columns = getRequiredColumns();
+    auto metadata_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
+    auto block = metadata_snapshot->getSampleBlockForColumns(required_columns);
+
+    /// 1. build tree rewriter result
+    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(block.getNamesAndTypesList(), storage, metadata_snapshot);
+    syntax_analyzer_result->analyzed_join = std::make_shared<TableJoin>();
+    query_info.syntax_analyzer_result = syntax_analyzer_result;
+
+    /// 2. build prepared sets
+    if (auto where = query_info.getSelectQuery()->where())
+        makeSetsForIndex(where, context, query_info.sets);
+    if (auto prewhere = query_info.getSelectQuery()->prewhere())
+        makeSetsForIndex(prewhere, context, query_info.sets);
+    // TODO: atomic_predicates_expr
+    if (query_info.partition_filter)
+        makeSetsForIndex(query_info.partition_filter, context, query_info.sets);
+
+    /// 3. build prewhere info
+    if (auto prewhere = query_info.getSelectQuery()->prewhere())
+    {
+        auto prewhere_action = IQueryPlanStep::createFilterExpressionActions(context, prewhere, block);
+        query_info.prewhere_info = std::make_shared<PrewhereInfo>(prewhere_action, prewhere->getColumnName());
+    }
+
+    /// 4. build index context
+    query_info.index_context = std::make_shared<MergeTreeIndexContext>();
 }
 }

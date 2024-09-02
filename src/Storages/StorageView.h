@@ -42,6 +42,7 @@ public:
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    void appendColumns(ASTPtr & query, const Names & column_names);
     const ASTPtr & getInnerQuery() const
     {
         return getInMemoryMetadataPtr()->getSelectQuery().inner_query ;

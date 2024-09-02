@@ -39,5 +39,7 @@ public:
     enforceNodePartitioning(QueryPlanStepPtr step, const Property & required, const Property & actual, const Context & context);
     static QueryPlanStepPtr
     enforceStreamPartitioning(QueryPlanStepPtr step, const Property & required, const Property & actual, const Context & context);
+
+    static PlanNodePtr enforceOffloadingGatherNode(const PlanNodePtr & node, Context & context);
 };
 }

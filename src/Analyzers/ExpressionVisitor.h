@@ -22,7 +22,6 @@
 
 namespace DB
 {
-
 /// Since the ASTFunction is heavily reused, the AnalyzerExpressionVisitor is used for providing more fine-grained visiting methods.
 template <typename C, typename R = void>
 class AnalyzerExpressionVisitor : public ASTVisitor<R, C>
@@ -45,19 +44,17 @@ protected:
     virtual R visitExistsSubquery(ASTPtr & node, ASTFunction & ast, C & visitor_context) { return visitFunction(node, ast, visitor_context); }
     virtual R visitScalarSubquery(ASTPtr & node, ASTSubquery & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }
     virtual R visitQuantifiedComparisonSubquery(ASTPtr & node, ASTQuantifiedComparison & ast, C & visitor_context) { return visitExpression(node, ast, visitor_context); }
+    virtual R visitPreparedParameter(ASTPtr & node, ASTPreparedParameter & ast, C & visitor_context)
+    {
+        return visitExpression(node, ast, visitor_context);
+    }
 
 public:
-    explicit AnalyzerExpressionVisitor(ContextPtr context_): context(context_) {}
+    explicit AnalyzerExpressionVisitor(ContextPtr context_) : context(context_) { }
 
-    virtual R process(ASTPtr & node, C & visitor_context)
-    {
-        return ASTVisitorUtil::accept(node, *this, visitor_context);
-    }
+    virtual R process(ASTPtr & node, C & visitor_context) { return ASTVisitorUtil::accept(node, *this, visitor_context); }
 
-    R visitASTLiteral(ASTPtr & node, C & visitor_context) final
-    {
-        return visitLiteral(node, node->as<ASTLiteral &>(), visitor_context);
-    }
+    R visitASTLiteral(ASTPtr & node, C & visitor_context) final { return visitLiteral(node, node->as<ASTLiteral &>(), visitor_context); }
 
     R visitASTIdentifier(ASTPtr & node, C & visitor_context) final
     {
@@ -104,6 +101,11 @@ public:
     {
         return visitQuantifiedComparisonSubquery(node, node->as<ASTQuantifiedComparison &>(), visitor_context);
     }
+
+    R visitASTPreparedParameter(ASTPtr & node, C & visitor_context) final
+    {
+        return visitPreparedParameter(node, node->as<ASTPreparedParameter &>(), visitor_context);
+    }
 };
 
 /// ExpressionTreeVisitor is used to provide default traversal logic for expression asts. (used for analyzed expr)
@@ -118,10 +120,7 @@ private:
 protected:
     void visitExpression(ASTPtr &, IAST &, const Void &) override {}
 
-    void visitFunction(ASTPtr &, ASTFunction & ast, const Void &) override
-    {
-        process(ast.arguments);
-    }
+    void visitFunction(ASTPtr &, ASTFunction & ast, const Void &) override { process(ast.arguments); }
 
     void visitWindowFunction(ASTPtr &, ASTFunction & ast, const Void &) override
     {
@@ -154,13 +153,15 @@ protected:
     void visitExistsSubquery(ASTPtr &, ASTFunction & ast, const Void &) override
     {
         auto subquery = ast.arguments->children[0];
+        if (ast.name == "not")
+        {
+            if (auto * not_func = subquery->as<ASTFunction>())
+                subquery = not_func->arguments->children[0];
+        }
         process(subquery->children[0]);
     }
 
-    void visitScalarSubquery(ASTPtr &, ASTSubquery & ast, const Void &) override
-    {
-        process(ast.children[0]);
-    }
+    void visitScalarSubquery(ASTPtr &, ASTSubquery & ast, const Void &) override { process(ast.children[0]); }
 
     void visitQuantifiedComparisonSubquery(ASTPtr &, ASTQuantifiedComparison & ast, const Void &) override
     {
@@ -170,26 +171,27 @@ protected:
     }
 
 public:
-    ExpressionTraversalIncludeSubqueryVisitor(AnalyzerExpressionVisitor<UserContext> & user_visitor_, UserContext & user_context_, Analysis & analysis_, ContextPtr context_):
-        AnalyzerExpressionVisitor(context_), analysis(analysis_), user_visitor(user_visitor_), user_context(user_context_) {}
+    ExpressionTraversalIncludeSubqueryVisitor(
+        AnalyzerExpressionVisitor<UserContext> & user_visitor_, UserContext & user_context_, Analysis & analysis_, ContextPtr context_)
+        : AnalyzerExpressionVisitor(context_), analysis(analysis_), user_visitor(user_visitor_), user_context(user_context_)
+    {
+    }
 
     void process(ASTPtr & node, const Void & traversal_context) override
     {
         // node is expression AST
-        if (node->as<ASTIdentifier>() || node->as<ASTFunction>() || node->as<ASTLiteral>() || node->as<ASTSubquery>() || node->as<ASTFieldReference>() || node->as<ASTQuantifiedComparison>())
+        if (node->as<ASTIdentifier>() || node->as<ASTFunction>() || node->as<ASTLiteral>() || node->as<ASTSubquery>()
+            || node->as<ASTFieldReference>() || node->as<ASTQuantifiedComparison>() || node->as<ASTPreparedParameter>())
             user_visitor.process(node, user_context);
 
         return ASTVisitorUtil::accept(node, *this, traversal_context);
     }
 
-    void process(ASTPtr & node)
-    {
-        process(node, {});
-    }
+    void process(ASTPtr & node) { process(node, {}); }
 
     void process(ASTs & nodes)
     {
-        for (auto & node: nodes)
+        for (auto & node : nodes)
             process(node, {});
     }
 
@@ -218,20 +220,11 @@ public:
         process(node->as<ASTSelectWithUnionQuery &>().list_of_selects);
     }
 
-    void visitASTExpressionList(ASTPtr & node, const Void &) override
-    {
-        process(node->children);
-    }
+    void visitASTExpressionList(ASTPtr & node, const Void &) override { process(node->children); }
 
-    void visitASTOrderByElement(ASTPtr & node, const Void &) override
-    {
-        process(node->children[0]);
-    }
+    void visitASTOrderByElement(ASTPtr & node, const Void &) override { process(node->children[0]); }
 
-    void visitASTTablesInSelectQuery(ASTPtr & node, const Void &) override
-    {
-        process(node->children);
-    }
+    void visitASTTablesInSelectQuery(ASTPtr & node, const Void &) override { process(node->children); }
 
     void visitASTTablesInSelectQueryElement(ASTPtr & node, const Void &) override
     {
@@ -259,21 +252,26 @@ public:
 };
 
 template <typename UserContext>
-class ExpressionTraversalVisitor: public ExpressionTraversalIncludeSubqueryVisitor<UserContext>
+class ExpressionTraversalVisitor : public ExpressionTraversalIncludeSubqueryVisitor<UserContext>
 {
 public:
     using ExpressionTraversalIncludeSubqueryVisitor<UserContext>::ExpressionTraversalIncludeSubqueryVisitor;
     using ExpressionTraversalIncludeSubqueryVisitor<UserContext>::process;
 
-    void visitASTSelectQuery(ASTPtr &, const Void &) override {}
+    void visitASTSelectQuery(ASTPtr &, const Void &) override { }
 
-    void visitASTSelectWithUnionQuery(ASTPtr &, const Void &) override {}
+    void visitASTSelectWithUnionQuery(ASTPtr &, const Void &) override { }
 };
 
-template<typename UserContext, template<typename> typename TraversalVisitor = ExpressionTraversalVisitor>
-void traverseExpressionTree(ASTPtr & node, AnalyzerExpressionVisitor<UserContext> & user_visitor, UserContext & user_context, Analysis & analysis, ContextPtr context)
+template <typename UserContext, template <typename> typename TraversalVisitor = ExpressionTraversalVisitor>
+void traverseExpressionTree(
+    ASTPtr & node,
+    AnalyzerExpressionVisitor<UserContext> & user_visitor,
+    UserContext & user_context,
+    Analysis & analysis,
+    ContextPtr context)
 {
-    TraversalVisitor<UserContext> visitor {user_visitor, user_context, analysis, context};
+    TraversalVisitor<UserContext> visitor{user_visitor, user_context, analysis, context};
     visitor.process(node);
 }
 

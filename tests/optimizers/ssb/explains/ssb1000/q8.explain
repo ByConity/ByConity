@@ -1,42 +1,46 @@
-Projection Est. 157857 rows
+Projection Est. 39431 rows
 │     Expressions: [C_CITY, S_CITY], d_year:=`expr#toYear(LO_ORDERDATE)`, revenue:=`expr#sum(LO_REVENUE)`
-└─ Sorting Est. 157857 rows
+└─ Sorting Est. 39431 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-   └─ Gather Exchange Est. 157857 rows
-      └─ Sorting Est. 157857 rows
+   └─ Gather Exchange Est. 39431 rows
+      └─ Sorting Est. 39431 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-         └─ MergingAggregated Est. 157857 rows
-            └─ Repartition Exchange Est. 157857 rows
+         └─ MergingAggregated Est. 39431 rows
+            └─ Repartition Exchange Est. 39431 rows
                │     Partition by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
-               └─ Aggregating Est. 157857 rows
+               └─ Aggregating Est. 39431 rows
                   │     Group by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 14437666 rows
+                  └─ Projection Est. 57750760 rows
                      │     Expressions: [C_CITY, LO_REVENUE, S_CITY], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join Est. 14437666 rows
+                     └─ Inner Join Est. 57750760 rows
                         │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     Runtime Filters Builder: {C_CUSTKEY}
-                        ├─ Repartition Exchange Est. 239623858 rows
+                        ├─ Repartition Exchange Est. 239624219 rows
                         │  │     Partition by: {LO_CUSTKEY}
-                        │  └─ Inner Join Est. 239623858 rows
+                        │  └─ Inner Join Est. 239624219 rows
                         │     │     Condition: LO_SUPPKEY == S_SUPPKEY
                         │     │     Runtime Filters Builder: {S_SUPPKEY}
-                        │     ├─ Filter Est. 5999989813 rows
+                        │     ├─ Filter Est. 1499997453 rows
                         │     │  │     Condition: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │     │  └─ TableScan ssb1000.lineorder Est. 5999989813 rows
                         │     │           Where: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │     │           Outputs: [LO_CUSTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                         │     └─ Broadcast Exchange Est. 79875 rows
-                        │        └─ Filter Est. 79875 rows
-                        │           │     Condition: S_NATION = 'UNITED STATES'
-                        │           └─ TableScan ssb1000.supplier Est. 2000000 rows
-                        │                    Where: S_NATION = 'UNITED STATES'
-                        │                    Outputs: [S_SUPPKEY, S_CITY, S_NATION]
+                        │        └─ Projection Est. 79875 rows
+                        │           │     Expressions: [S_CITY, S_SUPPKEY]
+                        │           └─ Filter Est. 79875 rows
+                        │              │     Condition: S_NATION = 'UNITED STATES'
+                        │              └─ TableScan ssb1000.supplier Est. 2000000 rows
+                        │                       Where: S_NATION = 'UNITED STATES'
+                        │                       Outputs: [S_SUPPKEY, S_CITY, S_NATION]
                         └─ Repartition Exchange Est. 1199689 rows
                            │     Partition by: {C_CUSTKEY}
-                           └─ Filter Est. 1199689 rows
-                              │     Condition: C_NATION = 'UNITED STATES'
-                              └─ TableScan ssb1000.customer Est. 30000000 rows
-                                       Where: C_NATION = 'UNITED STATES'
-                                       Outputs: [C_CUSTKEY, C_CITY, C_NATION]
+                           └─ Projection Est. 1199689 rows
+                              │     Expressions: [C_CITY, C_CUSTKEY]
+                              └─ Filter Est. 1199689 rows
+                                 │     Condition: C_NATION = 'UNITED STATES'
+                                 └─ TableScan ssb1000.customer Est. 30000000 rows
+                                          Where: C_NATION = 'UNITED STATES'
+                                          Outputs: [C_CUSTKEY, C_CITY, C_NATION]
 note: Runtime Filter is applied for 2 times.

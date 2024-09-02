@@ -89,11 +89,16 @@ enum class RuleType : UInt32
     JOIN_ENUM_ON_GRAPH,
     JOIN_TO_MULTI_JOIN,
     INNER_JOIN_COMMUTATION,
+    INNER_JOIN_ASSOCIATE,
     PULL_LEFT_JOIN_THROUGH_INNER_JOIN,
     PULL_LEFT_JOIN_PROJECTION_THROUGH_INNER_JOIN,
     PULL_LEFT_JOIN_FILTER_THROUGH_INNER_JOIN,
+    SEMI_JOIN_PUSH_DOWN,
     CARDILALITY_BASED_JOIN_REORDER,
     SELECTIVITY_BASED_JOIN_REORDER,
+    SEMI_JOIN_PUSH_DOWN_PROJECTION,
+    SEMI_JOIN_PUSH_DOWN_AGGREAGTE,
+    PREDICATE_TO_IN_PREDICATE,
 
     MAGIC_SET_FOR_AGGREGATION,
     MAGIC_SET_FOR_PROJECTION_AGGREGATION,
@@ -116,6 +121,7 @@ enum class RuleType : UInt32
     PUSH_LIMIT_THROUGH_EXTREMES,
     PUSH_LIMIT_THROUGH_UNION,
     PUSH_LIMIT_THROUGH_OUTER_JOIN,
+    PUSH_LIMIT_THROUGH_BUFFER,
     PUSH_LIMIT_INTO_WINDOW,
     PUSH_LIMIT_INTO_SORTING,
 
@@ -134,6 +140,7 @@ enum class RuleType : UInt32
     MERGE_AGGREGATINGS,
     SINGLE_DISTINCT_AGG_TO_GROUPBY,
     MULTIPLE_DISTINCT_AGG_TO_MARKDISTINCT,
+    MULTIPLE_DISTINCT_AGG_TO_EXPAND_AGG,
 
     SWAP_WINDOWS,
     MERGE_PREDICATES_USING_DOMAIN_TRANSLATOR,
@@ -150,6 +157,22 @@ enum class RuleType : UInt32
 
     PUSH_DOWN_APPLY_THROUGH_JOIN,
 
+    UNNESTING_WITH_PROJECTION_WINDOW,
+    UNNESTING_WITH_WINDOW,
+    EXISTS_TO_SEMI_JOIN,
+    IN_TO_SEMI_JOIN,
+
+    EAGER_AGGREGATION,
+
+    CROSS_JOIN_TO_UNION,
+
+    SUM_IF_TO_COUNT_IF,
+    
+    PUSH_UNION_THROUGH_JOIN,
+    PUSH_UNION_THROUGH_PROJECTION,
+    PUSH_UNION_THROUGH_AGG,
+
+    EXTRACT_BITMAP_IMPLICIT_FILTER,
     // Implementation
     SET_JOIN_DISTRIBUTION,
 
@@ -176,7 +199,7 @@ public:
     virtual String getName() const = 0;
     // enable/disable rule by settings, every rule must implement this function.
     virtual bool isEnabled(ContextPtr) const = 0;
-    virtual PatternPtr getPattern() const = 0;
+    virtual ConstRefPatternPtr getPattern() const = 0;
     // exclude this rule for a specific plan node after a successful `Rule::transform` call happens,
     // this effectively prevent a plan node being rewritten by a rule multiple times
     virtual bool excludeIfTransformSuccess() const { return false; }
@@ -189,7 +212,7 @@ public:
         return empty;
     }
 
-    std::unordered_set<IQueryPlanStep::Type> getTargetTypes()
+    const std::unordered_set<IQueryPlanStep::Type> & getTargetTypes()
     {
         if (target_types.empty())
         {

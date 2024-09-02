@@ -92,10 +92,6 @@ RemoteBlockOutputStream::RemoteBlockOutputStream(Connection & connection_,
             /// Server could attach ColumnsDescription in front of stream for column defaults. There's no need to pass it through cause
             /// client's already got this information for remote table. Ignore.
         }
-        else if (Protocol::Server::QueryMetrics == packet.type)
-        {
-            parseQueryWorkerMetrics(packet.query_worker_metric_elements);
-        }
         else
             throw NetException("Unexpected packet from server (expected Data or Exception, got "
                 + String(Protocol::Server::toString(packet.type)) + ")", ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
@@ -152,10 +148,6 @@ void RemoteBlockOutputStream::writeSuffix()
         {
             // Do nothing
         }
-        else if (Protocol::Server::QueryMetrics == packet.type)
-        {
-            parseQueryWorkerMetrics(packet.query_worker_metric_elements);
-        }
         else
             throw NetException("Unexpected packet from server (expected EndOfStream or Exception, got "
             + String(Protocol::Server::toString(packet.type)) + ")", ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
@@ -178,17 +170,6 @@ RemoteBlockOutputStream::~RemoteBlockOutputStream()
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
-    }
-}
-
-void RemoteBlockOutputStream::parseQueryWorkerMetrics(const QueryWorkerMetricElements & elements)
-{
-    for (const auto & element : elements)
-    {
-        if (context->getServerType() == ServerType::cnch_server)  /// For cnch server, directly push elements to the buffer
-            context->getQueryContext()->insertQueryWorkerMetricsElement(*element);
-        else if (context->getServerType() == ServerType::cnch_worker)  /// For cnch aggre worker, store the elements and forward them to cnch server
-            context->getQueryContext()->addQueryWorkerMetricElements(std::move(element));
     }
 }
 

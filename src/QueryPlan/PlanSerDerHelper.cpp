@@ -56,12 +56,16 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/LocalExchangeStep.h>
 #include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/MultiJoinStep.h>
+#include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/OffsetStep.h>
+#include <QueryPlan/OutfileWriteStep.h>
+#include <QueryPlan/OutfileFinishStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PartitionTopNStep.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>
@@ -71,6 +75,7 @@
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
+#include <QueryPlan/IntermediateResultCacheStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <QueryPlan/SortingStep.h>
@@ -344,7 +349,7 @@ bool isPlanStepEqualImpl(const IQueryPlanStep & a, const IQueryPlanStep & b)
 bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b)
 {
     if (a.getType() != b.getType())
-        return true;
+        return false;
 
     switch (a.getType())
     {
@@ -356,7 +361,7 @@ bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b)
         APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(CASE_DEF)
 
         default:
-            throw Exception("unsupported step", ErrorCodes::PROTOBUF_BAD_CAST);
+            throw Exception("unsupported step " + a.getName(), ErrorCodes::PROTOBUF_BAD_CAST);
 #undef CASE_DEF
     }
 }

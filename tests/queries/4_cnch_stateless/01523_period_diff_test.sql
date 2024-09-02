@@ -4,6 +4,9 @@ select period_diff(202202,'202103');
 select period_diff('202202',202103);
 select period_diff(999912,000000);
 select period_diff(000000,999912);
+select period_diff(5, 1);
+select period_diff(9805, 9812);
+select period_diff(9805, 9704);
 select period_diff(000000,-000001); -- { serverError 377 }
 
 CREATE DATABASE IF NOT EXISTS test;

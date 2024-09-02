@@ -52,11 +52,11 @@ void IResourceGroup::setParent(IResourceGroup * parent_)
 IResourceGroup::QueryEntity::QueryEntity(
     IResourceGroup * group_,
     const String & query_,
-    const Context & query_context_,
+    const ContextPtr & query_context_,
     QueryStatusType status_type_)
     : group(group_)
     , query(query_)
-    , query_context(&query_context_)
+    , query_context(query_context_)
     , status_type(status_type_)
     , id(group->root->id.fetch_add(1, std::memory_order_relaxed)) {}
 
@@ -74,7 +74,7 @@ void IResourceGroup::queryFinished(IResourceGroup::Container::iterator it)
     setInUse(true);
 }
 
-IResourceGroup::Container::iterator IResourceGroup::run(const String & query, const Context & query_context)
+IResourceGroup::Container::iterator IResourceGroup::run(const String & query, const ContextPtr & query_context)
 {
     std::unique_lock lock(root->mutex);
     bool canRun = true;
@@ -94,6 +94,7 @@ IResourceGroup::Container::iterator IResourceGroup::run(const String & query, co
     IResourceGroup::Element element = std::make_shared<IResourceGroup::QueryEntity>(this, query, query_context);
     if (canRun)
         return runQuery(element);
+    
     auto it = enqueueQuery(element);
 
     if (!root->can_run.wait_for(lock,
@@ -123,8 +124,8 @@ IResourceGroup::Container::iterator IResourceGroup::enqueueQuery(IResourceGroup:
     while (group)
     {
         ++group->descendent_queued_queries;
-        group = group->parent;
         group->setInUse(true);
+        group = group->parent;
     }
 
     setInUse(true);
@@ -142,9 +143,8 @@ IResourceGroup::Container::iterator IResourceGroup::runQuery(IResourceGroup::Ele
     {
         ++group->descendent_running_queries;
         group->cached_memory_usage_bytes += min_query_memory_usage;
-        group = group->parent;
-
         group->setInUse(true);
+        group = group->parent;
     }
     setInUse(true);
     return it;

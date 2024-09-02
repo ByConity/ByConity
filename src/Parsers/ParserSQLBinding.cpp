@@ -16,12 +16,16 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     ParserKeyword s_binding("BINDING");
     ParserKeyword s_using("USING");
     ParserKeyword s_settings("SETTINGS");
+    ParserKeyword s_if_not_exists("IF NOT EXISTS");
+    ParserKeyword s_or_replace("OR REPLACE");
 
     String query_pattern;
     String re_expression;
     ASTPtr pattern;
     ASTPtr target;
     ASTPtr settings;
+    bool if_not_exists = false;
+    bool or_replace = false;
 
     BindingLevel level;
     if (!s_create.ignore(pos, expected))
@@ -37,13 +41,21 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     if (!s_binding.ignore(pos, expected))
         return false;
 
+    if (s_if_not_exists.ignore(pos, expected))
+        if_not_exists = true;
+    else if (s_or_replace.ignore(pos, expected))
+        or_replace = true;
+
     ParserSelectWithUnionQuery select_p(dt);
     const auto * begin = pos->begin;
-    if (pos->type == TokenType::StringLiteral)
+    if (pos->type == TokenType::StringLiteral || pos->type == TokenType::DoubleQuotedIdentifier)
     {
         /// Identifier single quot
         ReadBufferFromMemory buf(pos->begin, pos->size());
-        readQuotedStringWithSQLStyle(re_expression, buf);
+        if (pos->type == TokenType::StringLiteral)
+            readQuotedStringWithSQLStyle(re_expression, buf);
+        else
+            readDoubleQuotedStringWithSQLStyle(re_expression, buf);
 
         if (re_expression.empty())
             return false;
@@ -76,6 +88,8 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     create_binding_query->pattern = pattern;
     create_binding_query->target = target;
     create_binding_query->settings = settings;
+    create_binding_query->if_not_exists = if_not_exists;
+    create_binding_query->or_replace = or_replace;
 
     node = create_binding_query;
     return true;
@@ -130,11 +144,14 @@ bool ParserDropBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     const auto * begin = pos->begin;
     String query_pattern;
     ParserSelectWithUnionQuery select_p(dt);
-    if (pos->type == TokenType::StringLiteral)
+    if (pos->type == TokenType::StringLiteral || pos->type == TokenType::DoubleQuotedIdentifier)
     {
         /// Identifier single quot
         ReadBufferFromMemory buf(pos->begin, pos->size());
-        readQuotedStringWithSQLStyle(str_value, buf);
+        if (pos->type == TokenType::StringLiteral)
+            readQuotedStringWithSQLStyle(str_value, buf);
+        else
+            readDoubleQuotedStringWithSQLStyle(str_value, buf);
 
         if (str_value.empty())
             return false;

@@ -22,6 +22,7 @@
 #include <QueryPlan/ITransformingStep.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Core/Names.h>
+#include <Processors/Transforms/AggregatingStreamingTransform.h>
 
 namespace DB
 {
@@ -112,6 +113,7 @@ public:
             false,
             should_produce_results_in_order_of_bucket_number_,
             no_shuffle_,
+            false,
             hints_)
     {
     }
@@ -128,6 +130,7 @@ public:
         bool overflow_row_ = false,
         bool should_produce_results_in_order_of_bucket_number_ = false,
         bool no_shuffle_ = false,
+        bool streaming_for_cache_ = false,
         PlanHints hints_ = {})
         : AggregatingStep(
             input_stream_,
@@ -146,6 +149,7 @@ public:
             false,
             should_produce_results_in_order_of_bucket_number_,
             no_shuffle_,
+            streaming_for_cache_,
             hints_)
     {
     }
@@ -168,6 +172,7 @@ public:
         bool totals_ = false,
         bool should_produce_results_in_order_of_bucket_number = true,
         bool no_shuffle_ = false,
+        bool streaming_for_cache_ = false,
         PlanHints hints_ = {});
 
     String getName() const override { return "Aggregating"; }
@@ -192,6 +197,15 @@ public:
         group_by_sort_description = group_by_sort_description_;
     }
     bool isFinal() const { return final; }
+    bool isStreamingForCache() const
+    {
+        return streaming_for_cache;
+    }
+    void setStreamingForCache(bool streaming_for_cache_)
+    {
+        streaming_for_cache = streaming_for_cache_;
+    }
+    
     bool isPartial() const { return !final; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
     bool isNoShuffle() const
@@ -253,6 +267,7 @@ private:
     /// if the condition is unkown, the safe options is to set it to true to avoid errors
     /// therefore the default value is true in the constructor
     bool should_produce_results_in_order_of_bucket_number;
+    bool streaming_for_cache = false;
 
     // for bitengine sqls
     bool no_shuffle;

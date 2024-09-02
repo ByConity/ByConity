@@ -51,7 +51,11 @@ public:
     bool tableIsActive() const;
     StoragePtr tryGetTargetTable();
 
+    std::set<cppkafka::TopicPartition> getSampleConsumingPartitionList(const std::map<String, size_t> & num_partitions_of_topics);
+
 private:
+    std::set<cppkafka::TopicPartition> sample_consuming_partitions_list;
+
     Poco::Logger * log;
 
 protected:

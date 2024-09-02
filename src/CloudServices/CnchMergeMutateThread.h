@@ -54,6 +54,20 @@ struct ManipulationTaskRecord
     String task_id;
     TransactionCnchPtr transaction;
 
+    UInt64 submit_time_ns{0};
+
+    /// Set task_record's commit_start_time once it go into txn commit stage.
+    /// There are some other operations may be conflict with merge.
+    /// 1. DROP PARTITION - get the current max block id and generate a DropRange part. 
+    ///    Need to cancel merge tasks before getting data parts.
+    /// 2. INGEST PARTITION - generate new content based on current source parts.
+    ///    Need to cancel merge tasks and suspend the merge process before INGEST PARTITION finish.
+    /// 3. INSERT OVERWRITE - need to generate a DropRange part to invalid old parts.
+    /// So it's possible that other threads may cancel merge tasks.
+    /// As we can't control the txn state after it's committing (it's controlled by txn manager),
+    /// those committing tasks must be destroyed by txn, but not others(DROP PARTITION, INGEST PARTITION).
+    time_t commit_start_time{0};
+
     ServerDataPartsVector parts;
 
     /// for heartbeat
@@ -175,7 +189,7 @@ public:
 
 
     void tryRemoveTask(const String & task_id);
-    void finishTask(const String & task_id, std::function<void(const ManipulationTaskRecord &)> && commit_parts);
+    void finishTask(const String & task_id, std::function<void(const Strings &, UInt64)> && precommit_parts);
     bool removeTasksOnPartitions(const std::unordered_set<String> & partitions);
 
     String triggerPartMerge(StoragePtr & istorage, const String & partition_id, bool final, bool try_select, bool try_execute);
@@ -185,6 +199,7 @@ public:
     void waitMutationFinish(UInt64 mutation_commit_time, UInt64 timeout_ms);
     MergeTreeMutationStatusVector getAllMutationStatuses();
     ClusterTaskProgress getReclusteringTaskProgress();
+    void setTableClusterStatus();
 
 private:
     void preStart() override;
@@ -203,7 +218,7 @@ private:
     String submitFutureManipulationTask(const StorageCnchMergeTree & storage, FutureManipulationTask & future_task, bool maybe_sync_task = false);
 
     // Mutate
-    void removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, bool recluster_finish, std::lock_guard<std::mutex> &);
+    void removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, std::lock_guard<std::mutex> &);
     void calcMutationPartitions(CnchMergeTreeMutationEntry & mutate_entry, StoragePtr & istorage, StorageCnchMergeTree & storage);
     bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
 

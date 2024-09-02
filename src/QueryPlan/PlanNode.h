@@ -30,6 +30,7 @@
 #include <QueryPlan/EnforceSingleRowStep.h>
 #include <QueryPlan/ExceptStep.h>
 #include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/ExpandStep.h>
 #include <QueryPlan/ExplainAnalyzeStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/ExtremesStep.h>
@@ -43,6 +44,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/LocalExchangeStep.h>
 #include <QueryPlan/MarkDistinctStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
@@ -58,6 +60,7 @@
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
+#include <QueryPlan/IntermediateResultCacheStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <QueryPlan/SortingStep.h>
@@ -65,6 +68,8 @@
 #include <QueryPlan/TableFinishStep.h>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/TableWriteStep.h>
+#include <QueryPlan/OutfileWriteStep.h>
+#include <QueryPlan/OutfileFinishStep.h>
 #include <QueryPlan/TopNFilteringStep.h>
 #include <QueryPlan/TotalsHavingStep.h>
 #include <QueryPlan/UnionStep.h>
@@ -112,6 +117,7 @@ public:
     NameToType getOutputNamesToTypes() const { return getCurrentDataStream().header.getNamesToTypes(); }
     Names getOutputNames() const { return getCurrentDataStream().header.getNames(); }
     PlanNodePtr getNodeById(PlanNodeId node_id) const;
+    void prepare(const PreparedStatementContext & prepared_context);
 
     static PlanNodePtr createPlanNode(
         [[maybe_unused]] PlanNodeId id_,

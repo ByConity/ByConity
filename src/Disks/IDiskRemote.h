@@ -84,13 +84,13 @@ public:
 
     Metadata readOrCreateMetaForWriting(const String & path, WriteMode mode);
 
-    UInt64 getTotalSpace() const override { return std::numeric_limits<UInt64>::max(); }
+    DiskStats getTotalSpace([[maybe_unused]]bool with_keep_free = false) const override { return {std::numeric_limits<UInt64>::max(), std::numeric_limits<UInt64>::max()}; }
 
-    UInt64 getAvailableSpace() const override { return std::numeric_limits<UInt64>::max(); }
+    DiskStats getAvailableSpace() const override { return {std::numeric_limits<UInt64>::max(), std::numeric_limits<UInt64>::max()}; }
 
-    UInt64 getUnreservedSpace() const override { return std::numeric_limits<UInt64>::max(); }
+    DiskStats getUnreservedSpace() const override { return {std::numeric_limits<UInt64>::max(), std::numeric_limits<UInt64>::max()}; }
 
-    UInt64 getKeepingFreeSpace() const override { return 0; }
+    DiskStats getKeepingFreeSpace() const override { return {}; }
 
     bool exists(const String & path) const override;
 

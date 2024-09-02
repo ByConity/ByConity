@@ -21,25 +21,30 @@ namespace DB::ANSI {
 
 void onSettingChanged(Settings *s)
 {
-    bool ansi = static_cast<DialectType>(s->dialect_type) == DialectType::ANSI || static_cast<DialectType>(s->dialect_type) == DialectType::MYSQL;
+    bool ansi_like = static_cast<DialectType>(s->dialect_type) != DialectType::CLICKHOUSE;
+    bool mysql = static_cast<DialectType>(s->dialect_type) == DialectType::MYSQL;
 
     // optimizer settings
-    s->enable_optimizer = ansi;
+    s->enable_optimizer = ansi_like;
 
     // community settings
-    if (ansi) // TODO: need be refactor by https://meego.feishu.cn/clickhousech/story/detail/3001220613
-        s->join_use_nulls = ansi;
-    s->cast_keep_nullable = ansi;
-    s->union_default_mode = ansi ? "DISTINCT" : "";
-    s->intersect_default_mode = ansi ? SetOperationMode::DISTINCT : SetOperationMode::ALL;
-    s->except_default_mode = ansi ? SetOperationMode::DISTINCT : SetOperationMode::ALL;
-    s->prefer_column_name_to_alias = ansi;
-    s->data_type_default_nullable = ansi;
-    s->decimal_division_use_extended_scale = ansi;
-    s->decimal_arithmetic_promote_storage = ansi;
-    s->allow_extended_type_conversion = ansi;
-    s->parse_literal_as_decimal = ansi;
-    s->check_date_overflow = ansi;
+    if (ansi_like) // TODO: need be refactor by https://meego.feishu.cn/clickhousech/story/detail/3001220613
+        s->join_use_nulls = ansi_like;
+    s->cast_keep_nullable = ansi_like;
+    s->union_default_mode = ansi_like ? "DISTINCT" : "";
+    s->intersect_default_mode = ansi_like ? SetOperationMode::DISTINCT : SetOperationMode::ALL;
+    s->except_default_mode = ansi_like ? SetOperationMode::DISTINCT : SetOperationMode::ALL;
+    s->prefer_column_name_to_alias = ansi_like;
+    s->data_type_default_nullable = ansi_like;
+    s->decimal_division_use_extended_scale = ansi_like;
+    s->decimal_arithmetic_promote_storage = ansi_like;
+    s->allow_extended_type_conversion = ansi_like;
+    s->parse_literal_as_decimal = ansi_like;
+    s->check_data_overflow = mysql;
+    // s->text_case_option= mysql ? TextCaseOption::LOWERCASE : TextCaseOption::MIXED;
+    s->enable_implicit_arg_type_convert = mysql;
+    s->handle_division_by_zero = mysql;
+    s->exception_on_unsupported_mysql_syntax = !mysql;
 }
 
 }

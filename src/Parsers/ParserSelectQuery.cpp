@@ -32,6 +32,8 @@
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Parsers/ParserWithElement.h>
 #include <Parsers/ParserHints.h>
+#include <Poco/Logger.h>
+#include <Parsers/formatAST.h>
 
 
 namespace DB
@@ -183,8 +185,9 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
 
     /// FROM database.table or FROM table or FROM (subquery) or FROM tableFunction(...)
-    if (s_from.ignore(pos, expected))
-    {
+    /// MySQL compatibility for DUAL table -- ignore here
+    if (s_from.ignore(pos, expected) && !ParserKeyword("DUAL").ignore(pos, expected))
+    {    
         if (!ParserTablesInSelectQuery(dt).parse(pos, tables, expected))
             return false;
     }

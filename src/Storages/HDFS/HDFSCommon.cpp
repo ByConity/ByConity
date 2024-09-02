@@ -33,7 +33,16 @@
 #    include <Common/ShellCommand.h>
 #    include <Common/formatIPv6.h>
 #    include <common/logger_useful.h>
+#    include <Common/ElapsedTimeProfileEventIncrement.h>
+#    include <Common/ProfileEvents.h>
 
+
+
+namespace ProfileEvents
+{
+    extern const int HdfsConnect;
+    extern const int HdfsConnectMicroseconds;
+}
 
 namespace DB
 {
@@ -206,6 +215,9 @@ std::mutex HDFSBuilderWrapper::kinit_mtx;
 
 HDFSFSPtr createHDFSFS(hdfsBuilder * builder)
 {
+    ProfileEvents::increment(ProfileEvents::HdfsConnect);
+    ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::HdfsConnectMicroseconds);
+
     HDFSFSPtr fs(hdfsBuilderConnect(builder), detail::HDFSFsDeleter());
     if (fs == nullptr)
         throw Exception("Unable to connect to HDFS: " + String(hdfsGetLastError()), ErrorCodes::NETWORK_ERROR);

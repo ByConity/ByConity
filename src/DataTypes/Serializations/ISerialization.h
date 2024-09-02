@@ -270,6 +270,8 @@ public:
 
         /// If not zero, may be used to avoid reallocations while reading column of String type.
         double avg_value_size_hint = 0;
+
+        bool zero_copy_read_from_cache = false;
     };
 
     /// Call before serializeBinaryBulkWithMultipleStreams chain to write something before first mark.
@@ -323,7 +325,7 @@ public:
     /** Override these methods for data types that require just single stream (most of data types).
       */
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;
-    virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const;
+    virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool zero_copy_cache_read) const;
 
     /** Serialization/deserialization of individual values.
       *
@@ -416,6 +418,8 @@ public:
     {
         in_serialization_nullable = true;
     }
+
+    static bool isSharedOffsetSubstream(const String & name_in_storage, const SubstreamPath & path);
 
 protected:
     template <typename State, typename StatePtr>

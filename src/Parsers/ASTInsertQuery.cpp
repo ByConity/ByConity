@@ -25,7 +25,8 @@
 #include <Common/quoteString.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
-
+#include <Parsers/ASTSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -40,7 +41,7 @@ void ASTInsertQuery::formatImpl(const FormatSettings & settings, FormatState & s
 {
     frame.need_parens = false;
 
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << "INSERT INTO ";
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << (is_overwrite ? "INSERT OVERWRITE " : "INSERT INTO ");
     if (table_function)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "FUNCTION ";
@@ -54,6 +55,13 @@ void ASTInsertQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else
         settings.ostr << (settings.hilite ? hilite_none : "")
                       << (!table_id.database_name.empty() ? backQuoteIfNeed(table_id.database_name) + "." : "") << backQuoteIfNeed(table_id.table_name);
+    if (is_overwrite && overwrite_partition)
+    {
+        settings.ostr << " PARTITION ";
+        settings.ostr << "(";
+        overwrite_partition->formatImpl(settings, state, frame);
+        settings.ostr << ") ";
+    }
 
     if (columns)
     {
@@ -145,6 +153,47 @@ static void tryFindInputFunctionImpl(const ASTPtr & ast, ASTPtr & input_function
 void ASTInsertQuery::tryFindInputFunction(ASTPtr & input_function) const
 {
     tryFindInputFunctionImpl(select, input_function);
+}
+
+void ASTInsertQuery::serialize(WriteBuffer & buf) const
+{
+    writeBinary(table_id.database_name, buf);
+    writeBinary(table_id.table_name, buf);
+    serializeAST(columns, buf);
+    writeBinary(format, buf);
+    serializeAST(select, buf);
+    serializeAST(watch, buf);
+    serializeAST(table_function, buf);
+    serializeAST(in_file, buf);
+    serializeAST(compression, buf);
+    serializeAST(partition_by, buf);
+    serializeAST(settings_ast, buf);
+    writeBinary(is_overwrite, buf);
+    serializeAST(overwrite_partition, buf);
+}
+
+void ASTInsertQuery::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(table_id.database_name, buf);
+    readBinary(table_id.table_name, buf);
+    columns = deserializeAST(buf);
+    readBinary(format, buf);
+    select = deserializeAST(buf);
+    watch = deserializeAST(buf);
+    table_function = deserializeAST(buf);
+    in_file = deserializeAST(buf);
+    compression = deserializeAST(buf);
+    partition_by = deserializeAST(buf);
+    settings_ast = deserializeAST(buf);
+    readBinary(is_overwrite, buf);
+    overwrite_partition = deserializeAST(buf);
+}
+
+ASTPtr ASTInsertQuery::deserialize(ReadBuffer & buf)
+{
+    auto insert = std::make_shared<ASTInsertQuery>();
+    insert->deserializeImpl(buf);
+    return insert;
 }
 
 }

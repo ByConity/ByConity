@@ -22,6 +22,7 @@
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/CollapsingSortedTransform.h>
@@ -212,6 +213,11 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes(
     }
 }
 
+static auto isMergePart(const MergeTreeDataPartPtr & part) -> bool
+{
+    return !part->get_deleted() && part->get_info().hint_mutation == 0 && part->get_info().level != 0;
+}
+
 MergeTreeMutableDataPartPtr MergeTreeDataMerger::prepareNewParts(
     const MergeTreeDataPartsVector & source_data_parts, const IMergeTreeDataPart * parent_part, const NamesAndTypesList & storage_columns)
 {
@@ -253,6 +259,18 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::prepareNewParts(
     for (const auto & part : source_data_parts)
         mutation_commit_time = std::max(mutation_commit_time, part->mutation_commit_time);
     new_data_part->mutation_commit_time = mutation_commit_time;
+
+    TxnTimestamp last_modification_time = 0;
+    for (const MergeTreeDataPartPtr & part : source_data_parts)
+    {
+        if (isMergePart(part)) {
+            last_modification_time = std::max(last_modification_time, part->last_modification_time);
+        } else {
+            last_modification_time
+                = std::max(last_modification_time, part->last_modification_time ? part->last_modification_time : part->commit_time);
+        }
+    }
+    new_data_part->last_modification_time = last_modification_time;
 
     if (!parent_part && params.is_bucket_table)
         new_data_part->bucket_number = source_data_parts.front()->bucket_number;
@@ -375,7 +393,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         {
             if (column.type->isByteMap())
             {
-                auto [curr, end] = getMapColumnRangeFromOrderedFiles(column.name, merged_column_to_size);
+                /// Implicit column names in merged_column_to_size is unescaped, so column.name need keep unescaped either.
+                auto [curr, end] = getFileRangeFromOrderedFilesByPrefix(getMapKeyPrefix(column.name), merged_column_to_size);
                 for (; curr != end; ++curr)
                     gathering_columns.emplace_back(
                         curr->first, dynamic_cast<const DataTypeMap *>(column.type.get())->getValueTypeForImplicitColumn());
@@ -406,11 +425,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     // create merge prefetcher if necessary
     if (context->getSettingsRef().cnch_enable_merge_prefetch)
     {
-        if (std::any_of(merging_columns.begin(), merging_columns.end(), [](auto & c) { return c.type->isMap(); }))
-        {
-            LOG_DEBUG(log, "Prefetcher is disabled as there is some Map column in merging_columns");
-        }
-        else if (std::any_of(gathering_columns.cbegin(), gathering_columns.cend(), [](auto & c) { return isBitEngineDataType(c.type); }))
+        if (std::any_of(gathering_columns.cbegin(), gathering_columns.cend(), [](auto & c) { return isBitEngineDataType(c.type); }))
         {
             LOG_DEBUG(log, "Prefetcher is disabled as there is some BitEngine column in gathering_columns");
         }
@@ -661,7 +676,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             context->getSettingsRef().optimize_map_column_serialization,
             /* enable_disk_based_key_index_ = */ false);
 
-        auto gather_column = [&](const String & column_name) {
+        auto gather_column = [&](const String & column_name, BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) {
             Float64 progress_before = manipulation_entry->progress.load(std::memory_order_relaxed);
             Float64 column_weight = column_sizes->columnWeight(column_name);
             MergeStageProgress column_progress(progress_before, column_weight);
@@ -669,6 +684,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
 
             /// Prepare input streams
             BlockInputStreams column_part_streams(source_data_parts.size());
+
+            auto rt_ctx = std::make_shared<MergeTreeSequentialSource::RuntimeContext>();
 
             for (size_t part_num = 0; part_num < source_data_parts.size(); ++part_num)
             {
@@ -680,9 +697,13 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                     source_data_parts[part_num],
                     Names{column_name},
                     read_with_direct_io,
-                    /*take_column_types_from_storage*/ true, /// default is true, in bitengine may set false,
+                    /*take_column_types_from_storage*/ bitengine_read_type
+                        == BitEngineReadType::ONLY_SOURCE, /// default is true, in bitengine may set false,
                     /*quiet*/ false,
-                    future_files);
+                    future_files,
+                    bitengine_read_type,
+                    /*block_preferred_size_bytes_*/ data_settings->merge_max_block_size_bytes,
+                    rt_ctx);
 
                 column_part_source->setProgressCallback(
                     ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, column_progress));
@@ -700,10 +721,10 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                 column_name,
                 column_part_streams,
                 *rows_sources_read_buf,
+                /*block_preferred_size_rows_ =*/ data_settings->merge_max_block_size,
+                /*block_preferred_size_bytes_ =*/ data_settings->merge_max_block_size_bytes,
                 context->getSettingsRef().enable_low_cardinality_merge_new_algo,
-                context->getSettingsRef().low_cardinality_distinct_threshold,
-                DEFAULT_BLOCK_SIZE /// block_preferred_size_
-            );
+                context->getSettingsRef().low_cardinality_distinct_threshold);
 
             /// Prepare output stream
             MergedColumnOnlyOutputStream column_to(
@@ -818,7 +839,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
         // we use a new merge_entry for projection merge
         // Here, projection_manipulation_entry use the parent_parent's params to initilize itself, which is not accurate.
         // THe most accurate way is to construct a new params by the projection_parts.
-        ManipulationListElement projection_manipulation_entry(params, false);
+        ManipulationListElement projection_manipulation_entry(params, false, context);
 
         auto merged_projection_part = mergePartsToTemporaryPartImpl(
             std::move(projection_parts), projection.metadata, projection_merging_params, &projection_manipulation_entry, new_data_part.get());

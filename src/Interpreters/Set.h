@@ -151,9 +151,18 @@ private:
         bool negative,
         const PaddedPODArray<UInt8> * null_map) const;
 
+    void executeBitmap64(
+        const Block & block,
+        ColumnUInt8::Container & vec_res,
+        bool negative) const;
+
     /// Collected elements of `Set`.
     /// It is necessary for the index to work on the primary key in the IN statement.
     std::vector<IColumn::WrappedPtr> set_elements;
+
+    BitMap64 bitmap_set;
+    void writeBitmap(WriteBuffer & buf) const;
+    void readBitmap(ReadBuffer & buf);
 
     /** Protects work with the set in the functions `insertFromBlock` and `execute`.
       * These functions can be called simultaneously from different threads only when using StorageSet,
@@ -247,6 +256,8 @@ public:
     MergeTreeSetIndex(const Columns & set_elements, std::vector<KeyTuplePositionMapping> && index_mapping_);
 
     size_t size() const { return ordered_set.at(0)->size(); }
+
+    const Columns & getOrderedSet() const { return ordered_set; }
 
     bool hasMonotonicFunctionsChain() const;
 

@@ -11,19 +11,19 @@ SELECT 'Ensure bucket number is assigned to a part in bucket table';
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a');
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-06-26', 1, '1b'), ('2023-06-26', 1, '1a'), ('2023-06-26', 1, '1c'), ('2023-06-26', 3, '3b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active;
 
 SELECT 'Ensure join queries between bucket tables work correctly';
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active;
 SELECT b1.s, id, b2.s FROM u10117_uniquekey_test_bucket b1 JOIN u10117_uniquekey_test_bucket2 b2 USING (id);
 
 SELECT 'ALTER MODIFY CLUSTER KEY DEFINITION';
 ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY sipHash64(id) INTO 3 BUCKETS;
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
+SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
 
 SELECT 'AFTER MODIFY CLUSTER KEY, test insert one row';
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-25', 0, '0a'), ('2023-06-25', 1, '1d'), ('2023-06-25', 1, '1e'), ('2023-06-25', 4, '4a'), ('2023-06-25', 1, '1b');
@@ -36,7 +36,7 @@ SELECT 'DROP bucket table definition, INSERT, ensure bucket number of new part i
 ALTER TABLE u10117_uniquekey_test_bucket2 DROP CLUSTER;
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-25', 0, '0a');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s, d;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION '2023-06-26';  -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION ID '20230626'; -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION WHERE id > 0;  -- { serverError 344 }
@@ -55,25 +55,25 @@ SELECT 'Ensure bucket number is assigned to a part in bucket table';
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a');
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-06-26', 1, '1b'), ('2023-06-26', 1, '1a'), ('2023-06-26', 1, '1c'), ('2023-06-26', 3, '3b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active;
 
 SELECT 'Ensure join queries between bucket tables work correctly';
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active;
 SELECT b1.s, id, b2.s FROM u10117_uniquekey_test_bucket b1 JOIN u10117_uniquekey_test_bucket2 b2 USING (id);
 
 SELECT 'ALTER MODIFY CLUSTER KEY DEFINITION';
 ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY s INTO 3 BUCKETS;
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
+SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
 
 SELECT 'DROP bucket table definition, INSERT, ensure bucket number of new part is -1, ban recluster commands';
 ALTER TABLE u10117_uniquekey_test_bucket2 DROP CLUSTER;
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-25', 0, '0a');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s, d;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION '2023-06-26';  -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION ID '20230626'; -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION WHERE id > 0;  -- { serverError 344 }
@@ -98,19 +98,19 @@ SELECT 'Ensure bucket number is assigned to a part in bucket table';
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a');
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-06-26', 1, '1b'), ('2023-06-26', 1, '1a'), ('2023-06-26', 1, '1c'), ('2023-06-26', 3, '3b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active;
 
 SELECT 'Ensure join queries between bucket tables work correctly';
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active;
 SELECT b1.s, id, b2.s FROM u10117_uniquekey_test_bucket b1 JOIN u10117_uniquekey_test_bucket2 b2 USING (id);
 
 SELECT 'ALTER MODIFY CLUSTER KEY DEFINITION';
 ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY sipHash64(id) INTO 3 BUCKETS;
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
+SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
 
 SELECT 'AFTER MODIFY CLUSTER KEY, test insert one row';
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-25', 0, '00a');
@@ -122,7 +122,7 @@ SELECT 'DROP bucket table definition, INSERT, ensure bucket number of new part i
 ALTER TABLE u10117_uniquekey_test_bucket2 DROP CLUSTER;
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-25', 0, '0a');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s, d;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION '2023-06-26';  -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION ID '20230626'; -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION WHERE id > 0;  -- { serverError 344 }
@@ -141,25 +141,25 @@ SELECT 'Ensure bucket number is assigned to a part in bucket table';
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a');
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-06-26', 1, '1b'), ('2023-06-26', 1, '1a'), ('2023-06-26', 1, '1c'), ('2023-06-26', 3, '3b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active;
 
 SELECT 'Ensure join queries between bucket tables work correctly';
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active;
 SELECT b1.s, id, b2.s FROM u10117_uniquekey_test_bucket b1 JOIN u10117_uniquekey_test_bucket2 b2 USING (id);
 
 SELECT 'ALTER MODIFY CLUSTER KEY DEFINITION';
 ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY s INTO 3 BUCKETS;
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
-SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
+SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
 
 SELECT 'DROP bucket table definition, INSERT, ensure bucket number of new part is -1, ban recluster commands';
 ALTER TABLE u10117_uniquekey_test_bucket2 DROP CLUSTER;
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-25', 0, '0a');
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s, d;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active order by partition, bucket_number;
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION '2023-06-26';  -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION ID '20230626'; -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION WHERE id > 0;  -- { serverError 344 }
@@ -182,9 +182,9 @@ SELECT 'insert some values and query';
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a');
 INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-06-26', 1, '1b'), ('2023-06-26', 1, '1a'), ('2023-06-27', 1, '1c'), ('2023-06-27', 3, '3b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket' and active;
 SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s, d;
-SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase(1) and table = 'u10117_uniquekey_test_bucket2' and active;
 
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket2;
@@ -265,5 +265,21 @@ SELECT 'start dedup worker and all staged parts to be visible';
 SYSTEM START DEDUP WORKER u10117_uniquekey_test_bucket;
 SYSTEM SYNC DEDUP WORKER u10117_uniquekey_test_bucket;
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
+
+SELECT 'Test fetch right parts when enable_bucket_level_unique_keys=1';
+CREATE TABLE u10117_uniquekey_test_bucket (d Int32, n Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d UNIQUE KEY n CLUSTER BY EXPRESSION toUInt32(n%2) INTO 2 BUCKETS ORDER BY n SETTINGS partition_level_unique_keys = 1, enable_bucket_level_unique_keys = 1;
+INSERT INTO u10117_uniquekey_test_bucket VALUES (0, 0, 0), (0, 1, 1), (1, 2, 2), (1, 3, 3);
+INSERT INTO u10117_uniquekey_test_bucket SELECT number as d, number as n, number+10 as m FROM numbers(1);
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY n;
+
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
+
+SELECT 'Test fetch right parts when enable_bucket_level_unique_keys=0';
+CREATE TABLE u10117_uniquekey_test_bucket (d Int32, n Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d UNIQUE KEY n CLUSTER BY EXPRESSION toUInt32(m%2) INTO 2 BUCKETS ORDER BY n SETTINGS partition_level_unique_keys = 1, enable_bucket_level_unique_keys = 0;
+INSERT INTO u10117_uniquekey_test_bucket VALUES (0, 0, 0), (0, 1, 1), (1, 2, 2), (1, 3, 3);
+INSERT INTO u10117_uniquekey_test_bucket SELECT number as d, number as n, number+7 as m FROM numbers(1);
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY n;
 
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;

@@ -34,3 +34,6 @@ USING (x, y, u, v) SETTINGS enable_optimizer = 1;
 -- FULL JOIN (SELECT toUInt16(3) AS x, toInt16(3) AS y, toUInt32(3) AS u, toInt32(3) AS v) AS s
 -- USING (x, y, u, v)
 -- ORDER BY x, y, u, v;
+
+select * from (select 1 as a, 2 as c) as t1 right join (select 2 as a, 4 as d) as t2 using a SETTINGS dialect_type='CLICKHOUSE';
+select * from (select 1 as a, 2 as c) as t1 right join (select 2 as a, 4 as d) as t2 using a SETTINGS dialect_type='ANSI' -- { serverError 62 };

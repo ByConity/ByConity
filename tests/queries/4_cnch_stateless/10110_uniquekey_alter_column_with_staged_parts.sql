@@ -20,7 +20,7 @@ set enable_staging_area_for_write = 1;
 system start dedup worker u10110_common;
 system stop dedup worker u10110_common;
 INSERT INTO u10110_common VALUES ('20210102', 'k1', 2, 'k3', 25, '2')('20210103', 'k1', 3, 'k3', 30, '3');
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10110_common' and to_publish;
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase(0) and table = 'u10110_common' and to_publish;
 SELECT * FROM u10110_common ORDER BY d, k2;
 
 
@@ -36,7 +36,7 @@ DESC u10110_common;
 SELECT 'start dedup worker and check whether staged part has added column c2';
 system start dedup worker u10110_common;
 system sync dedup worker u10110_common;
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10110_common' and to_publish;
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase(0) and table = 'u10110_common' and to_publish;
 SELECT * FROM u10110_common ORDER BY d, k2;
 
 -- add column without default
@@ -44,7 +44,7 @@ SELECT '';
 SELECT 'stop dedup worker and async insert one row to test next alter command';
 system stop dedup worker u10110_common;
 INSERT INTO u10110_common VALUES ('20210101', 'k1', 4, 'k3', 40, '4', 'c3');
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10110_common' and to_publish;
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase(0) and table = 'u10110_common' and to_publish;
 ALTER TABLE u10110_common DROP COLUMN c2, DROP COLUMN c3;
 ALTER TABLE u10110_common ADD COLUMN c4 Int32;
 SELECT 'After drop c2, c3 and add c4 int32, table description:';
@@ -52,7 +52,7 @@ DESC u10110_common;
 SELECT 'start dedup worker and check whether staged part has applied alter commands';
 system start dedup worker u10110_common;
 system sync dedup worker u10110_common;
-SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase() and table = 'u10110_common' and to_publish;
+SELECT '#staged parts:', count() FROM system.cnch_staged_parts where database=currentDatabase(0) and table = 'u10110_common' and to_publish;
 SELECT * FROM u10110_common ORDER BY d, k2;
 
 

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <CloudServices/DedupWorkerStatus.h>
+#include <CloudServices/DedupGran.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/Types.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
@@ -26,40 +27,56 @@ namespace DB
 {
 class Context;
 class StorageCloudMergeTree;
+class MergeTreeDataDeduper;
 
 class CloudMergeTreeDedupWorker
 {
 public:
-    CloudMergeTreeDedupWorker(StorageCloudMergeTree & storage_);
+    explicit CloudMergeTreeDedupWorker(StorageCloudMergeTree & storage_);
     ~CloudMergeTreeDedupWorker();
 
     void start()
     {
-        is_stopped = false;
         task->activateAndSchedule();
+        if (data_repairer && !data_repairer->taskIsActive())
+            data_repairer->activateAndSchedule();
+        is_stopped = false;
     }
 
     void stop()
     {
-        is_stopped = true;
         if (task)
+        {
+            /// Cancel current dedup task and deactivate
+            cancelDedupTasks();
             task->deactivate();
+        }
+        if (data_repairer && data_repairer->taskIsActive())
+            data_repairer->deactivate();
+        is_stopped = true;
         if (!server_host_ports.empty() && heartbeat_task)
             heartbeat_task->deactivate();
     }
 
     bool isActive() { return !is_stopped; }
 
-    void setServerHostWithPorts(HostWithPorts host_ports);
+    void setServerIndexAndHostPorts(size_t deduper_index, HostWithPorts host_ports);
 
     HostWithPorts getServerHostWithPorts();
+
+    void assignHighPriorityDedupPartition(const NameSet & high_priority_dedup_partition_);
+
+    void assignRepairGran(const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time);
 
     DedupWorkerStatus getDedupWorkerStatus();
 
 private:
+
+    void cancelDedupTasks();
+
     /**
-     *  Due to staged parts, engine can perform dedup tasks asynchronously, but brings unvisable time until staged parts are published.
-     *  Therefore, the staged part has a maximum lifttime. When the lifetime of staged parts exceed the threshold engine will block kafka ingestion action.
+     *  Due to staged parts, engine can perform dedup tasks asynchronously, but brings invisible time until staged parts are published.
+     *  Therefore, the staged part has a maximum lifetime. When the lifetime of staged parts exceed the threshold engine will block kafka ingestion action.
      *  There are two cases that may cause the situation:
      *  1. The speed of dedup task can not catch up that of kafka ingestion.
      *  2. The interval of dedup tasks is irrational.
@@ -71,7 +88,7 @@ private:
      *  |<--reserve-->|<---safe---->|<-----------idle-------------->|
      *  t1            t2            t3                              t4
      *
-     *  For each valid dedup task, it will recalculate the interval time. t4 is the begining time that launches dedup task.
+     *  For each valid dedup task, it will recalculate the interval time. t4 is the beginning time that launches dedup task.
      *
      *  Before doing dedup task, it will get the minimum timestamp of staged parts(short for mts). The location of mts is divided into four cases:
      *  1. idle area. mts is in t3~t4 which means that the speed of dedup task is much more than that of kafka engine. In this case, task interval increases at a rate of 1.5 times.
@@ -128,7 +145,13 @@ private:
     void run();
     void iterate();
 
+    /**
+     * @brief Task to repair data duplication data executed by `data_repairer`.
+     */
+    void runDataRepairTask();
+
     StorageCloudMergeTree & storage;
+    std::atomic<size_t> index{0};
     ContextMutablePtr context;
     String log_name;
     Poco::Logger * log;
@@ -141,7 +164,23 @@ private:
     time_t last_heartbeat_time{0};
     BackgroundSchedulePool::TaskHolder heartbeat_task;
 
+    /// Protect high_priority_dedup_partition
+    mutable std::mutex high_priority_dedup_partition_mutex;
+    NameSet high_priority_dedup_partition;
+
+    /// Protect current_repair_grans & history_repair_gran_expiration_time
+    mutable std::mutex repair_grans_mutex;
+    DedupGranList current_repair_grans;
+    DedupGranTimeMap history_repair_gran_expiration_time;
+
+    /// Repair data duplication in background.
+    BackgroundSchedulePool::TaskHolder data_repairer;
+
     mutable std::mutex status_mutex;
     DedupWorkerStatus status;
+
+    /// Protect current_deduper
+    mutable std::mutex current_deduper_mutex;
+    std::unique_ptr<MergeTreeDataDeduper> current_deduper;
 };
 }

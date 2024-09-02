@@ -199,9 +199,9 @@ Token Lexer::nextTokenImpl()
         case '\'':
             return quotedString<'\'', TokenType::StringLiteral, TokenType::ErrorSingleQuoteIsNotClosed>(pos, token_begin, end);
         case '"':
-            return quotedString<'"', TokenType::QuotedIdentifier, TokenType::ErrorDoubleQuoteIsNotClosed>(pos, token_begin, end);
+            return quotedString<'"', TokenType::DoubleQuotedIdentifier, TokenType::ErrorDoubleQuoteIsNotClosed>(pos, token_begin, end);
         case '`':
-            return quotedString<'`', TokenType::QuotedIdentifier, TokenType::ErrorBackQuoteIsNotClosed>(pos, token_begin, end);
+            return quotedString<'`', TokenType::BackQuotedIdentifier, TokenType::ErrorBackQuoteIsNotClosed>(pos, token_begin, end);
 
         case '(':
             return Token(TokenType::OpeningRoundBracket, token_begin, ++pos);
@@ -228,7 +228,8 @@ Token Lexer::nextTokenImpl()
                     || prev_significant_token_type == TokenType::ClosingRoundBracket
                     || prev_significant_token_type == TokenType::ClosingSquareBracket
                     || prev_significant_token_type == TokenType::BareWord
-                    || prev_significant_token_type == TokenType::QuotedIdentifier
+                    || prev_significant_token_type == TokenType::BackQuotedIdentifier
+                    || prev_significant_token_type == TokenType::DoubleQuotedIdentifier
                     || prev_significant_token_type == TokenType::Number))
                 return Token(TokenType::Dot, token_begin, ++pos);
 
@@ -320,7 +321,7 @@ Token Lexer::nextTokenImpl()
                     /// # hello - a comment
                     /// #!/usr/bin/clickhouse-local --queries-file - a comment
             ++pos;
-            if (pos < end && (*pos == ' ' || *pos == '!'))
+            if (pos < end && (*pos == ' ' || *pos == '!' || *pos == '#'))
                 return comment_until_end_of_line();
             return Token(TokenType::Error, token_begin, pos);
         }
@@ -340,9 +341,11 @@ Token Lexer::nextTokenImpl()
                 return Token(TokenType::NotEquals, token_begin, ++pos);
             return Token(TokenType::ErrorSingleExclamationMark, token_begin, pos);
         }
-        case '<':   /// <, <=, <>
+        case '<':   /// <, <=, <>, <=>, <<, >>
         {
             ++pos;
+            if (pos < end && *pos == '<')
+                return Token(TokenType::BitLeftShift, token_begin, ++pos);
             if (pos < end && *pos == '=') {
                 ++pos;
                 if (pos < end && *pos == '>')
@@ -356,6 +359,8 @@ Token Lexer::nextTokenImpl()
         case '>':   /// >, >=
         {
             ++pos;
+            if (pos < end && *pos == '>')
+                return Token(TokenType::BitRightShift, token_begin, ++pos);
             if (pos < end && *pos == '=')
                 return Token(TokenType::GreaterOrEquals, token_begin, ++pos);
             return Token(TokenType::Greater, token_begin, pos);
@@ -369,12 +374,22 @@ Token Lexer::nextTokenImpl()
                 return Token(TokenType::DoubleColon, token_begin, ++pos);
             return Token(TokenType::Colon, token_begin, pos);
         }
+        case '&':
+        {
+            ++pos;
+            return Token(TokenType::BitAnd, token_begin, pos);
+        }
         case '|':
         {
             ++pos;
             if (pos < end && *pos == '|')
                 return Token(TokenType::Concatenation, token_begin, ++pos);
-            return Token(TokenType::ErrorSinglePipeMark, token_begin, pos);
+            return Token(TokenType::BitOr, token_begin, pos);
+        }
+        case '^':
+        {
+            ++pos;
+            return Token(TokenType::BitXor, token_begin, pos);
         }
         case '@':
         {
@@ -469,8 +484,6 @@ const char * getErrorTokenDescription(TokenType type)
             return "Back quoted string is not closed";
         case TokenType::ErrorSingleExclamationMark:
             return "Exclamation mark can only occur in != operator";
-        case TokenType::ErrorSinglePipeMark:
-            return "Pipe symbol could only occur in || operator";
         case TokenType::ErrorWrongNumber:
             return "Wrong number";
         case TokenType::ErrorMaxQuerySizeExceeded:

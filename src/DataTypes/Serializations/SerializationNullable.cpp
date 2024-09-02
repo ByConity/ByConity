@@ -27,15 +27,15 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-void SerializationNullable::convertOverflowDateToNull(IColumn & column, const FormatSettings & settings)
+void SerializationNullable::convertOverflowDataToNull(IColumn & column, const FormatSettings & settings)
 {
-    if (settings.check_date_overflow && current_thread && current_thread->has_truncated_date)
-    {
-        current_thread->has_truncated_date = false;
-        ColumnNullable & col = assert_cast<ColumnNullable &>(column);
-        col.popBack(1);
-        col.insertDefault();
-    }
+    if (!settings.check_data_overflow || !current_thread || !current_thread->getOverflow())
+        return;
+
+    current_thread->resetOverflow();
+    ColumnNullable & col = assert_cast<ColumnNullable &>(column);
+    col.popBack(1);
+    col.insertDefault();
 }
 
 DataTypePtr SerializationNullable::SubcolumnCreator::create(const DataTypePtr & prev) const
@@ -156,7 +156,7 @@ void SerializationNullable::deserializeBinaryBulkWithMultipleStreams(
     }
     else if (auto * stream = settings.getter(settings.path))
     {
-        SerializationNumber<UInt8>().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0);
+        SerializationNumber<UInt8>().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0, settings.zero_copy_read_from_cache);
         addToSubstreamsCache(cache, settings.path, col.getNullMapColumnPtr());
     }
 
@@ -273,7 +273,7 @@ void SerializationNullable::serializeTextEscaped(const IColumn & column, size_t 
 void SerializationNullable::deserializeTextEscaped(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     deserializeTextEscapedImpl<void>(column, istr, settings, nested);
-    convertOverflowDateToNull(column, settings);
+    convertOverflowDataToNull(column, settings);
 }
 
 template<typename ReturnType>
@@ -346,7 +346,7 @@ void SerializationNullable::serializeTextQuoted(const IColumn & column, size_t r
 void SerializationNullable::deserializeTextQuoted(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     deserializeTextQuotedImpl<void>(column, istr, settings, nested);
-    convertOverflowDateToNull(column, settings);
+    convertOverflowDataToNull(column, settings);
 }
 
 template<typename ReturnType>
@@ -365,7 +365,7 @@ ReturnType SerializationNullable::deserializeTextQuotedImpl(IColumn & column, Re
 void SerializationNullable::deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     deserializeWholeTextImpl<void>(column, istr, settings, nested);
-    convertOverflowDateToNull(column, settings);
+    convertOverflowDataToNull(column, settings);
 }
 
 template <typename ReturnType>
@@ -395,7 +395,7 @@ void SerializationNullable::serializeTextCSV(const IColumn & column, size_t row_
 void SerializationNullable::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     deserializeTextCSVImpl<void>(column, istr, settings, nested);
-    convertOverflowDateToNull(column, settings);
+    convertOverflowDataToNull(column, settings);
 }
 
 template<typename ReturnType>
@@ -504,7 +504,7 @@ void SerializationNullable::serializeTextJSON(const IColumn & column, size_t row
 void SerializationNullable::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     deserializeTextJSONImpl<void>(column, istr, settings, nested);
-    convertOverflowDateToNull(column, settings);
+    convertOverflowDataToNull(column, settings);
 }
 
 template<typename ReturnType>

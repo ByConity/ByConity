@@ -30,31 +30,32 @@
 #include <unordered_set>
 #include <utility>
 
-#include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
-#include <Storages/MergeTree/MergeTreeReadPool.h>
-#include <Storages/MergeTree/MergeTreeIndices.h>
-#include <Storages/MergeTree/MergeTreeIndexReader.h>
-#include <Storages/MergeTree/KeyCondition.h>
-#include <Storages/MergeTree/MergeTreeDataPartUUID.h>
-#include <Storages/MergeTree/GinIndexDataPartHelper.h>
-#include <Storages/MergeTree/GinIndexStore.h>
-#include <Storages/MergeTree/MergeTreeIndexInverted.h>
-#include <Storages/DiskCache/DiskCacheFactory.h>
-#include <Storages/ReadInOrderOptimizer.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSampleRatio.h>
 #include <Parsers/parseIdentifierOrStringLiteral.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/Context.h>
 #include <Processors/ConcatProcessor.h>
-#include <QueryPlan/QueryPlan.h>
-#include <QueryPlan/FilterStep.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 #include <QueryPlan/ExpressionStep.h>
-#include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/ReadFromMergeTree.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <QueryPlan/UnionStep.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/MergeTree/GinIndexDataPartHelper.h>
+#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/KeyCondition.h>
+#include <Storages/MergeTree/MergeTreeDataPartUUID.h>
+#include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
+#include <Storages/MergeTree/MergeTreeIndexInverted.h>
+#include <Storages/MergeTree/MergeTreeIndexReader.h>
+#include <Storages/MergeTree/MergeTreeIndices.h>
+#include <Storages/MergeTree/MergeTreeReadPool.h>
+#include <Storages/ReadInOrderOptimizer.h>
 
 #include <Core/UUID.h>
 #include <DataTypes/DataTypeDate.h>
@@ -68,10 +69,12 @@
 
 #include <Interpreters/InterpreterSelectQuery.h>
 
+#include <IO/WriteBufferFromOStream.h>
+#include <MergeTreeCommon/assignCnchParts.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
-#include <IO/WriteBufferFromOStream.h>
 #include <roaring.hh>
+#include <Processors/IntermediateResult/TableScanCacheInfo.h>
 
 namespace ProfileEvents
 {
@@ -122,7 +125,11 @@ size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
 
     for (const auto & part : parts)
     {
-        MarkRanges ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, settings, log);
+        MarkRanges ranges;
+        if (!key_condition.alwaysUnknownOrTrue())
+            ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, settings, log);
+        else
+            ranges.emplace_back(0, part->getMarksCount());
 
         /** In order to get a lower bound on the number of rows that match the condition on PK,
           *  consider only guaranteed full marks.
@@ -169,6 +176,20 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     const auto & metadata_for_reading = storage_snapshot->getMetadataForQuery();
 
     auto parts = data.getDataPartsVector();
+
+    if (data.source_index && data.source_count)
+    {
+        auto size_before_filtering = parts.size();
+        filterParts(parts, data.source_index.value(), data.source_count.value());
+        LOG_TRACE(
+            log,
+            "After filtering(index:{}, count:{}) the number of parts of table {} becomes {} from {}",
+            data.source_index.value(),
+            data.source_count.value(),
+            data.getTableName(),
+            parts.size(),
+            size_before_filtering);
+    }
 
     if (settings.enable_ab_index_optimization)
         query_info.index_context->enable_read_bitmap_index = settings.enable_ab_index_optimization;
@@ -359,6 +380,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
                     settings.group_by_two_level_threshold,
                     settings.group_by_two_level_threshold_bytes,
                     settings.max_bytes_before_external_group_by,
+                    settings.spill_mode == SpillMode::AUTO,
                     settings.spill_buffer_bytes_before_external_group_by,
                     settings.empty_result_for_aggregation_by_empty_set,
                     context->getTemporaryVolume(),
@@ -392,6 +414,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
                     settings.group_by_two_level_threshold,
                     settings.group_by_two_level_threshold_bytes,
                     settings.max_bytes_before_external_group_by,
+                    settings.spill_mode == SpillMode::AUTO,
                     settings.spill_buffer_bytes_before_external_group_by,
                     settings.empty_result_for_aggregation_by_empty_set,
                     context->getTemporaryVolume(),
@@ -954,8 +977,11 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             size_t total_marks_count = part->index_granularity.getMarksCountWithoutFinal();
 
-            if (metadata_snapshot->hasPrimaryKey())
+            // Make sure that part->getIndex() is called only if they're needed.
+            if (metadata_snapshot->hasPrimaryKey() && !key_condition.alwaysUnknownOrTrue())
                 ranges.ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, settings, log_);
+            else if (part->mark_ranges_for_virtual_part != nullptr)
+                ranges.ranges = *part->mark_ranges_for_virtual_part;
             else if (total_marks_count)
                 ranges.ranges = MarkRanges{MarkRange{0, total_marks_count}};
 
@@ -1005,7 +1031,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     log_,
                     index_time_watcher
                 );
-                
+
                 (*filter_bitmap) |= tmp_filter_bitmap;
 
                 index_and_condition.total_granules.fetch_add(total_granules, std::memory_order_relaxed);
@@ -1119,6 +1145,38 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     return parts_with_ranges;
 }
 
+RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByIntermediateResultCache(
+    const StorageID & storage_id,
+    const SelectQueryInfo & query_info,
+    const ContextPtr & context,
+    Poco::Logger * /*log*/,
+    RangesInDataParts & parts_with_ranges,
+    CacheHolderPtr & part_cache_holder)
+{
+    auto cache = context->getIntermediateResultCache();
+    if (!cache)
+        return parts_with_ranges;
+
+    TableScanCacheInfo cache_info = getTableScanCacheInfo(query_info);
+
+    // check enable result cache
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::NO_CACHE)
+        return parts_with_ranges;
+
+    if (cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_DEPENDENT_TABLE)
+    {
+        // todo should send parts info to CACHE_TABLE
+        // const auto & cache_dependent_info = cache_info.getDependentInfo();
+        return parts_with_ranges;
+    }
+
+    assert(cache_info.getStatus() == TableScanCacheInfo::Status::CACHE_TABLE);
+    RangesInDataParts new_parts_with_ranges;
+    part_cache_holder = cache->createCacheHolder(context, cache_info.getDigest(), storage_id, parts_with_ranges, new_parts_with_ranges);
+
+    return new_parts_with_ranges;
+}
+
 // high quality uniform sampling is required by sample algorithm of statistics
 MarkRanges uniformSampleByRange(const MarkRange & range, UInt64 sample_size, UInt64 random_seed)
 {
@@ -1210,14 +1268,14 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
         // Compute sampled size
         size_t marks_size = range.end - range.begin;
         UInt64 sampled_size;
-        if (ensure_one_mark_in_part_when_sample_by_range) 
+        if (ensure_one_mark_in_part_when_sample_by_range)
         {
             // old logic to ensure at least one mark is sample in this part
             // keep it as default mode
             RelativeSize total_size = RelativeSize(marks_size);
             sampled_size = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * total_size + RelativeSize(1)));
-        } 
-        else 
+        }
+        else
         {
             // new logic will sample part
             // and make sure that the number of rows sampled meets the expected value
@@ -1391,6 +1449,10 @@ static void selectColumnNames(
             sample_factor_column_queried = true;
             virt_column_names.push_back(name);
         }
+        else if (name == "_bucket_number")
+        {
+            virt_column_names.push_back(name);
+        }
         else
         {
             real_column_names.push_back(name);
@@ -1556,23 +1618,29 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 {
     MarkRanges res;
 
+    /// Do NOT need to load index if it is not used.
     size_t marks_count = part->index_granularity.getMarksCount();
-    const auto & index = *(part->getIndex());
     if (marks_count == 0)
         return res;
 
+    const auto & ranges_hint = part->mark_ranges_for_virtual_part;
     bool has_final_mark = part->index_granularity.hasFinalMark();
 
-    /// If index is not used.
     if (key_condition.alwaysUnknownOrTrue())
     {
-        if (has_final_mark)
+        if (ranges_hint)
+            res = *ranges_hint;
+        else if (has_final_mark)
             res.push_back(MarkRange(0, marks_count - 1));
         else
             res.push_back(MarkRange(0, marks_count));
 
         return res;
     }
+
+    /// TODO: apply virtual part index here to avoid mark range filter on the whole part
+    /// Here, index is needed and we try to load it
+    const auto & index = *(part->getIndex());
 
     size_t used_key_size = key_condition.getMaxKeyColumn() + 1;
 
@@ -1650,7 +1718,14 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         * If fits, split it into smaller ones and put them on the stack. If not, discard it.
         * If the segment is already of one mark length, add it to may_trueponse and discard it.
         */
-        std::vector<MarkRange> ranges_stack = { {0, marks_count} };
+        std::deque<MarkRange> ranges_stack;
+        if (ranges_hint)
+        {
+            ranges_stack = *ranges_hint;
+            std::reverse(ranges_stack.begin(), ranges_stack.end()); /// TODO: check if we can do this while receiving parts
+        }
+        else
+            ranges_stack.emplace_back(0, marks_count);
 
         size_t steps = 0;
 
@@ -1733,6 +1808,22 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
             res.emplace_back(std::move(result_range));
 
         LOG_TRACE(log, "Found {} range in {} steps", res.empty() ? "empty" : "continuous", steps);
+
+        if (ranges_hint && !res.empty())
+        {
+            /// For each element in ranges_hint, find the overlap with res[0]
+            MarkRanges tmp;
+            auto & res_range = res[0];
+            for (auto & range : *ranges_hint)
+            {
+                auto new_begin = std::max(res_range.begin, range.begin);
+                auto new_end = std::min(res_range.end, range.end);
+                /// No need to merge because range_hints are disjoint already
+                if (new_begin < new_end)
+                    tmp.emplace_back(new_begin, new_end);
+            }
+            res = std::move(tmp);
+        }
     }
 
     return res;
@@ -1777,7 +1868,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
         ranges,
         reader_settings,
         context->getMarkCache().get(),
-        context->getInternalProgressCallback());
+        context->getProgressCallback());
 
     MarkRanges res;
 
@@ -1790,10 +1881,14 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
 
     if (dynamic_cast<const MergeTreeIndexInverted *>(&*index_helper) != nullptr)
     {
+        context->mustEnableAdditionalService(AdditionalService::FullTextSearch, true);
         std::unique_ptr<IGinDataPartHelper> gin_part_helper = nullptr;
         if (part->getType() == IMergeTreeDataPart::Type::CNCH)
         {
-            gin_part_helper = std::make_unique<GinDataCNCHPartHelper>(part,
+            /// Need to follow the part chain and find the right part with this index
+            String index_version_file_name = index_helper->getFileName() + ".idx";
+            gin_part_helper = std::make_unique<GinDataCNCHPartHelper>(
+                part->getMvccDataPart(index_version_file_name),
                 DiskCacheFactory::instance().get(DiskCacheType::MergeTree));
         }
         else
@@ -1804,6 +1899,11 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     }
 
     const auto * gin_filter_condition = dynamic_cast<const MergeTreeConditionInverted *>(&*condition);
+
+    if (gin_filter_condition != nullptr)
+    {
+        context->mustEnableAdditionalService(AdditionalService::FullTextSearch, true);
+    }
 
     for (const auto & range : ranges)
     {

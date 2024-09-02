@@ -199,7 +199,7 @@ int KeyIndexFileCache::get(const IndexFile::RemoteFileInfo & file)
                 {
                     Context & context = rep_inner->context;
                     ReadSettings settings = context.getReadSettings();
-                    settings.throttler = context.getDiskCacheThrottler();
+                    settings.remote_throttler = context.getDiskCacheThrottler();
                     std::unique_ptr<ReadBufferFromFileBase> reader = file.disk->readFile(file.rel_path,
                         settings);
                     reader->seek(file.start_offset);

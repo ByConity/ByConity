@@ -49,6 +49,38 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+static ConsulAddrType consul_addr_type;
+
+String addrTypeString(ConsulAddrType type)
+{
+    switch (type)
+    {
+        case ConsulAddrType::IPV4:
+            return "IPV4";
+        case ConsulAddrType::IPV6:
+            return "IPV6";
+        case ConsulAddrType::DUAL:
+            return "DUAL";
+        default:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown ConsulAddrType {}", type);
+    }
+}
+
+bool checkConsulResults(const ServiceDiscoveryConsul::Endpoints & endpoints)
+{
+    if (endpoints.empty())
+        return false;
+    if (consul_addr_type != ConsulAddrType::IPV4)
+    {
+        for (const auto & endpoint : endpoints)
+        {
+            if (endpoint.host.find("::") == std::string::npos)
+                return false;
+        }
+    }
+    return true;
+}
+
 ServiceDiscoveryConsul::ServiceDiscoveryConsul(const Poco::Util::AbstractConfiguration & config)
 {
     /// initialize cluster variable
@@ -59,7 +91,8 @@ ServiceDiscoveryConsul::ServiceDiscoveryConsul(const Poco::Util::AbstractConfigu
         cache_disabled = config.getBool("service_discovery.disable_cache");
     if (config.hasProperty("service_discovery.cache_timeout"))
         cache_timeout = config.getUInt("service_discovery.cache_timeout");
-
+    if (config.hasProperty("service_discovery.check_result"))
+        check_result = config.getBool("service_discovery.check_result");
 }
 
 HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, ComponentType type, const String & vw_name)
@@ -135,6 +168,18 @@ ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromCach
     try
     {
         Endpoints res = fetchEndpointsFromUpstream(psm_name, vw_name);
+        if (check_result && !checkConsulResults(res))
+        {
+            LOG_WARNING(
+                log,
+                "Failed to get valid results by addr type {}: size = {}, first = {}, return old cache results: size = {}, first = {}",
+                addrTypeString(consul_addr_type),
+                res.size(),
+                res.empty() ? "empty" : res.begin()->host,
+                cache_res.endpoints.size(),
+                cache_res.endpoints.empty() ? "empty" : cache_res.endpoints.begin()->host);
+            return cache_res.endpoints;
+        }
         SDCacheValue<Endpoint> new_value {res, time(nullptr)};
 
         // update cache

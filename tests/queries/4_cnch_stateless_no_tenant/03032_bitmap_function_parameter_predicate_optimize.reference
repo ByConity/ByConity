@@ -1,0 +1,162 @@
+6	5	3	[6,5,3]
+5	[6,4,4]	6	3
+-- SELECT bitmapExtract('1')(f1, uids) AS r1, bitmapMultiExtract('1|2', '2', '3')(f1, uids) AS r2, bitmapExtract('a')(f3, uids) AS r3, bitmapExtract('a&b')(f3, uids) AS r4, bitmapExtract('2')(toInt64(f2), uids) AS r5, bitmapExtract('2~1')(toInt64(f2), uids) AS r6 FROM test_tag_bitmap_v2 WHERE p_date='2024-01-01';
+
+-- { echoOn }
+explain select bitmapCount('1')(f1, uids) as r1
+from test_tag_bitmap_v2 where p_date='2024-01-01'
+settings enable_optimizer=1;
+Projection Est. ? rows
+│     Expressions: r1:=`expr#BitMapCount(\'1\')(f1, uids)`
+└─ Aggregating Est. ? rows
+   │     Group by: {}
+   │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
+   └─ Gather Exchange Est. ? rows
+      └─ Projection Est. ? rows
+         │     Expressions: [f1, uids]
+         └─ Filter Est. ? rows
+            │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                     Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+                     Outputs: [f1, uids, p_date]
+explain select bitmapMultiCount('1|2','2','3')(f1, uids) as r2
+from test_tag_bitmap_v2 where p_date='2024-01-01'
+settings enable_optimizer=1;
+Projection Est. ? rows
+│     Expressions: r2:=`expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids)`
+└─ Aggregating Est. ? rows
+   │     Group by: {}
+   │     Aggregates: expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids):=AggNull(bitmapMultiCount)(f1,uids)
+   └─ Gather Exchange Est. ? rows
+      └─ Projection Est. ? rows
+         │     Expressions: [f1, uids]
+         └─ Filter Est. ? rows
+            │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 IN (1, 2, 3))
+            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                     Where: (p_date = cast(19723, \'Date\')) AND (f1 IN (1, 2, 3))
+                     Outputs: [f1, uids, p_date]
+explain select
+  bitmapCount('1')(f1, uids) as r1,
+  bitmapMultiCount('1|2','2','3')(f1, uids) as r2,
+  --bitmapCount('a')(f3, uids) as r3,
+  --bitmapCount('a&b')(f3, uids) as r4,
+  bitmapCount('2')(toInt64(f2), uids) as r5,
+  bitmapCount('2~1')(toInt64(f2), uids) as r6,
+  bitmapCount('10')(f4, uids) as r7,
+  bitmapMultiCount('10|20','20','30')(f4, uids) as r8
+from test_tag_bitmap_v2 where p_date='2024-01-01'
+settings enable_optimizer=1;
+Projection Est. ? rows
+│     Expressions: r1:=`expr#BitMapCount(\'1\')(f1, uids)`, r2:=`expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids)`, r5:=`expr#BitMapCount(\'2\')(toInt64(f2), uids)`, r6:=`expr#BitMapCount(\'2~1\')(toInt64(f2), uids)`, r7:=`expr#BitMapCount(\'10\')(f4, uids)`, r8:=`expr#BitMapMultiCount(\'10|20\', \'20\', \'30\')(f4, uids)`
+└─ Aggregating Est. ? rows
+   │     Group by: {}
+   │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids), expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids):=AggNull(bitmapMultiCount)(f1,uids), expr#BitMapCount(\'2\')(toInt64(f2), uids):=AggNull(bitmapCount)(expr#toInt64(f2),uids), expr#BitMapCount(\'2~1\')(toInt64(f2), uids):=AggNull(bitmapCount)(expr#toInt64(f2),uids), expr#BitMapCount(\'10\')(f4, uids):=AggNull(bitmapCount)(f4,uids), expr#BitMapMultiCount(\'10|20\', \'20\', \'30\')(f4, uids):=AggNull(bitmapMultiCount)(f4,uids)
+   └─ Gather Exchange Est. ? rows
+      └─ Projection Est. ? rows
+         │     Expressions: [f1, f4, uids], expr#toInt64(f2):=toInt64(f2)
+         └─ Filter Est. ? rows
+            │     Condition: (p_date = cast(19723, \'Date\')) AND ((f4 IN (10, 20, 30)) OR (f1 IN (1, 2, 3)))
+            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                     Where: (p_date = cast(19723, \'Date\')) AND ((f4 IN (10, 20, 30)) OR (f1 IN (1, 2, 3)))
+                     Outputs: [f1, f2, f4, uids, p_date]
+explain select 1
+from test_tag_bitmap_v2 where p_date='2024-01-01'
+having bitmapCount('1')(f1, uids) > 1
+settings enable_optimizer=1;
+Projection Est. ? rows
+│     Expressions: 1:=`expr#1`
+└─ Projection Est. ? rows
+   │     Expressions: expr#1:=1
+   └─ Filter Est. ? rows
+      │     Condition: `expr#BitMapCount(\'1\')(f1, uids)` > 1
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
+         └─ Gather Exchange Est. ? rows
+            └─ Projection Est. ? rows
+               │     Expressions: [f1, uids]
+               └─ Filter Est. ? rows
+                  │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+                  └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                           Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+                           Outputs: [f1, uids, p_date]
+explain
+select 1
+union all
+select bitmapCount('1')(f1, uids) as r1
+from test_tag_bitmap_v2 where p_date='2024-01-01'
+settings enable_optimizer=1;
+Projection Est. 1 rows, cost 3.820000e-01
+│     Expressions: 1:=`expr#1_2`
+└─ Union Est. 1 rows, cost 3.080000e-01
+   │     OutputToInputs: expr#1_2 = [expr#1_1,expr#BitMapCount(\'1\')(f1, uids)]
+   ├─ Projection Est. 1 rows, cost 1.480000e-01
+   │  │     Expressions: expr#1_1:=cast(1, \'UInt64\')
+   │  └─ Values Est. 1 rows, cost 7.400000e-02
+   └─ Aggregating Est. ? rows, cost 1.600000e-01
+      │     Group by: {}
+      │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
+      └─ Gather Exchange Est. ? rows, cost 1.600000e-01
+         └─ Projection Est. ? rows, cost 0.000000e+00
+            │     Expressions: [f1, uids]
+            └─ Filter Est. ? rows, cost 0.000000e+00
+               │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+               └─ TableScan default.test_tag_bitmap_v2 Est. ? rows, cost 0.000000e+00
+                        Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+                        Outputs: [f1, uids, p_date]
+explain
+select bitmapCount('1')(x, y) as r1
+from (
+  select f1 as x, uids as y
+  from test_tag_bitmap_v2 where p_date='2024-01-01'
+) s
+settings enable_optimizer=1;
+Projection Est. ? rows
+│     Expressions: r1:=`expr#BitMapCount(\'1\')(x, y)`
+└─ Aggregating Est. ? rows
+   │     Group by: {}
+   │     Aggregates: expr#BitMapCount(\'1\')(x, y):=AggNull(bitmapCount)(f1,uids)
+   └─ Gather Exchange Est. ? rows
+      └─ Projection Est. ? rows
+         │     Expressions: [f1, uids]
+         └─ Filter Est. ? rows
+            │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                     Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
+                     Outputs: [f1, uids, p_date]
+explain
+select bitmapCount('1')(x, y) as r1
+from (
+  select f1 as x, uids as y
+  from test_tag_bitmap_v2 where p_date='2024-01-01'
+) s cross join (select 1) as t
+settings enable_optimizer=1;
+Projection Est. ? rows
+│     Expressions: r1:=`expr#BitMapCount(\'1\')(x, y)`
+└─ Aggregating Est. ? rows
+   │     Group by: {}
+   │     Aggregates: expr#BitMapCount(\'1\')(x, y):=AggNull(bitmapCount)(f1,uids)
+   └─ Gather Exchange Est. ? rows
+      └─ Inner Join Est. ? rows
+         │     Condition: 
+         ├─ Projection Est. ? rows
+         │  │     Expressions: [f1, uids]
+         │  └─ Filter Est. ? rows
+         │     │     Condition: p_date = cast(19723, \'Date\')
+         │     └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+         │              Where: p_date = cast(19723, \'Date\')
+         │              Outputs: [f1, uids, p_date]
+         └─ Broadcast Exchange Est. 1 rows
+            └─ Values Est. 1 rows
+explain
+select bitmapCount('1')(f1, uids)
+from (select toInt64(1) as f1, arrayToBitmap([1,2,3]) as uids)
+settings enable_optimizer=1;
+Projection Est. 1 rows, cost 6.242000e+00
+│     Expressions: BitMapCount(\'1\')(f1, uids):=`expr#BitMapCount(\'1\')(f1, uids)`
+└─ Aggregating Est. 1 rows, cost 6.168000e+00
+   │     Group by: {}
+   │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(expr#toInt64(1),expr#arrayToBitmap([1, 2, 3]))
+   └─ Projection Est. 1 rows, cost 1.480000e-01
+      │     Expressions: expr#arrayToBitmap([1, 2, 3]):=arrayToBitmap([1, 2, 3]), expr#toInt64(1):=cast(1, \'Int64\')
+      └─ Values Est. 1 rows, cost 7.400000e-02

@@ -24,7 +24,7 @@ public:
     RuleType getType() const override { return RuleType::PULL_LEFT_JOIN_THROUGH_INNER_JOIN; }
     String getName() const override { return "PULL_LEFT_JOIN_THROUGH_INNER_JOIN"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_pull_outer_join; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -37,7 +37,7 @@ public:
     RuleType getType() const override { return RuleType::PULL_LEFT_JOIN_PROJECTION_THROUGH_INNER_JOIN; }
     String getName() const override { return "PULL_LEFT_JOIN_PROJECTION_THROUGH_INNER_JOIN"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_pull_outer_join; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -49,7 +49,7 @@ public:
     RuleType getType() const override { return RuleType::PULL_LEFT_JOIN_FILTER_THROUGH_INNER_JOIN; }
     String getName() const override { return "PULL_LEFT_JOIN_FILTER_THROUGH_INNER_JOIN"; }
     bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_pull_outer_join; }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

@@ -15,11 +15,13 @@ namespace ErrorCodes
 
 static const String catalog_delim = "$$";
 
-static String getTenantId()
+String getCurrentTenantId()
 {
-    String empty_result;
     if (!CurrentThread::isInitialized())
-        return empty_result;
+        return {};
+    auto &status = CurrentThread::get();
+    if (!status.isEnableTenant())
+        return {};
     auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
@@ -31,18 +33,10 @@ static String getTenantId()
     return CurrentThread::get().getTenantId();
 }
 
-static bool enable_tenant_systemdb = true;
-
-void setEnableTenantSystemDB(bool v)
-{
-    enable_tenant_systemdb = v;
-}
-
 String getCurrentCatalog()
 {
-    String empty_result;
     if (!CurrentThread::isInitialized())
-        return empty_result;
+        return {};
     auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
@@ -51,11 +45,11 @@ String getCurrentCatalog()
         else if (!context->getSettings().default_catalog.toString().empty())
             return context->getSettings().default_catalog.toString();
     }
-    return empty_result;
+    return {};
 }
 
-static String internal_databases[]
-    = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
+static constexpr std::string_view internal_databases[]
+    = {DatabaseCatalog::SYSTEM_DATABASE, DatabaseCatalog::INFORMATION_SCHEMA, DatabaseCatalog::INFORMATION_SCHEMA_UPPERCASE, DatabaseCatalog::MYSQL, DatabaseCatalog::MYSQL_UPPERCASE, DatabaseCatalog::TEMPORARY_DATABASE, CNCH_SYSTEM_LOG_DB_NAME, "default"};
 
 static bool isInternalDatabaseName(const String & database_name)
 {
@@ -64,18 +58,28 @@ static bool isInternalDatabaseName(const String & database_name)
         if (db == database_name)
             return true;
     }
-    if(!enable_tenant_systemdb)
-    {
-        if (DatabaseCatalog::SYSTEM_DATABASE == database_name)
-            return true;
-    }
     return false;
+}
+
+//Format pattern {tenant_id}.{name}
+String formatTenantName(const String & name, char separator)
+{
+    auto tenant_id = getCurrentTenantId();
+    if (!tenant_id.empty() &&
+        (name.find(tenant_id) != 0 || name.size() == tenant_id.size() || name[tenant_id.size()] != separator))
+    {
+        String result = tenant_id;
+        result += separator;
+        result += name;
+        return result;
+    }
+    return name;
 }
 
 //Format pattern {tenant_id}.{database_name}
 static String formatTenantDatabaseNameImpl(const String & database_name, char separator = '.')
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty() && !isInternalDatabaseName(database_name) &&
         (database_name.find(tenant_id) != 0 || database_name.size() == tenant_id.size() || database_name[tenant_id.size()] != separator))
     {
@@ -90,7 +94,7 @@ static String formatTenantDatabaseNameImpl(const String & database_name, char se
 //Format pattern {tenant_id}.{username}
 static String formatTenantUserNameImpl(const String & user_name, char separator = '`')
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty() &&
         (user_name.find(tenant_id) != 0 || user_name.size() == tenant_id.size() || user_name[tenant_id.size()] != separator))
     {
@@ -117,8 +121,10 @@ String formatTenantDatabaseName(const String & database_name)
     }
 }
 
-String appendTenantIdOnly(const String & name)
+String appendTenantIdOnly(const String& name, bool is_datbase_name)
 {
+    if (!is_datbase_name)
+        return formatTenantName(name);
     return formatTenantDatabaseNameImpl(name);
 }
 
@@ -137,7 +143,7 @@ String formatTenantDatabaseNameWithTenantId(const String & database_name, const 
 //Format pattern {tenant_id}`{database_name}
 String formatTenantConnectDefaultDatabaseName(const String & database_name)
 {
-     auto tenant_id = getTenantId();
+     auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty())
     {
         auto pos = database_name.find(tenant_id);
@@ -163,7 +169,7 @@ String formatTenantConnectDefaultDatabaseName(const String & database_name)
 //Format pattern {tenant_id}`{user_name}
 String formatTenantConnectUserName(const String & user_name, bool is_force)
 {
-    auto tenant_id = getTenantId();
+    auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty())
     {
         auto pos = user_name.find(tenant_id);
@@ -196,9 +202,9 @@ String formatTenantEntityName(const String & name)
     return formatTenantUserNameImpl(name, '.');
 }
 
-bool isTenantMatchedEntityName(const String & tenant_entity_name)
+bool isTenantMatchedEntityName(const String & tenant_entity_name, const String & tenant_id_arg)
 {
-    auto tenant_id = getTenantId();
+    const String & tenant_id = tenant_id_arg.empty() ? getCurrentTenantId() : tenant_id_arg;
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();
@@ -210,9 +216,9 @@ bool isTenantMatchedEntityName(const String & tenant_entity_name)
     return true;
 }
 
-String getOriginalEntityName(const String & tenant_entity_name)
+String getOriginalEntityName(const String & tenant_entity_name, const String & tenant_id_arg)
 {
-    auto tenant_id = getTenantId();
+    const String & tenant_id = tenant_id_arg.empty() ? getCurrentTenantId() : tenant_id_arg;
     if (!tenant_id.empty()) {
         auto size = tenant_id.size();
         if (tenant_entity_name.size() > size + 1 && tenant_entity_name[size] == '.'
@@ -225,7 +231,11 @@ String getOriginalEntityName(const String & tenant_entity_name)
 // {tenant_id}.{original_database_name}
 String getOriginalDatabaseName(const String & tenant_database_name)
 {
-    auto tenant_id = getTenantId();
+    return getOriginalDatabaseName(tenant_database_name, getCurrentTenantId());
+}
+
+String getOriginalDatabaseName(const String & tenant_database_name, const String & tenant_id)
+{
     if (!tenant_id.empty())
     {
         auto size = tenant_id.size();
@@ -275,4 +285,19 @@ std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDataba
         return {std::nullopt, {database_name}};
     return {{database_name.substr(0, pos)}, {database_name.substr(pos + catalog_delim.size())}};
 }
+
+DisableTenantGuard::DisableTenantGuard()
+{
+    if(!CurrentThread::isInitialized())
+        return;
+    CurrentThread::get().disableTenant();
+}
+
+DisableTenantGuard::~DisableTenantGuard()
+{
+    if(!CurrentThread::isInitialized())
+        return;
+    CurrentThread::get().enableTenant();
+}
+
 }

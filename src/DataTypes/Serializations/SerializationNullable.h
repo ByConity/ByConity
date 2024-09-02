@@ -89,7 +89,7 @@ public:
     static ReturnType deserializeTextJSONImpl(IColumn & column, ReadBuffer & istr, const FormatSettings &, const SerializationPtr & nested);
 
 private:
-    static void convertOverflowDateToNull(IColumn & column, const FormatSettings & settings);
+    static void convertOverflowDataToNull(IColumn & column, const FormatSettings & settings);
 
     struct SubcolumnCreator : public ISubcolumnCreator
     {

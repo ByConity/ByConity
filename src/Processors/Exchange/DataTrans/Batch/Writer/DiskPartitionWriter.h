@@ -23,7 +23,7 @@ namespace DB
 class DiskPartitionWriter : public IBroadcastSender
 {
 public:
-    DiskPartitionWriter(ContextPtr context, DiskExchangeDataManagerPtr mgr_, Block header_, ExchangeDataKeyPtr key_);
+    DiskPartitionWriter(ContextPtr context, const DiskExchangeDataManagerPtr & mgr_, Block header_, ExchangeDataKeyPtr key_);
     ~DiskPartitionWriter() override;
     /// send data to queue
     BroadcastStatus sendImpl(Chunk chunk) override;
@@ -60,10 +60,12 @@ private:
         bvar::Adder<size_t> write_ms{};
         bvar::Adder<size_t> write_num{};
         bvar::Adder<size_t> commit_ms{};
+        bvar::Adder<size_t> wait_done_ms{};
+        bvar::Adder<size_t> sync_ms{};
     };
     DiskPartitionWriterMetrics writer_metrics;
     ContextPtr context;
-    DiskExchangeDataManagerPtr mgr;
+    std::weak_ptr<DiskExchangeDataManager> mgr;
     DiskPtr disk;
     Block header;
     ExchangeDataKeyPtr key;

@@ -21,7 +21,8 @@
 
 #pragma once
 
-#include "DiskDecorator.h"
+#include <Disks/DiskDecorator.h>
+#include <Disks/IDisk.h>
 
 #include <common/logger_useful.h>
 #include <shared_mutex>
@@ -46,10 +47,10 @@ public:
 
     ReservationPtr reserve(UInt64 bytes) override;
     const String & getPath() const override;
-    UInt64 getTotalSpace() const override;
-    UInt64 getAvailableSpace() const override;
-    UInt64 getUnreservedSpace() const override;
-    UInt64 getKeepingFreeSpace() const override;
+    DiskStats getTotalSpace([[maybe_unused]]bool with_keep_free = false) const override;
+    DiskStats getAvailableSpace() const override;
+    DiskStats getUnreservedSpace() const override;
+    DiskStats getKeepingFreeSpace() const override;
     bool exists(const String & path) const override;
     bool isFile(const String & path) const override;
     bool isDirectory(const String & path) const override;

@@ -139,6 +139,8 @@ using FunctionArrayPartialReverseSort = FunctionArrayMapped<ArraySortImpl<false,
 REGISTER_FUNCTION(ArraySort)
 {
     factory.registerFunction<FunctionArraySort>();
+    factory.registerAlias("array_sort", NameArraySort::name, FunctionFactory::CaseInsensitive);
+
     factory.registerFunction<FunctionArrayReverseSort>();
     factory.registerFunction<FunctionArrayPartialSort>({
         R"(

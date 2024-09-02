@@ -53,9 +53,9 @@ struct ExprAnalyzerOptions
     AggregateSupport aggregate_support = AggregateSupport::DISALLOWED;
     WindowSupport window_support = WindowSupport::DISALLOWED;
     SubquerySupport subquery_support = SubquerySupport::DISALLOWED;
-    bool expand_untuple = true;
-    bool expand_asterisk = true;
+    bool expand_untuple_and_asterisk = true;
     bool record_used_object = true; // whether record used_columns, used_functions
+    bool subquery_to_semi_anti = false;
     bool evaluate_constant_expression = true;
 
     // constructor
@@ -89,19 +89,19 @@ struct ExprAnalyzerOptions
 
     ExprAnalyzerOptions & expandUntuple(bool arg)
     {
-        expand_untuple = arg;
-        return *this;
-    }
-
-    ExprAnalyzerOptions & expandAsterisk(bool arg)
-    {
-        expand_asterisk = arg;
+        expand_untuple_and_asterisk = arg;
         return *this;
     }
 
     ExprAnalyzerOptions & recordUsedObject(bool arg)
     {
         record_used_object = arg;
+        return *this;
+    }
+
+    ExprAnalyzerOptions & subqueryToSemiAnti(bool arg)
+    {
+        subquery_to_semi_anti = arg;
         return *this;
     }
 

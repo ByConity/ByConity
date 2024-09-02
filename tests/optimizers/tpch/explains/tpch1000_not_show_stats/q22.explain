@@ -13,37 +13,37 @@ Projection
                   │     Aggregates: expr#count():=AggNull(count)(), expr#sum(c_acctbal):=AggNull(sum)(c_acctbal)
                   └─ Projection
                      │     Expressions: [c_acctbal], expr#substring(c_phone, 1, 2):=substring(c_phone, 1, 2)
-                     └─ Filter
-                        │     Condition: NOT cast(coalesce(build_side_non_null_symbol, 0), 'UInt8')
-                        └─ Left (PARALLEL_HASH) Join
-                           │     Condition: c_custkey == o_custkey
-                           ├─ Repartition Exchange
-                           │  │     Partition by: {c_custkey}
-                           │  └─ Inner Join
-                           │     │     Condition: 
-                           │     │     Filter: c_acctbal > `expr#avg(c_acctbal)`
-                           │     ├─ Filter
-                           │     │  │     Condition: substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31')
-                           │     │  └─ TableScan tpch1000.customer
-                           │     │           Where: substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31')
-                           │     │           Outputs: [c_custkey, c_phone, c_acctbal]
-                           │     └─ Broadcast Exchange
-                           │        └─ MergingAggregated
-                           │           └─ Gather Exchange
-                           │              └─ Aggregating
-                           │                 │     Group by: {}
-                           │                 │     Aggregates: expr#avg(c_acctbal):=AggNull(avg)(c_acctbal_1)
-                           │                 └─ Filter
-                           │                    │     Condition: (c_acctbal_1 > 0.) AND (substring(c_phone_1, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))
-                           │                    └─ TableScan tpch1000.customer
-                           │                             Where: (c_acctbal > 0.) AND (substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))
-                           │                             Outputs: c_phone_1:=c_phone, c_acctbal_1:=c_acctbal
-                           └─ Projection
-                              │     Expressions: [o_custkey], build_side_non_null_symbol:=1
-                              └─ MergingAggregated
-                                 └─ Repartition Exchange
-                                    │     Partition by: {o_custkey}
-                                    └─ Aggregating
-                                       │     Group by: {o_custkey}
-                                       └─ TableScan tpch1000.orders
-                                                Outputs: [o_custkey]
+                     └─ Right Anti (PARALLEL_HASH) Join
+                        │     Condition: o_custkey == c_custkey
+                        │     Runtime Filters Builder: {c_custkey}
+                        ├─ Repartition Exchange
+                        │  │     Partition by: {o_custkey}
+                        │  └─ Filter
+                        │     │     Condition: Runtime Filters: {o_custkey}
+                        │     └─ TableScan tpch1000.orders
+                        │              Where: Runtime Filters: {o_custkey}
+                        │              Outputs: [o_custkey]
+                        └─ Repartition Exchange
+                           │     Partition by: {c_custkey}
+                           └─ Inner Join
+                              │     Condition: 
+                              │     Filter: c_acctbal > `expr#avg(c_acctbal)`
+                              ├─ Filter
+                              │  │     Condition: substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31')
+                              │  └─ TableScan tpch1000.customer
+                              │           Where: substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31')
+                              │           Outputs: [c_custkey, c_phone, c_acctbal]
+                              └─ Broadcast Exchange
+                                 └─ MergingAggregated
+                                    └─ Gather Exchange
+                                       └─ Aggregating
+                                          │     Group by: {}
+                                          │     Aggregates: expr#avg(c_acctbal):=AggNull(avg)(c_acctbal_1)
+                                          └─ Projection
+                                             │     Expressions: [c_acctbal_1]
+                                             └─ Filter
+                                                │     Condition: (c_acctbal_1 > 0.) AND (substring(c_phone_1, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))
+                                                └─ TableScan tpch1000.customer
+                                                         Where: (c_acctbal > 0.) AND (substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))
+                                                         Outputs: c_phone_1:=c_phone, c_acctbal_1:=c_acctbal
+note: Runtime Filter is applied for 1 times.

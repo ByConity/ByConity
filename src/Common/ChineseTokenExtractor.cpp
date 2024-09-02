@@ -143,7 +143,7 @@ void ChineseTokenExtractor::stringLikeToGinFilter(const String & data, ChineseTo
         begin_offset++;
         end_size--;
     }
-    if (data.starts_with("%"))
+    if (data.ends_with("%"))
     {
         end_size--;
     }

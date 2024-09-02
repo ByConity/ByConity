@@ -17,7 +17,11 @@
 #include <CloudServices/CnchServerServiceImpl.h>
 
 #include <Catalog/Catalog.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Catalog/CatalogUtils.h>
+#include <CloudServices/CnchDataWriter.h>
+#include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/DedupWorkerManager.h>
+#include <CloudServices/DedupWorkerStatus.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -26,15 +30,22 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/GlobalTxnCommitter.h>
+#include <WorkerTasks/ManipulationType.h>
 #include <Common/RWLock.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
+#include <CloudServices/CnchDedupHelper.h>
 #include <DataTypes/ObjectUtils.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <IO/ReadBufferFromString.h>
+#include <Optimizer/SelectQueryInfoHelper.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/CnchRefreshMaterializedViewThread.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
@@ -170,16 +181,27 @@ void CnchServerServiceImpl::commitParts(
                     binlog.meta_version = binlog_req.meta_version();
                 }
 
+                UInt64 peak_memory_usage = 0;
+                if (req->has_peak_memory_usage())
+                {
+                    peak_memory_usage = req->peak_memory_usage();
+                }
+
                 CnchDataWriter cnch_writer(
                     *cnch,
                     rpc_context,
-                    ManipulationType(req->type()),
+                    static_cast<ManipulationType>(req->type()),
                     req->task_id(),
                     std::move(consumer_group),
                     tpl,
-                    binlog);
+                    binlog,
+                    peak_memory_usage);
 
-                cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
+                auto dedup_mode = static_cast<CnchDedupHelper::DedupMode>(req->dedup_mode());
+                cnch_writer.setDedupMode(dedup_mode);
+
+                cnch_writer.commitPreparedCnchParts(
+                    DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts), dedup_mode});
             }
             catch (...)
             {
@@ -318,14 +340,14 @@ void CnchServerServiceImpl::commitTransaction(
                 auto txn_id = request->txn_id();
                 auto txn = txn_coordinator.getTransaction(txn_id);
 
-                if (request->has_insertion_label())
-                {
-                    if (UUIDHelpers::Nil == txn->getMainTableUUID())
-                        throw Exception("Main table is not set when using insertion label", ErrorCodes::LOGICAL_ERROR);
+                // if (request->has_insertion_label())
+                // {
+                //     if (UUIDHelpers::Nil == txn->getMainTableUUID())
+                //         throw Exception("Main table is not set when using insertion label", ErrorCodes::LOGICAL_ERROR);
 
-                    txn->setInsertionLabel(std::make_shared<InsertionLabel>(
-                        txn->getMainTableUUID(), request->insertion_label(), txn->getTransactionID().toUInt64()));
-                }
+                //     txn->setInsertionLabel(std::make_shared<InsertionLabel>(
+                //         txn->getMainTableUUID(), request->insertion_label(), txn->getTransactionID().toUInt64()));
+                // }
 
                 auto commit_ts = txn->commit();
                 response->set_commit_ts(commit_ts.toUInt64());
@@ -339,6 +361,7 @@ void CnchServerServiceImpl::commitTransaction(
             }
         });
 }
+
 void CnchServerServiceImpl::precommitTransaction(
     google::protobuf::RpcController * /*cntl*/,
     const Protos::PrecommitTransactionReq * request,
@@ -359,6 +382,40 @@ void CnchServerServiceImpl::precommitTransaction(
             if (txn->getMainTableUUID() == UUIDHelpers::Nil)
                 txn->setMainTableUUID(main_table_uuid);
             txn->precommit();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::redirectCommitTransaction(
+    google::protobuf::RpcController * /*cntl*/,
+    const Protos::RedirectCommitTransactionReq * request,
+    Protos::RedirectCommitTransactionResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+        try
+        {
+            const Protos::TransactionMetadata & transaction_model = request->txn_meta();
+            TransactionRecord record{transaction_model.txn_record()};
+
+            CnchServerTransactionPtr txn = std::make_shared<CnchServerTransaction>(global_context, record);
+            txn->setCommitTs(TxnTimestamp{transaction_model.commit_time()});
+            txn->setMainTableUUID(RPCHelpers::createUUID(transaction_model.main_table()));
+            if (transaction_model.has_consumer_group())
+            {
+                cppkafka::TopicPartitionList tpl;
+                RPCHelpers::createKafkaTPL(tpl, transaction_model.tpl());
+                txn->setKafkaTpl(transaction_model.consumer_group(), tpl);
+            }
+
+            global_context->getGlobalTxnCommitter()->commit(txn);
         }
         catch (...)
         {
@@ -515,39 +572,40 @@ void CnchServerServiceImpl::reportTaskHeartbeat(
 }
 
 void CnchServerServiceImpl::reportDeduperHeartbeat(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController *,
     const Protos::ReportDeduperHeartbeatReq * request,
     Protos::ReportDeduperHeartbeatResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
-        auto cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
-
-        if (auto bg_thread = getContext()->tryGetDedupWorkerManager(cnch_storage_id))
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
         {
-            auto worker_table_name = request->worker_table_name();
-            auto & manager = static_cast<DedupWorkerManager &>(*bg_thread);
+            auto cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
 
-            auto ret = manager.reportHeartbeat(worker_table_name);
+            if (auto bg_thread = gc->tryGetDedupWorkerManager(cnch_storage_id))
+            {
+                const auto & worker_table_name = request->worker_table_name();
+                auto & manager = static_cast<DedupWorkerManager &>(*bg_thread);
 
-            // NOTE: here we send a response back to let the worker know the result.
-            response->set_code(static_cast<UInt32>(ret));
-            return;
+                auto ret = manager.reportHeartbeat(worker_table_name);
+
+                // NOTE: here we send a response back to let the worker know the result.
+                response->set_code(static_cast<UInt32>(ret));
+                return;
+            }
+            else
+            {
+                LOG_WARNING(log, "Failed to get background thread");
+            }
         }
-        else
+        catch (...)
         {
-            LOG_WARNING(log, "Failed to get background thread");
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
         }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-    response->set_code(static_cast<UInt32>(DedupWorkerHeartbeatResult::Kill));
+        response->set_code(static_cast<UInt32>(DedupWorkerHeartbeatResult::Kill));
+    });
 }
 
 void CnchServerServiceImpl::fetchDataParts(
@@ -580,11 +638,68 @@ void CnchServerServiceImpl::fetchDataParts(
             for (const auto & partition : request->partitions())
                 partition_list.emplace_back(partition);
 
+            std::set<Int64> bucket_numbers;
+            for (const auto & bucket_number : request->bucket_numbers())
+                bucket_numbers.insert(bucket_number);
+
             auto parts = gc->getCnchCatalog()->getServerDataPartsInPartitions(
-                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
+                storage,
+                partition_list,
+                TxnTimestamp{request->timestamp()},
+                nullptr,
+                /*visibility=*/Catalog::VisibilityLevel::All,
+                bucket_numbers);
+
             auto & mutable_parts = *response->mutable_parts();
             for (const auto & part : parts)
                 *mutable_parts.Add() = part->part_model();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::fetchDeleteBitmaps(
+    ::google::protobuf::RpcController *,
+    const ::DB::Protos::FetchDeleteBitmapsReq * request,
+    ::DB::Protos::FetchDeleteBitmapsResp * response,
+    ::google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            StoragePtr storage
+                = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(), TxnTimestamp{request->table_commit_time()});
+
+            auto calculated_host
+                = gc->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true).getRPCAddress();
+            if (request->remote_host() != calculated_host)
+                throw Exception(
+                    "Fetch parts failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
+                        + ", calculated_host: " + calculated_host,
+                    ErrorCodes::LOGICAL_ERROR);
+
+            if (!isLocalServer(calculated_host, std::to_string(gc->getRPCPort())))
+                throw Exception(
+                    "Fetch parts failed because calculated host (" + calculated_host + ") is not remote server.",
+                    ErrorCodes::LOGICAL_ERROR);
+
+            Strings partition_list;
+            for (const auto & partition : request->partitions())
+                partition_list.emplace_back(partition);
+
+            std::set<Int64> bucket_numbers;
+            for (const auto & bucket_number : request->bucket_numbers())
+                bucket_numbers.insert(bucket_number);
+            auto bitmaps = gc->getCnchCatalog()->getDeleteBitmapsInPartitions(
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr, Catalog::VisibilityLevel::All, bucket_numbers);
+            auto & mutable_parts = *response->mutable_delete_bitmaps();
+            for (const auto & bitmap : bitmaps)
+                *mutable_parts.Add() = *bitmap->getModel();
         }
         catch (...)
         {
@@ -624,9 +739,11 @@ void CnchServerServiceImpl::fetchPartitions(
             Names column_names;
             for (const auto & name : request->column_name_filter())
                 column_names.push_back(name);
-            SelectQueryInfo query_info;
             auto session_context = Context::createCopy(gc);
-            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(session_context, storage, request->predicate(), query_info);
+            session_context->setCurrentDatabase(request->database());
+            ReadBufferFromString rb(request->predicate());
+            ASTPtr query_ptr = deserializeAST(rb);
+            SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
             auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
@@ -1129,8 +1246,9 @@ void CnchServerServiceImpl::handleRedirectCommitRequest(
             if (!final_commit)
             {
                 TxnTimestamp txnID{request->txn_id()};
+                bool write_manifest = cnch->getSettings()->enable_publish_version_on_commit;
                 global_context->getCnchCatalog()->writeParts(storage, txnID,
-                    Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode());
+                    Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode(), write_manifest);
             }
             else
             {
@@ -1154,6 +1272,44 @@ void CnchServerServiceImpl::redirectCommitParts(
     [[maybe_unused]] google::protobuf::Closure * done)
 {
     handleRedirectCommitRequest(controller, request, response, done, false);
+}
+
+void CnchServerServiceImpl::redirectClearParts(
+    [[maybe_unused]] google::protobuf::RpcController * controller,
+    const Protos::RedirectClearPartsReq * request,
+    Protos::RedirectClearPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
+                StoragePtr storage
+                    = global_context->getCnchCatalog()->tryGetTableByUUID(*global_context, table_uuid, TxnTimestamp::maxTS());
+
+                if (!storage)
+                    throw Exception("Table with uuid " + table_uuid + " not found.", ErrorCodes::UNKNOWN_TABLE);
+
+                auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+                if (!cnch)
+                    throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
+
+                auto parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->parts(), nullptr);
+                auto staged_parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->staged_parts(), nullptr);
+                DeleteBitmapMetaPtrVector delete_bitmaps;
+                delete_bitmaps.reserve(request->delete_bitmaps_size());
+                for (const auto & bitmap_model : request->delete_bitmaps())
+                    delete_bitmaps.emplace_back(createFromModel(*cnch, bitmap_model));
+                global_context->getCnchCatalog()->clearParts(storage, Catalog::CommitItems{parts, delete_bitmaps, staged_parts});
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        });
 }
 
 void CnchServerServiceImpl::redirectSetCommitTime(
@@ -1380,31 +1536,11 @@ void CnchServerServiceImpl::removeMergeMutateTasksOnPartitions(
 
 void CnchServerServiceImpl::submitQueryWorkerMetrics(
     google::protobuf::RpcController * /*cntl*/,
-    const Protos::SubmitQueryWorkerMetricsReq * request,
-    Protos::SubmitQueryWorkerMetricsResp * response,
+    const Protos::SubmitQueryWorkerMetricsReq * /*request*/,
+    Protos::SubmitQueryWorkerMetricsResp * /*response*/,
     google::protobuf::Closure * done)
 {
-    RPCHelpers::serviceHandler(
-        done,
-        response,
-        [request = request, response = response, done = done, gc = getContext(), log = log] {
-            brpc::ClosureGuard done_guard(done);
-
-            try
-            {
-                auto query_worker_metric_element = createQueryWorkerMetricElement(request->element());
-                gc->insertQueryWorkerMetricsElement(query_worker_metric_element);
-
-                LOG_TRACE(log, "Submit query worker metrics [{}] from {}: {}", query_worker_metric_element.current_query_id,
-                    query_worker_metric_element.worker_id, query_worker_metric_element.query);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(log, __PRETTY_FUNCTION__);
-                RPCHelpers::handleException(response->mutable_exception());
-            }
-        }
-    );
+    brpc::ClosureGuard done_guard(done);
 }
 
 void CnchServerServiceImpl::submitPreloadTask(
@@ -1561,6 +1697,29 @@ void CnchServerServiceImpl::reportSyncFailedForSyncThread(
 }
 #endif
 
+void CnchServerServiceImpl::handleRefreshTaskOnFinish(
+    google::protobuf::RpcController *,
+    const Protos::handleRefreshTaskOnFinishReq * request,
+    Protos::handleRefreshTaskOnFinishResp * response,
+    google::protobuf::Closure *done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->mv_storage_id());
+        auto bg_thread = getContext()->getCnchBGThread(CnchBGThreadType::CnchRefreshMaterializedView, storage_id);
+
+        auto * mv_refresh_thread = dynamic_cast<CnchRefreshMaterializedViewThread *>(bg_thread.get());
+        mv_refresh_thread->handleRefreshTaskOnFinish(request->task_id(), request->txn_id());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
 void CnchServerServiceImpl::executeOptimize(
     google::protobuf::RpcController *,
     const Protos::ExecuteOptimizeQueryReq * request,
@@ -1571,7 +1730,7 @@ void CnchServerServiceImpl::executeOptimize(
         done,
         response,
         [request = request, response = response, done = done, global_context = getContext(), log = log] {
-            
+
             brpc::ClosureGuard done_guard(done);
             try
             {
@@ -1632,35 +1791,95 @@ void CnchServerServiceImpl::forceRecalculateMetrics(
     }
 }
 
+void CnchServerServiceImpl::getLastModificationTimeHints(
+    google::protobuf::RpcController *,
+    const Protos::getLastModificationTimeHintsReq * request,
+    Protos::getLastModificationTimeHintsResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+
+            auto istorage = gc->getCnchCatalog()->getTable(*gc, storage_id.database_name, storage_id.table_name);
+
+            std::vector<Protos::LastModificationTimeHint> hints = gc->getCnchCatalog()->getLastModificationTimeHints(istorage);
+
+            *response->mutable_last_modification_time_hints() = {hints.begin(), hints.end()};
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::notifyTableCreated(
+    google::protobuf::RpcController *,
+    const Protos::notifyTableCreatedReq * request,
+    Protos::notifyTableCreatedResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            if (auto pcm = gc->getPartCacheManager())
+            {
+                UUID uuid = RPCHelpers::createUUID(request->storage_uuid());
+                auto storage = gc->getCnchCatalog()->getTableByUUID(*gc, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+                if (storage)
+                {
+                    auto host_port = gc->getCnchTopologyMaster()->getTargetServer(
+                        UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
+                    pcm->mayUpdateTableMeta(*storage, host_port.topology_version, true);
+                }
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            (void)response;
+            //RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
 void CnchServerServiceImpl::notifyAccessEntityChange(
     google::protobuf::RpcController *,
     const Protos::notifyAccessEntityChangeReq * request,
     Protos::notifyAccessEntityChangeResp * response,
     google::protobuf::Closure *done)
 {
-    brpc::ClosureGuard done_guard(done);
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
 
-    try
-    {
-        String entity_type = request->type();
-        String name = request->name();
-        UUID id = RPCHelpers::createUUID(request->uuid());
-        for (auto type : collections::range(IAccessEntity::Type::MAX))
+        try
         {
-            // KVAccessStorage::onAccessEntityChanged will find the newly update/deleted access entity and notify all subscribers
-            if (toString(type) == entity_type)
+            String entity_type = request->type();
+            String name = request->name();
+            UUID id = RPCHelpers::createUUID(request->uuid());
+            for (auto type : collections::range(IAccessEntity::Type::MAX))
             {
-                if (auto kv_access_storage = std::dynamic_pointer_cast<KVAccessStorage>(getContext()->getAccessControlManager().getStorage(id)))
-                    kv_access_storage->onAccessEntityChanged(type, name);
-            }
+                // KVAccessStorage::find will find the newly update/deleted access entity and notify all subscribers
+                if (toString(type) == entity_type)
+                {
+                    const auto storage = gc->getAccessControlManager().getStorage(id);
+                    if (storage)
+                        storage->find(type, name);
+                }
 
+            }
         }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 
 

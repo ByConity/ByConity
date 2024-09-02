@@ -93,7 +93,7 @@ public:
     Array getNullableDiscreteSet() const;
     Domain intersect(const Domain & other) const;
     Domain unionn(const Domain & other) const;
-    Domain complement();
+    Domain complement() const;
     Domain subtract(const Domain & other);
     bool overlaps(const Domain & other) const;
     bool contains(const Domain & other) const;
@@ -166,7 +166,7 @@ public:
     {
     }
     explicit TupleDomainImpl(DomainMap domains_);
-    explicit TupleDomainImpl(std::initializer_list<std::pair<T, Domain>> init_list) : TupleDomainImpl(DomainMap(std::move(init_list)))
+    TupleDomainImpl(std::initializer_list<std::pair<T, Domain>> init_list) : TupleDomainImpl(DomainMap(std::move(init_list)))
     {
     }
 
@@ -183,10 +183,13 @@ public:
     {
         return domains.count(column);
     }
-    TupleDomainImpl<T, Hash, Equal> intersect(const TupleDomainImpl<T, Hash, Equal> & other)
+    TupleDomainImpl<T, Hash, Equal> intersect(const TupleDomainImpl<T, Hash, Equal> & other) const
     {
         return intersect(std::vector<TupleDomainImpl<T, Hash, Equal>>{other, *this});
     }
+
+    std::optional<TupleDomainImpl<T, Hash, Equal>> subtract(const TupleDomainImpl<T, Hash, Equal> & other) const;
+
     bool contains(const TupleDomainImpl<T, Hash, Equal> & other) const;
     bool overlaps(const TupleDomainImpl<T, Hash, Equal> & other) const;
     bool operator==(const TupleDomainImpl<T, Hash, Equal> & other) const
@@ -211,6 +214,7 @@ public:
 
     static TupleDomainImpl<T, Hash, Equal> fromFixedValues(const FieldWithTypeMap & fixed_values);
     static TupleDomainImpl<T, Hash, Equal> intersect(const std::vector<TupleDomainImpl<T, Hash, Equal>> & others);
+    static TupleDomainImpl<T, Hash, Equal> subtract(const std::vector<TupleDomainImpl<T, Hash, Equal>> & others);
     static std::optional<TupleDomainImpl<T, Hash, Equal>> maximal(const std::vector<TupleDomainImpl<T, Hash, Equal>> & domains);
     static TupleDomainImpl<T, Hash, Equal> columnWiseUnion(const std::vector<TupleDomainImpl<T, Hash, Equal>> & tuple_domains);
 
@@ -222,7 +226,12 @@ public:
 
         typename TargetType::DomainMap mapped_domains;
         for (const auto & [key, domain] : domains)
-            mapped_domains.emplace(key_mapper(key), domain);
+        {
+            auto mapped_key = key_mapper(key);
+            if (!mapped_domains.contains(mapped_key))
+                mapped_domains.emplace(std::move(mapped_key), domain);
+        }
+            
         return TargetType{mapped_domains};
     }
 

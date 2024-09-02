@@ -21,7 +21,7 @@ ${CLICKHOUSE_CLIENT} -n -q "
 system flush logs;
 select interface, initial_query_id = query_id
     from system.query_log
-    where current_database = currentDatabase() AND query_id = '$query_id' and type = 'QueryFinish'
+    where current_database = currentDatabase(0) AND query_id = '$query_id' and type = 'QueryFinish'
     order by interface
     ;
 "

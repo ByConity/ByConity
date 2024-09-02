@@ -21,6 +21,7 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnVector.h>
+#include <Compression/CachedCompressedReadBuffer.h>
 #include <Core/Field.h>
 #include <DataTypes/Serializations/SerializationNumber.h>
 #include <Formats/FormatSettings.h>
@@ -28,13 +29,44 @@
 #include <Formats/ProtobufWriter.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/MergeTree/MergedReadBufferWithSegmentCache.h>
+#include "common/defines.h"
 #include <Common/Endian.h>
 #include <Common/NaNUtils.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
 
+
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE;
+}
+
+
+template <typename T>
+void SerializationNumber<T>::checkNumberOverflow(T & x, const FormatSettings & settings) const
+{
+    if constexpr (is_integer_v<T>)
+    {
+        if (!settings.check_data_overflow || !current_thread || !current_thread->getOverflow(ThreadStatus::OverflowFlag::Integer))
+            return;
+
+        current_thread->unsetOverflow(ThreadStatus::OverflowFlag::Integer);
+        throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "The integer value is overflow. You can ignore it by setting check_data_overflow=0");
+    }
+    else
+    {
+        if (!settings.check_data_overflow || (!std::isinf(x) && !std::isnan(x)) || !current_thread)
+            return;
+        if (in_serialization_nullable)
+            current_thread->setOverflow(ThreadStatus::OverflowFlag::Float);
+        else
+            current_thread->unsetOverflow(ThreadStatus::OverflowFlag::Float);
+    }
+}
 
 template <typename T>
 void SerializationNumber<T>::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const
@@ -43,30 +75,36 @@ void SerializationNumber<T>::serializeText(const IColumn & column, size_t row_nu
 }
 
 template <typename T>
-void SerializationNumber<T>::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationNumber<T>::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     T x;
 
     if constexpr (is_integer_v<T> && is_arithmetic_v<T>)
-        readIntTextUnsafe(x, istr);
+    {
+        if (settings.check_data_overflow)
+            readText(x, istr, true);
+        else
+            readIntTextUnsafe(x, istr);
+    }
     else
         readText(x, istr);
-
+    checkNumberOverflow(x, settings);
     assert_cast<ColumnVector<T> &>(column).getData().push_back(x);
 }
 
 template <typename T>
-void SerializationNumber<T>::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
+void SerializationNumber<T>::serializeTextJSON(
+    const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
     auto x = assert_cast<const ColumnVector<T> &>(column).getData()[row_num];
     writeJSONNumber(x, ostr, settings);
 }
 
 template <typename T>
-void SerializationNumber<T>::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationNumber<T>::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     bool has_quote = false;
-    if (!istr.eof() && *istr.position() == '"')        /// We understand the number both in quotes and without.
+    if (!istr.eof() && *istr.position() == '"') /// We understand the number both in quotes and without.
     {
         has_quote = true;
         ++istr.position();
@@ -99,25 +137,27 @@ void SerializationNumber<T>::deserializeTextJSON(IColumn & column, ReadBuffer & 
                 x = tmp;
             }
             else
-                readText(x, istr);
+                readText(x, istr, settings.check_data_overflow);
         }
         else
         {
-            readText(x, istr);
+            readText(x, istr, settings.check_data_overflow);
         }
 
         if (has_quote)
             assertChar('"', istr);
     }
 
+    checkNumberOverflow(x, settings);
     assert_cast<ColumnVector<T> &>(column).getData().push_back(x);
 }
 
 template <typename T>
-void SerializationNumber<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationNumber<T>::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
     FieldType x;
-    readCSV(x, istr);
+    readCSV(x, istr, settings.check_data_overflow);
+    checkNumberOverflow(x, settings);
     assert_cast<ColumnVector<T> &>(column).getData().push_back(x);
 }
 
@@ -165,14 +205,44 @@ void SerializationNumber<T>::serializeBinaryBulk(const IColumn & column, WriteBu
         ostr.write(reinterpret_cast<const char *>(&x[offset]), sizeof(typename ColumnVector<T>::ValueType) * limit);
 }
 
+
 template <typename T>
-void SerializationNumber<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/) const
+void classicDeserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit)
 {
     typename ColumnVector<T>::Container & x = typeid_cast<ColumnVector<T> &>(column).getData();
     size_t initial_size = x.size();
     x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(typename ColumnVector<T>::ValueType) * limit);
+    size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(typename ColumnVector<T>::ValueType) * limit);
     x.resize(initial_size + size / sizeof(typename ColumnVector<T>::ValueType));
+}
+
+template <typename T>
+void SerializationNumber<T>::deserializeBinaryBulk(
+    IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool zero_copy_cache_read) const
+{
+    ColumnVector<T> & vec_col = typeid_cast<ColumnVector<T> &>(column, false);
+
+    if (zero_copy_cache_read && vec_col.has_zero_buf)
+    {
+        if (auto * merged_segment_istr = typeid_cast<MergedReadBufferWithSegmentCache *>(&istr); merged_segment_istr->isInternalCachedCompressedReadBuffer())
+        {
+            bool incomplete_read = false;
+            size_t size = merged_segment_istr->readZeroCopy(vec_col.getZeroCopyBuf(), sizeof(typename ColumnVector<T>::ValueType) * limit, incomplete_read);
+
+            if (incomplete_read)
+            {
+                classicDeserializeBinaryBulk<T>(column, *merged_segment_istr, limit - size / sizeof(typename ColumnVector<T>::ValueType));
+            }
+        }
+        else
+        {
+            classicDeserializeBinaryBulk<T>(column, istr, limit);
+        }
+    }
+    else
+    {
+        classicDeserializeBinaryBulk<T>(column, istr, limit);
+    }
 }
 
 

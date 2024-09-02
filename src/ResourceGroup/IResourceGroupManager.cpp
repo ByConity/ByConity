@@ -19,11 +19,14 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTReproduceQuery.h>
-#include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -58,6 +61,7 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
         || ast->as<ASTCreateSnapshotQuery>()
         || ast->as<ASTDropQuery>()
         || ast->as<ASTRenameQuery>()
+        || ast->as<ASTCreateQueryAnalyticalMySQL>()
         // || ast->as<ASTCreateMaskingPolicyQuery>()
     )
         return ResourceSelectCase::QueryType::DDL;
@@ -65,8 +69,22 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
     else if (ast->as<ASTSelectQuery>() || ast->as<ASTSelectWithUnionQuery>())
         return ResourceSelectCase::QueryType::SELECT;
 
-    else if (ast->as<ASTInsertQuery>() || ast->as<ASTDeleteQuery>() || ast->as<ASTUpdateQuery>())
+    else if (ast->as<ASTInsertQuery>()
+        || ast->as<ASTDeleteQuery>()
+        || ast->as<ASTUpdateQuery>()
+        || ast->as<ASTRefreshQuery>()
+    )
         return ResourceSelectCase::QueryType::DATA;
+    else if (const auto * explain = ast->as<ASTExplainQuery>(); explain
+             && (explain->getKind() == ASTExplainQuery::DistributedAnalyze || explain->getKind() == ASTExplainQuery::LogicalAnalyze
+                 || explain->getKind() == ASTExplainQuery::PipelineAnalyze))
+    {
+        const auto & query = explain->getExplainedQuery();
+        if (query->as<ASTInsertQuery>())
+            return ResourceSelectCase::QueryType::DATA;
+        else if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
+            return ResourceSelectCase::QueryType::SELECT;
+    }
 
     else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system
         && ast_system->type == ASTSystemQuery::Type::DEDUP
@@ -81,7 +99,7 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
             {
                 auto * command_ast = child->as<ASTAlterCommand>();
 
-                if (auto command = AlterCommand::parse(command_ast); command)
+                if (auto command = AlterCommand::parse(command_ast, nullptr); command)
                 {
                     if (command->type == AlterCommand::Type::ADD_COLUMN || command->type == AlterCommand::Type::DROP_COLUMN
                         || command->type == AlterCommand::Type::MODIFY_COLUMN || command->type == AlterCommand::Type::COMMENT_COLUMN
@@ -95,7 +113,28 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
         }
         return ResourceSelectCase::QueryType::DATA;
     }
-
+    else if (const auto * mysql_alter_selects = ast->as<ASTAlterAnalyticalMySQLQuery>())
+    {
+        if (mysql_alter_selects->command_list)
+        {
+            for (const auto & child : mysql_alter_selects->command_list->children)
+            {
+                if(auto * command_ast = child->as<ASTAlterCommand>(); command_ast)
+                {
+                    if (command_ast->type == ASTAlterCommand::Type::ADD_COLUMN
+                    || command_ast->type == ASTAlterCommand::Type::DROP_COLUMN
+                    || command_ast->type == ASTAlterCommand::Type::MODIFY_COLUMN
+                    || command_ast->type == ASTAlterCommand::Type::ADD_INDEX
+                    || command_ast->type == ASTAlterCommand::Type::DROP_INDEX
+                    || command_ast->type == ASTAlterCommand::Type::RENAME_TABLE
+                    || command_ast->type == ASTAlterCommand::Type::DROP_PARTITION
+                    )
+                        return ResourceSelectCase::QueryType::DDL;
+                }
+            }
+        }
+        return ResourceSelectCase::QueryType::DATA;
+    }
     else if (const auto * ast_reproduce = ast->as<ASTReproduceQuery>();
              ast_reproduce && ast_reproduce->mode == ASTReproduceQuery::Mode::DDL)
         return ResourceSelectCase::QueryType::DDL;

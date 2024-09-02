@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Columns/ListIndex.h>
+#include <Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <Processors/Exchange/DataTrans/NativeChunkInputStream.h>
@@ -27,10 +28,12 @@ public:
 
 private:
     Chunk readNextFile();
+    void initStream();
 
     std::vector<std::unique_ptr<ReadBufferFromFileBase>> bufs;
     size_t idx = 0;
     NativeChunkInputStreamHolder stream;
+    std::unique_ptr<CompressedReadBuffer> compressed_input;
     ExchangeDataKeyPtr key;
     ContextPtr context;
 };

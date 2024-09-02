@@ -20,6 +20,7 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
@@ -163,6 +164,13 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     auto register_mode
         = context->getSettingsRef().bsp_mode ? BrpcExchangeReceiverRegistryService::DISK_READER : BrpcExchangeReceiverRegistryService::BRPC;
     auto disk_exchange_mgr = context->getSettingsRef().bsp_mode ? context->getDiskExchangeDataManager() : nullptr;
+    size_t local_queue_size = context->getSettingsRef().exchange_local_receiver_queue_size;
+    size_t remote_queue_size = context->getSettingsRef().exchange_remote_receiver_queue_size;
+    size_t multi_path_queue_size = context->getSettingsRef().exchange_multi_path_receiver_queue_size;
+    std::shared_ptr<MemoryController> memory_controller;
+    auto weak_segment_process_list_entry = context->getPlanSegmentProcessListEntry().lock();
+    if (weak_segment_process_list_entry)
+        memory_controller = weak_segment_process_list_entry->getMemoryController();
 
     for (const auto & input : inputs)
     {
@@ -180,23 +188,51 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         if (context->getSettingsRef().exchange_enable_multipath_reciever && !keep_order)
         {
             LocalChannelOptions local_options{
-                .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size,
+                .queue_size = local_queue_size,
                 .max_timeout_ts = options.exchange_timeout_ts,
                 .enable_metrics = enable_metrics};
             if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explain)
                 throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
             bool enable_block_compress = context->getSettingsRef().exchange_enable_block_compress;
             BroadcastReceiverPtrs receivers;
-            MultiPathQueuePtr collector
-                = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_multi_path_receiver_queue_size);
+            MultiPathQueuePtr collector = std::make_shared<MultiPathBoundedQueue>(multi_path_queue_size, memory_controller);
             bool is_final_plan_segment = plan_segment_id == 0;
+            size_t input_index = 0;
             for (const auto & source_address : input->getSourceAddress())
             {
                 auto write_address = extractExchangeHostPort(source_address);
                 for (size_t i = 0; i < exchange_parallel_size; ++i)
                 {
                     UInt32 partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                    ExchangeDataKeyPtr data_key;
+                    if (context->getSettingsRef().bsp_mode)
+                    {
+                        if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                            || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                        {
+                            if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
+                            {
+                                data_key = std::make_shared<ExchangeDataKey>(
+                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                            }
+                            else
+                            {
+                                if (input_index == context->getPlanSegmentInstanceId().parallel_id)
+                                    data_key = std::make_shared<ExchangeDataKey>(
+                                        current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                                else
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index);
+                        }
+                    }
+                    else
+                    {
+                        data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                    }
                     bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
                     BroadcastReceiverPtr receiver = createReceiver(
                         disk_exchange_mgr,
@@ -215,13 +251,14 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                         query_exchange_log);
                     receivers.emplace_back(std::move(receiver));
                 }
+                input_index++;
             }
             if (settings.distributed_settings.is_explain)
             {
                 ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id_start);
                 String name = BrpcRemoteBroadcastReceiver::generateName(
                             exchange_id, write_plan_segment_id, plan_segment_id, partition_id_start, coordinator_address);
-                auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
+                auto queue = std::make_shared<MultiPathBoundedQueue>(remote_queue_size, memory_controller);
                 auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
                     std::move(data_key),
                     "",
@@ -239,7 +276,10 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             }
             String receiver_name = MultiPathReceiver::generateName(
                 exchange_id, write_plan_segment_id, plan_segment_id, coordinator_address);
-            auto multi_path_receiver = std::make_shared<MultiPathReceiver>(collector, std::move(receivers), exchange_header, receiver_name, enable_block_compress);
+            auto multi_path_options
+                = MultiPathReceiverOptions{.enable_block_compress = enable_block_compress, .enable_metrics = enable_metrics};
+            auto multi_path_receiver = std::make_shared<MultiPathReceiver>(
+                collector, std::move(receivers), exchange_header, receiver_name, std::move(multi_path_options), context);
             LOG_DEBUG(logger, "Create {}", multi_path_receiver->getName());
             auto source = std::make_shared<ExchangeSource>(source_header, std::move(multi_path_receiver), options, is_final_plan_segment, totals_source, extremes_source);
             pipe.addSource(std::move(source));
@@ -248,19 +288,48 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         else
         {
             LocalChannelOptions local_options{
-                .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size,
+                .queue_size = local_queue_size,
                 .max_timeout_ts = options.exchange_timeout_ts,
                 .enable_metrics = enable_metrics};
             if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explain)
                 throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
             bool is_final_plan_segment = plan_segment_id == 0;
+            size_t input_index = 0;
             for (const auto & source_address : input->getSourceAddress())
             {
                 auto write_address = extractExchangeHostPort(source_address);
                 for (size_t i = 0; i < exchange_parallel_size; ++i)
                 {
                     size_t partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                    ExchangeDataKeyPtr data_key;
+                    if (context->getSettingsRef().bsp_mode)
+                    {
+                        if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                            || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                        {
+                            if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
+                            {
+                                data_key = std::make_shared<ExchangeDataKey>(
+                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                            }
+                            else
+                            {
+                                if (input_index == context->getPlanSegmentInstanceId().parallel_id)
+                                    data_key = std::make_shared<ExchangeDataKey>(
+                                        current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                                else
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index);
+                        }
+                    }
+                    else
+                    {
+                        data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                    }
                     bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
                     BroadcastReceiverPtr receiver = createReceiver(
                         disk_exchange_mgr,
@@ -281,6 +350,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     pipe.addSource(std::move(source));
                     source_num++;
                 }
+                input_index++;
             }
             if (settings.distributed_settings.is_explain)
             {
@@ -294,7 +364,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     exchange_header,
                     keep_order,
                     name,
-                    std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size));
+                    std::make_shared<MultiPathBoundedQueue>(remote_queue_size, memory_controller));
                 BroadcastReceiverPtr receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
                 auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment, totals_source, extremes_source);
                 pipe.addSource(std::move(source));
@@ -337,6 +407,11 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
     std::shared_ptr<QueryExchangeLog> query_exchange_log)
 {
     BroadcastReceiverPtr receiver;
+    size_t remote_queue_size = context->getSettingsRef().exchange_remote_receiver_queue_size;
+    std::shared_ptr<MemoryController> memory_controller;
+    auto weak_segment_process_list_entry = context->getPlanSegmentProcessListEntry().lock();
+    if (weak_segment_process_list_entry)
+        memory_controller = weak_segment_process_list_entry->getMemoryController();
     if (is_local_exchange)
     {
         if (!options.force_remote_mode)
@@ -350,11 +425,21 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
                 plan_segment_id);
             String name = LocalBroadcastChannel::generateName(
                 exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
-            auto queue = collector ? collector : std::make_shared<MultiPathBoundedQueue>(local_options.queue_size);
+            auto queue = collector ? collector : std::make_shared<MultiPathBoundedQueue>(local_options.queue_size, memory_controller);
             auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options, name, std::move(queue), context);
             receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
             if (context->getSettingsRef().bsp_mode)
             {
+                /// we need to do this as to avoid previous sender waitBecomeRealSender in finish
+                auto previous_sender = BroadcastSenderProxyRegistry::instance().get(data_key);
+                if (previous_sender)
+                {
+                    previous_sender->finish(BroadcastStatusCode::SEND_CANCELLED, "cancelled as previous sender");
+                    BroadcastSenderProxyRegistry::instance().remove(data_key);
+                    LOG_WARNING(logger, "previous_sender found for query_id:{} key:{}", query_id, *data_key);
+                }
+                previous_sender = nullptr; // dont forget to release
+                disk_mgr->cancelReadTask(data_key); /// cancel possible previous read task from last execution
                 auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
                 sender_proxy->accept(context, exchange_header);
                 auto processors = disk_mgr->createProcessors(std::move(sender_proxy), exchange_header, context);
@@ -374,7 +459,7 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
             String name = BrpcRemoteBroadcastReceiver::generateName(
                 exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
             auto queue = collector ? collector
-                                   : std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
+                                   : std::make_shared<MultiPathBoundedQueue>(remote_queue_size, memory_controller);
             auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
                 std::move(data_key),
                 localhost_address,
@@ -402,7 +487,7 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
         String name = BrpcRemoteBroadcastReceiver::generateName(
             exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
         auto queue = collector ? collector
-                               : std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
+                               : std::make_shared<MultiPathBoundedQueue>(remote_queue_size, memory_controller);
         auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
             std::move(data_key),
             write_address,

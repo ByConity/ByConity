@@ -5,9 +5,9 @@ namespace DB
 {
 PlanNodeStatisticsPtr SortingEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const SortingStep & step)
 {
-    if (step.getLimit() > 0)
+    if (!step.hasPreparedParam() && step.getLimitValue() > 0)
     {
-        size_t limit = step.getLimit();
+        size_t limit = step.getLimitValue();
         return LimitEstimator::getLimitStatistics(child_stats, limit);
     }
     return child_stats;

@@ -118,6 +118,7 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                     left_keys,
                     right_keys,
                     ASTTableJoin::Kind::Inner,
+                    ASTTableJoin::Strictness::All,
                     *context,
                     // todo is base table
                     left_base_table,
@@ -291,6 +292,7 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                         new_left_keys,
                         new_right_keys,
                         ASTTableJoin::Kind::Inner,
+                        ASTTableJoin::Strictness::All,
                         *context,
                         left_base_table,
                         right_base_table);

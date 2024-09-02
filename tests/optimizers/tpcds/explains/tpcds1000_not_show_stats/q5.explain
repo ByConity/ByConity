@@ -1,160 +1,164 @@
 Projection
-│     Expressions: channel:=`expr#'store channel'_1`, id:=`expr#concat('store', s_store_id)_1`, profit:=`expr#sum(profit)_3`, returns:=`expr#sum(returns)`, sales:=`expr#sum(sales)`
+│     Expressions: channel:=`expr#'store channel'_1`, id:=`expr#concat('store', s_store_id)_2`, profit:=`expr#sum(profit)_3`, returns:=`expr#sum(returns)`, sales:=`expr#sum(sales)`
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
+      │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_2 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
+            │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_2 ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated
-               └─ Repartition Exchange
-                  │     Partition by: {expr#'store channel'_1, expr#concat('store', s_store_id)_1, __grouping_set}
-                  └─ Union
-                     │     OutputToInputs: expr#sum(profit)_3 = [expr#sum(profit)_3,expr#sum(profit)_3,expr#sum(profit)_3], expr#'store channel'_1 = [expr#'store channel',expr#'catalog channel',expr#'web channel'], expr#sum(returns) = [expr#sum(returns),expr#sum(returns),expr#sum(returns)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], expr#concat('store', s_store_id)_1 = [expr#concat('store', s_store_id),expr#concat('catalog_page', cp_catalog_page_id),expr#concat('web_site', web_site_id)], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
-                     ├─ Aggregating
-                     │  │     Group by: {expr#'store channel', expr#concat('store', s_store_id)}
-                     │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss))
-                     │  └─ Projection
-                     │     │     Expressions: [expr#sum(return_amt), expr#sum(sales_price)], expr#'store channel':='store channel', expr#concat('store', s_store_id):=concat('store', s_store_id), expr#minus(profit, profit_loss):=`expr#sum(profit)` - `expr#sum(net_loss)`
-                     │     └─ MergingAggregated
-                     │        └─ Repartition Exchange
-                     │           │     Partition by: {s_store_id}
-                     │           └─ Aggregating
-                     │              │     Group by: {s_store_id}
-                     │              │     Aggregates: expr#sum(sales_price):=AggNull(sum)(ss_ext_sales_price_1), expr#sum(profit):=AggNull(sum)(ss_net_profit_1), expr#sum(return_amt):=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_8), expr#sum(net_loss):=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_9)
-                     │              └─ Inner Join
-                     │                 │     Condition: ss_store_sk_1 == s_store_sk
-                     │                 ├─ Inner Join
-                     │                 │  │     Condition: ss_sold_date_sk_1 == d_date_sk
-                     │                 │  │     Runtime Filters Builder: {d_date_sk}
-                     │                 │  ├─ Union
-                     │                 │  │  │     OutputToInputs: expr#CAST(0, 'decimal(7, 2)')_9 = [expr#CAST(0, 'decimal(7, 2)')_5,sr_net_loss], ss_net_profit_1 = [ss_net_profit,expr#CAST(0, 'decimal(7, 2)')_7], expr#CAST(0, 'decimal(7, 2)')_8 = [expr#CAST(0, 'decimal(7, 2)')_4,sr_return_amt], ss_ext_sales_price_1 = [ss_ext_sales_price,expr#CAST(0, 'decimal(7, 2)')_6], ss_sold_date_sk_1 = [ss_sold_date_sk,sr_returned_date_sk], ss_store_sk_1 = [ss_store_sk,sr_store_sk]
-                     │                 │  │  ├─ Projection
-                     │                 │  │  │  │     Expressions: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk], expr#CAST(0, 'decimal(7, 2)')_4:=cast(`expr#CAST(0, 'decimal(7, 2)')`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_5:=cast(`expr#CAST(0, 'decimal(7, 2)')`, 'Nullable(Float64)')
-                     │                 │  │  │  └─ Projection
-                     │                 │  │  │     │     Expressions: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk], expr#CAST(0, 'decimal(7, 2)'):=cast('0', 'Decimal(7, 2)')
-                     │                 │  │  │     └─ Filter
-                     │                 │  │  │        │     Condition: Runtime Filters: {ss_sold_date_sk}
-                     │                 │  │  │        └─ TableScan tpcds1000.store_sales
-                     │                 │  │  │                 Where: Runtime Filters: {ss_sold_date_sk}
-                     │                 │  │  │                 Outputs: [ss_sold_date_sk, ss_store_sk, ss_ext_sales_price, ss_net_profit]
-                     │                 │  │  └─ Projection
-                     │                 │  │     │     Expressions: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk], expr#CAST(0, 'decimal(7, 2)')_6:=cast(`expr#CAST(0, 'decimal(7, 2)')_2`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_7:=cast(`expr#CAST(0, 'decimal(7, 2)')_2`, 'Nullable(Float64)')
-                     │                 │  │     └─ Projection
-                     │                 │  │        │     Expressions: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk], expr#CAST(0, 'decimal(7, 2)')_2:=cast('0', 'Decimal(7, 2)')
-                     │                 │  │        └─ Filter
-                     │                 │  │           │     Condition: Runtime Filters: {sr_returned_date_sk}
-                     │                 │  │           └─ TableScan tpcds1000.store_returns
-                     │                 │  │                    Where: Runtime Filters: {sr_returned_date_sk}
-                     │                 │  │                    Outputs: [sr_returned_date_sk, sr_store_sk, sr_return_amt, sr_net_loss]
-                     │                 │  └─ Broadcast Exchange
-                     │                 │     └─ Filter
-                     │                 │        │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
-                     │                 │        └─ TableScan tpcds1000.date_dim
-                     │                 │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
-                     │                 │                 Outputs: [d_date_sk, d_date]
-                     │                 └─ Broadcast Exchange
-                     │                    └─ TableScan tpcds1000.store
-                     │                             Outputs: [s_store_sk, s_store_id]
-                     ├─ Aggregating
-                     │  │     Group by: {expr#'catalog channel', expr#concat('catalog_page', cp_catalog_page_id)}
-                     │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)_1), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)_1), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss)_1)
-                     │  └─ Projection
-                     │     │     Expressions: [expr#sum(return_amt)_1, expr#sum(sales_price)_1], expr#'catalog channel':='catalog channel', expr#concat('catalog_page', cp_catalog_page_id):=concat('catalog_page', cp_catalog_page_id), expr#minus(profit, profit_loss)_1:=`expr#sum(profit)_1` - `expr#sum(net_loss)_1`
-                     │     └─ MergingAggregated
-                     │        └─ Repartition Exchange
-                     │           │     Partition by: {cp_catalog_page_id}
-                     │           └─ Aggregating
-                     │              │     Group by: {cp_catalog_page_id}
-                     │              │     Aggregates: expr#sum(sales_price)_1:=AggNull(sum)(cs_ext_sales_price_1), expr#sum(profit)_1:=AggNull(sum)(cs_net_profit_1), expr#sum(return_amt)_1:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_18), expr#sum(net_loss)_1:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_19)
-                     │              └─ Inner Join
-                     │                 │     Condition: cs_catalog_page_sk_1 == cp_catalog_page_sk
-                     │                 ├─ Inner Join
-                     │                 │  │     Condition: cs_sold_date_sk_1 == d_date_sk_1
-                     │                 │  │     Runtime Filters Builder: {d_date_sk_1}
-                     │                 │  ├─ Union
-                     │                 │  │  │     OutputToInputs: expr#CAST(0, 'decimal(7, 2)')_19 = [expr#CAST(0, 'decimal(7, 2)')_15,cr_net_loss], expr#CAST(0, 'decimal(7, 2)')_18 = [expr#CAST(0, 'decimal(7, 2)')_14,cr_return_amount], cs_net_profit_1 = [cs_net_profit,expr#CAST(0, 'decimal(7, 2)')_17], cs_ext_sales_price_1 = [cs_ext_sales_price,expr#CAST(0, 'decimal(7, 2)')_16], cs_sold_date_sk_1 = [cs_sold_date_sk,cr_returned_date_sk], cs_catalog_page_sk_1 = [cs_catalog_page_sk,cr_catalog_page_sk]
-                     │                 │  │  ├─ Projection
-                     │                 │  │  │  │     Expressions: [cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit, cs_sold_date_sk], expr#CAST(0, 'decimal(7, 2)')_14:=cast(`expr#CAST(0, 'decimal(7, 2)')_10`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_15:=cast(`expr#CAST(0, 'decimal(7, 2)')_10`, 'Nullable(Float64)')
-                     │                 │  │  │  └─ Projection
-                     │                 │  │  │     │     Expressions: [cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit, cs_sold_date_sk], expr#CAST(0, 'decimal(7, 2)')_10:=cast('0', 'Decimal(7, 2)')
-                     │                 │  │  │     └─ Filter
-                     │                 │  │  │        │     Condition: Runtime Filters: {cs_sold_date_sk}
-                     │                 │  │  │        └─ TableScan tpcds1000.catalog_sales
-                     │                 │  │  │                 Where: Runtime Filters: {cs_sold_date_sk}
-                     │                 │  │  │                 Outputs: [cs_sold_date_sk, cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit]
-                     │                 │  │  └─ Projection
-                     │                 │  │     │     Expressions: [cr_catalog_page_sk, cr_net_loss, cr_return_amount, cr_returned_date_sk], expr#CAST(0, 'decimal(7, 2)')_16:=cast(`expr#CAST(0, 'decimal(7, 2)')_12`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_17:=cast(`expr#CAST(0, 'decimal(7, 2)')_12`, 'Nullable(Float64)')
-                     │                 │  │     └─ Projection
-                     │                 │  │        │     Expressions: [cr_catalog_page_sk, cr_net_loss, cr_return_amount, cr_returned_date_sk], expr#CAST(0, 'decimal(7, 2)')_12:=cast('0', 'Decimal(7, 2)')
-                     │                 │  │        └─ Filter
-                     │                 │  │           │     Condition: Runtime Filters: {cr_returned_date_sk}
-                     │                 │  │           └─ TableScan tpcds1000.catalog_returns
-                     │                 │  │                    Where: Runtime Filters: {cr_returned_date_sk}
-                     │                 │  │                    Outputs: [cr_returned_date_sk, cr_catalog_page_sk, cr_return_amount, cr_net_loss]
-                     │                 │  └─ Broadcast Exchange
-                     │                 │     └─ Filter
-                     │                 │        │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11206, 'Date'))
-                     │                 │        └─ TableScan tpcds1000.date_dim
-                     │                 │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
-                     │                 │                 Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date
-                     │                 └─ Broadcast Exchange
-                     │                    └─ TableScan tpcds1000.catalog_page
-                     │                             Outputs: [cp_catalog_page_sk, cp_catalog_page_id]
-                     └─ Aggregating
-                        │     Group by: {expr#'web channel', expr#concat('web_site', web_site_id)}
-                        │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)_2), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)_2), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss)_2)
-                        └─ Projection
-                           │     Expressions: [expr#sum(return_amt)_2, expr#sum(sales_price)_2], expr#'web channel':='web channel', expr#concat('web_site', web_site_id):=concat('web_site', web_site_id), expr#minus(profit, profit_loss)_2:=`expr#sum(profit)_2` - `expr#sum(net_loss)_2`
-                           └─ MergingAggregated
-                              └─ Repartition Exchange
-                                 │     Partition by: {web_site_id}
-                                 └─ Aggregating
-                                    │     Group by: {web_site_id}
-                                    │     Aggregates: expr#sum(sales_price)_2:=AggNull(sum)(ws_ext_sales_price_1), expr#sum(profit)_2:=AggNull(sum)(ws_net_profit_1), expr#sum(return_amt)_2:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_28), expr#sum(net_loss)_2:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_29)
-                                    └─ Inner Join
-                                       │     Condition: ws_web_site_sk_2 == web_site_sk
-                                       ├─ Inner Join
-                                       │  │     Condition: ws_sold_date_sk_1 == d_date_sk_2
-                                       │  │     Runtime Filters Builder: {d_date_sk_2}
-                                       │  ├─ Union
-                                       │  │  │     OutputToInputs: expr#CAST(0, 'decimal(7, 2)')_29 = [expr#CAST(0, 'decimal(7, 2)')_25,wr_net_loss], ws_web_site_sk_2 = [ws_web_site_sk,ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_28 = [expr#CAST(0, 'decimal(7, 2)')_24,wr_return_amt], ws_net_profit_1 = [ws_net_profit,expr#CAST(0, 'decimal(7, 2)')_27], ws_ext_sales_price_1 = [ws_ext_sales_price,expr#CAST(0, 'decimal(7, 2)')_26], ws_sold_date_sk_1 = [ws_sold_date_sk,wr_returned_date_sk]
-                                       │  │  ├─ Projection
-                                       │  │  │  │     Expressions: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_site_sk], expr#CAST(0, 'decimal(7, 2)')_24:=cast(`expr#CAST(0, 'decimal(7, 2)')_20`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_25:=cast(`expr#CAST(0, 'decimal(7, 2)')_20`, 'Nullable(Float64)')
-                                       │  │  │  └─ Projection
-                                       │  │  │     │     Expressions: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_site_sk], expr#CAST(0, 'decimal(7, 2)')_20:=cast('0', 'Decimal(7, 2)')
-                                       │  │  │     └─ Filter
-                                       │  │  │        │     Condition: Runtime Filters: {ws_sold_date_sk}
-                                       │  │  │        └─ TableScan tpcds1000.web_sales
-                                       │  │  │                 Where: Runtime Filters: {ws_sold_date_sk}
-                                       │  │  │                 Outputs: [ws_sold_date_sk, ws_web_site_sk, ws_ext_sales_price, ws_net_profit]
-                                       │  │  └─ Projection
-                                       │  │     │     Expressions: [wr_net_loss, wr_return_amt, wr_returned_date_sk, ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_26:=cast(`expr#CAST(0, 'decimal(7, 2)')_22`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_27:=cast(`expr#CAST(0, 'decimal(7, 2)')_22`, 'Nullable(Float64)')
-                                       │  │     └─ Projection
-                                       │  │        │     Expressions: [wr_net_loss, wr_return_amt, wr_returned_date_sk, ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_22:=cast('0', 'Decimal(7, 2)')
-                                       │  │        └─ Right (PARALLEL_HASH) Join
-                                       │  │           │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
-                                       │  │           ├─ Repartition Exchange
-                                       │  │           │  │     Partition by: {ws_item_sk, ws_order_number}
-                                       │  │           │  └─ TableScan tpcds1000.web_sales
-                                       │  │           │           Outputs: [ws_item_sk, ws_order_number], ws_web_site_sk_1:=ws_web_site_sk
-                                       │  │           └─ Repartition Exchange
-                                       │  │              │     Partition by: {wr_item_sk, wr_order_number}
-                                       │  │              └─ Filter
-                                       │  │                 │     Condition: Runtime Filters: {wr_returned_date_sk}
-                                       │  │                 └─ TableScan tpcds1000.web_returns
-                                       │  │                          Where: Runtime Filters: {wr_returned_date_sk}
-                                       │  │                          Outputs: [wr_returned_date_sk, wr_item_sk, wr_order_number, wr_return_amt, wr_net_loss]
-                                       │  └─ Broadcast Exchange
-                                       │     └─ Filter
-                                       │        │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11206, 'Date'))
-                                       │        └─ TableScan tpcds1000.date_dim
-                                       │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
-                                       │                 Outputs: d_date_sk_2:=d_date_sk, d_date_2:=d_date
-                                       └─ Broadcast Exchange
-                                          └─ TableScan tpcds1000.web_site
-                                                   Outputs: [web_site_sk, web_site_id]
+            └─ Projection
+               │     Expressions: [expr#'store channel'_1, expr#concat('store', s_store_id)_2, expr#sum(profit)_3, expr#sum(returns), expr#sum(sales)]
+               └─ MergingAggregated
+                  └─ Repartition Exchange
+                     │     Partition by: {expr#'store channel'_1, expr#concat('store', s_store_id)_2, __grouping_set}
+                     └─ Union
+                        │     OutputToInputs: expr#'store channel'_1 = [expr#'store channel',expr#'catalog channel',expr#'web channel'], expr#sum(returns) = [expr#sum(returns),expr#sum(returns),expr#sum(returns)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], expr#sum(profit)_3 = [expr#sum(profit)_3,expr#sum(profit)_3,expr#sum(profit)_3], expr#concat('store', s_store_id)_2 = [expr#concat('store', s_store_id)_1,expr#concat('catalog_page', cp_catalog_page_id),expr#concat('web_site', web_site_id)_1], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
+                        ├─ Aggregating
+                        │  │     Group by: {expr#'store channel', expr#concat('store', s_store_id)_1}
+                        │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss))
+                        │  └─ Projection
+                        │     │     Expressions: [expr#sum(return_amt), expr#sum(sales_price)], expr#'store channel':='store channel', expr#concat('store', s_store_id)_1:=cast(concat('store', s_store_id), 'String'), expr#minus(profit, profit_loss):=`expr#sum(profit)` - `expr#sum(net_loss)`
+                        │     └─ MergingAggregated
+                        │        └─ Repartition Exchange
+                        │           │     Partition by: {s_store_id}
+                        │           └─ Aggregating
+                        │              │     Group by: {s_store_id}
+                        │              │     Aggregates: expr#sum(sales_price):=AggNull(sum)(ss_ext_sales_price_2), expr#sum(profit):=AggNull(sum)(ss_net_profit_2), expr#sum(return_amt):=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_8), expr#sum(net_loss):=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_9)
+                        │              └─ Inner Join
+                        │                 │     Condition: ss_store_sk_1 == s_store_sk
+                        │                 ├─ Inner Join
+                        │                 │  │     Condition: ss_sold_date_sk_1 == d_date_sk
+                        │                 │  │     Runtime Filters Builder: {d_date_sk}
+                        │                 │  ├─ Union
+                        │                 │  │  │     OutputToInputs: expr#CAST(0, 'decimal(7, 2)')_9 = [expr#CAST(0, 'decimal(7, 2)')_5,sr_net_loss_1], expr#CAST(0, 'decimal(7, 2)')_8 = [expr#CAST(0, 'decimal(7, 2)')_4,sr_return_amt_1], ss_net_profit_2 = [ss_net_profit_1,expr#CAST(0, 'decimal(7, 2)')_7], ss_ext_sales_price_2 = [ss_ext_sales_price_1,expr#CAST(0, 'decimal(7, 2)')_6], ss_sold_date_sk_1 = [ss_sold_date_sk,sr_returned_date_sk], ss_store_sk_1 = [ss_store_sk,sr_store_sk]
+                        │                 │  │  ├─ Projection
+                        │                 │  │  │  │     Expressions: [ss_sold_date_sk, ss_store_sk], expr#CAST(0, 'decimal(7, 2)')_4:=cast(`expr#CAST(0, 'decimal(7, 2)')`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_5:=cast(`expr#CAST(0, 'decimal(7, 2)')`, 'Nullable(Float64)'), ss_ext_sales_price_1:=cast(ss_ext_sales_price, 'Nullable(Float64)'), ss_net_profit_1:=cast(ss_net_profit, 'Nullable(Float64)')
+                        │                 │  │  │  └─ Projection
+                        │                 │  │  │     │     Expressions: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk], expr#CAST(0, 'decimal(7, 2)'):=cast('0', 'Decimal(7, 2)')
+                        │                 │  │  │     └─ Filter
+                        │                 │  │  │        │     Condition: Runtime Filters: {ss_sold_date_sk}
+                        │                 │  │  │        └─ TableScan tpcds1000.store_sales
+                        │                 │  │  │                 Where: Runtime Filters: {ss_sold_date_sk}
+                        │                 │  │  │                 Outputs: [ss_sold_date_sk, ss_store_sk, ss_ext_sales_price, ss_net_profit]
+                        │                 │  │  └─ Projection
+                        │                 │  │     │     Expressions: [sr_returned_date_sk, sr_store_sk], expr#CAST(0, 'decimal(7, 2)')_6:=cast(`expr#CAST(0, 'decimal(7, 2)')_2`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_7:=cast(`expr#CAST(0, 'decimal(7, 2)')_2`, 'Nullable(Float64)'), sr_net_loss_1:=cast(sr_net_loss, 'Nullable(Float64)'), sr_return_amt_1:=cast(sr_return_amt, 'Nullable(Float64)')
+                        │                 │  │     └─ Projection
+                        │                 │  │        │     Expressions: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk], expr#CAST(0, 'decimal(7, 2)')_2:=cast('0', 'Decimal(7, 2)')
+                        │                 │  │        └─ Filter
+                        │                 │  │           │     Condition: Runtime Filters: {sr_returned_date_sk}
+                        │                 │  │           └─ TableScan tpcds1000.store_returns
+                        │                 │  │                    Where: Runtime Filters: {sr_returned_date_sk}
+                        │                 │  │                    Outputs: [sr_returned_date_sk, sr_store_sk, sr_return_amt, sr_net_loss]
+                        │                 │  └─ Broadcast Exchange
+                        │                 │     └─ Projection
+                        │                 │        │     Expressions: [d_date_sk]
+                        │                 │        └─ Filter
+                        │                 │           │     Condition: (d_date >= cast(11192, 'Date32')) AND (d_date <= cast(11206, 'Date32'))
+                        │                 │           └─ TableScan tpcds1000.date_dim
+                        │                 │                    Where: (d_date >= cast(11192, 'Date32')) AND (d_date <= cast(11206, 'Date32'))
+                        │                 │                    Outputs: [d_date_sk, d_date]
+                        │                 └─ Broadcast Exchange
+                        │                    └─ TableScan tpcds1000.store
+                        │                             Outputs: [s_store_sk, s_store_id]
+                        ├─ Aggregating
+                        │  │     Group by: {expr#'catalog channel', expr#concat('catalog_page', cp_catalog_page_id)}
+                        │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)_1), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)_1), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss)_1)
+                        │  └─ Projection
+                        │     │     Expressions: [expr#sum(return_amt)_1, expr#sum(sales_price)_1], expr#'catalog channel':='catalog channel', expr#concat('catalog_page', cp_catalog_page_id):=concat('catalog_page', cp_catalog_page_id), expr#minus(profit, profit_loss)_1:=`expr#sum(profit)_1` - `expr#sum(net_loss)_1`
+                        │     └─ MergingAggregated
+                        │        └─ Repartition Exchange
+                        │           │     Partition by: {cp_catalog_page_id}
+                        │           └─ Aggregating
+                        │              │     Group by: {cp_catalog_page_id}
+                        │              │     Aggregates: expr#sum(sales_price)_1:=AggNull(sum)(cs_ext_sales_price_2), expr#sum(profit)_1:=AggNull(sum)(cs_net_profit_2), expr#sum(return_amt)_1:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_18), expr#sum(net_loss)_1:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_19)
+                        │              └─ Inner Join
+                        │                 │     Condition: cs_catalog_page_sk_1 == cp_catalog_page_sk
+                        │                 ├─ Inner Join
+                        │                 │  │     Condition: cs_sold_date_sk_1 == d_date_sk_1
+                        │                 │  │     Runtime Filters Builder: {d_date_sk_1}
+                        │                 │  ├─ Union
+                        │                 │  │  │     OutputToInputs: expr#CAST(0, 'decimal(7, 2)')_19 = [expr#CAST(0, 'decimal(7, 2)')_15,cr_net_loss_1], expr#CAST(0, 'decimal(7, 2)')_18 = [expr#CAST(0, 'decimal(7, 2)')_14,cr_return_amount_1], cs_net_profit_2 = [cs_net_profit_1,expr#CAST(0, 'decimal(7, 2)')_17], cs_sold_date_sk_1 = [cs_sold_date_sk,cr_returned_date_sk_1], cs_ext_sales_price_2 = [cs_ext_sales_price_1,expr#CAST(0, 'decimal(7, 2)')_16], cs_catalog_page_sk_1 = [cs_catalog_page_sk,cr_catalog_page_sk]
+                        │                 │  │  ├─ Projection
+                        │                 │  │  │  │     Expressions: [cs_catalog_page_sk, cs_sold_date_sk], cs_ext_sales_price_1:=cast(cs_ext_sales_price, 'Nullable(Float64)'), cs_net_profit_1:=cast(cs_net_profit, 'Float64'), expr#CAST(0, 'decimal(7, 2)')_14:=cast(`expr#CAST(0, 'decimal(7, 2)')_10`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_15:=cast(`expr#CAST(0, 'decimal(7, 2)')_10`, 'Nullable(Float64)')
+                        │                 │  │  │  └─ Projection
+                        │                 │  │  │     │     Expressions: [cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit, cs_sold_date_sk], expr#CAST(0, 'decimal(7, 2)')_10:=cast('0', 'Decimal(7, 2)')
+                        │                 │  │  │     └─ Filter
+                        │                 │  │  │        │     Condition: Runtime Filters: {cs_sold_date_sk}
+                        │                 │  │  │        └─ TableScan tpcds1000.catalog_sales
+                        │                 │  │  │                 Where: Runtime Filters: {cs_sold_date_sk}
+                        │                 │  │  │                 Outputs: [cs_sold_date_sk, cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit]
+                        │                 │  │  └─ Projection
+                        │                 │  │     │     Expressions: [cr_catalog_page_sk], cr_net_loss_1:=cast(cr_net_loss, 'Nullable(Float64)'), cr_return_amount_1:=cast(cr_return_amount, 'Nullable(Float64)'), cr_returned_date_sk_1:=cast(cr_returned_date_sk, 'Nullable(Int32)'), expr#CAST(0, 'decimal(7, 2)')_16:=cast(`expr#CAST(0, 'decimal(7, 2)')_12`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_17:=cast(`expr#CAST(0, 'decimal(7, 2)')_12`, 'Float64')
+                        │                 │  │     └─ Projection
+                        │                 │  │        │     Expressions: [cr_catalog_page_sk, cr_net_loss, cr_return_amount, cr_returned_date_sk], expr#CAST(0, 'decimal(7, 2)')_12:=cast('0', 'Decimal(7, 2)')
+                        │                 │  │        └─ Filter
+                        │                 │  │           │     Condition: Runtime Filters: {cast(cr_returned_date_sk, 'Nullable(Int32)')}
+                        │                 │  │           └─ TableScan tpcds1000.catalog_returns
+                        │                 │  │                    Where: Runtime Filters: {cast(cr_returned_date_sk, 'Nullable(Int32)')}
+                        │                 │  │                    Outputs: [cr_returned_date_sk, cr_catalog_page_sk, cr_return_amount, cr_net_loss]
+                        │                 │  └─ Broadcast Exchange
+                        │                 │     └─ Projection
+                        │                 │        │     Expressions: [d_date_sk_1]
+                        │                 │        └─ Filter
+                        │                 │           │     Condition: (d_date_1 >= cast(11192, 'Date32')) AND (d_date_1 <= cast(11206, 'Date32'))
+                        │                 │           └─ TableScan tpcds1000.date_dim
+                        │                 │                    Where: (d_date >= cast(11192, 'Date32')) AND (d_date <= cast(11206, 'Date32'))
+                        │                 │                    Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date
+                        │                 └─ Broadcast Exchange
+                        │                    └─ TableScan tpcds1000.catalog_page
+                        │                             Outputs: [cp_catalog_page_sk, cp_catalog_page_id]
+                        └─ Aggregating
+                           │     Group by: {expr#'web channel', expr#concat('web_site', web_site_id)_1}
+                           │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(sales_price)_2), expr#sum(returns):=AggNull(sum)(expr#sum(return_amt)_2), expr#sum(profit)_3:=AggNull(sum)(expr#minus(profit, profit_loss)_2)
+                           └─ Projection
+                              │     Expressions: [expr#sum(return_amt)_2, expr#sum(sales_price)_2], expr#'web channel':='web channel', expr#concat('web_site', web_site_id)_1:=cast(concat('web_site', web_site_id), 'String'), expr#minus(profit, profit_loss)_2:=`expr#sum(profit)_2` - `expr#sum(net_loss)_2`
+                              └─ MergingAggregated
+                                 └─ Repartition Exchange
+                                    │     Partition by: {web_site_id}
+                                    └─ Aggregating
+                                       │     Group by: {web_site_id}
+                                       │     Aggregates: expr#sum(sales_price)_2:=AggNull(sum)(ws_ext_sales_price_2), expr#sum(profit)_2:=AggNull(sum)(ws_net_profit_2), expr#sum(return_amt)_2:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_28), expr#sum(net_loss)_2:=AggNull(sum)(expr#CAST(0, 'decimal(7, 2)')_29)
+                                       └─ Inner Join
+                                          │     Condition: ws_web_site_sk_2 == web_site_sk
+                                          ├─ Inner Join
+                                          │  │     Condition: ws_sold_date_sk_1 == d_date_sk_2
+                                          │  │     Runtime Filters Builder: {d_date_sk_2}
+                                          │  ├─ Union
+                                          │  │  │     OutputToInputs: expr#CAST(0, 'decimal(7, 2)')_29 = [expr#CAST(0, 'decimal(7, 2)')_25,wr_net_loss_1], ws_web_site_sk_2 = [ws_web_site_sk,ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_28 = [expr#CAST(0, 'decimal(7, 2)')_24,wr_return_amt_1], ws_sold_date_sk_1 = [ws_sold_date_sk,wr_returned_date_sk], ws_net_profit_2 = [ws_net_profit_1,expr#CAST(0, 'decimal(7, 2)')_27], ws_ext_sales_price_2 = [ws_ext_sales_price_1,expr#CAST(0, 'decimal(7, 2)')_26]
+                                          │  │  ├─ Projection
+                                          │  │  │  │     Expressions: [ws_sold_date_sk, ws_web_site_sk], expr#CAST(0, 'decimal(7, 2)')_24:=cast(`expr#CAST(0, 'decimal(7, 2)')_20`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_25:=cast(`expr#CAST(0, 'decimal(7, 2)')_20`, 'Nullable(Float64)'), ws_ext_sales_price_1:=cast(ws_ext_sales_price, 'Nullable(Float64)'), ws_net_profit_1:=cast(ws_net_profit, 'Float64')
+                                          │  │  │  └─ Projection
+                                          │  │  │     │     Expressions: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_site_sk], expr#CAST(0, 'decimal(7, 2)')_20:=cast('0', 'Decimal(7, 2)')
+                                          │  │  │     └─ Filter
+                                          │  │  │        │     Condition: Runtime Filters: {ws_sold_date_sk}
+                                          │  │  │        └─ TableScan tpcds1000.web_sales
+                                          │  │  │                 Where: Runtime Filters: {ws_sold_date_sk}
+                                          │  │  │                 Outputs: [ws_sold_date_sk, ws_web_site_sk, ws_ext_sales_price, ws_net_profit]
+                                          │  │  └─ Projection
+                                          │  │     │     Expressions: [wr_returned_date_sk, ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_26:=cast(`expr#CAST(0, 'decimal(7, 2)')_22`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_27:=cast(`expr#CAST(0, 'decimal(7, 2)')_22`, 'Float64'), wr_net_loss_1:=cast(wr_net_loss, 'Nullable(Float64)'), wr_return_amt_1:=cast(wr_return_amt, 'Nullable(Float64)')
+                                          │  │     └─ Projection
+                                          │  │        │     Expressions: [wr_net_loss, wr_return_amt, wr_returned_date_sk, ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_22:=cast('0', 'Decimal(7, 2)')
+                                          │  │        └─ Right (PARALLEL_HASH) Join
+                                          │  │           │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
+                                          │  │           ├─ TableScan tpcds1000.web_sales
+                                          │  │           │        Outputs: [ws_item_sk, ws_order_number], ws_web_site_sk_1:=ws_web_site_sk
+                                          │  │           └─ Filter
+                                          │  │              │     Condition: Runtime Filters: {wr_returned_date_sk}
+                                          │  │              └─ TableScan tpcds1000.web_returns
+                                          │  │                       Where: Runtime Filters: {wr_returned_date_sk}
+                                          │  │                       Outputs: [wr_returned_date_sk, wr_item_sk, wr_order_number, wr_return_amt, wr_net_loss]
+                                          │  └─ Broadcast Exchange
+                                          │     └─ Projection
+                                          │        │     Expressions: [d_date_sk_2]
+                                          │        └─ Filter
+                                          │           │     Condition: (d_date_2 >= cast(11192, 'Date32')) AND (d_date_2 <= cast(11206, 'Date32'))
+                                          │           └─ TableScan tpcds1000.date_dim
+                                          │                    Where: (d_date >= cast(11192, 'Date32')) AND (d_date <= cast(11206, 'Date32'))
+                                          │                    Outputs: d_date_sk_2:=d_date_sk, d_date_2:=d_date
+                                          └─ Broadcast Exchange
+                                             └─ TableScan tpcds1000.web_site
+                                                      Outputs: [web_site_sk, web_site_id]
 note: Runtime Filter is applied for 6 times.

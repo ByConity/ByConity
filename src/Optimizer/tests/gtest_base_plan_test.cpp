@@ -17,9 +17,12 @@
 
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/QueryRewriter.h>
+#include <Databases/DatabaseCnch.h>
 #include <Databases/DatabaseMemory.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterShowStatsQuery.h>
@@ -29,6 +32,8 @@
 #include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
 #include <Optimizer/Dump/PlanReproducer.h>
 #include <Optimizer/PlanOptimizer.h>
+#include <Optimizer/tests/gtest_storage_mock_distirbuted.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 #include <QueryPlan/PlanPrinter.h>
@@ -39,6 +44,7 @@
 #include <Poco/Util/MapConfiguration.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
+#include <Common/tests/gtest_utils.h>
 
 #include <fstream>
 #include <iostream>
@@ -62,11 +68,16 @@ BasePlanTest::BasePlanTest(const String & database_name_, const std::unordered_m
     tryRegisterAggregateFunctions();
     tryRegisterHints();
 
+    UnitTest::initLogger("warning");
+
+    tryRegisterStorageMockDistributed();
+
     SettingsChanges setting_changes;
 
     setting_changes.emplace_back("enable_optimizer", true);
     setting_changes.emplace_back("enable_memory_catalog", true);
-    setting_changes.emplace_back("dialect_type", "ANSI"s);
+    setting_changes.emplace_back("dialect_type", "ANSI");
+    setting_changes.emplace_back("data_type_default_nullable", false);
 
     for (const auto & item : session_settings)
         setting_changes.emplace_back(item.first, item.second);
@@ -128,12 +139,30 @@ PlanSegmentTreePtr BasePlanTest::planSegment(const String & query, ContextMutabl
 
 std::string BasePlanTest::execute(const String & query, ContextMutablePtr query_context)
 {
+    ASTPtr ast = parse(query, query_context);
+    if (auto * create = ast->as<ASTCreateQuery>())
+    {
+        if (create->storage)
+        {
+            auto * storage = create->storage->as<ASTStorage>();
+            storage->engine->name = StorageMockDistributed::ENGINE_NAME;
+        }
+        ThreadStatus thread_status;
+        thread_status.attachQueryContext(query_context);
+        InterpreterCreateQuery create_interpreter(ast, query_context);
+        create_interpreter.execute();
+        return "";
+    }
+
+
     ThreadStatus thread_status;
     thread_status.attachQueryContext(query_context);
     String res;
-    ReadBufferFromString is1(query);
-    WriteBufferFromString os1(res);
-    executeQuery(is1, os1, false, query_context, {}, {}, false);
+    {
+        ReadBufferFromString is1(query);
+        WriteBufferFromString os1(res);
+        executeQuery(is1, os1, false, query_context, {}, {}, false);
+    }
     return res;
 }
 
@@ -149,25 +178,6 @@ ContextMutablePtr BasePlanTest::createQueryContext(std::unordered_map<std::strin
     for (const auto & item : settings)
         query_context->setSetting(item.first, item.second);
     return query_context;
-}
-
-std::unordered_map<String, Field> BasePlanTest::getDefaultOptimizerSettings()
-{
-    std::unordered_map<std::string, DB::Field> settings;
-#ifndef NDEBUG
-    // debug mode may time out.
-    settings.emplace("iterative_optimizer_timeout", "30000000");
-    settings.emplace("cascades_optimizer_timeout", "30000000");
-#endif
-    settings.emplace("dialect_type", "ANSI");
-    settings.emplace("enable_sharding_optimize", 1);
-    settings.emplace("enable_group_by_keys_pruning", true);
-    settings.emplace("enable_eliminate_join_by_fk", true);
-    settings.emplace("enable_eliminate_complicated_pk_fk_join", true);
-    settings.emplace("enable_eliminate_complicated_pk_fk_join_without_top_join", true);
-    settings.emplace("cost_calculator_cte_weight_for_join_build_side", 1.3);
-
-    return settings;
 }
 
 std::vector<std::string> AbstractPlanTestSuite::loadQueries()
@@ -227,7 +237,8 @@ std::string AbstractPlanTestSuite::explain(const std::string & name)
             auto query_plan = plan(sql.first, context);
 
             CardinalityEstimator::estimate(*query_plan, context);
-            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, session_context, show_statistics, true);
+            QueryPlanSettings settings{.stats = show_statistics};
+            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, context, {}, {}, settings);
         }
         else
             execute(sql.first, context);
@@ -265,11 +276,11 @@ void AbstractPlanTestSuite::createTables()
             ASTPtr ast = parse(ddl, session_context);
             if (auto * create = ast->as<ASTCreateQuery>())
             {
-                auto engine = std::make_shared<ASTFunction>();
-                engine->name = "Memory";
-                auto storage = std::make_shared<ASTStorage>();
-                storage->set(storage->engine, engine);
-                create->set(create->storage, storage);
+                if (create->storage)
+                {
+                    auto * storage = create->storage->as<ASTStorage>();
+                    storage->engine->name = StorageMockDistributed::ENGINE_NAME;
+                }
             }
 
             ThreadStatus thread_status;
@@ -343,5 +354,34 @@ int AbstractPlanTestSuite::regenerate_task_thread_size()
         }
     }
     return 8;
+}
+
+std::unordered_map<String, Field> BasePlanTest::getDefaultOptimizerSettings()
+{
+    std::unordered_map<std::string, DB::Field> settings;
+    if (auto * str = std::getenv("REGENERATE_SETTINGS"); str != nullptr && std::strlen(str) > 0)
+    {
+        ParserSetQuery parser{true};
+        auto set_query = parseQuery(parser, str, 0, 0);
+        for (const auto & setting_change : set_query->as<ASTSetQuery>()->changes)
+            settings.emplace(setting_change.name, setting_change.value);
+    }
+
+#ifndef NDEBUG
+    // debug mode may time out.
+    settings.emplace("iterative_optimizer_timeout", "30000000");
+    settings.emplace("cascades_optimizer_timeout", "30000000");
+#endif
+    settings.emplace("dialect_type", "ANSI");
+    settings.emplace("enable_sharding_optimize", 1);
+    settings.emplace("data_type_default_nullable", false);
+    settings.emplace("enable_group_by_keys_pruning", true);
+    settings.emplace("enable_eliminate_join_by_fk", true);
+    settings.emplace("enable_eliminate_complicated_pk_fk_join", true);
+    settings.emplace("enable_eliminate_complicated_pk_fk_join_without_top_join", true);
+    settings.emplace("enable_add_projection_to_pruning", true);
+    settings.emplace("statistics_return_row_count_if_empty", false);
+    settings.emplace("enable_positional_arguments", true);
+    return settings;
 }
 }

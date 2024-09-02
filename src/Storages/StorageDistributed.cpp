@@ -397,9 +397,9 @@ std::optional<QueryProcessingStage::Enum> getOptimizedQueryProcessingStage(const
     return QueryProcessingStage::Complete;
 }
 
-static bool requiresObjectColumns(const ColumnsDescription & all_columns, ASTPtr query)
+static bool requiresObjectColumns(const StorageMetadataPtr & metadata_snapshot, ASTPtr query)
 {
-    if (!hasDynamicSubcolumns(all_columns))
+    if (!metadata_snapshot->hasDynamicSubcolumns())
         return false;
 
     if (!query)
@@ -409,6 +409,7 @@ static bool requiresObjectColumns(const ColumnsDescription & all_columns, ASTPtr
     RequiredSourceColumnsVisitor(columns_context).visit(query);
 
     auto required_columns = columns_context.requiredColumns();
+    const auto & all_columns = metadata_snapshot->getColumns();
     for (const auto & required_column : required_columns)
     {
         auto name_in_storage = Nested::splitName(required_column).first;
@@ -679,7 +680,7 @@ void StorageDistributed::read(
     bool has_virtual_shard_num_column = std::find(column_names.begin(), column_names.end(), "_shard_num") != column_names.end();
     if (has_virtual_shard_num_column && !isVirtualColumn("_shard_num", storage_snapshot->metadata))
         has_virtual_shard_num_column = false;
-    
+
     const auto & snapshot_data = assert_cast<const SnapshotData &>(*storage_snapshot->data);
 
     ClusterProxy::SelectStreamFactory select_stream_factory = remote_table_function_ptr ? ClusterProxy::SelectStreamFactory(
@@ -1361,7 +1362,7 @@ StorageSnapshotPtr StorageDistributed::getStorageSnapshotForQuery(
     /// If query doesn't use columns of type Object, don't deduce
     /// concrete types for them, because it required extra round trip.
     auto snapshot_data = std::make_unique<SnapshotData>();
-    if (!requiresObjectColumns(metadata_snapshot->getColumns(), query))
+    if (!requiresObjectColumns(metadata_snapshot, query))
         return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, ColumnsDescription{}, std::move(snapshot_data));
 
     snapshot_data->objects_by_shard = getExtendedObjectsOfRemoteTables(
@@ -1377,6 +1378,15 @@ StorageSnapshotPtr StorageDistributed::getStorageSnapshotForQuery(
         [](const auto & shard_num_and_columns) -> const auto & { return shard_num_and_columns.second; });
 
     return std::make_shared<StorageSnapshot>(*this, metadata_snapshot, object_columns, std::move(snapshot_data));
+}
+
+ASTPtr
+StorageDistributed::applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr stats) const
+{
+    auto remote_db = getRemoteDatabaseName();
+    auto remote_table_name = getRemoteTableName();
+    auto local_storage = DatabaseCatalog::instance().getTable(StorageID{remote_db, remote_table}, query_context);
+    return local_storage->applyFilter(query_filter, query_info, query_context, stats);
 }
 
 void registerStorageDistributed(StorageFactory & factory)

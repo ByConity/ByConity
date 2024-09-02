@@ -368,6 +368,10 @@ public:
         return std::make_shared<DataTypeUInt64>();
     }
 
+    bool mayAggStateVeryLarge() const override {
+        return true;
+    }
+
     bool allocatesMemoryInArena() const override { return false; }
 
     /// ALWAYS_INLINE is required to have better code layout for uniqHLL12 function
@@ -464,6 +468,10 @@ public:
     DataTypePtr getReturnType() const override
     {
         return std::make_shared<DataTypeUInt64>();
+    }
+
+    bool mayAggStateVeryLarge() const override {
+        return true;
     }
 
     bool allocatesMemoryInArena() const override { return false; }

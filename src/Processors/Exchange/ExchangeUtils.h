@@ -37,6 +37,8 @@ namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
+    extern const int BRPC_EXCEPTION;
+    extern const int TIMEOUT_EXCEEDED;
 }
 class ExchangeUtils
 {
@@ -63,12 +65,28 @@ public:
     static inline BroadcastStatus sendAndCheckReturnStatus(IBroadcastSender & sender, Chunk chunk)
     {
         BroadcastStatus status = sender.send(std::move(chunk));
-        if (status.is_modifer && status.code > 0)
+        if (status.is_modified_by_operator && status.code > 0)
         {
-            throw Exception(
-                sender.getName() + " for query: " + CurrentThread::getQueryId().toString() + " fail to send data: " + status.message
-                    + " code: " + std::to_string(status.code),
-                ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+            if(status.code == BroadcastStatusCode::SEND_TIMEOUT)
+            {
+                throw Exception(
+                    ErrorCodes::TIMEOUT_EXCEEDED,
+                    "Query {} send data timeout, maybe you can increase settings max_execution_time. Debug info: sender {}, msg : {}",
+                    CurrentThread::getQueryId(),
+                    sender.getName(),
+                    status.message);
+
+            }
+            else 
+            {
+                throw Exception(
+                    ErrorCodes::BRPC_EXCEPTION,
+                    "Query {} cancel sending data: sender {}, code: {}, msg : {}",
+                    CurrentThread::getQueryId(),
+                    sender.getName(),
+                    status.code,
+                    status.message);
+            }
         }
         return status;
     }
@@ -94,13 +112,6 @@ public:
             merged_sender->merge(std::move(*senders_to_merge[i]));
         }
         senders.emplace_back(std::move(merged_sender));
-    }
-
-    static inline void transferThreadMemoryToGlobal(Int64 bytes)
-    {
-        CurrentMemoryTracker::free(bytes);
-        if (DB::MainThreadStatus::get())
-            total_memory_tracker.alloc(bytes);
     }
 
     static inline void transferGlobalMemoryToThread(Int64 bytes)

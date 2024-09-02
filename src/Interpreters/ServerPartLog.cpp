@@ -61,6 +61,9 @@ NamesAndTypesList ServerPartLogElement::getNamesAndTypes()
         {"end_ts", std::make_shared<DataTypeUInt64>()},
         {"source_part_names", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
 
+        {"duration_ms", std::make_shared<DataTypeUInt64>()},
+        {"peak_memory_usage", std::make_shared<DataTypeUInt64>()},
+
         {"error", std::make_shared<DataTypeUInt8>()},
         {"exception", std::make_shared<DataTypeString>()},
     };
@@ -102,6 +105,9 @@ void ServerPartLogElement::appendToBlock(MutableColumns & columns) const
         source_part_names_array.push_back(name);
     columns[i++]->insert(source_part_names_array);
 
+    columns[i++]->insert(duration_ms);
+    columns[i++]->insert(peak_memory_usage);
+
     columns[i++]->insert(error);
     columns[i++]->insert(exception);
 }
@@ -119,7 +125,9 @@ bool ServerPartLog::addNewParts(
     const MutableMergeTreeDataPartsCNCHVector & staged_parts,
     UInt64 txn_id,
     UInt8 error,
-    const Strings & source_part_names)
+    const Strings & source_part_names,
+    UInt64 duration_ns,
+    UInt64 peak_memory_usage)
 {
     std::shared_ptr<ServerPartLog> server_part_log = local_context->getServerPartLog();
     if (!server_part_log)
@@ -148,6 +156,10 @@ bool ServerPartLog::addNewParts(
         elem.commit_ts = part->get_commit_time();
         elem.end_ts = 0;
         elem.source_part_names = source_part_names;
+
+        elem.duration_ms = duration_ns / 1000000;
+        elem.peak_memory_usage = peak_memory_usage;
+
         elem.error = error;
 
         server_part_log->add(elem);

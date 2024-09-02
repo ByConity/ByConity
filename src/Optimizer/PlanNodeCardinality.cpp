@@ -43,7 +43,8 @@ public:
     {
         auto source_range = VisitorUtil::accept(node.getChildren()[0], *this, context);
         const auto * step = dynamic_cast<const LimitStep *>(node.getStep().get());
-        return applyLimit(applyOffset(source_range, step->getOffset()), step->getLimit());
+        return step->hasPreparedParam() ? source_range
+                                        : applyLimit(applyOffset(source_range, step->getOffsetValue()), step->getLimitValue());
     }
 
     Range visitProjectionNode(ProjectionNode & node, Void & context) override

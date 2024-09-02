@@ -23,6 +23,7 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnLowCardinality.h>
 
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -77,6 +78,10 @@ DataTypePtr recursiveRemoveLowCardinality(const DataTypePtr & type)
     if (const auto * low_cardinality_type = typeid_cast<const DataTypeFullLowCardinality *>(type.get()))
         return low_cardinality_type->getDictionaryType();
 
+    /// there could be Nullable(Array(LowCardinality)) under mysql dialect
+    if (const auto * null_type = typeid_cast<const DataTypeNullable *>(type.get()))
+        return std::make_shared<DataTypeNullable>(recursiveRemoveLowCardinality(null_type->getNestedType()));
+
     return type;
 }
 
@@ -125,6 +130,13 @@ ColumnPtr recursiveRemoveLowCardinality(const ColumnPtr & column)
 
     if (const auto * column_low_cardinality = typeid_cast<const ColumnLowCardinality *>(column.get()))
         return column_low_cardinality->convertToFullColumn();
+
+    /// there could be nullable<array<lowcardinality>> under mysql dialect
+    if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(column.get()))
+    {
+        auto nested_full_col = recursiveRemoveLowCardinality(column_nullable->getNestedColumnPtr());
+        return ColumnNullable::create(nested_full_col, column_nullable->getNullMapColumnPtr());
+    }
 
     return column;
 }

@@ -157,6 +157,7 @@ void EmitMetric(const MetricType type, const std::string & name, double value, c
         case Rate:
             EmitRateCounter(name, value, tag);
             break;
+        // Store type will show the the last value of 30s sample time
         case Store:
             EmitStore(name, value, tag);
             break;

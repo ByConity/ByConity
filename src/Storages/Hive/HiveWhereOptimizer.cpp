@@ -34,10 +34,9 @@ namespace ErrorCodes
 }
 
 HiveWhereOptimizer::HiveWhereOptimizer(
-    const StorageMetadataPtr & metadata_snapshot_, const SelectQueryInfo & query_info_)
+    const StorageMetadataPtr & metadata_snapshot_, const ASTPtr & filter_conditions)
 {
-    ASTSelectQuery & select = query_info_.query->as<ASTSelectQuery &>();
-    if (!select.where())
+    if (!filter_conditions)
         return;
 
     if (metadata_snapshot_->hasPartitionKey())
@@ -48,12 +47,12 @@ HiveWhereOptimizer::HiveWhereOptimizer(
 
     if (metadata_snapshot_->hasClusterByKey())
     {
-        const auto & cluster_key_cols = metadata_snapshot_->getClusterByKey().column_names;
+        const auto & cluster_key_cols = metadata_snapshot_->getColumnsRequiredForClusterByKey();
         cluster_key_names = NameSet(cluster_key_cols.begin(), cluster_key_cols.end());
     }
 
     Data data;
-    extractKeyConditions(data, select.where());
+    extractKeyConditions(data, filter_conditions);
 
     partition_key_conds = reconstruct(data.partiton_key_conditions);
     cluster_key_conds = reconstruct(data.cluster_key_conditions);

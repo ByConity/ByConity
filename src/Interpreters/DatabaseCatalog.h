@@ -26,6 +26,7 @@
 #include <Interpreters/StorageID.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
+#include <Databases/TablesDependencyGraph.h>
 
 #include <boost/noncopyable.hpp>
 #include <Poco/Logger.h>
@@ -59,9 +60,6 @@ using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 /// Table -> set of table-views that make SELECT from it.
 using ViewDependencies = std::map<StorageID, std::set<StorageID>>;
 using Dependencies = std::vector<StorageID>;
-
-using MemoryTableDependencies = std::map<StorageID, std::set<StorageID>>;
-using MemoryTableInfo = std::pair<StoragePtr, bool>;
 
 /// Allows executing DDL query only in one thread.
 /// Puts an element into the map, locks tables's mutex, counts how much threads run parallel query on the table,
@@ -152,6 +150,8 @@ public:
     static constexpr const char * SYSTEM_DATABASE = "system";
     static constexpr const char * INFORMATION_SCHEMA = "information_schema";
     static constexpr const char * INFORMATION_SCHEMA_UPPERCASE = "INFORMATION_SCHEMA";
+    static constexpr const char * MYSQL = "mysql";
+    static constexpr const char * MYSQL_UPPERCASE = "MYSQL";
 
     static DatabaseCatalog & init(ContextMutablePtr global_context_);
     static DatabaseCatalog & instance();
@@ -198,11 +198,10 @@ public:
                                   ContextPtr context,
                                   std::optional<Exception> * exception = nullptr) const;
 
+    /// Materialized view table dependency
     void addDependency(const StorageID & from, const StorageID & where);
     void removeDependency(const StorageID & from, const StorageID & where);
     Dependencies getDependencies(const StorageID & from) const;
-
-    /// For Materialized and Live View
     void updateDependency(const StorageID & old_from, const StorageID & old_where,const StorageID & new_from, const StorageID & new_where);
 
     /// If table has UUID, addUUIDMapping(...) must be called when table attached to some database
@@ -230,6 +229,9 @@ public:
     void enqueueDroppedTableCleanup(StorageID table_id, StoragePtr table, String dropped_metadata_path, bool ignore_delay = false);
 
     void waitTableFinallyDropped(const UUID & uuid);
+
+    // check if the database if vidible for all tenants by default.
+    static bool isDefaultVisibleSystemDatabase(const String & database_name);
 
 private:
     // The global instance of database catalog. unique_ptr is to allow
@@ -289,7 +291,8 @@ private:
 
     mutable std::mutex databases_mutex;
 
-    ViewDependencies view_dependencies;
+    /// View dependencies between a source table and its view.
+    TablesDependencyGraph view_dependencies TSA_GUARDED_BY(databases_mutex);
 
     Databases databases;
     UUIDToDatabaseMap db_uuid_map;

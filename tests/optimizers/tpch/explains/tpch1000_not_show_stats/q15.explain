@@ -1,13 +1,13 @@
 Projection
-│     Expressions: [s_address, s_name, s_phone, s_suppkey], total_revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1`
+│     Expressions: [s_address, s_name, s_phone, s_suppkey], total_revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2`
 └─ Sorting
    │     Order by: {s_suppkey ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
          │     Order by: {s_suppkey ASC NULLS LAST}
          └─ Inner Join
-            │     Condition: s_suppkey == l_suppkey_1
-            │     Runtime Filters Builder: {l_suppkey_1}
+            │     Condition: s_suppkey == l_suppkey_2
+            │     Runtime Filters Builder: {l_suppkey_2}
             ├─ Filter
             │  │     Condition: Runtime Filters: {s_suppkey}
             │  └─ TableScan tpch1000.supplier
@@ -15,33 +15,36 @@ Projection
             │           Outputs: [s_suppkey, s_name, s_address, s_phone]
             └─ Broadcast Exchange
                └─ Inner Join
-                  │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1 == expr#max(total_revenue)
-                  │     Runtime Filters Builder: {expr#max(total_revenue)}
+                  │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2 == expr#max(total_revenue)_1
+                  │     Runtime Filters Builder: {expr#max(total_revenue)_1}
                   ├─ Filter
-                  │  │     Condition: Runtime Filters: {`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1`}
-                  │  └─ Buffer
-                  │     └─ CTERef[0]
+                  │  │     Condition: Runtime Filters: {`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2`}
+                  │  └─ Local Exchange
+                  │     └─ Buffer
+                  │        └─ CTERef[0]
                   └─ Broadcast Exchange
-                     └─ MergingAggregated
-                        └─ Gather Exchange
-                           └─ Aggregating
-                              │     Group by: {}
-                              │     Aggregates: expr#max(total_revenue):=AggNull(max)(expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2)
-                              └─ Buffer
-                                 └─ CTERef[0]
+                     └─ Projection
+                        │     Expressions: expr#max(total_revenue)_1:=cast(`expr#max(total_revenue)`, 'Nullable(Decimal(38, 4))')
+                        └─ MergingAggregated
+                           └─ Gather Exchange
+                              └─ Aggregating
+                                 │     Group by: {}
+                                 │     Aggregates: expr#max(total_revenue):=AggNull(max)(expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3)
+                                 └─ Buffer
+                                    └─ CTERef[0]
 CTEDef [0]
    MergingAggregated
    └─ Repartition Exchange
-      │     Partition by: {l_suppkey}
+      │     Partition by: {l_suppkey_1}
       └─ Aggregating
-         │     Group by: {l_suppkey}
-         │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
+         │     Group by: {l_suppkey_1}
+         │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_1)
          └─ Projection
-            │     Expressions: [l_suppkey], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
+            │     Expressions: [l_suppkey_1], expr#multiply(l_extendedprice, minus(1, l_discount))_1:=l_extendedprice_1 * (1 - l_discount_1)
             └─ Filter
-               │     Condition: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
+               │     Condition: (l_shipdate_1 >= cast(9496, 'Date')) AND (l_shipdate_1 < cast(9587, 'Date'))
                └─ TableScan tpch1000.lineitem
                         Where: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
-                        Outputs: [l_suppkey, l_extendedprice, l_discount, l_shipdate]
+                        Outputs: l_suppkey_1:=l_suppkey, l_extendedprice_1:=l_extendedprice, l_discount_1:=l_discount, l_shipdate_1:=l_shipdate
 note: Runtime Filter is applied for 2 times.
 note: CTE(Common Table Expression) is applied for 2 times.

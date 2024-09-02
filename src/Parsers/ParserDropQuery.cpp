@@ -2,8 +2,11 @@
 #include <Parsers/ASTDropQuery.h>
 
 #include <Parsers/CommonParsers.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/IAST_fwd.h>
 #include <Parsers/ParserDropQuery.h>
-#include "Parsers/IAST_fwd.h"
+#include <Parsers/ParserPartition.h>
 
 
 namespace DB
@@ -12,7 +15,7 @@ namespace DB
 namespace
 {
 
-bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, const ASTDropQuery::Kind kind)
+bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, const ASTDropQuery::Kind kind, const ParserSettingsImpl & dt)
 {
     ParserKeyword s_temporary("TEMPORARY");
     ParserKeyword s_table("TABLE");
@@ -27,8 +30,11 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_permanently("PERMANENTLY");
     ParserKeyword s_no_delay("NO DELAY");
     ParserKeyword s_sync("SYNC");
-
     ParserKeyword s_schema("SCHEMA");
+
+    ParserKeyword s_partition_where("PARTITION WHERE");
+    ParserExpression parser_partition_predicate(dt);
+    ParserKeyword s_partition("PARTITION");
 
     ASTPtr catalog;
     ASTPtr database;
@@ -109,6 +115,18 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     auto query = std::make_shared<ASTDropQuery>();
     node = query;
 
+    if (s_partition_where.ignore(pos, expected))
+    {
+        if (!parser_partition_predicate.parse(pos, query->partition_predicate, expected))
+            return false;
+    }
+    else if (s_partition.ignore(pos, expected))
+    {
+        if (!ParserList{std::make_unique<ParserLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false}.parse(
+                pos, query->partition, expected))
+            return false;
+    }
+
     query->kind = kind;
     query->if_exists = if_exists;
     query->temporary = temporary;
@@ -136,11 +154,11 @@ bool ParserDropQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_truncate("TRUNCATE");
 
     if (s_drop.ignore(pos, expected))
-        return parseDropQuery(pos, node, expected, ASTDropQuery::Kind::Drop);
+        return parseDropQuery(pos, node, expected, ASTDropQuery::Kind::Drop, dt);
     else if (s_detach.ignore(pos, expected))
-        return parseDropQuery(pos, node, expected, ASTDropQuery::Kind::Detach);
+        return parseDropQuery(pos, node, expected, ASTDropQuery::Kind::Detach, dt);
     else if (s_truncate.ignore(pos, expected))
-        return parseDropQuery(pos, node, expected, ASTDropQuery::Kind::Truncate);
+        return parseDropQuery(pos, node, expected, ASTDropQuery::Kind::Truncate, dt);
     else
         return false;
 }

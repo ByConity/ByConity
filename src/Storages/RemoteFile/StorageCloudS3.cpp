@@ -21,11 +21,14 @@
 #    include <Storages/StorageFactory.h>
 #    include <aws/core/auth/AWSCredentials.h>
 #    include <aws/s3/S3Client.h>
-#    include <aws/s3/model/CopyObjectRequest.h>
-#    include <aws/s3/model/DeleteObjectsRequest.h>
 #    include <aws/s3/model/ListObjectsV2Request.h>
 #    include <re2/stringpiece.h>
 #    include <Common/Exception.h>
+
+namespace ProfileEvents
+{
+    extern const Event S3ListObjects;
+}
 
 namespace DB
 {
@@ -74,6 +77,7 @@ bool StorageCloudS3::FileBufferClient::exist(const DB::String & key)
     request.SetPrefix(key);
     while (!is_finished)
     {
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
         outcome = config.client->ListObjectsV2(request);
         if (!outcome.IsSuccess())
             throw Exception(

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Access/ContextAccess.h>
 #include <Storages/System/StorageSystemCnchColumns.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
@@ -68,7 +69,7 @@ static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromW
         {
             tmp_map["database"] = item["database"].get<String>();
         }
-        
+
         if (item.count("table") && item["table"].getType() == Field::Types::String)
         {
             tmp_map["table"] = item["table"].get<String>();
@@ -83,24 +84,24 @@ static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromW
     return res;
 }
 
-static bool getDBTablesFromPredicates(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+static bool getDBTablesFromPredicates(const std::optional<std::vector<std::map<String, String>>> & predicates,
         std::vector<std::pair<String, String>> & db_table_pairs)
 {
     if (!predicates)
         return false;
-    
+
     for (const auto & item : predicates.value())
     {
         if (!item.count("database") || !item.count("table"))
             return false;
-        
+
         db_table_pairs.push_back(std::make_pair(item.at("database"), item.at("table")));
     }
 
     return true;
 }
 
-static bool matchAnyPredicate(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+static bool matchAnyPredicate(const std::optional<std::vector<std::map<String, String>>> & predicates,
         const Protos::DataModelTable & table_model)
 {
     if (!predicates)
@@ -127,30 +128,73 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
         Stopwatch stop_watch;
         stop_watch.start();
 
+        const String & tenant_id = context->getTenantId();
         Catalog::Catalog::DataModelTables table_models;
 
         std::vector<std::pair<String, String>> db_table_pairs;
         auto predicates = parsePredicatesFromWhere(query_info, context);
         bool get_db_tables_ok = getDBTablesFromPredicates(predicates, db_table_pairs);
         if (get_db_tables_ok && (db_table_pairs.size() <= GET_ALL_TABLES_LIMIT))
-        {        
+        {
+            if (!tenant_id.empty())
+            {
+                for (auto & pair : db_table_pairs)
+                    pair.first = formatTenantDatabaseNameWithTenantId(pair.first, tenant_id);
+            }
+
             auto table_ids = cnch_catalog->getTableIDsByNames(db_table_pairs);
             if (table_ids)
                 table_models = cnch_catalog->getTablesByIDs(*table_ids);
         }
         else
+        {
             table_models = cnch_catalog->getAllTables();
+        }
+
+        std::vector<String> full_db_name;
+        for (auto it = table_models.begin(); it != table_models.end();)
+        {
+            String non_stripped_db_name = it->database();
+            if (!tenant_id.empty())
+            {
+                if (startsWith(non_stripped_db_name, tenant_id + "."))
+                {
+                    it->set_database(getOriginalDatabaseName(non_stripped_db_name, tenant_id));
+                }
+                else
+                {
+                    // Will skip database of other tenants and default user (without tenantid prefix)
+                    if (non_stripped_db_name.find(".") != std::string::npos)
+                    {
+                        it = table_models.erase(it);
+                        continue;
+                    }
+
+                    if (!DatabaseCatalog::isDefaultVisibleSystemDatabase(non_stripped_db_name))
+                    {
+                        it = table_models.erase(it);
+                        continue;
+                    }
+                }
+            }
+            full_db_name.push_back(non_stripped_db_name);
+            it++;
+        }
 
         UInt64 time_pass_ms = stop_watch.elapsedMilliseconds();
         if (time_pass_ms > 2000)
             LOG_INFO(&Poco::Logger::get("StorageSystemCnchColumns"),
                 "cnch_catalog->getAllTables() took {} ms", time_pass_ms);
 
+        const auto access = context->getAccess();
+        const bool check_access_for_tables = !access->isGranted(AccessType::SHOW_COLUMNS);
+
         ContextMutablePtr mutable_context = Context::createCopy(context);
         for (size_t i = 0, size = table_models.size(); i != size; ++i)
         {
             if (!Status::isDeleted(table_models[i].status()) && matchAnyPredicate(predicates, table_models[i]))
             {
+
                 String db = table_models[i].database();
                 String table_name = table_models[i].name();
                 auto table_uuid = RPCHelpers::createUUID(table_models[i].uuid());
@@ -165,7 +209,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
 
                 {
                     StoragePtr storage
-                        = Catalog::CatalogFactory::getTableByDefinition(mutable_context, db, table_name, create_query);
+                        = Catalog::CatalogFactory::getTableByDefinition(mutable_context, formatTenantDatabaseNameWithTenantId(db, tenant_id), table_name, create_query);
 
                     StorageMetadataPtr metadata_snapshot = storage->getInMemoryMetadataPtr();
 
@@ -178,8 +222,13 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
                     column_sizes = storage->getColumnSizes();
                 }
 
+                bool check_access_for_columns = check_access_for_tables && !access->isGranted(AccessType::SHOW_COLUMNS, full_db_name[i], table_models[i].name());
+
                 for (const auto & column : columns)
                 {
+                    if (check_access_for_columns && !access->isGranted(AccessType::SHOW_COLUMNS, full_db_name[i], table_models[i].name(), column.name))
+                        continue;
+
                     size_t res_index = 0;
                     res_columns[res_index++]->insert(db);
                     res_columns[res_index++]->insert(table_name);

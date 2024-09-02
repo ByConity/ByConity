@@ -15,12 +15,14 @@ namespace ErrorCodes
 
 ZlibDeflatingWriteBuffer::ZlibDeflatingWriteBuffer(
         std::unique_ptr<WriteBuffer> out_,
-        CompressionMethod compression_method,
-        int compression_level,
+        CompressionMethod compression_method_,
+        int compression_level_,
         size_t buf_size,
         char * existing_memory,
         size_t alignment)
     : BufferWithOwnMemory<WriteBuffer>(buf_size, existing_memory, alignment)
+    , compression_method(compression_method_)
+    , compression_level(compression_level_)
     , out(std::move(out_))
 {
     zstr.zalloc = nullptr;
@@ -51,10 +53,9 @@ ZlibDeflatingWriteBuffer::~ZlibDeflatingWriteBuffer()
     /// FIXME move final flush into the caller
     MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
 
-    finish();
-
     try
     {
+        finish();
         int rc = deflateEnd(&zstr);
         if (rc != Z_OK)
             throw Exception(std::string("deflateEnd failed: ") + zError(rc), ErrorCodes::ZLIB_DEFLATE_FAILED);

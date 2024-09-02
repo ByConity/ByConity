@@ -22,6 +22,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Core/UUID.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
@@ -40,6 +41,7 @@ NamesAndTypesList StorageSystemCnchDedupWorkers::getNamesAndTypes()
         {"table", std::make_shared<DataTypeString>()},
         {"uuid", std::make_shared<DataTypeUUID>()},
         {"is_active", std::make_shared<DataTypeUInt64>()},
+        {"index", std::make_shared<DataTypeUInt64>()},
 
         {"create_time", std::make_shared<DataTypeDateTime>()},
         {"total_schedule_cnt", std::make_shared<DataTypeUInt64>()},
@@ -57,6 +59,8 @@ NamesAndTypesList StorageSystemCnchDedupWorkers::getNamesAndTypes()
         {"server_tcp_address", std::make_shared<DataTypeString>()},
         {"worker_rpc_address", std::make_shared<DataTypeString>()},
         {"worker_tcp_address", std::make_shared<DataTypeString>()},
+
+        {"dedup_tasks_progress", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"last_exception_time", std::make_shared<DataTypeDateTime>()},
         {"last_exception", std::make_shared<DataTypeString>()},
     };
@@ -78,38 +82,49 @@ void StorageSystemCnchDedupWorkers::fillDataOnServer(
     {
         auto uuid = (*needed_uuids)[i].safeGet<const UInt128 &>();
         auto thread = uuid_to_threads.at(UUID(uuid));
-        DedupWorkerStatus status;
+        std::vector<DedupWorkerStatus> status_list;
         if (auto dedup_worker_manager = dynamic_cast<DedupWorkerManager *>(thread.get()))
-            status = dedup_worker_manager->getDedupWorkerStatus();
+            status_list = dedup_worker_manager->getDedupWorkerStatus();
 
         auto storage = tables.at(UUID(uuid));
         auto storage_id = storage->getStorageID();
 
-        size_t col_num = 0;
-        res_columns[col_num++]->insert(storage_id.database_name);
-        res_columns[col_num++]->insert(storage_id.table_name);
-        res_columns[col_num++]->insert(storage_id.uuid);
-        res_columns[col_num++]->insert(status.is_active);
+        auto index = 0;
+        for (auto & status : status_list)
+        {
+            size_t col_num = 0;
+            res_columns[col_num++]->insert(storage_id.database_name);
+            res_columns[col_num++]->insert(storage_id.table_name);
+            res_columns[col_num++]->insert(storage_id.uuid);
+            res_columns[col_num++]->insert(status.is_active);
+            res_columns[col_num++]->insert(index++);
 
-        res_columns[col_num++]->insert(status.create_time);
-        res_columns[col_num++]->insert(status.total_schedule_cnt);
-        res_columns[col_num++]->insert(status.total_dedup_cnt);
-        res_columns[col_num++]->insert(status.last_schedule_wait_ms);
-        res_columns[col_num++]->insert(status.last_task_total_cost_ms);
-        res_columns[col_num++]->insert(status.last_task_dedup_cost_ms);
-        res_columns[col_num++]->insert(status.last_task_publish_cost_ms);
-        res_columns[col_num++]->insert(status.last_task_staged_part_cnt);
-        res_columns[col_num++]->insert(status.last_task_visible_part_cnt);
-        res_columns[col_num++]->insert(status.last_task_staged_part_total_rows);
-        res_columns[col_num++]->insert(status.last_task_visible_part_total_rows);
+            res_columns[col_num++]->insert(status.create_time);
+            res_columns[col_num++]->insert(status.total_schedule_cnt);
+            res_columns[col_num++]->insert(status.total_dedup_cnt);
+            res_columns[col_num++]->insert(status.last_schedule_wait_ms);
+            res_columns[col_num++]->insert(status.last_task_total_cost_ms);
+            res_columns[col_num++]->insert(status.last_task_dedup_cost_ms);
+            res_columns[col_num++]->insert(status.last_task_publish_cost_ms);
+            res_columns[col_num++]->insert(status.last_task_staged_part_cnt);
+            res_columns[col_num++]->insert(status.last_task_visible_part_cnt);
+            res_columns[col_num++]->insert(status.last_task_staged_part_total_rows);
+            res_columns[col_num++]->insert(status.last_task_visible_part_total_rows);
 
-        auto server_host_ports = context->getHostWithPorts();
-        res_columns[col_num++]->insert(server_host_ports.getRPCAddress());
-        res_columns[col_num++]->insert(server_host_ports.getTCPAddress());
-        res_columns[col_num++]->insert(status.worker_rpc_address);
-        res_columns[col_num++]->insert(status.worker_tcp_address);
-        res_columns[col_num++]->insert(status.last_exception_time);
-        res_columns[col_num++]->insert(status.last_exception);
+            auto server_host_ports = context->getHostWithPorts();
+            res_columns[col_num++]->insert(server_host_ports.getRPCAddress());
+            res_columns[col_num++]->insert(server_host_ports.getTCPAddress());
+            res_columns[col_num++]->insert(status.worker_rpc_address);
+            res_columns[col_num++]->insert(status.worker_tcp_address);
+
+            Array dedup_tasks_progress;
+            dedup_tasks_progress.reserve(status.dedup_tasks_progress.size());
+            for (const String & task_progress : status.dedup_tasks_progress)
+                dedup_tasks_progress.emplace_back(task_progress);
+            res_columns[col_num++]->insert(dedup_tasks_progress);
+            res_columns[col_num++]->insert(status.last_exception_time);
+            res_columns[col_num++]->insert(status.last_exception);
+        }
     }
 }
 
@@ -132,6 +147,8 @@ void StorageSystemCnchDedupWorkers::fillDataOnWorker(
         res_columns[col_num++]->insert(storage_id.table_name);
         res_columns[col_num++]->insert(storage_id.uuid);
         res_columns[col_num++]->insert(worker->isActive());
+        /// For worker, index is always 0
+        res_columns[col_num++]->insert(0);
 
         auto status = worker->getDedupWorkerStatus();
         res_columns[col_num++]->insert(status.create_time);
@@ -154,6 +171,11 @@ void StorageSystemCnchDedupWorkers::fillDataOnWorker(
         res_columns[col_num++]->insert(worker_host_ports.getRPCAddress());
         res_columns[col_num++]->insert(worker_host_ports.getTCPAddress());
 
+        Array dedup_tasks_progress;
+        dedup_tasks_progress.reserve(status.dedup_tasks_progress.size());
+        for (const String & task_progress : status.dedup_tasks_progress)
+            dedup_tasks_progress.emplace_back(task_progress);
+        res_columns[col_num++]->insert(dedup_tasks_progress);
         res_columns[col_num++]->insert(status.last_exception);
         res_columns[col_num++]->insert(status.last_exception_time);
     }

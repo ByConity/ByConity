@@ -20,6 +20,7 @@
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Common/HostWithPorts.h>
 #include <Catalog/StringHelper.h>
+#include <Catalog/LargeKVHandler.h>
 #include <Protos/cnch_common.pb.h>
 #include <Protos/data_models.pb.h>
 #include <Common/filesystemHelpers.h>
@@ -138,8 +139,12 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
 {
     if (key.starts_with("TB_"))
         std::cout << formatDataModel<DB::Protos::DataModelTable>(metadata) << std::endl;
+    else if (key.starts_with("TP_"))
+        std::cout << formatDataModel<DB::Protos::PartitionMeta>(metadata) << std::endl;
     else if (key.starts_with("PT_"))
         std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
+    else if (key.starts_with("DLB_") || key.starts_with("DDLB_"))
+        std::cout << formatDataModel<DB::Protos::DataModelDeleteBitmap>(metadata) << std::endl;
     else if (key.starts_with("TR_"))
         std::cout << formatDataModel<DB::Protos::DataModelTransactionRecord>(metadata) << std::endl;
     else if (key.ends_with("-election"))
@@ -150,6 +155,19 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
         std::cout << formatDataModel<DB::Protos::PartitionPartsMetricsSnapshot>(metadata) << std::endl;
     else if (key.starts_with("TTS_"))
         std::cout << formatDataModel<DB::Protos::TableTrashItemsMetricsSnapshot>(metadata) << std::endl;
+    else if (key.starts_with("GCTRASH_"))
+        std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
+    else if (key.starts_with("MFST_"))
+    {
+        if (key.find("PT_") != std::string::npos)
+            std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
+        else if (key.find("DLB_") != std::string::npos)
+            std::cout << formatDataModel<DB::Protos::DataModelDeleteBitmap>(metadata) << std::endl;
+        else 
+            std::cout << metadata << std::endl;
+    }
+    else if (key.starts_with("MFSTS_"))
+        std::cout << formatDataModel<DB::Protos::ManifestListModel>(metadata) << std::endl;
     else
         std::cout << metadata << std::endl;
 };
@@ -312,7 +330,7 @@ private:
     void initializeMetastore()
     {
         MetastoreConfig catalog_conf(config(), CATALOG_SERVICE_CONFIGURE);
-        const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+        const char * consul_http_host = getConsulIPFromEnv();
         const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
         if (consul_http_host != nullptr && consul_http_port != nullptr)
             brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
@@ -345,6 +363,14 @@ private:
                 {
                     std::string value;
                     metastore_ptr->get(full_key, value);
+                    // try parse large KV before really dump metadata.
+                    DB::Protos::DataModelLargeKVMeta large_kv_model;
+                    if (Catalog::tryParseLargeKVMetaModel(value, large_kv_model))
+                    {
+                        std::cout << "Large KV base value: \n" << large_kv_model.DebugString() << std::endl;
+                        tryGetLargeValue(metastore_ptr, name_space, full_key, value);
+                        std::cout << "Original value : " << std::endl;
+                    }
                     dumpMetadata(cmd.key, value);
                     break;
                 }

@@ -1,53 +1,32 @@
 #pragma once
 
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
-#include "Interpreters/DistributedStages/AddressInfo.h"
 
 namespace DB
 {
 
-static void reportPlanSegmentStatus(const AddressInfo & coordinator_address, const RuntimeSegmentsStatus & status) noexcept
-{
-    static auto * logger = &Poco::Logger::get("PlanSegmentExecutor");
-    try
-    {
-        auto address = extractExchangeHostPort(coordinator_address);
+void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) noexcept;
 
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
-        Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
-        brpc::Controller cntl;
-        Protos::SendPlanSegmentStatusRequest request;
-        Protos::SendPlanSegmentStatusResponse response;
-        request.set_query_id(status.query_id);
-        request.set_segment_id(status.segment_id);
-        request.set_parallel_index(status.parallel_index);
-        request.set_is_succeed(status.is_succeed);
-        request.set_is_canceled(status.is_cancelled);
-        status.metrics.setProtos(*request.mutable_metrics());
-        request.set_code(status.code);
-        request.set_message(status.message);
+PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
+    ContextPtr query_context,
+    const AddressInfo & execution_address,
+    int exception_code,
+    const String & exception_message,
+    Progress final_progress = {},
+    SenderMetrics sender_metrics = {},
+    PlanSegmentOutputs plan_segment_outputs = {});
 
-        manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
-        rpc_client->assertController(cntl);
-        LOG_TRACE(
-            logger,
-            "PlanSegment-{} send status to coordinator successfully, query id-{} cpu_micros-{} is_succeed:{} is_cancelled:{} code:{}",
-            request.segment_id(),
-            request.query_id(),
-            status.metrics.cpu_micros,
-            status.is_succeed,
-            status.is_cancelled,
-            status.code);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
-}
-
+PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
+    ContextPtr query_context,
+    const AddressInfo & execution_address,
+    Progress & final_progress,
+    SenderMetrics & sender_metrics,
+    PlanSegmentOutputs & plan_segment_outputs);
 }

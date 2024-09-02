@@ -27,6 +27,8 @@
 #include <Parsers/MySQL/ASTDeclareOption.h>
 #include <Parsers/MySQL/ASTDeclareReference.h>
 
+#include <Common/quoteString.h>
+#include <IO/Operators.h>
 namespace DB
 {
 
@@ -164,7 +166,7 @@ static inline bool parseDeclareConstraintIndex(IParser::Pos & pos, String & inde
             index_type = "UNIQUE_" + temp_node->as<ASTIdentifier>()->name();
         }
     }
-    else if (ParserKeyword("PRIMARY KEY").ignore(pos, expected))
+    else if (ParserKeyword("PRIMARY KEY").ignore(pos, expected) || ParserKeyword("PRIMARY_KEY").ignore(pos, expected))
     {
         index_type = "PRIMARY_KEY_BTREE"; /// default btree index_type
         if (ParserKeyword("USING").ignore(pos, expected))
@@ -180,6 +182,14 @@ static inline bool parseDeclareConstraintIndex(IParser::Pos & pos, String & inde
         index_type = "FOREIGN";
         if (p_identifier.parse(pos, temp_node, expected))
             index_name = temp_node->as<ASTIdentifier>()->name();  /// reset index_name
+    }
+    else if (ParserKeyword("CLUSTERED KEY").ignore(pos, expected)
+            || ParserKeyword("CLUSTERED_KEY").ignore(pos, expected)
+            || ParserKeyword("CLUSTERED INDEX").ignore(pos, expected))
+    {
+        index_type = "CLUSTERED_KEY";
+        if (p_identifier.parse(pos, temp_node, expected))
+            index_name = temp_node->as<ASTIdentifier>()->name();
     }
 
     return true;
@@ -250,6 +260,38 @@ bool ParserDeclareIndex::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected &
 
     node = declare_index;
     return true;
+}
+
+inline String getIndexType(const String& type) {
+    if (type.starts_with("CLUSTERED"))
+    {
+        return "CLUSTERED KEY";
+    }
+    else if (type.starts_with("KEY"))
+    {
+        return "KEY";
+    }
+    else if (type.starts_with("PRIMARY_KEY"))
+    {
+        return "PRIMARY KEY";
+    }
+    else if (type.starts_with("UNIQUE"))
+    {
+        return "UNIQUE KEY";
+    }
+
+    return "INDEX";
+}
+
+void ASTDeclareIndex::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
+{
+    if (index_type == "CLUSTERED_KEY" || index_type == "KEY_BTREE" || index_type == "PRIMARY_KEY_BTREE" || index_type == "UNIQUE_BTREE")
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << getIndexType(index_type) << (s.hilite ? hilite_none : "");
+        s.ostr << "(";
+        index_columns->formatImpl(s, state, frame);
+        s.ostr << ")";
+    }
 }
 
 }

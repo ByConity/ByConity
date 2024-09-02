@@ -71,6 +71,8 @@ enum class LockStatus : UInt32
     LOCK_OK,
     LOCK_WAITING,
     LOCK_TIMEOUT,
+    /// Handling the situation where the waiting lock is unlocked
+    LOCK_CANCELLED,
 };
 
 enum class LockLevel : UInt32

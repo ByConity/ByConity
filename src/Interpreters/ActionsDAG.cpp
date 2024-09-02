@@ -68,6 +68,8 @@ const char * ActionsDAG::typeToString(ActionsDAG::ActionType type)
             return "ArrayJoin";
         case ActionType::FUNCTION:
             return "Function";
+        case ActionType::PREPARED_COLUMN:
+            return "PREPARED_COLUMN";
     }
 
     __builtin_unreachable();
@@ -394,6 +396,16 @@ const ActionsDAG::Node & ActionsDAG::addFunction(
     return addNode(std::move(node));
 }
 
+const ActionsDAG::Node & ActionsDAG::addPreparedColumn(std::string name, DataTypePtr type)
+{
+    Node node;
+    node.type = ActionType::PREPARED_COLUMN;
+    node.result_type = std::move(type);
+    node.result_name = std::move(name);
+
+    return addNode(std::move(node));
+}
+
 const ActionsDAG::Node & ActionsDAG::findInOutputs(const std::string & name) const
 {
     if (const auto * node = tryFindInOutputs(name))
@@ -651,6 +663,11 @@ static ColumnWithTypeAndName executeActionForHeader(const ActionsDAG::Node * nod
         }
 
         case ActionsDAG::ActionType::INPUT:
+        {
+            break;
+        }
+
+        case ActionsDAG::ActionType::PREPARED_COLUMN:
         {
             break;
         }
@@ -1089,6 +1106,10 @@ std::string ActionsDAG::dumpDAG() const
             case ActionsDAG::ActionType::INPUT:
                 out << "INPUT ";
                 break;
+
+            case ActionsDAG::ActionType::PREPARED_COLUMN:
+                out << "PREPARED_COLUMN ";
+                break;
         }
 
         out << "(";
@@ -1118,6 +1139,54 @@ std::string ActionsDAG::dumpDAG() const
         out << ' ' << map[node];
     out << '\n';
 
+    return out.str();
+}
+
+std::string ActionsDAG::Node::dump() const
+{
+    WriteBufferFromOwnString out;
+    switch (type)
+    {
+        case ActionsDAG::ActionType::COLUMN:
+            out << "COLUMN ";
+            break;
+
+        case ActionsDAG::ActionType::ALIAS:
+            out << "ALIAS ";
+            break;
+
+        case ActionsDAG::ActionType::FUNCTION:
+            out << "FUNCTION ";
+            break;
+
+        case ActionsDAG::ActionType::ARRAY_JOIN:
+            out << "ARRAY JOIN ";
+            break;
+
+        case ActionsDAG::ActionType::INPUT:
+            out << "INPUT ";
+            break;
+        
+        case ActionsDAG::ActionType::PREPARED_COLUMN:
+            out << "PREPARED_COLUMN ";
+            break;
+    }
+
+    out << "(";
+    out << children.size();
+    out << ")";
+
+    out << " " << (column ? column->getName() : "(no column)");
+    out << " " << (result_type ? result_type->getName() : "(no type)");
+    out << " " << (!result_name.empty() ? result_name : "(no name)");
+
+    if (function_base)
+        out << " [" << function_base->getName() << "]";
+
+    if (is_function_compiled)
+        out << " [compiled]";
+
+    out << "\n";
     return out.str();
 }
 
@@ -2050,6 +2119,7 @@ ActionsDAGPtr ActionsDAG::cloneActionsForFilterPushDown(
 
                 predicate->function_builder = func_builder_cast;
                 predicate->function_base = predicate->function_builder->build(arguments);
+                predicate->result_type = predicate->function_base->getResultType();
                 predicate->function = predicate->function_base->prepare(arguments);
             }
         }
@@ -2061,6 +2131,7 @@ ActionsDAGPtr ActionsDAG::cloneActionsForFilterPushDown(
             auto arguments = prepareFunctionArguments(predicate->children);
 
             predicate->function_base = predicate->function_builder->build(arguments);
+            predicate->result_type = predicate->function_base->getResultType();
             predicate->function = predicate->function_base->prepare(arguments);
         }
 

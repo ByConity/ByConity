@@ -29,16 +29,20 @@ Projection Est. 2406 rows
                            │     │           Where: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
                            │     │           Outputs: [LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                            │     └─ Broadcast Exchange Est. 1962 rows
-                           │        └─ Filter Est. 1962 rows
-                           │           │     Condition: P_BRAND = 'MFGR#2221'
-                           │           └─ TableScan ssb1000.part Est. 2000000 rows
-                           │                    Where: P_BRAND = 'MFGR#2221'
-                           │                    Outputs: [P_PARTKEY, P_BRAND]
+                           │        └─ Projection Est. 1962 rows
+                           │           │     Expressions: [P_PARTKEY]
+                           │           └─ Filter Est. 1962 rows
+                           │              │     Condition: P_BRAND = 'MFGR#2221'
+                           │              └─ TableScan ssb1000.part Est. 2000000 rows
+                           │                       Where: P_BRAND = 'MFGR#2221'
+                           │                       Outputs: [P_PARTKEY, P_BRAND]
                            └─ Repartition Exchange Est. 400686 rows
                               │     Partition by: {S_SUPPKEY}
-                              └─ Filter Est. 400686 rows
-                                 │     Condition: S_REGION = 'EUROPE'
-                                 └─ TableScan ssb1000.supplier Est. 2000000 rows
-                                          Where: S_REGION = 'EUROPE'
-                                          Outputs: [S_SUPPKEY, S_REGION]
+                              └─ Projection Est. 400686 rows
+                                 │     Expressions: [S_SUPPKEY]
+                                 └─ Filter Est. 400686 rows
+                                    │     Condition: S_REGION = 'EUROPE'
+                                    └─ TableScan ssb1000.supplier Est. 2000000 rows
+                                             Where: S_REGION = 'EUROPE'
+                                             Outputs: [S_SUPPKEY, S_REGION]
 note: Runtime Filter is applied for 2 times.

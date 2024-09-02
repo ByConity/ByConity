@@ -189,6 +189,8 @@ namespace ProfileEvents
     extern const Event GetServerDataPartsInPartitionsFailed;
     extern const Event GetAllServerDataPartsSuccess;
     extern const Event GetAllServerDataPartsFailed;
+    extern const Event GetAllServerDataPartsWithDBMSuccess;
+    extern const Event GetAllServerDataPartsWithDBMFailed;
     extern const Event GetDataPartsByNamesSuccess;
     extern const Event GetDataPartsByNamesFailed;
     extern const Event GetStagedDataPartsByNamesSuccess;
@@ -794,6 +796,8 @@ private:
         ProfileEvents::GetServerDataPartsInPartitionsFailed,
         ProfileEvents::GetAllServerDataPartsSuccess,
         ProfileEvents::GetAllServerDataPartsFailed,
+        ProfileEvents::GetAllServerDataPartsWithDBMSuccess,
+        ProfileEvents::GetAllServerDataPartsWithDBMFailed,
         ProfileEvents::GetDataPartsByNamesSuccess,
         ProfileEvents::GetDataPartsByNamesFailed,
         ProfileEvents::GetStagedDataPartsByNamesSuccess,

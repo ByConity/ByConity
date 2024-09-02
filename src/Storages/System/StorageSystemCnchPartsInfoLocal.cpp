@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -31,8 +32,7 @@ namespace ErrorCodes
     extern const int CANNOT_GET_TABLE_LOCK;
 }
 
-StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID & table_id_)
-    : IStorage(table_id_)
+StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID & table_id_) : IStorage(table_id_)
 {
     StorageInMemoryMetadata storage_metadata;
 
@@ -40,6 +40,7 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
         {"Unloaded", static_cast<Int8>(ReadyState::Unloaded)},
         {"Loading", static_cast<Int8>(ReadyState::Loading)},
         {"Loaded", static_cast<Int8>(ReadyState::Loaded)},
+        {"Recalculated", static_cast<Int8>(ReadyState::Recalculated)},
     });
 
     storage_metadata.setColumns(ColumnsDescription({
@@ -58,6 +59,7 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
         {"recalculating", std::make_shared<DataTypeUInt8>()},
         {"last_update_time", std::make_shared<DataTypeUInt64>()},
         {"last_snapshot_time", std::make_shared<DataTypeUInt64>()},
+        {"last_modification_time", std::make_shared<DataTypeDateTime>()},
     }));
     setInMemoryMetadata(storage_metadata);
 }
@@ -116,7 +118,7 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
     // get current timestamp for later use.
     UInt64 current_ts = context->getTimestamp();
 
-    for (size_t i=0; i<active_tables.size(); i++)
+    for (size_t i = 0; i < active_tables.size(); i++)
     {
         database_column_mut->insert(active_tables[i]->database);
         table_column_mut->insert(active_tables[i]->table);
@@ -124,7 +126,7 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
         /// if the last update time is not set. we just use current timestamp to make sure the table's parts info are always returned in incremental mode.
         if (last_update_time == TxnTimestamp::maxTS())
             last_update_time = current_ts;
-        last_update_mut->insert((last_update_time>>18)/1000);
+        last_update_mut->insert((last_update_time >> 18) / 1000);
         index_column_mut->insert(i);
     }
 
@@ -146,7 +148,7 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
 
     ColumnPtr filtered_index_column = block_to_filter.getByName("index").column;
     std::vector<PartitionData> metrics_collection{filtered_index_column->size(), PartitionData{}};
-    std::atomic_size_t task_index {0};
+    std::atomic_size_t task_index{0};
     std::size_t total_task_size = filtered_index_column->size();
     std::atomic_bool need_abort = false;
 
@@ -198,15 +200,15 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
     collect_metrics_pool.wait();
 
     MutableColumns res_columns = res_block.cloneEmptyColumns();
-    for (size_t i=0; i<filtered_index_column->size(); i++)
+    for (size_t i = 0; i < filtered_index_column->size(); i++)
     {
         auto entry = active_tables[(*filtered_index_column)[i].get<UInt64>()];
         PartitionData & metrics = metrics_collection[i];
-        for (auto it = metrics.begin(); it != metrics.end(); it++)
+        for (auto & [partition_id, metric] : metrics)
         {
             size_t src_index = 0;
             size_t dest_index = 0;
-            const auto & metrics_data = it->second->partition_info_ptr->metrics_ptr->read();
+            const auto & metrics_data = metric->partition_info_ptr->metrics_ptr->read();
             bool is_valid_metrics = metrics_data.validateMetrics();
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->table_uuid);
@@ -215,11 +217,11 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->table);
             if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(it->first);
+                res_columns[dest_index++]->insert(partition_id);
             if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(it->second->partition);
+                res_columns[dest_index++]->insert(metric->partition);
             if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(it->second->first_partition);
+                res_columns[dest_index++]->insert(metric->first_partition);
             if (is_valid_metrics)
             {
                 // valid metrics
@@ -247,14 +249,16 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
             if (columns_mask[src_index++])
             {
                 ReadyState state = ReadyState::Unloaded;
-                if (entry->loading_metrics)
-                    state = ReadyState::Loading;
-                if (entry->partition_metrics_loaded)
+                if (metric->partition_info_ptr->metrics_ptr->finishFirstRecalculation())
+                    state = ReadyState::Recalculated;
+                else if (entry->partition_metrics_loaded)
                     state = ReadyState::Loaded;
+                else if (entry->loading_metrics)
+                    state = ReadyState::Loading;
                 res_columns[dest_index++]->insert(state);
             }
             if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(it->second->partition_info_ptr->metrics_ptr->isRecalculating());
+                res_columns[dest_index++]->insert(metric->partition_info_ptr->metrics_ptr->isRecalculating());
             if (columns_mask[src_index++])
             {
                 UInt64 last_update_time = metrics_data.last_update_time;
@@ -268,6 +272,10 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                 if (last_snapshot_time == TxnTimestamp::maxTS())
                     last_snapshot_time = current_ts;
                 res_columns[dest_index++]->insert(TxnTimestamp(last_snapshot_time).toSecond());
+            }
+            if (columns_mask[src_index++])
+            {
+                res_columns[dest_index++]->insert(TxnTimestamp(metrics_data.last_modification_time).toSecond());
             }
         }
     }

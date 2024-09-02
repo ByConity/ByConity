@@ -14,12 +14,17 @@
  */
 
 #pragma once
+#include <memory>
 #include <Processors/Chunk.h>
-#include <butil/iobuf.h>
 #include <Processors/ISimpleTransform.h>
+#include <butil/iobuf.h>
+#include "Common/Stopwatch.h"
+#include "Processors/Exchange/DataTrans/IBroadcastReceiver.h"
 
 namespace DB
 {
+class IBroadcastReceiver;
+using BroadcastReceiverPtr = std::shared_ptr<IBroadcastReceiver>;
 class DeserializeBufTransform : public ISimpleTransform
 {
 public:
@@ -27,6 +32,11 @@ public:
     struct IOBufChunkInfo : public ChunkInfo
     {
         butil::IOBuf io_buf;
+    };
+
+    struct IOBufChunkInfoWithReceiver : public IOBufChunkInfo
+    {
+        std::weak_ptr<IBroadcastReceiver> receiver;
     };
 
     explicit DeserializeBufTransform(const Block & header_, bool enable_block_compress_);
@@ -40,7 +50,7 @@ private:
     const Block & header;
     bool enable_block_compress;
     Poco::Logger * logger;
-
+    Stopwatch s;
 };
 
 }

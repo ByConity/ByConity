@@ -35,8 +35,11 @@ namespace ErrorCodes
 
 void ThreadStatus::applyQuerySettings()
 {
-    /// reset the truncation flag for every query
-    has_truncated_date = false;
+    /// reset the truncation flag for every query due to overflow check setting could be changed across queries.
+    /// e.g., check_date_overflow could be changed from false to true from q1 to q2.
+    /// for q1, check_date_overflow is false, but there is date overflow -> the bit is on;
+    /// for q2, check_date_overflow is changed to true, but there is no date overflow -> if the bit is not reset, it is still on.
+    resetOverflow();
     auto query_context_ptr = query_context.lock();
     assert(query_context_ptr);
     const Settings & settings = query_context_ptr->getSettingsRef();
@@ -64,6 +67,39 @@ void ThreadStatus::applyQuerySettings()
 #endif
 }
 
+ThreadGroupStatusPtr ThreadGroupStatus::createForBackgroundProcess(ContextPtr storage_context)
+{
+    auto group = std::make_shared<ThreadGroupStatus>();
+
+    group->memory_tracker.setDescription("background process to apply mutate/merge in table");
+    /// However settings from storage context have to be applied
+    const Settings & settings = storage_context->getSettingsRef();
+    group->memory_tracker.setProfilerStep(settings.memory_profiler_step);
+    group->memory_tracker.setSampleProbability(settings.memory_profiler_sample_probability);
+    group->memory_tracker.setParent(&background_memory_tracker);
+    if (settings.memory_tracker_fault_probability > 0.0)
+        group->memory_tracker.setFaultProbability(settings.memory_tracker_fault_probability);
+
+    return group;
+}
+
+ThreadGroupSwitcher::ThreadGroupSwitcher(ThreadGroupStatusPtr thread_group)
+{
+    chassert(thread_group);
+
+    /// might be nullptr
+    prev_thread_group = CurrentThread::getGroup();
+
+    CurrentThread::detachQueryIfNotDetached();
+    CurrentThread::attachTo(thread_group);
+}
+
+ThreadGroupSwitcher::~ThreadGroupSwitcher()
+{
+    CurrentThread::detachQueryIfNotDetached();
+    if (prev_thread_group)
+        CurrentThread::attachTo(prev_thread_group);
+}
 
 void ThreadStatus::attachQueryContext(ContextPtr query_context_)
 {
@@ -146,9 +182,9 @@ void ThreadStatus::setupState(const ThreadGroupStatusPtr & thread_group_)
     thread_state = ThreadState::AttachedToQuery;
 }
 
-void ThreadStatus::initializeQuery()
+void ThreadStatus::initializeQuery(MemoryTracker * memory_tracker_)
 {
-    setupState(std::make_shared<ThreadGroupStatus>());
+    setupState(std::make_shared<ThreadGroupStatus>(memory_tracker_));
 
     /// No need to lock on mutex here
     thread_group->memory_tracker.setDescription("(for query)");
@@ -471,11 +507,11 @@ void ThreadStatus::tryUpdateMaxIOThreadProfile(bool use_async_read)
     }
 }
 
-void CurrentThread::initializeQuery()
+void CurrentThread::initializeQuery(MemoryTracker * memory_tracker)
 {
     if (unlikely(!current_thread))
         return;
-    current_thread->initializeQuery();
+    current_thread->initializeQuery(memory_tracker);
     current_thread->deleter = CurrentThread::defaultThreadDeleter;
 }
 
@@ -524,9 +560,9 @@ void CurrentThread::detachQueryIfNotDetached()
 }
 
 
-CurrentThread::QueryScope::QueryScope(ContextMutablePtr query_context)
+CurrentThread::QueryScope::QueryScope(ContextMutablePtr query_context, MemoryTracker * memory_tracker)
 {
-    CurrentThread::initializeQuery();
+    CurrentThread::initializeQuery(memory_tracker);
     CurrentThread::attachQueryContext(query_context);
     if (!query_context->hasQueryContext())
         query_context->makeQueryContext();

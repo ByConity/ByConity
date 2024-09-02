@@ -55,12 +55,14 @@ message LimitByStep {
 
 message LimitStep {
   required ITransformingStep query_plan_base = 1;
-  required uint64 limit = 2;
-  required uint64 offset = 3;
+  required uint64 limit = 2; // deprecated, use limit_or_var instead
+  required uint64 offset = 3; // deprecated, use offset_or_var instead
   required bool always_read_till_end = 4;
   required bool with_ties = 5;
   repeated SortColumnDescription description = 6;
   required bool partial = 7;
+  optional SizeOrVariable limit_or_var = 8;
+  optional SizeOrVariable offset_or_var = 9;
 }
 
 message MarkDistinctStep {
@@ -82,11 +84,21 @@ message OffsetStep {
 }
 
 message SortingStep {
+  message Stage {
+    enum Enum {
+        FULL = 0;
+        MERGE = 1;
+        PARTIAL = 2;
+    }
+  }
+
   required ITransformingStep query_plan_base = 1;
   repeated SortColumnDescription result_description = 2;
-  required uint64 limit = 3;
+  required uint64 limit = 3; // deprecated, use limit_or_var instead
   required bool partial = 4;
   repeated SortColumnDescription prefix_description = 5;
+  optional Stage.Enum stage = 6;
+  optional SizeOrVariable limit_or_var = 7;
 }
 
 message ValuesStep {
@@ -184,6 +196,7 @@ message TableWriteStep {
   message InsertTarget {
     required StorageID storage_id = 1;
     repeated NameAndTypePair columns = 2;
+    optional AST query = 3;
   }
 
   message Target {
@@ -194,13 +207,29 @@ message TableWriteStep {
 
   required ITransformingStep query_plan_base = 1;
   required Target target = 2;
+  optional bool insert_select_with_profiles = 3;
 }
 
 message TableFinishStep {
   required ITransformingStep query_plan_base = 1;
   required TableWriteStep.Target target = 2;
   required string output_affected_row_count_symbol = 3;
+  optional AST query = 4;
 }
+
+message OutfileWriteStep {
+  message OutfileTarget {
+    required string request_uri = 1;
+    required string format = 2;
+    required string compression_method_str = 3;
+    required uint64 compression_level = 4;
+  }
+
+  required ITransformingStep query_plan_base = 1;
+  required OutfileTarget outfile_target = 2;
+}
+
+message OutfileFinishStep {}
 
 message FilterStep {
   required ITransformingStep query_plan_base = 1;
@@ -252,6 +281,7 @@ message MergeSortingStep {
   required double remerge_lowered_memory_bytes_ratio = 6;
   required uint64 max_bytes_before_external_sort = 7;
   required uint64 min_free_disk_space = 8;
+  optional bool enable_adaptive_spill = 9;
 }
 
 message MergingAggregatedStep {
@@ -280,6 +310,8 @@ message AggregatingStep {
   repeated GroupingDescription groupings = 12;
   required bool should_produce_results_in_order_of_bucket_number = 13;
   repeated string keys_not_hashed = 14;
+  optional bool streaming_for_cache = 15;
+  
 }
 
 message TotalsHavingStep {
@@ -307,6 +339,7 @@ message TableScanStep {
   optional ProjectionStep pushdown_projection = 6;
   optional FilterStep pushdown_filter = 7;
   optional Assignments inline_expressions = 14;
+  optional DataStream output_stream = 15;
 }
 
 message RemoteExchangeSourceStep {
@@ -325,10 +358,10 @@ message FinalSampleStep {
 
 message ReadStorageRowCountStep {
   required ISourceStep query_plan_base = 1;
-  required StorageID storage_id = 2;
   required AST query = 3;
   required AggregateDescription agg_desc = 4;
   required uint64 num_rows = 5;
+  required bool is_final_agg = 6;
 }
 
 message WindowStep {
@@ -351,9 +384,36 @@ message BufferStep {
 
 message ExplainAnalyzeStep {}
 
+message IntermediateResultCacheStep {
+  required string step_description = 1;
+  required DataStream input_stream = 2;
+  required CacheParam cache_param = 3;
+  required AggregatorParams aggregator_params = 4;
+}
+
+message LocalExchangeStep {
+  required ITransformingStep query_plan_base = 1;
+  required ExchangeMode.Enum exchange_type = 2;
+  required Partitioning schema = 3;
+}
 
 message MultiJoinStep {
   required Graph graph = 1;
+}
+
+message SampleRatioStep {
+  required ITransformingStep query_plan_base = 1;
+  required float sample_ratio = 2;
+}
+
+message ExpandStep {
+  required ITransformingStep query_plan_base = 1;
+  required Assignments assignments = 2;
+  map<string, DataType> name_to_type = 3;
+  required string group_id_symbol = 4;
+  repeated uint32 group_id_value = 5;
+  map<uint32, StringVec> group_id_non_null_symbol = 6;
+
 }
 
 // this must be identical to APPLY_STEP_PROTOBUF_TYPES_AND_NAMES
@@ -403,9 +463,15 @@ message QueryPlanStep {
     IntersectOrExceptStep intersect_or_except_step = 37;
     BufferStep buffer_step = 38;
     ApplyStep apply_step = 39;
+    OutfileWriteStep outfile_write_step = 40;
+    OutfileFinishStep outfile_finish_step = 41;
     ExplainAnalyzeStep explain_analyze_step = 44;
     TotalsHavingStep totals_having_step = 50;
+    IntermediateResultCacheStep intermediate_result_cache_step = 53;
+    LocalExchangeStep local_exchange_step = 54;
     MultiJoinStep multi_join_step = 55;
+    SampleRatioStep sample_ratio_step = 56;
+    ExpandStep expand_step = 57;
   }
 }
 
@@ -429,3 +495,8 @@ message QueryPlan {
   map<uint64, uint64> cte_id_mapping = 3;
   required PlanMode.Enum mode = 4;
 }
+
+message PreparedStatement {
+  required string query = 1;
+}
+

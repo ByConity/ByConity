@@ -449,7 +449,7 @@ public:
 
         sql += sample_tail_with_space;
 
-        auto helper = SubqueryHelper::create(context, sql);
+        auto helper = SubqueryHelper::create(context, sql, true);
         auto block = getOnlyRowFrom(helper);
         table_handler.parse(block);
     }
@@ -492,7 +492,7 @@ public:
             auto sql = table_handler.getFullSql();
             sql += getSampleTail();
 
-            auto helper = SubqueryHelper::create(context, sql);
+            auto helper = SubqueryHelper::create(context, sql, true);
             auto block = getOnlyRowFrom(helper);
             table_handler.parse(block);
         }
@@ -509,7 +509,7 @@ public:
             auto & col_data = handler_context.columns_data.at(col_desc.name);
             auto full_sql = constructThirdSql(handler_context.settings, table_info, col_desc, col_data.bucket_bounds, getSampleTail());
             LOG_INFO(&Poco::Logger::get("thirdSampleColumnHandler"), full_sql);
-            auto helper = SubqueryHelper::create(context, full_sql);
+            auto helper = SubqueryHelper::create(context, full_sql, true);
             Block block;
 
             // when bucket_bounds not exists, we will use 0 as bucket_id

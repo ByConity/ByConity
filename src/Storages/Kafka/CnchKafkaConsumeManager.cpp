@@ -331,7 +331,15 @@ CnchKafkaConsumeManager::ConsumerDependencies CnchKafkaConsumeManager::getDepend
         return {};
 
     for (auto & view : all_views_from_catalog)
-        init_dependencies.emplace(view->getStorageID());
+    {
+        if (auto * mv = dynamic_cast<StorageMaterializedView *>(view.get()))
+        {
+            if (mv->async())
+                continue;
+            init_dependencies.emplace(view->getStorageID());
+        }
+    }
+
 
     return init_dependencies;
 }
@@ -401,6 +409,10 @@ void CnchKafkaConsumeManager::updatePartitionCountOfTopics(StorageCnchKafka & ka
 
 void CnchKafkaConsumeManager::assignPartitionsToConsumers(StorageCnchKafka & kafka_table)
 {
+    /// get sample consuming partitions list if has
+    const auto & sample_partitions_list = kafka_table.getSampleConsumingPartitionList(num_partitions_of_topics);
+    bool sample_consuming_enabled = !sample_partitions_list.empty();
+
     size_t consumers_num = kafka_table.getConsumersNum();
     consumers_num = std::min(consumers_num, max_needed_consumers);
 
@@ -413,6 +425,12 @@ void CnchKafkaConsumeManager::assignPartitionsToConsumers(StorageCnchKafka & kaf
         stopConsumers();
     }
 
+    /// We must ensure each consumer can be assigned a real partition to consume;
+    /// Or the offsets cannot be committed when all messages are discarded
+    if (unlikely(sample_consuming_enabled))
+        consumers_num = std::min(consumers_num, sample_partitions_list.size());
+
+    /// Assign the partitions not in the sample partition list to the consumers;
     for (size_t i = 0; i < consumers_num; ++i)
     {
         consumer_infos.emplace_back();
@@ -422,7 +440,26 @@ void CnchKafkaConsumeManager::assignPartitionsToConsumers(StorageCnchKafka & kaf
         for (auto & [topic, partition_cnt] : num_partitions_of_topics)
         {
             for (auto p = i; p < partition_cnt; p += consumers_num)
+            {
                 info.partitions.emplace_back(topic, p);
+                if (unlikely(sample_consuming_enabled) && sample_partitions_list.contains(info.partitions.back()))
+                    info.partitions.pop_back();
+            }
+        }
+    }
+
+    /// Assign the partitions in the sample partition list to the consuemrs specially
+    /// as we need ensure that each consumer should be assigned a real partition
+    if (unlikely(sample_consuming_enabled))
+    {
+        size_t sample_partition_idx = 0;
+        for (const auto & tp : sample_partitions_list)
+        {
+            size_t info_idx = sample_partition_idx % consumers_num;
+            ++sample_partition_idx;
+
+            consumer_infos[info_idx].sample_partitions.emplace(tp);
+            consumer_infos[info_idx].partitions.emplace_back(tp);
         }
     }
 }
@@ -540,7 +577,7 @@ void CnchKafkaConsumeManager::checkConsumerStatus(ConsumerInfo & info, std::uniq
         }
 
         LOG_DEBUG(log, "Check consumer status succ for {} on host {}", storage_id.getTableName() + info.table_suffix
-                  , info.worker_client->getRPCAddress());
+                  , info.worker_client->getHostWithPortsID());
 
         /// Check if need to reschedule consumer to new worker
         if (consumer_scheduler->shouldReschedule(info.worker_client, info.table_suffix, info.index))
@@ -671,13 +708,14 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
 
     command.assigned_consumer = info.index;
     command.tpl = info.partitions;
+    command.sample_partitions = info.sample_partitions;
 
     /// Send command to worker client to create local tables and start consume
     CnchWorkerClientPtr worker_client;
     try
     {
         worker_client = selectWorker(info.index, table_suffix);
-        LOG_TRACE(log, "Selected worker {} for consumer #{}", worker_client->getRPCAddress(), info.index);
+        LOG_TRACE(log, "Selected worker {} for consumer #{}", worker_client->getHostWithPortsID(), info.index);
 
         {
             /// Do NOT hold lock for RPC call in case of some unexpected hang issues in rpc
@@ -704,7 +742,7 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     info.table_suffix = table_suffix;
     info.worker_client = worker_client;
     info.is_running = true;
-    LOG_DEBUG(log, "Successfully send command 'START_CONSUME' to {}", worker_client->getRPCAddress());
+    LOG_DEBUG(log, "Successfully send command 'START_CONSUME' to {}", worker_client->getHostWithPortsID());
 }
 
 bool CnchKafkaConsumeManager::checkWorkerClient(const String & consumer_table_name, size_t index) const
@@ -752,7 +790,7 @@ void CnchKafkaConsumeManager::stopConsumerOnWorker(ConsumerInfo & info)
     /// send stop-command to worker
     worker_client->submitKafkaConsumeTask(command);
 
-    LOG_DEBUG(log, "Successfully send command 'STOP_CONSUME' to {}", worker_client->getRPCAddress());
+    LOG_DEBUG(log, "Successfully send command 'STOP_CONSUME' to {}", worker_client->getHostWithPortsID());
 }
 
 void CnchKafkaConsumeManager::stopConsumers()
@@ -801,8 +839,11 @@ std::vector<KafkaConsumerRunningInfo> CnchKafkaConsumeManager::getConsumerInfos(
             info.is_running = consumer.is_running;
             info.table_suffix = consumer.table_suffix;
             info.partitions = consumer.partitions;
+            std::transform(consumer.sample_partitions.begin(), consumer.sample_partitions.end(),
+                    std::back_inserter(info.sample_partitions),
+                         [](auto & tp) { return tp; });
             if (consumer.worker_client)
-                info.worker_client_info = consumer.worker_client->getRPCAddress();///getHostWithPorts().toDebugString();
+                info.worker_client_info = consumer.worker_client->getHostWithPortsID();
         }
     }
 

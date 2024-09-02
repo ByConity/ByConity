@@ -55,6 +55,11 @@ storage_configuration:
         hdfs:
           default: hdfs_disk
           disk: hdfs_disk
+cnch_unique_table_log:
+  database: cnch_system
+  table: cnch_unique_table_log
+  flush_max_row_count: 10000
+  flush_interval_milliseconds: 7500
 cnch_kafka_log:
   database: cnch_system
   table: cnch_kafka_log
@@ -76,4 +81,7 @@ consistent_hash_ring:
   num_probes: 21
   load_factor: 1.3
 cnch_config: /config/cnch-config.yml
+restrict_tenanted_users_to_whitelist_settings: false
+restrict_tenanted_users_to_privileged_operations: false
+sensitive_permission_tenants: 1234
 custom_settings_prefixes: SQL_

@@ -167,7 +167,7 @@ private:
             String data_file_path = storage.table_path + "data.bin";
             size_t rd_buffer_size = std::min(max_read_buffer_size, storage.disk->getFileSize(data_file_path));
 
-            data_in.emplace(storage.disk->readFile(data_file_path, {.buffer_size = rd_buffer_size}));
+            data_in.emplace(storage.disk->readFile(data_file_path, ReadSettings().initializeReadSettings(rd_buffer_size)));
             block_in.emplace(*data_in, 0, index_begin, index_end);
         }
     }
@@ -364,7 +364,7 @@ Pipe StorageStripeLog::read(
         return Pipe(std::make_shared<NullSource>(storage_snapshot->getSampleBlockForColumns(column_names)));
     }
 
-    CompressedReadBufferFromFile index_in(disk->readFile(index_file, {.buffer_size = 4096}));
+    CompressedReadBufferFromFile index_in(disk->readFile(index_file, ReadSettings().initializeReadSettings(4096)));
     std::shared_ptr<const IndexForNativeFormat> index{std::make_shared<IndexForNativeFormat>(index_in, column_names_set)};
 
     size_t size = index->blocks.size();

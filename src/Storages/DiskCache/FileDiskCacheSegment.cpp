@@ -28,7 +28,7 @@ void FileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
         size_t begin = data_range.has_value() ? data_range.value().first : 0;
         size_t end = data_range.has_value() ? data_range.value().second : remote_disk->getFileSize(path);
 
-        read_settings.throttler = disk_cache.getDiskCacheThrottler();
+        read_settings.remote_throttler = disk_cache.getDiskCacheThrottler();
         auto buf = remote_disk->readFile(path, read_settings);
         LimitSeekableReadBuffer limit_reader(*buf, begin, end);
 

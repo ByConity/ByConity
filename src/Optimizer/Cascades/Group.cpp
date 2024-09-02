@@ -22,11 +22,11 @@
 #include <Optimizer/Property/ConstantsDeriver.h>
 #include <Optimizer/Rule/Rule.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
+#include <Optimizer/Rule/Transformation/JoinReorderUtils.h>
 #include <Optimizer/Rule/Transformation/JoinToMultiJoin.h>
 #include <QueryPlan/AnyStep.h>
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/MultiJoinStep.h>
-#include "Optimizer/Rule/Transformation/JoinToMultiJoin.h"
 
 namespace DB
 {
@@ -42,10 +42,10 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
     if (expression->isLogical())
     {
         logical_expressions.emplace_back(expression);
-        if (!((expression->getStep()->getType() == IQueryPlanStep::Type::Join
-               && dynamic_cast<const JoinStep &>(*expression->getStep()).supportReorder(context.isSupportFilter())
-               && !dynamic_cast<const JoinStep &>(*expression->getStep()).isOrdered())
-              || expression->getStep()->getType() == IQueryPlanStep::Type::MultiJoin))
+        if ((expression->getStep()->getType() != IQueryPlanStep::Type::Join
+               || !dynamic_cast<const JoinStep &>(*expression->getStep()).supportReorder(context.isSupportFilter())
+               || dynamic_cast<const JoinStep &>(*expression->getStep()).isOrdered())
+              && expression->getStep()->getType() != IQueryPlanStep::Type::MultiJoin)
         {
             join_sets.insert(JoinSet(id));
             // if this is the top node of one join root.
@@ -113,6 +113,7 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
         std::vector<PlanNodeStatisticsPtr> children_stats;
         InclusionDependency inclusion_dependency;
         std::vector<bool> is_table_scans;
+        std::vector<double> children_filter_selectivity;
         for (const auto & child : expression->getChildrenGroups())
         {
             inclusion_dependency = inclusion_dependency
@@ -120,6 +121,8 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
             children_stats.emplace_back(context.getMemo().getGroupById(child)->getStatistics().value_or(nullptr));
             simple_children &= context.getMemo().getGroupById(child)->isSimpleChildren();
             is_table_scans.emplace_back(context.getMemo().getGroupById(child)->isTableScan());
+            double child_filter_selectivity = JoinReorderUtils::computeFilterSelectivity(child, context.getMemo());
+            children_filter_selectivity.emplace_back(child_filter_selectivity);
         }
         statistics = CardinalityEstimator::estimate(
             expression->getStep(),
@@ -128,6 +131,7 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
             context.getContext(),
             simple_children,
             is_table_scans,
+            children_filter_selectivity,
             inclusion_dependency);
 
         if (expression->getStep()->getType() == IQueryPlanStep::Type::TableScan)
@@ -135,6 +139,15 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
             if (statistics.has_value())
             {
                 max_table_scan_rows = std::max(max_table_scan_rows, (*statistics)->getRowCount());
+            }
+        }
+        else if (expression->getStep()->getType() == IQueryPlanStep::Type::CTERef)
+        {
+            if (!statistics.has_value())
+            {
+                statistics = context.getMemo()
+                                 .getCTEDefGroupByCTEId(dynamic_cast<const CTERefStep *>(expression->getStep().get())->getId())
+                                 ->statistics;
             }
         }
 
@@ -235,14 +248,30 @@ bool Group::setExpressionCost(const WinnerPtr & expr, const Property & property)
         return true;
     }
 
-    if (it->second->getCost() > expr->getCost() + 1e-2)
+    if (it->second->getCost() > expr->getCost() + 1e-5)
     {
         // this is lower cost
-        lowest_cost_expressions[property] = expr;
+        it->second = expr;
         return true;
     }
 
     return false;
+}
+
+double Group::getCostLowerBound(const Property & property) const
+{
+    auto it = cost_lower_bounds.find(property);
+    return (it != cost_lower_bounds.end()) ? it->second : -1;
+}
+
+void Group::setCostLowerBound(const Property & property, double lower_bound)
+{
+    cost_lower_bounds[property] = lower_bound;
+}
+
+bool Group::hasOptimized(const Property & property) const
+{
+    return cost_lower_bounds.find(property) != cost_lower_bounds.end();
 }
 
 void Group::deleteExpression(const GroupExprPtr & expression)
@@ -270,7 +299,7 @@ void Group::deleteAllExpression()
         expr->setDeleted(true);
     }
     lowest_cost_expressions.clear();
-    cost_lower_bound = -1;
+    cost_lower_bounds.clear();
     join_sets.clear();
 }
 

@@ -14,12 +14,12 @@
  */
 
 #pragma once
-#include <QueryPlan/IQueryPlanStep.h>
-#include <QueryPlan/ITransformingStep.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/RuntimeFilterUtils.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
@@ -53,7 +53,7 @@ public:
     JoinStep(
         DataStreams input_streams_,
         DataStream output_stream_,
-        ASTTableJoin::Kind kind,
+        ASTTableJoin::Kind kind_,
         ASTTableJoin::Strictness strictness_,
         size_t max_streams_ = 1,
         bool keep_left_read_in_order_ = false,
@@ -65,7 +65,7 @@ public:
         ASOF::Inequality asof_inequality_ = ASOF::Inequality::GreaterOrEquals,
         DistributionType distribution_type_ = DistributionType::UNKNOWN,
         JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO,
-        bool magic_set_ = false,
+        bool is_magic_ = false,
         bool is_ordered_ = false,
         bool simple_reordered_ = false,
         LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders = {},
@@ -93,15 +93,14 @@ public:
     const Names & getRightKeys() const { return right_keys; }
     const ConstASTPtr & getFilter() const { return filter; }
     bool isHasUsing() const { return has_using; }
-    std::optional<std::vector<bool>> getRequireRightKeys() const
-    {
-        return require_right_keys;
-    }
+    std::optional<std::vector<bool>> getRequireRightKeys() const { return require_right_keys; }
     ASOF::Inequality getAsofInequality() const { return asof_inequality; }
     DistributionType getDistributionType() const { return distribution_type; }
     void setDistributionType(DistributionType distribution_type_) { distribution_type = distribution_type_; }
 
     bool isCrossJoin() const { return kind == ASTTableJoin::Kind::Cross || (kind == ASTTableJoin::Kind::Inner && left_keys.empty()); }
+
+    bool isInnerJoin() const {return kind == ASTTableJoin::Kind::Inner; }
 
     bool isOuterJoin() const
     {
@@ -148,14 +147,15 @@ public:
     bool supportSwap() const
     {
         if (getStrictness() != ASTTableJoin::Strictness::Unspecified && getStrictness() != ASTTableJoin::Strictness::All
-            && getStrictness() != ASTTableJoin::Strictness::Any)
+            && getStrictness() != ASTTableJoin::Strictness::Any && getStrictness() != ASTTableJoin::Strictness::Semi
+            && getStrictness() != ASTTableJoin::Strictness::Anti)
             return false;
 
         // todo can support swap
         if (require_right_keys || has_using)
             return false;
 
-        return !isMagic();
+        return true;
     }
 
     void setJoinAlgorithm(JoinAlgorithm join_algorithm_) { join_algorithm = join_algorithm_; }
@@ -168,8 +168,7 @@ public:
 
     bool needStreamWithNonJoinedRows() const
     {
-        if (strictness == ASTTableJoin::Strictness::Asof ||
-            strictness == ASTTableJoin::Strictness::Semi)
+        if (strictness == ASTTableJoin::Strictness::Asof || strictness == ASTTableJoin::Strictness::Semi)
             return false;
         return isRightOrFull(kind);
     }
@@ -177,6 +176,7 @@ public:
     JoinPtr makeJoin(
         ContextPtr context,
         std::shared_ptr<RuntimeFilterConsumer> && consumer,
+        size_t num_streams,
         ExpressionActionsPtr filter_action,
         String filter_column_name);
 
@@ -187,6 +187,7 @@ public:
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    void setOutputStream(DataStream output_stream_);
     // TODO(gouguilin): protobuf serde
 
     const LinkedHashMap<String, RuntimeFilterBuildInfos> & getRuntimeFilterBuilders() const { return runtime_filter_builders; }

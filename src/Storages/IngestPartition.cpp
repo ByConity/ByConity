@@ -186,7 +186,22 @@ void IngestPartition::writeNewPart(const StorageInMemoryMetadata & meta_data, co
 
 Names IngestPartition::getOrderedKeys(const Names & names_to_order, const StorageInMemoryMetadata & meta_data)
 {
-    auto ordered_keys = meta_data.getColumnsRequiredForPrimaryKey();
+    auto ordered_keys = meta_data.getPrimaryKeyColumns();
+
+    auto required_keys = meta_data.getColumnsRequiredForPrimaryKey();
+
+    NameSet required_keys_set(required_keys.begin(), required_keys.end());
+
+    for (auto it = ordered_keys.begin(); it != ordered_keys.end();)
+    {
+        if (required_keys_set.count(*it))
+        {
+            ++it;
+        }
+        else {
+            it = ordered_keys.erase(it);
+        }
+    }
 
     if (names_to_order.empty())
     {
@@ -233,7 +248,7 @@ void IngestPartition::checkIngestColumns(const StorageInMemoryMetadata & meta_da
     if (!meta_data.getColumns().getMaterialized().empty())
         throw Exception("There is materialized column in table which is not allowed!", ErrorCodes::BAD_ARGUMENTS);
 
-    for (auto & primary_key : meta_data.getColumnsRequiredForPrimaryKey())
+    for (auto & primary_key : meta_data.getPrimaryKeyColumns())
     {
         for (auto & col_name : column_names)
         {

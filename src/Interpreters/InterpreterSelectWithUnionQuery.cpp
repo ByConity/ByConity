@@ -33,8 +33,6 @@
 #include <Parsers/ASTSubquery.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 
-#include <Storages/StorageMemory.h>
-
 #include <QueryPlan/DistinctStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/IQueryPlanStep.h>
@@ -164,6 +162,7 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
         const Names & current_required_result_column_names
             = query_num == 0 ? required_result_column_names : required_result_column_names_for_other_selects[query_num];
 
+        // only select related ast is added here
         nested_interpreters.emplace_back(
             buildCurrentChildInterpreter(ast->list_of_selects->children.at(query_num), require_full_header ? Names() : current_required_result_column_names));
     }
@@ -178,7 +177,28 @@ InterpreterSelectWithUnionQuery::InterpreterSelectWithUnionQuery(
     {
         Blocks headers(num_children);
         for (size_t query_num = 0; query_num < num_children; ++query_num)
+        {
             headers[query_num] = nested_interpreters[query_num]->getSampleBlock();
+            /// Here we check that, in case if required_result_column_names were specified,
+            /// nested interpreter returns exactly it. Except if query requires full header.
+            /// The code aboew is written in a way that for 0th query required_result_column_names_for_other_selects[0]
+            /// is an empty list, and we should use required_result_column_names instead.
+            const auto & current_required_result_column_names = (query_num == 0 && !require_full_header)
+                ? required_result_column_names
+                : required_result_column_names_for_other_selects[query_num];
+            if (!current_required_result_column_names.empty())
+            {
+                const auto & header_columns = headers[query_num].getNames();
+                if (current_required_result_column_names != header_columns)
+                {
+                    throw Exception(ErrorCodes::LOGICAL_ERROR,
+                        "Different order of columns in UNION subquery: {} and {}",
+                        fmt::join(current_required_result_column_names, ", "),
+                        fmt::join(header_columns, ", "));
+                }
+
+            }
+        }
 
         result_header = getCommonHeaderForUnion(headers, context->getSettingsRef().allow_extended_type_conversion);
     }

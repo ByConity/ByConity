@@ -96,5 +96,14 @@ public:
     }
 };
 
+class ParserAlterAnalyticalMySQLQuery : public IParserDialectBase
+{
+protected:
+    const char * getName() const  override{ return "ALTER Analytical MySQL query"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+
+};
 
 }

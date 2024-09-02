@@ -222,7 +222,11 @@ protected:
         WrittenOffsetColumns & offset_columns,
         const Granules & granules);
 
-    void deepCopyAndAdd(const String & source_stream_name, const String & target_stream_name, const IDataType & type);
+    void deepCopyAndAdd(
+        const String & source_stream_name,
+        const String & target_stream_name,
+        const IDataType & type,
+        const ASTPtr & effective_codec_desc);
 
     ISerialization::OutputStreamGetter createStreamGetter(const NameAndTypePair & column, WrittenOffsetColumns & offset_columns) const;
 

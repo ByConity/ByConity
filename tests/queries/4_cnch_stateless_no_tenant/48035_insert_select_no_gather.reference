@@ -1,0 +1,20 @@
+TableFinish Est. ? rows
+└─ Gather Exchange Est. ? rows
+   └─ TableWrite Est. ? rows
+      │     Insert test.test_insert_bucket
+      └─ Local Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: [id, k, p_date]
+            └─ TableScan test.test_insert_bucket_source Est. ? rows
+                     Outputs: [p_date, id, k]
+
+test unique table
+TableFinish Est. ? rows
+└─ Gather Exchange Est. ? rows
+   └─ TableWrite Est. ? rows
+      │     Insert test.test_unique_insert_bucket
+      └─ Local Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: [id, k, p_date]
+            └─ TableScan test.test_insert_bucket_source Est. ? rows
+                     Outputs: [p_date, id, k]

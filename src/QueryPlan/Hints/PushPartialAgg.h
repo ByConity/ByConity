@@ -11,22 +11,13 @@ namespace DB
 class PushPartialAgg : public IPlanHint
 {
 public:
-    explicit PushPartialAgg(const Strings & options_) : options(options_)
-    {
-    }
+    explicit PushPartialAgg() = default;
 
-    HintCategory getType() const override
-    {
-        return HintCategory::PUSH_PARTIAL_AGG;
-    }
-    String & getFunctionName()
-    {
-        return options.at(0);
-    }
-    Strings getOptions() const override
-    {
-        return options;
-    }
+    HintCategory getType() const override { return HintCategory::PUSH_PARTIAL_AGG; }
+
+    bool checkStepType(const IQueryPlanStep & step) const override{ return step.getType() == IQueryPlanStep::Type::Aggregating; }
+
+    Strings getOptions() const override { return options; }
 
     bool canAttach(PlanNodeBase & node, HintOptions & hint_options) const override;
 
@@ -41,14 +32,12 @@ public:
 
     static PlanHintPtr create(const SqlHint & sql_hint, const ContextMutablePtr & context)
     {
-        if (sql_hint.getOptions().size() != 1)
+        if (!sql_hint.getOptions().empty())
             return {};
         return std::make_shared<EnablePushPartialAgg>(sql_hint, context);
     }
 
-    EnablePushPartialAgg(const SqlHint & sql_hint, const ContextMutablePtr &) : PushPartialAgg(sql_hint.getOptions())
-    {
-    }
+    EnablePushPartialAgg(const SqlHint &, const ContextMutablePtr &) {}
 
     String getName() const override
     {
@@ -64,14 +53,12 @@ public:
 
     static PlanHintPtr create(const SqlHint & sql_hint, const ContextMutablePtr & context)
     {
-        if (sql_hint.getOptions().size() != 1)
+        if (!sql_hint.getOptions().empty())
             return {};
         return std::make_shared<DisablePushPartialAgg>(sql_hint, context);
     }
 
-    DisablePushPartialAgg(const SqlHint & sql_hint, const ContextMutablePtr &) : PushPartialAgg(sql_hint.getOptions())
-    {
-    }
+    DisablePushPartialAgg(const SqlHint &, const ContextMutablePtr &) {}
 
     String getName() const override
     {

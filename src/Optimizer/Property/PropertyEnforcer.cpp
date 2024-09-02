@@ -15,9 +15,13 @@
 
 #include <Optimizer/Property/PropertyEnforcer.h>
 
+#include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Optimizer/Cascades/GroupExpression.h>
 #include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
+#include "QueryPlan/TableWriteStep.h"
 
 namespace DB
 {
@@ -26,8 +30,8 @@ namespace ErrorCodes
     extern const int ILLEGAL_ENFORCE;
 }
 
-PlanNodePtr PropertyEnforcer::enforceNodePartitioning(
-    const PlanNodePtr & node, const Property & required, const Property & property, Context & context)
+PlanNodePtr
+PropertyEnforcer::enforceNodePartitioning(const PlanNodePtr & node, const Property & required, const Property & property, Context & context)
 {
     QueryPlanStepPtr step_ptr = enforceNodePartitioning(node->getStep(), required, property, context);
     if (!step_ptr)
@@ -76,39 +80,29 @@ QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
     Partitioning partitioning = required.getNodePartitioning();
 
     // if the stream is ordered, we need keep order when exchange data.
-    bool keep_order = context.getSettingsRef().enable_shuffle_with_order || required.isEnforceNotMatch();
+    bool keep_order = context.getSettingsRef().enable_shuffle_with_order;
 
-    if (partitioning.getPartitioningHandle() == Partitioning::Handle::SINGLE)
+    switch (partitioning.getHandle())
     {
-        QueryPlanStepPtr step_ptr = std::make_unique<ExchangeStep>(streams, ExchangeMode::GATHER, partitioning, keep_order);
-        return step_ptr;
-    }
-    if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_HASH)
-    {
-        QueryPlanStepPtr step_ptr = std::make_unique<ExchangeStep>(streams, ExchangeMode::REPARTITION, partitioning, keep_order);
-        return step_ptr;
-    }
-    if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_BROADCAST)
-    {
-        QueryPlanStepPtr step_ptr = std::make_unique<ExchangeStep>(streams, ExchangeMode::BROADCAST, partitioning, keep_order);
-        return step_ptr;
-    }
-    if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_ARBITRARY)
-    {
-        if (partitioning.getComponent() == Partitioning::Component::WORKER
-            && actual.getNodePartitioning().getComponent() == Partitioning::Component::COORDINATOR)
-        {
+        case Partitioning::Handle::SINGLE:
             return std::make_unique<ExchangeStep>(streams, ExchangeMode::GATHER, partitioning, keep_order);
-        }
-        QueryPlanStepPtr step_ptr
-            = std::make_unique<ExchangeStep>(streams, ExchangeMode::LOCAL_NO_NEED_REPARTITION, partitioning, keep_order);
-        return step_ptr;
+        case Partitioning::Handle::FIXED_BROADCAST:
+            return std::make_unique<ExchangeStep>(streams, ExchangeMode::BROADCAST, partitioning, keep_order);
+        case Partitioning::Handle::FIXED_ARBITRARY:
+            if (partitioning.getComponent() == Partitioning::Component::WORKER
+                && actual.getNodePartitioning().getComponent() == Partitioning::Component::COORDINATOR)
+            {
+                return std::make_unique<ExchangeStep>(streams, ExchangeMode::GATHER, partitioning, keep_order);
+            }
+            return std::make_unique<ExchangeStep>(streams, ExchangeMode::LOCAL_NO_NEED_REPARTITION, partitioning, keep_order);
+        case Partitioning::Handle::ARBITRARY:
+            return nullptr;
+        case Partitioning::Handle::FIXED_HASH:
+        case Partitioning::Handle::BUCKET_TABLE:
+            return std::make_unique<ExchangeStep>(streams, ExchangeMode::REPARTITION, partitioning, keep_order);
+        default:
+            throw Exception("Property Enforce error", ErrorCodes::ILLEGAL_ENFORCE);
     }
-    if (partitioning.getPartitioningHandle() == Partitioning::Handle::ARBITRARY)
-    {
-        return nullptr;
-    }
-    throw Exception("Property Enforce error", ErrorCodes::ILLEGAL_ENFORCE);
 }
 
 QueryPlanStepPtr
@@ -118,11 +112,49 @@ PropertyEnforcer::enforceStreamPartitioning(QueryPlanStepPtr step, const Propert
     const DataStream & input_stream = step->getOutputStream();
     streams.emplace_back(input_stream);
 
-    if (required.getStreamPartitioning().getPartitioningHandle() == Partitioning::Handle::SINGLE)
+    Partitioning partitioning = required.getStreamPartitioning();
+    switch (partitioning.getHandle())
     {
-        QueryPlanStepPtr step_ptr = std::make_unique<UnionStep>(streams, DataStream{}, OutputToInputs{}, 0, true);
-        return step_ptr;
+        case Partitioning::Handle::SINGLE:
+            return std::make_unique<UnionStep>(streams, DataStream{}, OutputToInputs{}, 0, true);
+        case Partitioning::Handle::FIXED_HASH:
+            return std::make_unique<LocalExchangeStep>(streams[0], ExchangeMode::REPARTITION, partitioning);
+        case Partitioning::Handle::FIXED_ARBITRARY:
+            return std::make_unique<LocalExchangeStep>(streams[0], ExchangeMode::LOCAL_NO_NEED_REPARTITION, partitioning);
+        case Partitioning::Handle::ARBITRARY:
+            return nullptr;
+        default:
+            throw Exception("Property Enforce error", ErrorCodes::ILLEGAL_ENFORCE);
+}
+}
+
+PlanNodePtr PropertyEnforcer::enforceOffloadingGatherNode(const PlanNodePtr & node, Context & context)
+{
+    // TableWrite or Projection-TableWrite don't need gather
+    if (node->getType() == IQueryPlanStep::Type::TableFinish
+        || (node->getChildren().size() == 1 && node->getChildren()[0]->getType() == IQueryPlanStep::Type::TableFinish))
+        return node;
+
+    // already Exchange
+    if (node->getType() == IQueryPlanStep::Type::Exchange
+        || (node->getChildren().size() == 1 && node->getChildren()[0]->getType() == IQueryPlanStep::Type::Exchange))
+            return node;
+
+    auto * projection = dynamic_cast<ProjectionStep *>(node->getStep().get());
+    // add gather before final projection
+    if (projection && projection->isFinalProject())
+    {
+        // offloading_with_query_plan need keep_order
+        auto gather_step = std::make_unique<ExchangeStep>(
+        DataStreams{node->getChildren()[0]->getStep()->getOutputStream()}, ExchangeMode::GATHER, Partitioning{}, true);
+        auto gather_node = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(gather_step), node->getChildren());
+        node->replaceChildren(PlanNodes{gather_node});
+        return node;
     }
-    throw Exception("Property Enforce error", ErrorCodes::ILLEGAL_ENFORCE);
+    
+    // offloading_with_query_plan need keep_order
+    auto gather_step
+        = std::make_unique<ExchangeStep>(DataStreams{node->getStep()->getOutputStream()}, ExchangeMode::GATHER, Partitioning{}, true);
+    return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(gather_step), PlanNodes{node});
 }
 }

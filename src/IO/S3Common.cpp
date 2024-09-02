@@ -65,11 +65,22 @@ namespace ProfileEvents
     extern const Event S3ResetSessions;
     extern const Event S3PreservedSessions;
 
+    extern const Event S3DeleteObjects;
+    extern const Event S3ListObjects;
+    extern const Event S3HeadObject;
     extern const Event S3CreateMultipartUpload;
     extern const Event S3CompleteMultipartUpload;
     extern const Event S3AbortMultipartUpload;
     extern const Event S3UploadPart;
     extern const Event S3PutObject;
+    extern const Event S3GetObject;
+
+    extern const Event DiskS3HeadObject;
+    extern const Event DiskS3CreateMultipartUpload;
+    extern const Event DiskS3AbortMultipartUpload;
+    extern const Event DiskS3CompleteMultipartUpload;
+    extern const Event DiskS3UploadPart;
+    extern const Event DiskS3PutObject;
 }
 
 namespace
@@ -355,11 +366,13 @@ namespace S3
 
         String name;
         String endpoint_authority_from_uri;
+        String endpoint_without_scheme;
 
         if (re2::RE2::FullMatch(uri.getAuthority(), virtual_hosted_style_pattern, &bucket, &name, &endpoint_authority_from_uri))
         {
             is_virtual_hosted_style = true;
-            endpoint = uri.getScheme() + "://" + name + endpoint_authority_from_uri;
+            endpoint_without_scheme = name + endpoint_authority_from_uri;
+            endpoint = uri.getScheme() + "://" + endpoint_without_scheme;
 
             /// S3 specification requires at least 3 and at most 63 characters in bucket name.
             /// https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
@@ -390,7 +403,8 @@ namespace S3
         else if (re2::RE2::PartialMatch(uri.getPath(), path_style_pattern, &bucket, &key))
         {
             is_virtual_hosted_style = false;
-            endpoint = uri.getScheme() + "://" + uri.getAuthority();
+            endpoint_without_scheme = uri.getAuthority();
+            endpoint = uri.getScheme() + "://" + endpoint_without_scheme;
 
             validateBucket(bucket, uri);
         }
@@ -402,17 +416,17 @@ namespace S3
 
         // try parse region
         std::vector<String> endpoint_splices;
-        boost::split(endpoint_splices, endpoint, boost::is_any_of("."));
+        boost::split(endpoint_splices, endpoint_without_scheme, boost::is_any_of("."));
         if (endpoint_splices.empty())
             return;
 
-        if (storage_name == COSN || storage_name == S3)
+        if (endpoint_splices[0].starts_with("cos") || endpoint_splices[0].starts_with("s3"))
         {
             if (endpoint_splices.size() < 2)
                 return;
             region = endpoint_splices[1];
         }
-        else if (storage_name == TOS)
+        else if (endpoint_splices[0].starts_with("tos"))
         {
             if (endpoint_splices.size() < 1)
                 return;
@@ -448,7 +462,9 @@ namespace S3
             ("s3.root_prefix", po::value<String>(&root_prefix)->required(), "root prefix")
             ("s3.is_virtual_hosted_style", po::value<bool>(&is_virtual_hosted_style)->default_value(false)->implicit_value(false), "is virtual hosted style or not")
             ("s3.http_keep_alive_timeout_ms", po::value<uint32_t>(&http_keep_alive_timeout_ms)->default_value(5000)->implicit_value(5000), "http keep alive time")
-            ("s3.http_connection_pool_size", po::value<size_t>(&http_connection_pool_size)->implicit_value(1024)->default_value(1024), "http pool size");
+            ("s3.http_connection_pool_size", po::value<size_t>(&http_connection_pool_size)->implicit_value(1024)->default_value(1024), "http pool size")
+            ("s3.min_upload_part_size", po::value<UInt64>(&min_upload_part_size)->implicit_value(16 * 1024 * 1024)->default_value(16 * 1024 * 1024), "min upload part size")
+            ("s3.max_single_part_upload_size", po::value<UInt64>(&max_single_part_upload_size)->implicit_value(16 * 1024 * 1024)->default_value(16 * 1024 * 1024), "max single part upload size");
 
         po::parsed_options opts = po::parse_config_file(ini_file_path.c_str(), s3_opts);
         po::variables_map vm;
@@ -501,6 +517,8 @@ namespace S3
         is_virtual_hosted_style = cfg.getBool(cfg_prefix + ".is_virtual_hosted_style", true);
         http_keep_alive_timeout_ms = cfg.getUInt(cfg_prefix + ".http_keep_alive_timeout_ms", 5000);
         http_connection_pool_size = cfg.getUInt(cfg_prefix + ".http_connection_pool_size", 1024);
+        min_upload_part_size = cfg.getUInt64(cfg_prefix + ".min_upload_part_size", 16 * 1024 * 1024);
+        max_single_part_upload_size = cfg.getUInt64(cfg_prefix + ".max_single_part_upload_size", 16 * 1024 * 1024);
 
         if (ak_id.empty())
             collectCredentialsFromEnv();
@@ -574,6 +592,9 @@ namespace S3
         request.SetBucket(bucket);
         request.SetKey(key);
 
+        ProfileEvents::increment(ProfileEvents::S3HeadObject);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3HeadObject);
         Aws::S3::Model::HeadObjectOutcome outcome = client->HeadObject(request);
 
         if (outcome.IsSuccess())
@@ -629,6 +650,7 @@ namespace S3
         req.SetRange(range);
         req.SetResponseStreamFactory(AwsWriteableStreamFactory(buffer.begin(), size));
 
+        ProfileEvents::increment(ProfileEvents::S3GetObject);
         Aws::S3::Model::GetObjectOutcome outcome = client->GetObject(req);
 
         if (outcome.IsSuccess())
@@ -672,6 +694,7 @@ namespace S3
 
     S3Util::S3ListResult S3Util::listObjectsWithPrefix(const String & prefix, const std::optional<String> & token, int limit) const
     {
+        ProfileEvents::increment(ProfileEvents::S3ListObjects);
         Aws::S3::Model::ListObjectsV2Request request;
         request.SetBucket(bucket);
         request.SetMaxKeys(limit);
@@ -709,7 +732,9 @@ namespace S3
         const std::optional<std::map<String, String>> & meta,
         const std::optional<std::map<String, String>> & tags) const
     {
-        ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload, 1);
+        ProfileEvents::increment(ProfileEvents::S3CreateMultipartUpload);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3CreateMultipartUpload);
         Aws::S3::Model::CreateMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -731,20 +756,24 @@ namespace S3
         return outcome.GetResult().GetUploadId();
     }
 
-    void S3Util::completeMultipartUpload(const String & key, const String & upload_id, const std::vector<String> & etags) const
+    void S3Util::completeMultipartUpload(
+        const String & key,
+        const String & upload_id,
+        const std::vector<String> & etags) const
     {
         if (etags.empty())
         {
             throw Exception("Trying to complete a multiupload without any part in it", ErrorCodes::LOGICAL_ERROR);
         }
 
-        ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload, 1);
-
         Aws::S3::Model::CompleteMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
         req.SetUploadId(upload_id);
 
+        ProfileEvents::increment(ProfileEvents::S3CompleteMultipartUpload);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3CompleteMultipartUpload);
         Aws::S3::Model::CompletedMultipartUpload multipart_upload;
         for (size_t i = 0; i < etags.size(); ++i)
         {
@@ -765,13 +794,14 @@ namespace S3
 
     void S3Util::abortMultipartUpload(const String & key, const String & upload_id) const
     {
-        ProfileEvents::increment(ProfileEvents::S3AbortMultipartUpload, 1);
-
         Aws::S3::Model::AbortMultipartUploadRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
         req.SetUploadId(upload_id);
 
+        ProfileEvents::increment(ProfileEvents::S3AbortMultipartUpload);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3AbortMultipartUpload);
         auto outcome = client->AbortMultipartUpload(req);
 
         if (!outcome.IsSuccess())
@@ -788,8 +818,9 @@ namespace S3
         size_t size,
         const std::shared_ptr<Aws::StringStream> & stream) const
     {
-        ProfileEvents::increment(ProfileEvents::S3UploadPart, 1);
-
+        ProfileEvents::increment(ProfileEvents::S3UploadPart);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3UploadPart);
         Aws::S3::Model::UploadPartRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -815,8 +846,6 @@ namespace S3
         const std::optional<std::map<String, String>> & metadata,
         const std::optional<std::map<String, String>> & tags) const
     {
-        ProfileEvents::increment(ProfileEvents::S3PutObject, 1);
-
         Aws::S3::Model::PutObjectRequest req;
         req.SetBucket(bucket);
         req.SetKey(key);
@@ -831,6 +860,9 @@ namespace S3
             req.SetTagging(urlEncodeMap(tags.value()));
         }
 
+        ProfileEvents::increment(ProfileEvents::S3PutObject);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3PutObject);
         auto outcome = client->PutObject(req);
 
         if (!outcome.IsSuccess())
@@ -882,6 +914,7 @@ namespace S3
         delete_objs.SetObjects(obj_ids);
         delete_objs.SetQuiet(true);
 
+        ProfileEvents::increment(ProfileEvents::S3DeleteObjects);
         Aws::S3::Model::DeleteObjectsRequest request;
         request.SetBucket(bucket);
         request.SetDelete(delete_objs);
@@ -968,6 +1001,7 @@ namespace S3
         request.SetBucket(bucket);
         request.SetKey(key);
 
+        ProfileEvents::increment(ProfileEvents::S3HeadObject);
         Aws::S3::Model::HeadObjectOutcome outcome = client->HeadObject(request);
         if (outcome.IsSuccess())
         {
@@ -986,6 +1020,7 @@ namespace S3
         req.SetKey(key);
         req.SetRange("bytes=0-1");
 
+        ProfileEvents::increment(ProfileEvents::S3GetObject);
         Aws::S3::Model::GetObjectOutcome outcome = client->GetObject(req);
 
         if (outcome.IsSuccess())
@@ -1089,6 +1124,8 @@ namespace S3
     {
         auto access_key_id = config.getString(config_elem + ".access_key_id", "");
         auto secret_access_key = config.getString(config_elem + ".secret_access_key", "");
+        auto session_token = config.getString(config_elem + ".session_token", "");
+
         auto region = config.getString(config_elem + ".region", "");
         auto server_side_encryption_customer_key_base64 = config.getString(config_elem + ".server_side_encryption_customer_key_base64", "");
 
@@ -1125,7 +1162,7 @@ namespace S3
 
         return AuthSettings
             {
-                std::move(access_key_id), std::move(secret_access_key),
+                std::move(access_key_id), std::move(secret_access_key), std::move(session_token),
                 std::move(region),
                 std::move(server_side_encryption_customer_key_base64),
                 std::move(headers),
@@ -1146,6 +1183,8 @@ namespace S3
             access_key_id = from.access_key_id;
         if (!from.access_key_secret.empty())
             access_key_secret = from.access_key_secret;
+        if (!from.session_token.empty())
+            session_token = from.session_token;
 
         headers = from.headers;
         region = from.region;

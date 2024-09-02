@@ -2,6 +2,7 @@
 #include <Processors/IAccumulatingTransform.h>
 #include <Processors/Merges/MergingSortedTransform.h>
 #include <Common/ProfileEvents.h>
+#include "Disks/TemporaryFileOnDisk.h"
 #include <IO/WriteBufferFromFile.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Compression/CompressedReadBuffer.h>
@@ -9,6 +10,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <Disks/IVolume.h>
+#include <Interpreters/Context.h>
 
 
 namespace ProfileEvents
@@ -97,12 +99,13 @@ MergeSortingTransform::MergeSortingTransform(
     size_t max_bytes_before_remerge_,
     double remerge_lowered_memory_bytes_ratio_,
     size_t max_bytes_before_external_sort_, VolumePtr tmp_volume_,
-    size_t min_free_disk_space_)
+    size_t min_free_disk_space_,
+    bool enable_adaptive_spill_)
     : SortingTransform(header, description_, max_merged_block_size_, limit_)
     , max_bytes_before_remerge(max_bytes_before_remerge_)
     , remerge_lowered_memory_bytes_ratio(remerge_lowered_memory_bytes_ratio_)
     , max_bytes_before_external_sort(max_bytes_before_external_sort_), tmp_volume(tmp_volume_)
-    , min_free_disk_space(min_free_disk_space_) {}
+    , min_free_disk_space(min_free_disk_space_), enable_adaptive_spill(enable_adaptive_spill_) {}
 
 Processors MergeSortingTransform::expandPipeline()
 {
@@ -168,11 +171,22 @@ void MergeSortingTransform::consume(Chunk chunk)
         remerge();
     }
 
+    double spill_triger_threshold = kDefaultSpillTrigerThreshold;
+    if (CurrentThread::isInitialized()) {
+        const auto &cur_ctx = CurrentThread::get().getQueryContext();
+        if (cur_ctx)
+            spill_triger_threshold = cur_ctx->getSettingsRef().spill_triger_threshold.value;
+    }
+    bool adaptive_spill_trigered = enable_adaptive_spill && total_memory_tracker.getHardLimit() * spill_triger_threshold < total_memory_tracker.get();
+
     /** If too many of them and if external sorting is enabled,
       *  will merge blocks that we have in memory at this moment and write merged stream to temporary (compressed) file.
       * NOTE. It's possible to check free space in filesystem.
       */
-    if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
+    if (enable_adaptive_spill && !adaptive_spill_trigered) // skip external sort if memory usage is low in auto spill mode
+    {
+    }
+    else if (max_bytes_before_external_sort && sum_bytes_in_blocks > max_bytes_before_external_sort)
     {
         size_t size = sum_bytes_in_blocks + min_free_disk_space;
         auto reservation = tmp_volume->reserve(size);

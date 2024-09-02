@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBuffer.h>
@@ -6,7 +7,6 @@
 #include <Interpreters/Set.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/typeid_cast.h>
-#include <Common/TargetSpecific.h>
 
 #if USE_MULTITARGET_CODE
 #    include <immintrin.h>
@@ -24,7 +24,6 @@ namespace DB
 
 DECLARE_AVX2_SPECIFIC_CODE(
     static inline __m256i makeMask(const uint32_t hash) noexcept {
-        const __m256i ones = _mm256_set1_epi32(1);
         // Odd contants for hashing:
         const __m256i rehash
             = _mm256_setr_epi32(0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU, 0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U);
@@ -35,6 +34,7 @@ DECLARE_AVX2_SPECIFIC_CODE(
         hash_data = _mm256_mullo_epi32(rehash, hash_data);
         hash_data = _mm256_srli_epi32(hash_data, 27);
         // Use these 5 bits to shift a single bit to a location in each 32-bit lane
+        const __m256i ones = _mm256_set1_epi32(1);
         return _mm256_sllv_epi32(ones, hash_data);
     }
 
@@ -42,7 +42,7 @@ DECLARE_AVX2_SPECIFIC_CODE(
         auto slot_index = (h >> 32) & (slots - 1);
         auto mask = TargetSpecific::AVX2::makeMask(h);
         __m256i * ptr = reinterpret_cast<__m256i *>(data_ptr) + slot_index;
-        ptr = reinterpret_cast<__m256i *>(__builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot));
+        ptr = static_cast<__m256i *>(__builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot));
         __m256i data = _mm256_load_si256(ptr);
         __m256i res = _mm256_or_si256(data, mask);
         _mm256_store_si256(ptr, res);
@@ -52,12 +52,50 @@ DECLARE_AVX2_SPECIFIC_CODE(
         auto slot_index = (h >> 32) & (slots - 1);
         auto mask = TargetSpecific::AVX2::makeMask(h);
         auto ptr = reinterpret_cast<__m256i *>(data_ptr) + slot_index;
-        ptr = reinterpret_cast<__m256i *>(__builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot));
+        ptr = static_cast<__m256i *>(__builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot));
         const __m256i data = _mm256_load_si256(ptr);
         auto res = _mm256_testc_si256(data, mask);
         return res;
     })
 
+#endif
+
+// the previous method DECLARE_AVX2_SPECIFIC_CODE can't be inlined, so use the following code instead.
+#if defined(__AVX__) && defined(__AVX2__)
+    inline __m256i makeMaskAVX2(const uint32_t hash) noexcept {
+        // Odd contants for hashing:
+        const __m256i rehash
+            = _mm256_setr_epi32(0x47b6137bU, 0x44974d91U, 0x8824ad5bU, 0xa2b7289dU, 0x705495c7U, 0x2df1424bU, 0x9efc4947U, 0x5c6bfb31U);
+        // Load hash into a YMM register, repeated eight times
+        __m256i hash_data = _mm256_set1_epi32(hash);
+        // Multiply-shift hashing ala Dietzfelbinger et al.: multiply 'hash' by eight different
+        // odd constants, then keep the 5 most significant bits from each product.
+        hash_data = _mm256_mullo_epi32(rehash, hash_data);
+        hash_data = _mm256_srli_epi32(hash_data, 27);
+        // Use these 5 bits to shift a single bit to a location in each 32-bit lane
+        const __m256i ones = _mm256_set1_epi32(1);
+        return _mm256_sllv_epi32(ones, hash_data);
+    }
+
+    inline void addKeyUnhashAVX2(UInt64 h, UInt64 slots, void * data_ptr) {
+        auto slot_index = (h >> 32) & (slots - 1);
+        auto mask = makeMaskAVX2(h);
+        __m256i * ptr = reinterpret_cast<__m256i *>(data_ptr) + slot_index;
+        __builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot);
+        __m256i data = _mm256_load_si256(ptr);
+        __m256i res = _mm256_or_si256(data, mask);
+        _mm256_store_si256(ptr, res);
+    }
+
+    inline bool probeKeyUnhashAVX2(UInt64 h, UInt64 slots, void * data_ptr) {
+        auto slot_index = (h >> 32) & (slots - 1);
+        auto mask = makeMaskAVX2(h);
+        auto ptr = reinterpret_cast<__m256i *>(data_ptr) + slot_index;
+        __builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot);
+        const __m256i data = _mm256_load_si256(ptr);
+        auto res = _mm256_testc_si256(data, mask);
+        return res;
+    }
 #endif
 
 
@@ -117,7 +155,7 @@ bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
     return !(res);
 }
 
-#else
+#else 
 
 
 // MakeMask for scalar version:
@@ -134,11 +172,12 @@ static inline void makeMask(uint32_t key, uint32_t* masks) {
     }
 }
 
+
 void BlockBloomFilter::addKeyUnhash(UInt64 h)
 {
 
 #if USE_MULTITARGET_CODE
-    if (isArchSupported(TargetArch::AVX2)) {
+    if (is_arch_supported) {
         return TargetSpecific::AVX2::addKeyUnhash(h, slots, this->data.get());
     }
 #endif
@@ -153,15 +192,19 @@ void BlockBloomFilter::addKeyUnhash(UInt64 h)
     }
 }
 
-bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
+bool BlockBloomFilter::probeKeyUnhashAvx2(UInt64 h) const
 {
-
-#if USE_MULTITARGET_CODE
-    if (isArchSupported(TargetArch::AVX2)) {
-        return TargetSpecific::AVX2::probeKeyUnhash(h, slots, this->data.get());
-    }
+#if defined(__AVX__) && defined(__AVX2__)
+    return probeKeyUnhashAVX2(h, slots, this->data.get());
+#elif USE_MULTITARGET_CODE
+    return TargetSpecific::AVX2::probeKeyUnhash(h, slots, this->data.get());
+#else
+    throw Exception("AVX2 is not supported!", ErrorCodes::LOGICAL_ERROR);
 #endif
+}
 
+bool BlockBloomFilter::probeKeyUnhashScalar(UInt64 h) const
+{
     // scalar version
     auto slot_index = (h >> 32) & (slots - 1);
     uint32_t masks[uint32s_in_slot];
@@ -173,6 +216,20 @@ bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
         }
     }
     return true;
+}
+
+
+bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
+{
+
+#if USE_MULTITARGET_CODE
+    if (is_arch_supported) {
+        return TargetSpecific::AVX2::probeKeyUnhash(h, slots, this->data.get());
+    }
+#endif
+
+    // scalar version
+    return probeKeyUnhashScalar(h);
 }
 
 #endif
@@ -205,7 +262,7 @@ BlockBloomFilter BlockBloomFilter::intersect(BlockBloomFilter && left_, BlockBlo
 void BlockBloomFilter::deserialize(ReadBuffer & istr)
 {
     readBinary(ndv, istr);
-    init(ndv);
+    init(ndv, true);
     istr.read(reinterpret_cast<char *>(data.get()), bytes_in_slot * slots);
 }
 
@@ -215,7 +272,7 @@ void BlockBloomFilter::serializeToBuffer(WriteBuffer & ostr)
     ostr.write(reinterpret_cast<const char *>(data.get()), bytes_in_slot * slots);
 }
 
-void BlockBloomFilter::mergeInplace(BlockBloomFilter && bf)
+void BlockBloomFilter::mergeInplace( BlockBloomFilter && bf)
 {
     if (this->slots != bf.slots)
     {

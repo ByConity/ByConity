@@ -3,6 +3,7 @@
 #include <atomic>
 #include <Catalog/CatalogUtils.h>
 #include <Storages/CnchPartitionInfo.h>
+#include <Storages/TableDefinitionHash.h>
 #include <Common/CurrentThread.h>
 #include <Common/RWLock.h>
 #include <Common/ScanWaitFreeMap.h>
@@ -37,8 +38,17 @@ struct TableMetaEntry
 
     TableLockHolder writeLock() const { return meta_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString()); }
 
-    TableMetaEntry(const String & database_, const String & table_, const String & table_uuid_, const RWLock & lock = nullptr)
-        : database(database_), table(table_), table_uuid(table_uuid_), trash_item_metrics(std::make_shared<TableMetrics>(table_uuid_))
+    TableMetaEntry(
+        const String & database_,
+        const String & table_,
+        const String & table_uuid_,
+        const RWLock & lock = nullptr,
+        const bool on_table_creation = false)
+        : database(database_)
+        , table(table_)
+        , table_uuid(table_uuid_)
+        , partition_metrics_loaded(on_table_creation)
+        , trash_item_metrics(std::make_shared<TableMetrics>(table_uuid_))
     {
         if (!lock)
             meta_mutex = RWLockImpl::create();
@@ -60,7 +70,7 @@ struct TableMetaEntry
     CacheVersion cache_version;
 
     bool is_clustered{true};
-    std::atomic_uint64_t table_definition_hash{0};
+    TableDefinitionHash table_definition_hash;
     String preallocate_vw;
     mutable RWLock meta_mutex;
     std::atomic_bool partition_metrics_loaded = false;
@@ -78,6 +88,7 @@ struct TableMetaEntry
     String server_vw_name;
 
     Catalog::PartitionMap getPartitions(const Strings & wanted_partition_ids);
+    std::unordered_set<String> getDeletingPartitions();
     Strings getPartitionIDs();
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList();
 

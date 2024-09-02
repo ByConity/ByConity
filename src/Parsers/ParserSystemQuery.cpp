@@ -272,7 +272,9 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::START_GC:
         case Type::STOP_GC:
         case Type::FORCE_GC:
+        case Type::DROP_CNCH_META_CACHE:
         case Type::DROP_CNCH_PART_CACHE:
+        case Type::DROP_CNCH_DELETE_BITMAP_CACHE:
         case Type::STOP_TTL_MERGES:
         case Type::START_TTL_MERGES:
         case Type::STOP_MOVES:
@@ -290,6 +292,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
         case Type::DROP_CHECKSUMS_CACHE:
         case Type::SYNC_DEDUP_WORKER:
+        case Type::SYNC_REPAIR_TASK:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
         case Type::START_CLUSTER:
@@ -297,6 +300,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::FLUSH_CNCH_LOG:
         case Type::STOP_CNCH_LOG:
         case Type::RESUME_CNCH_LOG:
+        case Type::MANIFEST_CHECKPOINT:
             parseDatabaseAndTableName(pos, expected, res->database, res->table);
             break;
 
@@ -361,12 +365,31 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::DEDUP_WITH_HIGH_PRIORITY:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            if (!ParserKeyword{"PARTITION"}.ignore(pos, expected))
+                return false;
+            if (!parser_partition.parse(pos, res->partition, expected))
+                return false;
+            break;
+        }
+
         case Type::DEDUP:
         {
             if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
                 return false;
             if (ParserKeyword{"PARTITION"}.ignore(pos, expected) && !parser_partition.parse(pos, res->partition, expected))
                 return false;
+            if (ParserKeyword{"BUCKET"}.ignore(pos, expected))
+            {
+                ASTPtr ast;
+                if (!ParserUnsignedInteger().parse(pos, ast, expected))
+                    return false;
+                res->specify_bucket = true;
+                res->bucket_number = safeGet<UInt64>(ast->as<ASTLiteral>()->value);
+            }
             if (!ParserKeyword{"FOR REPAIR"}.ignore(pos, expected))
                 return false;
             break;
@@ -426,6 +449,40 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             if (ParserKeyword{"DOMAIN"}.ignore(pos, expected))
                 res->string_data = "DOMAIN";
 
+            break;
+        }
+
+        case Type::START_VIEW:
+        case Type::STOP_VIEW:
+        case Type::DROP_VIEW_META:
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            break;
+
+        case Type::RELEASE_MEMORY_LOCK:
+        {
+            if (ParserKeyword{"OF"}.ignore(pos, expected))
+            {
+                if (!ParserKeyword{"TXN"}.ignore(pos, expected))
+                    return false;
+                if (!parse_uint(pos, expected, res->txn_id))
+                    return false;
+                res->specify_txn = true;
+            }
+            else
+                parseDatabaseAndTableName(pos, expected, res->database, res->table);
+            break;
+        }
+
+        case Type::DROP_SCHEMA_CACHE:
+        {
+            if (ParserKeyword{"FOR"}.ignore(pos, expected))
+            {
+                if (ParserKeyword{"S3"}.ignore(pos, expected))
+                    res->schema_cache_storage = "S3";
+                else
+                    return false;
+            }
             break;
         }
 

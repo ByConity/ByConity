@@ -34,6 +34,8 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
@@ -50,6 +52,8 @@
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
+#include <QueryPlan/OutfileFinishStep.h>
+#include <QueryPlan/OutfileWriteStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/PlanBuilder.h>
 #include <QueryPlan/ProjectionStep.h>
@@ -60,11 +64,11 @@
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/planning_common.h>
 #include <Common/FieldVisitors.h>
-#include <Parsers/formatAST.h>
 
 #include <algorithm>
 #include <memory>
 #include <unordered_set>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -74,6 +78,7 @@ namespace ErrorCodes
     extern const int EXPECTED_ALL_OR_ANY;
     extern const int INVALID_LIMIT_EXPRESSION;
     extern const int BAD_ARGUMENTS;
+    extern const int SYNTAX_ERROR;
 }
 
 #define PRINT_PLAN(plan, NAME) \
@@ -87,7 +92,8 @@ class QueryPlannerVisitor : public ASTVisitor<RelationPlan, const Void>
 {
 public:
     QueryPlannerVisitor(ContextMutablePtr context_, CTERelationPlans & cte_plans_, Analysis & analysis_, TranslationMapPtr outer_context_)
-        : context(std::move(context_))
+        : ASTVisitor(context_->getSettingsRef().max_ast_depth)
+        , context(std::move(context_))
         , cte_plans(cte_plans_)
         , analysis(analysis_)
         , outer_context(std::move(outer_context_))
@@ -103,6 +109,12 @@ public:
     RelationPlan visitASTSelectQuery(ASTPtr & node, const Void &) override;
     RelationPlan visitASTSubquery(ASTPtr & node, const Void &) override;
     RelationPlan visitASTExplainQuery(ASTPtr & node, const Void &) override;
+    RelationPlan visitASTCreatePreparedStatementQuery(ASTPtr & node, const Void &) override
+    {
+        auto & prepare = node->as<ASTCreatePreparedStatementQuery &>();
+        auto query = prepare.getQuery();
+        return process(query);
+    }
 
     RelationPlan process(ASTPtr & node) { return ASTVisitorUtil::accept(node, *this, {}); }
 
@@ -135,7 +147,7 @@ private:
     std::pair<Names, Names> prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
     static DataStream getJoinOutputStream(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
 
-    RelationPlan planReadFromStorage(const IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints);
+    RelationPlan planReadFromStorage(IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints, bool is_table_function = false);
     // static MergeTreeReadPlannerPtr getReadPlanner(ASTSelectQuery & select_query);
     // static MergeTreeBitMapSchedulerPtr getBitMapScheduler(ASTSelectQuery & select_query, const StoragePtr & storage, size_t max_streams);
 
@@ -150,7 +162,8 @@ private:
     void planLimitBy(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planTotalsAndHaving(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planLimitAndOffset(PlanBuilder & builder, ASTSelectQuery & select_query);
-    // void planSampling(PlanBuilder & builder, ASTSelectQuery & select_query);
+    void planSampling(PlanBuilder & builder, ASTSelectQuery & select_query);
+
     RelationPlan planFinalSelect(PlanBuilder & builder, ASTSelectQuery & select_query);
 
     // the routine to plan expressions in most scenarios, which handle non-deterministic function & subqueries within expressions
@@ -181,6 +194,7 @@ private:
     NameToNameMap coerceTypesForSymbols(PlanBuilder & builder, const NameToType & symbol_and_types, bool replace_symbol);
     // coerce types for the first output column of a subquery plan
     void coerceTypeForSubquery(RelationPlan & plan, const DataTypePtr & type);
+
     /// utils
     SizeLimits extractDistinctSizeLimits();
     std::pair<UInt64, UInt64> getLimitLengthAndOffset(ASTSelectQuery & query);
@@ -193,12 +207,30 @@ private:
         String & lhs_symbol,
         RelationPlan & rhs_plan,
         ASTSelectQuery & select_query);
-    void planHint(const QueryPlanStepPtr & step, SqlHints & sql_hints);
+    void addPlanHint(const QueryPlanStepPtr & step, SqlHints & sql_hints, bool check_step_type = false);
     bool needAggregateOverflowRow(ASTSelectQuery & select_query) const;
 };
 
 namespace
 {
+    PlanNodePtr planOutfile(PlanNodePtr output_root, Analysis & analysis, ContextMutablePtr context)
+    {
+        auto & outfile_info = analysis.getOutfileInfo();
+        if (context->getSettingsRef().enable_distributed_output && outfile_info)
+        {
+            OutfileTargetPtr outfile_target = std::make_shared<OutfileTarget>(
+                context, outfile_info->out_file, outfile_info->format, outfile_info->compression_method, outfile_info->compression_level);
+            auto outfile_step = std::make_shared<OutfileWriteStep>(output_root->getCurrentDataStream(), outfile_target);
+            auto outfile_root = output_root->addStep(context->nextNodeId(), std::move(outfile_step));
+
+            auto outfile_finish_step = std::make_shared<OutfileFinishStep>(output_root->getCurrentDataStream());
+            auto outfile_finish_root = outfile_root->addStep(context->nextNodeId(), std::move(outfile_finish_step));
+
+            return outfile_finish_root;
+        }
+        return output_root;
+    }
+
     PlanNodePtr planOutput(const RelationPlan & plan, ASTPtr & query, Analysis & analysis, ContextMutablePtr context)
     {
         const auto & output_desc = analysis.getOutputDescription(*query);
@@ -240,9 +272,10 @@ namespace
             output_types[output_name] = input_types[input_column];
         }
 
-        auto output_step
-            = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, true);
-        auto new_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
+        auto output_step = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types, true);
+        auto output_root = old_root->addStep(context->nextNodeId(), std::move(output_step));
+
+        auto new_root = planOutfile(output_root, analysis, context);
         PRINT_PLAN(new_root, plan_output);
         return new_root;
     }
@@ -286,12 +319,13 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
     auto & insert = *analysis.getInsert();
     auto select_plan = process(insert_query.select);
     select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context));
+    auto insert_select_with_profiles = context->getSettingsRef().insert_select_with_profiles;
 
-    auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns);
+    auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns, node);
 
     auto insert_node = select_plan.getRoot()->addStep(
         context->nextNodeId(),
-        std::make_shared<TableWriteStep>(select_plan.getRoot()->getCurrentDataStream(), target),
+        std::make_shared<TableWriteStep>(select_plan.getRoot()->getCurrentDataStream(), target, insert_select_with_profiles),
         {select_plan.getRoot()});
 
     auto total_affected_row_count_symbol = context->getSymbolAllocator()->newSymbol("rows");
@@ -302,7 +336,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto return_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol),
+        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node, insert_select_with_profiles),
         {insert_node});
 
     PRINT_PLAN(return_node, plan_insert);
@@ -341,7 +375,6 @@ RelationPlan QueryPlannerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, co
 
 RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void &)
 {
-    LOG_INFO(&Poco::Logger::get(__func__), serializeAST(*node, true));
     auto & select_query = node->as<ASTSelectQuery &>();
 
     PlanBuilder builder = planFrom(select_query);
@@ -356,7 +389,6 @@ RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void 
         planTotalsAndHaving(builder, select_query);
     else
         planFilter(builder, select_query, select_query.having());
-
     PRINT_PLAN(builder.plan, plan_having);
 
     planWindow(builder, select_query);
@@ -374,7 +406,7 @@ RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void 
 
     planLimitAndOffset(builder, select_query);
 
-    // planSampling(builder, select_query);
+    planSampling(builder, select_query);
 
     return planFinalSelect(builder, select_query);
 }
@@ -427,13 +459,13 @@ RelationPlan QueryPlannerVisitor::visitASTExplainQuery(ASTPtr & node, const Void
     auto & query = node->as<ASTExplainQuery &>();
     auto plan = process(query.getExplainedQuery());
     auto settings = checkAndGetSettings<QueryPlanSettings>(query.getSettings());
+    auto output = context->getSymbolAllocator()->newSymbol("Explain Analyze");
     auto analyze_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<ExplainAnalyzeStep>(
-            plan.getRoot()->getCurrentDataStream(), query.getKind(), context, nullptr, settings),
+        std::make_shared<ExplainAnalyzeStep>(plan.getRoot()->getCurrentDataStream(), output, query.getKind(), context, nullptr, settings),
         {plan.getRoot()});
 
-    return {analyze_node, {{"Explain Analyze"}}};
+    return {analyze_node, {{output}}};
 }
 
 PlanBuilder QueryPlannerVisitor::planWithoutTables(ASTSelectQuery & select_query)
@@ -459,7 +491,6 @@ PlanBuilder QueryPlannerVisitor::planWithoutTables(ASTSelectQuery & select_query
 PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_select, ASTSelectQuery & select_query)
 {
     auto & first_table_elem = tables_in_select.children[0]->as<ASTTablesInSelectQueryElement &>();
-
     auto builder = planTableExpression(first_table_elem.table_expression->as<ASTTableExpression &>(), select_query);
 
     for (size_t idx = 1; idx < tables_in_select.children.size(); ++idx)
@@ -480,8 +511,7 @@ PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_s
         }
     }
 
-    planHint(builder.plan->getStep(), tables_in_select.hints);
-
+    addPlanHint(builder.plan->getStep(), tables_in_select.hints);
     return builder;
 }
 
@@ -539,7 +569,7 @@ PlanBuilder QueryPlannerVisitor::planTable(ASTTableIdentifier & db_and_table, AS
 PlanBuilder QueryPlannerVisitor::planTableFunction(ASTFunction & table_function, ASTSelectQuery & select_query)
 {
     const auto * scope = analysis.getScope(table_function);
-    auto relation_plan = planReadFromStorage(table_function, scope, select_query, table_function.hints);
+    auto relation_plan = planReadFromStorage(table_function, scope, select_query, table_function.hints, true);
     auto builder = toPlanBuilder(relation_plan, scope);
     PRINT_PLAN(builder.plan, plan_table_function);
     return builder;
@@ -551,7 +581,7 @@ PlanBuilder QueryPlannerVisitor::planTableSubquery(ASTSubquery & subquery, ASTPt
     auto builder = toPlanBuilder(plan, analysis.getScope(subquery));
 
     //set hints
-    planHint(builder.plan->getStep(), hints);
+    addPlanHint(builder.plan->getStep(), hints);
 
     PRINT_PLAN(builder.plan, plan_table_subquery);
     return builder;
@@ -591,7 +621,7 @@ void QueryPlannerVisitor::planCrossJoin(ASTTableJoin & table_join, PlanBuilder &
             context->getSettingsRef().max_threads,
             context->getSettingsRef().optimize_read_in_order);
 
-        planHint(join_step, table_join.hints);
+        addPlanHint(join_step, table_join.hints);
         left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});
     }
 
@@ -606,6 +636,13 @@ void QueryPlannerVisitor::planCrossJoin(ASTTableJoin & table_join, PlanBuilder &
 
 void QueryPlannerVisitor::planJoinUsing(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder)
 {
+    if (use_ansi_semantic && table_join.kind != ASTTableJoin::Kind::Inner)
+    {
+        throw Exception(
+            "USING is banned for outer joins in ANSI mode, to avoid unexpected different behaviour with CLICKHOUSE",
+            ErrorCodes::SYNTAX_ERROR);
+    }
+
     auto & join_analysis = analysis.getJoinUsingAnalysis(table_join);
 
     // 1. prepare join keys
@@ -625,7 +662,7 @@ void QueryPlannerVisitor::planJoinUsing(ASTTableJoin & table_join, PlanBuilder &
         true,
         use_ansi_semantic ? std::nullopt : std::make_optional(join_analysis.require_right_keys));
 
-    planHint(join_step, table_join.hints);
+    addPlanHint(join_step, table_join.hints);
     left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});
     // left_builder.setWithNonJoinStreamIfNecessary(table_join);
 
@@ -750,7 +787,7 @@ void QueryPlannerVisitor::planJoinOn(ASTTableJoin & table_join, PlanBuilder & le
         false,
         std::nullopt,
         asof_inequality);
-    planHint(join_step, table_join.hints);
+    addPlanHint(join_step, table_join.hints);
     left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});
     // left_builder.setWithNonJoinStreamIfNecessary(table_join);
 
@@ -866,7 +903,7 @@ DataStream QueryPlannerVisitor::getJoinOutputStream(ASTTableJoin &, PlanBuilder 
 }
 
 RelationPlan
-QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints)
+QueryPlannerVisitor::planReadFromStorage(IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints, bool is_table_function)
 {
     const auto & storage_analysis = analysis.getStorageAnalysis(table_ast);
     const auto & storage = storage_analysis.storage;
@@ -942,7 +979,7 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
             name_to_index_map.emplace(table_scope->at(i).getOriginColumnName(), i);
         }
 
-        auto column_name = ColumnPruning::selectColumnWithMinSize(std::move(source_columns), storage);
+        auto column_name = ColumnPruningVisitor::selectColumnWithMinSize(std::move(source_columns), storage);
         auto column_symbol = context->getSymbolAllocator()->newSymbol(column_name);
         columns_with_aliases.emplace_back(column_name, column_symbol);
         field_symbols[name_to_index_map.at(column_name)] = FieldSymbolInfo(column_symbol);
@@ -952,18 +989,19 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
     const auto generated_query = std::make_shared<ASTSelectQuery>();
     generated_query->setExpression(ASTSelectQuery::Expression::SELECT, std::make_shared<ASTExpressionList>());
     const auto select_expression_list = generated_query->select();
-    if (ASTPtr rewritten_prewhere = analysis.tryGetPrewhere(origin_query))
+    ASTPtr rewritten_prewhere = analysis.tryGetPrewhere(origin_query);
+    if (rewritten_prewhere)
     {
         // translate PREWHERE for subcolumn optimization
         TranslationMap translation{outer_context, table_scope, field_symbols, analysis, context};
         rewritten_prewhere = translation.translate(rewritten_prewhere);
+
         // now change the symbol name back to column name
         std::unordered_map<String, String> name_mapping;
         for (const auto & [column, symbol] : columns_with_aliases)
             name_mapping.emplace(symbol, column);
         auto symbol_mapper = SymbolMapper::simpleMapper(name_mapping);
-        rewritten_prewhere = symbol_mapper.map(rewritten_prewhere);
-        generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(rewritten_prewhere));
+        generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, symbol_mapper.map(rewritten_prewhere));
     }
     /*
     if (origin_query.implicitWhere())
@@ -974,8 +1012,13 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
 
     NamesAndTypesList columns;
     columns = storage->getInMemoryMetadataPtr()->getColumns().getOrdinary();
-    auto storage_id = storage->getStorageID();
-    generated_query->replaceDatabaseAndTable(storage_id.getDatabaseName(), storage_id.getTableName());
+    if (is_table_function)
+    {
+        auto table_func = table_ast.shared_from_this();
+        generated_query->addTableFunction(table_func);
+    }
+    else
+        generated_query->replaceDatabaseAndTable(storage->getStorageID());
 
     // set sampling size
     if (origin_query.sampleSize())
@@ -1074,8 +1117,11 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
     auto table_step
         = std::make_shared<TableScanStep>(context, storage->getStorageID(), columns_with_aliases, query_info, max_block_size, alias);
 
-    planHint(table_step, hints);
+    addPlanHint(table_step, hints);
     auto plan_node = PlanNodeBase::createPlanNode(context->nextNodeId(), table_step);
+    if (rewritten_prewhere)
+        plan_node = PlanNodeBase::createPlanNode(
+            context->nextNodeId(), std::make_shared<FilterStep>(plan_node->getCurrentDataStream(), rewritten_prewhere, true), {plan_node});
     return {plan_node, field_symbols};
 }
 
@@ -1175,11 +1221,9 @@ MergeTreeBitMapSchedulerPtr QueryPlannerVisitor::getBitMapScheduler(ASTSelectQue
 PlanBuilder QueryPlannerVisitor::planFrom(ASTSelectQuery & select_query)
 {
     if (select_query.tables())
-    {
-        return planTables(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query);
-    }
-    else
-        return planWithoutTables(select_query);
+            return planTables(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query);
+        else
+            return planWithoutTables(select_query);
 }
 
 void QueryPlannerVisitor::planArrayJoin(ASTArrayJoin & array_join, PlanBuilder & builder, ASTSelectQuery & select_query)
@@ -1403,6 +1447,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
         needAggregateOverflowRow(select_query),
         false);
 
+    addPlanHint(agg_step, select_query.hints, true);
     builder.addStep(std::move(agg_step));
     builder.withAdditionalMappings(mappings_for_aggregate);
 
@@ -1437,7 +1482,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
 
 void QueryPlannerVisitor::planTotalsAndHaving(PlanBuilder & builder, ASTSelectQuery & select_query)
 {
-    const auto& settings = context->getSettingsRef();
+    const auto & settings = context->getSettingsRef();
 
     auto totals_having_step = std::make_shared<TotalsHavingStep>(
         builder.getCurrentDataStream(),
@@ -1617,7 +1662,8 @@ void QueryPlannerVisitor::planOrderBy(PlanBuilder & builder, ASTSelectQuery & se
         limit = limit_length + limit_offset;
     }
 
-    auto sorting_step = std::make_shared<SortingStep>(builder.getCurrentDataStream(), sort_description, limit, false, SortDescription{});
+    auto sorting_step = std::make_shared<SortingStep>(
+        builder.getCurrentDataStream(), sort_description, limit, SortingStep::Stage::FULL, SortDescription{});
     builder.addStep(std::move(sorting_step));
     PRINT_PLAN(builder.plan, plan_order_by);
 }
@@ -1796,24 +1842,24 @@ void QueryPlannerVisitor::planLimitAndOffset(PlanBuilder & builder, ASTSelectQue
     }
 }
 
-/*
-PlanNodePtr QueryPlannerVisitor::planSampling(PlanNodePtr plan, ASTSelectQuery & select_query)
+void QueryPlannerVisitor::planSampling(PlanBuilder & builder, ASTSelectQuery & select_query)
 {
-    if (select_query.sample_size() && context->getSettingsRef().enable_final_sample)
+    if (select_query.sampleSize() && context->getSettingsRef().enable_final_sample)
     {
-        ASTSampleRatio * sample = select_query.sample_size()->as<ASTSampleRatio>();
+        ASTSampleRatio * sample = select_query.sampleSize()->as<ASTSampleRatio>();
         ASTSampleRatio::BigNum numerator = sample->ratio.numerator;
         ASTSampleRatio::BigNum denominator = sample->ratio.denominator;
         if (numerator <= 1 || denominator > 1)
-            return plan;
-
-        auto step = std::make_shared<FinalSamplingStep>(plan->getCurrentDataStream(), numerator);
-        plan = plan->addStep(context->nextNodeId(), std::move(step));
-        PRINT_PLAN(plan, plan_sampling);
+        {
+            return;
+        }
+        else
+        {
+            auto sampling = std::make_unique<FinalSampleStep>(builder.getCurrentDataStream(), numerator, context->getSettingsRef().max_block_size);
+            builder.addStep(std::move(sampling));
+        }
     }
-    return plan;
 }
-*/
 
 RelationPlan QueryPlannerVisitor::planFinalSelect(PlanBuilder & builder, ASTSelectQuery & select_query)
 {
@@ -1867,7 +1913,7 @@ RelationPlan QueryPlannerVisitor::planFinalSelect(PlanBuilder & builder, ASTSele
     }
 
     auto project = std::make_shared<ProjectionStep>(builder.getCurrentDataStream(), assignments, output_types);
-    planHint(project, select_query.hints);
+    addPlanHint(project, select_query.hints);
     builder.addStep(std::move(project));
 
     return {builder.getRoot(), field_symbol_infos};
@@ -1939,12 +1985,10 @@ namespace
     class ExtractNonDeterministicFunctionVisitor : public AnalyzerExpressionVisitor<const Void>
     {
     protected:
-        void visitExpression(ASTPtr &, IAST &, const Void &) override
-        {
-        }
+        void visitExpression(ASTPtr &, IAST &, const Void &) override { }
         void visitOrdinaryFunction(ASTPtr & node, ASTFunction & func, const Void &) override
         {
-            if (!context->isFunctionDeterministic(func.name))
+            if (context->isNonDeterministicFunction(func.name))
                 non_deterministic_functions.emplace_back(node);
         }
 
@@ -2018,7 +2062,8 @@ void QueryPlannerVisitor::planScalarSubquery(PlanBuilder & builder, const ASTPtr
         ApplyStep::ApplyType::CROSS,
         ApplyStep::SubqueryType::SCALAR,
         scalar_assignment,
-        NameSet{});
+        NameSet{},
+        analysis.subquery_support_semi_anti[scalar_subquery]);
     builder.addStep(std::move(apply_step), {builder.getRoot(), subquery_plan.getRoot()});
     builder.withAdditionalMapping(scalar_subquery, subquery_output_symbol);
     PRINT_PLAN(builder.plan, plan_scalar_subquery);
@@ -2050,7 +2095,8 @@ void QueryPlannerVisitor::planInSubquery(PlanBuilder & builder, const ASTPtr & n
         ApplyStep::ApplyType::CROSS,
         ApplyStep::SubqueryType::IN,
         in_assignment,
-        NameSet{});
+        NameSet{},
+        analysis.subquery_support_semi_anti[node]);
 
     builder.addStep(std::move(apply_step), {builder.getRoot(), rhs_plan.getRoot()});
     builder.withAdditionalMapping(node, apply_output_symbol);
@@ -2064,6 +2110,12 @@ void QueryPlannerVisitor::planExistsSubquery(PlanBuilder & builder, const ASTPtr
         return;
 
     auto exists_subquery = node->as<ASTFunction &>();
+    bool is_not_exist = false;
+    if (exists_subquery.name == "not")
+    {
+        is_not_exist = true;
+        exists_subquery = exists_subquery.arguments->children[0]->as<ASTFunction &>();
+    }
     auto subquery_plan
         = QueryPlanner().planQuery(exists_subquery.arguments->children.at(0), builder.translation, analysis, context, cte_plans);
     // Add Projection Step
@@ -2080,15 +2132,17 @@ void QueryPlannerVisitor::planExistsSubquery(PlanBuilder & builder, const ASTPtr
     }
 
     // Add Apply Step
-    String apply_output_symbol = context->getSymbolAllocator()->newSymbol("_exists_subquery");
-    Assignment exist_assignment{apply_output_symbol, std::make_shared<ASTLiteral>(true)};
+    String apply_output_symbol = context->getSymbolAllocator()->newSymbol(is_not_exist ? "_not_exists_subquery" : "_exists_subquery");
+    Assignment exist_assignment{
+        apply_output_symbol, is_not_exist ? std::make_shared<ASTLiteral>(false) : std::make_shared<ASTLiteral>(true)};
     auto apply_step = std::make_shared<ApplyStep>(
         DataStreams{builder.getCurrentDataStream(), subquery_plan.getRoot()->getCurrentDataStream()},
         builder.getOutputNames(),
         ApplyStep::ApplyType::CROSS,
         ApplyStep::SubqueryType::EXISTS,
         exist_assignment,
-        NameSet{});
+        NameSet{},
+        analysis.subquery_support_semi_anti[node]);
 
     builder.addStep(std::move(apply_step), {builder.getRoot(), subquery_plan.getRoot()});
     builder.withAdditionalMapping(node, apply_output_symbol);
@@ -2130,7 +2184,8 @@ void QueryPlannerVisitor::planQuantifiedComparisonSubquery(PlanBuilder & builder
             ApplyStep::ApplyType::CROSS,
             ApplyStep::SubqueryType::QUANTIFIED_COMPARISON,
             quantified_comparison_assignment,
-            NameSet{});
+            NameSet{},
+            analysis.subquery_support_semi_anti[node]);
     }
     else
     {
@@ -2146,7 +2201,8 @@ void QueryPlannerVisitor::planQuantifiedComparisonSubquery(PlanBuilder & builder
             ApplyStep::ApplyType::CROSS,
             ApplyStep::SubqueryType::IN,
             in_assignment,
-            NameSet{});
+            NameSet{},
+            analysis.subquery_support_semi_anti[node]);
     }
 
     builder.addStep(std::move(apply_step), {builder.getRoot(), rhs_plan.getRoot()});
@@ -2461,7 +2517,7 @@ void QueryPlannerVisitor::processSubqueryArgs(
     rhs_symbol = rhs_plan.getFirstPrimarySymbol();
 }
 
-void QueryPlannerVisitor::planHint(const QueryPlanStepPtr & step, SqlHints & sql_hints)
+void QueryPlannerVisitor::addPlanHint(const QueryPlanStepPtr & step, SqlHints & sql_hints, bool check_step_type)
 {
     if (sql_hints.empty())
         return;
@@ -2476,7 +2532,7 @@ void QueryPlannerVisitor::planHint(const QueryPlanStepPtr & step, SqlHints & sql
     }
 
     if (!hint_list.empty())
-        step->addHints(hint_list, context);
+        step->addHints(hint_list, context, check_step_type);
 }
 
 bool QueryPlannerVisitor::needAggregateOverflowRow(ASTSelectQuery & select_query) const

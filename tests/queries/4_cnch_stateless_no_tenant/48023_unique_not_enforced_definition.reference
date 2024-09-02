@@ -1,3 +1,4 @@
+CREATE TABLE test.c1\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `parent_id1` UInt8,\n    `description` String,\n    CONSTRAINT parent_id_uk UNIQUE (parent_id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
 1	1	CHILD ONE
 2	1	CHILD ONE
 3	2	CHILD TWO

@@ -8,16 +8,16 @@ DROP TABLE IF EXISTS test_distinct.unique_1;
 DROP TABLE IF EXISTS test_distinct.unique_2;
 DROP TABLE IF EXISTS test_distinct.unique_3;
 
-CREATE TABLE test_distinct.unique_1 (event_time DateTime, id UInt64, m1 UInt32, m2 UInt64) ENGINE = CnchMergeTree(m1) PARTITION BY toDate(event_time) ORDER BY id UNIQUE KEY id;
+CREATE TABLE test_distinct.unique_1 (event_time DateTime, id UInt64, m1 UInt32, m2 UInt64) ENGINE = CnchMergeTree(m1) ORDER BY id UNIQUE KEY id;
 insert into test_distinct.unique_1 select toDate('2021-01-01') + number, number, number % 5, number % 10 from numbers(20);
 
-CREATE TABLE test_distinct.unique_2 (event_time DateTime, id UInt64, id2 UInt32, m2 UInt64) ENGINE = CnchMergeTree(id2) PARTITION BY toDate(event_time) ORDER BY id UNIQUE KEY (id,id2);
+CREATE TABLE test_distinct.unique_2 (event_time DateTime, id UInt64, id2 UInt32, m2 UInt64) ENGINE = CnchMergeTree(id2) ORDER BY id UNIQUE KEY (id,id2);
 insert into test_distinct.unique_2 select toDate('2021-01-01') + number, number, number % 20, number % 10 from numbers(20,20);
 
-CREATE TABLE test_distinct.unique_3 (event_time DateTime, id3 UInt64, m1 UInt32, m2 UInt64, m3 UInt32) ENGINE = CnchMergeTree(m1) PARTITION BY toDate(event_time) ORDER BY id3 UNIQUE KEY id3;
+CREATE TABLE test_distinct.unique_3 (event_time DateTime, id3 UInt64, m1 UInt32, m2 UInt64, m3 UInt32) ENGINE = CnchMergeTree(m1) ORDER BY id3 UNIQUE KEY id3;
 insert into test_distinct.unique_3 select toDate('2021-01-01') + number, number, number % 5, number % 10, number % 2 from numbers(40,10);
 
-CREATE TABLE test_distinct.unique_4 (event_time DateTime, id4 UInt64, m1 UInt32, m2 UInt64, k3 String) ENGINE = CnchMergeTree(m1) PARTITION BY toDate(event_time) ORDER BY id4 UNIQUE KEY (id4,m2,sipHash64(k3));
+CREATE TABLE test_distinct.unique_4 (event_time DateTime, id4 UInt64, m1 UInt32, m2 UInt64, k3 String) ENGINE = CnchMergeTree(m1) ORDER BY id4 UNIQUE KEY (id4,m2,sipHash64(k3));
 insert into test_distinct.unique_4 select toDate('2021-01-01') + number, number, number % 5, number % 10, number % 2 from numbers(50,10);
 
 set enable_optimizer=1;
@@ -103,5 +103,34 @@ drop table if exists test_distinct.unique_1;
 drop table if exists test_distinct.unique_2;
 drop table if exists test_distinct.unique_3;
 drop table if exists test_distinct.unique_4;
+
+set dialect_type='CLICKHOUSE';
+set send_logs_level='error';
+
+drop table if exists test48045;
+drop table if exists test480451;
+drop table if exists test480452;
+
+CREATE TABLE test_distinct.test48045
+(
+    `id` Int64,
+    `issue_id` Int64,
+    p_date Date
+)
+ENGINE = CnchMergeTree
+PARTITION BY p_date
+ORDER BY issue_id
+UNIQUE KEY id;
+
+insert into test_distinct.test48045 values (1, 100, '2024-01-01') (1, 200, '2024-01-02') (1, 300, '2024-01-01');
+
+SELECT DISTINCT id
+FROM test_distinct.test48045
+where p_date = '2024-01-01';
+
+SELECT DISTINCT id
+FROM test_distinct.test48045;
+
+drop table if exists test48045;
 
 DROP database if exists test_distinct;

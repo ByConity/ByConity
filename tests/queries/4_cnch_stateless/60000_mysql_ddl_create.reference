@@ -1,0 +1,29 @@
+id	Int32	true						
+val1	DateTime64(3)	false				中文		
+val2	String	false		DEFAULT	\'a\'			
+mysql_create_ddl1	CREATE TABLE test.mysql_create_ddl1 (\n    `id` Int32 NULL,\n    `val1` DateTime64(3) NOT NULL COMMENT \'中文\',\n    `val2` String NOT NULL DEFAULT \'a\'\n)\nENGINE = CnchMergeTree\nPARTITION BY (toString(val1), id)\nORDER BY (id, val1, val2)\nUNIQUE KEY tuple()\nTTL toDateTime(val1) + toIntervalDay(1)\nSETTINGS index_granularity = 4096, partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\'\nCOMMENT \'a\'
+id	Int32	true						
+val1	DateTime64(3)	true						
+val2	String	false		DEFAULT	\'a\'			
+mysql_create_ddl2	CREATE TABLE test.mysql_create_ddl2 (\n    `id` Int32 NULL,\n    `val1` DateTime64(3) NULL,\n    `val2` String NOT NULL DEFAULT \'a\'\n)\nENGINE = CnchMergeTree\nPARTITION BY (toString(val1), id)\nORDER BY (id, val1, val2)\nUNIQUE KEY tuple()\nSETTINGS index_granularity = 8192, partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\'\nCOMMENT \'a\'
+id	Int32	false						
+val1	DateTime64(3)	false				中文		
+val2	String	false		DEFAULT	\'a\'			
+mysql_create_ddl3	CREATE TABLE test.mysql_create_ddl3 (\n    `id` Int32 NOT NULL,\n    `val1` DateTime64(3) NOT NULL COMMENT \'中文\',\n    `val2` String NOT NULL DEFAULT \'a\'\n)\nENGINE = CnchMergeTree\nPARTITION BY toDate(val1)\nORDER BY tuple(id)\nUNIQUE KEY tuple(id)\nSETTINGS index_granularity = 4096, partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\'\nCOMMENT \'a\'
+id	Int32	true						
+val1	DateTime64(3)	false				中文		
+val2	String	false		DEFAULT	\'a\'			
+mysql_create_ddl4	CREATE TABLE test.mysql_create_ddl4 (\n    `id` Int32 NULL,\n    `val1` DateTime64(3) NOT NULL COMMENT \'中文\',\n    `val2` String NOT NULL DEFAULT \'a\'\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\', index_granularity = 8192
+id	Int32	false						
+val1	DateTime64(3)	false				中文		
+val2	String	false		DEFAULT	\'a\'			
+mysql_create_ddl5	CREATE TABLE test.mysql_create_ddl5 (\n    `id` Int32 NOT NULL,\n    `val1` DateTime64(3) NOT NULL COMMENT \'中文\',\n    `val2` String NOT NULL DEFAULT \'a\',\n    CONSTRAINT un1 UNIQUE (id)\n)\nENGINE = CnchMergeTree\nPARTITION BY intDiv(id, 4294967)\nORDER BY tuple(id)\nUNIQUE KEY tuple(id)\nSETTINGS partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\', index_granularity = 8192
+id	Int32	false						
+id2	Decimal(18, 0)	false						
+val1	DateTime64(3)	false				中文		
+val2	String	false		DEFAULT	\'a\'			
+mysql_create_ddl6	CREATE TABLE test.mysql_create_ddl6 (\n    `id` Int32 NOT NULL,\n    `id2` Decimal(18, 0) NOT NULL,\n    `val1` DateTime64(3) NOT NULL COMMENT \'中文\',\n    `val2` String NOT NULL DEFAULT \'a\'\n)\nENGINE = CnchMergeTree\nPARTITION BY intDiv(id, 4294967)\nORDER BY (id, id2)\nUNIQUE KEY (id, id2)\nSETTINGS index_granularity = 8192, partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\'
+1	1
+	0	1	0	0
+test_create_table_unique2	CREATE TABLE test.test_create_table_unique2 (\n    `int_col_1` UInt64 NOT NULL,\n    `int_col_2` UInt64 NOT NULL,\n    `int_col_3` LowCardinality(Int8 NULL) NOT NULL,\n    `int_col_4` Bool NULL,\n    `int_col_5` Int8 NULL,\n    `int_col_6` Int64 NULL,\n    `str_col_1` String NOT NULL,\n    `str_col_2` String NULL,\n    `float_col_1` Float64 NULL,\n    `float_col_2` Decimal(3, 2) NULL,\n    `date_col_1` Date32 NOT NULL,\n    `date_col_2` DateTime64(3) NULL,\n    `map_col_1` Map(String, String) NOT NULL,\n    `map_col_2` Map(String, UInt64) NOT NULL\n)\nENGINE = CnchMergeTree\nPARTITION BY (int_col_1, date_col_1)\nORDER BY (str_col_1, int_col_1)\nUNIQUE KEY (int_col_1, str_col_1)\nTTL toDate(date_col_1) + toIntervalDay(30)\nSETTINGS index_granularity = 4096, partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\'
+mysql_create_ddl7	CREATE TABLE test.mysql_create_ddl7 (\n    `id` Int32 NOT NULL,\n    `val1` DateTime64(3) NOT NULL DEFAULT now(),\n    `val2` String NOT NULL DEFAULT \'a\'\n)\nENGINE = CnchMergeTree\nPARTITION BY toDate(val1)\nORDER BY (id, val1, val2)\nUNIQUE KEY tuple(id)\nTTL toDateTime(val1) + toIntervalDay(1)\nSETTINGS index_granularity = 4096, partition_level_unique_keys = 0, storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\'\nCOMMENT \'a\'

@@ -18,6 +18,7 @@
 #include <Core/Types.h>
 
 #include <memory>
+#include <set>
 #include <unordered_map>
 
 namespace DB
@@ -37,30 +38,27 @@ public:
     const std::unordered_map<CTEId, PlanNodePtr> & getCTEs() const { return common_table_expressions; }
     std::unordered_map<CTEId, PlanNodePtr> & getCTEs() { return common_table_expressions; }
 
-    void add(CTEId id, PlanNodePtr plan)
-    {
-        checkNotExists(id);
-        common_table_expressions.emplace(id, std::move(plan));
-    }
+    void add(CTEId id, PlanNodePtr plan);
 
-    void update(CTEId id, PlanNodePtr plan)
-    {
-        checkExists(id);
-        common_table_expressions[id] = std::move(plan);
-    }
+    void update(CTEId id, PlanNodePtr plan);
 
     bool empty() const { return common_table_expressions.empty(); }
 
     size_t size() const { return common_table_expressions.size(); }
 
+    void clear() { common_table_expressions.clear(); }
+
     std::unordered_map<CTEId, UInt64> collectCTEReferenceCounts(PlanNodePtr & root);
+
+    std::set<CTEId> getCTEIds() const;
+
+    CTEId nextCTEId() { return ++next_cte_id; }
 
 private:
     std::unordered_map<CTEId, PlanNodePtr> common_table_expressions;
 
-    class ReferenceCountsVisitor;
+    CTEId next_cte_id = 0;
 
-    void checkNotExists(CTEId id) const;
-    void checkExists(CTEId id) const;
+    class ReferenceCountsVisitor;
 };
 }

@@ -148,7 +148,7 @@ public:
     {
         fs::create_directory("./tmp/local1/");
         DB::Disks disks;
-        disks.emplace_back(std::make_shared<DB::DiskLocal>("local1", "./tmp/local1/", 0));
+        disks.emplace_back(std::make_shared<DB::DiskLocal>("local1", "./tmp/local1/", DB::DiskStats{}));
         return std::make_shared<DB::VolumeJBOD>("local_disk", disks, disks.front()->getName(), 0, false);
     }
 

@@ -29,7 +29,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/Macros.h>
 #include <Common/randomSeed.h>
-#include <Common/renameat2.h>
+#include <Common/atomicRename.h>
 
 #include <Core/Defines.h>
 #include <Core/Settings.h>
@@ -49,10 +49,12 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/IParserBase.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/StorageMaterializedView.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
@@ -67,6 +69,7 @@
 #include <Access/AccessRightsElement.h>
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/IDataType.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -110,6 +113,7 @@
 #include <Optimizer/QueryUseOptimizerChecker.h>
 
 #include <fmt/format.h>
+
 
 namespace DB
 {
@@ -574,12 +578,22 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         {
             column_type = DataTypeFactory::instance().get(col_decl.type);
 
+            if (col_decl.unsigned_modifier)
+            {
+                if (!isInteger(column_type))
+                    throw Exception("Can only use SIGNED/UNSIGNED modifier with integer type", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
+                if (isSignedInteger(column_type) && *col_decl.unsigned_modifier)
+                    column_type = makeUnsigned(column_type);
+                if (isUnsignedInteger(column_type) && !(*col_decl.unsigned_modifier))
+                    column_type = makeSigned(column_type);
+            }
+
             if (col_decl.null_modifier)
             {
                 if (column_type->isNullable())
                     throw Exception("Can't use [NOT] NULL modifier with Nullable type", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
                 if (*col_decl.null_modifier)
-                    column_type = makeNullable(column_type);
+                    column_type = JoinCommon::convertTypeToNullable(column_type);
             }
             else if (make_columns_nullable)
             {
@@ -679,7 +693,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         res.add(std::move(column));
     }
 
-    if (context_->getSettingsRef().flatten_nested)
+    if (!attach && context_->getSettingsRef().flatten_nested)
         res.flattenNested();
 
     if (res.getAllPhysical().empty())
@@ -715,7 +729,6 @@ UniqueNotEnforcedDescription InterpreterCreateQuery::getUniqueNotEnforcedDescrip
             res.unique.push_back(std::dynamic_pointer_cast<ASTUniqueNotEnforcedDeclaration>(unique_key->clone()));
     return res;
 }
-
 
 InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(ASTCreateQuery & create) const
 {
@@ -800,12 +813,18 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         {
             auto cloned_query = create.select->clone();
             if (QueryUseOptimizerChecker::check(cloned_query, getContext()))
-                as_select_sample = InterpreterSelectQueryUseOptimizer(cloned_query, getContext(), {}).getSampleBlock();
+                as_select_sample = InterpreterSelectQueryUseOptimizer(
+                                       cloned_query, getContext(), SelectQueryOptions().analyze().setWithoutExtendedObject())
+                                       .getSampleBlock();
             else
-                as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(cloned_query, getContext());
+                as_select_sample
+                    = InterpreterSelectWithUnionQuery(cloned_query, getContext(), SelectQueryOptions().analyze().setWithoutExtendedObject())
+                          .getSampleBlock();
         }
         else
-            as_select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), getContext());
+            as_select_sample = InterpreterSelectWithUnionQuery(
+                                   create.select->clone(), getContext(), SelectQueryOptions().analyze().setWithoutExtendedObject())
+                                   .getSampleBlock();
         properties.columns = ColumnsDescription(as_select_sample.getNamesAndTypesList());
     }
     else if (create.as_table_function)
@@ -1005,6 +1024,8 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
                 as_create.storage->ttl_table = nullptr;
 
             create.set(create.storage, as_create.storage->ptr());
+            if (as_create.comment)
+                create.set(create.comment, as_create.comment->ptr());
         }
         else if (as_create.as_table_function)
             create.as_table_function = as_create.as_table_function->clone();
@@ -1116,107 +1137,14 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
-    // Make sure names in foreign key exist.
-    if (create.columns_list && create.columns_list->foreign_keys)
-    {
-        if (create.database.empty())
-            create.database = getContext()->getCurrentDatabase();
-
-        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
-            NameSet name_set;
-            for (const auto & name : names)
-                name_set.insert(name);
-
-            for (const auto & ptr : name_list.children)
-                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
-                    return ptr->as<ASTIdentifier &>().name();
-            return String();
-        };
-
-        Names columns;
-        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
-            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
-
-        // FOREIGN KEY (foreign_key.column_names) REFERENCES(foreign_key.ref_column_names)
-        if (!columns.empty())
-        {
-            const ASTExpressionList * foreign_keys = create.columns_list->foreign_keys;
-            NameSet used_fk_names;
-
-            for (const auto & foreign_key_child : foreign_keys->children)
-            {
-                auto & foreign_key = foreign_key_child->as<ASTForeignKeyDeclaration &>();
-
-                if (!used_fk_names.contains(foreign_key.fk_name))
-                    used_fk_names.insert(foreign_key.fk_name);
-                else
-                    throw Exception("FOREIGN KEY constraint name duplicated with " + foreign_key.fk_name, ErrorCodes::ILLEGAL_COLUMN);
-
-                auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
-                if (!ref_storage_ptr)
-                    throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
-
-                auto check_res = contains_columns(foreign_key.column_names->as<ASTExpressionList &>(), columns);
-                auto ref_check_res = contains_columns(
-                    foreign_key.ref_column_names->as<ASTExpressionList &>(),
-                    ref_storage_ptr->getInMemoryMetadataPtr()->getColumns().getAll().getNames());
-
-                if (!check_res.empty())
-                    throw Exception("FOREIGN KEY references unknown column " + check_res, ErrorCodes::ILLEGAL_COLUMN);
-                if (!ref_check_res.empty())
-                    throw Exception("FOREIGN KEY references unknown column " + ref_check_res, ErrorCodes::ILLEGAL_COLUMN);
-            }
-        }
-    }
-
-    // Make sure names in unique not enforced exist.
-    if (create.columns_list && create.columns_list->unique)
-    {
-        if (create.database.empty())
-            create.database = getContext()->getCurrentDatabase();
-
-        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
-            NameSet name_set;
-            for (const auto & name : names)
-                name_set.insert(name);
-
-            for (const auto & ptr : name_list.children)
-                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
-                    return ptr->as<ASTIdentifier &>().name();
-            return String();
-        };
-
-        Names columns;
-        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
-            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
-
-        if (!columns.empty())
-        {
-            const ASTExpressionList * unique = create.columns_list->unique;
-            NameSet used_uk_names;
-
-            for (const auto & unique_child : unique->children)
-            {
-                auto & unique_key = unique_child->as<ASTUniqueNotEnforcedDeclaration &>();
-
-                if (!used_uk_names.contains(unique_key.name))
-                    used_uk_names.insert(unique_key.name);
-                else
-                    throw Exception("UNIQUE NOT ENFORCED constraint name duplicated with " + unique_key.name, ErrorCodes::ILLEGAL_COLUMN);
-
-                auto check_res = contains_columns(unique_key.column_names->as<ASTExpressionList &>(), columns);
-                if (!check_res.empty())
-                    throw Exception("UNIQUE NOT ENFORCED not exists -- " + check_res, ErrorCodes::ILLEGAL_COLUMN);
-            }
-        }
-    }
-
     /// Temporary tables are created out of databases.
     if (create.temporary && !create.database.empty())
         throw Exception("Temporary tables cannot be inside a database. You should not specify a database for a temporary table.",
             ErrorCodes::BAD_DATABASE_FOR_TEMPORARY_TABLE);
 
-    if (create.storage && create.storage->unique_key && create.columns_list->projections)
+    /// Need to judge create.columns_list to avoid possible core caused by:
+    ///     CREATE TABLE u10104_t2 Engine=CnchMergeTree UNIQUE KEY(a) AS SELECT * FROM u10104_t1;
+    if (create.storage && create.storage->unique_key && create.columns_list && create.columns_list->projections)
         throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 
     String current_database = getContext()->getCurrentDatabase();
@@ -1316,6 +1244,110 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     /// Set and retrieve list of columns, indices and constraints. Set table engine if needed. Rewrite query in canonical way.
     TableProperties properties = setProperties(create);
 
+    // Make sure names in foreign key exist.
+    if (create.columns_list && create.columns_list->foreign_keys && !create.columns_list->foreign_keys->children.empty())
+    {
+        // When the reference column does not exist, foreign keys are still created
+        bool force_create_foreign_key = getContext()->getSettingsRef().force_create_foreign_key;
+
+        if (create.database.empty())
+            create.database = getContext()->getCurrentDatabase();
+
+        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
+            NameSet name_set;
+            for (const auto & name : names)
+                name_set.insert(name);
+
+            for (const auto & ptr : name_list.children)
+                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
+                    return ptr->as<ASTIdentifier &>().name();
+            return String();
+        };
+
+        Names columns;
+        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
+            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
+
+        // FOREIGN KEY (foreign_key.column_names) REFERENCES(foreign_key.ref_column_names)
+        if (!columns.empty())
+        {
+            const ASTExpressionList * foreign_keys = create.columns_list->foreign_keys;
+            NameSet used_fk_names;
+
+            for (const auto & foreign_key_child : foreign_keys->children)
+            {
+                auto & foreign_key = foreign_key_child->as<ASTForeignKeyDeclaration &>();
+
+                if (!used_fk_names.contains(foreign_key.fk_name))
+                    used_fk_names.insert(foreign_key.fk_name);
+                else
+                    throw Exception("FOREIGN KEY constraint name duplicated with " + foreign_key.fk_name, ErrorCodes::ILLEGAL_COLUMN);
+
+
+                auto check_res = contains_columns(foreign_key.column_names->as<ASTExpressionList &>(), columns);
+                if (!check_res.empty())
+                    throw Exception("FOREIGN KEY references unknown self column " + check_res, ErrorCodes::ILLEGAL_COLUMN);
+
+                if (!force_create_foreign_key)
+                {
+                    auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
+                    if (!ref_storage_ptr)
+                        throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
+
+                    auto ref_check_res = contains_columns(
+                        foreign_key.ref_column_names->as<ASTExpressionList &>(),
+                        ref_storage_ptr->getInMemoryMetadataPtr()->getColumns().getAll().getNames());
+
+                    if (!ref_check_res.empty())
+                        throw Exception("FOREIGN KEY references unknown column " + ref_check_res, ErrorCodes::ILLEGAL_COLUMN);
+                }
+            }
+        }
+    }
+
+    // Make sure names in unique not enforced exist.
+    if (create.columns_list && create.columns_list->unique && !create.columns_list->unique->children.empty())
+    {
+        if (create.database.empty())
+            create.database = getContext()->getCurrentDatabase();
+
+        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
+            NameSet name_set;
+            for (const auto & name : names)
+                name_set.insert(name);
+
+            for (const auto & ptr : name_list.children)
+                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
+                    return ptr->as<ASTIdentifier &>().name();
+            return String();
+        };
+
+        Names columns;
+        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
+            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
+
+        if (!columns.empty())
+        {
+            const ASTExpressionList * unique = create.columns_list->unique;
+            NameSet used_uk_names;
+
+            for (const auto & unique_child : unique->children)
+            {
+                auto & unique_key = unique_child->as<ASTUniqueNotEnforcedDeclaration &>();
+
+                if (!used_uk_names.contains(unique_key.name))
+                    used_uk_names.insert(unique_key.name);
+                else
+                    throw Exception("UNIQUE NOT ENFORCED constraint name duplicated with " + unique_key.name, ErrorCodes::ILLEGAL_COLUMN);
+
+                auto check_res = contains_columns(unique_key.column_names->as<ASTExpressionList &>(), columns);
+                if (!check_res.empty())
+                    throw Exception("UNIQUE NOT ENFORCED not exists -- " + check_res, ErrorCodes::ILLEGAL_COLUMN);
+            }
+        }
+    }
+
+
     DatabasePtr database;
     bool need_add_to_database = !create.temporary;
     if (need_add_to_database)
@@ -1372,6 +1404,31 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     if (create.replace_table)
         return doCreateOrReplaceTable(create, properties);
+
+    /// when create materialized view and tenant id is not empty add setting tenant_id to select query
+    if (create.is_materialized_view && !getCurrentTenantId().empty())
+    {
+        ASTPtr settings = std::make_shared<ASTSetQuery>();
+        settings->as<ASTSetQuery &>().is_standalone = false;
+        settings->as<ASTSetQuery &>().changes.push_back({"tenant_id", getCurrentTenantId()});
+        ASTPtr select = create.select->clone();
+        if (select && select->as<ASTSelectWithUnionQuery &>().settings_ast)
+        {
+            if (!select->as<ASTSelectWithUnionQuery &>().settings_ast->as<ASTSetQuery &>().changes.tryGet("tenant_id"))
+            {
+                settings->as<ASTSetQuery &>().changes.merge(select->as<ASTSelectWithUnionQuery &>().settings_ast->as<ASTSetQuery &>().changes);
+                ASTSetQuery * setting_ptr = select->as<ASTSelectWithUnionQuery &>().settings_ast->as<ASTSetQuery>();
+                select->setOrReplace(setting_ptr, settings);
+                create.setOrReplace(create.select, select);
+            }
+        }
+        else
+        {
+            select->as<ASTSelectWithUnionQuery &>().settings_ast = settings;
+            select->children.push_back(settings);
+            create.setOrReplace(create.select, select);
+        }
+    }
 
     /// Actually creates table
     bool created = doCreateTable(create, properties);
@@ -1550,7 +1607,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     /// we can safely destroy the object without a call to "shutdown", because there is guarantee
     /// that no background threads/similar resources remain after exception from "startup".
 
-    if (!res->supportsDynamicSubcolumns() && hasDynamicSubcolumns(res->getInMemoryMetadataPtr()->getColumns()))
+    if (!res->supportsDynamicSubcolumns() && res->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         throw Exception(ErrorCodes::ILLEGAL_COLUMN,
             "Cannot create table with column of type Object, "

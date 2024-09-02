@@ -20,16 +20,17 @@
 
 namespace DB
 {
-PatternPtr InnerJoinCommutation::getPattern() const
+ConstRefPatternPtr InnerJoinCommutation::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
         .with(Patterns::any(), Patterns::any()).result();
+    return pattern;
 }
 
 TransformResult InnerJoinCommutation::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
-    auto join_node = dynamic_cast<JoinNode *>(node.get());
+    auto * join_node = dynamic_cast<JoinNode *>(node.get());
     if (!join_node)
         return {};
 
@@ -38,7 +39,7 @@ TransformResult InnerJoinCommutation::transformImpl(PlanNodePtr node, const Capt
 
 PlanNodePtr InnerJoinCommutation::swap(JoinNode & node, RuleContext & rule_context)
 {
-    auto step = *node.getStep();
+    auto & step = *node.getStep();
     DataStreams streams = {step.getInputStreams()[1], step.getInputStreams()[0]};
     auto join_step = std::make_shared<JoinStep>(
         streams,

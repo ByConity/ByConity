@@ -443,11 +443,12 @@ bool Iterator::Next(fdb_error_t & code)
     if (batch_count > batch_read_index)
     {
         batch_read_index++;
+        read_count++;
         return true;
     }
     else
     {
-        if (iteration > 1 && !has_more)
+        if (iteration > 1 && ((read_count == req.row_limit) || !has_more))
             return false;
 
         while (true)
@@ -461,10 +462,16 @@ bool Iterator::Next(fdb_error_t & code)
             }
             else
             {
-                batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
-                    FDB_KEYSEL_FIRST_GREATER_THAN(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
-                    FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
-                    req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
+                batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(
+                    tr->transaction,
+                    FDB_KEYSEL_FIRST_GREATER_THAN(reinterpret_cast<const uint8_t *>(start_key_batch.c_str()), start_key_batch.size()),
+                    FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t *>(req.end_key.c_str()), req.end_key.size()),
+                    std::min(req.row_limit, req.row_limit - read_count),
+                    0,
+                    FDB_STREAMING_MODE_LARGE,
+                    iteration,
+                    1,
+                    req.reverse_order));
             }
 
             code = waitFuture(batch_future->future);
@@ -490,6 +497,7 @@ bool Iterator::Next(fdb_error_t & code)
             start_key_batch = std::string(reinterpret_cast<const char *>(batch_kvs[batch_count-1].key), batch_kvs[batch_count-1].key_length);
             iteration++;
             batch_read_index = 1;
+            read_count++;
             return true;
         }
         else

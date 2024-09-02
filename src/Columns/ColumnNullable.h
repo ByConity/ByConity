@@ -78,6 +78,15 @@ public:
     UInt64 get64(size_t n) const override { return nested_column->get64(n); }
     bool isDefaultAt(size_t n) const override { return isNullAt(n); }
 
+    void tryToFlushZeroCopyBuffer() const override
+    {
+        
+        if (nested_column) 
+            nested_column->tryToFlushZeroCopyBuffer();
+        if (null_map) 
+            null_map->tryToFlushZeroCopyBuffer();
+    }
+
     /**
      * If isNullAt(n) returns false, returns the nested column's getDataAt(n), otherwise returns a special value
      * EMPTY_STRING_REF indicating that data is not present.
@@ -206,8 +215,8 @@ public:
     const ColumnPtr & getNullMapColumnPtr() const { return null_map; }
     ColumnPtr & getNullMapColumnPtr() { return null_map; }
 
-    ColumnUInt8 & getNullMapColumn() { return assert_cast<ColumnUInt8 &>(*null_map); }
-    const ColumnUInt8 & getNullMapColumn() const { return assert_cast<const ColumnUInt8 &>(*null_map); }
+    ColumnUInt8 & getNullMapColumn() { return typeid_cast<ColumnUInt8 &>(*null_map); }
+    const ColumnUInt8 & getNullMapColumn() const { return typeid_cast<const ColumnUInt8 &>(*null_map); }
 
     NullMap & getNullMapData() { return getNullMapColumn().getData(); }
     const NullMap & getNullMapData() const { return getNullMapColumn().getData(); }
@@ -243,5 +252,6 @@ private:
 
 ColumnPtr makeNullable(const ColumnPtr & column);
 ColumnPtr makeNullableOrLowCardinalityNullable(const ColumnPtr & column);
+ColumnPtr recursiveAssumeNotNullable(const ColumnPtr & column);
 
 }

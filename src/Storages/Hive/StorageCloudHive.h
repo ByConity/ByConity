@@ -7,6 +7,7 @@
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/StorageInMemoryMetadata.h"
 #include <common/shared_ptr_helper.h>
+#include <Processors/IntermediateResult/CacheManager.h>
 
 namespace DB
 {
@@ -25,6 +26,8 @@ public:
 
     std::string getName() const override { return "CloudHive"; }
 
+    HiveFiles filterHiveFilesByIntermediateResultCache(SelectQueryInfo & query_info, ContextPtr query_context, HiveFiles & hive_files);
+
     Pipe read(
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
@@ -39,15 +42,9 @@ public:
     void loadHiveFiles(const HiveFiles & files);
     HiveFiles getHiveFiles() const { return files; }
     std::shared_ptr<CnchHiveSettings> getSettings() const { return storage_settings; }
+    bool supportIntermedicateResultCache() const override { return true; }
 
 private:
-    struct MinMaxDescription
-    {
-        NamesAndTypesList columns;
-        ExpressionActionsPtr expression;
-    };
-    static MinMaxDescription getMinMaxIndex(const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context);
-
     void selectFiles(
         ContextPtr local_context,
         const StorageMetadataPtr & metadata_snapshot,
@@ -58,6 +55,7 @@ private:
     HiveFiles files;
     std::shared_ptr<CnchHiveSettings> storage_settings;
     Poco::Logger * log {&Poco::Logger::get("CloudHive")};
+    CacheHolderPtr cache_holder;
 };
 
 }

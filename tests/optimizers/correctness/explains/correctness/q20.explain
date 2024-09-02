@@ -1,32 +1,26 @@
 Projection Est. ? rows
-│     Expressions: sum(2):=`expr#sum(2)`
-└─ MergingAggregated Est. ? rows
-   └─ Gather Exchange Est. ? rows
-      └─ Aggregating Est. ? rows
-         │     Group by: {}
-         │     Aggregates: expr#sum(2):=AggNull(sum)(expr#2)
-         └─ Projection Est. ? rows
-            │     Expressions: expr#2:=2
-            └─ TableScan correctness.q17_t3 Est. ? rows
-                     Outputs: [a.null]
-Projection Est. ? rows
-│     Expressions: sum(2):=`expr#sum(2)_1`
-└─ MergingAggregated Est. ? rows
-   └─ Gather Exchange Est. ? rows
-      └─ Aggregating Est. ? rows
-         │     Group by: {}
-         │     Aggregates: expr#sum(2)_1:=AggNull(sum)(expr#2_1)
-         └─ Projection Est. ? rows
-            │     Expressions: expr#2_1:=2
-            └─ TableScan correctness.q17_t3 Est. ? rows
-                     Outputs: a.null_1:=a.null
-Projection Est. ? rows
-│     Expressions: sum(2):=`expr#sum(2)_2`
+│     Expressions: count():=`expr#count()`
 └─ Aggregating Est. ? rows
    │     Group by: {}
-   │     Aggregates: expr#sum(2)_2:=AggNull(sum)(expr#2_2)
+   │     Aggregates: expr#count():=AggNull(count)()
    └─ Gather Exchange Est. ? rows
-      └─ Projection Est. ? rows
-         │     Expressions: expr#2_2:=2
-         └─ TableScan correctness.q17_t3 Est. ? rows
-                  Outputs: a.null_2:=a.null
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {a}
+            └─ Aggregating Est. ? rows
+               │     Group by: {a}
+               └─ TableScan correctness.q17_t3 Est. ? rows
+                        Outputs: [a]
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()_1`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count()_1:=AggNull(count)()
+         └─ Aggregating Est. ? rows
+            │     Group by: {a_1}
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {a_1}
+               └─ TableScan correctness.q17_t3 Est. ? rows
+                        Outputs: a_1:=a

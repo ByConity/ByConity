@@ -29,6 +29,7 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTExpressionList.h>
 
 namespace DB
 {
@@ -94,6 +95,15 @@ struct IdentifierSemantic
     getIdentsMembership(ASTPtr ast, const std::vector<TableWithColumnNamesAndTypes> & tables, const Aliases & aliases);
     static std::pair<String, String> extractDatabaseAndTable(const ASTIdentifier & identifier);
 
+    /// According input ast indenfier as table alias name to get dependent table and column mapping
+    /// Sepcific function for materialized view partition mapping rule
+    static std::optional<size_t> getSourceTableAndColumnMapping(
+        ASTPtr ast,
+        const std::vector<TableWithColumnNamesAndTypes> & tables,
+        Aliases & aliases,
+        std::shared_ptr<ASTExpressionList> & collect_identifiers,
+        bool is_recursion = false);
+
 private:
     static bool doesIdentifierBelongTo(const ASTIdentifier & identifier, const String & database, const String & table);
     static bool doesIdentifierBelongTo(const ASTIdentifier & identifier, const String & table);
@@ -114,6 +124,19 @@ public:
     static void visit(const ASTPtr & node, Data & data);
     static bool needChildVisit(const ASTPtr &, const ASTPtr &);
     static ASTIdentifiers collect(const ASTPtr & node);
+};
+
+class RemoveQualifierVisitor
+{
+public:
+    
+    struct Data
+    {
+    };
+
+    static void visit(ASTPtr & node, Data & data);
+    static bool needChildVisit(ASTPtr &, ASTPtr &);
+    static void transform(ASTPtr & node);
 };
 
 /// Collect identifier table membership considering aliases

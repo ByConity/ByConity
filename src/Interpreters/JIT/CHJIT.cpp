@@ -29,7 +29,10 @@
 #include <common/getPageSize.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
-
+#include <common/logger_useful.h>
+#include <Common/PODArray.h>
+#include <Common/ProfileEvents.h>
+#include <Common/BitHelpers.h>
 
 namespace DB
 {
@@ -70,6 +73,7 @@ public:
 
         llvm::raw_svector_ostream object_stream(object_buffer);
         llvm::legacy::PassManager pass_manager;
+        llvm::legacy::PassManager pass_manager2;
         llvm::MCContext * machine_code_context = nullptr;
 
         if (target_machine.addPassesToEmitMC(pass_manager, machine_code_context, object_stream))
@@ -355,8 +359,41 @@ private:
 //     }
 
 // private:
-//     llvm::JITEventListener * gdb_listener = nullptr;
+//     llvm::JITEventListener * gdb_lzzistener = nullptr;
 // };
+
+void printStr(char * data, size_t offset, size_t next_offset)
+{
+    std::cout << "offset: " << offset << " next_offset: " << next_offset << std::endl;
+    if (next_offset-offset > 0)
+    {
+        std::string s(data+offset, next_offset-offset);
+        std::cout << "str: " << s << std::endl;
+    }
+}
+
+void printInt(size_t offset)
+{
+    std::cout << "offset: " << offset << std::endl;
+}
+
+void printPtr(void * data)
+{
+    std::cout << "offset: " << data << std::endl;
+}
+
+void * reallocForString(void * ptr, size_t new_size, size_t capacity)
+{
+    if (new_size > capacity)
+    {
+        new_size = roundUpToPowerOfTwoOrZero(new_size);
+        return realloc(ptr, new_size);
+    }
+    else
+    {
+        return ptr;
+    }
+}
 
 CHJIT::CHJIT()
     : machine(getTargetMachine())
@@ -369,6 +406,12 @@ CHJIT::CHJIT()
     symbol_resolver->registerSymbol("memset", reinterpret_cast<void *>(&memset));
     symbol_resolver->registerSymbol("memcpy", reinterpret_cast<void *>(&memcpy));
     symbol_resolver->registerSymbol("memcmp", reinterpret_cast<void *>(&memcmp));
+    symbol_resolver->registerSymbol("reallocForString", reinterpret_cast<void *>(&reallocForString));
+    symbol_resolver->registerSymbol("realloc", reinterpret_cast<void *>(&realloc));
+    symbol_resolver->registerSymbol("printStr", reinterpret_cast<void *>(&printStr));
+    symbol_resolver->registerSymbol("printInt", reinterpret_cast<void *>(&printInt));
+    symbol_resolver->registerSymbol("printPtr", reinterpret_cast<void *>(&printPtr));
+    symbol_resolver->registerSymbol("roundUpToPowerOfTwoOrZero", reinterpret_cast<void *>(&roundUpToPowerOfTwoOrZero));
 }
 
 CHJIT::~CHJIT() = default;
@@ -379,6 +422,10 @@ CHJIT::CompiledModule CHJIT::compileModule(std::function<void (llvm::Module &)> 
 
     auto module = createModuleForCompilation();
     compile_function(*module);
+    std::string tmp;
+    llvm::raw_string_ostream os(tmp);
+    module->print(os, nullptr);
+    LOG_TRACE(&Poco::Logger::get("CompiledModule"), "module: ===\n{}===\n", os.str());
     auto module_info = compileModule(std::move(module));
 
     ++current_module_key;

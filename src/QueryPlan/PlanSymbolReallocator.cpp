@@ -1,6 +1,8 @@
+#include <Core/NameToType.h>
 #include <Core/Names.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
+#include <Optimizer/Utils.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/ExceptStep.h>
 #include <QueryPlan/PlanNode.h>
@@ -9,76 +11,51 @@
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SymbolAllocator.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
 
-class PlanSymbolReallocator::SymbolReallocatorVisitor : public PlanNodeVisitor<PlanNodePtr, SymbolMapper>
-{
-public:
-    explicit SymbolReallocatorVisitor(ContextMutablePtr context_) : context(context_) { }
-
-    PlanNodePtr visitPlanNode(PlanNodeBase & node, SymbolMapper & symbol_mapper) override
-    {
-        auto step = symbol_mapper.map(*node.getStep());
-        PlanNodes children;
-        for (auto & child : node.getChildren())
-            children.emplace_back(VisitorUtil::accept(child, *this, symbol_mapper));
-        return PlanNodeBase::createPlanNode(context->nextNodeId(), step, children, symbol_mapper.map(node.getStatistics()));
-    }
-
-    PlanNodePtr visitProjectionNode(ProjectionNode & project, SymbolMapper & symbol_mapper) override
-    {
-        auto step = symbol_mapper.map(*project.getStep());
-
-        Assignments assignments;
-        for (const auto & assignment : step->getAssignments())
-        {
-            if (const auto * identifier = assignment.second->as<ASTIdentifier>())
-            {
-                assignments.emplace(assignment.first, std::make_shared<ASTIdentifier>(assignment.first));
-                symbol_mapper.addSymbolMapping(identifier->name(), assignment.first);
-                continue;
-            }
-            assignments.emplace(assignment.first, assignment.second);
-        }
-
-        auto child = VisitorUtil::accept(project.getChildren()[0], *this, symbol_mapper);
-        return PlanNodeBase::createPlanNode(
-            context->nextNodeId(),
-            std::make_shared<ProjectionStep>(
-                child->getStep()->getOutputStream(),
-                assignments,
-                step->getNameToType(),
-                step->isFinalProject(),
-                step->isIndexProject(),
-                step->getHints()),
-            {child},
-            symbol_mapper.map(project.getStatistics()));
-    }
-
-private:
-    ContextMutablePtr context;
-};
-
-
 PlanNodePtr PlanSymbolReallocator::unalias(const PlanNodePtr & plan, ContextMutablePtr & context)
 {
-    SymbolReallocatorVisitor visitor{context};
-    std::unordered_map<std::string, std::string> symbol_mapping;
-    for (const auto & output_name: plan->getOutputNames()) {
-        symbol_mapping.emplace(output_name, output_name);
+    auto origin_output_stream = plan->getStep()->getOutputStream();
+
+    SymbolReallocatorVisitor visitor{context, [](auto & mapping) { return SymbolMapper::symbolMapper(mapping); }};
+    Void c;
+    auto [plan_node, mappings] = VisitorUtil::accept(plan, visitor, c);
+    auto symbol_mapper = SymbolMapper::symbolMapper(mappings);
+
+    // create projection step to guarante output symbols as output symbol size and order may changed in SymbolReallocatorVisitor
+    Assignments assignments;
+    NameToType name_to_type;
+    for (const auto & output : origin_output_stream.header)
+    {
+        assignments.emplace_back(output.name, std::make_shared<ASTIdentifier>(symbol_mapper.map(output.name)));
+        name_to_type.emplace(output.name, output.type);
     }
-    SymbolMapper symbol_mapper = SymbolMapper::symbolMapper(symbol_mapping);
-    return VisitorUtil::accept(plan, visitor, symbol_mapper);
+    if (!Utils::isIdentity(assignments))
+    {
+        auto projection_step = std::make_shared<ProjectionStep>(plan_node->getStep()->getOutputStream(), assignments, name_to_type);
+        plan_node = PlanNodeBase::createPlanNode(context->nextNodeId(), projection_step, {plan_node});
+    }
+
+    return plan_node;
 }
 
-PlanNodePtr
-PlanSymbolReallocator::reallocate(const PlanNodePtr & plan, ContextMutablePtr & context, std::unordered_map<std::string, std::string> & symbol_mapping)
+PlanNodeAndMappings PlanSymbolReallocator::reallocate(const PlanNodePtr & plan, ContextMutablePtr & context)
 {
-    SymbolReallocatorVisitor visitor{context};
-    SymbolMapper symbol_mapper = SymbolMapper::symbolReallocator(symbol_mapping, *context->getSymbolAllocator());
-    return VisitorUtil::accept(plan, visitor, symbol_mapper);
+    Names origin_outputs = plan->getOutputNames();
+
+    SymbolReallocatorVisitor visitor{
+        context, [&](auto & mapping) { return SymbolMapper::symbolReallocator(mapping, *context->getSymbolAllocator()); }};
+    Void c;
+    auto [plan_node, mappings] = VisitorUtil::accept(plan, visitor, c);
+    auto symbol_mapper = SymbolMapper::symbolMapper(mappings);
+
+    NameToNameMap output_symbol_mappings;
+    for (const auto & output : origin_outputs)
+        output_symbol_mappings.emplace(output, symbol_mapper.map(output));
+    return {plan_node, output_symbol_mappings};
 }
 
 bool PlanSymbolReallocator::isOverlapping(const DataStream & lho, const DataStream & rho)

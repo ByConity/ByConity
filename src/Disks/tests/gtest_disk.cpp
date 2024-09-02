@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include "Disks/IDisk.h"
 #include "gtest_disk.h"
 #include <filesystem>
 
@@ -26,7 +27,7 @@ template <>
 DB::DiskPtr createDisk<DB::DiskLocal>()
 {
     fs::create_directory("tmp/");
-    return std::make_shared<DB::DiskLocal>("local_disk", "tmp/", 0);
+    return std::make_shared<DB::DiskLocal>("local_disk", "tmp/", DB::DiskStats{});
 }
 
 

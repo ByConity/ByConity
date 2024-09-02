@@ -19,11 +19,13 @@ Projection Est. 10 rows
                      │     Runtime Filters Builder: {o_orderkey}
                      ├─ Repartition Exchange Est. 323744565 rows
                      │  │     Partition by: {l_orderkey}
-                     │  └─ Filter Est. 323744565 rows
-                     │     │     Condition: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
-                     │     └─ TableScan tpch100.lineitem Est. 600037902 rows
-                     │              Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
-                     │              Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
+                     │  └─ Projection Est. 323744565 rows
+                     │     │     Expressions: [l_discount, l_extendedprice, l_orderkey]
+                     │     └─ Filter Est. 323744565 rows
+                     │        │     Condition: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
+                     │        └─ TableScan tpch100.lineitem Est. 600037902 rows
+                     │                 Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
+                     │                 Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
                      └─ Repartition Exchange Est. 45136391 rows
                         │     Partition by: {o_orderkey}
                         └─ Inner (PARALLEL_HASH) Join Est. 45136391 rows
@@ -38,9 +40,11 @@ Projection Est. 10 rows
                            │              Outputs: [o_orderkey, o_custkey, o_orderdate, o_shippriority]
                            └─ Repartition Exchange Est. 3000188 rows
                               │     Partition by: {c_custkey}
-                              └─ Filter Est. 3000188 rows
-                                 │     Condition: c_mktsegment = 'BUILDING'
-                                 └─ TableScan tpch100.customer Est. 15000000 rows
-                                          Where: c_mktsegment = 'BUILDING'
-                                          Outputs: [c_custkey, c_mktsegment]
+                              └─ Projection Est. 3000188 rows
+                                 │     Expressions: [c_custkey]
+                                 └─ Filter Est. 3000188 rows
+                                    │     Condition: c_mktsegment = 'BUILDING'
+                                    └─ TableScan tpch100.customer Est. 15000000 rows
+                                             Where: c_mktsegment = 'BUILDING'
+                                             Outputs: [c_custkey, c_mktsegment]
 note: Runtime Filter is applied for 2 times.

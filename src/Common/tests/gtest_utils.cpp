@@ -23,11 +23,11 @@ namespace UnitTest
 {
 void initLogger(const String & level)
 {
-    Poco::AutoPtr<Poco::ConsoleChannel> channel(new Poco::ConsoleChannel());
     if (!Poco::Logger::root().getChannel())
     {
+        Poco::AutoPtr<Poco::ConsoleChannel> channel(new Poco::ConsoleChannel());
         Poco::Logger::root().setChannel(channel);
-        Poco::Logger::root().setLevel(level);
     }
+    Poco::Logger::root().setLevel(level);
 }
 }

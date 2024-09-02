@@ -24,11 +24,14 @@ SELECT a + 1 AS p, count() AS cnt FROM t40073_ansi_alias GROUP BY p ORDER BY p;
 
 EXPLAIN SELECT a + 1 AS p FROM t40073_ansi_alias PREWHERE p > 1;
 Projection Est. ? rows
-│     Expressions: p:=a + 1
+│     Expressions: p:=`expr#plus(a, 1)`
 └─ Gather Exchange Est. ? rows
-   └─ TableScan default.t40073_ansi_alias Est. ? rows
-            Prewhere: (a + 1) > 1
-            Outputs: [a]
+   └─ Projection Est. ? rows
+      │     Expressions: expr#plus(a, 1):=a + 1
+      └─ TableScan default.t40073_ansi_alias Est. ? rows
+               Where: (a + 1) > 1
+               Prewhere: (a + 1) > 1
+               Outputs: [a]
 SELECT a + 1 AS p FROM t40073_ansi_alias PREWHERE p > 1 ORDER BY p;
 2
 3
@@ -36,22 +39,27 @@ SELECT a + 1 AS p FROM t40073_ansi_alias PREWHERE p > 1 ORDER BY p;
 
 EXPLAIN SELECT a + 1 AS a FROM t40073_ansi_alias WHERE a > 1;
 Projection Est. ? rows
-│     Expressions: a:=a + 1
+│     Expressions: a:=`expr#plus(a, 1)`
 └─ Gather Exchange Est. ? rows
-   └─ Filter Est. ? rows
-      │     Condition: a > 1
-      └─ TableScan default.t40073_ansi_alias Est. ? rows
-               Where: a > 1
-               Outputs: [a]
+   └─ Projection Est. ? rows
+      │     Expressions: expr#plus(a, 1):=a + 1
+      └─ Filter Est. ? rows
+         │     Condition: a > 1
+         └─ TableScan default.t40073_ansi_alias Est. ? rows
+                  Where: a > 1
+                  Outputs: [a]
 SELECT a + 1 AS a FROM t40073_ansi_alias WHERE a > 1 ORDER BY a;
 3
 EXPLAIN SELECT a + 1 AS a FROM t40073_ansi_alias PREWHERE a > 1;
 Projection Est. ? rows
-│     Expressions: a:=a + 1
+│     Expressions: a:=`expr#plus(a, 1)`
 └─ Gather Exchange Est. ? rows
-   └─ TableScan default.t40073_ansi_alias Est. ? rows
-            Prewhere: a > 1
-            Outputs: [a]
+   └─ Projection Est. ? rows
+      │     Expressions: expr#plus(a, 1):=a + 1
+      └─ TableScan default.t40073_ansi_alias Est. ? rows
+               Where: a > 1
+               Prewhere: a > 1
+               Outputs: [a]
 SELECT a + 1 AS a FROM t40073_ansi_alias PREWHERE a > 1 ORDER BY a;
 3
 -- prefer source column ignoring ORDER BY

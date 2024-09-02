@@ -100,7 +100,9 @@ size_t ReadBufferFromFileDescriptor::readImpl(char * to, size_t min_bytes, size_
                 res = ::read(fd, to + bytes_read, to_read);
         }
         if (!res)
+        {
             break;
+        }
 
         if (-1 == res && errno != EINTR)
         {
@@ -135,7 +137,9 @@ size_t ReadBufferFromFileDescriptor::readImpl(char * to, size_t min_bytes, size_
     }
 
     if (bytes_read)
+    {
         ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read);
+    }
 
     return bytes_read;
 }

@@ -92,6 +92,8 @@ public:
 
     String getFullPath() const override;
 
+    String getRelativePathForDetachedPart(const String & prefix) const override;
+
     /// @param allow_null whether allow delete bitmap to be nullptr
     /// @attention make sure this method is thread-safe.
     /// There are following cases that allow delete bitmap to be nullptr:
@@ -102,12 +104,14 @@ public:
     /// and we combine the original delete bitmap and _row_exists when data processing.
     ImmutableDeleteBitmapPtr getDeleteBitmap(bool allow_null = false) const override;
 
-    virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
+    /// it's a no-op because in CNCH, projection parts are uploaded to parent part's data file
+    virtual void projectionRemove(const String &, bool) const override { }
 
-    void preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const;
+    void preload(UInt64 preload_level, UInt64 submit_ts) const;
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
     void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override {columns_ptr = new_columns_ptr;}
+
 private:
     /// See #getDeleteBitmap
     ImmutableDeleteBitmapPtr getCombinedDeleteBitmapForUniqueTable(bool allow_null = false) const;
@@ -122,7 +126,7 @@ private:
     void loadIndex() override;
     IndexPtr loadIndexFromStorage() const;
 
-    MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
+    MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter(size_t & out_file_size) const;
 
     ChecksumsPtr loadChecksums(bool require) override;
     ChecksumsPtr loadChecksumsFromRemote(bool follow_part_chain);
@@ -150,7 +154,7 @@ private:
 
     void fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file);
 
-    std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr& disk, const String& path, size_t file_size) const;
+    std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t file_size, const String & remote_read_context = {}) const;
 };
 
 }

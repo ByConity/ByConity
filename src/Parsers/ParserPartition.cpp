@@ -89,6 +89,7 @@ bool ParserPartition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         {
             Pos left_paren = begin;
             Pos right_paren = pos;
+            --right_paren;
 
             while (left_paren != right_paren && left_paren->type != TokenType::OpeningRoundBracket)
                 ++left_paren;

@@ -36,9 +36,12 @@ namespace CnchBGThread
         Clustering = 6,
         MaterializedMySQL = 7,
         ObjectSchemaAssemble = 8,
-        
+        CnchRefreshMaterializedView = 9,
+        PartMover = 10,
+        ManifestCheckpoint = 11,
+
         ServerMinType = PartGC,
-        ServerMaxType = ObjectSchemaAssemble,
+        ServerMaxType = ManifestCheckpoint,
 
         GlobalGC = 20, /// reserve several entries
         TxnGC = 21,
@@ -103,6 +106,12 @@ constexpr auto toString(CnchBGThreadType type)
             return "MemoryBuffer";
         case CnchBGThreadType::MaterializedMySQL:
             return "MaterializedMySQL";
+        case CnchBGThreadType::CnchRefreshMaterializedView:
+            return "CnchRefreshMaterializedView";
+        case CnchBGThreadType::PartMover:
+            return "PartMoverThread";
+        case CnchBGThreadType::ManifestCheckpoint:
+            return "ManifestCheckpoint";
     }
     __builtin_unreachable();
 }

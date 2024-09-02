@@ -58,8 +58,8 @@ bool LockRequest::lock(const Context & context)
     {
         if (wait())
         {
-            // status has changed to OK before timeout
-            return true;
+            // status has changed to OK/CANCELLED before timeout
+            return getStatus() != LockStatus::LOCK_CANCELLED;
         }
         else
         {
@@ -138,7 +138,7 @@ void LockRequest::notify()
 bool LockRequest::wait()
 {
     std::unique_lock lk(mutex);
-    return cv.wait_for(lk, std::chrono::milliseconds(timeout), [this]() { return status == LockStatus::LOCK_OK; });
+    return cv.wait_for(lk, std::chrono::milliseconds(timeout), [this]() { return status == LockStatus::LOCK_OK || status == LockStatus::LOCK_CANCELLED; });
 }
 
 LockLevel LockInfo::getLockLevel() const {

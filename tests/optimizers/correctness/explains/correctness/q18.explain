@@ -2,25 +2,25 @@ Projection Est. 10 rows
 │     Expressions: [a, a_1, a_2, b, c, d]
 └─ Limit Est. 10 rows
    │     Limit: 10
-   └─ Left Join Est. ? rows
-      │     Condition: a_1 == a_2
-      ├─ Limit Est. 10 rows
-      │  │     Limit: 10
-      │  └─ Left Join Est. ? rows
-      │     │     Condition: a == a_1
-      │     ├─ Limit Est. 10 rows
-      │     │  │     Limit: 10
-      │     │  └─ Gather Exchange Est. ? rows
-      │     │     └─ Limit Est. 10 rows
-      │     │        │     Limit: 10
-      │     │        └─ Filter Est. ? rows
-      │     │           │     Condition: b = 1
-      │     │           └─ TableScan correctness.q6_t1 Est. ? rows
-      │     │                    Where: b = 1
-      │     │                    Outputs: [a, b]
-      │     └─ Broadcast Exchange Est. ? rows
-      │        └─ TableScan correctness.q6_t2 Est. ? rows
-      │                 Outputs: [c], a_1:=a
-      └─ Broadcast Exchange Est. ? rows
-         └─ TableScan correctness.q6_t3 Est. ? rows
-                  Outputs: [d], a_2:=a
+   └─ Gather Exchange Est. 10 rows
+      └─ Limit Est. 10 rows
+         │     Limit: 10
+         └─ Left Join Est. ? rows
+            │     Condition: a_1 == a_2
+            ├─ Limit Est. 10 rows
+            │  │     Limit: 10
+            │  └─ Left Join Est. ? rows
+            │     │     Condition: a == a_1
+            │     ├─ Limit Est. 10 rows
+            │     │  │     Limit: 10
+            │     │  └─ Filter Est. ? rows
+            │     │     │     Condition: b = 1
+            │     │     └─ TableScan correctness.q6_t1 Est. ? rows
+            │     │              Where: b = 1
+            │     │              Outputs: [a, b]
+            │     └─ Broadcast Exchange Est. ? rows
+            │        └─ TableScan correctness.q6_t2 Est. ? rows
+            │                 Outputs: [c], a_1:=a
+            └─ Broadcast Exchange Est. ? rows
+               └─ TableScan correctness.q6_t3 Est. ? rows
+                        Outputs: [d], a_2:=a

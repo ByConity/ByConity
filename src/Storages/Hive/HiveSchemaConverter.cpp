@@ -22,9 +22,11 @@
 #include "Interpreters/Context.h"
 #include "Interpreters/InterpreterCreateQuery.h"
 #include "Parsers/ASTCreateQuery.h"
+#include "Parsers/ASTClusterByElement.h"
 #include "Parsers/ASTExpressionList.h"
 #include "Parsers/ASTFunction.h"
 #include "Parsers/ASTIdentifier.h"
+#include "Parsers/ASTLiteral.h"
 #include "Parsers/formatAST.h"
 #include "Storages/ColumnsDescription.h"
 #include "Storages/KeyDescription.h"
@@ -166,23 +168,43 @@ void HiveSchemaConverter::convert(StorageInMemoryMetadata & metadata) const
         addColumn(hive_field, true);
     }
 
-    auto partition_def = std::make_shared<ASTFunction>();
-    partition_def->name = "tuple";
-    partition_def->arguments = std::make_shared<ASTExpressionList>();
-    for (const auto & hive_field : hive_table->partitionKeys)
     {
-        if (!columns.has(hive_field.name))
-            addColumn(hive_field, false);
+        auto partition_def = std::make_shared<ASTFunction>();
+        partition_def->name = "tuple";
+        partition_def->arguments = std::make_shared<ASTExpressionList>();
+        for (const auto & hive_field : hive_table->partitionKeys)
+        {
+            if (!columns.has(hive_field.name))
+                addColumn(hive_field, false);
 
-        auto col = std::make_shared<ASTIdentifier>(hive_field.name);
-        partition_def->arguments->children.emplace_back(col);
+            auto col = std::make_shared<ASTIdentifier>(hive_field.name);
+            partition_def->arguments->children.emplace_back(col);
+        }
+
+        partition_def->children.push_back(partition_def->arguments);
+        metadata.partition_key = KeyDescription::getKeyFromAST(partition_def, columns, getContext());
     }
 
-    partition_def->children.push_back(partition_def->arguments);
-    KeyDescription partition_key = KeyDescription::getKeyFromAST(partition_def, columns, getContext());
+    /// has bucket key
+    if (!hive_table->sd.bucketCols.empty())
+    {
+        ASTs args;
+        args.reserve(hive_table->sd.bucketCols.size());
+        for (const auto & bucket_col_name : hive_table->sd.bucketCols)
+        {
+            if (!columns.has(bucket_col_name))
+                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "hive bucket col {} not found in schema", bucket_col_name);
+
+            args.push_back(std::make_shared<ASTIdentifier>(bucket_col_name));
+        }
+        auto func_hash = makeASTFunction("javaHash", args);
+        auto bucket_num = std::make_shared<ASTLiteral>(hive_table->sd.numBuckets);
+        auto func_mod = makeASTFunction("hiveModulo", ASTs{func_hash, bucket_num});
+        auto cluster_key = std::make_shared<ASTClusterByElement>(func_mod, bucket_num, -1, false, false);
+        metadata.cluster_by_key = KeyDescription::getClusterByKeyFromAST(cluster_key, columns, getContext());
+    }
 
     metadata.setColumns(columns);
-    metadata.partition_key = partition_key;
 }
 
 void HiveSchemaConverter::check(const StorageInMemoryMetadata & metadata) const

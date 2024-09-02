@@ -1,0 +1,7 @@
+Select before found duplicate
+2020-10-29 23:40:00	10001	10001A	5	500
+2020-10-29 23:40:00	10001	10001A	5	500
+2020-10-29 23:40:00	10002	10002A	2	200
+2020-10-29 23:40:00	10002	10002A	2	200
+Sleep 21 seconds for cnch_system.cnch_unique_table_log sync
+duplicate info:	unique_found_duplicate	ERROR	1	Dedup task partition 20201029 found duplication

@@ -82,7 +82,7 @@ struct ASTTableExpression : public IAST
 
     ASTType getType() const override { return ASTType::ASTTableExpression; }
 
-    void toLowerCase() override 
+    void toLowerCase() override
     {
         if (database_and_table_name)
             database_and_table_name->toLowerCase();
@@ -92,7 +92,7 @@ struct ASTTableExpression : public IAST
             subquery->toLowerCase();
     }
 
-    void toUpperCase() override 
+    void toUpperCase() override
     {
         if (database_and_table_name)
             database_and_table_name->toUpperCase();
@@ -185,6 +185,7 @@ inline bool isAny(ASTTableJoin::Strictness strictness)  { return strictness == A
 inline bool isSemi(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Semi; }
 inline bool isAnti(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Anti; }
 inline bool isAsof(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Asof; }
+inline bool isUnspecified(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Unspecified; }
 
 String kindToString(ASTTableJoin::Kind kind);
 

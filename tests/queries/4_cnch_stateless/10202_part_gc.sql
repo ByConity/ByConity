@@ -20,10 +20,10 @@ select * from t10202 order by i;
 alter table t10202 modify setting gc_trash_part_limit = 0;
 system gc t10202; -- clear covered parts
 select 'after first gc';
-select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase() and table = 't10202';
+select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase(1) and table = 't10202';
 system gc t10202; -- clear alone tombstones
 select 'after second gc';
-select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase() and table = 't10202';
+select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase(1) and table = 't10202';
 select * from t10202 order by i;
 
 -- test drop partition for range tombstone
@@ -37,9 +37,9 @@ select 'after insert and drop';
 select * from t10202 order by i;
 system gc t10202;
 select 'after first gc';
-select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase() and table = 't10202';
+select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase(1) and table = 't10202';
 system gc t10202;
 select 'after second gc';
-select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase() and table = 't10202';
+select '#tombstones', countIf(part_type = 'Tombstone') from system.cnch_parts where database = currentDatabase(1) and table = 't10202';
 
 drop table if exists t10202;

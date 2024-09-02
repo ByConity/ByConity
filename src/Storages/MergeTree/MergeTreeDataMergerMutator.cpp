@@ -1333,13 +1333,24 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
 
             MergeStageProgress column_progress(progress_before, column_sizes->columnWeight(column_name));
             auto mergeFunc = [&](const Names & column_names_, const String & name_) {
+                auto rt_ctx = std::make_shared<MergeTreeSequentialSource::RuntimeContext>();
+
                 for (size_t part_num = 0; part_num < parts.size(); ++part_num)
                 {
                     /// FIXME(UNIQUE KEY): set delete bitmap from snapshot
                     auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
-                        data, storage_snapshot, parts[part_num], /*delete_bitmap*/nullptr, column_names_, read_with_direct_io,
+                        data,
+                        storage_snapshot,
+                        parts[part_num],
+                        /*delete_bitmap*/nullptr,
+                        column_names_,
+                        read_with_direct_io,
                         /*take_column_types_from_storage*/true,
-                        /*quiet=*/ false);
+                        /*quiet=*/ false,
+                        /*future_files*/ nullptr,
+                        /*bitengine_read_type*/ BitEngineReadType::ONLY_SOURCE,
+                        /*block_preferred_size_bytes_*/ data_settings->merge_max_block_size_bytes,
+                        rt_ctx);
 
                     column_part_source->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, column_progress));
 
@@ -1351,10 +1362,14 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 }
 
                 rows_sources_read_buf.seek(0, 0);
-                ColumnGathererStream column_gathered_stream(name_, column_part_streams, rows_sources_read_buf,
+                ColumnGathererStream column_gathered_stream(
+                    name_,
+                    column_part_streams,
+                    rows_sources_read_buf,
+                    /*block_preferred_size_rows_ =*/ data_settings->merge_max_block_size,
+                    /*block_preferred_size_bytes_ =*/ data_settings->merge_max_block_size_bytes,
                     context->getSettingsRef().enable_low_cardinality_merge_new_algo,
-                    context->getSettingsRef().low_cardinality_distinct_threshold,
-                    /*block_preferred_size_ =*/ DEFAULT_BLOCK_SIZE);
+                    context->getSettingsRef().low_cardinality_distinct_threshold);
 
                 MergedColumnOnlyOutputStream column_to(
                     new_data_part,

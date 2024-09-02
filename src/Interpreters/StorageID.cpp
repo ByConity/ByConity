@@ -40,6 +40,13 @@ namespace ErrorCodes
     extern const int UNKNOWN_DATABASE;
 }
 
+StorageID::StorageID(const QualifiedTableName & qualified_name)
+: StorageID(qualified_name.database, qualified_name.table) 
+{ 
+    assertNotEmpty();
+}
+
+
 StorageID::StorageID(const ASTQueryWithTableAndOutput & query)
 {
     database_name = query.database;
@@ -157,6 +164,16 @@ String StorageID::getInternalDictionaryName() const
 void StorageID::toProto(Protos::StorageID & proto) const
 {
     RPCHelpers::fillStorageID(*this, proto);
+}
+
+StorageID StorageID::tryFromProto(const Protos::StorageID & proto, ContextPtr context)
+{
+    try {
+        return fromProto(proto, context);
+    } catch (Exception &) {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        return StorageID{};
+    }
 }
 
 StorageID StorageID::fromProto(const Protos::StorageID & proto, ContextPtr context)

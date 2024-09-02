@@ -27,7 +27,7 @@ public:
     {
         return context->getSettingsRef().enable_push_partial_agg_through_exchange;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 
@@ -43,7 +43,7 @@ public:
     {
         return context->getSettingsRef().enable_push_partial_agg_through_union;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -57,7 +57,7 @@ public:
     {
         return context->getSettingsRef().enable_push_partial_sorting_through_exchange;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -71,7 +71,7 @@ public:
     {
         return context->getSettingsRef().enable_push_partial_limit_through_exchange;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -85,7 +85,7 @@ public:
     {
         return context->getSettingsRef().enable_push_partial_distinct_through_exchange;
     }
-    PatternPtr getPattern() const override;
+    ConstRefPatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };

@@ -1,4 +1,4 @@
--- NOTE: database = currentDatabase() is not mandatory
+-- NOTE: database = currentDatabase(0) is not mandatory
 
 SELECT database FROM system.tables WHERE database LIKE '%' format Null;
 SELECT database AS db FROM system.tables WHERE db LIKE '%' format Null;

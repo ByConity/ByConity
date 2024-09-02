@@ -373,7 +373,7 @@ bool TableJoin::allowParallelHashJoin() const
 {
     if (dictionary_reader || join_algorithm != JoinAlgorithm::PARALLEL_HASH)
         return false;
-    if (table_join.kind != ASTTableJoin::Kind::Left && table_join.kind != ASTTableJoin::Kind::Inner)
+    if (table_join.kind == ASTTableJoin::Kind::Cross)
         return false;
     if (isSpecialStorage() || !oneDisjunct())
         return false;

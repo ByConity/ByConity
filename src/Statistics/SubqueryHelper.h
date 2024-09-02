@@ -22,7 +22,8 @@ namespace DB::Statistics
 class SubqueryHelper
 {
 public:
-    static SubqueryHelper create(ContextPtr context, const String & sql);
+    static SubqueryHelper create(ContextPtr context, const String & sql, bool large_sql = false);
+
     SubqueryHelper(SubqueryHelper && other) = default;
     Block getNextBlock();
     ~SubqueryHelper();
@@ -31,7 +32,6 @@ public:
 
 private:
     explicit SubqueryHelper(std::unique_ptr<DataImpl> impl_);
-
     std::unique_ptr<DataImpl> impl;
     // use unique_ptr to ensure that sub_context will be destroyed after block_io
 };

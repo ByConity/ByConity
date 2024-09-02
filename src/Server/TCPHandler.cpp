@@ -20,7 +20,7 @@
  */
 
 #include <iomanip>
-#include "common/types.h"
+#include <common/types.h>
 #include <common/scope_guard.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/LayeredConfiguration.h>
@@ -46,7 +46,6 @@
 #include <IO/WriteBufferFromPocoSocket.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
-#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryStatus.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
@@ -74,6 +73,7 @@
 #include <common/scope_guard.h>
 
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Processors/Executors/PullingPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
 
 #include "AsyncQueryManager.h"
@@ -105,8 +105,30 @@ namespace ErrorCodes
     extern const int SUPPORT_IS_DISABLED;
     extern const int UNKNOWN_PROTOCOL;
     extern const int QUERY_WAS_CANCELLED;
-    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int TIMEOUT_EXCEEDED;
+}
+
+namespace
+{
+    struct AsyncTrait
+    {
+        using Executor = PullingAsyncPipelineExecutor;
+
+        static bool pull(Executor & executor, Block & block, uint64_t ms)
+        {
+            return executor.pull(block, ms);
+        }
+    };
+
+    struct SyncTrait
+    {
+        using Executor = PullingPipelineExecutor;
+
+        static bool pull(Executor & executor, Block & block, uint64_t /*ms*/)
+        {
+            return executor.pull(block);
+        }
+    };
 }
 
 TCPHandler::TCPHandler(
@@ -507,7 +529,10 @@ void TCPHandler::runImpl()
                     executor->execute(state.io.pipeline.getNumThreads());
                 }
                 else if (state.io.pipeline.initialized()) /// `SELECT` in both server and worker sides or `INSERT SELECT` in write worker
-                    processOrdinaryQueryWithProcessors();
+                    if (query_context->getSettingsRef().use_sync_pipeline_executor)
+                        processOrdinaryQueryWithProcessors<SyncTrait>();
+                    else
+                        processOrdinaryQueryWithProcessors<AsyncTrait>();
                 else if (state.io.in) /// `INSERT INFILE` in worker side
                     processOrdinaryQuery();
 
@@ -521,7 +546,6 @@ void TCPHandler::runImpl()
                 break;
 
             sendLogs();
-            sendQueryWorkerMetrics();
             sendEndOfStream();
 
             /// QueryState should be cleared before QueryScope, since otherwise
@@ -580,7 +604,7 @@ void TCPHandler::runImpl()
             state.io.onException();
             exception.emplace(Exception::CreateFromSTDTag{}, e);
             sendException(*exception, send_exception_with_stack_trace);
-            std::abort();
+            // std::abort();
         }
 #endif
         catch (const std::exception & e)
@@ -603,7 +627,6 @@ void TCPHandler::runImpl()
                     /// Try to send logs to client, but it could be risky too
                     /// Assume that we can't break output here
                     sendLogs();
-                    sendQueryWorkerMetrics();
                 }
                 catch (...)
                 {
@@ -837,10 +860,15 @@ void TCPHandler::processOrdinaryQuery()
         sendData({});
     }
 
+    auto coordinator = state.io.coordinator;
+    if (coordinator && query_context->getSettings().enable_wait_for_post_processing)
+    {
+        coordinator->waitUntilAllPostProcessingRPCReceived();
+    }
     sendProgress();
 }
 
-
+template <typename Trait>
 void TCPHandler::processOrdinaryQueryWithProcessors()
 {
     auto & pipeline = state.io.pipeline;
@@ -857,11 +885,11 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
     }
 
     {
-        PullingAsyncPipelineExecutor executor(pipeline);
+        typename Trait::Executor executor(pipeline);
         CurrentMetrics::Increment query_thread_metric_increment{CurrentMetrics::QueryThread};
 
         Block block;
-        while (executor.pull(block, query_context->getSettingsRef().interactive_delay / 1000))
+        while (Trait::pull(executor, block, query_context->getSettingsRef().interactive_delay / 1000))
         {
             std::lock_guard lock(task_callback_mutex);
 
@@ -914,6 +942,11 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
         sendData({});
     }
 
+    auto coordinator = state.io.coordinator;
+    if (coordinator && query_context->getSettings().enable_wait_for_post_processing)
+    {
+        coordinator->waitUntilAllPostProcessingRPCReceived();
+    }
     sendProgress();
 }
 
@@ -993,26 +1026,6 @@ void TCPHandler::sendProfileInfo(const BlockStreamProfileInfo & info)
     writeVarUInt(Protocol::Server::ProfileInfo, *out);
     info.write(*out);
     out->next();
-}
-
-void TCPHandler::sendQueryWorkerMetrics()
-{
-    /// The 'QueryMetrics' packets are only allowed to be sent to cnch worker or cnch server.
-    /// plan segment cannot receive worker metrics currently
-    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_QUERY_METRICS && query_context->getSettingsRef().enable_query_level_profiling
-        && query_context->getClientInfo().client_type != ClientInfo::ClientType::UNKNOWN
-        /*&& !state->plan_segment*/)
-    {
-        writeVarUInt(Protocol::Server::QueryMetrics, *out);
-
-        writeVarUInt(query_context->getQueryWorkerMetricElements().size(), *out);
-        for (const auto & query_worker_metric_element : query_context->getQueryWorkerMetricElements())
-        {
-            query_worker_metric_element->write(*out);
-        }
-
-        out->next();
-    }
 }
 
 void TCPHandler::sendTotals(const Block & totals)
@@ -1225,16 +1238,16 @@ void TCPHandler::receiveUnexpectedHello()
 void TCPHandler::sendHello()
 {
     writeVarUInt(Protocol::Server::Hello, *out);
-    writeStringBinary(DBMS_NAME, *out);
-    writeVarUInt(DBMS_VERSION_MAJOR, *out);
-    writeVarUInt(DBMS_VERSION_MINOR, *out);
+    writeStringBinary(VERSION_NAME, *out);
+    writeVarUInt(VERSION_MAJOR, *out);
+    writeVarUInt(VERSION_MINOR, *out);
     writeVarUInt(DBMS_TCP_PROTOCOL_VERSION, *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_TIMEZONE)
         writeStringBinary(DateLUT::instance().getTimeZone(), *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME)
         writeStringBinary(server_display_name, *out);
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_VERSION_PATCH)
-        writeVarUInt(DBMS_VERSION_PATCH, *out);
+        writeVarUInt(VERSION_PATCH, *out);
     out->next();
 }
 
@@ -1414,6 +1427,8 @@ void TCPHandler::receiveQuery()
     Settings passed_settings;
     passed_settings.read(*in, settings_format);
 
+    adjustAccessTablesIfNeeded(query_context);
+
     /// Interserver secret.
     std::string received_hash;
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET)
@@ -1481,7 +1496,7 @@ void TCPHandler::receiveQuery()
         /// Quietly clamp to the constraints if it's not an initial query.
         query_context->clampToSettingsConstraints(settings_changes);
     }
-    query_context->applySettingsChanges(settings_changes);
+    query_context->applySettingsChanges(settings_changes, false);
 
     /// Disable function name normalization when it's a secondary query, because queries are either
     /// already normalized on initiator node, or not normalized and should remain unnormalized for
@@ -2081,12 +2096,14 @@ void TCPHandler::updateProgress(const Progress & value)
 
 void TCPHandler::sendProgress()
 {
-    writeVarUInt(Protocol::Server::Progress, *out);
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
-    increment.write(*out, client_tcp_protocol_version);
-    out->next();
+    if (!increment.empty())
+    {
+        writeVarUInt(Protocol::Server::Progress, *out);
+        increment.write(*out, client_tcp_protocol_version);
+        out->next();
+    }
 }
-
 
 void TCPHandler::sendLogs()
 {

@@ -96,7 +96,7 @@ services:
     cap_add:
       - SYS_PTRACE
 
-  worker-write:
+  worker-write-0:
     # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
     image: byconity/debian:buster-runit-fdb7.1.27
     environment:
@@ -107,6 +107,21 @@ services:
     ports:
       - "${CNCH_WRITE_WORKER_PORT_TCP}:52145"
     container_name: "${COMPOSE_PROJECT_NAME}_worker-write-0"
+    volumes:
+      - binary_volume:/opt/byconity/bin/
+      - config_volume:/config/
+    cap_add:
+      - SYS_PTRACE
+
+  worker-write-1:
+    # image: byconity/debian@sha256:164fd2218d3fb56bc911dcf0e086577d40c3a896126dd7ef81da39d5c97a46a3
+    image: byconity/debian:buster-runit-fdb7.1.27
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_server-0:21557 && VIRTUAL_WAREHOUSE_ID=vw_write WORKER_GROUP_ID=wg_write WORKER_ID=w1 clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server
+    container_name: "${COMPOSE_PROJECT_NAME}_worker-write-1"
     volumes:
       - binary_volume:/opt/byconity/bin/
       - config_volume:/config/

@@ -11,42 +11,40 @@ Projection Est. 1 rows
                │     Expressions: expr#multiIf(and(isNotNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0):=multiIf(isNotNull(ss_customer_sk) AND isNotNull(cs_bill_customer_sk), 1, 0), expr#multiIf(and(isNotNull(ssci.customer_sk), isNull(csci.customer_sk)), 1, 0):=multiIf(isNotNull(ss_customer_sk) AND isNull(cs_bill_customer_sk), 1, 0), expr#multiIf(and(isNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0):=multiIf(isNull(ss_customer_sk) AND isNotNull(cs_bill_customer_sk), 1, 0)
                └─ Full (PARALLEL_HASH) Join Est. 652025528 rows
                   │     Condition: ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
-                  ├─ MergingAggregated Est. 52607245 rows
-                  │  └─ Repartition Exchange Est. 52607245 rows
-                  │     │     Partition by: {ss_customer_sk, ss_item_sk}
-                  │     └─ Aggregating Est. 52607245 rows
-                  │        │     Group by: {ss_customer_sk, ss_item_sk}
-                  │        └─ Inner Join Est. 52607245 rows
-                  │           │     Condition: ss_sold_date_sk == d_date_sk
-                  │           │     Runtime Filters Builder: {d_date_sk}
-                  │           ├─ Filter Est. 287997024 rows
-                  │           │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-                  │           │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
-                  │           │           Where: Runtime Filters: {ss_sold_date_sk}
-                  │           │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk]
-                  │           └─ Broadcast Exchange Est. 334 rows
-                  │              └─ Filter Est. 334 rows
-                  │                 │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                  │                 └─ TableScan tpcds100.date_dim Est. 73049 rows
-                  │                          Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                  │                          Outputs: [d_date_sk, d_month_seq]
-                  └─ MergingAggregated Est. 26117114 rows
-                     └─ Repartition Exchange Est. 26117114 rows
-                        │     Partition by: {cs_bill_customer_sk, cs_item_sk}
-                        └─ Aggregating Est. 26117114 rows
-                           │     Group by: {cs_bill_customer_sk, cs_item_sk}
-                           └─ Inner Join Est. 26117114 rows
-                              │     Condition: cs_sold_date_sk == d_date_sk_1
-                              │     Runtime Filters Builder: {d_date_sk_1}
-                              ├─ Filter Est. 143997065 rows
-                              │  │     Condition: Runtime Filters: {cs_sold_date_sk}
-                              │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
-                              │           Where: Runtime Filters: {cs_sold_date_sk}
-                              │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk]
-                              └─ Broadcast Exchange Est. 334 rows
-                                 └─ Filter Est. 334 rows
-                                    │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
-                                    └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                             Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                             Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
+                  ├─ Aggregating Est. 52607245 rows
+                  │  │     Group by: {ss_customer_sk, ss_item_sk}
+                  │  └─ Inner Join Est. 52607245 rows
+                  │     │     Condition: ss_sold_date_sk == d_date_sk
+                  │     │     Runtime Filters Builder: {d_date_sk}
+                  │     ├─ Filter Est. 287997024 rows
+                  │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                  │     │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                  │     │           Where: Runtime Filters: {ss_sold_date_sk}
+                  │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk]
+                  │     └─ Broadcast Exchange Est. 334 rows
+                  │        └─ Projection Est. 334 rows
+                  │           │     Expressions: [d_date_sk]
+                  │           └─ Filter Est. 334 rows
+                  │              │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                  │              └─ TableScan tpcds100.date_dim Est. 73049 rows
+                  │                       Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                  │                       Outputs: [d_date_sk, d_month_seq]
+                  └─ Aggregating Est. 26117114 rows
+                     │     Group by: {cs_bill_customer_sk, cs_item_sk}
+                     └─ Inner Join Est. 26117114 rows
+                        │     Condition: cs_sold_date_sk == d_date_sk_1
+                        │     Runtime Filters Builder: {d_date_sk_1}
+                        ├─ Filter Est. 143997065 rows
+                        │  │     Condition: Runtime Filters: {cs_sold_date_sk}
+                        │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
+                        │           Where: Runtime Filters: {cs_sold_date_sk}
+                        │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk]
+                        └─ Broadcast Exchange Est. 334 rows
+                           └─ Projection Est. 334 rows
+                              │     Expressions: [d_date_sk_1]
+                              └─ Filter Est. 334 rows
+                                 │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= cast(1211, 'UInt32'))
+                                 └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                          Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                                          Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
 note: Runtime Filter is applied for 2 times.

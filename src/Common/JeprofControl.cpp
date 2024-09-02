@@ -40,8 +40,9 @@ static void getJemallocMetric(const String & name, T & value)
         throw Poco::SystemException("mallctl() failed for " + name); 
 }
 
-bool JeprofControl::jeprofInitialize(bool enable_by_conf)
+bool JeprofControl::jeprofInitialize(bool enable_by_conf, bool use_mmap_directly_)
 {
+    use_mmap_directly = use_mmap_directly_;
     if (enable_by_conf)
     {
         setJeprofStatus(true);

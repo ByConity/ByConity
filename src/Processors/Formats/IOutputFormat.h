@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <IO/OutfileCommon.h>
 #include <Processors/IProcessor.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <IO/Progress.h>
@@ -10,6 +11,10 @@ namespace DB
 {
 
 class WriteBuffer;
+class OutfileTarget;
+using OutfileTargetPtr = std::shared_ptr<OutfileTarget>;
+class MPPQueryCoordinator;
+using MPPQueryCoordinatorPtr = std::shared_ptr<MPPQueryCoordinator>;
 
 /** Output format have three inputs and no outputs. It writes data from WriteBuffer.
   *
@@ -28,6 +33,10 @@ public:
 protected:
     WriteBuffer & out;
 
+    /// Used when write select result into directory, and data will be split into sever segments
+    /// Also used to ensure out buffer's life cycle is as long as this class
+    OutfileTargetPtr outfile_target;
+
     Chunk current_chunk;
     PortKind current_block_kind = PortKind::Main;
     bool has_input = false;
@@ -45,6 +54,14 @@ protected:
     virtual void consumeTotals(Chunk) {}
     virtual void consumeExtremes(Chunk) {}
     virtual void finalize() {}
+
+    /// for OutputFormat implementation like 'Parquet', there is a
+    /// inner file descriptor, release the file descriptor or the WriteBuffer by self
+    /// only used when 'INTO OUTFILE' to a directory, that's to say, member outfile_target
+    /// is set.
+    virtual void customReleaseBuffer() { }
+
+    void processMultiOutFileIfNeeded(size_t bytes);
 
 public:
     IOutputFormat(const Block & header_, WriteBuffer & out_);
@@ -87,18 +104,21 @@ public:
     size_t getResultRows() const { return result_rows; }
     size_t getResultBytes() const { return result_bytes; }
 
-    void setBuffer(std::shared_ptr<WriteBuffer> buffer) {
-        this->buffer_ = buffer;
-    }
     static Chunk prepareTotals(Chunk chunk);
+
+    void setOutFileTarget(OutfileTargetPtr outfile_target);
+    void setMPPQueryCoordinator(MPPQueryCoordinatorPtr coordinator_)
+    {
+        coordinator = std::move(coordinator_);
+    }
+
 private:
     /// Counters for consumed chunks. Are used for QueryLog.
     size_t result_rows = 0;
     size_t result_bytes = 0;
 
     bool prefix_written = false;
-    // Used to ensure buffer's life cycle is as long as this class
-    std::shared_ptr<WriteBuffer> buffer_;
+    MPPQueryCoordinatorPtr coordinator = nullptr;
 };
 }
 

@@ -12,6 +12,7 @@ message RegistryRequest {
   optional string coordinator_address = 4;
   optional uint32 wait_timeout_ms = 5;
   optional uint64 query_unique_id = 6;
+  optional uint64 parallel_index = 7;
 };
 
 message RegistryDiskSenderRequest {

@@ -42,7 +42,7 @@ VolumeJBOD::VolumeJBOD(
         std::vector<UInt64> sizes;
         for (const auto & disk : disks)
         {
-            sizes.push_back(disk->getTotalSpace());
+            sizes.push_back(disk->getTotalSpace().bytes);
             sum_size += sizes.back();
         }
         max_data_part_size = static_cast<decltype(max_data_part_size)>(sum_size * ratio / disks.size());

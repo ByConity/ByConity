@@ -16,15 +16,13 @@ Projection
                      └─ Inner (PARALLEL_HASH) Join
                         │     Condition: o_orderkey == l_orderkey
                         │     Runtime Filters Builder: {l_orderkey}
-                        ├─ Repartition Exchange
-                        │  │     Partition by: {o_orderkey}
-                        │  └─ Filter
-                        │     │     Condition: Runtime Filters: {o_orderkey}
-                        │     └─ TableScan tpch1000.orders
-                        │              Where: Runtime Filters: {o_orderkey}
-                        │              Outputs: [o_orderkey, o_orderpriority]
-                        └─ Repartition Exchange
-                           │     Partition by: {l_orderkey}
+                        ├─ Filter
+                        │  │     Condition: Runtime Filters: {o_orderkey}
+                        │  └─ TableScan tpch1000.orders
+                        │           Where: Runtime Filters: {o_orderkey}
+                        │           Outputs: [o_orderkey, o_orderpriority]
+                        └─ Projection
+                           │     Expressions: [l_orderkey, l_shipmode]
                            └─ Filter
                               │     Condition: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
                               └─ TableScan tpch1000.lineitem

@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <city.h>
 #include <farmhash.h>
 #include <metrohash.h>
@@ -54,32 +55,32 @@
 #    include <openssl/sha.h>
 #endif
 
-#include <Poco/ByteOrder.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypesDecimal.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeEnum.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnString.h>
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
-#include <Columns/ColumnArray.h>
-#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
-#include <Functions/IFunctionMySql.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
+#include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Common/TargetSpecific.h>
+#include <Functions/IFunctionMySql.h>
 #include <Functions/PerformanceAdaptors.h>
 #include <Functions/hiveCityHash.h>
-#include <common/range.h>
+#include <Poco/ByteOrder.h>
+#include <Common/TargetSpecific.h>
 #include <common/bit_cast.h>
+#include <common/range.h>
 
 
 namespace DB
@@ -688,6 +689,30 @@ struct MurmurHash3Impl128WithSeed
     static constexpr bool use_int_hash_for_pods = false;
 };
 
+/// for datatype of Int8/Int16/Int32/Int64/Ascii String,
+/// the result is same with hash() in Spark-3.2
+/// and notice that unsigned numer is ok, but Spark only has signed integer
+struct SparkHashSimpleImpl
+{
+    static constexpr auto name = "sparkHashSimple";
+    using ReturnType = Int32;
+    static constexpr Int32 seed = 42;
+
+    static Int32 apply(const char * data, const size_t size)
+    {
+        char bytes[16];
+        MurmurHash3_x86_32_spark_compatible(data, size, seed, bytes);
+        return *reinterpret_cast<Int32 *>(bytes);
+    }
+
+    static Int32 combineHashes(Int32 h1, Int32 h2)
+    {
+        return IntHash32Impl::apply(h1) ^ h2;
+    }
+
+    static constexpr bool use_int_hash_for_pods = false;
+};
+
 #endif
 
 /// http://hg.openjdk.java.net/jdk8u/jdk8u/jdk/file/478a4add975b/src/share/classes/java/lang/String.java#l1452
@@ -733,9 +758,9 @@ struct JavaHashImpl
         return static_cast<Int32>(h);
     }
 
-    static Int32 combineHashes(Int32, Int32)
+    static Int32 combineHashes(Int32 h1, Int32 h2)
     {
-        throw Exception("Java hash is not combinable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
+        return (static_cast<uint64_t>(h1) * 31 + h2) & std::numeric_limits<Int32>::max();
     }
 
     static constexpr bool use_int_hash_for_pods = false;
@@ -1298,7 +1323,15 @@ private:
                             reverseMemcpy(&tmp_v, &v, sizeof(v));
                             v = tmp_v;
                         }
-                        h = applyWithSeed(key, reinterpret_cast<const char *>(&v), sizeof(v));
+                        if constexpr (std::is_same_v<Impl, SparkHashSimpleImpl> && sizeof(FromType) <= 4)
+                        {
+                            Int32 vv = static_cast<Int32>(v);
+                            h = applyWithSeed(key, reinterpret_cast<const char *>(&vv), sizeof(vv));
+                        }
+                        else
+                        {
+                            h = applyWithSeed(key, reinterpret_cast<const char *>(&v), sizeof(v));
+                        }
                     }
                 }
 
@@ -1679,6 +1712,10 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool useDefaultImplementationForConstants() const override { return !with_seed; }
+    bool useDefaultImplementationForNulls() const override
+    {
+        return with_default_nullable;
+    }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
 
@@ -2317,10 +2354,15 @@ using FunctionSipHash128Keyed = FunctionAnyHash<SipHash128KeyedImpl, false, true
 using FunctionSipHash128Reference = FunctionAnyHash<SipHash128ReferenceImpl>;
 using FunctionSipHash128ReferenceKeyed = FunctionAnyHash<SipHash128ReferenceKeyedImpl, false, true, true, SipHash128ReferenceKeyedImpl::Key>;
 using FunctionCityHash64 = FunctionAnyHash<ImplCityHash64>;
+using FunctionCityHash64V2 = FunctionAnyHash<ImplCityHash64, false, false>;
 using FunctionHiveCityHash64 = FunctionAnyHash<ImplHiveCityHash64>;
+using FunctionHiveCityHash64V2 = FunctionAnyHash<ImplHiveCityHash64, false, false>;
 using FunctionFarmFingerprint64 = FunctionAnyHash<ImplFarmFingerprint64>;
+using FunctionFarmFingerprint64V2 = FunctionAnyHash<ImplFarmFingerprint64, false, false>;
 using FunctionFarmHash64 = FunctionAnyHash<ImplFarmHash64>;
+using FunctionFarmHash64V2 = FunctionAnyHash<ImplFarmHash64, false, false>;
 using FunctionMetroHash64 = FunctionAnyHash<ImplMetroHash64>;
+using FunctionMetroHash64V2 = FunctionAnyHash<ImplMetroHash64, false, false>;
 
 #if !defined(ARCADIA_BUILD)
 using FunctionMurmurHash2_32 = FunctionAnyHash<MurmurHash2Impl32>;
@@ -2334,6 +2376,7 @@ using FunctionMurmurHash3_128 = FunctionAnyHash<MurmurHash3Impl128>;
 using FunctionMurmurHash3_32WithSeed = FunctionAnyHash<MurmurHash3Impl32WithSeed, true>;
 using FunctionMurmurHash3_64WithSeed = FunctionAnyHash<MurmurHash3Impl64WithSeed, true>;
 using FunctionMurmurHash3_128WithSeed = FunctionAnyHash<MurmurHash3Impl128WithSeed, true>;
+using FunctionSparkHashSimple = FunctionAnyHash<SparkHashSimpleImpl>;
 
 using FunctionMurmurHash2_32V2 = FunctionAnyHash<MurmurHash2Impl32, false, false>;
 using FunctionMurmurHash2_64V2 = FunctionAnyHash<MurmurHash2Impl64, false, false>;

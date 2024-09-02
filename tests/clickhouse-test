@@ -321,13 +321,27 @@ def configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file):
             return ''.join(random.choice(alphabet) for _ in range(length))
         database = 'test_{suffix}'.format(suffix=random_str())
 
-        with open(stderr_file, 'w') as stderr:
-            clickhouse_proc_create = Popen(shlex.split(testcase_args.testcase_client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
-            try:
-                clickhouse_proc_create.communicate(("CREATE DATABASE " + database + get_db_engine(testcase_args, database)), timeout=testcase_args.timeout)
-            except TimeoutExpired:
-                total_time = (datetime.now() - testcase_args.testcase_start_time).total_seconds()
-                return clickhouse_proc_create, "", "Timeout creating database {} before test".format(database), total_time
+        if args.tenant_id is None or len(args.tenant_id) == 0:
+            create_database = database
+        else:
+            create_database = '{prefix}.{suffix}'.format(suffix=database, prefix=args.tenant_id)
+
+        if args.tenant_id:
+            with open(stderr_file, 'w') as stderr:
+                clickhouse_proc_create = Popen(shlex.split(testcase_args.testcase_client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
+                try:
+                    clickhouse_proc_create.communicate(("CREATE DATABASE `" + create_database + "`" + get_db_engine(testcase_args, database)), timeout=testcase_args.timeout)
+                except TimeoutExpired:
+                    total_time = (datetime.now() - testcase_args.testcase_start_time).total_seconds()
+                    return clickhouse_proc_create, "", "Timeout creating database {} before test".format(database), total_time
+        else:
+            with open(stderr_file, 'w') as stderr:
+                clickhouse_proc_create = Popen(shlex.split(testcase_args.testcase_client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
+                try:
+                    clickhouse_proc_create.communicate(("CREATE DATABASE " + database + get_db_engine(testcase_args, database)), timeout=testcase_args.timeout)
+                except TimeoutExpired:
+                    total_time = (datetime.now() - testcase_args.testcase_start_time).total_seconds()
+                    return clickhouse_proc_create, "", "Timeout creating database {} before test".format(database), total_time
 
         os.environ["CLICKHOUSE_DATABASE"] = database
         # Set temporary directory to match the randomly generated database,
@@ -346,11 +360,19 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
     start_time = args.testcase_start_time
     database = args.testcase_database
 
+    #replace tenant_id format from a.b to a`b
+    if args.tenant_id is None or len(args.tenant_id) == 0:
+        drop_database = args.testcase_database
+        default_database = drop_database
+    else:
+        drop_database = '{prefix}.{suffix}'.format(suffix=args.testcase_database, prefix=args.tenant_id)
+        default_database = '{prefix}\`{suffix}'.format(suffix=args.testcase_database, prefix=args.tenant_id)
+
     # This is for .sh tests
     os.environ["CLICKHOUSE_LOG_COMMENT"] = args.testcase_basename
 
     params = {
-        'client': client + ' --database=' + database,
+        'client': client + ' --database="' + default_database + '"',
         'logs_level': server_logs_level,
         'options': client_options,
         'test': case_file,
@@ -377,25 +399,46 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
         need_drop_database = not maybe_passed
 
     if need_drop_database:
-        with open(stderr_file, 'a') as stderr:
-            clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
-        seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
-        try:
-            drop_database_query = "DROP DATABASE " + database
-            if args.replicated_database:
-                drop_database_query += " ON CLUSTER test_cluster_database_replicated"
-            clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
-        except TimeoutExpired:
-            # kill test process because it can also hung
-            if proc.returncode is None:
-                try:
-                    proc.kill()
-                except OSError as e:
-                    if e.errno != ESRCH:
-                        raise
+        if args.tenant_id:
+            with open(stderr_file, 'a') as stderr:
+                clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
+            seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
+            try:
+                drop_database_query = "DROP DATABASE `" + drop_database + "`"
+                if args.replicated_database:
+                    drop_database_query += " ON CLUSTER test_cluster_database_replicated"
+                clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
+            except TimeoutExpired:
+                # kill test process because it can also hung
+                if proc.returncode is None:
+                    try:
+                        proc.kill()
+                    except OSError as e:
+                        if e.errno != ESRCH:
+                            raise
 
-            total_time = (datetime.now() - start_time).total_seconds()
-            return clickhouse_proc_create, "", "Timeout dropping database {} after test".format(database), total_time
+                total_time = (datetime.now() - start_time).total_seconds()
+                return clickhouse_proc_create, "", "Timeout dropping database {} after test".format(database), total_time
+        else:
+            with open(stderr_file, 'a') as stderr:
+                clickhouse_proc_create = Popen(shlex.split(client), stdin=PIPE, stdout=PIPE, stderr=stderr, universal_newlines=True)
+            seconds_left = max(args.timeout - (datetime.now() - start_time).total_seconds(), 20)
+            try:
+                drop_database_query = "DROP DATABASE " + database
+                if args.replicated_database:
+                    drop_database_query += " ON CLUSTER test_cluster_database_replicated"
+                clickhouse_proc_create.communicate((drop_database_query), timeout=seconds_left)
+            except TimeoutExpired:
+                # kill test process because it can also hung
+                if proc.returncode is None:
+                    try:
+                        proc.kill()
+                    except OSError as e:
+                        if e.errno != ESRCH:
+                            raise
+
+                total_time = (datetime.now() - start_time).total_seconds()
+                return clickhouse_proc_create, "", "Timeout dropping database {} after test".format(database), total_time
 
         shutil.rmtree(args.test_tmp_dir)
 
@@ -868,6 +911,7 @@ class BuildFlags():
     POLYMORPHIC_PARTS = 'polymorphic-parts'
     DATABASE_REPLICATED = 'database-replicated'
     S3 = 's3'
+    MULTI_SERVERS = 'multi-servers'
 
 
 def collect_build_flags(client):
@@ -995,6 +1039,9 @@ def main(args):
     if args.s3:
         build_flags.append(BuildFlags.S3)
 
+    if not args.single_server:
+        build_flags.append(BuildFlags.MULTI_SERVERS)
+
     if args.use_skip_list:
         tests_to_skip_from_list = collect_tests_to_skip(args.skip_list_path, build_flags)
     else:
@@ -1044,6 +1091,12 @@ def main(args):
             args.shard = False
 
     def create_common_database(args, db_name):
+        #tenant_id.db_name is the name of the tenant database
+        if args.tenant_id is None or len(args.tenant_id) == 0:
+            create_database = db_name
+        else:
+            create_database = args.tenant_id + "." + db_name
+
         create_database_retries = 0
         while create_database_retries < MAX_RETRIES:
             clickhouse_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE, universal_newlines=True)
@@ -1051,6 +1104,15 @@ def main(args):
             if not need_retry(stderr):
                 break
             create_database_retries += 1
+
+        if args.tenant_id:
+            create_database_retries = 0
+            while create_database_retries < MAX_RETRIES:
+                clickhouse_proc_create = Popen(shlex.split(args.client), stdin=PIPE, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+                (_, stderr) = clickhouse_proc_create.communicate(("CREATE DATABASE IF NOT EXISTS `" + create_database + "`"+ get_db_engine(args, db_name)))
+                if not need_retry(stderr):
+                    break
+                create_database_retries += 1
 
     if args.database and args.database != "test":
         create_common_database(args, args.database)
@@ -1246,7 +1308,9 @@ def collect_tests_to_skip(skip_list_path, build_flags):
         # allows to have comments in skip_list.json
         skip_dict = json.loads(json_minify(content))
         for build_flag in build_flags:
-            result |= set(skip_dict[build_flag])
+            cur_result = set(skip_dict[build_flag])
+            print("Use build flag: {}, skips tests: {}".format(build_flag, cur_result))
+            result |= cur_result 
 
     if len(result) > 0:
         print("Found file with skip-list {}, {} test will be skipped".format(skip_list_path, len(result)))
@@ -1327,6 +1391,8 @@ if __name__ == '__main__':
     parser.add_argument('--run', required=False, default=None, nargs='+', help='name of suites to be executed')
     parser.add_argument('--locate-asan-error-to-case', action='store_true', default=False,help='enable check asan erorr after each case finishs, no -j')
     parser.add_argument('--s3', required=False, action='store_true', help='Only run tests for S3 environment')
+    parser.add_argument('--single-server', required=False, action='store_true', help='Add some tests which will fail on multi-server')
+    parser.add_argument('--tenant_id', default='', help='set the tenant id for test')
 
     args = parser.parse_args()
 
@@ -1387,7 +1453,10 @@ if __name__ == '__main__':
         if os.getenv("CLICKHOUSE_PORT_TCP"):
             args.client += ' --port=' + os.getenv("CLICKHOUSE_PORT_TCP")
         if os.getenv("CLICKHOUSE_DATABASE"):
-            args.client += ' --database=' + os.getenv("CLICKHOUSE_DATABASE")
+            if args.tenant_id is None or len(args.tenant_id) == 0:
+                args.client += ' --database=' + os.getenv("CLICKHOUSE_DATABASE")
+            else:
+                args.client += ' --database="' + args.tenant_id + "\`" + os.getenv("CLICKHOUSE_DATABASE") + '"'
 
     if args.client_option:
         # Set options for client

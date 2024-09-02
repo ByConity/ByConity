@@ -43,6 +43,8 @@ public:
     /// [Preallocate Mode] if worker_topology_hash is not empty, need to check whether the given topology is matched with worker's topology
     void loadDataParts(MutableDataPartsVector & parts, UInt64 worker_topology_hash = 0);
 
+    void loadServerDataPartsWithDBM(ServerDataPartsWithDBM && parts_with_dbm);
+
     /// Remove Outdated parts of which timestamp is less than expired ts from container.
     /// DO NOT check reference count of parts.
     void unloadOldPartsByTimestamp(Int64 expired_ts);
@@ -60,6 +62,8 @@ protected:
 
     void deactivateOutdatedParts();
 
+    size_t loadFromServerPartsInPartition(const Strings & required_partitions);
+
     void loadDataPartsInParallel(MutableDataPartsVector & parts);
 
     static void runOverPartsInParallel(MutableDataPartsVector & parts, size_t threads, const std::function<void(MutableDataPartPtr &)> & op);
@@ -68,7 +72,6 @@ protected:
 
     MergeTreeCloudData(
         const StorageID & table_id_,
-        const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata_,
         ContextMutablePtr context_,
         const String & date_column_name_,

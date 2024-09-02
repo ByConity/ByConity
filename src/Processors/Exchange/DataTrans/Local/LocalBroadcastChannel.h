@@ -47,6 +47,11 @@ public:
     LocalBroadcastChannel(
         ExchangeDataKeyPtr data_key_,
         LocalChannelOptions options_,
+        const String & name_);
+
+    LocalBroadcastChannel(
+        ExchangeDataKeyPtr data_key_,
+        LocalChannelOptions options_,
         const String & name_,
         MultiPathQueuePtr queue_,
         ContextPtr context_ = nullptr);

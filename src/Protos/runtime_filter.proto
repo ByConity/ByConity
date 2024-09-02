@@ -6,7 +6,7 @@ option cc_generic_services = true;
 message TransferRuntimeFilterRequest {
   required string query_id = 1;
   required uint64 builder_id = 2;
-  required string worker_address = 3;
+  required uint32 parallel_id = 3;
   required uint64 require_parallel_size = 4;
   required bytes filter_data = 5;
 }

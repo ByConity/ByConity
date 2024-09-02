@@ -31,7 +31,7 @@ namespace CurrentMetrics
 namespace DB
 {
 
-ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & params, bool disable_memory_tracker)
+ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & params, [[maybe_unused]] bool disable_memory_tracker, const ContextPtr & context)
     : type(params.type)
     , task_id(params.task_id)
     , last_touch_time(time(nullptr))
@@ -53,7 +53,7 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
             total_rows_count += source_part->index_granularity.getTotalRows();
         }
     }
-    else
+    else if (!params.source_parts.empty())
     {
         partition_id = params.source_parts.front()->info().partition_id;
         num_parts = params.source_parts.size();
@@ -68,34 +68,7 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
         }
     }
 
-    memory_tracker.setDescription("Manipulation");
-
-    /// Let's try to copy memory related settings from the query,
-    /// since settings that we have here is not from query, but global, from the table.
-    ///
-    /// NOTE: Remember, that Thread level MemoryTracker does not have any settings,
-    /// so it's parent is required.
-    MemoryTracker * query_memory_tracker = CurrentThread::getMemoryTracker();
-    MemoryTracker * parent_query_memory_tracker;
-    if (query_memory_tracker
-        && query_memory_tracker->level == VariableContext::Thread
-        && (parent_query_memory_tracker = query_memory_tracker->getParent())
-        && parent_query_memory_tracker != &total_memory_tracker)
-    {
-        memory_tracker.setOrRaiseHardLimit(parent_query_memory_tracker->getHardLimit());
-    }
-
-    /// Each merge is executed into separate background processing pool thread.
-    /// We disable memory_tracker in CnchMergeMutateThread, since it may cause coredump.
-    if (!disable_memory_tracker)
-        background_thread_memory_tracker = CurrentThread::getMemoryTracker();
-
-    if (background_thread_memory_tracker)
-    {
-        memory_tracker.setMetric(CurrentMetrics::MemoryTrackingForMerges);
-        background_thread_memory_tracker_prev_parent = background_thread_memory_tracker->getParent();
-        background_thread_memory_tracker->setParent(&memory_tracker);
-    }
+    thread_group = ThreadGroupStatus::createForBackgroundProcess(context);
 }
 
 ManipulationInfo ManipulationListElement::getInfo() const
@@ -116,7 +89,7 @@ ManipulationInfo ManipulationListElement::getInfo() const
     res.rows_read = rows_read.load(std::memory_order_relaxed);
     res.rows_written = rows_written.load(std::memory_order_relaxed);
     res.columns_written = columns_written.load(std::memory_order_relaxed);
-    res.memory_usage = memory_tracker.get();
+    res.memory_usage = getMemoryTracker().get();
     res.thread_id = thread_id;
 
     for (const auto & source_part_name : source_part_names)
@@ -143,9 +116,7 @@ void ManipulationInfo::update(const ManipulationInfo & info)
 
 ManipulationListElement::~ManipulationListElement()
 {
-    /// Unplug memory_tracker from current background processing pool thread
-    if (background_thread_memory_tracker)
-        background_thread_memory_tracker->setParent(background_thread_memory_tracker_prev_parent);
+    background_memory_tracker.adjustOnBackgroundTaskEnd(&getMemoryTracker());
 }
 
 }

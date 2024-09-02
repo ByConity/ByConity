@@ -251,6 +251,23 @@ enum class CTEMode
 
 DECLARE_SETTING_ENUM(CTEMode)
 
+enum class ExpandMode
+{
+    EXPAND,
+    UNION,
+    CTE,
+};
+
+DECLARE_SETTING_ENUM(ExpandMode)
+
+enum class SpillMode
+{
+    MANUAL,
+    AUTO,
+};
+
+DECLARE_SETTING_ENUM(SpillMode)
+
 enum class StatisticsAccurateSampleNdvMode
 {
     NEVER,
@@ -283,11 +300,22 @@ enum class StatisticsCachePolicy
 };
 DECLARE_SETTING_ENUM(StatisticsCachePolicy)
 
+enum class HiveMoveToPrewhereMethod
+{
+    NEVER,
+    COLUMN_SIZE,
+    STATS,
+    ALL,
+};
+DECLARE_SETTING_ENUM(HiveMoveToPrewhereMethod)
+
 enum class MaterializedViewConsistencyCheckMethod
 {
     NONE,
     PARTITION,
 };
+
+DECLARE_SETTING_ENUM(MaterializedViewConsistencyCheckMethod);
 
 enum class BackupVWMode
 {
@@ -298,7 +326,27 @@ enum class BackupVWMode
 
 DECLARE_SETTING_ENUM(BackupVWMode)
 
-DECLARE_SETTING_ENUM(MaterializedViewConsistencyCheckMethod)
+enum class QueueName : uint32_t
+{
+    Highest = 0,
+    High,
+    Normal,
+    Low,
+    Lowest,
+    Count,
+    Auto
+};
+
+DECLARE_SETTING_ENUM(QueueName);
+
+enum class VWQueueMode : uint32_t
+{
+    Skip = 0,
+    Match,
+    Force
+};
+
+DECLARE_SETTING_ENUM(VWQueueMode);
 
 enum class SpanHierarchy : int
 {
@@ -306,6 +354,7 @@ enum class SpanHierarchy : int
     DEBUG = 1,
     INFO = 2
 };
+
 
 DECLARE_SETTING_ENUM(SpanHierarchy)
 
@@ -331,8 +380,38 @@ enum class DedupKeyMode
 {
     REPLACE,
     THROW,
+    APPEND,
 };
 
 DECLARE_SETTING_ENUM(DedupKeyMode)
+
+enum class RefreshViewTaskStatus : int8_t
+{
+    START = 1,
+    FINISH = 2,
+    EXCEPTION_EXECUTE_TASK = 3,
+    EXCEPTION_BEFORE_START = 4,
+};
+
+DECLARE_SETTING_ENUM(RefreshViewTaskStatus);
+
+enum class RefreshViewTaskType : int8_t
+{
+    NONE = 1,
+    PARTITION_BASED_REFRESH = 2,
+    FULL_REFRESH = 3,
+};
+
+DECLARE_SETTING_ENUM(RefreshViewTaskType);
+
+enum class SchemaInferenceMode
+{
+    DEFAULT,
+    UNION,
+};
+
+DECLARE_SETTING_ENUM(SchemaInferenceMode)
+
+DECLARE_SETTING_ENUM_WITH_RENAME(DateTimeOverflowBehavior, FormatSettings::DateTimeOverflowBehavior)
 
 }

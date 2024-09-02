@@ -26,6 +26,7 @@
 #include <QueryPlan/CTEVisitHelper.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <Interpreters/ProcessorProfile.h>
+#include "QueryPlan/PlanNode.h"
 
 namespace DB
 {
@@ -36,9 +37,14 @@ struct PrinterContext;
 class PlanNodePrinter : public PlanNodeVisitor<Void, PrinterContext>
 {
 public:
-    explicit PlanNodePrinter(std::stringstream & out_, bool with_id_ = false, CTEInfo * cte_info = nullptr, PlanCostMap plan_cost_map_ = {}, StepAggregatedOperatorProfiles profiles_ = {})
+    explicit PlanNodePrinter(
+        std::stringstream & out_,
+        bool with_id_ = false,
+        CTEInfo * cte_info = nullptr,
+        PlanCostMap plan_cost_map_ = {},
+        StepAggregatedOperatorProfiles profiles_ = {})
         : out(out_)
-        , cte_helper(cte_info ? std::make_optional<CTEPreorderVisitHelper>(*cte_info) : std::nullopt)
+        , cte_helper(cte_info ? std::make_optional<SimpleCTEVisitHelper<void>>(*cte_info) : std::nullopt)
         , with_id(with_id_)
         , plan_cost_map(std::move(plan_cost_map_))
         , profiles(profiles_)
@@ -48,6 +54,7 @@ public:
     ~PlanNodePrinter() override = default;
     Void visitPlanNode(PlanNodeBase &, PrinterContext &) override;
     Void visitProjectionNode(ProjectionNode & node, PrinterContext & context) override;
+    Void visitExpandNode(ExpandNode & node, PrinterContext & context) override;
     Void visitFilterNode(FilterNode & node, PrinterContext & context) override;
     Void visitJoinNode(JoinNode & node, PrinterContext & context) override;
     Void visitArrayJoinNode(ArrayJoinNode & node, PrinterContext & context) override;
@@ -62,6 +69,8 @@ public:
     Void visitTableScanNode(TableScanNode & node, PrinterContext & context) override;
     Void visitTableWriteNode(TableWriteNode & node, PrinterContext & context) override;
     Void visitTableFinishNode(TableFinishNode & node, PrinterContext & context) override;
+    Void visitOutfileWriteNode(OutfileWriteNode & node, PrinterContext & context) override;
+    Void visitOutfileFinishNode(OutfileFinishNode & node, PrinterContext & context) override;
     Void visitReadNothingNode(ReadNothingNode & node, PrinterContext & context) override;
     Void visitReadStorageRowCountNode(ReadStorageRowCountNode & node, PrinterContext & context) override;
     Void visitValuesNode(ValuesNode & node, PrinterContext & context) override;
@@ -86,11 +95,12 @@ public:
     Void visitTopNFilteringNode(TopNFilteringNode & node, PrinterContext & context) override;
     Void visitFillingNode(FillingNode & node, PrinterContext & context) override;
     Void visitIntersectOrExceptNode(IntersectOrExceptNode & node, PrinterContext & context) override;
+    Void visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, PrinterContext & context) override;
 
 private:
     void printCTEDefNode(CTEId cte_id);
     std::stringstream & out;
-    std::optional<CTEPreorderVisitHelper> cte_helper;
+    std::optional<SimpleCTEVisitHelper<void>> cte_helper;
     bool with_id;
     PlanCostMap plan_cost_map;
     StepAggregatedOperatorProfiles profiles;
@@ -103,7 +113,7 @@ class PlanNodeEdgePrinter : public PlanNodeVisitor<Void, Void>
 {
 public:
     explicit PlanNodeEdgePrinter(std::stringstream & out_, CTEInfo * cte_info = nullptr)
-        : out(out_), cte_helper(cte_info ? std::make_optional<CTEPreorderVisitHelper>(*cte_info) : std::nullopt)
+        : out(out_), cte_helper(cte_info ? std::make_optional<SimpleCTEVisitHelper<void>>(*cte_info) : std::nullopt)
     {
     }
     Void visitPlanNode(PlanNodeBase &, Void &) override;
@@ -112,7 +122,7 @@ public:
 
 private:
     std::stringstream & out;
-    std::optional<CTEPreorderVisitHelper> cte_helper;
+    std::optional<SimpleCTEVisitHelper<void>> cte_helper;
     void printEdge(PlanNodeBase & from, PlanNodeBase & to, std::string_view format = "");
 };
 
@@ -123,6 +133,7 @@ public:
     ~PlanSegmentNodePrinter() override = default;
     Void visitNode(QueryPlan::Node *, PrinterContext &) override;
     Void visitProjectionNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitExpandNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitFilterNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitJoinNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitArrayJoinNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -137,6 +148,8 @@ public:
     Void visitTableScanNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitTableWriteNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitTableFinishNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitOutfileWriteNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitOutfileFinishNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitReadNothingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitReadStorageRowCountNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitValuesNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -160,6 +173,7 @@ public:
     Void visitTopNFilteringNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitFillingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitIntersectOrExceptNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitIntermediateResultCacheNode(QueryPlan::Node * node, PrinterContext & context) override;
 
 private:
     std::stringstream & out;
@@ -185,6 +199,7 @@ class StepPrinter
 public:
     static String printStep(const IQueryPlanStep & step, bool include_output = true);
     static String printProjectionStep(const ProjectionStep & step, bool include_output = true);
+    static String printExpandStep(const ExpandStep & step, bool include_output = true);
     static String printFilterStep(const FilterStep & step, bool include_output = true);
     static String printJoinStep(const JoinStep & step);
     static String printArrayJoinStep(const ArrayJoinStep & step);
@@ -196,9 +211,12 @@ public:
     static String printExceptStep(const ExceptStep & step);
     static String printExchangeStep(const ExchangeStep & step);
     static String printRemoteExchangeSourceStep(const RemoteExchangeSourceStep & step);
+    static String printFinalSampleStep(const FinalSampleStep & step);
     static String printTableScanStep(const TableScanStep & step);
     static String printTableWriteStep(const TableWriteStep & step);
     static String printTableFinishStep(const TableFinishStep & step);
+    static String printOutfileWriteStep(const OutfileWriteStep & step);
+    static String printOutfileFinishStep(const OutfileFinishStep & step);
     static String printReadStorageRowCountStep(const ReadStorageRowCountStep & step);
     static String printValuesStep(const ValuesStep & step);
     static String printLimitStep(const LimitStep & step);
@@ -221,6 +239,7 @@ public:
     static String printIntersectOrExceptStep(const IntersectOrExceptStep & step);
     static String printTotalsHavingStep(const TotalsHavingStep & step);
     static String printExtremesStep(const ExtremesStep & step);
+    static String printIntermediateResultCacheStep(const IntermediateResultCacheStep & step);
 
 private:
     static String printFilter(const ConstASTPtr & filter);

@@ -9,7 +9,7 @@
 #include <mysqlxx/Pool.h>
 
 #include <common/sleep.h>
-
+#include <Common/Exception.h>
 #include <Poco/Util/LayeredConfiguration.h>
 
 
@@ -20,9 +20,12 @@ void Pool::Entry::incrementRefCount()
 {
     if (!data)
         return;
+
     /// First reference, initialize thread
     if (data->ref_count.fetch_add(1) == 0)
         mysql_thread_init();
+
+    chassert(!data->removed_from_pool);
 }
 
 
@@ -30,10 +33,17 @@ void Pool::Entry::decrementRefCount()
 {
     if (!data)
         return;
-
-    /// We were the last user of this thread, deinitialize it
-    if (data->ref_count.fetch_sub(1) == 1)
+    
+    const auto ref_count = data->ref_count.fetch_sub(1);
+    if (ref_count == 1)
+    {
+        /// We were the last user of this thread, deinitialize it
         mysql_thread_end();
+        /// In Pool::Entry::disconnect() we remove connection from the list of pool's connections.
+        /// So now we must deallocate the memory.
+        if (data->removed_from_pool)
+            ::delete data;
+    }
 }
 
 
@@ -208,12 +218,10 @@ void Pool::removeConnection(Connection* connection)
     std::lock_guard<std::mutex> lock(mutex);
     if (connection)
     {
-        if (connection->ref_count > 0)
-        {
+        if (!connection->removed_from_pool)
             connection->conn.disconnect();
-            connection->ref_count = 0;
-        }
         connections.remove(connection);
+        connection->removed_from_pool = true;
     }
 }
 

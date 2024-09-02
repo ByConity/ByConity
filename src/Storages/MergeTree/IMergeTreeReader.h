@@ -203,6 +203,12 @@ private:
     google::dense_hash_map<StringRef, const DataTypePtr *, StringRefHash> columns_from_part;
 
     std::unordered_map<String, NameAndTypePair> columns_type_cache;
+
+    /// Because of columns_commit_time, cnch parts may have inconsistent columns with files already written to disk
+    /// (e.g. add column a, b -> drop column a, columns_commit_time will be updated, b is added to part->columns but
+    /// non of its files written). So we should remember which column is missing and filled by fillMissingColumns,
+    /// then we can get right types in performRequiredConversions.
+    std::unordered_map<String, DataTypePtr> filled_missing_column_types;
 };
 
 }

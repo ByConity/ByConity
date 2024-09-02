@@ -314,8 +314,10 @@ public:
     static constexpr auto name = Impl<false>::name;
     static FunctionPtr create(ContextPtr context)
     {
-        if (context->getSettingsRef().dialect_type == DialectType::MYSQL)
-            return std::make_shared<FunctionsStringSearch<Impl<true>>>(true);
+        if (context && context->getSettingsRef().dialect_type == DialectType::MYSQL)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionsStringSearch<Impl<true>>>(true));
+        else if (context && context->getSettingsRef().enable_implicit_arg_type_convert)
+            return std::make_shared<IFunctionMySql>(std::make_unique<FunctionsStringSearch<Impl<false>>>(false));
         else
             return std::make_shared<FunctionsStringSearch<Impl<false>>>(false);
     }

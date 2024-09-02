@@ -24,6 +24,11 @@
 
 #include <Columns/ColumnConst.h>
 #include <Common/CurrentThread.h>
+#include <IO/ConnectionTimeoutsContext.h>
+#include <Interpreters/Cluster.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InternalTextLogsQueue.h>
+#include <Interpreters/castColumn.h>
 #include <Processors/Pipe.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Storages/IStorage.h>
@@ -202,7 +207,8 @@ void RemoteQueryExecutor::sendQuery()
 
     auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
     ClientInfo modified_client_info = context->getClientInfo();
-    
+
+    // change query kind to secondary query here
     if (!is_server_forwarding)
         modified_client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
 
@@ -370,10 +376,6 @@ std::optional<Block> RemoteQueryExecutor::processPacket(Packet packet)
                 profile_info_callback(packet.profile_info);
             break;
 
-        case Protocol::Server::QueryMetrics:
-            parseQueryWorkerMetrics(packet.query_worker_metric_elements);
-            break;
-
         case Protocol::Server::Totals:
             totals = packet.block;
             break;
@@ -449,10 +451,6 @@ void RemoteQueryExecutor::finish(std::unique_ptr<ReadContext> * read_context)
                 LOG_DEBUG(log, "Receive ProfileInfo");
                 // info.setFrom(packet.profile_info, true);
                 // initOwnProfileInfo();
-                break;
-
-            case Protocol::Server::QueryMetrics:
-                parseQueryWorkerMetrics(packet.query_worker_metric_elements);
                 break;
 
             case Protocol::Server::EndOfStream:
@@ -580,32 +578,6 @@ bool RemoteQueryExecutor::isQueryPending() const
 bool RemoteQueryExecutor::hasThrownException() const
 {
     return got_exception_from_replica || got_unknown_packet_from_replica;
-}
-
-void RemoteQueryExecutor::parseQueryWorkerMetrics(const QueryWorkerMetricElements & elements)
-{
-    for (const auto & element : elements)
-    {
-        /// The extended_info metrics are only used in INSERT SELECT/ INSERT INFILE cases, you may consider these values as metrics of the write worker.
-        extended_info.read_rows += element->read_rows;
-        extended_info.read_bytes += element->read_bytes;
-        extended_info.read_cached_bytes += element->read_cached_bytes;
-
-        extended_info.written_rows += element->write_rows;
-        extended_info.written_bytes += element->write_bytes;
-        extended_info.written_duration += element->write_duration;
-
-        extended_info.runtime_latency += element->runtime_latency;
-
-        if (context->getServerType() == ServerType::cnch_server)  /// For cnch server, directly push elements to the buffer
-            context->getQueryContext()->insertQueryWorkerMetricsElement(*element);
-        else if (context->getServerType() == ServerType::cnch_worker)  /// For cnch aggre worker, store the elements and forward them to cnch server
-            context->getQueryContext()->addQueryWorkerMetricElements(std::move(element));
-
-        auto internal_progress_callback = context->getInternalProgressCallback();
-        if (internal_progress_callback)
-            internal_progress_callback({element->read_rows, element->read_bytes, 0, 0, element->read_cached_bytes});
-    }
 }
 
 }

@@ -11,10 +11,7 @@ bool DistributionTypeHint::checkOptions(Strings & table_name_list) const
 {
     if (table_name_list.size() != 1)
         return false;
-    if (table_name_list[0] == options[0])
-        return true;
-
-    return false;
+    return table_name_list[0] == options[0];
 }
 
 bool DistributionTypeHint::canAttach(PlanNodeBase & node, HintOptions & hint_options) const

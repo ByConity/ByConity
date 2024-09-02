@@ -58,9 +58,6 @@ ASTPtr ASTStorage::clone() const
     if (settings)
         res->set(res->settings, settings->clone());
 
-    if (comment)
-        res->set(res->comment, comment->clone());
-
     return res;
 }
 
@@ -110,11 +107,6 @@ void ASTStorage::formatImpl(const FormatSettings & s, FormatState & state, Forma
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "SETTINGS " << (s.hilite ? hilite_none : "");
         settings->formatImpl(s, state, frame);
-    }
-    if (comment)
-    {
-        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "COMMENT " << (s.hilite ? hilite_none : "");
-        comment->formatImpl(s, state, frame);
     }
 
 }
@@ -177,6 +169,8 @@ ASTPtr ASTColumns::clone() const
         res->set(res->projections, projections->clone());
     if (primary_key)
         res->set(res->primary_key, primary_key->clone());
+    if (mysql_indices)
+        res->set(res->mysql_indices, mysql_indices->clone());
 
     return res;
 }
@@ -248,6 +242,15 @@ void ASTColumns::formatImpl(const FormatSettings & s, FormatState & state, Forma
             list.children.push_back(elem);
         }
     }
+    if (mysql_indices)
+    {
+        for (const auto & mysql_index : mysql_indices->children)
+        {
+            auto elem = std::make_shared<ASTColumnsElement>();
+            elem->set(elem->elem, mysql_index->clone());
+            list.children.push_back(elem);
+        }
+    }
 
     if (!list.children.empty())
     {
@@ -295,6 +298,8 @@ ASTPtr ASTCreateQuery::clone() const
         res->set(res->storage, storage->clone());
     if (select)
         res->set(res->select, select->clone());
+    if (refresh_strategy)
+        res->set(res->refresh_strategy, refresh_strategy->clone());
     if (tables)
         res->set(res->tables, tables->clone());
     if (table_overrides)
@@ -306,6 +311,9 @@ ASTPtr ASTCreateQuery::clone() const
         res->set(res->dictionary_attributes_list, dictionary_attributes_list->clone());
         res->set(res->dictionary, dictionary->clone());
     }
+
+    if (comment)
+        res->set(res->comment, comment->clone());
 
     cloneOutputOptions(*res);
 
@@ -349,7 +357,13 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
             settings.ostr << settings.nl_or_ws;
             table_overrides->formatImpl(settings, state, frame);
         }
-        
+
+        if (comment)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "COMMENT " << (settings.hilite ? hilite_none : "");
+            comment->formatImpl(settings, state, frame);
+        }
+
         return;
     }
 
@@ -471,7 +485,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     if (columns_list && !columns_list->empty() && !as_table_function)
     {
-        settings.ostr << (settings.one_line ? " (" : "\n(");
+        /// replace "\n(" to "(\n" for MYSQL as navicat (duplicate table action) requires
+        settings.ostr << ((settings.one_line || settings.dialect_type == DialectType::MYSQL) ? " (" : "\n(");
         FormatStateStacked frame_nested = frame;
         columns_list->formatImpl(settings, state, frame_nested);
         settings.ostr << (settings.one_line ? ")" : "\n)");
@@ -499,6 +514,12 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     if (is_populate)
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " POPULATE" << (settings.hilite ? hilite_none : "");
 
+    if (refresh_strategy)
+    {
+        settings.ostr << settings.nl_or_ws;
+        refresh_strategy->formatImpl(settings, state, frame);
+    }
+
     if (select)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS" << settings.nl_or_ws << (settings.hilite ? hilite_none : "");
@@ -509,6 +530,12 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " WITH " << (settings.hilite ? hilite_none : "");
         tables->formatImpl(settings, state, frame);
+    }
+
+    if (comment)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "COMMENT " << (settings.hilite ? hilite_none : "");
+        comment->formatImpl(settings, state, frame);
     }
 }
 

@@ -26,6 +26,16 @@ public:
 
     ~ZlibDeflatingWriteBuffer() override;
 
+    WriteBuffer * inplaceReconstruct([[maybe_unused]] const String & out_path, std::unique_ptr<WriteBuffer> nested) override
+    {
+        CompressionMethod method = this->compression_method;
+        int level = this->compression_level;
+        // Call the destructor explicitly but does not free memory
+        this->~ZlibDeflatingWriteBuffer();
+        new (this) ZlibDeflatingWriteBuffer(std::move(nested), method, level);
+        return this;
+    }
+
 private:
     void nextImpl() override;
 
@@ -35,6 +45,8 @@ private:
     /// an attempt to write to this buffer will result in exception.
     void finish();
 
+    CompressionMethod compression_method;
+    int compression_level;
     std::unique_ptr<WriteBuffer> out;
     z_stream zstr;
     bool finished = false;

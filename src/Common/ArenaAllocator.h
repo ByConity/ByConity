@@ -83,7 +83,11 @@ protected:
 
 
 /// Switches to ordinary Allocator after REAL_ALLOCATION_TRESHOLD bytes to avoid fragmentation and trash in Arena.
+#if USE_HUALLOC
+template <size_t REAL_ALLOCATION_TRESHOLD = 4096, typename TRealAllocator = HuAllocator<false>, typename TArenaAllocator = ArenaAllocator, size_t alignment = 0>
+#else
 template <size_t REAL_ALLOCATION_TRESHOLD = 4096, typename TRealAllocator = Allocator<false>, typename TArenaAllocator = ArenaAllocator, size_t alignment = 0>
+#endif
 class MixedArenaAllocator : private TRealAllocator
 {
 public:
@@ -122,9 +126,13 @@ protected:
 };
 
 
+#if USE_HUALLOC
+template <size_t alignment, size_t REAL_ALLOCATION_TRESHOLD = 4096>
+using MixedAlignedArenaAllocator = MixedArenaAllocator<REAL_ALLOCATION_TRESHOLD, HuAllocator<false>, AlignedArenaAllocator<alignment>, alignment>;
+#else
 template <size_t alignment, size_t REAL_ALLOCATION_TRESHOLD = 4096>
 using MixedAlignedArenaAllocator = MixedArenaAllocator<REAL_ALLOCATION_TRESHOLD, Allocator<false>, AlignedArenaAllocator<alignment>, alignment>;
-
+#endif
 
 template <size_t N = 64, typename Base = ArenaAllocator>
 class ArenaAllocatorWithStackMemory : public Base

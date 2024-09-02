@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Core/BackgroundSchedulePool.h>
 #include <Transaction/LockDefines.h>
 #include <Transaction/LockRequest.h>
 #include <common/logger_useful.h>
@@ -12,6 +13,7 @@
 namespace DB
 {
 class Context;
+struct StorageID;
 
 class LockContext
 {
@@ -19,11 +21,11 @@ public:
     LockContext();
     LockStatus lock(LockRequest * request);
     void unlock(LockRequest * request);
-    const LockRequestList & getGrantedList() const { return grantedList; }
-    const LockRequestList & getWaitingList() const { return waitingList; }
+    const LockRequestList & getGrantedList() const { return granted_list; }
+    const LockRequestList & getWaitingList() const { return waiting_list; }
     std::vector<TxnTimestamp> getGrantedTxnList() const;
-    std::pair<UInt32, UInt32> getModes() const { return {grantedModes, conflictedModes}; }
-    bool empty() const { return !grantedModes && !conflictedModes; }
+    std::pair<UInt32, UInt32> getModes() const { return {granted_modes, conflicted_modes}; }
+    bool empty() const { return !granted_modes && !conflicted_modes; }
 
 private:
     void scheduleWaitingRequests();
@@ -37,23 +39,23 @@ private:
     void decGrantedTxnCounts(const TxnTimestamp & txn_id);
     bool lockedBySameTxn(const TxnTimestamp & txn_id);
 
-private:
+
     // Counts the granted lock requests for each lock modes
-    std::array<UInt32, LockModeSize> grantedCounts;
+    std::array<UInt32, LockModeSize> granted_counts;
 
     // Bit-mask of current granted lock modes
-    UInt32 grantedModes;
+    UInt32 granted_modes;
 
     // List of granted lock requests
-    LockRequestList grantedList;
+    LockRequestList granted_list;
 
-    std::array<UInt32, LockModeSize> conflictedCounts;
-    UInt32 conflictedModes;
-    LockRequestList waitingList;
+    std::array<UInt32, LockModeSize> conflicted_counts;
+    UInt32 conflicted_modes;
+    LockRequestList waiting_list;
 
     //  Counts the num of granted lock requests for each txn_id
     using TxnID = UInt64;
-    std::unordered_map<TxnID, UInt32> grantedTxnCounts;
+    std::unordered_map<TxnID, UInt32> granted_txn_counts;
 };
 
 template <typename Key, typename T>
@@ -80,9 +82,12 @@ using LockMaps = std::vector<LockMap>;
 class LockManager : public ext::singleton<LockManager>
 {
 public:
-    LockManager() = default;
+    LockManager();
     LockManager(const LockManager &) = delete;
     LockManager & operator=(const LockManager &) = delete;
+    ~LockManager();
+
+    void shutdown();
 
     LockStatus lock(LockRequest *, const Context & context);
     void unlock(LockRequest *);
@@ -100,9 +105,9 @@ public:
     void setEvictExpiredLocks(bool enable) { evict_expired_locks = enable; }
     LockMaps & getLockMaps() { return lock_maps; }
 
-private:
-    LockInfoPtr getLockInfoPtr(const TxnTimestamp & txn_id, LockID lock_id);
-    bool isTxnExpired(const TxnTimestamp & txn_id, const Context & context);
+    void releaseLocksForTxn(const TxnTimestamp & txn_id, const Context & context);
+
+    void releaseLocksForTable(const StorageID & storage_id, const Context & context);
 
 private:
     bool evict_expired_locks{true};
@@ -115,6 +120,8 @@ private:
         UInt64 txn_id;
         Clock::time_point expire_time;
         LockIdMap lock_ids;
+        /// The topology version passed when acquiring lock
+        PairInt64 topology_version;
     };
 
     using TxnLockMapStripe = MapStripe<UInt64, TxnLockInfo>;
@@ -122,7 +129,22 @@ private:
     // Maps from txn_id -> TxnLockInfo
     TxnLockMap txn_locks_map;
 
+    ContextPtr global_context;
+    BackgroundSchedulePool::TaskHolder txn_checker;
+
     Poco::Logger * log{&Poco::Logger::get("CnchLockManager")};
+
+    std::atomic<bool> is_stopped{false};
+
+    bool isActive() { return !is_stopped; }
+
+    void checkTxnStatus();
+
+    LockInfoPtr getLockInfoPtr(const TxnTimestamp & txn_id, LockID lock_id);
+
+    bool isTxnExpired(const TxnTimestamp & txn_id, const Context & context);
+
+    bool abortTxnAndReleaseLocks(const TxnTimestamp & txn_id, const Context & context);
 };
 
 }

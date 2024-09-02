@@ -5,6 +5,7 @@
 #include <Interpreters/PreparedSets.h>
 #include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
 #include <Core/Block.h>
+#include <Parsers/ASTFunction.h>
 #include <map>
 #include <set>
 #include <memory>
@@ -117,4 +118,5 @@ public:
         );
 };
 
+bool functionCanUseBitmapIndex(const ASTFunction & function);
 }

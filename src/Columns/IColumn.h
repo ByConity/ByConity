@@ -178,6 +178,8 @@ public:
         throw Exception("Method getBool is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    virtual void tryToFlushZeroCopyBuffer() const {}
+
     /// Removes all elements outside of specified range.
     /// Is used in LIMIT operation, for example.
     virtual Ptr cut(size_t start, size_t length) const

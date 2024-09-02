@@ -158,7 +158,7 @@ public:
 
         Float64 res = calculateXirr(xirr_items, guess);
 
-        dynamic_cast<ColumnFloat64 &>(to).getData().push_back(res);
+        typeid_cast<ColumnFloat64 &>(to).getData().push_back(res);
     }
 
     Float64 calculateAnnualizedReturn(const XirrItems & xirr_items) const

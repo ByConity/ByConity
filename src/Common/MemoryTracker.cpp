@@ -76,6 +76,8 @@ namespace ProfileEvents
 
 static constexpr size_t log_peak_memory_usage_every = 1ULL << 30;
 
+MemoryTracker background_memory_tracker(&total_memory_tracker, VariableContext::User);
+
 // BlockerInThread
 thread_local uint64_t MemoryTracker::BlockerInThread::counter = 0;
 thread_local VariableContext MemoryTracker::BlockerInThread::level = VariableContext::Global;
@@ -114,8 +116,10 @@ MemoryTracker::LockExceptionInThread::~LockExceptionInThread()
 MemoryTracker total_memory_tracker(nullptr, VariableContext::Global);
 
 
-MemoryTracker::MemoryTracker(VariableContext level_) : parent(&total_memory_tracker), level(level_) {}
-MemoryTracker::MemoryTracker(MemoryTracker * parent_, VariableContext level_) : parent(parent_), level(level_) {}
+MemoryTracker::MemoryTracker(VariableContext level_)
+    : parent(&total_memory_tracker), log(&Poco::Logger::get("MemoryTracker")), level(level_) {}
+MemoryTracker::MemoryTracker(MemoryTracker * parent_, VariableContext level_)
+    : parent(parent_), log(&Poco::Logger::get("MemoryTracker")), level(level_) {}
 
 
 MemoryTracker::~MemoryTracker()
@@ -137,14 +141,19 @@ MemoryTracker::~MemoryTracker()
 void MemoryTracker::logPeakMemoryUsage() const
 {
     const auto * description = description_ptr.load(std::memory_order_relaxed);
-    LOG_DEBUG(&Poco::Logger::get("MemoryTracker"),
+    LOG_DEBUG(log,
         "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), ReadableSize(peak));
+}
+
+void MemoryTracker::setSoftLimit(Int64 value)
+{
+    soft_limit.store(value, std::memory_order_relaxed);
 }
 
 void MemoryTracker::logMemoryUsage(Int64 current) const
 {
     const auto * description = description_ptr.load(std::memory_order_relaxed);
-    LOG_DEBUG(&Poco::Logger::get("MemoryTracker"),
+    LOG_DEBUG(log,
         "Current memory usage{}: {}.", (description ? " " + std::string(description) : ""), ReadableSize(current));
 }
 
@@ -397,4 +406,11 @@ void MemoryTracker::setOrRaiseProfilerLimit(Int64 value)
     Int64 old_value = profiler_limit.load(std::memory_order_relaxed);
     while (old_value < value && !profiler_limit.compare_exchange_weak(old_value, value))
         ;
+}
+
+bool canEnqueueBackgroundTask()
+{
+    auto limit = background_memory_tracker.getSoftLimit();
+    auto amount = background_memory_tracker.get();
+    return limit == 0 || amount < limit;
 }

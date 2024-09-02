@@ -84,7 +84,10 @@ void ICnchBGThread::wakeup()
         std::unique_lock lock(wakeup_mutex);
         wakeup_cv.wait(lock);
         if (wakeup_finished)
+        {
+            thread_status = CnchBGThread::Running;
             break;
+        }
     }
 
     LOG_DEBUG(log, "Woke up {} for {} {}", toString(thread_type), (storage_id.isDatabase()? "database": "table"), storage_id.getNameForLogs());
@@ -164,7 +167,7 @@ TxnTimestamp ICnchBGThread::calculateMinActiveTimestamp() const
     {
         try
         {
-            if (auto ts = c->getMinActiveTimestamp(storage_id))
+            if (auto ts = c->getMinActiveTimestamp(storage_id); ts && ts.value())
                 min_active_ts = std::min(*ts, min_active_ts);
         }
         catch (...)

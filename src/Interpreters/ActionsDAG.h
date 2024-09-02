@@ -71,7 +71,6 @@ namespace JSONBuilder
 class ActionsDAG
 {
 public:
-
     enum class ActionType
     {
         /// Column which must be in input.
@@ -83,6 +82,8 @@ public:
         /// Function arrayJoin. Specially separated because it changes the number of rows.
         ARRAY_JOIN,
         FUNCTION,
+        /// A constant column which is not determined yet
+        PREPARED_COLUMN,
     };
 
     static const char * typeToString(ActionType type);
@@ -125,7 +126,9 @@ public:
         bool has_function;
 
         void serialize(WriteBuffer & buf) const;
-        static Node deserialize(ReadBuffer & buf, ContextPtr context); 
+        static Node deserialize(ReadBuffer & buf, ContextPtr context);
+
+        std::string dump() const;
     };
 
     /// NOTE: std::list is an implementation detail.
@@ -176,6 +179,7 @@ public:
             const FunctionOverloadResolverPtr & function,
             NodeRawConstPtrs children,
             std::string result_name);
+    const Node & addPreparedColumn(std::string name, DataTypePtr type);
 
     /// Find first column by name in output nodes. This search is linear.
     const Node & findInOutputs(const std::string & name) const;

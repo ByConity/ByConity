@@ -177,6 +177,9 @@ MergeTreeData::MergeTreeData(
     , replicated_sends_throttler(
           std::make_shared<Throttler>(getSettings()->max_replicated_sends_network_bandwidth, getContext()->getReplicatedSendsThrottler()))
 {
+    setProperties(metadata_, metadata_, false);
+    checkTTLExpressions(metadata_, metadata_);
+
     const auto settings = getSettings();
     enable_metastore = settings->enable_metastore;
 
@@ -2893,7 +2896,8 @@ void MergeTreeData::repairPartition(const ASTPtr & , bool , const String & , Con
 Pipe MergeTreeData::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
-    ContextPtr query_context)
+    ContextPtr query_context,
+    const ASTPtr & /* query */)
 {
     PartitionCommandsResultInfo result;
     for (const PartitionCommand & command : commands)
@@ -2939,7 +2943,8 @@ Pipe MergeTreeData::alterPartition(
                     case PartitionCommand::MoveDestinationType::VOLUME:
                         movePartitionToVolume(command.partition, command.move_destination_name, command.part, query_context);
                         break;
-
+                    case PartitionCommand::MoveDestinationType::BYTECOOL:
+                        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Can't support alter move part into bytecool by commond!");
                     case PartitionCommand::MoveDestinationType::TABLE:
                     {
                         checkPartitionCanBeDropped(command.partition);
@@ -4725,22 +4730,20 @@ ColumnsDescription MergeTreeData::getConcreteObjectColumns(
 void MergeTreeData::resetObjectColumnsFromActiveParts(const DataPartsLock & /*lock*/)
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    const auto & columns = metadata_snapshot->getColumns();
-    if (!hasDynamicSubcolumns(columns))
+    if (!metadata_snapshot->hasDynamicSubcolumns())
         return;
 
     auto range = getDataPartsStateRange(DataPartState::Committed);
-    object_columns = getConcreteObjectColumns(range, columns);
+    object_columns = getConcreteObjectColumns(range, metadata_snapshot->getColumns());
 }
 
 void MergeTreeData::updateObjectColumns(const DataPartPtr & part, const DataPartsLock & /*lock*/)
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    const auto & columns = metadata_snapshot->getColumns();
-    if (!hasDynamicSubcolumns(columns))
+    if (!metadata_snapshot->hasDynamicSubcolumns())
         return;
 
-    DB::updateObjectColumns(object_columns, columns, part->getColumns());
+    DB::updateObjectColumns(object_columns, metadata_snapshot->getColumns(), part->getColumns());
 }
 
 ColumnsDescription MergeTreeData::getConcreteObjectColumns(

@@ -60,9 +60,6 @@ namespace DB
 class ClientInfo;
 class Pipe;
 struct Settings;
-struct QueryWorkerMetricElement;
-using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
-using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 
 /// Struct which represents data we are going to send for external table.
 struct ExternalTableData
@@ -98,7 +95,6 @@ struct Packet
     Progress progress;
     BlockStreamProfileInfo profile_info;
     std::vector<UUID> part_uuids;
-    QueryWorkerMetricElements query_worker_metric_elements;
 
     Packet() : type(Protocol::Server::Hello) {}
 };
@@ -127,13 +123,15 @@ public:
         Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
         UInt16 exchange_port_ = 0,
         UInt16 exchange_status_port_ = 0,
-        UInt16 rpc_port_ = 0)
+        UInt16 rpc_port_ = 0,
+        String worker_id_ = "virtual_id")
         :
         host(host_), port(port_), default_database(default_database_),
         user(user_), password(password_),
         exchange_port(exchange_port_),
         exchange_status_port(exchange_status_port_),
         rpc_port(rpc_port_),
+        worker_id(worker_id_),
         cluster(cluster_),
         cluster_secret(cluster_secret_),
         client_name(client_name_),
@@ -190,7 +188,7 @@ public:
         HostWithPorts res{host};
         res.rpc_port = rpc_port;
         res.tcp_port = port;
-        res.id = "virtual_id";
+        res.id = worker_id;
         return res;
     }
 
@@ -224,7 +222,8 @@ public:
         const ConnectionTimeouts & timeouts,
         const PlanSegment * plan_segment,
         const Settings * settings = nullptr,
-        const ClientInfo * client_info = nullptr);
+        const ClientInfo * client_info = nullptr,
+        UInt16 server_rpc_port = 0);
 
     void sendCancel();
     /// Send block of data; if name is specified, server will write it to external (temporary) table of that name.
@@ -296,6 +295,7 @@ private:
     UInt16 exchange_port;
     UInt16 exchange_status_port;
     UInt16 rpc_port;
+    String worker_id;
 
     /// For inter-server authorization
     String cluster;
@@ -396,7 +396,6 @@ private:
     std::unique_ptr<Exception> receiveException() const;
     Progress receiveProgress() const;
     BlockStreamProfileInfo receiveProfileInfo() const;
-    QueryWorkerMetricElements receiveQueryWorkerMetrics();
 
     void initInputBuffers();
     void initBlockInput();

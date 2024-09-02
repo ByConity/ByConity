@@ -24,6 +24,7 @@
 
 #include <common/logger_useful.h>
 #include <cppkafka/cppkafka.h>
+#include <boost/circular_buffer.hpp>
 
 namespace DB
 {
@@ -47,6 +48,13 @@ class CnchReadBufferFromKafkaConsumer : public ReadBuffer
     using Message = cppkafka::Message;
 
 public:
+    struct RdkafkaErrorInfo
+    {
+        String text;
+        UInt64 timestamp_usec;
+    };
+    using RdkafkaErrorsBuffer = boost::circular_buffer<RdkafkaErrorInfo>;
+
     CnchReadBufferFromKafkaConsumer(
         ConsumerPtr consumer_,
         const String & logger_name,
@@ -64,6 +72,7 @@ public:
         , run(run_)
         , create_time(time(nullptr))
         , enable_skip_offsets_hole(enable_skip_offsets_hole_)
+        , rdkafka_errors_buffer(ERRORS_DEPTH)
     {
     }
 
@@ -74,6 +83,7 @@ public:
     void unsubscribe(); // Unsubscribe internal consumer in case of failure.
     void assign(const cppkafka::TopicPartitionList & topic_partition_list);
     void unassign();
+    void setSampleConsumingPartitionList(const std::set<cppkafka::TopicPartition> & sample_partitions_);
 
     auto pollTimeout() const { return poll_timeout; }
 
@@ -87,8 +97,10 @@ public:
     size_t getReadMessages() const { return read_messages; }
     size_t getReadBytes() const { return read_bytes; }
     size_t getEmptyMessages() const { return empty_messages; }
+    size_t getSkippedMessagesBySampling() const { return skip_messages_by_sample; }
     size_t getCreateTime() const { return create_time; }
     size_t getAliveTime() const { return alive_time; }
+    auto getRdkafkaErrorsBuffer() const { return rdkafka_errors_buffer; }
 
     // Return values for the message that's being read.
     const Message & currentMessage() const { return current; }
@@ -115,6 +127,9 @@ private:
 
     Message current;
 
+    bool enable_sample_consuming{false};
+    std::set<cppkafka::TopicPartition> sample_partitions;
+
     /// skip the holes in the kafka if enabled
     bool enable_skip_offsets_hole = false;
     size_t skipped_msgs_in_holes{0};
@@ -123,11 +138,18 @@ private:
     size_t read_messages {0};
     size_t empty_messages {0};
     size_t read_bytes {0};
+    size_t skip_messages_by_sample{0};
 
     std::unordered_map<
         std::pair<std::string, std::uint64_t>,
         std::int64_t,
         PairHash> offsets;
+
+    /// The errors from rdkafka should not be diverse;
+    /// so we only need to record the recent ones if they occur
+    size_t rdkafka_errors{0};
+    const size_t ERRORS_DEPTH = 10;
+    RdkafkaErrorsBuffer rdkafka_errors_buffer;
 
     bool nextImpl() override;
     bool hasExpired();

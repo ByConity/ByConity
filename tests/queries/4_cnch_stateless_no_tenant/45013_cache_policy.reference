@@ -4,25 +4,25 @@ t3	1	3
 t4	1	4
 
 --- original catalog ---
-Projection Est. 24 rows, cost 4.174600e+01
+Projection
 │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-└─ Gather Exchange Est. 24 rows, cost 3.997000e+01
-   └─ Inner Join Est. 24 rows, cost 3.597000e+01
+└─ Gather Exchange
+   └─ Inner Join
       │     Condition: 
-      ├─ Inner Join Est. 6 rows, cost 1.479000e+01
+      ├─ Inner Join
       │  │     Condition: 
-      │  ├─ TableScan cache_policy_45013.t3 Est. 3 rows, cost 2.220000e+00
+      │  ├─ TableScan cache_policy_45013.t3
       │  │        Outputs: x_2:=x
-      │  └─ Broadcast Exchange Est. 2 rows, cost 6.080000e+00
-      │     └─ Inner Join Est. 2 rows, cost 5.600000e+00
+      │  └─ Broadcast Exchange
+      │     └─ Inner Join
       │        │     Condition: 
-      │        ├─ TableScan cache_policy_45013.t2 Est. 2 rows, cost 1.480000e+00
+      │        ├─ TableScan cache_policy_45013.t2
       │        │        Outputs: x_1:=x
-      │        └─ Broadcast Exchange Est. 1 rows, cost 1.060000e+00
-      │           └─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
+      │        └─ Broadcast Exchange
+      │           └─ TableScan cache_policy_45013.t1
       │                    Outputs: [x]
-      └─ Broadcast Exchange Est. 4 rows, cost 3.760000e+00
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows, cost 2.960000e+00
+      └─ Broadcast Exchange
+         └─ TableScan cache_policy_45013.t4
                   Outputs: x_3:=x
 t1.*		1					
 t1.x	UInt32	1	0	1	1	1	1
@@ -34,47 +34,55 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	1
 
 --- original cache ---
-Projection Est. ? rows
+Projection
 │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-└─ Gather Exchange Est. ? rows
-   └─ Inner Join Est. ? rows
+└─ Gather Exchange
+   └─ Inner Join
       │     Condition: 
-      ├─ Inner Join Est. ? rows
+      ├─ Inner Join
       │  │     Condition: 
-      │  ├─ Inner Join Est. ? rows
-      │  │  │     Condition: 
-      │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
-      │  │  │        Outputs: [x]
-      │  │  └─ Broadcast Exchange Est. ? rows
-      │  │     └─ TableScan cache_policy_45013.t2 Est. ? rows
-      │  │              Outputs: x_1:=x
-      │  └─ Broadcast Exchange Est. ? rows
-      │     └─ TableScan cache_policy_45013.t3 Est. ? rows
-      │              Outputs: x_2:=x
-      └─ Broadcast Exchange Est. ? rows
-         └─ TableScan cache_policy_45013.t4 Est. ? rows
+      │  ├─ TableScan cache_policy_45013.t3
+      │  │        Outputs: x_2:=x
+      │  └─ Broadcast Exchange
+      │     └─ Inner Join
+      │        │     Condition: 
+      │        ├─ TableScan cache_policy_45013.t2
+      │        │        Outputs: x_1:=x
+      │        └─ Broadcast Exchange
+      │           └─ TableScan cache_policy_45013.t1
+      │                    Outputs: [x]
+      └─ Broadcast Exchange
+         └─ TableScan cache_policy_45013.t4
                   Outputs: x_3:=x
+t1.*		1					
+t1.x	UInt32	1	0	1	1	1	1
+t2.*		2					
+t2.x	UInt32	2	0	1	2	2	1
+t3.*		3					
+t3.x	UInt32	3	0	1	3	3	1
+t4.*		4					
+t4.x	UInt32	4	0	1	4	4	1
 
 --- original normal ---
-Projection Est. 24 rows, cost 4.174600e+01
+Projection
 │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-└─ Gather Exchange Est. 24 rows, cost 3.997000e+01
-   └─ Inner Join Est. 24 rows, cost 3.597000e+01
+└─ Gather Exchange
+   └─ Inner Join
       │     Condition: 
-      ├─ Inner Join Est. 6 rows, cost 1.479000e+01
+      ├─ Inner Join
       │  │     Condition: 
-      │  ├─ TableScan cache_policy_45013.t3 Est. 3 rows, cost 2.220000e+00
+      │  ├─ TableScan cache_policy_45013.t3
       │  │        Outputs: x_2:=x
-      │  └─ Broadcast Exchange Est. 2 rows, cost 6.080000e+00
-      │     └─ Inner Join Est. 2 rows, cost 5.600000e+00
+      │  └─ Broadcast Exchange
+      │     └─ Inner Join
       │        │     Condition: 
-      │        ├─ TableScan cache_policy_45013.t2 Est. 2 rows, cost 1.480000e+00
+      │        ├─ TableScan cache_policy_45013.t2
       │        │        Outputs: x_1:=x
-      │        └─ Broadcast Exchange Est. 1 rows, cost 1.060000e+00
-      │           └─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
+      │        └─ Broadcast Exchange
+      │           └─ TableScan cache_policy_45013.t1
       │                    Outputs: [x]
-      └─ Broadcast Exchange Est. 4 rows, cost 3.760000e+00
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows, cost 2.960000e+00
+      └─ Broadcast Exchange
+         └─ TableScan cache_policy_45013.t4
                   Outputs: x_3:=x
 t1.*		1					
 t1.x	UInt32	1	0	1	1	1	1
@@ -86,25 +94,25 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	1
 
 --- original cache ---
-Projection Est. 24 rows, cost 4.174600e+01
+Projection
 │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-└─ Gather Exchange Est. 24 rows, cost 3.997000e+01
-   └─ Inner Join Est. 24 rows, cost 3.597000e+01
+└─ Gather Exchange
+   └─ Inner Join
       │     Condition: 
-      ├─ Inner Join Est. 6 rows, cost 1.479000e+01
+      ├─ Inner Join
       │  │     Condition: 
-      │  ├─ TableScan cache_policy_45013.t3 Est. 3 rows, cost 2.220000e+00
+      │  ├─ TableScan cache_policy_45013.t3
       │  │        Outputs: x_2:=x
-      │  └─ Broadcast Exchange Est. 2 rows, cost 6.080000e+00
-      │     └─ Inner Join Est. 2 rows, cost 5.600000e+00
+      │  └─ Broadcast Exchange
+      │     └─ Inner Join
       │        │     Condition: 
-      │        ├─ TableScan cache_policy_45013.t2 Est. 2 rows, cost 1.480000e+00
+      │        ├─ TableScan cache_policy_45013.t2
       │        │        Outputs: x_1:=x
-      │        └─ Broadcast Exchange Est. 1 rows, cost 1.060000e+00
-      │           └─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
+      │        └─ Broadcast Exchange
+      │           └─ TableScan cache_policy_45013.t1
       │                    Outputs: [x]
-      └─ Broadcast Exchange Est. 4 rows, cost 3.760000e+00
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows, cost 2.960000e+00
+      └─ Broadcast Exchange
+         └─ TableScan cache_policy_45013.t4
                   Outputs: x_3:=x
 t1.*		1					
 t1.x	UInt32	1	0	1	1	1	1
@@ -118,49 +126,51 @@ t4.x	UInt32	4	0	1	4	4	1
 --- manipulating ---
 
 --- cache ---
-Projection Est. ? rows
+Projection
 │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-└─ Gather Exchange Est. ? rows
-   └─ Inner Join Est. ? rows
+└─ Gather Exchange
+   └─ Inner Join
       │     Condition: 
-      ├─ Inner Join Est. ? rows
+      ├─ Inner Join
       │  │     Condition: 
-      │  ├─ Inner Join Est. ? rows
+      │  ├─ Inner Join
       │  │  │     Condition: 
-      │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
+      │  │  ├─ TableScan cache_policy_45013.t1
       │  │  │        Outputs: [x]
-      │  │  └─ Broadcast Exchange Est. ? rows
-      │  │     └─ TableScan cache_policy_45013.t2 Est. ? rows
+      │  │  └─ Broadcast Exchange
+      │  │     └─ TableScan cache_policy_45013.t2
       │  │              Outputs: x_1:=x
-      │  └─ Broadcast Exchange Est. ? rows
-      │     └─ TableScan cache_policy_45013.t3 Est. ? rows
+      │  └─ Broadcast Exchange
+      │     └─ TableScan cache_policy_45013.t3
       │              Outputs: x_2:=x
-      └─ Broadcast Exchange Est. 4 rows
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows
+      └─ Broadcast Exchange
+         └─ TableScan cache_policy_45013.t4
                   Outputs: x_3:=x
+t2.*		2					
+t2.x	UInt32	2	0	1	2	2	1
 t4.*		4					
 t4.x	UInt32	4	0	1	4	4	1
 
 --- catalog ---
-Projection Est. ? rows
+Projection
 │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-└─ Gather Exchange Est. ? rows
-   └─ Inner Join Est. ? rows
+└─ Gather Exchange
+   └─ Inner Join
       │     Condition: 
-      ├─ Inner Join Est. ? rows
+      ├─ Inner Join
       │  │     Condition: 
-      │  ├─ Inner Join Est. ? rows
+      │  ├─ Inner Join
       │  │  │     Condition: 
-      │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
+      │  │  ├─ TableScan cache_policy_45013.t1
       │  │  │        Outputs: [x]
-      │  │  └─ Broadcast Exchange Est. 2 rows
-      │  │     └─ TableScan cache_policy_45013.t2 Est. 2 rows
+      │  │  └─ Broadcast Exchange
+      │  │     └─ TableScan cache_policy_45013.t2
       │  │              Outputs: x_1:=x
-      │  └─ Broadcast Exchange Est. ? rows
-      │     └─ TableScan cache_policy_45013.t3 Est. ? rows
+      │  └─ Broadcast Exchange
+      │     └─ TableScan cache_policy_45013.t3
       │              Outputs: x_2:=x
-      └─ Broadcast Exchange Est. 4 rows
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows
+      └─ Broadcast Exchange
+         └─ TableScan cache_policy_45013.t4
                   Outputs: x_3:=x
 t2.*		2					
 t2.x	UInt32	2	0	1	2	2	1
@@ -168,25 +178,25 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	1
 
 --- normal ---
-Projection Est. ? rows
+Projection
 │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-└─ Gather Exchange Est. ? rows
-   └─ Inner Join Est. ? rows
+└─ Gather Exchange
+   └─ Inner Join
       │     Condition: 
-      ├─ Inner Join Est. ? rows
+      ├─ Inner Join
       │  │     Condition: 
-      │  ├─ Inner Join Est. ? rows
+      │  ├─ Inner Join
       │  │  │     Condition: 
-      │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
+      │  │  ├─ TableScan cache_policy_45013.t1
       │  │  │        Outputs: [x]
-      │  │  └─ Broadcast Exchange Est. 2 rows
-      │  │     └─ TableScan cache_policy_45013.t2 Est. 2 rows
+      │  │  └─ Broadcast Exchange
+      │  │     └─ TableScan cache_policy_45013.t2
       │  │              Outputs: x_1:=x
-      │  └─ Broadcast Exchange Est. ? rows
-      │     └─ TableScan cache_policy_45013.t3 Est. ? rows
+      │  └─ Broadcast Exchange
+      │     └─ TableScan cache_policy_45013.t3
       │              Outputs: x_2:=x
-      └─ Broadcast Exchange Est. 4 rows
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows
+      └─ Broadcast Exchange
+         └─ TableScan cache_policy_45013.t4
                   Outputs: x_3:=x
 t2.*		2					
 t2.x	UInt32	2	0	1	2	2	1

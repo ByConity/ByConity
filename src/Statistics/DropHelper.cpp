@@ -31,29 +31,6 @@ void dropStatsTable(ContextPtr context, const StatsTableIdentifier & table, Stat
             throw;
     }
 }
-void dropStatsDatabase(ContextPtr context, const String & db, StatisticsCachePolicy cache_policy, bool throw_exception)
-{
-    try
-    {
-        auto catalog = createCatalogAdaptor(context);
-        catalog->checkHealth(/*is_write=*/true);
-        std::vector<StatsTableIdentifier> tables;
-        auto proxy = createCachedStatsProxy(catalog, cache_policy);
-
-        tables = catalog->getAllTablesID(db);
-        // TODO: invalidate them in batch
-        for (auto & table : tables)
-        {
-            proxy->drop(table);
-            catalog->invalidateClusterStatsCache(table);
-        }
-    }
-    catch (...)
-    {
-        if (throw_exception)
-            throw;
-    }
-}
 
 void dropStatsColumns(
     ContextPtr context,

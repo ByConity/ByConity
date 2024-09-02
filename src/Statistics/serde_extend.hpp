@@ -21,6 +21,8 @@
 #include <IO/WriteBufferFromString.h>
 #include <Statistics/SerdeUtils.h>
 #include <common/extended_types.h>
+#include "IO/ReadBufferFromString.h"
+#include "IO/ReadHelpers.h"
 
 namespace datasketches
 {
@@ -100,6 +102,13 @@ DB::String to_string(wide::integer<Bits, Signed> x)
         writeIntText(x, out);
         return std::move(out.str());
     }
+}
+
+template <size_t Bits, typename Signed>
+void wideIntFromString(wide::integer<Bits, Signed> & result, const String & str)
+{
+    DB::ReadBufferFromString buf(str);
+    DB::readIntText(result, buf);
 }
 
 template <size_t Bits, typename Signed>

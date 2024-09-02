@@ -55,7 +55,7 @@ public:
         std::vector<size_t> arguments;
     };
 
-    llvm::Value * compile(llvm::IRBuilderBase & builder, Values input_nodes_values) const;
+    llvm::Value * compile(llvm::IRBuilderBase & builder, Values input_nodes_values, JITContext & jit_context) const;
 
     std::string dump() const;
 

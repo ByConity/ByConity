@@ -54,14 +54,21 @@ template<typename NamedSession>
 std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
     const Key & session_id,
     ContextPtr context,
-    std::chrono::steady_clock::duration timeout,
-    bool throw_if_not_found)
+    size_t timeout,
+    bool throw_if_not_found,
+    bool return_null_if_not_found)
 {
     std::unique_lock lock(mutex);
 
     auto it = sessions.find(session_id);
     if (it == sessions.end())
     {
+        if (return_null_if_not_found)
+        {
+            LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Session not found, return nullptr");
+            return nullptr;
+        }
+
         if (throw_if_not_found)
             throw Exception("Session not found.", ErrorCodes::SESSION_NOT_FOUND);
         else
@@ -105,15 +112,11 @@ void NamedSessionsImpl<NamedSession>::scheduleCloseSession(NamedSession & sessio
     /// Push it on a queue of sessions to close, on a position corresponding to the timeout.
     /// (timeout is measured from current moment of time)
 
-    const UInt64 close_index = session.timeout / close_interval + 1;
-    const auto new_close_cycle = close_cycle + close_index;
-
-    if (session.close_cycle != new_close_cycle)
+    Poco::Timestamp current_time;
+    if (session.close_time < current_time.epochTime() + session.timeout)
     {
-        session.close_cycle = new_close_cycle;
-        if (close_times.size() < close_index + 1)
-            close_times.resize(close_index + 1);
-        close_times[close_index].emplace_back(session.key);
+        session.close_time = current_time.epochTime() + session.timeout;
+        close_times.emplace(session.close_time, session.key);
     }
 }
 
@@ -135,48 +138,46 @@ void NamedSessionsImpl<NamedSession>::cleanThread()
 template<typename NamedSession>
 std::chrono::steady_clock::duration NamedSessionsImpl<NamedSession>::closeSessions(std::unique_lock<std::mutex> & lock)
 {
-    const auto now = std::chrono::steady_clock::now();
-
-    /// The time to close the next session did not come
-    if (now < close_cycle_time)
-        return close_cycle_time - now;  /// Will sleep until it comes.
-
-    const auto current_cycle = close_cycle;
-
-    ++close_cycle;
-    close_cycle_time = now + close_interval;
+    /// Schedule closeSessions() every 1 second by default.
+    static constexpr std::chrono::steady_clock::duration close_interval = std::chrono::seconds(1);
 
     if (close_times.empty())
         return close_interval;
 
-    auto & sessions_to_close = close_times.front();
+    Poco::Timestamp current_time;
 
-    for (const auto & key : sessions_to_close)
+    while (!close_times.empty())
     {
-        const auto session = sessions.find(key);
+        auto curr_session = *close_times.begin();
 
-        if (session != sessions.end() && session->second->close_cycle <= current_cycle)
+        if (curr_session.first > static_cast<size_t>(current_time.epochTime()))
+            break;
+
+        auto session_iter = sessions.find(curr_session.second);
+
+        if (session_iter != sessions.end() && session_iter->second->close_time == curr_session.first)
         {
-            if (!session->second.unique())
+            if (!session_iter->second.unique())
             {
-                /// Skip but move it to close on the next cycle.
-                session->second->timeout = std::chrono::steady_clock::duration{0};
-                scheduleCloseSession(*session->second, lock);
+                /// Skip to recycle and move it to close on the next interval.
+                session_iter->second->timeout = 1;
+                scheduleCloseSession(*session_iter->second, lock);
             }
             else
             {
-                LOG_DEBUG(&Poco::Logger::get("NamedSession"), "release timed out session: {}", session->second->getID());
-                sessions.erase(session);
+                LOG_DEBUG(&Poco::Logger::get("NamedSession"), "Release timed out session: {}", session_iter->second->getID());
+                sessions.erase(session_iter);
             }
         }
+
+        close_times.erase(close_times.begin());
     }
 
-    close_times.pop_front();
     return close_interval;
 }
 
 
-NamedSession::NamedSession(NamedSessionKey key_, ContextPtr context_, std::chrono::steady_clock::duration timeout_, NamedSessions & parent_)
+NamedSession::NamedSession(NamedSessionKey key_, ContextPtr context_, size_t timeout_, NamedSessions & parent_)
     : key(key_), context(Context::createCopy(context_)), timeout(timeout_), parent(parent_)
 {
 }
@@ -186,7 +187,7 @@ void NamedSession::release()
     parent.releaseSession(*this);
 }
 
-NamedCnchSession::NamedCnchSession(NamedSessionKey key_, ContextPtr context_, std::chrono::steady_clock::duration timeout_, NamedCnchSessions & parent_)
+NamedCnchSession::NamedCnchSession(NamedSessionKey key_, ContextPtr context_, size_t timeout_, NamedCnchSessions & parent_)
     : key(key_), context(Context::createCopy(context_)), timeout(timeout_), parent(parent_)
 {
     context->worker_resource = std::make_shared<CnchWorkerResource>();
@@ -194,9 +195,10 @@ NamedCnchSession::NamedCnchSession(NamedSessionKey key_, ContextPtr context_, st
 
 void NamedCnchSession::release()
 {
-    timeout = std::chrono::steady_clock::duration{0}; /// release immediately
+    timeout = 0; /// schedule immediately
+    close_time = 0;
     parent.releaseSession(*this);
-    LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "release CnchWorkerResource({})", key);
+    LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Release CnchWorkerResource {}", key);
 }
 
 template class NamedSessionsImpl<NamedSession>;

@@ -25,6 +25,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
+#include <Common/time.h>
 #include <common/MoveOrCopyIfThrow.h>
 
 namespace DB
@@ -34,46 +35,20 @@ namespace ErrorCodes
     extern const int STD_EXCEPTION;
 }
 
-template <typename T>
+template <typename T, typename Controller = std::nullptr_t>
 class BoundedDataQueue
 {
-private:
-    template <typename E>
-    inline void pushImpl(E && x)
-    {
-        std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.size() >= capacity && !is_closed)
-        {
-            LOG_TRACE(&Poco::Logger::get("BoundedDataQueue"), fmt::format("Queue is full and waiting, current size: {}, max size: {}", queue.size(), capacity));
-            full_cv.wait(lock);
-        }
-        if (is_closed)
-            throw Exception("Queue is closed", ErrorCodes::STD_EXCEPTION);
-        queue.push(std::forward<E>(x));
-        lock.unlock();
-        empty_cv.notify_one();
-    }
-
-    template <typename E>
-    inline bool tryPushImpl(E && x, UInt64 milliseconds = 0)
-    {
-        std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.size() >= capacity && !is_closed)
-        {
-            if (ETIMEDOUT == full_cv.wait_for(lock, milliseconds * 1000))
-                return false;
-        }
-        if (is_closed)
-            return false;
-        queue.push(std::forward<E>(x));
-        lock.unlock();
-        empty_cv.notify_one();
-        return true;
-    }
+    static constexpr bool use_controller = !std::is_same_v<Controller, std::nullptr_t>;
 
 public:
-    explicit BoundedDataQueue(size_t capacity_ = 20) : capacity(capacity_)
+    explicit BoundedDataQueue(size_t capacity_ = 20) : full_cv(), empty_cv(), capacity(capacity_)
     {
+        static_assert(!use_controller);
+    }
+    BoundedDataQueue(size_t capacity_, Controller memory_controller_)
+        : full_cv(), empty_cv(), capacity(capacity_), memory_controller(std::move(memory_controller_))
+    {
+        static_assert(use_controller);
     }
 
     inline void push(const T & x)
@@ -96,6 +71,11 @@ public:
             throw Exception("Queue is closed", ErrorCodes::STD_EXCEPTION);
         ::detail::moveOrCopyIfThrow(std::move(queue.front()), x);
         queue.pop();
+        if constexpr (use_controller)
+        {
+            if (memory_controller)
+                memory_controller->decrease(x);
+        }
         lock.unlock();
         full_cv.notify_one();
     }
@@ -111,29 +91,17 @@ public:
 
     inline bool tryPop(T & x, UInt64 milliseconds = 0)
     {
-        std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.empty() && !is_closed)
-        {
-            if (ETIMEDOUT == empty_cv.wait_for(lock, milliseconds * 1000))
-                return false;
-        }
-
-        if (is_closed)
-            return false;
-
-        ::detail::moveOrCopyIfThrow(std::move(queue.front()), x);
-        queue.pop();
-        lock.unlock();
-        full_cv.notify_one();
-        return true;
+        UInt64 timeout_ms_ts = time_in_milliseconds(std::chrono::system_clock::now()) + milliseconds;
+        timespec timestamp{.tv_sec = time_t(timeout_ms_ts / 1000), .tv_nsec = long(timeout_ms_ts % 1000) * 1000000};
+        return tryPopUntil(x, timestamp);
     }
 
-    bool tryPopUntil(T & x, timespec millis_timestamp)
+    bool tryPopUntil(T & x, timespec timestamp)
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         while (queue.empty() && !is_closed)
         {
-            if (ETIMEDOUT == empty_cv.wait_until(lock, millis_timestamp))
+            if (ETIMEDOUT == empty_cv.wait_until(lock, timestamp))
                 return false;
         }
 
@@ -142,6 +110,11 @@ public:
 
         ::detail::moveOrCopyIfThrow(std::move(queue.front()), x);
         queue.pop();
+        if constexpr (use_controller)
+        {
+            if (memory_controller)
+                memory_controller->decrease(x);
+        }
         lock.unlock();
         full_cv.notify_one();
         return true;
@@ -150,31 +123,27 @@ public:
     template <typename... Args>
     inline bool tryEmplace(UInt64 milliseconds, Args &&... args)
     {
-        std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.size() >= capacity && !is_closed)
-        {
-            if (ETIMEDOUT == full_cv.wait_for(lock, milliseconds * 1000))
-                return false;
-        }
-        if (is_closed)
-            return false;
-        queue.emplace(std::forward<Args>(args)...);
-        lock.unlock();
-        empty_cv.notify_one();
-        return true;
+        UInt64 timeout_ms_ts = time_in_milliseconds(std::chrono::system_clock::now()) + milliseconds;
+        timespec timestamp{.tv_sec = time_t(timeout_ms_ts / 1000), .tv_nsec = long(timeout_ms_ts % 1000) * 1000000};
+        return tryEmplaceUntil(timestamp, std::forward<Args>(args)...);
     }
 
     template <typename... Args>
-    bool tryEmplaceUntil(timespec millis_timestamp, Args &&... args)
+    bool tryEmplaceUntil(timespec timestamp, Args &&... args)
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
-        while (queue.size() >= capacity && !is_closed)
+        while (exceedLimit() && !is_closed)
         {
-            if (ETIMEDOUT == full_cv.wait_until(lock, millis_timestamp))
+            if (ETIMEDOUT == full_cv.wait_until(lock, timestamp))
                 return false;
         }
         if (is_closed)
             return false;
+        if constexpr (use_controller)
+        {
+            if (memory_controller)
+                (memory_controller->increase(std::forward<Args>(args)), ...);
+        }
         queue.emplace(std::forward<Args>(args)...);
         lock.unlock();
         empty_cv.notify_one();
@@ -198,7 +167,14 @@ public:
         std::unique_lock<bthread::Mutex> lock(mutex);
         while (!queue.empty())
         {
+            T x;
+            ::detail::moveOrCopyIfThrow(std::move(queue.front()), x);
             queue.pop();
+            if constexpr (use_controller)
+            {
+                if (memory_controller)
+                    memory_controller->decrease(x);
+            }
         }
         std::queue<T> empty_queue;
         std::swap(empty_queue, queue);
@@ -215,7 +191,6 @@ public:
         std::unique_lock<bthread::Mutex> lock(mutex);
         if (is_closed)
             return false;
-
         is_closed = true;
         lock.unlock();
         empty_cv.notify_all();
@@ -241,11 +216,81 @@ public:
     }
 
 private:
+    template <typename E>
+    inline void pushImpl(E && x)
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        while (exceedLimit() && !is_closed)
+        {
+            LOG_TRACE(&Poco::Logger::get("BoundedDataQueue"), fmt::format("Queue is full and waiting, current size: {}, max size: {}", queue.size(), capacity));
+            full_cv.wait(lock);
+        }
+        if (is_closed)
+            throw Exception("Queue is closed", ErrorCodes::STD_EXCEPTION);
+        if constexpr (use_controller)
+        {
+            if (memory_controller)
+                memory_controller->increase(x);
+        }
+        queue.push(std::forward<E>(x));
+        lock.unlock();
+        empty_cv.notify_one();
+    }
+
+    template <typename E>
+    inline bool tryPushImpl(E && x, UInt64 milliseconds = 0)
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        while (exceedLimit() && !is_closed)
+        {
+            if (ETIMEDOUT == full_cv.wait_for(lock, milliseconds * 1000))
+                return false;
+        }
+        if (is_closed)
+            return false;
+        if constexpr (use_controller)
+        {
+            if (memory_controller)
+                memory_controller->increase(x);
+        }
+        queue.push(std::forward<E>(x));
+        lock.unlock();
+        empty_cv.notify_one();
+        return true;
+    }
+
+    ALWAYS_INLINE bool exceedLimit() const
+    {
+        if constexpr (use_controller)
+            return queue.size() >= capacity || (queue.size() != 0 && memory_controller && memory_controller->exceedLimit());
+        else
+            return queue.size() >= capacity;
+    }
+
+    ALWAYS_INLINE void increase(T & x)
+    {
+        if constexpr (use_controller)
+        {
+            if (memory_controller)
+                memory_controller->increase(x);
+        }
+    }
+
+    ALWAYS_INLINE void decrease(T & x)
+    {
+        if constexpr (use_controller)
+        {
+            if (memory_controller)
+                memory_controller->decrease(x);
+        }
+    }
+
     std::queue<T> queue;
     bthread::Mutex mutex;
     bthread::ConditionVariable full_cv;
     bthread::ConditionVariable empty_cv;
     size_t capacity;
+    Controller memory_controller = nullptr;
     bool is_closed = false;
 };
 

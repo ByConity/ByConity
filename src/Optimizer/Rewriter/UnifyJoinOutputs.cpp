@@ -19,6 +19,7 @@
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/CTERefStep.h>
+#include "common/types.h"
 
 namespace DB
 {
@@ -173,15 +174,12 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitJoinNode(JoinNode & node, std::set<
     return PlanNodeBase::createPlanNode(node.getId(), new_step, PlanNodes{left, right});
 }
 
-PlanNodePtr UnifyJoinOutputs::Rewriter::visitCTERefNode(CTERefNode & node, std::set<String> & require)
+PlanNodePtr UnifyJoinOutputs::Rewriter::visitCTERefNode(CTERefNode & node, std::set<String> &)
 {
-    auto step = dynamic_cast<const CTERefStep *>(node.getStep().get());
-    std::set<String> mapped;
-    for (auto & item : require)
-        if (step->getOutputColumns().contains(item))
-            mapped.emplace(step->getOutputColumns().at(item));
-
-    auto cte_plan = cte_helper.acceptAndUpdate(step->getId(), *this, mapped);
+    const auto * step = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto outputs = cte_helper.getCTEInfo().getCTEDef(step->getId())->getOutputNames();
+    std::set<String> require{outputs.begin(), outputs.end()};
+    auto cte_plan = cte_helper.acceptAndUpdate(step->getId(), *this, require);
     return node.shared_from_this();
 }
 

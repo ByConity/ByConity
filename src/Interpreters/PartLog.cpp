@@ -11,6 +11,7 @@
 #include <Interpreters/PartLog.h>
 #include <Interpreters/Context.h>
 
+#include "common/types.h"
 #include <Common/CurrentThread.h>
 #include <Common/time.h>
 
@@ -55,6 +56,7 @@ NamesAndTypesList PartLogElement::getNamesAndTypes()
 
         {"rows", std::make_shared<DataTypeUInt64>()},
         {"segments", std::make_shared<DataTypeUInt64>()},
+        {"preload_level", std::make_shared<DataTypeUInt64>()},
         {"size_in_bytes", std::make_shared<DataTypeUInt64>()}, // On disk
 
         /// Merge-specific info
@@ -91,6 +93,7 @@ void PartLogElement::appendToBlock(MutableColumns & columns) const
 
     columns[i++]->insert(rows);
     columns[i++]->insert(segments);
+    columns[i++]->insert(preload_level);
     columns[i++]->insert(bytes_compressed_on_disk);
 
     Array source_part_names_array;
@@ -177,7 +180,7 @@ bool PartLog::addNewParts(
     return true;
 }
 
-PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, UInt64 elapsed_ns, const String & exception, UInt64 submit_ts, UInt64 segments)
+PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, UInt64 elapsed_ns, const String & exception, UInt64 submit_ts, UInt64 segments, UInt64 preload_level)
 {
     PartLogElement elem;
 
@@ -193,6 +196,7 @@ PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMe
 
     elem.rows = part->rows_count;
     elem.segments = segments;
+    elem.preload_level = preload_level;
     elem.bytes_compressed_on_disk = part->bytes_on_disk;
 
     elem.exception = exception;

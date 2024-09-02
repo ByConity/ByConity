@@ -37,6 +37,7 @@ struct CnchMergeTreeMutationEntry
     String toString() const;
     static CnchMergeTreeMutationEntry parse(const String & str);
     bool isReclusterMutation() const;
+    bool isModifyClusterBy() const;
     void setPartitionIDs(const Strings & _partition_ids);
 
     String query_id;

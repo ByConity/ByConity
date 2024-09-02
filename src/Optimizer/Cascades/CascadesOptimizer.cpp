@@ -15,25 +15,37 @@
 
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 
+#include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
+#include <Optimizer/Cascades/GroupExpression.h>
 #include <Optimizer/Cascades/Task.h>
+#include <Optimizer/OptimizerMetrics.h>
+#include <Optimizer/Property/PropertyEnforcer.h>
 #include <Optimizer/Rule/Implementation/SetJoinDistribution.h>
+#include <Optimizer/Rule/Rewrite/PullProjectionOnJoinThroughJoin.h>
 #include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
+#include <Optimizer/Rule/Transformation/CardinalityBasedJoinReorder.h>
 #include <Optimizer/Rule/Transformation/InlineCTE.h>
+#include <Optimizer/Rule/Transformation/InnerJoinAssociate.h>
 #include <Optimizer/Rule/Transformation/InnerJoinCommutation.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
+#include <Optimizer/Rule/Transformation/JoinToMultiJoin.h>
 #include <Optimizer/Rule/Transformation/LeftJoinToRightJoin.h>
 #include <Optimizer/Rule/Transformation/MagicSetForAggregation.h>
-#include <Optimizer/Rule/Transformation/MagicSetPushDown.h>
 #include <Optimizer/Rule/Transformation/PullOuterJoin.h>
-#include <Optimizer/Rule/Transformation/CardinalityBasedJoinReorder.h>
 #include <Optimizer/Rule/Transformation/SelectivityBasedJoinReorder.h>
-#include <Optimizer/Rule/Transformation/JoinToMultiJoin.h>
-#include <QueryPlan/MultiJoinStep.h>
+#include <Optimizer/Rule/Transformation/SemiJoinPushDown.h>
+#include <QueryPlan/AnyStep.h>
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/PlanPattern.h>
-#include <Storages/StorageDistributed.h>
+#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Storages/StorageCnchMergeTree.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -53,8 +65,7 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 
     auto root_id = root->getGroupId();
     auto single = Property{Partitioning{Partitioning::Handle::SINGLE}};
-    if (context->getSettingsRef().offloading_with_query_plan)
-        single.setEnforceNotMatch(true);
+    single.getNodePartitioningRef().setComponent(Partitioning::Component::COORDINATOR);
 
     WinnerPtr winner;
     try
@@ -63,7 +74,7 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     }
     catch (...)
     {
-        LOG_DEBUG(cascades_context.getLog(), cascades_context.getInfo());
+        LOG_WARNING(cascades_context.getLog(), "Optimize failed: {}", cascades_context.getInfo());
         GraphvizPrinter::printMemo(cascades_context.getMemo(), root_id, context, std::to_string(id) + "_CascadesOptimizer-Memo-Graph");
         throw;
     }
@@ -71,12 +82,18 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     GraphvizPrinter::printMemo(cascades_context.getMemo(), root_id, context, std::to_string(id) + "_CascadesOptimizer-Memo-Graph");
 
     auto result = buildPlanNode(root_id, cascades_context, single);
+
+    // enforce a gather with keep_order if offloading_with_query_plan enabled
+    if (context->getSettingsRef().offloading_with_query_plan)
+        result = PropertyEnforcer::enforceOffloadingGatherNode(result, *context);
+
+    plan.getCTEInfo().clear();
     for (const auto & item : winner->getCTEActualProperties())
     {
         auto cte_id = item.first;
         auto cte_def_group = cascades_context.getMemo().getCTEDefGroupByCTEId(cte_id);
         auto cte = buildPlanNode(cte_def_group->getId(), cascades_context, item.second.first);
-        plan.getCTEInfo().update(cte_id, cte);
+        plan.getCTEInfo().add(cte_id, cte);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -102,7 +119,7 @@ WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & c
         // Check to see if we have at least one plan, and if we have exceeded our
         // timeout limit
         double duration = watch.elapsedMillisecondsAsDouble();
-        if (duration >= context.getTaskExecutionTimeout() || context.getTaskStack().size() > 100000)
+        if (duration >= context.getTaskExecutionTimeout())
         {
             throw Exception(
                 "Cascades exhausted the time limit of " + std::to_string(context.getTaskExecutionTimeout()) + " ms",
@@ -157,7 +174,6 @@ GroupExprPtr CascadesContext::initMemo(const PlanNodePtr & plan_node)
             {
                 auto cte_expr = initMemo(cte_info.getCTEDef(read_step->getId()));
                 memo.recordCTEDefGroupId(read_step->getId(), cte_expr->getGroupId());
-                node->setStatistics(memo.getGroupById(cte_expr->getGroupId())->getStatistics());
             }
         }
         queue.pop();
@@ -218,25 +234,34 @@ CascadesContext::CascadesContext(
     , worker_size(worker_size_)
     , support_filter(context->getSettingsRef().enable_join_graph_support_filter)
     , task_execution_timeout(context->getSettingsRef().cascades_optimizer_timeout)
+    , enable_pruning((context->getSettingsRef().enable_cascades_pruning))
+    , enable_auto_cte(context->getSettingsRef().cte_mode == CTEMode::AUTO)
+    , enable_trace((context->getSettingsRef().log_optimizer_run_time))
     , enable_cbo(enable_cbo_ && context->getSettingsRef().enable_cbo)
     , max_join_size(max_join_size_)
     , log(&Poco::Logger::get("CascadesOptimizer"))
 {
     LOG_DEBUG(log, "max join size: {}", max_join_size_);
-
-    if (context->getSettingsRef().enable_join_reorder)
-    {
-        transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
-        transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
-        if (context->getSettingsRef().heuristic_join_reorder_enumeration_times > 0)
-            transformation_rules.emplace_back(std::make_shared<CardinalityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
-        transformation_rules.emplace_back(std::make_shared<SelectivityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
-        transformation_rules.emplace_back(std::make_shared<JoinToMultiJoin>());
-    }
-
+    LOG_DEBUG(log, "worker size: {}", worker_size_);
     implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
+
     if (enable_cbo)
     {
+        if (context->getSettingsRef().enable_join_reorder)
+        {
+            if (context->getSettingsRef().enable_non_equijoin_reorder && max_join_size_ <= context->getSettingsRef().max_graph_reorder_size)
+            {
+                transformation_rules.emplace_back(std::make_shared<InnerJoinAssociate>());
+            }
+            transformation_rules.emplace_back(std::make_shared<SemiJoinPushDown>());
+            transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
+            transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
+            if (context->getSettingsRef().heuristic_join_reorder_enumeration_times > 0)
+                transformation_rules.emplace_back(std::make_shared<CardinalityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
+            transformation_rules.emplace_back(std::make_shared<SelectivityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
+            transformation_rules.emplace_back(std::make_shared<JoinToMultiJoin>());
+        }
+
         // left join inner join reorder q78, 80
         transformation_rules.emplace_back(std::make_shared<PullLeftJoinThroughInnerJoin>());
         transformation_rules.emplace_back(std::make_shared<PullLeftJoinProjectionThroughInnerJoin>());
@@ -245,18 +270,18 @@ CascadesContext::CascadesContext(
         transformation_rules.emplace_back(std::make_shared<LeftJoinToRightJoin>());
         transformation_rules.emplace_back(std::make_shared<MagicSetForAggregation>());
         transformation_rules.emplace_back(std::make_shared<MagicSetForProjectionAggregation>());
-        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughProject>());
-        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughJoin>());
-        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughFilter>());
-        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughAggregating>());
+        transformation_rules.emplace_back(std::make_shared<SemiJoinPushDownProjection>());
+        transformation_rules.emplace_back(std::make_shared<SemiJoinPushDownAggregate>());
 
-        transformation_rules.emplace_back(std::make_shared<InlineCTE>());
-        transformation_rules.emplace_back(std::make_shared<InlineCTEWithFilter>());
+        if (!cte_info.empty() && enable_auto_cte)
+        {
+            transformation_rules.emplace_back(std::make_shared<InlineCTE>());
+            transformation_rules.emplace_back(std::make_shared<InlineCTEWithFilter>());
+        }
+    }
 
         // transformation_rules.emplace_back(std::make_shared<PushAggThroughInnerJoin>());
     }
-    enable_pruning = cte_info.empty() && context->getSettingsRef().enable_cascades_pruning;
-}
 
 size_t WorkerSizeFinder::find(QueryPlan & query_plan, const Context & context)
 {
@@ -264,16 +289,14 @@ size_t WorkerSizeFinder::find(QueryPlan & query_plan, const Context & context)
         return context.getSettingsRef().memory_catalog_worker_size;
 
     WorkerSizeFinder visitor{query_plan.getCTEInfo()};
-    Void c{};
-
     // default schedule to worker cluster
-    std::optional<size_t> result = VisitorUtil::accept(query_plan.getPlanNode(), visitor, c);
+    std::optional<size_t> result = VisitorUtil::accept(query_plan.getPlanNode(), visitor, context);
     if (result.has_value())
         return result.value();
     return 1;
 }
 
-std::optional<size_t> WorkerSizeFinder::visitPlanNode(PlanNodeBase & node, Void & context)
+std::optional<size_t> WorkerSizeFinder::visitPlanNode(PlanNodeBase & node, const Context & context)
 {
     for (const auto & child : node.getChildren())
     {
@@ -284,18 +307,89 @@ std::optional<size_t> WorkerSizeFinder::visitPlanNode(PlanNodeBase & node, Void 
     return std::nullopt;
 }
 
-std::optional<size_t> WorkerSizeFinder::visitTableScanNode(TableScanNode & node, Void &)
+std::optional<size_t> WorkerSizeFinder::visitTableScanNode(TableScanNode & node, const Context & context)
 {
-    const auto * source_step = node.getStep().get();
-    auto * distributed_table = dynamic_cast<StorageDistributed *>(source_step->getStorage().get());
-    if (distributed_table)
-        return std::make_optional<size_t>(distributed_table->getShardCount());
+    const auto storage = node.getStep()->getStorage();
+    const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
+    const auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get());
+
+    if (cnch_table || cnch_hive || cnch_file)
+    {
+        const auto & worker_group = context.getCurrentWorkerGroup();
+        return worker_group->getShardsInfo().size();
+    }
     return std::nullopt;
 }
 
-std::optional<size_t> WorkerSizeFinder::visitCTERefNode(CTERefNode & node, Void & context)
+std::optional<size_t> WorkerSizeFinder::visitCTERefNode(CTERefNode & node, const Context & context)
 {
     const auto * step = dynamic_cast<const CTERefStep *>(node.getStep().get());
     return VisitorUtil::accept(cte_info.getCTEDef(step->getId()), *this, context);
 }
+
+void CascadesContext::trace(const String & task_name, GroupId /*group_id*/, RuleType rule_type, UInt64 elapsed_ns)
+{
+    if (!enable_trace)
+    {
+        return;
+    }
+    auto & counter = rule_trace[rule_type][task_name];
+    counter.elapsed_ns += elapsed_ns;
+    counter.counts += 1;
 }
+
+String CascadesContext::getInfo() const
+{
+    std::stringstream ss;
+
+    ss << "Group: " << memo.getGroups().size() << ' ';
+
+    size_t total_logical_expr = 0;
+    size_t total_physical_expr = 0;
+    for (const auto & group : memo.getGroups())
+    {
+        total_logical_expr += group->getLogicalExpressions().size();
+        total_physical_expr += group->getPhysicalExpressions().size();
+    }
+    ss << "Logical Expr: " << total_logical_expr << ' ';
+    ss << "Physical Expr: " << total_physical_expr << ' ';
+    ss << "Total Expr: " << memo.getExprs().size() << ' ';
+
+    if (enable_trace)
+    {
+        ss << '\n';
+        for (const auto & item : implementation_rules)
+            if (rule_trace.contains(item->getType()))
+                for (const auto & task_to_counter : rule_trace.at(item->getType()))
+                    ss << "[" << task_to_counter.first << "] " << item->getName() << ": "
+                       << static_cast<double>(task_to_counter.second.elapsed_ns) / 1000000 << " ms / " << task_to_counter.second.counts
+                       << " counts" << '\n';
+
+        for (const auto & item : transformation_rules)
+            if (rule_trace.contains(item->getType()))
+                for (const auto & task_to_counter : rule_trace.at(item->getType()))
+                    ss << "[" << task_to_counter.first << "] " << item->getName() << ": "
+                       << static_cast<double>(task_to_counter.second.elapsed_ns) / 1000000 << " ms / " << task_to_counter.second.counts
+                       << " counts" << '\n';
+
+        std::unordered_map<RuleType, UInt64> rule_to_logical_expression_counts;
+        for (const auto & group : memo.getGroups())
+        {
+            for (const auto & item : group->getLogicalExpressions())
+                rule_to_logical_expression_counts[item->getProduceRule()]++;
+            for (const auto & item : group->getPhysicalExpressions())
+                rule_to_logical_expression_counts[item->getProduceRule()]++;
+        }
+
+        for (const auto & item : implementation_rules)
+            if (rule_to_logical_expression_counts.contains(item->getType()))
+                ss << item->getName() << " produced: " << rule_to_logical_expression_counts[item->getType()] << " logical exprs.\n";
+
+        for (const auto & item : transformation_rules)
+            if (rule_to_logical_expression_counts.contains(item->getType()))
+                ss << item->getName() << " produced: " << rule_to_logical_expression_counts[item->getType()] << " logical exprs.\n";
+    }
+    return ss.str();
+}
+    }

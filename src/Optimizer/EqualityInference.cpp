@@ -65,7 +65,7 @@ bool EqualityInference::isInferenceCandidate(const ConstASTPtr & predicate, Cont
     if (predicate->as<ASTFunction>())
     {
         const auto & fun = predicate->as<ASTFunction &>();
-        if (fun.name == "equals" && !mayReturnNullOnNonNullInput(fun) && ExpressionDeterminism::isDeterministic(predicate, context))
+        if (fun.name == "equals" && ExpressionDeterminism::isDeterministic(predicate, context))
         {
             // We should only consider equalities that have distinct left and right components
             if (fun.arguments->getChildren()[0]->getColumnName() != fun.arguments->getChildren()[1]->getColumnName())
@@ -77,20 +77,6 @@ bool EqualityInference::isInferenceCandidate(const ConstASTPtr & predicate, Cont
             {
                 return true;
             }
-        }
-    }
-    return false;
-}
-
-// TODO: this should look at whether the return type of the function is Nullable
-bool EqualityInference::mayReturnNullOnNonNullInput(const ASTFunction & predicate)
-{
-    // for example: a = upper(name), we consider arguments with function all may result null value.
-    for (auto & argument : predicate.arguments->getChildren())
-    {
-        if (argument->as<ASTFunction>())
-        {
-            return true;
         }
     }
     return false;
@@ -133,20 +119,13 @@ ASTPtr EqualityInference::rewrite(const ConstASTPtr & expression, const std::set
     return rewrite(expression, scope, true, true);
 }
 
-ASTPtr EqualityInference::rewrite(const ConstASTPtr & expression, const std::set<String> & scope, bool contains, bool allow_full_replacement)
+ASTPtr
+EqualityInference::rewrite(const ConstASTPtr & expression, const std::set<String> & scope, bool contains, bool allow_full_replacement)
 {
     ConstASTSet sub_expressions = SubExpressionExtractor::extract(expression);
     if (!allow_full_replacement)
     {
-        ConstASTSet sub_expressions_remove_itself;
-        for (const auto & sub_expression : sub_expressions)
-        {
-            if (!ASTEquality::compareTree(sub_expression, expression))
-            {
-                sub_expressions_remove_itself.emplace(sub_expression);
-            }
-        }
-        sub_expressions = sub_expressions_remove_itself;
+        sub_expressions.erase(expression);
     }
     ConstASTMap expression_remap;
     for (const auto & sub_expression : sub_expressions)
@@ -239,7 +218,7 @@ bool EqualityInference::isNotScoped(const ConstASTPtr & equivalence, const std::
     return std::none_of(symbols.begin(), symbols.end(), [&](auto & symbol) { return scope.contains(symbol); });
 }
 
-EqualityPartition EqualityInference::partitionedBy(const std::set<String>& scope)
+EqualityPartition EqualityInference::partitionedBy(const std::set<String> & scope)
 {
     std::vector<ConstASTPtr> scope_equalities;
     std::vector<ConstASTPtr> scope_complement_equalities;
@@ -299,8 +278,7 @@ EqualityPartition EqualityInference::partitionedBy(const std::set<String>& scope
             {
                 if (scope_complement_expression != complement_canonical)
                 {
-                    ASTPtr expression
-                        = makeASTFunction("equals", ASTs{complement_canonical->clone(), scope_complement_expression->clone()});
+                    ASTPtr expression = makeASTFunction("equals", ASTs{complement_canonical->clone(), scope_complement_expression->clone()});
                     scope_complement_equalities.emplace_back(expression);
                 }
             }
@@ -339,6 +317,48 @@ EqualityPartition EqualityInference::partitionedBy(const std::set<String>& scope
         }
     }
     return EqualityPartition(std::move(scope_equalities), std::move(scope_complement_equalities), std::move(scope_straddling_equalities));
+}
+
+String EqualityInference::toString()
+{
+    String dump = "EqualityInference[";
+    dump += "(equality_sets:";
+    if (!equality_sets.empty())
+    {
+        for (auto & entry : equality_sets)
+        {
+            dump += entry.first->formatForErrorMessage() + ":";
+            for (const auto & set : entry.second)
+            {
+                dump += set->formatForErrorMessage();
+                dump += "|";
+            }
+        }
+    }
+    dump += ")";
+    dump += "(canonical_map:";
+    if (!canonical_map.empty())
+    {
+        for (auto & entry : canonical_map)
+        {
+            dump += entry.first->formatForErrorMessage() + ":";
+            dump += entry.second->formatForErrorMessage();
+            dump += "|";
+        }
+    }
+    dump += ")";
+    dump += "(derived_expressions:";
+    if (!derived_expressions.empty())
+    {
+        for (const auto & expr : derived_expressions)
+        {
+            dump += expr->formatForErrorMessage();
+            dump += ":";
+        }
+    }
+    dump += ")";
+    dump += "]";
+    return dump;
 }
 
 bool DisjointSet::findAndUnion(const ConstHashAST & element_1, const ConstHashAST & element_2)
@@ -439,4 +459,31 @@ ConstHashAST DisjointSet::findInternal(const ConstHashAST & element) // NOLINT(m
     }
 }
 
+String EqualityPartition::toString()
+{
+    String dump = "EqualityPartition[";
+    dump += "scope_equalities(";
+    for (auto & value : scope_equalities)
+    {
+        dump += value->formatForErrorMessage();
+        dump += "|";
+    }
+    dump += ")";
+    dump += "scope_complement_equalities(";
+    for (auto & value : scope_complement_equalities)
+    {
+        dump += value->formatForErrorMessage();
+        dump += "|";
+    }
+    dump += ")";
+    dump += "scope_straddling_equalities(";
+    for (auto & value : scope_straddling_equalities)
+    {
+        dump += value->formatForErrorMessage();
+        dump += "|";
+    }
+    dump += ")";
+    dump += "]";
+    return dump;
+}
 }

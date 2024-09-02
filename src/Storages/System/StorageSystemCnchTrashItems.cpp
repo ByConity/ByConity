@@ -57,8 +57,8 @@ void StorageSystemCnchTrashItems::fillData(MutableColumns & res_columns, Context
     else
     {
         auto filtered_tables = filterTables(context, query_info);
-        for (const auto & [database_name, table_name] : filtered_tables)
-            request_storages.push_back(cnch_catalog->tryGetTable(*context, database_name, table_name, start_time));
+        for (const auto & [database_fullname, database_name, table_name] : filtered_tables)
+            request_storages.push_back(cnch_catalog->tryGetTable(*context, database_fullname, table_name, start_time));
     }
 
     /// Add one item into final results.
@@ -96,24 +96,26 @@ void StorageSystemCnchTrashItems::fillData(MutableColumns & res_columns, Context
         if (!storage)
             continue;
 
-        auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-        if (!cnch_merge_tree && !context->getSettingsRef().enable_skip_non_cnch_tables_for_cnch_trash_items)
+
+        if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+        {
+            auto trash_items = cnch_catalog->getDataItemsInTrash(storage);
+
+            if (trash_items.empty())
+                continue;
+
+            for (const auto & part : trash_items.data_parts)
+                add_item(storage, part, nullptr);
+
+            for (const auto & delete_bitmap : trash_items.delete_bitmaps)
+                add_item(storage, nullptr, delete_bitmap);
+        }
+        else if (!context->getSettingsRef().enable_skip_non_cnch_tables_for_cnch_trash_items)
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
                 "Table system.cnch_trash_itesm only support CnchMergeTree engine, but got `{}`. "
                 "Consider enable `enable_skip_non_cnch_tables_for_cnch_trash_items` to skip non CnchMergeTree engine.",
                 storage->getName());
-
-        auto trash_items = cnch_catalog->getDataItemsInTrash(storage);
-
-        if (trash_items.empty())
-            continue;
-
-        for (const auto & part : trash_items.data_parts)
-            add_item(storage, part, nullptr);
-
-        for (const auto & delete_bitmap : trash_items.delete_bitmaps)
-            add_item(storage, nullptr, delete_bitmap);
     }
 }
 

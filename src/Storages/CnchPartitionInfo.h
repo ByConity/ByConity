@@ -22,6 +22,7 @@
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Common/RWLock.h>
+#include <common/getThreadId.h>
 
 namespace DB
 {
@@ -32,12 +33,52 @@ namespace CacheStatus
     static constexpr UInt32 LOADED = 2;
 }
 
+struct DataCacheStatus
+{
+    std::atomic<UInt32> load_status = CacheStatus::UINIT;
+    std::atomic<UInt64> loading_thread_id = 0;
+
+    bool isUnInit()
+    {
+        return load_status == CacheStatus::UINIT;
+    }
+    bool isLoaded()
+    {
+        return load_status == CacheStatus::LOADED;
+    }
+    bool isLoading()
+    {
+        return load_status == CacheStatus::LOADING;
+    }
+    bool isLoadingByCurrentThread()
+    {
+        return load_status == CacheStatus::LOADING && loading_thread_id == getThreadId();
+    }
+
+    /// calls to setXXX should always be protected by partition write lock
+    void setToLoading()
+    {
+        load_status = CacheStatus::LOADING;
+        loading_thread_id = getThreadId();
+    }
+    void setToLoaded()
+    {
+        load_status = CacheStatus::LOADED;
+        loading_thread_id = 0;
+    }
+    void reset()
+    {
+        load_status = CacheStatus::UINIT;
+        loading_thread_id = 0;
+    }
+};
+
 class CnchPartitionInfo
 {
 public:
     explicit CnchPartitionInfo(
-        const String & table_uuid_, const std::shared_ptr<MergeTreePartition> & partition_, const std::string & partition_id_)
-        : partition_ptr(partition_), partition_id(partition_id_), metrics_ptr(std::make_shared<PartitionMetrics>(table_uuid_, partition_id))
+        const String & table_uuid_, const std::shared_ptr<MergeTreePartition> & partition_, const std::string & partition_id_, bool newly_inserted = false)
+        : partition_ptr(partition_), partition_id(partition_id_), metrics_ptr(std::make_shared<PartitionMetrics>(table_uuid_, partition_id, newly_inserted))
     {
     }
 
@@ -45,17 +86,19 @@ public:
 
     std::shared_ptr<MergeTreePartition> partition_ptr;
     std::string partition_id;
-    std::atomic<UInt32> cache_status = CacheStatus::UINIT;
+    DataCacheStatus part_cache_status;
+    DataCacheStatus delete_bitmap_cache_status;
+    std::atomic<UInt64> gctime = {0};
     std::shared_ptr<PartitionMetrics> metrics_ptr;
 
     inline PartitionLockHolder readLock() const
     {
-        return partition_mutex->getLock(RWLockImpl::Read, CurrentThread::getQueryId().toString());
+        return partition_mutex->getLock(RWLockImpl::Read, RWLockImpl::NO_QUERY);
     }
 
     inline PartitionLockHolder writeLock() const
     {
-        return partition_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString());
+        return partition_mutex->getLock(RWLockImpl::Write, RWLockImpl::NO_QUERY);
     }
 
 private:

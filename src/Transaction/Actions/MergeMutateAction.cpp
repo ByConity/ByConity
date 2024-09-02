@@ -16,7 +16,13 @@
 #include <Transaction/Actions/MergeMutateAction.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchDataWriter.h>
+#include <Common/ProfileEvents.h>
 #include <Storages/StorageCnchMergeTree.h>
+
+namespace ProfileEvents
+{
+    extern const Event ManipulationSuccess;
+}
 
 namespace DB
 {
@@ -55,7 +61,8 @@ void MergeMutateAction::executeV1(TxnTimestamp commit_time)
     for (auto & bitmap : delete_bitmaps)
         bitmap->updateCommitTime(commit_time);
 
-    global_context.getCnchCatalog()->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, true, /*preallocate_mode=*/ false);
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    global_context.getCnchCatalog()->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, true, /*preallocate_mode=*/ false, write_manifest);
 }
 
 void MergeMutateAction::executeV2()
@@ -68,8 +75,9 @@ void MergeMutateAction::executeV2()
     auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(table.get());
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
-
-    global_context.getCnchCatalog()->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true,  /*preallocate_mode=*/ false);
+    
+    bool write_manifest = cnch_table->getSettings()->enable_publish_version_on_commit;
+    global_context.getCnchCatalog()->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true,  /*preallocate_mode=*/ false, write_manifest);
 }
 
 /// Post processing
@@ -79,8 +87,22 @@ void MergeMutateAction::postCommit(TxnTimestamp commit_time)
     global_context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
     for (auto & part : parts)
         part->commit_time = commit_time;
+    
+    UInt64 current_time_ns = clock_gettime_ns(CLOCK_MONOTONIC_COARSE);
 
-    ServerPartLog::addNewParts(getContext(), table->getStorageID(), getPartLogType(), type == ManipulationType::Merge ? getMergedPart() : parts, {}, txn_id, /*error=*/ false, source_part_names);
+    ServerPartLog::addNewParts(
+        getContext(),
+        table->getStorageID(),
+        getPartLogType(),
+        /*parts*/ type == ManipulationType::Merge ? getMergedPart() : parts,
+        /*staged_parts*/ {},
+        txn_id,
+        /*error=*/ false,
+        source_part_names,
+        current_time_ns - manipulation_submit_time_ns,
+        peak_memory_usage);
+
+    ProfileEvents::increment(ProfileEvents::ManipulationSuccess, 1);
 }
 
 void MergeMutateAction::abort()

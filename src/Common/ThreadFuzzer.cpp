@@ -18,7 +18,7 @@
  * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
- 
+
 #include <signal.h>
 #include <sys/time.h>
 #if defined(OS_LINUX)
@@ -48,7 +48,7 @@
 
 /// Starting from glibc 2.34 there are no internal symbols without version,
 /// so not __pthread_mutex_lock but __pthread_mutex_lock@2.2.5
-#if defined(OS_LINUX)
+#if defined(OS_LINUX) and !defined(USE_MUSL)
     /// You can get version from glibc/sysdeps/unix/sysv/linux/$ARCH/$BITS_OR_BYTE_ORDER/libc.abilist
     #if defined(__amd64__)
     #    define GLIBC_SYMVER "GLIBC_2.2.5"
@@ -317,3 +317,4 @@ FOR_EACH_WRAPPED_FUNCTION(MAKE_WRAPPER)
 #    undef MAKE_WRAPPER
 #endif
 }
+

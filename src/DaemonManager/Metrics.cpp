@@ -27,6 +27,10 @@ namespace DB::DaemonManager::BRPCMetrics
     bvar::Window<bvar::Adder<int>> g_executeImpl_MergeMutate_error_minute("DaemonManager_Internal", "executeImpl_MergeMutate_error", & g_executeImpl_MergeMutate_error, 60);
     bvar::Window<bvar::Adder<int>> g_executeImpl_MergeMutate_minute("DaemonManager_Internal", "executeImpl_MergeMutate", & g_executeImpl_MergeMutate, 60);
 
+    bvar::Adder< int > g_executeImpl_ManifestCheckpoint_error;
+    bvar::Adder< int > g_executeImpl_ManifestCheckpoint;
+    bvar::Window<bvar::Adder<int>> g_executeImpl_ManifestCheckpoint_error_minute("DaemonManager_Internal", "executeImpl_ManifestCheckpoint_error", & g_executeImpl_ManifestCheckpoint_error, 60);
+    bvar::Window<bvar::Adder<int>> g_executeImpl_ManifestCheckpoint_minute("DaemonManager_Internal", "executeImpl_ManifestCheckpoint", & g_executeImpl_ManifestCheckpoint, 60);
 
     bvar::Adder< int > g_executeImpl_Consumer_error;
     bvar::Adder< int > g_executeImpl_Consumer;
@@ -72,5 +76,16 @@ namespace DB::DaemonManager::BRPCMetrics
     bvar::Adder< int > g_executeImpl_MaterializedMySQL;
     bvar::Window<bvar::Adder<int>> g_executeImpl_MaterializedMySQL_error_minute("DaemonManager_Internal", "executeImpl_MaterializedMySQL_error", & g_executeImpl_MaterializedMySQL_error, 60);
     bvar::Window<bvar::Adder<int>> g_executeImpl_MaterializedMySQL_minute("DaemonManager_Internal", "executeImpl_MaterializedMySQL", & g_executeImpl_MaterializedMySQL, 60);
+
+
+    bvar::Adder<int> g_executeImpl_CnchRefreshMaterializedView_error;
+    bvar::Adder< int > g_executeImpl_CnchRefreshMaterializedView;
+    bvar::Window<bvar::Adder<int>> g_executeImpl_CnchRefreshMaterializedView_error_minute("DaemonManager_Internal", "executeImpl_CnchRefreshMaterializedView_error", & g_executeImpl_CnchRefreshMaterializedView_error, 60);
+    bvar::Window<bvar::Adder<int>> g_executeImpl_CnchRefreshMaterializedView_minute("DaemonManager_Internal", "executeImpl_CnchRefreshMaterializedView", & g_executeImpl_CnchRefreshMaterializedView, 60);
+
+    bvar::Adder< int > g_executeImpl_PartMover_error;
+    bvar::Adder< int > g_executeImpl_PartMover;
+    bvar::Window<bvar::Adder<int>> g_executeImpl_PartMover_error_minute("DaemonManager_Internal", "executeImpl_PartMover_error", & g_executeImpl_PartMover_error, 60);
+    bvar::Window<bvar::Adder<int>> g_executeImpl_PartMover_minute("DaemonManager_Internal", "executeImpl_PartMover", & g_executeImpl_PartMover, 60);
 }/// end namespace
 

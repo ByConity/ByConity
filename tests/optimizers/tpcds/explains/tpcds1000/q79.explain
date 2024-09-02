@@ -5,53 +5,61 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {c_last_name ASC NULLS LAST, c_first_name ASC NULLS LAST, expr#substring(s_city, 1, 30) ASC NULLS LAST, expr#sum(ss_net_profit) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 98579951 rows
+      └─ Gather Exchange Est. 91693128 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_last_name ASC NULLS LAST, c_first_name ASC NULLS LAST, expr#substring(s_city, 1, 30) ASC NULLS LAST, expr#sum(ss_net_profit) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 98579951 rows
+            └─ Projection Est. 91693128 rows
                │     Expressions: [c_first_name, c_last_name, expr#sum(ss_coupon_amt), expr#sum(ss_net_profit), ss_ticket_number], expr#substring(s_city, 1, 30):=substring(s_city, 1, 30)
-               └─ Inner (PARALLEL_HASH) Join Est. 98579951 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 91693128 rows
                   │     Condition: ss_customer_sk == c_customer_sk
-                  ├─ Repartition Exchange Est. 98579951 rows
+                  ├─ Repartition Exchange Est. 91693128 rows
                   │  │     Partition by: {ss_customer_sk}
-                  │  └─ MergingAggregated Est. 98579951 rows
-                  │     └─ Repartition Exchange Est. 98579951 rows
-                  │        │     Partition by: {ss_ticket_number, ss_customer_sk, ss_addr_sk, s_city}
-                  │        └─ Aggregating Est. 98579951 rows
-                  │           │     Group by: {ss_ticket_number, ss_customer_sk, ss_addr_sk, s_city}
-                  │           │     Aggregates: expr#sum(ss_coupon_amt):=AggNull(sum)(ss_coupon_amt), expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit)
-                  │           └─ Inner Join Est. 98579951 rows
-                  │              │     Condition: ss_store_sk == s_store_sk
-                  │              ├─ Inner Join Est. 98579951 rows
-                  │              │  │     Condition: ss_hdemo_sk == hd_demo_sk
-                  │              │  │     Runtime Filters Builder: {hd_demo_sk}
-                  │              │  ├─ Inner Join Est. 246449878 rows
-                  │              │  │  │     Condition: ss_sold_date_sk == d_date_sk
-                  │              │  │  │     Runtime Filters Builder: {d_date_sk}
-                  │              │  │  ├─ Filter Est. 2879987999 rows
-                  │              │  │  │  │     Condition: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk}
-                  │              │  │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                  │              │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk}
-                  │              │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_ticket_number, ss_coupon_amt, ss_net_profit]
-                  │              │  │  └─ Broadcast Exchange Est. 156 rows
-                  │              │  │     └─ Filter Est. 156 rows
-                  │              │  │        │     Condition: (d_dow = 1) AND (d_year IN (1999, 2000, 2001))
-                  │              │  │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                  │              │  │                 Where: (d_dow = 1) AND (d_year IN (1999, 2000, 2001))
-                  │              │  │                 Outputs: [d_date_sk, d_year, d_dow]
-                  │              │  └─ Broadcast Exchange Est. 2880 rows
-                  │              │     └─ Filter Est. 2880 rows
-                  │              │        │     Condition: (hd_dep_count = 6) OR (hd_vehicle_count > 2)
-                  │              │        └─ TableScan tpcds1000.household_demographics Est. 7200 rows
-                  │              │                 Where: (hd_dep_count = 6) OR (hd_vehicle_count > 2)
-                  │              │                 Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
-                  │              └─ Broadcast Exchange Est. 946 rows
-                  │                 └─ Filter Est. 946 rows
-                  │                    │     Condition: (s_number_employees >= 200) AND (s_number_employees <= 295)
-                  │                    └─ TableScan tpcds1000.store Est. 1002 rows
-                  │                             Where: (s_number_employees >= 200) AND (s_number_employees <= 295)
-                  │                             Outputs: [s_store_sk, s_number_employees, s_city]
+                  │  └─ Projection Est. 91693128 rows
+                  │     │     Expressions: [expr#sum(ss_coupon_amt), expr#sum(ss_net_profit), s_city, ss_customer_sk, ss_ticket_number]
+                  │     └─ MergingAggregated Est. 91693128 rows
+                  │        └─ Repartition Exchange Est. 91693128 rows
+                  │           │     Partition by: {ss_ticket_number, ss_customer_sk, ss_addr_sk, s_city}
+                  │           └─ Aggregating Est. 91693128 rows
+                  │              │     Group by: {ss_ticket_number, ss_customer_sk, ss_addr_sk, s_city}
+                  │              │     Aggregates: expr#sum(ss_coupon_amt):=AggNull(sum)(ss_coupon_amt), expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit)
+                  │              └─ Inner Join Est. 91693128 rows
+                  │                 │     Condition: ss_store_sk == s_store_sk
+                  │                 ├─ Inner Join Est. 98579951 rows
+                  │                 │  │     Condition: ss_hdemo_sk == hd_demo_sk
+                  │                 │  │     Runtime Filters Builder: {hd_demo_sk}
+                  │                 │  ├─ Inner Join Est. 246449878 rows
+                  │                 │  │  │     Condition: ss_sold_date_sk == d_date_sk
+                  │                 │  │  │     Runtime Filters Builder: {d_date_sk}
+                  │                 │  │  ├─ Filter Est. 2879987999 rows
+                  │                 │  │  │  │     Condition: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk}
+                  │                 │  │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                  │                 │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk}
+                  │                 │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_ticket_number, ss_coupon_amt, ss_net_profit]
+                  │                 │  │  └─ Broadcast Exchange Est. 156 rows
+                  │                 │  │     └─ Projection Est. 156 rows
+                  │                 │  │        │     Expressions: [d_date_sk]
+                  │                 │  │        └─ Filter Est. 156 rows
+                  │                 │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dow = 1)
+                  │                 │  │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                  │                 │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dow = 1)
+                  │                 │  │                    Outputs: [d_date_sk, d_year, d_dow]
+                  │                 │  └─ Broadcast Exchange Est. 2880 rows
+                  │                 │     └─ Projection Est. 2880 rows
+                  │                 │        │     Expressions: [hd_demo_sk]
+                  │                 │        └─ Filter Est. 2880 rows
+                  │                 │           │     Condition: (hd_dep_count = 6) OR (hd_vehicle_count > 2)
+                  │                 │           └─ TableScan tpcds1000.household_demographics Est. 7200 rows
+                  │                 │                    Where: (hd_dep_count = 6) OR (hd_vehicle_count > 2)
+                  │                 │                    Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
+                  │                 └─ Broadcast Exchange Est. 932 rows
+                  │                    └─ Projection Est. 932 rows
+                  │                       │     Expressions: [s_city, s_store_sk]
+                  │                       └─ Filter Est. 932 rows
+                  │                          │     Condition: (s_number_employees >= 200) AND (s_number_employees <= 295)
+                  │                          └─ TableScan tpcds1000.store Est. 1002 rows
+                  │                                   Where: (s_number_employees >= 200) AND (s_number_employees <= 295)
+                  │                                   Outputs: [s_store_sk, s_number_employees, s_city]
                   └─ Repartition Exchange Est. 12000000 rows
                      │     Partition by: {c_customer_sk}
                      └─ TableScan tpcds1000.customer Est. 12000000 rows

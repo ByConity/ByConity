@@ -14,11 +14,15 @@ public:
 
     explicit VWCustomizedSettings(Poco::Util::AbstractConfiguration & config_)
         : vw_settings_prefix("vw_customized_settings"), config_holder(config_.createView(vw_settings_prefix))
-    {}
+    {
+        loadCustomizedSettings();
+    }
 
     explicit VWCustomizedSettings(ConfigurationPtr & config_)
         : vw_settings_prefix("vw_customized_settings"), config_holder(config_->createView(vw_settings_prefix))
-    {}
+    {
+        loadCustomizedSettings();
+    }
 
     ~VWCustomizedSettings()
     {
@@ -26,12 +30,13 @@ public:
     }
 
     void overwriteDefaultSettings(const String & vw_name, ContextMutablePtr context);
-    void loadCustomizedSettings();
 
     String toString();
     bool isEmpty();
 
 private:
+
+    void loadCustomizedSettings();
     using RawConfigKeys = std::unordered_map<String, std::unordered_map<String, String>>;
     String vw_settings_prefix;
     ConfigurationViewPtr config_holder;

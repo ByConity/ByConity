@@ -23,8 +23,9 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
-#include "QueryPlan/QueryPlan.h"
-
+#include <QueryPlan/QueryPlan.h>
+#include <Interpreters/getTableExpressions.h>
+#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -43,7 +44,8 @@ public:
         Assignments inline_expressions_ = {},
         std::shared_ptr<AggregatingStep> aggregation_ = nullptr,
         std::shared_ptr<ProjectionStep> projection_ = nullptr,
-        std::shared_ptr<FilterStep> filter_ = nullptr);
+        std::shared_ptr<FilterStep> filter_ = nullptr,
+        std::optional<DataStream> output_stream_ = std::nullopt);
 
     TableScanStep(
         DataStream output,
@@ -149,6 +151,7 @@ public:
     SelectQueryInfo fillQueryInfo(ContextPtr context);
     void fillPrewhereInfo(ContextPtr context);
     void makeSetsForIndex(const ASTPtr & node, ContextPtr context, PreparedSets & prepared_sets) const;
+    void fillQueryInfoV2(ContextPtr context);
 
     void allocate(ContextPtr context);
     Int32 getUniqueId() const { return unique_id; }
@@ -177,6 +180,8 @@ public:
     };
 
     Names getRequiredColumns(GetFlags flags = All) const;
+
+    void prepare(const PreparedStatementContext & prepared_context) override;
 
 private:
     StoragePtr storage;
@@ -211,14 +216,17 @@ private:
     Poco::Logger * log;
     String alias;
 
+    // Only for worker.
+    bool is_null_source{false};
+
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;
-    ASTPtr rewriteRuntimeFilter(
-        const ASTPtr & filter, const String & query_id, size_t wait_ms, bool is_prewhere, bool enable_bf, bool range_cover);
-    bool rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query);
-    // enforce calculating inline expressions(an example is to calculate arraySetCheck for data parts without index), then alias outputs
+    void rewriteDynamicFilter(SelectQueryInfo & select_query, const BuildQueryPipelineSettings & build_settings, bool use_expand_pipe);
+
     void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &, const String & pipeline_name);
     void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);
+
+    bool hasFunctionCanUseBitmapIndex() const;
 };
 
 }

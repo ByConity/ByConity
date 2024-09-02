@@ -47,7 +47,8 @@ public:
         ApplyType apply_type_,
         SubqueryType subquery_type_,
         Assignment assignment_,
-        NameSet outer_columns_);
+        NameSet outer_columns_,
+        bool support_semi_anti_);
 
     String getName() const override { return "Apply"; }
     Type getType() const override { return Type::Apply; }
@@ -63,12 +64,15 @@ public:
     DataTypePtr getAssignmentDataType() const;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    bool supportSemiAnti() const { return support_semi_anti; }
+
     void toProto(Protos::ApplyStep & proto, bool for_hash_equals = false) const
     {
         (void)proto;
         (void)for_hash_equals;
         throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
     }
+
     static std::shared_ptr<ApplyStep> fromProto(const Protos::ApplyStep & proto, ContextPtr)
     {
         (void)proto;
@@ -104,6 +108,7 @@ private:
      */
     Assignment assignment;
     NameSet outer_columns;
+    bool support_semi_anti;
 };
 
 }

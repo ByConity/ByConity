@@ -13,14 +13,13 @@
  * limitations under the License.
  */
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Analyzers/function_utils.h>
 #include <Functions/FunctionFactory.h>
-#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Parsers/ASTSubquery.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int TYPE_MISMATCH;
@@ -37,7 +36,7 @@ FunctionType getFunctionType(const ASTFunction & function, ContextPtr context)
         return FunctionType::GROUPING_OPERATION;
     else if (functionIsInSubquery(function))
         return FunctionType::IN_SUBQUERY;
-    else if (function.name == "exists")
+    else if (functionIsExistsSubquery(function))
         return FunctionType::EXISTS_SUBQUERY;
     else if (function.name == "lambda")
         return FunctionType::LAMBDA_EXPRESSION;
@@ -70,8 +69,8 @@ ASTPtr getLambdaExpressionBody(ASTFunction & lambda)
 
 bool isComparisonFunction(const ASTFunction & function)
 {
-    return function.name == "equals" || function.name == "less" || function.name == "lessOrEquals"
-        || function.name == "greater" || function.name == "greaterOrEquals";
+    return function.name == "equals" || function.name == "less" || function.name == "lessOrEquals" || function.name == "greater"
+        || function.name == "greaterOrEquals";
 }
 
 bool functionIsInSubquery(const ASTFunction & function)
@@ -82,4 +81,20 @@ bool functionIsInSubquery(const ASTFunction & function)
         && function.arguments->children.size() == 2 && function.arguments->children[1]->as<ASTSubquery>();
 }
 
+bool functionIsExistsSubquery(const ASTFunction & function)
+{
+    auto is_exist = [](const ASTFunction & func) {
+        return func.name == "exists" && func.arguments->children.size() == 1 && func.arguments->children[0]->as<ASTSubquery>();
+    };
+
+    if (function.name == "not" && function.arguments->children.size() == 1)
+    {
+        if (auto * func = function.arguments->children[0]->as<ASTFunction>())
+        {
+            return is_exist(*func);
+        }
+    }
+
+    return is_exist(function);
+}
 }

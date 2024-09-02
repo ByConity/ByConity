@@ -23,9 +23,10 @@
 
 namespace DB
 {
-PatternPtr DistinctToAggregate::getPattern() const
+ConstRefPatternPtr DistinctToAggregate::getPattern() const
 {
-    return Patterns::distinct().result();
+     static auto pattern = Patterns::distinct().result();
+     return pattern;
 }
 
 TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

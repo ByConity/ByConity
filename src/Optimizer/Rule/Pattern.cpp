@@ -95,7 +95,11 @@ String Pattern::toString() const
 std::optional<Match> TypeOfPattern::accept(const PlanNodePtr & node, Captures & captures) const
 {
     if (type == IQueryPlanStep::Type::Any || type == IQueryPlanStep::Type::Tree || type == node->getStep()->getType())
+    {
+        if (attaching_predicate && !attaching_predicate(node->getStep(), captures))
+            return {};
         return {Match{std::move(captures)}};
+    }
     else
         return {};
 }
@@ -108,25 +112,14 @@ void TypeOfPattern::accept(PatternVisitor & pattern_visitor) const
 std::optional<Match> CapturePattern::accept(const PlanNodePtr & node, Captures & captures) const
 {
     captures.insert(std::make_pair(capture, property(node)));
-    return {Match{std::move(captures)}};
+    if (!attaching_predicate || attaching_predicate(node->getStep(), captures))
+        return {Match{std::move(captures)}};
+    return {};
 }
 
 void CapturePattern::accept(PatternVisitor & pattern_visitor) const
 {
     pattern_visitor.visitCapturePattern(*this);
-}
-
-std::optional<Match> FilterPattern::accept(const PlanNodePtr & node, Captures & captures) const
-{
-    if (predicate(node, captures))
-        return {Match{std::move(captures)}};
-    else
-        return {};
-}
-
-void FilterPattern::accept(PatternVisitor & pattern_visitor) const
-{
-    pattern_visitor.visitFilterPattern(*this);
 }
 
 std::optional<Match> WithPattern::accept(const PlanNodePtr & node, Captures & captures) const
@@ -273,19 +266,15 @@ void PatternPrinter::visitTypeOfPattern(const TypeOfPattern & pattern)
         default:
             break;
     }
+    if (pattern.attaching_predicate)
+        appendLine("has attaching_predicate");
 #undef PRINT_STEP_TYPE
 }
 
 void PatternPrinter::visitCapturePattern(const CapturePattern & pattern)
 {
     visitPrevious(pattern);
-    appendLine("capture " + pattern.name + " as: " + pattern.capture.desc);
-}
-
-void PatternPrinter::visitFilterPattern(const FilterPattern & pattern)
-{
-    visitPrevious(pattern);
-    appendLine("filter by: " + pattern.name);
+    appendLine("capture " + pattern.name + " as: " + String{pattern.capture});
 }
 
 void PatternPrinter::visitOneOfPattern(const OneOfPattern & pattern)

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <Optimizer/Rule/Match.h>
+#include "QueryPlan/IQueryPlanStep.h"
 
 #include <functional>
 #include <memory>
@@ -31,12 +32,13 @@ namespace DB
 {
 class Pattern;
 using PatternPtr = std::unique_ptr<Pattern>;
+using ConstRefPatternPtr = const std::unique_ptr<Pattern> &;
 using PatternPtrs = std::vector<PatternPtr>;
 using PatternRawPtr = const Pattern *;
 using PatternRawPtrs = std::vector<PatternRawPtr>;
 class PatternVisitor;
 using PatternProperty = std::function<std::any(const PlanNodePtr &)>;
-using PatternPredicate = std::function<bool(const PlanNodePtr &, const Captures &)>;
+using PatternPredicate = std::function<bool(const QueryPlanStepPtr &, Captures &)>;
 enum class PatternQuantifier;
 
 class Pattern
@@ -80,6 +82,7 @@ public:
     void accept(PatternVisitor & pattern_visitor) const override;
 
     IQueryPlanStep::Type type;
+    PatternPredicate attaching_predicate;
 };
 
 class CapturePattern : public Pattern
@@ -93,18 +96,7 @@ public:
     std::string name;
     PatternProperty property;
     Capture capture;
-};
-
-class FilterPattern : public Pattern
-{
-public:
-    FilterPattern(std::string name_, PatternPredicate predicate_, PatternPtr previous)
-        : Pattern(std::move(previous)), name(std::move(name_)), predicate(std::move(predicate_)){}
-    std::optional<Match> accept(const PlanNodePtr & node, Captures & captures) const override;
-    void accept(PatternVisitor & pattern_visitor) const override;
-
-    std::string name;
-    PatternPredicate predicate;
+    PatternPredicate attaching_predicate;
 };
 
 enum class PatternQuantifier
@@ -121,7 +113,8 @@ public:
     WithPattern(PatternQuantifier quantifier_, PatternPtr sub_pattern, PatternPtr previous)
         : Pattern(std::move(previous)), quantifier(quantifier_)
     {
-        sub_patterns.emplace_back(std::move(sub_pattern));
+        if (sub_pattern)
+            sub_patterns.emplace_back(std::move(sub_pattern));
     }
 
     WithPattern(PatternQuantifier quantifier_, PatternPtrs sub_patterns_, PatternPtr previous)
@@ -165,7 +158,6 @@ public:
     virtual ~PatternVisitor() = default;
     virtual void visitTypeOfPattern(const TypeOfPattern & pattern) = 0;
     virtual void visitCapturePattern(const CapturePattern & pattern) = 0;
-    virtual void visitFilterPattern(const FilterPattern & pattern) = 0;
     virtual void visitWithPattern(const WithPattern & pattern) = 0;
     virtual void visitOneOfPattern(const OneOfPattern & pattern) = 0;
 
@@ -181,7 +173,6 @@ class PatternPrinter : public PatternVisitor
 public:
     void visitTypeOfPattern(const TypeOfPattern & pattern) override;
     void visitCapturePattern(const CapturePattern & pattern) override;
-    void visitFilterPattern(const FilterPattern & pattern) override;
     void visitWithPattern(const WithPattern & pattern) override;
     void visitOneOfPattern(const OneOfPattern & pattern) override;
 

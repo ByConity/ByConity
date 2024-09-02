@@ -38,6 +38,7 @@
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTPartition.h>
+#include <Parsers/ASTPreparedParameter.h>
 #include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTQuantifiedComparison.h>
 #include <Parsers/ASTRenameQuery.h>
@@ -69,6 +70,11 @@ template <typename R, typename C>
 class ASTVisitor
 {
 public:
+    constexpr static UInt64 MAX_RECURSION_LEVEL = 1024;
+
+    explicit ASTVisitor(UInt64 max_level_ = MAX_RECURSION_LEVEL) : max_level(max_level_)
+    {
+    }
     virtual ~ASTVisitor() = default;
     virtual R visitNode(ASTPtr &, C &) { throw Exception("Visitor does not supported this AST node.", ErrorCodes::NOT_IMPLEMENTED); }
 #define VISITOR_DEF(TYPE) \
@@ -77,7 +83,8 @@ public:
 #undef VISITOR_DEF
 
 private:
-    int level = 0;
+    const UInt64 max_level;
+    UInt64 level = 0;
     friend class ASTVisitorUtil;
 };
 
@@ -86,6 +93,11 @@ template <typename R, typename C>
 class ConstASTVisitor
 {
 public:
+    constexpr static UInt64 MAX_RECURSION_LEVEL = 1024;
+
+    explicit ConstASTVisitor(UInt64 max_level_ = MAX_RECURSION_LEVEL) : max_level(max_level_)
+    {
+    }
     virtual ~ConstASTVisitor() = default;
     virtual R visitNode(const ConstASTPtr &, C &) { throw Exception("Visitor does not supported this AST node.", ErrorCodes::NOT_IMPLEMENTED); }
 #define VISITOR_DEF(TYPE) \
@@ -94,15 +106,14 @@ public:
 #undef VISITOR_DEF
 
 private:
-    int level = 0;
+    const UInt64 max_level;
+    UInt64 level = 0;
     friend class ASTVisitorUtil;
 };
 
 class ASTVisitorUtil
 {
 public:
-    constexpr static int MAX_RECURSE_LEVEL = 1024;
-
     template <typename R, typename C>
     static R accept(ASTPtr && node, ASTVisitor<R, C> & visitor, C & context)
     {
@@ -112,33 +123,43 @@ public:
     template <typename R, typename C>
     static R accept(ASTPtr & node, ASTVisitor<R, C> & visitor, C & context)
     {
-        if (++visitor.level > MAX_RECURSE_LEVEL)
+        if (++visitor.level > visitor.max_level)
             throw Exception(ErrorCodes::TOO_DEEP_RECURSION, "Too deep recursion");
         SCOPE_EXIT({ --visitor.level; });
+
+        switch(node->getType())
+        {
 #define VISITOR_DEF(TYPE) \
-       if (node->getType() == ASTType::TYPE) \
-       { \
-           return visitor.visit##TYPE(node, context); \
-       }
-       APPLY_AST_TYPES(VISITOR_DEF)
+        case ASTType::TYPE: \
+        { \
+            return visitor.visit##TYPE(node, context); \
+        }
+        APPLY_AST_TYPES(VISITOR_DEF)
 #undef VISITOR_DEF
-       return visitor.visitNode(node, context);
+            default:
+                return visitor.visitNode(node, context);
+        }
     }
 
     template <typename R, typename C>
     static R accept(const ConstASTPtr & node, ConstASTVisitor<R, C> & visitor, C & context)
     {
-        if (++visitor.level > MAX_RECURSE_LEVEL)
+        if (++visitor.level > visitor.max_level)
             throw Exception(ErrorCodes::TOO_DEEP_RECURSION, "Too deep recursion");
         SCOPE_EXIT({ --visitor.level; });
+        
+        switch(node->getType())
+        {
 #define VISITOR_DEF(TYPE) \
-       if (node->getType() == ASTType::TYPE) \
-       { \
-           return visitor.visit##TYPE(node, context); \
-       }
+        case ASTType::TYPE: \
+        { \
+            return visitor.visit##TYPE(node, context); \
+        }
         APPLY_AST_TYPES(VISITOR_DEF)
 #undef VISITOR_DEF
-        return visitor.visitNode(node, context);
+            default:
+                return visitor.visitNode(node, context);
+        }
     }
 };
 

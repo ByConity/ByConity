@@ -48,8 +48,7 @@
 	url = https://github.com/ClickHouse-Extras/Turbo-Base64.git
 [submodule "contrib/arrow"]
 	path = contrib/arrow
-	url = https://github.com/ClickHouse-Extras/arrow
-	branch = clickhouse-arrow-2.0.0
+	url = https://github.com/ByConity/clickhouse-arrow.git
 [submodule "contrib/thrift"]
 	path = contrib/thrift
 	url = https://github.com/apache/thrift.git
@@ -64,7 +63,7 @@
 	url = https://github.com/ClickHouse-Extras/libcxx.git
 [submodule "contrib/libcxxabi"]
 	path = contrib/libcxxabi
-	url = https://github.com/ClickHouse-Extras/libcxxabi.git
+	url = git@github.com:ByConity/clickhouse-libcxxabi.git
 [submodule "contrib/snappy"]
 	path = contrib/snappy
 	url = https://github.com/google/snappy
@@ -97,7 +96,7 @@
 	url = https://github.com/ClickHouse-Extras/fastops
 [submodule "contrib/orc"]
 	path = contrib/orc
-	url = https://github.com/ClickHouse-Extras/orc
+	url = https://github.com/ByConity/clickhouse-orc.git
 [submodule "contrib/sparsehash-c11"]
 	path = contrib/sparsehash-c11
 	url = https://github.com/sparsehash/sparsehash-c11.git
@@ -339,3 +338,6 @@
 [submodule "contrib/nlp-data"]
 	path = contrib/nlp-data
     url = https://github.com/ClickHouse/nlp-data
+[submodule "contrib/libdeflate"]
+	path = contrib/libdeflate
+	url = https://github.com/ByConity/libdeflate.git

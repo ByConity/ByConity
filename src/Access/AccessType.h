@@ -122,6 +122,9 @@ enum class AccessType
     M(CREATE_DICTIONARY, "", DICTIONARY, CREATE) /* allows to execute {CREATE|ATTACH} DICTIONARY */ \
     M(CREATE_TEMPORARY_TABLE, "", GLOBAL, CREATE) /* allows to create and manipulate temporary tables;
                                                      implicitly enabled by the grant CREATE_TABLE on any table */ \
+    M(CREATE_FUNCTION, "", GLOBAL, CREATE) /* allows to execute CREATE FUNCTION */ \
+    M(CREATE_BINDING, "", GLOBAL, CREATE) /* allows to execute CREATE BINDING */ \
+    M(CREATE_PREPARED_STATEMENT, "", GLOBAL, CREATE) /* allows to execute CREATE PREPARED STATEMENT */ \
     M(CREATE, "", GROUP, ALL) /* allows to execute {CREATE|ATTACH} */ \
 \
     M(DROP_DATABASE, "", DATABASE, DROP) /* allows to execute {DROP|DETACH} DATABASE */ \
@@ -129,6 +132,9 @@ enum class AccessType
     M(DROP_VIEW, "", VIEW, DROP) /* allows to execute {DROP|DETACH} TABLE for views;
                                     implicitly enabled by the grant DROP_TABLE */ \
     M(DROP_DICTIONARY, "", DICTIONARY, DROP) /* allows to execute {DROP|DETACH} DICTIONARY */ \
+    M(DROP_FUNCTION, "", GLOBAL, DROP) /* allows to execute DROP FUNCTION */\
+    M(DROP_BINDING, "", GLOBAL, DROP) /* allows to execute DROP BINDING */\
+    M(DROP_PREPARED_STATEMENT, "", GLOBAL, DROP) /* allows to execute DROP PREPARED STATEMENT */ \
     M(DROP, "", GROUP, ALL) /* allows to execute {DROP|DETACH} */ \
 \
     M(TRUNCATE, "TRUNCATE TABLE", TABLE, ALL) \
@@ -172,6 +178,7 @@ enum class AccessType
     M(SYSTEM_DROP_MARK_CACHE, "SYSTEM DROP MARK, DROP MARK CACHE, DROP MARKS", GLOBAL, SYSTEM_DROP_CACHE) \
     M(SYSTEM_DROP_UNCOMPRESSED_CACHE, "SYSTEM DROP UNCOMPRESSED, DROP UNCOMPRESSED CACHE, DROP UNCOMPRESSED", GLOBAL, SYSTEM_DROP_CACHE) \
     M(SYSTEM_DROP_NVM_CACHE, "SYSTEM DROP NVM, DROP NVM CACHE, DROP NVM", GLOBAL, SYSTEM_DROP_CACHE) \
+    M(SYSTEM_DROP_SCHEMA_CACHE, "SYSTEM DROP SCHEMA CACHE, DROP SCHEMA CACHE", GLOBAL, SYSTEM_DROP_CACHE) \
     M(SYSTEM_DROP_MMAP_CACHE, "SYSTEM DROP MMAP, DROP MMAP CACHE, DROP MMAP", GLOBAL, SYSTEM_DROP_CACHE) \
     M(SYSTEM_DROP_QUERY_CACHE, "SYSTEM DROP QUERY, DROP QUERY CACHE, DROP QUERY", GLOBAL, SYSTEM_DROP_CACHE) \
     M(SYSTEM_DROP_COMPILED_EXPRESSION_CACHE, \

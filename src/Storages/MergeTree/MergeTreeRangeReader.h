@@ -20,14 +20,19 @@
  */
 
 #pragma once
+#include <optional>
 #include <Core/Block.h>
-#include <common/logger_useful.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include <common/logger_useful.h>
+#include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
 
+#include "IMergeTreeDataPart.h"
+#include "Parsers/IAST_fwd.h"
+#include "Storages/MergeTree/IMergeTreeDataPart.h"
 namespace DB
 {
 
-template <typename T>
+template <typename T, bool has_buf>
 class ColumnVector;
 using ColumnUInt8 = ColumnVector<UInt8>;
 
@@ -277,6 +282,8 @@ private:
     bool is_initialized = false;
 
     size_t filtered_ratio_to_use_skip_read = 0;
+    /// used by last reader to track how many marks are selected
+    std::optional<size_t> last_selected_mark {std::nullopt};
 };
 
 }

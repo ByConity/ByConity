@@ -1,20 +1,21 @@
-Projection Est. 2165399 rows
+Projection Est. 541349 rows
 │     Expressions: [P_BRAND], d_year:=`expr#toYear(LO_ORDERDATE)`, sum(LO_REVENUE):=`expr#sum(LO_REVENUE)`
-└─ Sorting Est. 2165399 rows
+└─ Sorting Est. 541349 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-   └─ Gather Exchange Est. 2165399 rows
-      └─ Sorting Est. 2165399 rows
+   └─ Gather Exchange Est. 541349 rows
+      └─ Sorting Est. 541349 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-         └─ MergingAggregated Est. 2165399 rows
-            └─ Repartition Exchange Est. 2165399 rows
+         └─ MergingAggregated Est. 541349 rows
+            └─ Repartition Exchange Est. 541349 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), P_BRAND}
-               └─ Aggregating Est. 2165399 rows
+               └─ Aggregating Est. 541349 rows
                   │     Group by: {expr#toYear(LO_ORDERDATE), P_BRAND}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 1200112368 rows
+                  └─ Projection Est. 428573588 rows
                      │     Expressions: [LO_REVENUE, P_BRAND], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join Est. 1200112368 rows
+                     └─ Inner Join Est. 428573588 rows
                         │     Condition: LO_PARTKEY == P_PARTKEY
+                        │     Runtime Filters Builder: {P_PARTKEY}
                         ├─ Repartition Exchange Est. 1200112368 rows
                         │  │     Partition by: {LO_PARTKEY}
                         │  └─ Inner Join Est. 1200112368 rows
@@ -23,22 +24,24 @@ Projection Est. 2165399 rows
                         │     ├─ Repartition Exchange Est. 5999989813 rows
                         │     │  │     Partition by: {LO_SUPPKEY}
                         │     │  └─ Filter Est. 5999989813 rows
-                        │     │     │     Condition: Runtime Filters: {LO_SUPPKEY}
+                        │     │     │     Condition: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
                         │     │     └─ TableScan ssb1000.lineorder Est. 5999989813 rows
-                        │     │              Where: Runtime Filters: {LO_SUPPKEY}
+                        │     │              Where: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
                         │     │              Outputs: [LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                         │     └─ Repartition Exchange Est. 400039 rows
                         │        │     Partition by: {S_SUPPKEY}
-                        │        └─ Filter Est. 400039 rows
-                        │           │     Condition: S_REGION = 'ASIA'
-                        │           └─ TableScan ssb1000.supplier Est. 2000000 rows
-                        │                    Where: S_REGION = 'ASIA'
-                        │                    Outputs: [S_SUPPKEY, S_REGION]
-                        └─ Repartition Exchange Est. 2000000 rows
+                        │        └─ Projection Est. 400039 rows
+                        │           │     Expressions: [S_SUPPKEY]
+                        │           └─ Filter Est. 400039 rows
+                        │              │     Condition: S_REGION = 'ASIA'
+                        │              └─ TableScan ssb1000.supplier Est. 2000000 rows
+                        │                       Where: S_REGION = 'ASIA'
+                        │                       Outputs: [S_SUPPKEY, S_REGION]
+                        └─ Repartition Exchange Est. 500000 rows
                            │     Partition by: {P_PARTKEY}
-                           └─ Filter Est. 2000000 rows
+                           └─ Filter Est. 500000 rows
                               │     Condition: (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228')
                               └─ TableScan ssb1000.part Est. 2000000 rows
                                        Where: (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228')
                                        Outputs: [P_PARTKEY, P_BRAND]
-note: Runtime Filter is applied for 1 times.
+note: Runtime Filter is applied for 2 times.

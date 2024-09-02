@@ -34,30 +34,30 @@ void sendPlanSegmentToAddress(
     static auto * log = &Poco::Logger::get("SegmentScheduler::sendPlanSegment");
     LOG_TRACE(
         log,
-        "segment_id {}, parallel index {}, address {}, plansegment {}",
+        "query id {} segment id {}, parallel index {}, address {}, plansegment {}",
+        plan_segment_ptr->getQueryId(),
         plan_segment_ptr->getPlanSegmentId(),
         execution_info.parallel_id,
         addressinfo.toString(),
         plan_segment_ptr->toString());
+    if (execution_info.source_task_index && execution_info.source_task_count)
+        LOG_TRACE(
+            log,
+            "send additional filter index {} count {}",
+            execution_info.source_task_index.value(),
+            execution_info.source_task_count.value());
     execution_info.execution_address = addressinfo;
-    if (!dag_graph_ptr)
-        return;
-    if (plan_segment_buf_ptr)
-    {
-        executePlanSegmentRemotelyWithPreparedBuf(
-            *plan_segment_ptr,
-            std::move(execution_info),
-            dag_graph_ptr->query_common_buf,
-            dag_graph_ptr->query_settings_buf,
-            *plan_segment_buf_ptr,
-            dag_graph_ptr->async_context,
-            *query_context.get(),
-            worker_id);
-    }
-    else
-    {
-        executePlanSegmentRemotely(*plan_segment_ptr, execution_info, query_context, dag_graph_ptr->async_context, worker_id);
-    }
+
+    executePlanSegmentRemotelyWithPreparedBuf(
+        *plan_segment_ptr,
+        std::move(execution_info),
+        dag_graph_ptr->query_common_buf,
+        dag_graph_ptr->query_settings_buf,
+        *plan_segment_buf_ptr,
+        dag_graph_ptr->async_context,
+        *query_context.get(),
+        worker_id);
+
     std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
     dag_graph_ptr->plan_send_addresses.emplace(addressinfo);
 }

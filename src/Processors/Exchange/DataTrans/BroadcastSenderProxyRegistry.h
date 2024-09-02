@@ -43,6 +43,8 @@ public:
         return *instance;
     }
 
+    BroadcastSenderProxyPtr get(ExchangeDataKeyPtr data_key);
+
     BroadcastSenderProxyPtr getOrCreate(ExchangeDataKeyPtr data_key);
 
     BroadcastSenderProxyPtr getOrCreate(ExchangeDataKeyPtr data_key, SenderProxyOptions options);

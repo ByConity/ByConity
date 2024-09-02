@@ -1,5 +1,6 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnBitMap64.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 #include <Interpreters/SetVariants.h>
@@ -21,6 +22,7 @@ void SetVariantsTemplate<Variant>::init(Type type_)
     switch (type)
     {
         case Type::EMPTY: break;
+        case Type::bitmap64: break;
 
     #define M(NAME) \
         case Type::NAME: (NAME) = std::make_unique<typename decltype(NAME)::element_type>(); break;
@@ -35,6 +37,7 @@ size_t SetVariantsTemplate<Variant>::getTotalRowCount() const
     switch (type)
     {
         case Type::EMPTY: return 0;
+        case Type::bitmap64: return 1;
 
     #define M(NAME) \
         case Type::NAME: return (NAME)->data.size();
@@ -51,6 +54,7 @@ size_t SetVariantsTemplate<Variant>::getTotalByteCount() const
     switch (type)
     {
         case Type::EMPTY: return 0;
+        case Type::bitmap64: return 0;
 
     #define M(NAME) \
         case Type::NAME: return (NAME)->data.getBufferSizeInBytes();
@@ -163,6 +167,9 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
 
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(nested_key_columns[0]))
         return Type::key_fixed_string;
+
+    if (keys_size == 1 && typeid_cast<const ColumnBitMap64 *>(nested_key_columns[0]))
+        return Type::bitmap64;
 
     /// Otherwise, will use set of cryptographic hashes of unambiguously serialized values.
     return Type::hashed;

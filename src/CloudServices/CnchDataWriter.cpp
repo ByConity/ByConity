@@ -13,43 +13,46 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <memory>
 #include <CloudServices/CnchDataWriter.h>
 
+#include <Catalog/Catalog.h>
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
+#include <Core/Types.h>
+#include <Core/UUID.h>
 #include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+#include <Disks/DiskType.h>
+#include <Disks/IDisk.h>
+#include <Disks/IVolume.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Statistics/AutoStatisticsMemoryRecord.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/Actions/DropRangeAction.h>
 #include <Transaction/Actions/InsertAction.h>
 #include <Transaction/Actions/MergeMutateAction.h>
 #include <Transaction/Actions/S3AttachMetaAction.h>
 #include <Transaction/Actions/S3DetachMetaAction.h>
+#include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
-#include <common/strong_typedef.h>
-#include <Core/Types.h>
-#include <Disks/DiskType.h>
-#include <Disks/IDisk.h>
-#include <Disks/IVolume.h>
 #include <WorkerTasks/ManipulationType.h>
-#include <Core/Types.h>
-#include <Core/UUID.h>
-#include <Statistics/AutoStatisticsMemoryRecord.h>
+#include <common/strong_typedef.h>
 
 namespace ProfileEvents
 {
-extern const Event CnchWriteDataElapsedMilliseconds;
+    extern const Event CnchWriteDataElapsedMilliseconds;
+    extern const Event PreloadSubmitTotalOps;
 }
-
 namespace DB
 {
 namespace ErrorCodes
@@ -60,9 +63,17 @@ namespace ErrorCodes
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
 }
 
+bool DumpedData::isEmpty()
+{
+    return parts.empty() && bitmaps.empty() && staged_parts.empty();
+}
+
 void DumpedData::extend(DumpedData && data)
 {
-    auto extendImpl = [](auto & src, auto && dst) {
+    if (data.isEmpty())
+        return;
+
+    auto extendImpl = [] (auto & src, auto && dst) {
         if (src.empty())
         {
             src = std::move(dst);
@@ -77,6 +88,10 @@ void DumpedData::extend(DumpedData && data)
     extendImpl(parts, std::move(data.parts));
     extendImpl(bitmaps, std::move(data.bitmaps));
     extendImpl(staged_parts, std::move(data.staged_parts));
+
+    if (dedup_mode != data.dedup_mode)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Dedup mode is mismatch, {}/{}", typeToString(dedup_mode), typeToString(data.dedup_mode));
 }
 
 using DumpCancelPred = std::function<bool()>;
@@ -112,7 +127,8 @@ CnchDataWriter::CnchDataWriter(
     String task_id_,
     String consumer_group_,
     const cppkafka::TopicPartitionList & tpl_,
-    const MySQLBinLogInfo & binlog_)
+    const MySQLBinLogInfo & binlog_,
+    UInt64 peak_memory_usage_)
     : storage(storage_)
     , context(context_)
     , type(type_)
@@ -120,6 +136,8 @@ CnchDataWriter::CnchDataWriter(
     , consumer_group(std::move(consumer_group_))
     , tpl(tpl_)
     , binlog(binlog_)
+    , instance_id(context->getPlanSegmentInstanceId())
+    , peak_memory_usage(peak_memory_usage_)
 {
 }
 
@@ -139,7 +157,7 @@ DumpedData CnchDataWriter::dumpAndCommitCnchParts(
 {
     if (temp_parts.empty() && temp_bitmaps.empty() && temp_staged_parts.empty())
         // Nothing to dump and commit, returns
-        return {};
+        return {.dedup_mode = dedup_mode};
 
     LOG_DEBUG(
         storage.getLogger(),
@@ -166,7 +184,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 {
     if (temp_parts.empty() && temp_bitmaps.empty() && temp_staged_parts.empty())
         // Nothing to dump, returns
-        return {};
+        return {.dedup_mode = dedup_mode};
 
     Stopwatch watch;
 
@@ -183,7 +201,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     auto curr_txn = context->getCurrentTransaction();
 
     // set main table uuid in server or worker side
-    curr_txn->setMainTableUUID(storage.getStorageUUID());
+    curr_txn->setMainTableUUID(storage.getCnchStorageUUID());
 
     /// get offsets first and the parts shouldn't be dumped and committed if get offsets failed
     if (context->getServerType() == ServerType::cnch_worker)
@@ -212,8 +230,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     /// For the delete bitmap, it's always be dumped to the default disk
     std::vector<DiskPtr> part_disks;
     part_disks.reserve(temp_parts.size() + temp_staged_parts.size());
-
-    for (auto & part : temp_parts)
+    for (const auto & part : temp_parts)
     {
         String part_name = part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
@@ -231,11 +248,9 @@ DumpedData CnchDataWriter::dumpCnchParts(
         undo_resources.back().setDiskName(disk->getName());
         part_disks.emplace_back(std::move(disk));
     }
-    for (auto & bitmap : temp_bitmaps)
-    {
+    for (const auto & bitmap : temp_bitmaps)
         undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
-    }
-    for (auto & staged_part : temp_staged_parts)
+    for (const auto & staged_part : temp_staged_parts)
     {
         String part_name = staged_part->info.getPartNameWithHintMutation();
         auto disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
@@ -256,7 +271,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     try
     {
-        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, undo_resources);
+        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, undo_resources, instance_id);
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
     }
     catch (...)
@@ -266,7 +281,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     }
 
     /// Parallel dumping to shared storage
-    DumpedData result;
+    DumpedData result{.dedup_mode = dedup_mode};
     S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
         curr_txn->getTransactionID().toString());
     MergeTreeCNCHDataDumper dumper(storage, part_generator_id);
@@ -332,7 +347,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
-                server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, binlog);
+                server_client->commitParts(txn_id, type, storage, dumped_data, task_id, false, consumer_group, tpl, binlog, peak_memory_usage);
             }
             else
             {
@@ -358,8 +373,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
                 throw Exception("Server with transaction " + txn_id.toString() + " is unknown", ErrorCodes::LOGICAL_ERROR);
             }
 
-            server_client->precommitParts(
-                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, binlog);
+            server_client->precommitParts(context, txn_id, type, storage, dumped_data, task_id, is_server, consumer_group, tpl, binlog, peak_memory_usage);
         }
     }
     catch (const Exception &)
@@ -376,12 +390,13 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
 
     LOG_DEBUG(
         storage.getLogger(),
-        "Committed {} parts, {} bitmaps, {} staged parts in transaction {}, elapsed {} ms",
+        "Committed {} parts, {} bitmaps, {} staged parts in transaction {}, elapsed {} ms, dedup mode is {}",
         dumped_parts.size(),
         delete_bitmaps.size(),
         dumped_staged_parts.size(),
         toString(UInt64(txn_id)),
-        watch.elapsedMilliseconds());
+        watch.elapsedMilliseconds(),
+        typeToString(dumped_data.dedup_mode));
 }
 
 void CnchDataWriter::initialize(size_t max_threads)
@@ -496,7 +511,8 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
     auto txn = context->getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
     /// set main table uuid in server side
-    txn->setMainTableUUID(storage.getStorageUUID());
+    txn->setMainTableUUID(storage.getCnchStorageUUID());
+    txn->setCommitMode(storage.getSettings()->enable_publish_version_on_commit ? TransactionCommitMode::SEQUENTIAL : TransactionCommitMode::INDEPENDENT);
 
     auto storage_ptr = storage.shared_from_this();
     if (!storage_ptr)
@@ -537,25 +553,27 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
                     // NOTE: set allow_attach_parts_with_different_table_definition_hash to false and
                     // skip_table_definition_hash_check to true if you want to force set part's TDH to table's TDH
                     if (context->getSettings().skip_table_definition_hash_check)
-                        part->table_definition_hash = table_definition_hash;
+                        part->table_definition_hash = table_definition_hash.getDeterminHash();
 
                     if (context->getSettings().allow_attach_parts_with_different_table_definition_hash && !storage_ptr->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey())
                         continue;
 
                     if (!part->deleted &&
-                        (part->bucket_number < 0 || table_definition_hash != part->table_definition_hash))
+                        (part->bucket_number < 0 || !table_definition_hash.match(part->table_definition_hash)))
                     {
                         throw Exception(
                             "Part " + part->name + " is not clustered or it has different table definition with storage. Part bucket number : "
                             + std::to_string(part->bucket_number) + ", part table_definition_hash : [" + std::to_string(part->table_definition_hash)
-                            + "], table's table_definition_hash : [" + std::to_string(table_definition_hash) + "]",
+                            + "], table's table_definition_hash : [" + table_definition_hash.toString() + "]",
                             ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
                     }
                 }
             }
 
             // Precommit stage. Write intermediate parts to KV
-            auto action = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
+            auto action
+                = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
+            action->as<InsertAction>()->checkAndSetDedupMode(dumped_data.dedup_mode);
             txn->appendAction(action);
             action->executeV2();
         }
@@ -597,8 +615,9 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             }
             else
             {
-                merge_mutate_thread->finishTask(task_id, [&](const ManipulationTaskRecord & task) {
-                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, task.getSourcePartNames());
+                merge_mutate_thread->finishTask(task_id, [&](const Strings & source_part_names, UInt64 manipulation_submit_time_ns) {
+                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr, source_part_names,
+                        manipulation_submit_time_ns, peak_memory_usage);
 
                     for (const auto & part : dumped_data.parts)
                         action->as<MergeMutateAction &>().appendPart(part);
@@ -644,10 +663,18 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
 
 void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & staged_parts, const LocalDeleteBitmaps & bitmaps_to_dump)
 {
+    if (dedup_mode != CnchDedupHelper::DedupMode::APPEND)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Dedup mode is not append, but got {} when publish staged parts for table {}, it's a bug!",
+            typeToString(dedup_mode),
+            storage.getCnchStorageID().getNameForLogs());
     DumpedData items;
+    items.dedup_mode = dedup_mode;
+
     TxnTimestamp txn_id = context->getCurrentTransactionID();
 
-    for (auto & staged_part : staged_parts)
+    for (const auto & staged_part : staged_parts)
     {
         // new part that shares the data file with the staged part
         Protos::DataModelPart new_part_model;
@@ -684,7 +711,7 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
     for (auto & staged_part : items.staged_parts)
         undo_resources.emplace_back(std::move(
             UndoResource(txn_id, UndoResourceType::StagedPart, staged_part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
-    for (auto & bitmap : bitmaps_to_dump)
+    for (const auto & bitmap : bitmaps_to_dump)
         undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
 
     /// write undo buffer
@@ -692,7 +719,7 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
     {
         size_t size = undo_resources.size();
         Stopwatch watch;
-        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, std::move(undo_resources));
+        context->getCnchCatalog()->writeUndoBuffer(storage.getCnchStorageID(), txn_id, std::move(undo_resources));
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", size, watch.elapsedMilliseconds());
     }
     catch (...)
@@ -709,39 +736,39 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
 
 void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
 {
-    if (context->tryGetPreloadThrottler())
-        context->tryGetPreloadThrottler()->add(1);
-
     const auto & settings = context->getSettingsRef();
-    // storage.getSettings()->enable_preload_parts is old setting, use it for compitablity
-    if (settings.parts_preload_level && storage.getSettings()->enable_local_disk_cache && (storage.getSettings()->enable_preload_parts || storage.getSettings()->parts_preload_level))
+
+    if (!settings.parts_preload_level || !storage.getSettings()->parts_preload_level || !storage.getSettings()->enable_local_disk_cache
+        || !storage.getSettings()->enable_preload_parts)
+        return;
+
+    try
     {
+        Stopwatch timer;
+        auto server_client = context->getCnchServerClientPool().get();
+        MutableMergeTreeDataPartsCNCHVector preload_parts;
+        std::copy_if(dumped_parts.begin(), dumped_parts.end(), std::back_inserter(preload_parts), [](const auto & part) {
+            return !part->deleted && !part->isPartial();
+        });
 
-        try
+        if (!preload_parts.empty())
         {
-            Stopwatch timer;
-            auto server_client = context->getCnchServerClientPool().get();
-            MutableMergeTreeDataPartsCNCHVector preload_parts;
-            std::copy_if(dumped_parts.begin(), dumped_parts.end(), std::back_inserter(preload_parts), [](const auto & part) {
-                return !part->deleted && !part->isPartial();
-            });
-
-            if (!preload_parts.empty())
-            {
-                auto max_timeout = std::max(30 * 1000L, settings.max_execution_time.totalMilliseconds());
-                server_client->submitPreloadTask(storage, preload_parts, max_timeout);
-                LOG_DEBUG(
-                    storage.getLogger(),
-                    "Finish submit preload {} task for {} parts to server {}, elapsed {} ms", typeToString(type), preload_parts.size(), server_client->getRPCAddress(), timer.elapsedMilliseconds());
-            }
-            // TODO: invalidate deleted part's disk cache
+            ProfileEvents::increment(ProfileEvents::PreloadSubmitTotalOps, 1, Metrics::MetricType::Rate);
+            server_client->submitPreloadTask(storage, preload_parts, settings.preload_send_rpc_max_ms);
+            LOG_DEBUG(
+                storage.getLogger(),
+                "Finish submit preload {} task for {} parts to server {}, elapsed {} ms",
+                typeToString(type),
+                preload_parts.size(),
+                server_client->getRPCAddress(),
+                timer.elapsedMilliseconds());
         }
-        catch (...)
-        {
-            tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
-            if (storage.getSettings()->enable_parts_sync_preload)
-                throw;
-        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
+        if (storage.getSettings()->enable_parts_sync_preload)
+            throw;
     }
 }
 

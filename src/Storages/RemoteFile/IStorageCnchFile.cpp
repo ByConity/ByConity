@@ -132,7 +132,7 @@ void IStorageCnchFile::read(
     unsigned num_streams)
 {
     tryUpdateFSClient(query_context);
-    
+
     auto prepare_result = prepareReadContext(column_names, storage_snapshot->metadata, query_info, query_context);
 
     /// If no parts to read from - execute locally, must make sure that all stages are executed
@@ -276,7 +276,7 @@ void IStorageCnchFile::alter(const AlterCommands & commands, ContextPtr query_co
 
     if (alter_setting)
         this->settings = new_settings;
-        
+
     setInMemoryMetadata(new_metadata);
 }
 
@@ -408,7 +408,7 @@ void IStorageCnchFile::collectResource(const ContextPtr & query_context, const F
 
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, query_context, false, {}, args);
     cnch_resource->setWorkerGroup(query_context->getCurrentWorkerGroup());
-    cnch_resource->addCreateQuery(query_context, shared_from_this(), create_table_query, local_table_name);
+    cnch_resource->addCreateQuery(query_context, shared_from_this(), create_table_query, local_table_name, false);
     cnch_resource->addDataParts(getStorageUUID(), parts);
 }
 

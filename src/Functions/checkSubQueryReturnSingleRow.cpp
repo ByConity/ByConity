@@ -42,7 +42,6 @@ private:
         const ColumnVector<UInt8> * col_from = checkAndGetColumn<ColumnVector<UInt8>>(arguments[0].column.get());
         if (col_from == nullptr) 
             throw Exception("Illegal argument [NULL] for this function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT); 
-
         const typename ColumnVector<UInt8>::Container & vec_from = col_from->getData();
         size_t size = vec_from.size();
 

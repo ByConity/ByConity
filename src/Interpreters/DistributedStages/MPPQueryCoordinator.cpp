@@ -179,6 +179,7 @@ MPPQueryCoordinator::MPPQueryCoordinator(
     , query_id(query_context->getClientInfo().current_query_id)
     , log(&Poco::Logger::get("MPPQueryCoordinator"))
     , state_machine(std::make_unique<CoordinatorStateMachine>(this))
+    , progress_manager(query_id)
 {
 }
 
@@ -186,8 +187,8 @@ BlockIO MPPQueryCoordinator::execute()
 {
     state_machine->start();
 
-    auto this_coodinator = shared_from_this();
-    MPPQueryManager::instance().registerQuery(query_id, this_coodinator);
+    auto this_coordinator = shared_from_this();
+    MPPQueryManager::instance().registerQuery(query_id, this_coordinator);
 
     PlanSegmentsStatusPtr scheduler_status;
 
@@ -197,6 +198,16 @@ BlockIO MPPQueryCoordinator::execute()
     }
 
     query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{0, 0});
+
+    /// set progress_callback before send plan segment
+    progress_manager.setProgressCallback([previous_progress_callback = query_context->getProgressCallback(),
+                                          entry = query_context->getProcessListEntry()](const Progress & p) {
+        if (previous_progress_callback)
+            previous_progress_callback(p);
+        if (auto process_list_elem_ptr = entry.lock())
+            process_list_elem_ptr->get().updateProgressIn(p);
+    });
+
     scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
 
     if (scheduler_status && !scheduler_status->exception.empty())
@@ -210,19 +221,21 @@ BlockIO MPPQueryCoordinator::execute()
         throw Exception("Cannot get scheduler status from segment scheduler or final stage not started yet", ErrorCodes::LOGICAL_ERROR);
     }
 
+    initializePostProcessingRPCReceived();
+
     auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
     final_segment->update(query_context);
     LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
 
-    auto final_semgent_instance = std::make_unique<PlanSegmentInstance>();
-    final_semgent_instance->info = PlanSegmentExecutionInfo{.parallel_id = 0};
-    final_semgent_instance->info.execution_address = getLocalAddress(*query_context);
-    final_semgent_instance->plan_segment = std::make_unique<PlanSegment>(std::move(*final_segment));
+    auto final_segment_instance = std::make_unique<PlanSegmentInstance>();
+    final_segment_instance->info = PlanSegmentExecutionInfo{.parallel_id = 0};
+    final_segment_instance->info.execution_address = getLocalAddress(*query_context);
+    final_segment_instance->plan_segment = std::make_unique<PlanSegment>(std::move(*final_segment));
 
     try
     {
-        auto res = DB::lazyExecutePlanSegmentLocally(std::move(final_semgent_instance), query_context);
-        res.coordinator = this_coodinator;
+        auto res = DB::lazyExecutePlanSegmentLocally(std::move(final_segment_instance), query_context);
+        res.coordinator = this_coordinator;
         return res;
     }
     catch (const Exception & e)
@@ -271,11 +284,12 @@ SummarizedQueryStatus MPPQueryCoordinator::waitUntilFinish(int error_code, const
         .summarized_error_msg = std::move(summarized_error_msg)};
 }
 
-void MPPQueryCoordinator::updateSegmentInstanceStatus(RuntimeSegmentsStatus status)
+void MPPQueryCoordinator::updateSegmentInstanceStatus(const RuntimeSegmentStatus & status)
 {
     LOG_TRACE(
         log,
-        "debug segment_id:{} is_succeed:{} is_cancelled:{} code:{} message:{}",
+        "updateSegmentInstanceStatus query_id:{} segment_id:{} is_succeed:{} is_cancelled:{} code:{} message:{}",
+        query_id,
         status.segment_id,
         status.is_succeed,
         status.is_cancelled,
@@ -306,7 +320,7 @@ void MPPQueryCoordinator::tryUpdateRootErrorCause(const QueryError & query_error
     if (query_status.success)
         return;
 
-    if (isAmbiguosError(query_error.code) && query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
+    if (isAmbiguosError(query_error.code))
     {
         if (query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
             query_status.additional_errors.emplace_back(std::move(query_error));
@@ -328,6 +342,94 @@ boost::msm::back::HandledEnum MPPQueryCoordinator::triggerEvent(Event const & ev
 {
     std::unique_lock lock(state_machine_mutex);
     return state_machine->process_event(evt);
+}
+
+void MPPQueryCoordinator::onProgress(UInt32 segment_id, UInt32 parallel_index, const Progress & progress_)
+{
+    progress_manager.onProgress(segment_id, parallel_index, progress_);
+}
+
+void MPPQueryCoordinator::onFinalProgress(UInt32 segment_id, UInt32 parallel_index, const Progress & progress_)
+{
+    progress_manager.onFinalProgress(segment_id, parallel_index, progress_);
+    if (query_context->getSettingsRef().enable_wait_for_post_processing)
+    {
+        {
+            std::unique_lock lock(post_processing_rpc_waiting_mutex);
+            PlanSegmentInstanceId instance_id{segment_id, parallel_index};
+            // save instance id in post_processing_rpc_waiting if not initialized
+            if (post_processing_rpc_waiting_initialized)
+            {
+                post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost].erase(instance_id);
+            }
+            else
+            {
+                post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost].insert(instance_id);
+            }
+        }
+        post_processing_rpc_waiting_cv.notify_all();
+    }
+}
+
+Progress MPPQueryCoordinator::getFinalProgress() const
+{
+    return progress_manager.getFinalProgress();
+}
+
+void MPPQueryCoordinator::initializePostProcessingRPCReceived()
+{
+    if (query_context->getSettingsRef().enable_wait_for_post_processing)
+    {
+        {
+            std::unique_lock lock(post_processing_rpc_waiting_mutex);
+            auto instance_ids = query_context->getSegmentScheduler()->getIOPlanSegmentInstanceIDs(query_id);
+            // remove instance id which has been received before
+            for (auto instance_id : post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost])
+            {
+                if (instance_ids.find(instance_id) != instance_ids.end())
+                    instance_ids.erase(instance_id);
+            }
+            LOG_INFO(log, "initializePostProcessingRPCReceived query_id:{} with {} instances", query_id, instance_ids.size());
+            post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost] = std::move(instance_ids);
+            post_processing_rpc_waiting_initialized = true;
+        }
+        post_processing_rpc_waiting_cv.notify_all();
+    }
+}
+
+void MPPQueryCoordinator::waitUntilAllPostProcessingRPCReceived()
+{
+    // if setting is not enabled, just skip wait
+    if (!query_context->getSettingsRef().enable_wait_for_post_processing)
+        return;
+    std::unique_lock lock(post_processing_rpc_waiting_mutex);
+    bool need_wait = false;
+
+    if (!post_processing_rpc_waiting_initialized)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "post_processing_rpc not initialized for query_id:{}", query_id);
+    // need to wait if not all already received
+    if (!post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost].empty())
+        need_wait = true;
+
+    if (!need_wait)
+    {
+        LOG_TRACE(log, "waitUntilAllPostProcessingRPCReceived no need to wait");
+        return;
+    }
+
+    if (!post_processing_rpc_waiting_cv.wait_for(
+            lock, std::chrono::milliseconds(query_context->getSettingsRef().wait_for_post_processing_timeout_ms), [this] {
+                return post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost].empty();
+            }))
+    {
+        std::stringstream not_received_msg;
+        for (auto instance_id : post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost])
+        {
+            not_received_msg << instance_id.toString();
+        }
+        LOG_WARNING(log, fmt::format("waitUntilAllPostProcessingRPCReceived failed for {} timeout, empty:{}", not_received_msg.str(), post_processing_rpc_waiting[PostProcessingRPCID::ReportPlanSegmentCost].empty()));
+    }
+    LOG_TRACE(log, "waitUntilAllPostProcessingRPCReceived done");
 }
 
 MPPQueryCoordinator::~MPPQueryCoordinator()

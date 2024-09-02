@@ -6,6 +6,7 @@
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Optimizer/Utils.h>
 
 namespace DB
 {
@@ -15,7 +16,7 @@ void SortingOrderedSource::rewrite(QueryPlan & plan, ContextMutablePtr context) 
     Void require;
     auto result = VisitorUtil::accept(plan.getPlanNode(), rewriter, require);
 
-    PushSortingInfoRewriter push_rewriter{context, plan.getCTEInfo(), plan.getPlanNode()};
+    PushSortingInfoRewriter push_rewriter{context, plan.getCTEInfo()};
     SortInfo sort_info;
     auto plan_node = VisitorUtil::accept(result.plan, push_rewriter, sort_info);
     plan.update(plan_node);
@@ -33,9 +34,9 @@ PlanAndProp SortingOrderedSource::Rewriter::visitPlanNode(PlanNodeBase & node, V
         input_properties.emplace_back(result.property);
     }
 
-
     node.replaceChildren(children);
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), input_properties, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), input_properties, any_prop, context);
     return {node.shared_from_this(), prop};
 }
 
@@ -46,15 +47,17 @@ PlanAndProp SortingOrderedSource::Rewriter::visitSortingNode(SortingNode & node,
     auto step = node.getStep();
     auto prefix_sorting = PropertyMatcher::matchSorting(*context, step->getSortDescription(), result.property.getSorting());
     step->setPrefixDescription(prefix_sorting.toSortDesc());
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, any_prop, context);
     return {node.shared_from_this(), prop};
 }
 
 PlanAndProp SortingOrderedSource::Rewriter::visitAggregatingNode(AggregatingNode & node, Void & v)
 {
     auto result = VisitorUtil::accept(node.getChildren()[0], *this, v);
+    const auto & settings = context->getSettingsRef();
 
-    if (context->getSettingsRef().optimize_aggregation_in_order)
+    if (settings.optimize_aggregation_in_order /* && !settings.optimize_aggregate_function_type */)
     {
         auto step = node.getStep();
 
@@ -69,7 +72,8 @@ PlanAndProp SortingOrderedSource::Rewriter::visitAggregatingNode(AggregatingNode
         auto prefix_sorting = PropertyMatcher::matchSorting(*context, order_descr, result.property.getSorting());
         step->setGroupBySortDescription(prefix_sorting.toSortDesc());
     }
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, any_prop, context);
     return {node.shared_from_this(), prop};
 }
 
@@ -94,7 +98,8 @@ PlanAndProp SortingOrderedSource::Rewriter::visitWindowNode(WindowNode & node, V
         step->setPrefixDescription(prefix_sorting.toSortDesc());
     }
 #endif
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, any_prop, context);
     return {node.shared_from_this(), prop};
 }
 
@@ -102,7 +107,7 @@ PlanAndProp SortingOrderedSource::Rewriter::visitCTERefNode(CTERefNode & node, V
 {
     const auto * step = node.getStep().get();
 
-    auto cte_plan = cte_helper.accept(step->getId(), *this, v);
+    auto cte_plan = cte_helper.acceptAndUpdate(step->getId(), *this, v, [](auto & result) { return result.plan; });
     return {node.shared_from_this(), Property{}};
 }
 
@@ -117,7 +122,8 @@ PlanAndProp SortingOrderedSource::Rewriter::visitTopNFilteringNode(TopNFiltering
     if (actual_sorting.hasPrefix(required_sorting))
         topn_filtering.setAlgorithm(TopNFilteringAlgorithm::Limit);
 
-    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, context);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, any_prop, context);
     return {node.shared_from_this(), prop};
 }
 
@@ -130,17 +136,15 @@ PlanNodePtr PushSortingInfoRewriter::visitSortingNode(SortingNode & node, SortIn
 
 PlanNodePtr PushSortingInfoRewriter::visitAggregatingNode(AggregatingNode & node, SortInfo &)
 {
-
     auto prefix_desc = node.getStep()->getGroupBySortDescription();
-    SortInfo s{prefix_desc, 0};
+    SortInfo s{prefix_desc, size_t{0}};
     return visitPlanNode(node, s);
 }
 
 PlanNodePtr PushSortingInfoRewriter::visitWindowNode(WindowNode & node, SortInfo &)
 {
-
     auto prefix_desc = node.getStep()->getPrefixDescription();
-    SortInfo s{prefix_desc, 0};
+    SortInfo s{prefix_desc, size_t{0}};
     return visitPlanNode(node, s);
 }
 

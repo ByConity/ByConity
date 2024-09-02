@@ -125,6 +125,22 @@ GroupExprBindingIterator::GroupExprBindingIterator(
         return;
     }
 
+    // use matchingStep to early reject
+    PatternRawPtr first_pattern = pattern;
+    while (first_pattern->getPrevious())
+        first_pattern = first_pattern->getPrevious();
+    if (const auto * type_pattern = dynamic_cast<const TypeOfPattern*>(first_pattern); type_pattern)
+    {
+        if (type_pattern->attaching_predicate)
+        {
+            Captures captures;
+            if (!type_pattern->attaching_predicate(group_expr->getStep(), captures))
+            {
+                return;
+            }
+        }
+    }
+
     const auto & child_groups = group_expr->getChildrenGroups();
     auto child_patterns = pattern->getChildrenPatterns();
 
@@ -159,7 +175,7 @@ GroupExprBindingIterator::GroupExprBindingIterator(
         }
 
         // Push a copy
-        children.emplace_back(child_bindings[0]->copy(context->nextNodeId(), context->getOptimizerContext().getContext()));
+        children.emplace_back(child_bindings[0]);
     }
 
     has_next = true;
@@ -212,7 +228,7 @@ bool GroupExprBindingIterator::hasNext()
             {
                 PlanNodes & child_binding = children_bindings[idx];
                 children.emplace_back(
-                    child_binding[children_bindings_pos[idx]]->copy(context->nextNodeId(), context->getOptimizerContext().getContext()));
+                    child_binding[children_bindings_pos[idx]]);
             }
 
             const auto & statistics = memo.getGroupById(group_expr->getGroupId())->getStatistics();

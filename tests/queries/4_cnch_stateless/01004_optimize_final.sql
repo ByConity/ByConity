@@ -10,12 +10,12 @@ SYSTEM STOP MERGES t_optimize_final;
 INSERT INTO t_optimize_final values (1,1);
 INSERT INTO t_optimize_final values (1,1);
 OPTIMIZE TABLE t_optimize_final FINAL;
-SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() AND table = 't_optimize_final' AND partition_id = '1' AND active SETTINGS enable_multiple_tables_for_cnch_parts = 1;
+SELECT count() FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 't_optimize_final' AND partition_id = '1' AND active SETTINGS enable_multiple_tables_for_cnch_parts = 1;
 
 INSERT INTO t_optimize_final values (2,1);
 INSERT INTO t_optimize_final values (2,1);
 INSERT INTO t_optimize_final values (2,1);
 OPTIMIZE TABLE t_optimize_final PARTITION ID '2' FINAL;
-SELECT count() FROM system.cnch_parts WHERE database = currentDatabase() AND table = 't_optimize_final' AND partition_id = '2' AND active SETTINGS enable_multiple_tables_for_cnch_parts = 1;
+SELECT count() FROM system.cnch_parts WHERE database = currentDatabase(1) AND table = 't_optimize_final' AND partition_id = '2' AND active SETTINGS enable_multiple_tables_for_cnch_parts = 1;
 
 DROP TABLE t_optimize_final;

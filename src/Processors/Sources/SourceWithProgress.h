@@ -1,8 +1,9 @@
 #pragma once
-#include <Processors/ISource.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Common/Stopwatch.h>
 #include <DataStreams/StreamLocalLimits.h>
+#include <Processors/IProcessor.h>
+#include <Processors/ISource.h>
+#include <Common/Stopwatch.h>
 
 namespace DB
 {
@@ -36,8 +37,6 @@ public:
     /// Note that the callback can be called from different threads.
     virtual void setProgressCallback(const ProgressCallback & callback) = 0;
 
-    virtual void setInternalProgressCallback(const ProgressCallback & callback) = 0;
-
     /// Set the approximate total number of rows to read.
     virtual void addTotalRowsApprox(size_t value) = 0;
 };
@@ -55,7 +54,6 @@ public:
     void setQuota(const std::shared_ptr<const EnabledQuota> & quota_) final { quota = quota_; }
     void setProcessListElement(QueryStatus * elem) final;
     void setProgressCallback(const ProgressCallback & callback) final { progress_callback = callback; }
-    void setInternalProgressCallback(const ProgressCallback & callback) final { internal_progress_callback = callback; }
     void addTotalRowsApprox(size_t value) final { total_rows_approx += value; }
 
 protected:
@@ -63,8 +61,6 @@ protected:
     void progress(const Progress & value);
 
     void work() override;
-
-    ProgressCallback internal_progress_callback;
 
 private:
     StreamLocalLimits limits;

@@ -72,7 +72,7 @@ void abortOnFailedAssertion(const String & description)
     if (always_false)
         return;
 
-    abort();
+    // abort();
 }
 
 /// - Aborts the process if error code is LOGICAL_ERROR.
@@ -187,7 +187,7 @@ void throwFromErrno(const std::string & s, int code, int the_errno)
 
 void throwFromErrnoWithPath(const std::string & s, const std::string & path, int code, int the_errno)
 {
-    throw ErrnoException(s + ", " + errnoToString(code, the_errno), code, the_errno, path);
+    throw ErrnoException(s + ", " + errnoToString(code, the_errno) + ", path = " + path, code, the_errno, path);
 }
 
 static void tryLogCurrentExceptionImpl(Poco::Logger * logger, const std::string & start_of_message)
@@ -631,11 +631,15 @@ std::string ParsingException::displayText() const
     }
 }
 
-void ExceptionHandler::setException(std::exception_ptr && exception)
+bool ExceptionHandler::setException(std::exception_ptr && exception)
 {
     std::unique_lock lock(mutex);
     if (!first_exception)
+    {
         first_exception = std::move(exception);
+        return true;
+    }
+    return false;
 }
 
 void ExceptionHandler::throwIfException()

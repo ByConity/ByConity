@@ -1,0 +1,28 @@
+Projection Est. ? rows
+│     Expressions: event_date:=event_date_2, event_type:=event_type_2, server_time_hour:=`expr#toHour(toDateTime(server_time))_2`, sum_click:=`expr#sumMerge(expr#sumState(click))_2`, uid:=uid_2
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {event_type_2, uid_2, event_date_2, expr#toHour(toDateTime(server_time))_2}
+         └─ Aggregating Est. ? rows
+            │     Group by: {event_type_2, uid_2, event_date_2, expr#toHour(toDateTime(server_time))_2}
+            │     Aggregates: expr#sumMerge(expr#sumState(click))_2:=AggNull(sumMerge)(expr#sumState(click)_1)
+            └─ TableScan test.target40051 Est. ? rows
+                     Where: uid = \'xx\'
+                     Prewhere: uid = \'xx\'
+                     Outputs: event_date_2:=event_date, event_type_2:=event_type, expr#sumState(click)_1:=sum_click, expr#toHour(toDateTime(server_time))_2:=server_time_hour, uid_2:=uid
+note: Materialized Views is applied for 1 times: test.mv40051.
+Projection Est. ? rows
+│     Expressions: event_date:=event_date_2, event_type:=event_type_2, server_time_hour:=`expr#toHour(toDateTime(server_time))_2`, sum_click:=`expr#sumMerge(expr#sumState(click))_2`, uid:=uid_2
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {event_type_2, uid_2, event_date_2, expr#toHour(toDateTime(server_time))_2}
+         └─ Aggregating Est. ? rows
+            │     Group by: {event_type_2, uid_2, event_date_2, expr#toHour(toDateTime(server_time))_2}
+            │     Aggregates: expr#sumMerge(expr#sumState(click))_2:=AggNull(sumMerge)(expr#sumState(click)_1)
+            └─ TableScan test.target40051 Est. ? rows
+                     Where: event_type = 1
+                     Prewhere: event_type = 1
+                     Outputs: event_date_2:=event_date, event_type_2:=event_type, expr#sumState(click)_1:=sum_click, expr#toHour(toDateTime(server_time))_2:=server_time_hour, uid_2:=uid
+note: Materialized Views is applied for 1 times: test.mv40051.

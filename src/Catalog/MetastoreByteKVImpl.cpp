@@ -202,7 +202,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
         DeleteRequest del_req;
         del_req.table = this->table_name;
         del_req.key = Slice(delete_key.key);
-        // del_req.expected_version = expected_version;
+        del_req.expected_version = delete_key.expected_version;
         wb_req.AddDelete(del_req);
     }
 
@@ -270,13 +270,20 @@ MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getAll()
     return getByPrefix("");
 }
 
-MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByPrefix(const String & partition_id, const size_t & limit, uint32_t scan_batch_size)
+MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getByPrefix(const String & partition_id, const size_t & limit, uint32_t scan_batch_size, const String & start_key)
 {
     ScanRequest scan_req;
     scan_req.scan_batch_count = scan_batch_size;
     scan_req.limit = limit;
     scan_req.table = table_name;
-    scan_req.start_key = partition_id;
+    if (likely(start_key.empty()))
+    {
+        scan_req.start_key = partition_id;
+    }
+    else
+    {
+        scan_req.start_key = start_key;
+    }
     String end_key = getNextKey(partition_id);
     scan_req.end_key = end_key;
     ScanResponse scan_resp;

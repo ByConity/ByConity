@@ -16,12 +16,13 @@
 
 namespace DB
 {
-PatternPtr PushDownApplyThroughJoin::getPattern() const
+ConstRefPatternPtr PushDownApplyThroughJoin::getPattern() const
 {
-    return Patterns::apply()
+    static auto pattern = Patterns::apply()
         .matchingStep<ApplyStep>([](const ApplyStep & step) { return !step.getOuterColumns().empty() && step.getCorrelation().empty(); })
         .with(Patterns::join(), Patterns::any())
         .result();
+    return pattern;
 }
 
 TransformResult PushDownApplyThroughJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -43,7 +44,8 @@ TransformResult PushDownApplyThroughJoin::transformImpl(PlanNodePtr node, const 
                 apply->getApplyType(),
                 apply->getSubqueryType(),
                 apply->getAssignment(),
-                apply->getOuterColumns());
+                apply->getOuterColumns(),
+                apply->supportSemiAnti());
             PlanNodes children{child, node->getChildren()[1]};
             auto apply_node
                 = ApplyNode::createPlanNode(context.context->nextNodeId(), std::move(apply_step), children, node->getStatistics());

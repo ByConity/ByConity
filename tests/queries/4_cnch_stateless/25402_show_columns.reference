@@ -10,9 +10,9 @@ int32	Nullable(Int32)	YES		\N
 str	String	NO	SOR	\N	
 uint64	UInt64	NO	PRI SOR	\N	
 --- FULL
-int32	Nullable(Int32)	YES		\N		\N	example comment	
-str	String	NO	SOR	\N		\N		
-uint64	UInt64	NO	PRI SOR	\N		\N		
+int32	Nullable(Int32)	YES		\N		utf8mb4_0900_ai_ci	example comment	
+str	String	NO	SOR	\N		utf8mb4_0900_ai_ci		
+uint64	UInt64	NO	PRI SOR	\N		utf8mb4_0900_ai_ci		
 --- LIKE
 int32	Nullable(Int32)	YES		\N	
 uint64	UInt64	NO	PRI SOR	\N	

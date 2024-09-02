@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Disks/IDisk.h>
 #if !defined(ARCADIA_BUILD)
     #include <Common/config.h>
 #endif
@@ -61,7 +62,7 @@ void checkWriteAccess(IDisk & disk)
 
 void checkReadAccess(const String & disk_name, IDisk & disk)
 {
-    auto file = disk.readFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE});
+    auto file = disk.readFile("test_acl", ReadSettings().initializeReadSettings(4));
     String buf(4, '0');
     file->readStrict(buf.data(), 4);
     if (buf != "test")
@@ -239,7 +240,7 @@ void registerDiskS3(DiskFactory & factory)
             if (metadata_path == cache_path)
                 throw Exception("Metadata and cache path should be different: " + metadata_path, ErrorCodes::BAD_ARGUMENTS);
 
-            auto cache_disk = std::make_shared<DiskLocal>("s3-cache", cache_path, 0);
+            auto cache_disk = std::make_shared<DiskLocal>("s3-cache", cache_path, DiskStats{});
             auto cache_file_predicate = [] (const String & path)
             {
                 return path.ends_with("idx") // index files.

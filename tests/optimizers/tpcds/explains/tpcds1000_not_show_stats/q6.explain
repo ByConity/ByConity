@@ -19,6 +19,7 @@ Projection
                         │     Aggregates: expr#count():=AggNull(count)()
                         └─ Inner Join
                            │     Condition: ss_item_sk == i_item_sk
+                           │     Runtime Filters Builder: {i_item_sk}
                            ├─ Repartition Exchange
                            │  │     Partition by: {ss_item_sk}
                            │  └─ Inner Join
@@ -49,14 +50,14 @@ Projection
                            │                 │     Condition: ss_sold_date_sk == d_date_sk
                            │                 │     Runtime Filters Builder: {d_date_sk}
                            │                 ├─ Filter
-                           │                 │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                           │                 │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                            │                 │  └─ TableScan tpcds1000.store_sales
-                           │                 │           Where: Runtime Filters: {ss_sold_date_sk}
+                           │                 │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                            │                 │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk]
                            │                 └─ Broadcast Exchange
                            │                    └─ Inner Join
-                           │                       │     Condition: d_month_seq == d_month_seq_1
-                           │                       │     Runtime Filters Builder: {d_month_seq_1}
+                           │                       │     Condition: d_month_seq == d_month_seq_2
+                           │                       │     Runtime Filters Builder: {d_month_seq_2}
                            │                       ├─ Filter
                            │                       │  │     Condition: Runtime Filters: {d_month_seq}
                            │                       │  └─ TableScan tpcds1000.date_dim
@@ -65,32 +66,40 @@ Projection
                            │                       └─ Broadcast Exchange
                            │                          └─ EnforceSingleRow
                            │                             └─ Gather Exchange
-                           │                                └─ MergingAggregated
-                           │                                   └─ Repartition Exchange
-                           │                                      │     Partition by: {d_month_seq_1}
-                           │                                      └─ Aggregating
-                           │                                         │     Group by: {d_month_seq_1}
-                           │                                         └─ Filter
-                           │                                            │     Condition: (d_year = 2001) AND (d_moy = 1)
-                           │                                            └─ TableScan tpcds1000.date_dim
-                           │                                                     Where: (d_year = 2001) AND (d_moy = 1)
-                           │                                                     Outputs: [d_year, d_moy], d_month_seq_1:=d_month_seq
+                           │                                └─ Projection
+                           │                                   │     Expressions: d_month_seq_2:=cast(d_month_seq_1, 'Nullable(Int16)')
+                           │                                   └─ MergingAggregated
+                           │                                      └─ Repartition Exchange
+                           │                                         │     Partition by: {d_month_seq_1}
+                           │                                         └─ Aggregating
+                           │                                            │     Group by: {d_month_seq_1}
+                           │                                            └─ Projection
+                           │                                               │     Expressions: [d_month_seq_1]
+                           │                                               └─ Filter
+                           │                                                  │     Condition: (d_year = 2001) AND (d_moy = 1)
+                           │                                                  └─ TableScan tpcds1000.date_dim
+                           │                                                           Where: (d_year = 2001) AND (d_moy = 1)
+                           │                                                           Outputs: [d_year, d_moy], d_month_seq_1:=d_month_seq
                            └─ Repartition Exchange
                               │     Partition by: {i_item_sk}
                               └─ Inner Join
                                  │     Condition: i_category == i_category_1
-                                 │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)`)
-                                 ├─ TableScan tpcds1000.item
-                                 │        Outputs: [i_item_sk, i_current_price, i_category]
+                                 │     Filter: i_current_price > ('1.2' * `expr#avg(j.i_current_price)_1`)
+                                 │     Runtime Filters Builder: {i_category_1}
+                                 ├─ Filter
+                                 │  │     Condition: Runtime Filters: {i_category}
+                                 │  └─ TableScan tpcds1000.item
+                                 │           Where: Runtime Filters: {i_category}
+                                 │           Outputs: [i_item_sk, i_current_price, i_category]
                                  └─ Broadcast Exchange
                                     └─ MergingAggregated
                                        └─ Repartition Exchange
                                           │     Partition by: {i_category_1}
                                           └─ Aggregating
                                              │     Group by: {i_category_1}
-                                             │     Aggregates: expr#avg(j.i_current_price):=AggNull(avgIf)(i_current_price_1,build_side_non_null_symbol)
+                                             │     Aggregates: expr#avg(j.i_current_price)_1:=AggNull(avgIf)(i_current_price_1,build_side_non_null_symbol)
                                              └─ Projection
                                                 │     Expressions: [i_category_1, i_current_price_1], build_side_non_null_symbol:=1
                                                 └─ TableScan tpcds1000.item
                                                          Outputs: i_current_price_1:=i_current_price, i_category_1:=i_category
-note: Runtime Filter is applied for 4 times.
+note: Runtime Filter is applied for 6 times.

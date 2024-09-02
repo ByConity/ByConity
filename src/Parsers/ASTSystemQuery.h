@@ -65,7 +65,9 @@ public:
         DROP_MMAP_CACHE,
         DROP_QUERY_CACHE,
         DROP_CHECKSUMS_CACHE,
+        DROP_CNCH_META_CACHE,
         DROP_CNCH_PART_CACHE,
+        DROP_CNCH_DELETE_BITMAP_CACHE,
 #if USE_EMBEDDED_COMPILER
         DROP_COMPILED_EXPRESSION_CACHE,
 #endif
@@ -93,6 +95,7 @@ public:
         RESUME_ALL_MERGES,
         SUSPEND_ALL_MERGES,
         GC, // gc db.table [partition partition_expr]
+        MANIFEST_CHECKPOINT, // system checkpoint db.table
         STOP_GC,
         START_GC,
         FORCE_GC,
@@ -123,8 +126,10 @@ public:
         FETCH_PARTS,
         METASTORE,
         CLEAR_BROKEN_TABLES,
+        DEDUP_WITH_HIGH_PRIORITY, // dedup with high priority db.table [partition partition_expr]
         DEDUP, // dedup db.table [partition partition_expr] for repair
         SYNC_DEDUP_WORKER,
+        SYNC_REPAIR_TASK, // sync repair task db.table
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
         START_CLUSTER,
@@ -139,6 +144,11 @@ public:
         STOP_MATERIALIZEDMYSQL,
         RESYNC_MATERIALIZEDMYSQL_TABLE,
         RECALCULATE_METRICS,
+        START_VIEW,
+        STOP_VIEW,
+        DROP_VIEW_META,
+        RELEASE_MEMORY_LOCK, /// RELEASE MEMORY LOCK [db.tb]/[OF TXN xxx]
+        DROP_SCHEMA_CACHE,
         END
     };
 
@@ -175,8 +185,15 @@ public:
     // For GC and DEDUP
     ASTPtr partition; // The value or ID of the partition is stored here.
 
+    // For DEDUP
+    bool specify_bucket = false;
+    UInt64 bucket_number;
+
     /// for CLEAN TRANSACTION txn_id
+    bool specify_txn = false;
     UInt64 txn_id;
+
+    String schema_cache_storage;
 
     String getID(char) const override { return "SYSTEM query"; }
 

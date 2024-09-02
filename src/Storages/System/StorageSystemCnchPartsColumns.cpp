@@ -173,7 +173,7 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
 
     auto worker_group = getWorkerGroupForTable(*data, context);
     context->setCurrentWorkerGroup(worker_group);
-    
+
     auto all_parts = enable_filter_by_partition
         ? catalog->getServerDataPartsInPartitions(table, {selected_partition_id}, current_ts, nullptr)
         : catalog->getAllServerDataParts(table, current_ts, nullptr);

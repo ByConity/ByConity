@@ -33,8 +33,9 @@ public:
     BrotliEncoderState * state;
 };
 
-BrotliWriteBuffer::BrotliWriteBuffer(std::unique_ptr<WriteBuffer> out_, int compression_level, size_t buf_size, char * existing_memory, size_t alignment)
+BrotliWriteBuffer::BrotliWriteBuffer(std::unique_ptr<WriteBuffer> out_, int compression_level_, size_t buf_size, char * existing_memory, size_t alignment)
     : BufferWithOwnMemory<WriteBuffer>(buf_size, existing_memory, alignment)
+    , compression_level(compression_level_)
     , brotli(std::make_unique<BrotliStateWrapper>())
     , in_available(0)
     , in_data(nullptr)
@@ -51,7 +52,14 @@ BrotliWriteBuffer::~BrotliWriteBuffer()
 {
     /// FIXME move final flush into the caller
     MemoryTracker::LockExceptionInThread lock(VariableContext::Global);
-    finish();
+    try
+    {
+        finish();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 void BrotliWriteBuffer::nextImpl()

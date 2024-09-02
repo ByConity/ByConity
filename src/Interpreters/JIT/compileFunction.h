@@ -21,12 +21,16 @@ struct ColumnData
 {
     const char * data = nullptr;
     const char * null_data = nullptr;
+    /// for ColumnString
+    const char * offset_data = nullptr;
 };
 
 /** Returns ColumnData for column.
   * If constant column is passed, LOGICAL_ERROR will be thrown.
   */
 ColumnData getColumnData(const IColumn * column);
+
+void getColumnDataImpl(const IColumn * column, ColumnData & column_data);
 
 using ColumnDataRowsSize = size_t;
 

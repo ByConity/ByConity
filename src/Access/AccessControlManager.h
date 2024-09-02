@@ -40,7 +40,7 @@ class SettingsProfileElements;
 class ClientInfo;
 class ExternalAuthenticators;
 struct Settings;
-
+using SensitiveResourcePtr = std::shared_ptr<Protos::DataModelSensitiveDatabase>;
 
 /// Manages access control entities.
 class AccessControlManager : public MultipleAccessStorage
@@ -48,6 +48,8 @@ class AccessControlManager : public MultipleAccessStorage
 public:
     AccessControlManager();
     ~AccessControlManager() override;
+
+    bool isSensitiveTenant(const String & tenant) const;
 
     /// Initializes access storage (user directories).
     void setUpFromMainConfig(const Poco::Util::AbstractConfiguration & config_, const String & config_path_,
@@ -79,7 +81,6 @@ public:
 
     /// Loads access entities from KV
     void addKVStorage(const ContextPtr & context);
-    void stopBgJobForKVStorage();
 
     /// Loads access entities from the directory on the local disk.
     /// Use that directory to keep created users/roles/etc.
@@ -116,6 +117,7 @@ public:
     void setCustomSettingsPrefixes(const String & comma_separated_prefixes);
     bool isSettingNameAllowed(const std::string_view & name) const;
     void checkSettingNameIsAllowed(const std::string_view & name) const;
+    void setSensitivePermissionTenants(const String & comma_separated_tenants);
 
     UUID login(const Credentials & credentials, const Poco::Net::IPAddress & address) const;
     void setExternalAuthenticatorsConfig(const Poco::Util::AbstractConfiguration & config);
@@ -126,13 +128,18 @@ public:
     void setSelectFromInformationSchemaRequiresGrant(bool enable) { select_from_information_schema_requires_grant = enable; }
     bool doesSelectFromInformationSchemaRequireGrant() const { return select_from_information_schema_requires_grant; }
 
-    std::shared_ptr<const ContextAccess> getContextAccess(
+    void setSelectFromMySQLRequiresGrant(bool enable) { select_from_mysql_requires_grant = enable; }
+    bool doesSelectFromMySQLRequireGrant() const { return select_from_mysql_requires_grant; }
+
+    ContextAccessParams getContextAccessParams(
         const UUID & user_id,
         const std::vector<UUID> & current_roles,
         bool use_default_roles,
         const Settings & settings,
         const String & current_database,
-        const ClientInfo & client_info) const;
+        const ClientInfo & client_info,
+        const String & tenant,
+        bool load_roles) const;
 
     std::shared_ptr<const ContextAccess> getContextAccess(const ContextAccessParams & params) const;
 
@@ -163,9 +170,12 @@ public:
 
     const ExternalAuthenticators & getExternalAuthenticators() const;
 
+    std::function<SensitiveResourcePtr(String)> sensitive_resource_getter;
+
 private:
     class ContextAccessCache;
     class CustomSettingsPrefixes;
+    class SensitivePermissionTenants;
 
     std::unique_ptr<ContextAccessCache> context_access_cache;
     std::unique_ptr<RoleCache> role_cache;
@@ -174,9 +184,11 @@ private:
     std::unique_ptr<SettingsProfilesCache> settings_profiles_cache;
     std::unique_ptr<ExternalAuthenticators> external_authenticators;
     std::unique_ptr<CustomSettingsPrefixes> custom_settings_prefixes;
-   
+    std::unique_ptr<SensitivePermissionTenants> sensitive_permission_tenants;
+
     std::atomic_bool select_from_system_db_requires_grant = false;
     std::atomic_bool select_from_information_schema_requires_grant = false;
+    std::atomic_bool select_from_mysql_requires_grant = false;
 };
 
 }

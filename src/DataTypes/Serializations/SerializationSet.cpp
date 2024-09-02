@@ -58,7 +58,7 @@ void SerializationSet::serializeBinaryBulk(const IColumn & column, WriteBuffer &
     serializeBinary(column, 0, ostr);
 }
 
-void SerializationSet::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t, double) const
+void SerializationSet::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t, double, bool) const
 {
     deserializeBinary(column, istr);
 }

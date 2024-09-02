@@ -35,6 +35,8 @@ struct S3Settings
         UInt64 max_list_nums = 1000;
         UInt64 max_timeout_ms = 30000;
 
+        bool throw_on_zero_files_match = false;
+
         ReadWriteSettings() = default;
         explicit ReadWriteSettings(const Settings & settings);
 

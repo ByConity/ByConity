@@ -20,15 +20,17 @@
  */
 
 #pragma once
-
-#include <arrow/type.h>
 #include "config_formats.h"
 #if USE_PARQUET
 
-
-#include <Common/ThreadPool.h>
 #include <Processors/Formats/IInputFormat.h>
+#include <Processors/Formats/Impl/ParallelDecodingBlockInputFormat.h>
 #include <Formats/FormatSettings.h>
+#include <Common/ThreadPool.h>
+#include <Processors/Formats/ISchemaReader.h>
+#include <Storages/MergeTree/KeyCondition.h>
+
+#include <future>
 
 namespace parquet { class FileMetaData; }
 namespace parquet::arrow { class FileReader; }
@@ -37,8 +39,9 @@ namespace arrow::io { class RandomAccessFile; }
 
 namespace DB
 {
-
+class ArrowFieldIndexUtil;
 class ArrowColumnToCHColumn;
+class ParquetRecordReader;
 
 // Parquet files contain a metadata block with the following information:
 //  * list of columns,
@@ -67,45 +70,33 @@ class ArrowColumnToCHColumn;
 // parallel reading+decoding, instead of using ParallelReadBuffer and ParallelParsingInputFormat.
 // That's what RandomAccessInputCreator in FormatFactory is about.
 
-class ParquetBlockInputFormat : public IInputFormat
+class ParquetBlockInputFormat : public ParallelDecodingBlockInputFormat
 {
 public:
     ParquetBlockInputFormat(
         ReadBuffer & buf,
         const Block & header,
-        const FormatSettings & format_settings,
-        size_t max_decoding_threads,
-        size_t min_bytes_for_seek);
+        const FormatSettings & format_settings);
+
     ~ParquetBlockInputFormat() override;
+
+    void setQueryInfo(const SelectQueryInfo & query_info, ContextPtr context) override;
 
     void resetParser() override;
 
     String getName() const override { return "ParquetBlockInputFormat"; }
 
-    const BlockMissingValues & getMissingValues() const override;
+    IStorage::ColumnSizeByName getColumnSizes() override;
 
-    size_t getApproxBytesReadForChunk() const { return previous_approx_bytes_read_for_chunk; }
-    static std::vector<int>
-    getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header, const FormatSettings & format_settings);
-
+    bool supportsPrewhere() const override { return format_settings.parquet.use_native_reader; }
 
 private:
-    Chunk generate() override;
+    void initializeFileReader() override;
+    void initializeRowGroupReaderIfNeeded(size_t row_group_idx) override;
+    void resetRowGroupReader(size_t row_group_idx) override { row_group_readers[row_group_idx].reset(); }
+    size_t getNumberOfRowGroups() override;
 
-    void onCancel() override
-    {
-        is_stopped = 1;
-    }
-
-    void initializeIfNeeded();
-    void initializeRowGroupReader(size_t row_group_idx);
-
-    void decodeOneChunk(size_t row_group_idx, std::unique_lock<std::mutex> & lock);
-
-    void scheduleMoreWorkIfNeeded(std::optional<size_t> row_group_touched = std::nullopt);
-    void scheduleRowGroup(size_t row_group_idx);
-
-    void threadFunction(size_t row_group_idx);
+    std::optional<PendingChunk> readBatch(size_t row_group_idx) override;
 
     // Data layout in the file:
     //
@@ -192,120 +183,61 @@ private:
     //  * The max_pending_chunks_per_row_group limit could be based on actual memory usage too.
     //    Useful for preserve_order.
 
-    struct RowGroupState
+    struct RowGroupReader
     {
-        // Transitions:
-        //
-        // NotStarted -> Running -> Complete
-        //                  Ʌ
-        //                  V
-        //               Paused
-        //
-        // If max_decoding_threads <= 1: NotStarted -> Complete.
-        enum class Status
-        {
-            NotStarted,
-            Running,
-            // Paused decoding because too many chunks are pending.
-            Paused,
-            // Decoded everything.
-            Done,
-        };
-
-        Status status = Status::NotStarted;
-
-        // Window of chunks that were decoded but not returned from generate():
-        //
-        // (delivered)            next_chunk_idx
-        //   v   v                       v
-        // +---+---+---+---+---+---+---+---+---+---+
-        // | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |    <-- all chunks
-        // +---+---+---+---+---+---+---+---+---+---+
-        //           ^   ^   ^   ^   ^
-        //           num_pending_chunks
-        //           (in pending_chunks)
-        //  (at most max_pending_chunks_per_row_group)
-
-        size_t next_chunk_idx = 0;
-        size_t num_pending_chunks = 0;
-
         size_t row_group_bytes_uncompressed = 0;
         size_t row_group_rows = 0;
 
         // These are only used by the decoding thread, so don't require locking the mutex.
+        bool initialized = false;
+
+        // If use_native_reader, only native_record_reader is used;
+        // otherwise, only native_record_reader is not used.
+        std::shared_ptr<ParquetRecordReader> native_record_reader;
         std::unique_ptr<parquet::arrow::FileReader> file_reader;
         std::shared_ptr<arrow::RecordBatchReader> record_batch_reader;
+
+        std::vector<int> read_column_indices;
         std::unique_ptr<ArrowColumnToCHColumn> arrow_column_to_ch_column;
-    };
 
-    // Chunk ready to be delivered by generate().
-    struct PendingChunk
-    {
-        Chunk chunk;
-        BlockMissingValues block_missing_values;
-        size_t chunk_idx; // within row group
-        size_t row_group_idx;
-        size_t approx_original_chunk_size;
-
-        // For priority_queue.
-        // In ordered mode we deliver strictly in order of increasing row group idx,
-        // in unordered mode we prefer to interleave chunks from different row groups.
-        struct Compare
+        void reset()
         {
-            bool row_group_first = false;
-
-            bool operator()(const PendingChunk & a, const PendingChunk & b) const
-            {
-                auto tuplificate = [this](const PendingChunk & c)
-                { return row_group_first ? std::tie(c.row_group_idx, c.chunk_idx)
-                                         : std::tie(c.chunk_idx, c.row_group_idx); };
-                return tuplificate(a) > tuplificate(b);
-            }
-        };
+            initialized = false;
+            native_record_reader.reset();
+            file_reader.reset();
+            record_batch_reader.reset();
+            read_column_indices.clear();
+            arrow_column_to_ch_column.reset();
+        }
     };
-
-    const FormatSettings format_settings;
-    const std::unordered_set<int> & skip_row_groups;
-    size_t max_decoding_threads;
-    size_t min_bytes_for_seek;
-    const size_t max_pending_chunks_per_row_group = 2;
+    std::vector<RowGroupReader> row_group_readers;
 
     // RandomAccessFile is thread safe, so we share it among threads.
     // FileReader is not, so each thread creates its own.
     std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
     std::shared_ptr<parquet::FileMetaData> metadata;
+    std::shared_ptr<arrow::Schema> schema;
     // indices of columns to read from Parquet file
     std::vector<int> column_indices;
 
-    // Window of active row groups:
-    //
-    // row_groups_completed   row_groups_started
-    //          v                   v
-    //  +---+---+---+---+---+---+---+---+---+---+
-    //  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |   <-- all row groups
-    //  +---+---+---+---+---+---+---+---+---+---+
-    //    ^   ^                       ^   ^   ^
-    //    Done                        NotStarted
+    /// Pushed-down filter that we'll use to skip row groups.
+    PrewhereInfoPtr prewhere_info;
+    std::shared_ptr<ArrowFieldIndexUtil> field_util;
 
-    std::mutex mutex;
-    // Wakes up the generate() call, if any.
-    std::condition_variable condvar;
-
-    std::vector<RowGroupState> row_groups;
-    std::priority_queue<PendingChunk, std::vector<PendingChunk>, PendingChunk::Compare> pending_chunks;
-    size_t row_groups_completed = 0;
-
-    // These are only used when max_decoding_threads > 1.
-    size_t row_groups_started = 0;
-    std::unique_ptr<ThreadPool> pool;
-
-    BlockMissingValues previous_block_missing_values;
-    size_t previous_approx_bytes_read_for_chunk = 0;
-
-    std::exception_ptr background_exception = nullptr;
-    std::atomic<int> is_stopped{0};
-    bool is_initialized = false;
+    Poco::Logger * log {&Poco::Logger::get("ParquetBlockInputFormat")};
 };
+
+class ParquetSchemaReader : public ISchemaReader
+{
+public:
+    ParquetSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_);
+
+    NamesAndTypesList readSchema() override;
+
+private:
+    const FormatSettings format_settings;
+};
+
 
 }
 

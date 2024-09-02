@@ -65,7 +65,7 @@ void RuntimeFilterService::transferRuntimeFilter(
 
         auto collection_context = manager.getRuntimeFilterCollectionContext(request->query_id());
         auto collection = collection_context->getCollection(request->builder_id());
-        size_t received = collection->add(std::move(data), request->worker_address());
+        size_t received = collection->add(std::move(data), request->parallel_id());
         size_t required = collection->getParallelSize();
 
         LOG_TRACE(
@@ -94,7 +94,7 @@ void RuntimeFilterService::transferRuntimeFilter(
                 writeFieldBinary(field.range, write_buffer);
                 writeFieldBinary(field.bf, write_buffer);
                 writeFieldBinary(field.set, write_buffer);
-                writeBinary(UInt8(field.bypass), write_buffer);
+                writeBinary(static_cast<UInt8>(field.bypass), write_buffer);
 
                 std::map<AddressInfo, std::unordered_set<RuntimeFilterId>> send_addresses;
                 const auto & execute_segment_ids = collection_context->getExecuteSegmentIds(filter_id);
@@ -116,7 +116,7 @@ void RuntimeFilterService::transferRuntimeFilter(
 
                     String host_port = extractExchangeHostPort(address);
                     std::shared_ptr<RpcClient> rpc_client
-                        = RpcChannelPool::getInstance().getClient(host_port, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+                        = RpcChannelPool::getInstance().getClient(host_port, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
                     std::shared_ptr<DB::Protos::RuntimeFilterService_Stub> command_service
                         = std::make_shared<Protos::RuntimeFilterService_Stub>(&rpc_client->getChannel());
                     auto * controller = new brpc::Controller;

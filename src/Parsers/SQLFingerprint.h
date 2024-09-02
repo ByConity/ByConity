@@ -22,5 +22,6 @@ public:
         DialectType dialect_type = DialectType::CLICKHOUSE);
 
     String generate(ASTPtr & ast);
+    String generateMD5(ASTPtr & ast);
 };
 }

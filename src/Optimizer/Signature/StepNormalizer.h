@@ -67,6 +67,8 @@ protected:
     StepAndOutputOrder visitProjectionStep(const ProjectionStep & step, StepsAndOutputOrders & inputs) override;
     StepAndOutputOrder visitAggregatingStep(const AggregatingStep & step, StepsAndOutputOrders & inputs) override;
     StepAndOutputOrder visitCTERefStep(const CTERefStep & step, StepsAndOutputOrders & inputs) override;
+    StepAndOutputOrder visitJoinStep(const JoinStep & step, StepsAndOutputOrders & inputs) override;
+
 private:
     ContextPtr context;
     Poco::Logger * log = &Poco::Logger::get("StepNormalizer");

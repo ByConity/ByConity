@@ -55,6 +55,16 @@ public:
     size_t byteSizeAt(size_t n) const override;
     size_t allocatedBytes() const override;
 
+    void tryToFlushZeroCopyBuffer() const override
+    {
+        
+        for (const auto &col: captured_columns)
+        {
+            if (col.column)
+                col.column->tryToFlushZeroCopyBuffer();
+        }
+    }
+
     void appendArguments(const ColumnsWithTypeAndName & columns);
     ColumnWithTypeAndName reduce() const;
 

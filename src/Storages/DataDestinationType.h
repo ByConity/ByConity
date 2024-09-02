@@ -8,6 +8,7 @@ enum class DataDestinationType
 {
     DISK,
     VOLUME,
+    BYTECOOL,
     TABLE,
     DELETE,
     SHARD,

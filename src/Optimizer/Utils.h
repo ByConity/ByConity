@@ -47,15 +47,19 @@ namespace Utils
     bool isIdentity(const Assignment & assignment);
     bool isIdentity(const Assignments & assignments);
     bool isIdentity(const ProjectionStep & project);
+    bool isAlias(const Assignment & assignment);
+    bool isAlias(const Assignments & assignments);
 
     bool isIdentifierOrIdentifierCast(const ConstASTPtr & ast);
     // return inside expression if cast don't affect the data in the bound column, such as cast to Nullable(column_name), int8 to int32.
     ConstASTPtr tryUnwrapCast(const ConstASTPtr & expression, ContextMutablePtr context, const NamesAndTypes & names_and_types);
-
+    
     NameToNameMap extractIdentities(const ProjectionStep & project);
-    std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
+    std::unordered_map<String, String> computeIdentityTranslations(const Assignments & assignments);
     ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
     bool containsAggregateFunction(const ASTPtr & ast);
+
+    bool canIgnoreNullsDirection(const DataTypePtr & type);
 
     // this method is used to deal with function names which are case-insensitive or have an alias to.
     // should be called after `registerFunctions`

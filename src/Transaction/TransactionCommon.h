@@ -54,6 +54,8 @@ enum class CnchTransactionInitiator
     Merge = 3, /// Transaction initiated by merge task
     GC = 4, /// Transaction initiated by garbage collection task
     Txn = 5, /// Transaction initiated by interactive transaction session
+    MvRefresh = 6, /// Transaction initiated by Mv refresh task
+    MergeSelect = 7, /// Transaction initiated by merge selecting task
 };
 
 const char * txnInitiatorToString(CnchTransactionInitiator initiator);
@@ -268,6 +270,13 @@ struct CommitExtraInfo
 {
 };
 
+struct TransactionRecordLite
+{
+    UInt64 commit_ts;
+    CnchTransactionStatus status;
+    TransactionRecordLite() = default;
+    TransactionRecordLite(UInt64 _commit_ts, CnchTransactionStatus _status) : commit_ts(_commit_ts), status(_status) {}
+}; 
 
 /// Transaction Record provide an abstract layer on top of Protos::DataModelTransactionRecord
 /// User getters and setters, DO NOT create custom constructors
@@ -397,5 +406,13 @@ struct TransactionRecord
     String toString() const { return pb_model.ShortDebugString(); }
     bool isInactive() const { return pb_model.status() == CnchTransactionStatus::Inactive; }
 };
+
+enum class TransactionCommitMode
+{
+    INDEPENDENT = 0, // transactions of one table are commit independently on all servers
+    SEQUENTIAL = 1, // transactions of one table are commit sequentialy on host server.
+};
+
+using TransactionRecords = std::vector<TransactionRecord>;
 
 }

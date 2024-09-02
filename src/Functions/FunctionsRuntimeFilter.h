@@ -21,6 +21,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
+// TODO: Yuanning RuntimeFilter; Replace with older version
 class RuntimeFilterBloomFilterExists : public IFunction
 {
 public:
@@ -34,9 +35,9 @@ public:
 
     String getName() const override { return name; }
 
-    bool isVariadic() const override { return false; }
+    bool isVariadic() const override { return true; }
 
-    size_t getNumberOfArguments() const override { return 2; }
+    size_t getNumberOfArguments() const override { return 0; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -93,7 +94,7 @@ public:
             else
             {
                 bloom_filter = d.bloom_filter;
-                LOG_DEBUG(log, "probe worker try get dynamic value, key: {}, value: {}", dynamic_value_key, bloom_filter->debug_string());
+                LOG_DEBUG(log, "probe worker try get dynamic value, key: {}, value: {}", dynamic_value_key, bloom_filter->debugString());
                 total_count = 0;
                 ready = true;
                 return true;
@@ -112,7 +113,7 @@ public:
             ReadBufferFromMemory read_buffer(data.data(), data.size());
             bloom_filter = std::make_shared<BloomFilterWithRange>();
             bloom_filter->deserialize(read_buffer);
-            LOG_DEBUG(log, "probe worker try get dynamic value, key: {}, value: {}", dynamic_value_key, bloom_filter->debug_string());
+            LOG_DEBUG(log, "probe worker try get dynamic value, key: {}, value: {}", dynamic_value_key, bloom_filter->debugString());
             total_count = 0;
             ready = true;
             return true;

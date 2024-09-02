@@ -20,6 +20,7 @@
  */
 
 #include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTColumnDeclaration.h>
 #include <IO/Operators.h>
 #include <iomanip>
 #include <Common/quoteString.h>
@@ -295,6 +296,8 @@ void ASTAlterCommand::formatImpl(
                       << (detach ? "DETACH" : "DROP") << (staging_area ? " STAGED " : "") << (part ? " PART " : " PARTITION ")
                       << (settings.hilite ? hilite_none : "");
         partition->formatImpl(settings, state, frame);
+        if (specify_bucket)
+            settings.ostr << " BUCKET " << bucket_number;
     }
     else if (type == ASTAlterCommand::DROP_PARTITION_WHERE)
     {
@@ -329,6 +332,9 @@ void ASTAlterCommand::formatImpl(
                       << (parts ? "PARTS" : part ? "PART " : "PARTITION ") << (settings.hilite ? hilite_none : "");
         if (!parts)
             partition->formatImpl(settings, state, frame);
+
+        if (specify_bucket)
+            settings.ostr << " BUCKET " << bucket_number;
     }
     else if (type == ASTAlterCommand::ATTACH_DETACHED_PARTITION)
     {
@@ -515,7 +521,7 @@ void ASTAlterCommand::formatImpl(
     else if (type == ASTAlterCommand::FAST_DELETE)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FASTDELETE " << (settings.hilite ? hilite_none : "");
-        
+
         if (partition)
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN PARTITION " << (settings.hilite ? hilite_none : "");
@@ -618,6 +624,16 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY SETTING " << (settings.hilite ? hilite_none : "");
         settings_changes->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::RENAME_TABLE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "RENAME " << (settings.hilite ? hilite_none : "");
+        rename_table_to->formatImpl(settings, state, frame);
+    }
+    // else if (type == ASTAlterCommand::PARTITION_BY)
+    // {
+    //     settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "PARTITION BY" << (settings.hilite ? hilite_none : "");
+    //     partition_by->formatImpl(settings, state, frame);
+    // }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }

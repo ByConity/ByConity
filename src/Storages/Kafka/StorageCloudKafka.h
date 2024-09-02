@@ -48,7 +48,8 @@ public:
 
     void setCnchStorageID(const StorageID & storage_id) { cnch_storage_id = storage_id; }
 
-    void startConsume(size_t consumer_index, const cppkafka::TopicPartitionList & tpl);
+    void startConsume(size_t consumer_index, const cppkafka::TopicPartitionList & tpl,
+                     const std::set<cppkafka::TopicPartition> & sample_partitions);
     void stopConsume();
 
     bool getStreamStatus() const { return stream_run; }
@@ -72,6 +73,8 @@ private:
          * */
         cppkafka::TopicPartitionList assignment;
         cppkafka::TopicPartitionList latest_offsets;
+
+        std::set<cppkafka::TopicPartition> sample_partitions;
 
         std::atomic<bool> error_event;
 
@@ -112,7 +115,7 @@ private:
 
     cppkafka::Configuration createConsumerConfiguration();
     BufferPtr createBuffer();
-    void createStreamThread(const cppkafka::TopicPartitionList &);
+    void createStreamThread(const cppkafka::TopicPartitionList &, const std::set<cppkafka::TopicPartition> &);
     void stopStreamThread();
 
     void streamThread();

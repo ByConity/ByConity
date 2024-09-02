@@ -9,55 +9,74 @@
 
 namespace DB
 {
+// for test assert, see more 10102_intermediate_result_cache
+static const std::unordered_set<std::string> IGNORED_SETTINGS{"max_bytes_to_read", "max_rows_to_read"};
 
-PlanSignature PlanSignatureProvider::computeSignature(std::shared_ptr<const PlanNodeBase> node)
+size_t PlanSignatureProvider::combine(const std::vector<size_t> & hashes)
 {
-    buffer = PlanNodeToSignatures{};
-    PlanNormalizeResult res = PlanNormalizer::normalize(query_plan, context);
-    return computeSignatureImpl(node, res, /*write_to_buffer*/false);
+    SipHash hash;
+    hash.update(hashes.size());
+    for (const auto & v : hashes)
+        hash.update(v);
+    return hash.get64();
 }
 
-PlanNodeToSignatures PlanSignatureProvider::computeSignatures()
+PlanSignature PlanSignatureProvider::computeSignature(PlanNodePtr node)
 {
-    buffer = PlanNodeToSignatures{};
-    PlanNormalizeResult res = PlanNormalizer::normalize(query_plan, context);
-    computeSignatureImpl(query_plan.getPlanNodeRoot(), res, /*write_to_buffer*/true);
-    return std::move(buffer);
+    PlanNodeToSignatures buffer{};
+    return computeSignatureImpl(node, /*write_to_buffer*/false, buffer);
 }
 
-PlanNodeToSignatures computeSignatures(std::shared_ptr<const PlanNodeBase> root);
+PlanSignature PlanSignatureProvider::combineSettings(PlanSignature signature, const SettingsChanges & settings)
+{
+    SipHash hash;
+    hash.update(signature);
 
+    size_t size = 0;
+    for (const auto & item : settings)
+    {
+        if (IGNORED_SETTINGS.contains(item.name))
+            continue;
+        size += 1;
+    }
 
-PlanSignature PlanSignatureProvider::computeSignatureImpl(std::shared_ptr<const PlanNodeBase> node,
-                                                          const PlanNormalizeResult & res,
-                                                          bool write_to_buffer)
+    hash.update(size);
+    for (const auto & item : settings)
+    {
+        if (IGNORED_SETTINGS.contains(item.name))
+            continue;
+        hash.update(sipHash64(item.name));
+        applyVisitor(FieldVisitorHash(hash), item.value);
+    }
+    return hash.get64();
+}
+
+PlanNodeToSignatures PlanSignatureProvider::computeSignatures(PlanNodePtr node)
+{
+    PlanNodeToSignatures buffer{};
+    computeSignatureImpl(node, /*write_to_buffer*/true, buffer);
+    return buffer;
+}
+
+PlanSignature PlanSignatureProvider::computeSignatureImpl(PlanNodePtr node, bool write_to_buffer, PlanNodeToSignatures & buffer)
 {
     std::vector<PlanSignature> sigs;
     for (const auto & child : node->getChildren())
-        sigs.emplace_back(computeSignatureImpl(child, res, write_to_buffer));
+        sigs.emplace_back(computeSignatureImpl(child, write_to_buffer, buffer));
     // special case for cte, because its child is implicit
     if (auto cte_step = dynamic_pointer_cast<const CTERefStep>(node->getStep()))
     {
-        auto cte_root = query_plan.getCTEInfo().getCTEs().at(cte_step->getId());
+        auto cte_root = cte_info.getCTEs().at(cte_step->getId());
         auto cte_root_signature = buffer.contains(cte_root) ? buffer.at(cte_root)
-                                                            : computeSignatureImpl(cte_root, res, /*write_to_buffer*/true);
+                                                            : computeSignatureImpl(cte_root, /*write_to_buffer*/true, buffer);
         sigs.emplace_back(std::move(cte_root_signature));
     }
 
-    sigs.emplace_back(res.getNormalizedHash(node));
+    sigs.emplace_back(computeStepHash(node));
     PlanSignature node_sig = combine(sigs);
     if (write_to_buffer)
         buffer.emplace(node, node_sig);
     return node_sig;
-}
-
-PlanSignature PlanSignatureProvider::combine(const std::vector<PlanSignature> & sigs)
-{
-    SipHash hash;
-    hash.update(sigs.size());
-    for (const auto & sig : sigs)
-        hash.update(sig);
-    return hash.get64();
 }
 
 }

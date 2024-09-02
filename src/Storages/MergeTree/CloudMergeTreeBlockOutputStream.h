@@ -20,6 +20,7 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
+#include <Storages/MergeTree/PartitionPruner.h>
 #include <common/logger_useful.h>
 #include <Common/SimpleIncrement.h>
 #include "WorkerTasks/ManipulationType.h"
@@ -37,7 +38,7 @@ public:
         MergeTreeMetaBase & storage_,
         StorageMetadataPtr metadata_snapshot_,
         ContextPtr context_,
-        bool to_staging_area_ = false);
+        ASTPtr overwrite_partition_ = nullptr);
 
     Block getHeader() const override;
 
@@ -53,14 +54,14 @@ private:
     using FilterInfo = CnchDedupHelper::FilterInfo;
     FilterInfo dedupWithUniqueKey(const Block & block);
 
-    void writeSuffixForInsert();
-    void writeSuffixForUpsert();
+    void initOverwritePartitionPruner();
+
+    void checkAndInit();
 
     MergeTreeMetaBase & storage;
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr context;
-    bool to_staging_area;
 
     MergeTreeDataWriter writer;
     CnchDataWriter cnch_writer;
@@ -70,6 +71,16 @@ private:
 
     bool disable_transaction_commit{false};
     SimpleIncrement increment;
+
+    ASTPtr overwrite_partition;
+    NameSet overwrite_partition_ids;
+
+    struct DedupParameters
+    {
+        bool enable_staging_area = false;
+        bool enable_append_mode = false; /// If it's true, we'll not dedup with existing parts, but it will dedup in block self.
+    };
+    DedupParameters dedup_parameters;
 };
 
 }

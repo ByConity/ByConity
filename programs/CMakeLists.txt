@@ -60,6 +60,7 @@ option (ENABLE_CLICKHOUSE_PART_TOOLKIT "Enable part_toolkit" ${ENABLE_CLICKHOUSE
 option (ENABLE_CLICKHOUSE_DUMPER "Enable clickhouse-dumper" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_RESOURCE_MANAGER "Service that manage worker resources" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_META_INSPECTOR "Enable meta-inspector in CNCH" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_STORAGE_TOOLS "Enable storage-tools in CNCH" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
@@ -262,6 +263,7 @@ add_subdirectory (tso)
 add_subdirectory (part-toolkit)
 add_subdirectory (dumper)
 add_subdirectory (meta-inspector)
+add_subdirectory (storage-tools)
 
 if (ENABLE_CLICKHOUSE_KEEPER)
     add_subdirectory (keeper)
@@ -347,6 +349,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
         clickhouse-part-toolkit
         clickhouse-dumper
         clickhouse-meta-inspector
+        clickhouse-storage-tools
     )
 
     if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
@@ -429,6 +432,9 @@ else ()
     endif()
     if (ENABLE_CLICKHOUSE_META_INSPECTOR)
         clickhouse_target_link_split_lib(clickhouse meta-inspector)
+    endif()
+    if (ENABLE_CLICKHOUSE_STORAGE_TOOLS)
+        clickhouse_target_link_split_lib(clickhouse storage-tools)
     endif()
 
     set (CLICKHOUSE_BUNDLE)
@@ -537,6 +543,14 @@ else ()
         add_custom_target (resource_manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse resource_manager DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/resource_manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE resource_manager)
+    endif ()
+    if (ENABLE_CLICKHOUSE_STORAGE_TOOLS)
+        add_custom_target (clickhouse-storage-tools ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-storage-tools DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-storage-tools" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-storage-tools)
+        add_custom_target (clickhouse-storage_tools ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-storage_tools DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-storage_tools" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-storage_tools)
     endif ()
 
     install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)

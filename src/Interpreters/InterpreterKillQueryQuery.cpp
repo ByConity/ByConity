@@ -45,6 +45,7 @@
 #include <Storages/System/CollectWhereClausePredicate.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 
 namespace DB
@@ -121,24 +122,26 @@ static QueryDescriptors extractQueriesExceptMeAndCheckAccess(const Block & proce
     };
 
     String query_user;
+    const auto & tenant_id = getCurrentTenantId();
+    const auto & nontenant_client_user = getOriginalEntityName(my_client.current_user, tenant_id);
 
     for (size_t i = 0; i < num_processes; ++i)
     {
         if ((my_client.current_query_id == query_id_col.getDataAt(i).toString())
-            && (my_client.current_user == user_col.getDataAt(i).toString()))
+            && (nontenant_client_user == user_col.getDataAt(i).toString()))
             continue;
 
         auto query_id = query_id_col.getDataAt(i).toString();
         query_user = user_col.getDataAt(i).toString();
 
-        if ((my_client.current_user != query_user) && !is_kill_query_granted())
+        if ((nontenant_client_user != query_user) && !is_kill_query_granted())
             continue;
 
         res.emplace_back(std::move(query_id), query_user, i, false);
     }
 
     if (res.empty() && access_denied)
-        throw Exception("User " + my_client.current_user + " attempts to kill query created by " + query_user, ErrorCodes::ACCESS_DENIED);
+        throw Exception("User " + nontenant_client_user + " attempts to kill query created by " + query_user, ErrorCodes::ACCESS_DENIED);
 
     return res;
 }
@@ -225,6 +228,7 @@ BlockIO InterpreterKillQueryQuery::execute()
     {
     case ASTKillQueryQuery::Type::Query:
     {
+            auto context = getContext();
             auto where_clause = DB::collectWhereORClausePredicate(query.where_expression, getContext());
             String query_id;
             std::for_each(where_clause.begin(), where_clause.end(), [&query_id](const std::map<String, Field> & wheres) {
@@ -233,13 +237,13 @@ BlockIO InterpreterKillQueryQuery::execute()
                     query_id = iter->second.get<String>();
             });
             if (!query_id.empty())
-                getContext()->getQueueManager()->cancel(query_id);
+                context->getQueueManager()->cancel(query_id);
             Block processes_block = getSelectResult("query_id, user, query", "system.processes");
             if (!processes_block)
                 return res_io;
 
-            ProcessList & process_list = getContext()->getProcessList();
-            QueryDescriptors queries_to_stop = extractQueriesExceptMeAndCheckAccess(processes_block, getContext());
+            ProcessList & process_list = context->getProcessList();
+            QueryDescriptors queries_to_stop = extractQueriesExceptMeAndCheckAccess(processes_block, context);
 
             auto header = processes_block.cloneEmpty();
             header.insert(0, {ColumnString::create(), std::make_shared<DataTypeString>(), "kill_status"});
@@ -250,7 +254,7 @@ BlockIO InterpreterKillQueryQuery::execute()
                 for (const auto & query_desc : queries_to_stop)
                 {
                     auto code = (query.test) ? CancellationCode::Unknown
-                                             : process_list.sendCancelToQuery(query_desc.query_id, query_desc.user, true);
+                                             : process_list.sendCancelToQuery(query_desc.query_id, (context->is_tenant_user() ? formatTenantName(query_desc.user) : query_desc.user), true);
                     insertResultRow(query_desc.source_num, code, processes_block, header, res_columns);
                 }
 

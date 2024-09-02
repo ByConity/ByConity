@@ -46,14 +46,14 @@ public:
     using IdentifierValues = std::unordered_map<String, Field>;
 
     // `optimizeExpression` simplify an expr by constant folding.
-    static std::pair<DataTypePtr, ASTPtr> optimizeExpression(const ConstASTPtr & expression, IdentifierTypes types, ContextMutablePtr context)
+    static std::pair<DataTypePtr, ASTPtr> optimizeExpression(const ConstASTPtr & expression, IdentifierTypes types, ContextPtr context)
     {
         auto interpreter = basicInterpreter(std::move(types), std::move(context));
         return interpreter.optimizeExpression(expression);
     }
 
     // `evaluateConstantExpression` evaluate a constant expr by constant folding, if not successful, return a std::nullopt.
-    static std::optional<std::pair<DataTypePtr, Field>> evaluateConstantExpression(const ConstASTPtr & expression, IdentifierTypes types, ContextMutablePtr context)
+    static std::optional<std::pair<DataTypePtr, Field>> evaluateConstantExpression(const ConstASTPtr & expression, IdentifierTypes types, ContextPtr context)
     {
         auto interpreter = basicInterpreter(std::move(types), std::move(context));
         return interpreter.evaluateConstantExpression(expression);
@@ -63,7 +63,7 @@ public:
     // The simplified expr may have a different type with the origin expr. e.g. given `x` is a Nullable(UInt8) column,
     // `x OR 1` is of type Nullable(UInt8), while the simplified expr `1` is of type UInt8. In some cases, that will
     // lead to a wrong answer, e.g. `toTypeName(x OR 1) = 'Nullable(UInt8)'`, but those should be rare.
-    static ASTPtr optimizePredicate(const ConstASTPtr & expression, IdentifierTypes types, ContextMutablePtr context, IdentifierValues values = {})
+    static ASTPtr optimizePredicate(const ConstASTPtr & expression, IdentifierTypes types, ContextPtr context, IdentifierValues values = {})
     {
         auto interpreter = optimizedInterpreter(std::move(types), std::move(values), std::move(context));
         return interpreter.optimizePredicate(expression);
@@ -106,12 +106,12 @@ public:
             assert(isValue());
             return value;
         }
-        ASTPtr convertToAST(const ContextMutablePtr & ctx) const;
+        ASTPtr convertToAST(const ContextPtr & ctx) const;
     };
 
-    ExpressionInterpreter(InterpretSetting setting_, ContextMutablePtr context_);
-    static ExpressionInterpreter basicInterpreter(IdentifierTypes types, ContextMutablePtr context);
-    static ExpressionInterpreter optimizedInterpreter(IdentifierTypes types, IdentifierValues values, ContextMutablePtr context);
+    ExpressionInterpreter(InterpretSetting setting_, ContextPtr context_);
+    static ExpressionInterpreter basicInterpreter(IdentifierTypes types, ContextPtr context);
+    static ExpressionInterpreter optimizedInterpreter(IdentifierTypes types, IdentifierValues values, ContextPtr context);
 
     std::pair<DataTypePtr, ASTPtr> optimizeExpression(const ConstASTPtr & expression) const;
     ASTPtr optimizePredicate(const ConstASTPtr & expression) const;
@@ -119,7 +119,7 @@ public:
     InterpretResult evaluate(const ConstASTPtr & expression) const;
 
 private:
-    ContextMutablePtr context;
+    ContextPtr context;
     InterpretSetting setting;
     TypeAnalyzer type_analyzer;
 
@@ -157,8 +157,10 @@ public:
             return (*value)[0];
         }
         bool isNull() const;
+
+        // large literals has bad performance of AST operations(e.g. clone, compares, serialization) and should not be constant folding
         bool isSuitablyRepresentedByValue() const;
-        ASTPtr convertToAST(const ContextMutablePtr & ctx) const;
+        ASTPtr convertToAST(const ContextPtr & ctx) const;
     };
 
     using InterpretIMResults = std::vector<InterpretIMResult>;
@@ -167,12 +169,13 @@ private:
     InterpretIMResult visit(const ConstASTPtr & node) const;
     InterpretIMResult visitASTLiteral(const ASTLiteral & literal, const ConstASTPtr & node) const;
     InterpretIMResult visitASTIdentifier(const ASTIdentifier & identifier, const ConstASTPtr & node) const;
+    InterpretIMResult visitASTPreparedParameter(const ASTPreparedParameter & prepared_param, const ConstASTPtr & node) const;
     InterpretIMResult visitOrdinaryFunction(const ASTFunction & function, const ConstASTPtr & node) const;
     InterpretIMResult visitInFunction(const ASTFunction & function, const ConstASTPtr & node) const;
 
     DataTypePtr getType(const ConstASTPtr & node) const
     {
-        return type_analyzer.getType(node);
+        return type_analyzer.getTypeWithoutCheck(node);
     }
 
     InterpretIMResult originalNode(const ConstASTPtr & node) const

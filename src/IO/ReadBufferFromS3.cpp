@@ -23,6 +23,7 @@
 
 #if USE_AWS_S3
 
+#    include <Interpreters/RemoteReadLog.h>
 #    include <IO/ReadBufferFromIStream.h>
 #    include <IO/ReadBufferFromS3.h>
 #    include <IO/S3Common.h>
@@ -38,6 +39,12 @@
 
 namespace ProfileEvents
 {
+    extern const Event S3HeadObject;
+    extern const Event S3GetObject;
+
+    extern const Event DiskS3GetObject;
+    extern const Event DiskS3HeadObject;
+
     extern const Event ReadBufferFromS3ReadCount;
     extern const Event ReadBufferFromS3ReadBytes;
     extern const Event ReadBufferFromS3ReadMicroseconds;
@@ -66,7 +73,7 @@ ReadBufferFromS3::ReadBufferFromS3(
     bool use_external_buffer_,
     off_t read_until_position_,
     std::optional<size_t> file_size_)
-    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : read_settings_.buffer_size, nullptr, 0, file_size_)
+    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : read_settings_.remote_fs_buffer_size, nullptr, 0, file_size_)
     , client_ptr(std::move(client_ptr_))
     , bucket(bucket_)
     , key(key_)
@@ -135,7 +142,9 @@ bool ReadBufferFromS3::nextImpl()
             return false;
 
         if (read_until_position < offset)
+        {
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Attempt to read beyond right offset ({} > {})", offset, read_until_position - 1);
+        }
     }
 
     bool next_result = false;
@@ -168,6 +177,8 @@ bool ReadBufferFromS3::nextImpl()
 
     size_t attempt = 0;
     size_t sleep_ms = 100;
+    Stopwatch timer;
+    const auto request_time = std::chrono::system_clock::now();
     while (true)
     {
         Stopwatch watch;
@@ -202,7 +213,9 @@ bool ReadBufferFromS3::nextImpl()
         {
             if (!S3::processReadException(e, log, bucket, key, getPosition(), ++attempt)
                 || attempt >= max_single_read_retries)
+            {
                 throw;
+            }
 
             sleepForMilliseconds(sleep_ms);
             sleep_ms *= 2;
@@ -212,6 +225,7 @@ bool ReadBufferFromS3::nextImpl()
             impl.reset();
         }
     }
+
     if (!next_result) {
         read_all_range_successfully = true;
         return false;
@@ -219,6 +233,11 @@ bool ReadBufferFromS3::nextImpl()
 
     BufferBase::set(impl->buffer().begin(), impl->buffer().size(), impl->offset());
     ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadBytes, working_buffer.size());
+    if (read_settings.remote_read_log)
+    {
+        read_settings.remote_read_log->insert(
+            request_time, bucket + ":" + key, offset, working_buffer.size(), timer.elapsedMicroseconds(), read_settings.remote_read_context);
+    }
     offset += working_buffer.size();
     return true;
 }
@@ -335,20 +354,10 @@ size_t ReadBufferFromS3::getFileSize()
 {
     if (file_size)
         return *file_size;
-    Aws::S3::Model::HeadObjectRequest request;
-    request.SetBucket(bucket);
-    request.SetKey(key);
 
-    Aws::S3::Model::HeadObjectOutcome outcome = client_ptr->HeadObject(request);
-    if (outcome.IsSuccess())
-    {
-        file_size = outcome.GetResultWithOwnership().GetContentLength();
-        return *file_size;
-    }
-    else
-    {
-        throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
-    }
+    S3::S3Util s3_util(client_ptr, bucket, read_settings.for_disk_s3);
+    file_size = s3_util.getObjectSize(key);
+    return *file_size;
 }
 
 Aws::S3::Model::GetObjectResult ReadBufferFromS3::sendRequest(size_t range_begin, std::optional<size_t> range_end_not_incl)
@@ -374,9 +383,11 @@ Aws::S3::Model::GetObjectResult ReadBufferFromS3::sendRequest(size_t range_begin
             bucket, key, range_begin);
     }
 
-    // ProfileEvents::increment(ProfileEvents::S3GetObject);
     Stopwatch watch;
 
+    ProfileEvents::increment(ProfileEvents::S3GetObject);
+    if (read_settings.for_disk_s3)
+        ProfileEvents::increment(ProfileEvents::DiskS3GetObject);
     Aws::S3::Model::GetObjectOutcome outcome = client_ptr->GetObject(req);
 
     if (outcome.IsSuccess())
@@ -411,7 +422,7 @@ size_t ReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, cons
 
         try
         {
-            result = sendRequest(range_begin, range_begin + n - 1);
+            result = sendRequest(range_begin, range_begin + n);
             std::istream & istr = result->GetBody();
 
             size_t bytes = copyFromIStreamWithProgressCallback(istr, to, n, progress_callback);

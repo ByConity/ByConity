@@ -47,12 +47,12 @@ class StorageFromMergeTreeDataPart final : public shared_ptr_helper<StorageFromM
     friend struct shared_ptr_helper<StorageFromMergeTreeDataPart>;
 public:
     String getName() const override { return "FromMergeTreeDataPart"; }
-    
+
     StorageSnapshotPtr getStorageSnapshot(
         const StorageMetadataPtr & metadata_snapshot, ContextPtr /*query_context*/) const override
     {
         const auto & storage_columns = metadata_snapshot->getColumns();
-        if (!hasDynamicSubcolumns(storage_columns))
+        if (!metadata_snapshot->hasDynamicSubcolumns())
             return std::make_shared<StorageSnapshot>(*this, metadata_snapshot);
 
         auto object_columns = getConcreteObjectColumns(
@@ -97,7 +97,7 @@ public:
     bool supportsPrewhere() const override { return true; }
 
     bool supportsIndexForIn() const override { return true; }
-    
+
     bool supportsDynamicSubcolumns() const override { return true; }
 
     bool mayBenefitFromIndexForIn(

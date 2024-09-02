@@ -14,16 +14,24 @@
  */
 
 #include <Transaction/CnchServerTransaction.h>
-
+#include <Transaction/GlobalTxnCommitter.h>
+#include <atomic>
+#include <mutex>
 #include <Catalog/Catalog.h>
-#include <common/scope_guard.h>
+#include <IO/WriteBuffer.h>
+#include <Transaction/Actions/InsertAction.h>
+#include <Transaction/TransactionCleaner.h>
+#include <Transaction/TransactionCommon.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
-#include <IO/WriteBuffer.h>
-#include <Transaction/TransactionCommon.h>
-#include <Transaction/TransactionCleaner.h>
-#include <mutex>
+#include <common/scope_guard.h>
+#include <common/scope_guard_safe.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <CloudServices/CnchDedupHelper.h>
+#include <Interpreters/VirtualWarehousePool.h>
+#include <Interpreters/StorageID.h>
+#include <CloudServices/CnchPartsHelper.h>
 
 namespace ProfileEvents
 {
@@ -57,7 +65,7 @@ namespace ErrorCodes
     extern const int INSERTION_LABEL_ALREADY_EXISTS;
     extern const int FAILED_TO_PUT_INSERTION_LABEL;
     extern const int BRPC_TIMEOUT;
-    // extern const int BAD_CAST;
+    extern const int ABORTED;
 }
 
 CnchServerTransaction::CnchServerTransaction(const ContextPtr & context_, TransactionRecord txn_record_)
@@ -144,7 +152,8 @@ TxnTimestamp CnchServerTransaction::commitV2()
     try
     {
         precommit();
-        assertLockAcquired();
+        /// XXX: If a topo switch occurs during the commit phase, it may lead to parallel lock holding.
+        /// While this problem is difficult to solve because committed transactions are not supported to be rolled back. Temporarily use the time window of topo switching to avoid this problem
         return commit();
     }
     catch (const Exception & e)
@@ -152,22 +161,18 @@ TxnTimestamp CnchServerTransaction::commitV2()
         if (!(getContext()->getSettings().ignore_duplicate_insertion_label && e.code() == ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS))
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
 
-        if (e.code() == ErrorCodes::BRPC_TIMEOUT)
+        try
         {
-            try
-            {
-                auto commit_ts = abort();
-                /// the txn has been sucessfully committed for the timeout case
-                if (txn_record.status() == CnchTransactionStatus::Finished)
-                    return commit_ts;
-            }
-            catch (...)
-            {
-                tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            }
+            auto commit_ts = abort();
+            /// the txn has been sucessfully committed for the timeout case
+            if (txn_record.status() == CnchTransactionStatus::Finished)
+                return commit_ts;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
 
-        rollback();
         throw;
     }
     catch (...)
@@ -185,14 +190,162 @@ void CnchServerTransaction::precommit()
     Stopwatch watch(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchTxnPrecommitElapsedMilliseconds, watch.elapsedMilliseconds()); });
 
-    auto lock = getLock();
-    if (auto status = getStatus(); status != CnchTransactionStatus::Running)
-        throw Exception("Transaction is not in running status, but in " + String(txnStatusToString(status)), ErrorCodes::LOGICAL_ERROR);
+    {
+        auto lock = getLock();
+        if (auto status = getStatus(); status != CnchTransactionStatus::Running)
+            throw Exception("Transaction is not in running status, but in " + String(txnStatusToString(status)), ErrorCodes::LOGICAL_ERROR);
 
-    for (auto & action : actions)
-        action->executeV2();
+        for (auto & action : actions)
+            action->executeV2();
 
-    txn_record.prepared = true;
+        txn_record.prepared = true;
+        action_size_before_dedup = actions.size();
+    }
+
+    auto retry_time = getContext()->getSettingsRef().max_dedup_retry_time.value;
+    do
+    {
+        try
+        {
+            executeDedupStage();
+            assertLockAcquired();
+        }
+        catch  (...)
+        {
+            if (retry_time == 0)
+                throw;
+            else if (action_size_before_dedup < actions.size())
+            {
+                /// TODO: Impl retry in this case, especially handle undo buffer
+                LOG_WARNING(
+                    log,
+                    "Dedup stage failed, but result is not empty({}/{}), unable to retry, retry time: {}",
+                    actions.size(),
+                    action_size_before_dedup,
+                    retry_time);
+                throw;
+            }
+            else
+            {
+                LOG_WARNING(log, "Dedup stage failed, retry time: {}, reason: {}", retry_time, getCurrentExceptionMessage(false));
+                retry_time--;
+                dedup_stage_flag = false;
+                continue;
+            }
+        }
+        break;
+    } while (true);
+}
+
+void CnchServerTransaction::executeDedupStage()
+{
+    auto expected_value = false;
+    if (!dedup_stage_flag.compare_exchange_strong(expected_value, true))
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Execute dedup stage concurrently which may lead to dirty dedup result, it's bug for current impl.");
+
+    /// Currently, lock holder only serve for dedup stage for unique table, we can just clear it in case of retry.
+    lock_holders.clear();
+    std::unordered_map<StorageID, CnchDedupHelper::DedupTaskPtr> dedup_task_map;
+    for (size_t i = 0 ; i < action_size_before_dedup; ++i)
+    {
+        auto & action = actions[i];
+        if (auto * insert_action = dynamic_cast<InsertAction *>(action.get()))
+        {
+            auto dedup_task = insert_action->getDedupTask();
+            if (dedup_task)
+            {
+                if (dedup_task_map.count(dedup_task->storage_id))
+                {
+                    auto & final_dedup_info = dedup_task_map[dedup_task->storage_id];
+                    final_dedup_info->new_parts.insert(
+                        final_dedup_info->new_parts.end(), dedup_task->new_parts.begin(), dedup_task->new_parts.end());
+                    final_dedup_info->delete_bitmaps_for_new_parts.insert(
+                        final_dedup_info->delete_bitmaps_for_new_parts.end(),
+                        dedup_task->delete_bitmaps_for_new_parts.begin(),
+                        dedup_task->delete_bitmaps_for_new_parts.end());
+                }
+                else
+                    dedup_task_map[dedup_task->storage_id] = std::move(dedup_task);
+            }
+        }
+    }
+
+    if (dedup_task_map.empty())
+        return;
+
+    Stopwatch watch;
+    auto txn_id = getTransactionID();
+    if (dedup_task_map.size() > 1)
+        LOG_TRACE(log, "Start handle dedup stage for {} tables, txn id: {}", dedup_task_map.size(), txn_id.toUInt64());
+
+    auto handler = std::make_shared<ExceptionHandler>();
+    std::vector<brpc::CallId> call_ids;
+    for (auto & it : dedup_task_map)
+    {
+        Stopwatch total_task_watch;
+        const auto & storage_id = it.first;
+        auto & dedup_task = it.second;
+        if (!dedup_task)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Dedup task for table {} is nullptr, this is a bug!", storage_id.getNameForLogs());
+
+        if (dedup_task->new_parts.empty())
+            continue;
+
+        LOG_TRACE(
+            log,
+            "Start handle dedup stage for table {}, part size: {}, delete bitmap size: {}, txn: {}",
+            storage_id.getNameForLogs(),
+            dedup_task->new_parts.size(),
+            dedup_task->delete_bitmaps_for_new_parts.size(),
+            txn_id.toUInt64());
+
+        auto catalog = getContext()->getCnchCatalog();
+        TxnTimestamp ts = getContext()->getTimestamp();
+        auto table = catalog->tryGetTableByUUID(*getContext(), UUIDHelpers::UUIDToString(dedup_task->storage_id.uuid), ts);
+        if (!table)
+            throw Exception(ErrorCodes::ABORTED, "Table {} has been dropped", dedup_task->storage_id.getNameForLogs());
+        auto cnch_table = dynamic_pointer_cast<StorageCnchMergeTree>(table);
+        if (!cnch_table)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Table {} is not cnch merge tree", dedup_task->storage_id.getNameForLogs());
+
+        /// 1. Acquire lock and fill task
+        CnchDedupHelper::acquireLockAndFillDedupTask(*cnch_table, *dedup_task, *this, getContext());
+        /// 2. Random pick one worker to execute dedup task
+        auto vw_handle = getContext()->getVirtualWarehousePool().get(cnch_table->getSettings()->cnch_vw_write);
+        auto worker_client = vw_handle->getWorker();
+        LOG_DEBUG(log, "Choose worker: {} to execute dedup task for txn {}", worker_client->getHostWithPorts().toDebugString(), txn_id.toUInt64());
+
+        /// 3. Execute dedup task and wait result
+        Stopwatch inner_watch;
+        auto funcOnCallback = [&, dedup_task, inner_watch, pre_cost = total_task_watch.elapsedMilliseconds()](bool success) {
+            dedup_task->statistics.execute_task_cost = inner_watch.elapsedMilliseconds();
+            dedup_task->statistics.total_cost = dedup_task->statistics.execute_task_cost + pre_cost;
+            dedup_task->statistics.other_cost = pre_cost - dedup_task->statistics.acquire_lock_cost - dedup_task->statistics.get_metadata_cost;
+            LOG_DEBUG(
+                log,
+                "{} handle dedup stage for table {}, part size: {}, delete bitmap size: {}, txn id: {}, statistics: {}",
+                success ? "Finish" : "Failed",
+                dedup_task->storage_id.getNameForLogs(),
+                dedup_task->new_parts.size(),
+                dedup_task->delete_bitmaps_for_new_parts.size(),
+                txn_id.toUInt64(),
+                dedup_task->statistics.toString());
+        };
+        auto call_id
+            = worker_client->executeDedupTask(getContext(), txn_id, getContext()->getRPCPort(), *cnch_table, *dedup_task, handler, funcOnCallback);
+        call_ids.emplace_back(call_id);
+    }
+
+    /// 4. Wait result
+    for (auto & call_id : call_ids)
+        brpc::Join(call_id);
+
+    handler->throwIfException();
+
+    if (dedup_task_map.size() > 1)
+        LOG_TRACE(log, "Finish handle dedup stage for {} tables, total cost {} ms, txn id: {}", dedup_task_map.size(), watch.elapsedMilliseconds(), txn_id.toUInt64());
 }
 
 TxnTimestamp CnchServerTransaction::commit()
@@ -209,6 +362,23 @@ TxnTimestamp CnchServerTransaction::commit()
     {
         try
         {
+            if (TransactionCommitMode::SEQUENTIAL == getCommitMode())
+            {
+                commit_time = commit_ts;
+                bool success = getContext()->getGlobalTxnCommitter()->commit(shared_from_this());
+                if (success)
+                {
+                    ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
+                    ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
+
+                    return commit_ts;
+                }
+                else
+                {
+                    throw Exception("Fail to commit txn " + txn_record.txnID().toString() + " by using GlobalTxnCommitter.", ErrorCodes::CNCH_TRANSACTION_COMMIT_ERROR);
+                }
+            }
+
             if (isPrimary() && !consumer_group.empty()) /// Kafka transaction is always primary
             {
                 if (tpl.empty())
@@ -291,23 +461,23 @@ TxnTimestamp CnchServerTransaction::commit()
 
                 String label_key;
                 String label_value;
-                if (insertion_label)
-                {
-                    /// Pack the operation creating a new label into CAS operations
-                    insertion_label->commit();
-                    label_key = global_context->getCnchCatalog()->getInsertionLabelKey(insertion_label);
-                    label_value = insertion_label->serializeValue();
-                    Catalog::SinglePutRequest put_req(label_key, label_value, true);
-                    put_req.callback = [label = insertion_label](int code, const std::string & msg) {
-                        if (code == Catalog::CAS_FAILED)
-                            throw Exception(
-                                "Insertion label " + label->name + " already exists: " + msg, ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS);
-                        else if (code != Catalog::OK)
-                            throw Exception(
-                                "Failed to put insertion label " + label->name + ": " + msg, ErrorCodes::FAILED_TO_PUT_INSERTION_LABEL);
-                    };
-                    requests.AddPut(put_req);
-                }
+                // if (insertion_label)
+                // {
+                //     /// Pack the operation creating a new label into CAS operations
+                //     insertion_label->commit();
+                //     label_key = global_context->getCnchCatalog()->getInsertionLabelKey(insertion_label);
+                //     label_value = insertion_label->serializeValue();
+                //     Catalog::SinglePutRequest put_req(label_key, label_value, true);
+                //     put_req.callback = [label = insertion_label](int code, const std::string & msg) {
+                //         if (code == Catalog::CAS_FAILED)
+                //             throw Exception(
+                //                 "Insertion label " + label->name + " already exists: " + msg, ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS);
+                //         else if (code != Catalog::OK)
+                //             throw Exception(
+                //                 "Failed to put insertion label " + label->name + ": " + msg, ErrorCodes::FAILED_TO_PUT_INSERTION_LABEL);
+                //     };
+                //     requests.AddPut(put_req);
+                // }
 
                 // CAS operation
                 TransactionRecord target_record = getTransactionRecord();
@@ -315,7 +485,21 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
 
-                bool success = global_context->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+                bool success = false;
+                if (!extern_commit_functions.empty())
+                {
+                    for (auto & txn_f : extern_commit_functions)
+                    {
+                        auto extern_requests = txn_f.commit_func(getContext());
+                        for (auto & req : extern_requests.puts)
+                            requests.AddPut(req);
+                        for (auto & req : extern_requests.deletes)
+                            requests.AddDelete(req.key);
+                    }
+                    success = getContext()->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+                }
+                else
+                    success = global_context->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
 
                 txn_record = std::move(target_record);
 
@@ -325,6 +509,9 @@ TxnTimestamp CnchServerTransaction::commit()
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
                     LOG_DEBUG(log, "Successfully committed transaction {} at {}\n", txn_record.txnID().toUInt64(), commit_ts);
                     commitModifiedCount(this->modified_counter);
+
+                    /// Clean merging_mutating_parts after txn succeed.
+                    tryCleanMergeTagger();
                     return commit_ts;
                 }
                 else // CAS failed
@@ -386,22 +573,42 @@ TxnTimestamp CnchServerTransaction::rollback()
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
+    tryCleanMergeTagger();
     return ts;
 }
 
 TxnTimestamp CnchServerTransaction::abort()
 {
     LOG_DEBUG(log, "Start abort transaction {}\n", txn_record.txnID().toUInt64());
+
+    SCOPE_EXIT_SAFE({ tryCleanMergeTagger(); });
+
     auto lock = getLock();
-    if (isReadOnly())
+    // Abort successful primary txn shouldn't be allowed unless we mean to do so with rollback.
+    if (isReadOnly() || (txn_record.isPrimary() && txn_record.status() == CnchTransactionStatus::Finished))
         throw Exception("Invalid commit operation", ErrorCodes::LOGICAL_ERROR);
 
     TransactionRecord target_record = getTransactionRecord();
     target_record.setStatus(CnchTransactionStatus::Aborted)
                  .setCommitTs(global_context->getTimestamp())
                  .setMainTableUUID(getMainTableUUID());
-
-    bool success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+    bool success = false;
+    Catalog::BatchCommitRequest requests(true, true);
+    Catalog::BatchCommitResponse response;
+    if (!extern_commit_functions.empty())
+    {
+        for (auto & txn_f : extern_commit_functions)
+        {
+            auto extern_requests = txn_f.abort_func(getContext());
+            for (auto & req : extern_requests.puts)
+                requests.AddDelete(req.key);
+            for (auto & req : extern_requests.deletes)
+                requests.AddPut(req);
+        }
+        success = getContext()->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
+    }
+    else
+        success = global_context->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
     txn_record = std::move(target_record);
 
     if (success)
@@ -414,11 +621,11 @@ TxnTimestamp CnchServerTransaction::abort()
         // Don't abort committed txn, treat committed
         if (txn_record.status() == CnchTransactionStatus::Finished)
         {
-            LOG_WARNING(log, "Transaction {} has been committed\n", txn_record.txnID().toUInt64());
+            LOG_WARNING(log, "Transaction {} has been committed\n", txn_record.toString());
         }
         else if (txn_record.status() == CnchTransactionStatus::Aborted)
         {
-            LOG_WARNING(log, "Transaction {} has been aborted\n", txn_record.txnID().toUInt64());
+            LOG_WARNING(log, "Transaction {} has been aborted\n", txn_record.toString());
         }
         else
         {
@@ -461,10 +668,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
                 undo_size += action->getSize();
             }
 
-            {
-                std::lock_guard lk(task.mutex);
-                task.undo_size = undo_size;
-            }
+            task.undo_size.store(undo_size, std::memory_order_relaxed);
 
             for (auto & action : actions)
                 action->postCommit(getCommitTime());
@@ -488,10 +692,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
             for (const auto & buffer : undo_buffer)
                 undo_size += buffer.second.size();
 
-            {
-                std::lock_guard lk(task.mutex);
-                task.undo_size = undo_size;
-            }
+            task.undo_size.store(undo_size, std::memory_order_relaxed);
 
             std::set<String> kvfs_lock_keys;
             for (const auto & [uuid, resources] : undo_buffer)

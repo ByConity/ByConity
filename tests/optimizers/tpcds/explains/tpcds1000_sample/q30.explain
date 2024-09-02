@@ -5,19 +5,19 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, c_preferred_cust_flag ASC NULLS LAST, c_birth_day ASC NULLS LAST, c_birth_month ASC NULLS LAST, c_birth_year ASC NULLS LAST, c_birth_country ASC NULLS LAST, c_login ASC NULLS LAST, c_email_address ASC NULLS LAST, c_last_review_date_sk ASC NULLS LAST, expr#sum(wr_return_amt)_1 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 646174 rows
+      └─ Gather Exchange Est. 323087 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, c_preferred_cust_flag ASC NULLS LAST, c_birth_day ASC NULLS LAST, c_birth_month ASC NULLS LAST, c_birth_year ASC NULLS LAST, c_birth_country ASC NULLS LAST, c_login ASC NULLS LAST, c_email_address ASC NULLS LAST, c_last_review_date_sk ASC NULLS LAST, expr#sum(wr_return_amt)_1 ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 676798 rows
+            └─ Inner Join Est. 323087 rows
                │     Condition: ca_state_1 == ca_state_3
-               │     Filter: `expr#sum(wr_return_amt)_1` > (`expr#avg(ctr_total_return)` * '1.2')
-               ├─ Inner Join Est. 676798 rows
+               │     Filter: `expr#sum(wr_return_amt)_1` > (`expr#avg(ctr_total_return)_1` * '1.2')
+               ├─ Inner Join Est. 646174 rows
                │  │     Condition: wr_returning_customer_sk_1 == c_customer_sk
                │  │     Runtime Filters Builder: {c_customer_sk}
                │  ├─ Repartition Exchange Est. 11842742 rows
                │  │  │     Partition by: {wr_returning_customer_sk_1}
-               │  │  └─ Filter Est. 10658467 rows
+               │  │  └─ Filter Est. 2960685 rows
                │  │     │     Condition: Runtime Filters: {wr_returning_customer_sk_1}
                │  │     └─ Buffer Est. 11842742 rows
                │  │        └─ CTERef[0] Est. 11842742 rows
@@ -35,18 +35,20 @@ Projection Est. 100 rows
                │        │              Outputs: [c_customer_sk, c_customer_id, c_current_addr_sk, c_salutation, c_first_name, c_last_name, c_preferred_cust_flag, c_birth_day, c_birth_month, c_birth_year, c_birth_country, c_login, c_email_address, c_last_review_date_sk]
                │        └─ Repartition Exchange Est. 297813 rows
                │           │     Partition by: {ca_address_sk_1}
-               │           └─ Filter Est. 297813 rows
-               │              │     Condition: ca_state_2 = 'GA'
-               │              └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
-               │                       Where: ca_state = 'GA'
-               │                       Outputs: ca_address_sk_1:=ca_address_sk, ca_state_2:=ca_state
+               │           └─ Projection Est. 297813 rows
+               │              │     Expressions: [ca_address_sk_1]
+               │              └─ Filter Est. 297813 rows
+               │                 │     Condition: ca_state_2 = 'GA'
+               │                 └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
+               │                          Where: ca_state = 'GA'
+               │                          Outputs: ca_address_sk_1:=ca_address_sk, ca_state_2:=ca_state
                └─ Broadcast Exchange Est. 52 rows
                   └─ MergingAggregated Est. 52 rows
                      └─ Repartition Exchange Est. 52 rows
                         │     Partition by: {ca_state_3}
                         └─ Aggregating Est. 52 rows
                            │     Group by: {ca_state_3}
-                           │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(wr_return_amt)_2,build_side_non_null_symbol)
+                           │     Aggregates: expr#avg(ctr_total_return)_1:=AggNull(avgIf)(expr#sum(wr_return_amt)_2,build_side_non_null_symbol)
                            └─ Projection Est. 11842742 rows
                               │     Expressions: [ca_state_3, expr#sum(wr_return_amt)_2], build_side_non_null_symbol:=1
                               └─ Buffer Est. 11842742 rows
@@ -71,11 +73,13 @@ CTEDef [0]
             │     │           Where: Runtime Filters: {wr_returned_date_sk}
             │     │           Outputs: [wr_returned_date_sk, wr_returning_customer_sk, wr_returning_addr_sk, wr_return_amt]
             │     └─ Broadcast Exchange Est. 365 rows
-            │        └─ Filter Est. 365 rows
-            │           │     Condition: d_year = 2002
-            │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-            │                    Where: d_year = 2002
-            │                    Outputs: [d_date_sk, d_year]
+            │        └─ Projection Est. 365 rows
+            │           │     Expressions: [d_date_sk]
+            │           └─ Filter Est. 365 rows
+            │              │     Condition: d_year = 2002
+            │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+            │                       Where: d_year = 2002
+            │                       Outputs: [d_date_sk, d_year]
             └─ Repartition Exchange Est. 6000000 rows
                │     Partition by: {ca_address_sk}
                └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows

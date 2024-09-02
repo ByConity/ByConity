@@ -80,10 +80,9 @@ PrepareContextResult StorageCnchLas::prepareReadContext(
     [[maybe_unused]] unsigned num_streams)
 {
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
-    HiveWhereOptimizer optimizer(metadata_snapshot, query_info);
 
     Stopwatch watch;
-    HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info, optimizer);
+    HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info);
     LOG_TRACE(log, "Elapsed {} ms to select {} required partitions", watch.elapsedMilliseconds(), partitions.size());
 
     /// TODO: This looks very hacky I know

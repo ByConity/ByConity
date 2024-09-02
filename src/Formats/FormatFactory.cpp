@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <Common/Exception.h>
+#include <Common/KnownObjectNames.h>
 #include <Interpreters/Context.h>
 #include <Core/Settings.h>
 #include <DataStreams/MaterializingBlockOutputStream.h>
@@ -87,20 +88,43 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.import_nested_json = settings.input_format_import_nested_json;
     format_settings.input_allow_errors_num = settings.input_format_allow_errors_num;
     format_settings.input_allow_errors_ratio = settings.input_format_allow_errors_ratio;
+    format_settings.json.read_objects_as_strings = settings.input_format_json_read_objects_as_strings;
     format_settings.json.array_of_rows = settings.output_format_json_array_of_rows;
     format_settings.json.escape_forward_slashes = settings.output_format_json_escape_forward_slashes;
-    format_settings.json.named_tuples_as_objects = settings.output_format_json_named_tuples_as_objects;
+    format_settings.json.write_named_tuples_as_objects = settings.output_format_json_named_tuples_as_objects;
+    format_settings.json.read_named_tuples_as_objects = settings.input_format_json_named_tuples_as_objects;
+    format_settings.json.defaults_for_missing_elements_in_named_tuple = settings.input_format_json_defaults_for_missing_elements_in_named_tuple;
     format_settings.json.quote_64bit_integers = settings.output_format_json_quote_64bit_integers;
     format_settings.json.quote_denormals = settings.output_format_json_quote_denormals;
-    format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
+    format_settings.orc.output_string_as_string = settings.output_format_orc_string_as_string;
+    format_settings.orc.allow_out_of_range = settings.input_orc_date_type_out_of_range;
+    format_settings.orc.use_fast_decoder = settings.input_format_orc_use_fast_decoder;
+    format_settings.orc.filter_push_down = settings.input_format_orc_filter_push_down;
+    format_settings.orc.import_nested = settings.input_format_orc_import_nested;
+    format_settings.orc.case_insensitive_column_matching = settings.input_format_orc_case_insensitive_column_matching;
+    format_settings.orc.use_footer_cache = settings.input_format_orc_use_footer_cache;
+    format_settings.seekable_read = settings.input_format_allow_seeks;
+    format_settings.max_rows_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
+    format_settings.max_bytes_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
+    format_settings.schema_inference_make_columns_nullable = settings.schema_inference_make_columns_nullable;
+    format_settings.avoid_buffering = settings.input_format_arrow_avoid_buffering;
     format_settings.null_as_default = settings.input_format_null_as_default;
-    format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
-    format_settings.parquet.case_insensitive_column_matching = settings.input_format_parquet_case_insensitive_column_matching;
     format_settings.parquet.row_group_size = settings.output_format_parquet_row_group_size;
-    format_settings.parquet.max_block_size = settings.input_format_parquet_max_block_size;
     format_settings.parquet.output_string_as_string = settings.output_format_parquet_string_as_string;
     format_settings.parquet.output_fixed_string_as_fixed_byte_array = settings.output_format_parquet_fixed_string_as_fixed_byte_array;
+    format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
+    format_settings.parquet.preserve_order = settings.input_format_parquet_preserve_order;
+    format_settings.parquet.coalesce_read = settings.input_format_parquet_coalesce_read;
+    format_settings.parquet.use_lazy_io_cache = settings.input_format_parquet_use_lazy_io_cache;
     format_settings.parquet.import_nested = settings.input_format_parquet_import_nested;
+    format_settings.parquet.case_insensitive_column_matching = settings.input_format_parquet_case_insensitive_column_matching;
+    format_settings.parquet.max_block_size = settings.input_format_parquet_max_block_size;
+    // NOTE:: this is used for parallel parquet read. It's a temporary solution
+    format_settings.parquet.max_download_threads = settings.max_download_threads;
+    format_settings.parquet.min_bytes_for_seek = settings.input_format_parquet_min_bytes_for_seek;
+    format_settings.parquet.filter_push_down = settings.input_format_parquet_filter_push_down;
+    format_settings.parquet.use_footer_cache = settings.input_format_parquet_use_footer_cache;
+    format_settings.parquet.use_native_reader = settings.input_format_parquet_use_native_reader;
     format_settings.pretty.charset = settings.output_format_pretty_grid_charset.toString() == "ASCII" ? FormatSettings::Pretty::Charset::ASCII : FormatSettings::Pretty::Charset::UTF8;
     format_settings.pretty.color = settings.output_format_pretty_color;
     format_settings.pretty.max_column_pad_width = settings.output_format_pretty_max_column_pad_width;
@@ -142,8 +166,8 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.map.parse_null_map_as_empty = settings.input_format_parse_null_map_as_empty;
     format_settings.map.skip_null_map_value = settings.input_format_skip_null_map_value;
     format_settings.map.max_map_key_length = settings.input_format_max_map_key_long;
-    format_settings.throw_on_date_overflow = settings.throw_on_date_overflow;
-    format_settings.check_date_overflow = settings.check_date_overflow;
+    format_settings.check_data_overflow = settings.check_data_overflow;
+    format_settings.date_time_overflow_behavior = settings.date_time_overflow_behavior;
 
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)
@@ -335,6 +359,7 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
     WriteBuffer & buf,
     const Block & sample,
     ContextPtr context,
+    bool out_to_directory,
     WriteCallback callback,
     const std::optional<FormatSettings> & _format_settings) const
 {
@@ -346,7 +371,8 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
 
     const Settings & settings = context->getSettingsRef();
 
-    if (settings.output_format_parallel_formatting && getCreators(name).supports_parallel_formatting
+    if (!out_to_directory && settings.output_format_parallel_formatting
+        && getCreators(name).supports_parallel_formatting
         && !settings.output_format_json_array_of_rows)
     {
         auto formatter_creator = [output_getter, sample, callback, format_settings]
@@ -405,6 +431,49 @@ OutputFormatPtr FormatFactory::getOutputFormat(
     return format;
 }
 
+void FormatFactory::registerAdditionalInfoForSchemaCacheGetter(
+    const String & name, AdditionalInfoForSchemaCacheGetter additional_info_for_schema_cache_getter)
+{
+    auto & target = dict[name].additional_info_for_schema_cache_getter;
+    if (target)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: additional info for schema cache getter {} is already registered", name);
+    target = std::move(additional_info_for_schema_cache_getter);
+}
+
+String FormatFactory::getAdditionalInfoForSchemaCache(const String & name, ContextPtr context, const std::optional<FormatSettings> & format_settings_)
+{
+    const auto & additional_info_getter = getCreators(name).additional_info_for_schema_cache_getter;
+    if (!additional_info_getter)
+        return "";
+
+    auto format_settings = format_settings_ ? *format_settings_ : getFormatSettings(context);
+    return additional_info_getter(format_settings);
+}
+
+SchemaReaderPtr FormatFactory::getSchemaReader(
+    const String & name,
+    ReadBuffer & buf,
+    const ContextPtr & context,
+    const std::optional<FormatSettings> & _format_settings) const
+{
+    const auto & schema_reader_creator = getCreators(name).schema_reader_creator;
+    if (!schema_reader_creator)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Format {} doesn't support schema inference.", name);
+
+    auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
+    auto schema_reader = schema_reader_creator(buf, format_settings);
+    // if (schema_reader->needContext())
+    //     schema_reader->setContext(context);
+    return schema_reader;
+}
+
+void FormatFactory::registerSchemaReader(const String & name, SchemaReaderCreator schema_reader_creator)
+{
+    auto & target = dict[name].schema_reader_creator;
+    if (target)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Schema reader {} is already registered", name);
+    target = std::move(schema_reader_creator);
+}
 
 void FormatFactory::registerInputFormat(const String & name, InputCreator input_creator)
 {
@@ -413,6 +482,7 @@ void FormatFactory::registerInputFormat(const String & name, InputCreator input_
         throw Exception("FormatFactory: Input format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(input_creator);
     registerFileExtension(name, name);
+    KnownFormatNames::instance().add(name);
 }
 
 void FormatFactory::registerOutputFormat(const String & name, OutputCreator output_creator)
@@ -422,6 +492,7 @@ void FormatFactory::registerOutputFormat(const String & name, OutputCreator outp
         throw Exception("FormatFactory: Output format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(output_creator);
     registerFileExtension(name, name);
+    KnownFormatNames::instance().add(name);
 }
 
 void FormatFactory::registerFileExtension(const String & extension, const String & format_name)
@@ -491,6 +562,10 @@ void FormatFactory::checkFormatName(const String & name) const
         throw Exception("Unknown format " + name, ErrorCodes::UNKNOWN_FORMAT);
 }
 
+bool FormatFactory::exists(const String & name) const
+{
+    return dict.find(name) != dict.end();
+}
 
 void FormatFactory::registerInputFormatProcessor(const String & name, InputProcessorCreator input_creator)
 {
@@ -542,6 +617,19 @@ bool FormatFactory::checkIfFormatIsColumnOriented(const String & name)
     const auto & target = getCreators(name);
     return target.is_column_oriented;
 }
+
+bool FormatFactory::checkIfFormatHasSchemaReader(const String & name) const
+{
+    const auto & target = getCreators(name);
+    return bool(target.schema_reader_creator);
+}
+
+
+// bool FormatFactory::checkIfFormatHasExternalSchemaReader(const String & name) const
+// {
+//     const auto & target = getCreators(name);
+//     return bool(target.external_schema_reader_creator);
+// }
 
 FormatFactory & FormatFactory::instance()
 {

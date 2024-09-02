@@ -52,10 +52,35 @@ const char * ParserUnaryExpression::operators[] =
     nullptr
 };
 
+const char * ParserBitwiseXorExpression::operators[] =
+{
+    "^", "bitXor",
+    nullptr
+};
+
 const char * ParserAdditiveExpression::operators[] =
 {
     "+",     "plus",
     "-",     "minus",
+    nullptr
+};
+
+const char * ParserShiftExpression::operators[] =
+{
+    "<<", "bitShiftLeft",
+    ">>", "bitShiftRight",
+    nullptr
+};
+
+const char * ParserBitwiseAndExpression::operators[] =
+{
+    "&", "bitAnd",
+    nullptr
+};
+
+const char * ParserBitwiseOrExpression::operators[] =
+{
+    "|", "bitOr",
     nullptr
 };
 

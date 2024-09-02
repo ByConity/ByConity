@@ -94,6 +94,7 @@
 
 #include <Parsers/formatAST.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Parsers/queryToString.h>
 
 namespace DB
 {
@@ -213,7 +214,7 @@ void sanitizeDataType(const DataTypePtr & type)
         return;
 
     throw Exception("Invalid type for filter: " + type->getName() + ", must be UInt8 or Nullable(UInt8)",
-                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER); 
+                    ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
 }
 
 ExpressionAnalyzerData::~ExpressionAnalyzerData() = default;
@@ -238,7 +239,7 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     const StorageMetadataPtr & metadata_snapshot_)
     : WithContext(context_)
     , query(query_)
-    , settings(getContext()->getSettings())
+    , settings(getContext()->getSettingsRef())
     , subquery_depth(subquery_depth_)
     , index_context(std::make_shared<MergeTreeIndexContext>())
     , metadata_snapshot(metadata_snapshot_)
@@ -366,7 +367,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                     aggregated_columns.emplace_back("__grouping_set", std::make_shared<DataTypeUInt64>());
 
                 bool ansi_enabled = getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE;
-
+                const bool non_trivial_grouping_sets = group_by_kind != GroupByKind::ORDINARY;
                 for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
                 {
                     ssize_t size = group_asts.size();
@@ -419,7 +420,7 @@ void ExpressionAnalyzer::analyzeAggregation()
 
                             /// When ANSI mode is on, aggregation keys must be nullable.
                             NameAndTypePair key{column_name, node->result_type};
-                            if (ansi_enabled && JoinCommon::canBecomeNullable(key.type))
+                            if (ansi_enabled && non_trivial_grouping_sets && JoinCommon::canBecomeNullable(key.type))
                                 key.type = JoinCommon::convertTypeToNullable(key.type);
 
                             grouping_set_list.push_back(key);
@@ -481,7 +482,7 @@ void ExpressionAnalyzer::analyzeAggregation()
 
                         /// When ANSI mode is on, aggregation keys must be nullable.
                         NameAndTypePair key{column_name, node->result_type};
-                        if (ansi_enabled && JoinCommon::canBecomeNullable(key.type))
+                        if (ansi_enabled && non_trivial_grouping_sets && JoinCommon::canBecomeNullable(key.type))
                             key.type = JoinCommon::convertTypeToNullable(key.type);
 
                         /// Aggregation keys are uniqued.
@@ -502,7 +503,7 @@ void ExpressionAnalyzer::analyzeAggregation()
                 makeAggregateDescriptions(temp_actions);
 
                 // tmpfix, ANSI features should be implemented in the optimizer
-                if (ansi_enabled)
+                if (ansi_enabled && non_trivial_grouping_sets)
                 {
                     NameSet aggregate_arguments;
                     for (const auto & agg : aggregate_descriptions)
@@ -655,6 +656,7 @@ void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {
     if (do_global && !getContext()->getSettingsRef().distributed_perfect_shard)
     {
+        LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables"), "input query-{}", queryToString(query));
         GlobalSubqueriesVisitor::Data subqueries_data(
             getContext(), subquery_depth, isRemoteStorage(), external_tables, subqueries_for_sets, has_global_subqueries);
         GlobalSubqueriesVisitor(subqueries_data).visit(query);
@@ -1301,7 +1303,7 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
         if (analyzed_join->allowParallelHashJoin())
         {
             LOG_TRACE(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "will use ConcurrentHashJoin");
-            return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, r_sample_block);
+            return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
         }
         return std::make_shared<HashJoin>(analyzed_join, r_sample_block);
     }
@@ -1309,8 +1311,19 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
         return std::make_shared<MergeJoin>(analyzed_join, r_sample_block);
     else if (analyzed_join->forceNestedLoopJoin())
         return std::make_shared<NestedLoopJoin>(analyzed_join, r_sample_block, context);
-    else if (analyzed_join->forceGraceHashLoopJoin())
-        return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk());
+    else if (analyzed_join->forceGraceHashJoin())
+    {
+        if (GraceHashJoin::isSupported(analyzed_join)) {
+            auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: context->getSettings().max_threads);
+            return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false, context->getSettings().max_threads);
+        }  else if (allow_merge_join) {  // fallback into merge join
+            LOG_WARNING(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join is not support, fallback into merge join.");
+            return {std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block)};
+        } else { // fallback into hash join when grace hash and merge join not supported
+            LOG_WARNING(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
+            return {std::make_shared<HashJoin>(analyzed_join, r_sample_block)};
+        }
+    }
     return std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block);
 }
 
@@ -1623,28 +1636,31 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(
     /// When ANSI mode is on, converts group keys into nullable types if they are not. The purpose of conversion is to
     /// ensure that (default) values of empty keys are NULLs with the modifiers as GROUPING SETS, ROLLUP and CUBE.
     /// The conversion occurs before the aggregation to adapt different aggregation variants.
-    if (getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+    const bool non_trivial_grouping_sets = select_query->group_by_with_grouping_sets || select_query->group_by_with_rollup || select_query->group_by_with_cube;
+    if (non_trivial_grouping_sets)
     {
-        const auto & src_columns = step.actions()->getResultColumns();
-        ColumnsWithTypeAndName dst_columns;
-        dst_columns.reserve(src_columns.size());
-
-        for (const auto &src: src_columns)
+        if (getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
         {
-            DataTypePtr type = src.type;
-            if (aggregation_keys.contains(src.name) && JoinCommon::canBecomeNullable(type))
-                type = JoinCommon::convertTypeToNullable(type);
-            dst_columns.emplace_back(src.column, type, src.name);
+            const auto & src_columns = step.actions()->getResultColumns();
+            ColumnsWithTypeAndName dst_columns;
+            dst_columns.reserve(src_columns.size());
+
+            for (const auto &src: src_columns)
+            {
+                DataTypePtr type = src.type;
+                if (aggregation_keys.contains(src.name) && JoinCommon::canBecomeNullable(type))
+                    type = JoinCommon::convertTypeToNullable(type);
+                dst_columns.emplace_back(src.column, type, src.name);
+            }
+
+            auto nullify_dag = ActionsDAG::makeConvertingActions(
+                    src_columns, dst_columns, ActionsDAG::MatchColumnsMode::Position);
+
+            auto ret = ActionsDAG::merge(std::move(*step.actions()), std::move(*nullify_dag));
+
+            step.actions().swap(ret);
         }
-
-        auto nullify_dag = ActionsDAG::makeConvertingActions(
-                src_columns, dst_columns, ActionsDAG::MatchColumnsMode::Position);
-
-        auto ret = ActionsDAG::merge(std::move(*step.actions()), std::move(*nullify_dag));
-
-        step.actions().swap(ret);
     }
-
     if (optimize_aggregation_in_order)
     {
         for (auto & child : asts)
@@ -1890,12 +1906,14 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
     ExpressionActionsChain::Step & step = chain.lastStep(aggregated_columns);
 
     NamesWithAliases result_columns;
+    NameSet required_result_columns_set(required_result_columns.begin(), required_result_columns.end());
 
     ASTs asts = select_query->select()->children;
     for (const auto & ast : asts)
     {
         String result_name = ast->getAliasOrColumnName();
-        if (required_result_columns.empty() || required_result_columns.count(result_name))
+        auto it = required_result_columns_set.find(result_name);
+        if (required_result_columns_set.empty() || it != required_result_columns_set.end())
         {
             std::string source_name = ast->getColumnName();
 
@@ -1926,11 +1944,35 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
 
             result_columns.emplace_back(source_name, result_name);
             step.addRequiredOutput(result_columns.back().second);
+            if (!required_result_columns_set.empty())
+                required_result_columns_set.erase(it);
         }
     }
 
     auto actions = chain.getLastActions();
     actions->project(result_columns);
+
+    if (!required_result_columns.empty())
+    {
+        const NameSet & required_result_columns_not_present = required_result_columns_set;
+        result_columns.clear();
+        for (const auto & column : required_result_columns)
+        {
+            // This is a simple fix for the test case tests/queries/4_cnch_stateless/00998_materialized_view_multiple_joins.sql
+            // whereby INSERT INTO `1234.test00998mv`.target_join_448189919111675915_write SELECT t.id, t.s FROM `1234.test00998mv`.source AS t INNER JOIN `1234.test00998mv`.dim AS d ON t.s = d.s WHERE _partition_id = 1
+            // results in _partition_id being one of the required_result_columns.
+            // But actions does not have the virtual column _partition_id.
+            // This is probably not the best way to do it. Should _partition_id even be allowed here?
+            if (required_result_columns_not_present.count(column) > 0)
+            {
+                LOG_DEBUG(&Poco::Logger::get("SelectQueryExpressionAnalyzer::appendProjectResult"), "Column not present: {}", column);
+                continue;
+            }
+            result_columns.emplace_back(column, std::string{});
+        }
+        actions->project(result_columns);
+    }
+
     return actions;
 }
 
@@ -2418,7 +2460,7 @@ void ExpressionAnalysisResult::finalize(const ExpressionActionsChain & chain, si
                     atomic_predicates[i]->remove_filter_column = can_remove;
                 else if (can_remove)
                     columns_to_remove.insert(name);
-            } 
+            }
         }
         columns_to_remove_after_prewhere = std::move(columns_to_remove);
     }

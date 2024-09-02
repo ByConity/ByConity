@@ -150,7 +150,6 @@ public:
 
     void create(AggregateDataPtr place) const override
     {
-        ParentHelper::create(place);
         new (place) Data(init_data_);
     }
 
@@ -168,76 +167,6 @@ public:
             const auto& column_second = static_cast<const SecondType&>(*columns[1]);
             auto value_second = column_second.getData()[row_num];
             this->data(place).add(value, value_second);
-        }
-    }
-
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override { this->data(place).merge(this->data(rhs)); }
-
-    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override { this->data(place).write(buf); }
-
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override { this->data(place).read(buf); }
-
-    void insertResultInto(AggregateDataPtr place, IColumn & to, Arena *) const override
-    {
-        const auto & data = this->data(place);
-        data.insertResultInto(to);
-    }
-
-    bool allocatesMemoryInArena() const override { return false; }
-
-private:
-    Data init_data_;
-};
-
-/// statistics collector for cbo
-/// for simplicity, convert all stats to base64 string as output
-template <typename Data, bool second_param=false>
-class AggregateFunctionCboFamilyForString final : public IAggregateFunctionDataHelper<Data, AggregateFunctionCboFamilyForString<Data, second_param>>
-{
-public:
-    using Self = AggregateFunctionCboFamilyForString;
-    using ParentHelper = IAggregateFunctionDataHelper<Data, Self>;
-
-    using ResultDataType = DataTypeSketchBinary;
-
-    using ColVecResult = ColumnString;
-
-    String getName() const override { return Data::getName(); }
-
-    template <typename... Args>
-    AggregateFunctionCboFamilyForString(const DataTypes & argument_types_, Args... args)
-        : ParentHelper(argument_types_, {}), init_data_(args...)
-    {
-    }
-
-    template <typename... Args>
-    AggregateFunctionCboFamilyForString(const IDataType & data_type, const DataTypes & argument_types_, Args... args)
-        : ParentHelper(argument_types_, {}), init_data_(args...)
-    {
-        (void)data_type;
-    }
-
-    DataTypePtr getReturnType() const override { return std::make_shared<ResultDataType>(); }
-
-    void create(AggregateDataPtr place) const override
-    {
-        ParentHelper::create(place);
-        new (place) Data(init_data_);
-    }
-
-    void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
-    {
-        auto str = columns[0]->getDataAt(row_num).toString();
-        if constexpr (!second_param)
-        {
-            this->data(place).add(str);
-        }
-        else
-        {
-            using SecondType = ColumnVector<UInt64>;
-            const auto& column_second = static_cast<const SecondType&>(*columns[1]);
-            auto value_second = column_second.getData()[row_num];
-            this->data(place).add(str, value_second);
         }
     }
 

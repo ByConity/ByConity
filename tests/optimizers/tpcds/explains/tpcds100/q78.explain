@@ -5,118 +5,91 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {d_year ASC NULLS LAST, ss_item_sk ASC NULLS LAST, ss_customer_sk ASC NULLS LAST, expr#sum(ss_quantity) DESC NULLS LAST, expr#sum(ss_wholesale_cost) DESC NULLS LAST, expr#sum(ss_sales_price) DESC NULLS LAST, expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)) ASC NULLS LAST, expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 8149281231 rows
+      └─ Gather Exchange Est. 29401979078 rows
          └─ Sorting Est. 100 rows
             │     Order by: {d_year ASC NULLS LAST, ss_item_sk ASC NULLS LAST, ss_customer_sk ASC NULLS LAST, expr#sum(ss_quantity) DESC NULLS LAST, expr#sum(ss_wholesale_cost) DESC NULLS LAST, expr#sum(ss_sales_price) DESC NULLS LAST, expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)) ASC NULLS LAST, expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 8149281231 rows
+            └─ Projection Est. 29401979078 rows
                │     Expressions: [d_year, expr#sum(ss_quantity), expr#sum(ss_sales_price), expr#sum(ss_wholesale_cost), ss_customer_sk, ss_item_sk], expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)):=coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0), expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)):=coalesce(`expr#sum(ws_sales_price)`, 0) + coalesce(`expr#sum(cs_sales_price)`, 0), expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)):=coalesce(`expr#sum(ws_wholesale_cost)`, 0) + coalesce(`expr#sum(cs_wholesale_cost)`, 0), expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2):=round(`expr#sum(ss_quantity)` / (coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0)), 2)
-               └─ Filter Est. 8149281231 rows
+               └─ Filter Est. 29401979078 rows
                   │     Condition: (coalesce(`expr#sum(ws_quantity)`, 0) > 0) OR (coalesce(`expr#sum(cs_quantity)`, 0) > 0)
-                  └─ Left (PARALLEL_HASH) Join Est. 9054756924 rows
+                  └─ Left (PARALLEL_HASH) Join Est. 117607916312 rows
                      │     Condition: d_year == d_year_2, ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
-                     ├─ Left (PARALLEL_HASH) Join Est. 635992041 rows
+                     ├─ Left (PARALLEL_HASH) Join Est. 2295165899 rows
                      │  │     Condition: d_year == d_year_1, ss_customer_sk == ws_bill_customer_sk, ss_item_sk == ws_item_sk
-                     │  ├─ Projection Est. 69163537 rows
-                     │  │  │     Expressions: [expr#sum(ss_quantity), expr#sum(ss_sales_price), expr#sum(ss_wholesale_cost), ss_customer_sk, ss_item_sk], d_year:=2000
-                     │  │  └─ MergingAggregated Est. 69163537 rows
-                     │  │     └─ Repartition Exchange Est. 69163537 rows
-                     │  │        │     Partition by: {ss_item_sk, ss_customer_sk}
-                     │  │        └─ Aggregating Est. 69163537 rows
-                     │  │           │     Group by: {ss_item_sk, ss_customer_sk}
-                     │  │           │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity), expr#sum(ss_wholesale_cost):=AggNull(sum)(ss_wholesale_cost), expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                     │  │           └─ Projection Est. 69163537 rows
-                     │  │              │     Expressions: [ss_customer_sk, ss_item_sk, ss_quantity, ss_sales_price, ss_wholesale_cost]
-                     │  │              └─ Filter Est. 62220627 rows
-                     │  │                 │     Condition: isNull(sr_ticket_number)
-                     │  │                 └─ Left (PARALLEL_HASH) Join Est. 69134030 rows
-                     │  │                    │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                     │  │                    ├─ Repartition Exchange Est. 57662596 rows
-                     │  │                    │  │     Partition by: {ss_item_sk, ss_ticket_number}
-                     │  │                    │  └─ Inner Join Est. 57662596 rows
-                     │  │                    │     │     Condition: ss_sold_date_sk == d_date_sk
-                     │  │                    │     │     Runtime Filters Builder: {d_date_sk}
-                     │  │                    │     ├─ Filter Est. 287997024 rows
-                     │  │                    │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-                     │  │                    │     │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
-                     │  │                    │     │           Where: Runtime Filters: {ss_sold_date_sk}
-                     │  │                    │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_ticket_number, ss_quantity, ss_wholesale_cost, ss_sales_price]
-                     │  │                    │     └─ Broadcast Exchange Est. 366 rows
-                     │  │                    │        └─ Filter Est. 366 rows
-                     │  │                    │           │     Condition: d_year = 2000
-                     │  │                    │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │  │                    │                    Where: d_year = 2000
-                     │  │                    │                    Outputs: [d_date_sk, d_year]
-                     │  │                    └─ Repartition Exchange Est. 28795080 rows
-                     │  │                       │     Partition by: {sr_item_sk, sr_ticket_number}
-                     │  │                       └─ TableScan tpcds100.store_returns Est. 28795080 rows
-                     │  │                                Outputs: [sr_item_sk, sr_ticket_number]
-                     │  └─ Projection Est. 17309245 rows
-                     │     │     Expressions: [expr#sum(ws_quantity), expr#sum(ws_sales_price), expr#sum(ws_wholesale_cost), ws_bill_customer_sk, ws_item_sk], d_year_1:=2000
-                     │     └─ MergingAggregated Est. 17309245 rows
-                     │        └─ Repartition Exchange Est. 17309245 rows
-                     │           │     Partition by: {ws_item_sk, ws_bill_customer_sk}
-                     │           └─ Aggregating Est. 17309245 rows
-                     │              │     Group by: {ws_item_sk, ws_bill_customer_sk}
-                     │              │     Aggregates: expr#sum(ws_quantity):=AggNull(sum)(ws_quantity), expr#sum(ws_wholesale_cost):=AggNull(sum)(ws_wholesale_cost), expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
-                     │              └─ Projection Est. 17309245 rows
-                     │                 │     Expressions: [ws_bill_customer_sk, ws_item_sk, ws_quantity, ws_sales_price, ws_wholesale_cost]
-                     │                 └─ Filter Est. 15571675 rows
-                     │                    │     Condition: isNull(wr_order_number)
-                     │                    └─ Left (PARALLEL_HASH) Join Est. 17301862 rows
-                     │                       │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
-                     │                       ├─ Repartition Exchange Est. 14416045 rows
-                     │                       │  │     Partition by: {ws_item_sk, ws_order_number}
-                     │                       │  └─ Inner Join Est. 14416045 rows
-                     │                       │     │     Condition: ws_sold_date_sk == d_date_sk_1
-                     │                       │     │     Runtime Filters Builder: {d_date_sk_1}
-                     │                       │     ├─ Filter Est. 72001237 rows
-                     │                       │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
-                     │                       │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                     │                       │     │           Where: Runtime Filters: {ws_sold_date_sk}
-                     │                       │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_customer_sk, ws_order_number, ws_quantity, ws_wholesale_cost, ws_sales_price]
-                     │                       │     └─ Broadcast Exchange Est. 366 rows
-                     │                       │        └─ Filter Est. 366 rows
-                     │                       │           │     Condition: d_year_1 = 2000
-                     │                       │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │                       │                    Where: d_year = 2000
-                     │                       │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
-                     │                       └─ Repartition Exchange Est. 7197670 rows
-                     │                          │     Partition by: {wr_item_sk, wr_order_number}
-                     │                          └─ TableScan tpcds100.web_returns Est. 7197670 rows
-                     │                                   Outputs: [wr_item_sk, wr_order_number]
-                     └─ Projection Est. 28633798 rows
-                        │     Expressions: [cs_bill_customer_sk, cs_item_sk, expr#sum(cs_quantity), expr#sum(cs_sales_price), expr#sum(cs_wholesale_cost)], d_year_2:=2000
-                        └─ MergingAggregated Est. 28633798 rows
-                           └─ Repartition Exchange Est. 28633798 rows
-                              │     Partition by: {cs_item_sk, cs_bill_customer_sk}
-                              └─ Aggregating Est. 28633798 rows
-                                 │     Group by: {cs_item_sk, cs_bill_customer_sk}
-                                 │     Aggregates: expr#sum(cs_quantity):=AggNull(sum)(cs_quantity), expr#sum(cs_wholesale_cost):=AggNull(sum)(cs_wholesale_cost), expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
-                                 └─ Projection Est. 28633798 rows
-                                    │     Expressions: [cs_bill_customer_sk, cs_item_sk, cs_quantity, cs_sales_price, cs_wholesale_cost]
-                                    └─ Filter Est. 25764180 rows
-                                       │     Condition: isNull(cr_order_number)
-                                       └─ Left (PARALLEL_HASH) Join Est. 28626867 rows
-                                          │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                                          ├─ Repartition Exchange Est. 28626867 rows
-                                          │  │     Partition by: {cs_item_sk, cs_order_number}
-                                          │  └─ Inner Join Est. 28626867 rows
-                                          │     │     Condition: cs_sold_date_sk == d_date_sk_2
-                                          │     │     Runtime Filters Builder: {d_date_sk_2}
-                                          │     ├─ Filter Est. 143997065 rows
-                                          │     │  │     Condition: Runtime Filters: {cs_sold_date_sk}
-                                          │     │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
-                                          │     │           Where: Runtime Filters: {cs_sold_date_sk}
-                                          │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_order_number, cs_quantity, cs_wholesale_cost, cs_sales_price]
-                                          │     └─ Broadcast Exchange Est. 366 rows
-                                          │        └─ Filter Est. 366 rows
-                                          │           │     Condition: d_year_2 = 2000
-                                          │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                          │                    Where: d_year = 2000
-                                          │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
-                                          └─ Repartition Exchange Est. 14404374 rows
-                                             │     Partition by: {cr_item_sk, cr_order_number}
-                                             └─ TableScan tpcds100.catalog_returns Est. 14404374 rows
-                                                      Outputs: [cr_item_sk, cr_order_number]
+                     │  ├─ Aggregating Est. 69247986 rows
+                     │  │  │     Group by: {d_year, ss_item_sk, ss_customer_sk}
+                     │  │  │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity), expr#sum(ss_wholesale_cost):=AggNull(sum)(ss_wholesale_cost), expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
+                     │  │  └─ Projection Est. 17283507 rows
+                     │  │     │     Expressions: [d_year, ss_customer_sk, ss_item_sk, ss_quantity, ss_sales_price, ss_wholesale_cost]
+                     │  │     └─ Filter Est. 17283507 rows
+                     │  │        │     Condition: isNull(sr_ticket_number)
+                     │  │        └─ Left (PARALLEL_HASH) Join Est. 69134030 rows
+                     │  │           │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                     │  │           ├─ Inner Join Est. 57662596 rows
+                     │  │           │  │     Condition: ss_sold_date_sk == d_date_sk
+                     │  │           │  │     Runtime Filters Builder: {d_date_sk}
+                     │  │           │  ├─ Filter Est. 287997024 rows
+                     │  │           │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                     │  │           │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                     │  │           │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                     │  │           │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_ticket_number, ss_quantity, ss_wholesale_cost, ss_sales_price]
+                     │  │           │  └─ Broadcast Exchange Est. 366 rows
+                     │  │           │     └─ Filter Est. 366 rows
+                     │  │           │        │     Condition: d_year = 2000
+                     │  │           │        └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │  │           │                 Where: d_year = 2000
+                     │  │           │                 Outputs: [d_date_sk, d_year]
+                     │  │           └─ TableScan tpcds100.store_returns Est. 28795080 rows
+                     │  │                    Outputs: [sr_item_sk, sr_ticket_number]
+                     │  └─ Aggregating Est. 17330380 rows
+                     │     │     Group by: {d_year_1, ws_item_sk, ws_bill_customer_sk}
+                     │     │     Aggregates: expr#sum(ws_quantity):=AggNull(sum)(ws_quantity), expr#sum(ws_wholesale_cost):=AggNull(sum)(ws_wholesale_cost), expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
+                     │     └─ Projection Est. 4325465 rows
+                     │        │     Expressions: [d_year_1, ws_bill_customer_sk, ws_item_sk, ws_quantity, ws_sales_price, ws_wholesale_cost]
+                     │        └─ Filter Est. 4325465 rows
+                     │           │     Condition: isNull(wr_order_number)
+                     │           └─ Left (PARALLEL_HASH) Join Est. 17301862 rows
+                     │              │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
+                     │              ├─ Inner Join Est. 14416045 rows
+                     │              │  │     Condition: ws_sold_date_sk == d_date_sk_1
+                     │              │  │     Runtime Filters Builder: {d_date_sk_1}
+                     │              │  ├─ Filter Est. 72001237 rows
+                     │              │  │  │     Condition: Runtime Filters: {ws_sold_date_sk}
+                     │              │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                     │              │  │           Where: Runtime Filters: {ws_sold_date_sk}
+                     │              │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_customer_sk, ws_order_number, ws_quantity, ws_wholesale_cost, ws_sales_price]
+                     │              │  └─ Broadcast Exchange Est. 366 rows
+                     │              │     └─ Filter Est. 366 rows
+                     │              │        │     Condition: d_year_1 = 2000
+                     │              │        └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │              │                 Where: d_year = 2000
+                     │              │                 Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+                     │              └─ TableScan tpcds100.web_returns Est. 7197670 rows
+                     │                       Outputs: [wr_item_sk, wr_order_number]
+                     └─ Aggregating Est. 28626867 rows
+                        │     Group by: {d_year_2, cs_item_sk, cs_bill_customer_sk}
+                        │     Aggregates: expr#sum(cs_quantity):=AggNull(sum)(cs_quantity), expr#sum(cs_wholesale_cost):=AggNull(sum)(cs_wholesale_cost), expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
+                        └─ Projection Est. 7156716 rows
+                           │     Expressions: [cs_bill_customer_sk, cs_item_sk, cs_quantity, cs_sales_price, cs_wholesale_cost, d_year_2]
+                           └─ Filter Est. 7156716 rows
+                              │     Condition: isNull(cr_order_number)
+                              └─ Left (PARALLEL_HASH) Join Est. 28626867 rows
+                                 │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+                                 ├─ Inner Join Est. 28626867 rows
+                                 │  │     Condition: cs_sold_date_sk == d_date_sk_2
+                                 │  │     Runtime Filters Builder: {d_date_sk_2}
+                                 │  ├─ Filter Est. 143997065 rows
+                                 │  │  │     Condition: Runtime Filters: {cs_sold_date_sk}
+                                 │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
+                                 │  │           Where: Runtime Filters: {cs_sold_date_sk}
+                                 │  │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_order_number, cs_quantity, cs_wholesale_cost, cs_sales_price]
+                                 │  └─ Broadcast Exchange Est. 366 rows
+                                 │     └─ Filter Est. 366 rows
+                                 │        │     Condition: d_year_2 = 2000
+                                 │        └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                 │                 Where: d_year = 2000
+                                 │                 Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                                 └─ TableScan tpcds100.catalog_returns Est. 14404374 rows
+                                          Outputs: [cr_item_sk, cr_order_number]
 note: Runtime Filter is applied for 3 times.

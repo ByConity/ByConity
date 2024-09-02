@@ -14,7 +14,6 @@
  */
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <brpc/options.pb.h>
@@ -22,22 +21,80 @@
 
 namespace DB
 {
-std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, const std::string & client_type, bool connection_reuse)
+
+void RpcChannelPool::createExpireTimer()
 {
-    auto mutex_itr = this->mutexes.find(client_type);
-    auto & mutex = mutex_itr == mutexes.end() ? mutexes.at(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY) : mutex_itr->second;
-    std::unique_lock lock(*mutex);
+    if (rpc_channel_pool_check_interval_seconds > 0 && rpc_channel_pool_expired_seconds > 0)
+    {
+        expireThread = std::make_unique<std::thread>([this]() {
+            while (this->rpc_channel_pool_check_interval_seconds > 0 && this->rpc_channel_pool_expired_seconds > 0)
+            {
+                std::unique_lock<bthread::Mutex> lock(mutex);
+                if (exit)
+                    break;
 
-    auto itr = pool_options_map.find(client_type);
+                cv.wait_for(lock, this->rpc_channel_pool_check_interval_seconds * 1000000);
+                this->checkAndClearExpiredPool(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
+                this->checkAndClearExpiredPool(BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY);
+            }
+        });
+    }
+}
 
-    // Get the options of the given client_type, otherwise get the default config.
-    if (itr == pool_options_map.end())
+void RpcChannelPool::destroyExpireTimer()
+{
+    if (expireThread.get())
+    {
+        try
+        {
+            std::unique_lock<bthread::Mutex> lock(mutex);
+            exit = true;
+            cv.notify_all();
+            lock.unlock();
+
+            expireThread->join();
+            expireThread.reset();
+        } catch (...)
+        {
+            expireThread.reset();
+        }
+    }
+}
+
+size_t RpcChannelPool::checkAndClearExpiredPool(const std::string & client_type)
+{
+    size_t expired_num = 0;
+    time_t current_ts = time(nullptr);
+    auto & host_port_pool = channel_pool[client_type].host_port_pool;
+
+    std::vector<HostPort> expired_host_ports;
+    host_port_pool.for_each([&](const Container::value_type & v) {
+        if (current_ts > v.second->getRecentUsedTime() + static_cast<long>(rpc_channel_pool_expired_seconds))
+        {
+            expired_host_ports.emplace_back(v.first);
+            ++expired_num;
+        }
+    });
+    for (const auto & host_port : expired_host_ports)
+        host_port_pool.erase(host_port);
+
+    if (expired_num != 0)
+        LOG_TRACE(log, "check {} ChannelPool, expired_num is {}.", client_type, expired_num);
+    return expired_num;
+}
+
+std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, const std::string & client_type)
+{
+    static thread_local std::unordered_map<ClientType, PoolOptionsPtr> local_options_pool;
+
+    auto iter = channel_pool.find(client_type);
+    if (unlikely(iter == channel_pool.end()))
     {
         std::cout << Poco::DateTimeFormatter::format(Poco::DateTime(), "%Y.%m.%d %H:%M:%S.%i") << " <Warning> "
                   << "RpcChannelPool::getClient "
-                  << "The given client_type is not in config! <rpc_default> config will be taken.";
-        itr = pool_options_map.find(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
-        if (itr == pool_options_map.end())
+                  << "The given client_type:<< client_type << is not in config! <rpc_default> config will be taken.";
+        iter = channel_pool.find(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
+        if (iter == channel_pool.end())
         {
             std::cout << Poco::DateTimeFormatter::format(Poco::DateTime(), "%Y.%m.%d %H:%M:%S.%i") << " <Error> "
                       << "RpcChannelPool::getClient "
@@ -46,38 +103,58 @@ std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, c
             return nullptr;
         }
     }
-    const BrpcChannelPoolOptions::PoolOptions & pool_options = itr->second;
-    const auto & max_connections = pool_options.max_connections;
-    auto & pool = channel_pool[client_type][host_port];
-    if (connection_reuse && pool.clients.empty())
+
+    auto local_iter = local_options_pool.find(client_type);
+    if (local_iter == local_options_pool.end() || local_iter->second != iter->second.pool_options)
     {
-        pool.clients.resize(max_connections, nullptr);
+        local_options_pool.emplace(client_type, std::atomic_load(&iter->second.pool_options));
+        local_iter = local_options_pool.find(client_type);
     }
-    if (likely(pool_options.load_balancer == "rr")) // round robin
+    auto & pool_options = local_iter->second;
+    auto max_connections = pool_options->max_connections;
+
+    PoolPtr pool;
+    bool found = iter->second.host_port_pool.if_contains(host_port, [&](auto & it) {
+        pool = it.second;
+        pool->updateRecentUsedTime();
+    });
+    if (!found || !pool->ok())
     {
-        auto & index = pool.counter;
-        auto & pool_clients = pool.clients;
-        index = (++index) % pool_options.max_connections;
-        if (connection_reuse && pool_clients.at(index) != nullptr)
+        pool = std::make_shared<Pool>(max_connections);
+        auto exists = [&](Container::value_type & v) {
+            if (!v.second->ok())
+                v.second = pool;
+            else
+            {
+                pool = v.second;
+                pool->updateRecentUsedTime();
+            }
+        };
+        iter->second.host_port_pool.try_emplace_l(host_port, exists, pool);
+    }
+
+    if (likely(pool_options->load_balancer == "rr")) // round robin
+    {
+        auto & pool_clients = pool->clients;
+        auto index = pool->counter % max_connections;
+        pool->counter = (index + 1) % max_connections;
+        auto client = std::atomic_load(&pool_clients.at(index));
+        if (client && client->ok())
         {
-            return pool_clients.at(index);
+            return client;
         }
         else
         {
-            auto connection_pool_options = pool_options.channel_options;
+            auto & connection_pool_options = pool_options->channel_options;
             if (static_cast<brpc::ConnectionType>(connection_pool_options.connection_type) == brpc::ConnectionType::CONNECTION_TYPE_SINGLE)
             {
-                connection_pool_options.connection_group = pool_options.pool_name + "_" + std::to_string(index);
+                connection_pool_options.connection_group = pool_options->pool_name + "_" + std::to_string(index);
             }
-            if (connection_reuse)
-            {
-                pool_clients[index] = std::make_shared<RpcClient>(host_port, &connection_pool_options);
-                return pool_clients[index];
-            }
-            else
-            {
-                return std::make_shared<RpcClient>(host_port, &connection_pool_options);
-            }
+
+            client = std::make_shared<RpcClient>(
+                host_port, [pool]() -> void { pool->ok_.store(false, std::memory_order_relaxed); }, &connection_pool_options);
+            std::atomic_store(&pool_clients[index], client);
+            return client;
         }
     }
     else

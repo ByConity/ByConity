@@ -218,8 +218,14 @@ bool IdentifierSemantic::doesIdentifierBelongTo(const ASTIdentifier & identifier
 {
     size_t num_components = identifier.name_parts.size();
     if (num_components >= 3)
-        return identifier.name_parts[0] == database &&
-               identifier.name_parts[1] == table;
+    {
+        if (identifier.name_parts[1] == table)
+        {
+            if (identifier.name_parts[0] != database)
+                return formatTenantDatabaseName(identifier.name_parts[0]) == database;
+            return true;
+        }
+    }
     return false;
 }
 
@@ -330,6 +336,52 @@ IdentifierSemantic::getIdentsMembership(ASTPtr ast, const std::vector<TableWithC
     return result;
 }
 
+/**
+ * 1. target partition key expression: (func_1(a), func_2(b), func_3(c)) --> IdentifiersCollector --> (a, b, c) (parititon key identifier must be short name)
+ * 
+ * 2. mv select query : select func_7(func_a(d)) as a, b, func_8(func_b(e)) as c from ... --> aliases (a-> func_7(func_a(d)), c -> func_8(func_b(e)))
+ * 
+ * 3. source table partition key(func_a(d), func_b(e), b)
+ * 
+ * 4. generate expression actions : (func_1(func_7(`func_a(d)`)), func_2(`b`), func_3(func_8(`func_b(e)`))) 
+ * 
+ */
+std::optional<size_t> IdentifierSemantic::getSourceTableAndColumnMapping(
+    ASTPtr ast, const std::vector<TableWithColumnNamesAndTypes> & tables, Aliases & aliases, std::shared_ptr<ASTExpressionList> & collect_identifiers, bool is_recursion)
+{
+    auto idents = IdentifiersCollector::collect(ast);
+    std::optional<size_t> result;
+    Aliases empty_alias;
+    for (const auto * ident : idents)
+    {
+        std::optional<size_t> pos;
+        /// condition_1: if target table partition key is alias from base table to check the source table
+        /// TODO: use name to compare maybe not enough
+        if (aliases.count(ident->name()))
+        {
+            pos = getSourceTableAndColumnMapping(aliases[ident->name()], tables, empty_alias, collect_identifiers, true);
+            collect_identifiers->children.emplace_back(aliases[ident->name()]);
+        }
+        /// condition_2: if target table partition key not in alias try to get source table with original column name
+        else
+        {
+            pos = IdentifierSemantic::chooseTableColumnMatch(*ident, tables, true);
+            if (!is_recursion)
+                collect_identifiers->children.emplace_back(std::make_shared<ASTIdentifier>(*ident));
+        }
+            
+        if (!pos)
+            return {};
+        /// identifiers from different tables
+        if (result && *pos != *result)
+            return {};
+        
+        result = pos;
+    }
+
+    return result;
+}
+
 IdentifiersCollector::ASTIdentifiers IdentifiersCollector::collect(const ASTPtr & node)
 {
     IdentifiersCollector::Data ident_data;
@@ -346,7 +398,31 @@ bool IdentifiersCollector::needChildVisit(const ASTPtr &, const ASTPtr &)
 void IdentifiersCollector::visit(const ASTPtr & node, IdentifiersCollector::Data & data)
 {
     if (const auto * ident = node->as<ASTIdentifier>())
-        data.idents.push_back(ident);
+        data.idents.push_back(ident);   
+}
+
+void RemoveQualifierVisitor::transform(ASTPtr & node)
+{
+    RemoveQualifierVisitor::Data ident_data;
+    MutableInDepthNodeVisitor<RemoveQualifierVisitor, true> ident_visitor(ident_data);
+    ident_visitor.visit(node);
+}
+
+bool RemoveQualifierVisitor::needChildVisit(ASTPtr &, ASTPtr &)
+{
+    return true;
+}
+
+void RemoveQualifierVisitor::visit(ASTPtr & node, RemoveQualifierVisitor::Data &)
+{
+    if (auto * ident = node->as<ASTIdentifier>())
+    {
+        if (ident->compound())
+        {
+            String table = ident->nameParts().back();
+            ident->setShortName(table);
+        }
+    }
 }
 
 

@@ -27,23 +27,23 @@ PlanNodeCost ExchangeCost::calculate(const ExchangeStep & step, CostContext & co
 
     // more shuffle keys is better than less shuffle keys.
     // todo data skew
-    if (!step.getSchema().getPartitioningColumns().empty()
-        && (step.getSchema().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH
-            || step.getSchema().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE))
-        base_cost += 1.0 / step.getSchema().getPartitioningColumns().size();
+    if (!step.getSchema().getColumns().empty()
+        && (step.getSchema().getHandle() == Partitioning::Handle::FIXED_HASH
+            || step.getSchema().getHandle() == Partitioning::Handle::BUCKET_TABLE))
+        base_cost += 1.0 / (step.getSchema().getColumns().size() + 1);
 
-    if (step.getSchema().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE)
+    if (step.getSchema().getHandle() == Partitioning::Handle::BUCKET_TABLE)
         base_cost *= 1.1;
 
     if (!context.stats)
         return PlanNodeCost::netCost(base_cost);
 
-    if (step.getSchema().getPartitioningHandle() == Partitioning::Handle::FIXED_ARBITRARY)
+    if (step.getSchema().getHandle() == Partitioning::Handle::FIXED_ARBITRARY)
         return PlanNodeCost::ZERO;
 
     auto single_worker_cost = context.stats->getRowCount() + base_cost;
     return PlanNodeCost::netCost(
-        step.getSchema().getPartitioningHandle() == Partitioning::Handle::FIXED_BROADCAST ? single_worker_cost * context.worker_size
+        step.getSchema().getHandle() == Partitioning::Handle::FIXED_BROADCAST ? single_worker_cost * context.worker_size
                                                                                           : single_worker_cost);
 }
 

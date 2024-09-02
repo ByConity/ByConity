@@ -25,11 +25,10 @@ const std::vector<RuleType> & SelectivityBasedJoinReorder::blockRules() const
     return block;
 }
 
-PatternPtr SelectivityBasedJoinReorder::getPattern() const
+ConstRefPatternPtr SelectivityBasedJoinReorder::getPattern() const
 {
-    return Patterns::multiJoin()
-        .matchingStep<MultiJoinStep>([&](const MultiJoinStep & s) { return s.getGraph().getNodes().size() > max_join_size; })
-        .result();
+    /* can't make static lambda with capture */
+    return pattern;
 }
 
 TransformResult SelectivityBasedJoinReorder::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
@@ -75,6 +74,7 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
         auto left_stats = memo.getGroupById(left_group_id)->getStatistics().value_or(nullptr);
         if (!left_stats)
             return {};
+        double left_selectivity = JoinReorderUtils::computeFilterSelectivity(left_group_id, memo);
 
         for (const auto & [right_group_id, edges] : item.second)
         {
@@ -82,6 +82,7 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
             auto right_stats = memo.getGroupById(right_group_id)->getStatistics().value_or(nullptr);
             if (!right_stats)
                 return {};
+            double right_selectivity = JoinReorderUtils::computeFilterSelectivity(right_group_id, memo);
 
             for (const auto & edge : edges)
             {
@@ -96,10 +97,11 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
                         left_keys,
                         right_keys,
                         ASTTableJoin::Kind::Inner,
+                        ASTTableJoin::Strictness::All,
                         *context,
                         is_left_base_table,
                         is_right_base_table,
-                        nullptr,
+                        {left_selectivity, right_selectivity},
                         {},
                         true);
 
@@ -154,10 +156,7 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
             if (!new_join_node)
                 return nullptr; // it's unreachable in general.
 
-            // const auto & join_step = static_cast<const JoinStep &>(*new_join_node->getStep());
-            // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "join_keys_in_cardinality_based={} vs {}", fmt::join(join_step.getLeftKeys(), ","), fmt::join(join_step.getRightKeys(), ","));
-
-            GroupId new_group_id = 0;
+                        GroupId new_group_id = 0;
             ++new_join_cnt;
             if (new_join_cnt < graph.getNodes().size() - 1)
             {
@@ -165,10 +164,7 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
                 rule_context.optimization_context->getOptimizerContext().recordPlanNodeIntoGroup(
                     new_join_node, join_expr, RuleType::SELECTIVITY_BASED_JOIN_REORDER);
                 new_group_id = join_expr->getGroupId();
-                
-                // LOG_WARNING(&Poco::Logger::get("FIX_JOIN_ORDER"), "SelectivityBased generate new join in new group id={}", new_group_id);
-    
-                for (auto type : blockRules())
+                                for (auto type : blockRules())
                     join_expr->setRuleExplored(type);
             }
 
@@ -222,11 +218,13 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
                 auto left_stats = memo.getGroupById(outer_left_group_id)->getStatistics().value_or(nullptr);
                 if (!left_stats)
                     return {};
+                double left_selectivity = JoinReorderUtils::computeFilterSelectivity(left_group_id, memo);
 
                 auto is_right_base_table = memo.getGroupById(outer_right_group_id)->isTableScan();
                 auto right_stats = memo.getGroupById(outer_right_group_id)->getStatistics().value_or(nullptr);
                 if (!right_stats)
                     return {};
+                double right_selectivity = JoinReorderUtils::computeFilterSelectivity(right_group_id, memo);
 
                 // because join graph is undirected graph, only use the same edge one time.
                 Names new_left_keys;
@@ -242,10 +240,11 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
                     new_left_keys,
                     new_right_keys,
                     ASTTableJoin::Kind::Inner,
+                    ASTTableJoin::Strictness::All,
                     *context,
                     is_left_base_table,
                     is_right_base_table,
-                    nullptr,
+                    {left_selectivity, right_selectivity},
                     {},
                     true);
                 if (!join_stats)

@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include <memory>
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/AggregateDescription.h>
@@ -29,9 +28,12 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/PreparedSets.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Processors/IntermediateResult/TableScanCacheInfo.h>
 #include <Storages/IStorage_fwd.h>
-#include <Storages/ProjectionsDescription.h>
 #include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
+#include <sstream>
+#include <Storages/ProjectionsDescription.h>
+#include <memory>
 #include <vector>
 
 namespace DB
@@ -62,7 +64,7 @@ struct FilterDAGInfo;
 using FilterDAGInfoPtr = std::shared_ptr<FilterDAGInfo>;
 
 struct InputOrderInfo;
-using InputOrderInfoPtr = std::shared_ptr<const InputOrderInfo>;
+using InputOrderInfoPtr = std::shared_ptr<InputOrderInfo>;
 
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
@@ -157,7 +159,7 @@ struct InputOrderInfo
     bool operator !=(const InputOrderInfo & other) const { return !(*this == other); }
 
     void toProto(Protos::InputOrderInfo & proto) const;
-    static std::shared_ptr<InputOrderInfo> fromProto(const Protos::InputOrderInfo & proto, ContextPtr context);
+    static std::shared_ptr<InputOrderInfo> fromProto(const Protos::InputOrderInfo & proto);
 };
 
 class IMergeTreeDataPart;
@@ -235,6 +237,9 @@ struct SelectQueryInfo
     /// atomic predicate, may > predicate ast
     std::deque<AtomicPredicatePtr> atomic_predicates;
 
+    /// cache digest, used for matching with cache when enable query cache
+    TableScanCacheInfo cache_info;
+
     void serialize(WriteBuffer &) const;
     void deserialize(ReadBuffer &);
     /// Read from index
@@ -255,13 +260,12 @@ struct SelectQueryInfo
         return select_query;
     }
 
+    void appendPartitonFilters(ASTs conjuncts);
+
     ASTSelectQuery * getSelectQuery()
     {
         return const_cast<ASTSelectQuery *>((const_cast<const SelectQueryInfo *>(this))->getSelectQuery());
     }
-
-    /// caller must hold the interpreter to prevent some resources in query_info from being released
-    static std::shared_ptr<InterpreterSelectQuery> buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info);
 };
 
 /// Collect all query 's predicates from query info, mainly used for collecting index.
@@ -278,4 +282,5 @@ const std::deque<AtomicPredicatePtr> & getAtomicPredicates(const SelectQueryInfo
 
 MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info);
 
+TableScanCacheInfo getTableScanCacheInfo(const SelectQueryInfo & query_info);
 }

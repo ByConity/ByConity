@@ -47,6 +47,8 @@ using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
 /// Push down where partition predicate to query info partition_filter
 void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context);
+Names getBitMapParameterValues(String expression);
+std::pair<ASTPtr, size_t> createInFunctionForBitMapParameter(const String & index_arg, const std::set<Field> & parameter_values);
 
 enum class MaterializeStrategy : Int32
 {
@@ -172,6 +174,7 @@ private:
     NameSet array_joined_names;
     const StorageMetadataPtr & metadata_snapshot;
     bool enable_ab_index_optimization;
+    bool enable_implicit_column_prewhere_push;
 
     /// Late materialize
     MaterializeStrategy materialize_strategy;

@@ -28,6 +28,8 @@ public:
     ASTPtr pattern;
     ASTPtr target;
     ASTPtr settings;
+    bool if_not_exists = false;
+    bool or_replace = false;
 
 
     /** Get the text that identifies this element. */

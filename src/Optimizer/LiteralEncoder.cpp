@@ -27,7 +27,7 @@
 namespace DB
 {
 
-ASTPtr LiteralEncoder::encode(Field field, const DataTypePtr & type, ContextMutablePtr context)
+ASTPtr LiteralEncoder::encode(Field field, const DataTypePtr & type, ContextPtr context)
 {
     auto literal_ast = std::make_shared<ASTLiteral>(std::move(field));
 
@@ -49,7 +49,7 @@ ASTPtr LiteralEncoder::encode(Field field, const DataTypePtr & type, ContextMuta
     return makeCastFunction(literal_ast, type);
 }
 
-ASTPtr LiteralEncoder::encodeForComparisonExpr(Field field, const DataTypePtr & type, ContextMutablePtr context)
+ASTPtr LiteralEncoder::encodeForComparisonExpr(Field field, const DataTypePtr & type, ContextPtr context)
 {
     // do not add cast for NULL & simple types
     auto base_type = removeNullable(recursiveRemoveLowCardinality(type));

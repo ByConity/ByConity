@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <optional>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 
 namespace DB
@@ -27,6 +28,8 @@ struct DistributedPipelineSettings
     String query_id{};
     size_t plan_segment_id = 0;
     size_t parallel_size = 1;
+    std::optional<size_t> source_task_index;
+    std::optional<size_t> source_task_count;
     bool is_explain = false; // explain pipeline sql set is_explain to true
     AddressInfo coordinator_address{};
     AddressInfo current_address{};

@@ -101,6 +101,7 @@ public:
     static bool isFalsePredicate(const T & predicate);
 
     static bool containsAll(const Strings & partition_symbols, const std::set<String> & unique_symbols);
+    static bool containsAny(const Strings & partition_symbols, const std::set<String> & unique_symbols);
 
     static bool isInliningCandidate(ConstASTPtr & predicate, ProjectionNode & node);
     static ASTPtr extractJoinPredicate(JoinNode &);
@@ -117,6 +118,9 @@ public:
 
     static std::pair<std::vector<std::pair<ConstASTPtr, ConstASTPtr>>, std::vector<ConstASTPtr>>
     extractEqualPredicates(const std::vector<ConstASTPtr> & predicates);
+
+    // Set Operation
+    static void subtract(ASTs & left, const ASTs & right);
 
 private:
     static String flip(const String & fun_name);

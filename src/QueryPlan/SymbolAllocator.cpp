@@ -38,6 +38,9 @@ String SymbolAllocator::newSymbol(String name_hint)
         }
     }
 
+    if (name_hint.empty())
+        name_hint = "newSymbol";
+
     if (next_ids.find(name_hint) == next_ids.end())
         next_ids[name_hint] = 1;
 

@@ -45,9 +45,8 @@ class GraceHashJoin final : public IJoin
 {
     class FileBucket;
     class DelayedBlocks;
-    using InMemoryJoin = HashJoin;
 
-    using InMemoryJoinPtr = std::shared_ptr<InMemoryJoin>;
+    using InMemoryJoinPtr = std::shared_ptr<HashJoin>;
 
 public:
     using BucketPtr = std::shared_ptr<FileBucket>;
@@ -57,7 +56,10 @@ public:
         ContextPtr context_, std::shared_ptr<TableJoin> table_join_,
         const Block & left_sample_block_, const Block & right_sample_block_,
         TemporaryDataOnDiskScopePtr tmp_data_,
-        bool any_take_last_row_ = false);
+        int left_side_parallel_,
+        bool enable_adaptive_spill,
+        bool any_take_last_row_,
+        int num_streams_);
 
     ~GraceHashJoin() override;
 
@@ -67,6 +69,8 @@ public:
     void initialize(const Block & sample_block) override;
 
     bool addJoinedBlock(const Block & block, bool check_limits) override;
+
+    BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size, size_t total_size, size_t index) const override;
 
     // void checkTypesOfKeys(const Block & block) const override;
 
@@ -95,6 +99,8 @@ private:
     /// Create empty join for in-memory processing.
     InMemoryJoinPtr makeInMemoryJoin();
 
+    void inMemoryJoinBlock(Block & block, ExtraBlockPtr & not_processed);
+
     /// Add right table block to the @join. Calls @rehash on overflow.
     void addJoinedBlockImpl(Block block, bool is_delay_read = false);
 
@@ -107,15 +113,12 @@ private:
     /// Throws if a bucket creation fails
     void addBuckets(size_t bucket_count);
 
-    /// Create new bucket at the end of @destination.
-    void addBucket(Buckets & destination);
-
     /// Increase number of buckets to match desired_size.
     /// Called when HashJoin in-memory table for one bucket exceeds the limits.
     ///
     /// NB: after @rehashBuckets there may be rows that are written to the buckets that they do not belong to.
     /// It is fine; these rows will be written to the corresponding buckets during the third stage.
-    Buckets rehashBuckets();
+    Buckets rehashBuckets(size_t grow_multiplier);
 
     /// Perform some bookkeeping after all calls to @joinBlock.
     void startReadingDelayedBlocks();
@@ -126,8 +129,12 @@ private:
     /// Structure block to store in the HashJoin according to sample_block.
     Block prepareRightBlock(const Block & block);
 
+    void initMaxJoinedBlockBytesInSpill();
+
     Poco::Logger * log;
     ContextPtr context;
+    bool adaptive_spill_mode = false;
+    bool join_blk_rows_inited = false;
     std::shared_ptr<TableJoin> table_join;
     Block left_sample_block;
     Block right_sample_block;
@@ -152,6 +159,17 @@ private:
     InMemoryJoinPtr hash_join;
     Block hash_join_sample_block;
     mutable std::mutex hash_join_mutex;
+    int left_side_parallel;
+    size_t max_allowed_mem_size_in_spill = 512 * 1024 * 1024; //512MB default
+    size_t max_joined_block_bytes_in_spill = 50 * 1024 * 1024; //50MB default
+    const size_t sample_block_rows_for_bytes_estimation = 1024;
+
+    size_t num_streams = 1;
+    size_t setting_max_joined_block_rows = DEFAULT_BLOCK_SIZE;
+    mutable std::atomic<bool> has_low_memory_encountered {false};
+    
+    mutable size_t last_mem_size_triger_spill = 0;
+
 };
 
 }

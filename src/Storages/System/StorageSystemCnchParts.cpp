@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Access/ContextAccess.h>
 #include <map>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
@@ -59,6 +60,7 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         {"name", std::make_shared<DataTypeString>()},
         {"bytes_on_disk", std::make_shared<DataTypeUInt64>()},
         {"rows_count", std::make_shared<DataTypeUInt64>()},
+        {"delete_rows", std::make_shared<DataTypeUInt64>()},
         {"columns", std::make_shared<DataTypeString>()},
         {"marks_count", std::make_shared<DataTypeUInt64>()},
         {"index_granularity", std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
@@ -77,6 +79,7 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         /// useful for getting raw value for debug
         {"commit_ts", std::make_shared<DataTypeUInt64>()},
         {"end_ts", std::make_shared<DataTypeUInt64>()},
+        {"last_modification_time", std::make_shared<DataTypeDateTime>()},
     };
 }
 
@@ -96,7 +99,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_parts only support cnch_server", ErrorCodes::NOT_IMPLEMENTED);
 
-    std::vector<std::pair<String, String>> tables;
+    std::vector<std::tuple<String, String, String>> tables;
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery &>().where();
 
@@ -150,16 +153,36 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         tables = filterTables(context, query_info);
     }
     else
-        tables.emplace_back(only_selected_db, only_selected_table);
+    {
+        const String & tenant_id = context->getTenantId();
+        String only_selected_db_full = only_selected_db;
+        if (!tenant_id.empty())
+        {
+            if (!DB::DatabaseCatalog::isDefaultVisibleSystemDatabase(only_selected_db))
+            {
+                only_selected_db_full = tenant_id + "." + only_selected_db;
+            }
+        }
+        tables.emplace_back(
+                only_selected_db_full,
+                only_selected_db,
+                only_selected_table
+            );
+    }
 
     TransactionCnchPtr cnch_txn = context->getCurrentTransaction();
     TxnTimestamp start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{context->getTimestamp()};
 
-    for (const auto & it : tables)
+    const auto access = context->getAccess();
+    const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
+
+    for (const auto & [database_fullname, database_name, table_name] : tables)
     {
-        const String & database_name = it.first;
-        const String & table_name = it.second;
-        auto table = cnch_catalog->tryGetTable(*context, database_name, table_name, start_time);
+        const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, database_fullname);
+        if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, database_fullname, table_name))
+            continue;
+
+        auto table = cnch_catalog->tryGetTable(*context, database_fullname, table_name, start_time);
 
         /// Skip not exist table
         if (!table)
@@ -181,14 +204,22 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         }
 
         /// use committed visibility to include dropped parts (and exclude intermediates) in system table
-        auto all_parts = enable_filter_by_partition
-            ? cnch_catalog->getServerDataPartsInPartitions(table, {only_selected_partition_id}, start_time, nullptr, Catalog::VisibilityLevel::Committed)
-            : cnch_catalog->getAllServerDataParts(table, start_time, nullptr, Catalog::VisibilityLevel::Committed);
-
-        const FormatSettings format_settings;
+        auto [all_parts, all_bitmaps] = enable_filter_by_partition
+            ? cnch_catalog->getServerDataPartsInPartitionsWithDBM(table, {only_selected_partition_id}, start_time, nullptr, Catalog::VisibilityLevel::Committed)
+            : cnch_catalog->getAllServerDataPartsWithDBM(table, start_time, nullptr, Catalog::VisibilityLevel::Committed);
 
         ServerDataPartsVector visible_parts;
         CnchPartsHelper::calcPartsForGC(all_parts, nullptr, &visible_parts);
+
+        if (visible_parts.empty())
+            continue;
+
+        if (cnch_merge_tree->getInMemoryMetadataPtr()->hasUniqueKey())
+        {
+            cnch_merge_tree->getDeleteBitmapMetaForServerParts(visible_parts, all_bitmaps, /*force_found*/false);
+        }
+
+        const FormatSettings format_settings;
 
         for (auto & part : visible_parts)
         {
@@ -207,7 +238,9 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 }
                 res_columns[col_num++]->insert(curr_part->name());
                 res_columns[col_num++]->insert(curr_part->part_model().size());
-                res_columns[col_num++]->insert(curr_part->part_model().rows_count());
+                auto delete_rows = curr_part->deletedRowsCount(*cnch_merge_tree, /*ignore_error*/true);
+                res_columns[col_num++]->insert(curr_part->part_model().rows_count() - delete_rows);
+                res_columns[col_num++]->insert(delete_rows);
                 res_columns[col_num++]->insert(curr_part->part_model().columns());
                 res_columns[col_num++]->insert(curr_part->part_model().marks_count());
                 Array index_granularity;
@@ -245,6 +278,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 res_columns[col_num++]->insert(curr_part->get_uuid());
                 res_columns[col_num++]->insert(curr_part->getCommitTime());
                 res_columns[col_num++]->insert(curr_part->getEndTime());
+                res_columns[col_num++]->insert(TxnTimestamp(curr_part->getLastModificationTime()).toSecond());
 
                 if (type == PartType::VisiblePart)
                     type = PartType::InvisiblePart;

@@ -25,7 +25,7 @@ namespace DB
 class ExpressionDeterminism
 {
 public:
-    static std::set<String> getDeterministicSymbols(Assignments & assignments, ContextPtr context);
+    static std::set<String> getDeterministicSymbols(const Assignments & assignments, ContextPtr context);
     static ConstASTPtr filterDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context);
     static ConstASTPtr filterNonDeterministicConjuncts(ConstASTPtr predicate, ContextPtr context);
     static std::set<ConstASTPtr> filterDeterministicPredicates(std::vector<ConstASTPtr> & predicates, ContextPtr context);

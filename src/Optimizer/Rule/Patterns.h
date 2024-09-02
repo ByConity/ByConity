@@ -17,6 +17,9 @@
 
 #include <Optimizer/Rule/Pattern.h>
 #include <QueryPlan/IQueryPlanStep.h>
+#include "QueryPlan/QueryPlan.h"
+
+#include <boost/hana.hpp>
 
 #include <sstream>
 
@@ -51,30 +54,35 @@ public:
         };
         return capturedAs(capture, property, name);
     }
-    PatternBuilder & matching(const PatternPredicate & predicate);
-    PatternBuilder & matching(const PatternPredicate & predicate, const std::string & name);
-    PatternBuilder & matchingCapture(const std::function<bool(const Captures &)> & capture_predicate);
-    PatternBuilder & matchingCapture(const std::function<bool(const Captures &)> & capture_predicate, const std::string & name);
-    template <typename T>
-    PatternBuilder & matchingStep(const std::function<bool(const T &)> & step_predicate)
+    PatternBuilder & matching(PatternPredicate predicate);
+    PatternBuilder & matching(PatternPredicate predicate, const std::string & name);
+    PatternBuilder & matchingCapture(std::function<bool(const Captures &)> capture_predicate);
+    PatternBuilder & matchingCapture(std::function<bool(const Captures &)> capture_predicate, const std::string & name);
+    template <typename T, typename F>
+    PatternBuilder & matchingStep(F step_predicate)
     {
-        return matchingStep(step_predicate, "unknown");
+        return matchingStep<T>(std::move(step_predicate), "unknown");
     }
-    template <typename T>
-    PatternBuilder & matchingStep(const std::function<bool(const T &)> & step_predicate, const std::string & name)
+    template <typename T, typename F>
+    PatternBuilder & matchingStep(F step_predicate, const std::string & name)
     {
         static_assert(std::is_base_of<const IQueryPlanStep, T>::value, "T must inherit from const IQueryPlanStep");
 
-        PatternPredicate predicate = [step_predicate](const PlanNodePtr & node, const Captures &) -> bool {
-            auto * step = dynamic_cast<const T *>(node->getStep().get());
+        PatternPredicate predicate = [step_predicate = std::move(step_predicate)](const QueryPlanStepPtr & istep, Captures & captures) -> bool {
+            auto * step = dynamic_cast<const T *>(istep.get());
 
             if (!step)
                 throw Exception("Unexpected plan step found in pattern matching", ErrorCodes::LOGICAL_ERROR);
 
-            return step_predicate(*step);
+            constexpr auto func_type1 = boost::hana::is_valid([](auto && x) -> decltype(x(*step)) {});
+
+            if constexpr (decltype(func_type1(step_predicate))::value)
+                return step_predicate(*step);
+            else
+                return step_predicate(*step, captures);
         };
 
-        return matching(predicate, name);
+        return matching(std::move(predicate), name);
     }
 
     PatternBuilder & withEmpty();
@@ -139,6 +147,7 @@ inline PatternBuilder apply() { return typeOf(IQueryPlanStep::Type::Apply); }
 inline PatternBuilder enforceSingleRow() { return typeOf(IQueryPlanStep::Type::EnforceSingleRow); }
 inline PatternBuilder assignUniqueId() { return typeOf(IQueryPlanStep::Type::AssignUniqueId); }
 inline PatternBuilder cte() { return typeOf(IQueryPlanStep::Type::CTERef); }
+inline PatternBuilder buffer() { return typeOf(IQueryPlanStep::Type::Buffer); }
 PatternBuilder topN();
 inline PatternBuilder topNFiltering() { return typeOf(IQueryPlanStep::Type::TopNFiltering); }
 inline PatternBuilder explainAnalyze() { return typeOf(IQueryPlanStep::Type::ExplainAnalyze); }
@@ -154,7 +163,7 @@ PatternBuilder oneOf(const T &... sub_builders)
 // miscellaneous
 inline PatternPredicate predicateNot(const PatternPredicate & predicate)
 {
-    return [=](const PlanNodePtr & node, const Captures & captures) -> bool {return !predicate(node, captures);};
+    return [=](const QueryPlanStepPtr & node, Captures & captures) -> bool {return !predicate(node, captures);};
 }
 
 }

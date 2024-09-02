@@ -62,3 +62,27 @@ ALTER TABLE t_alter_d_partition DELETE IN PARTITION '20231010-10' WHERE m = 10; 
 DROP TABLE t_alter_d_partition;
 
 CREATE TABLE wrong_column_row_exists(k Int32, _row_exists Int32) ENGINE = CnchMergeTree ORDER BY k; -- { serverError 44 }
+
+SELECT '----- TRIVIAL COUNT AFTER DELETING DATA -----';
+CREATE TABLE t_delete_and_trivial_count(d Date, k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d ORDER BY k;
+SYSTEM START MERGES t_delete_and_trivial_count;
+INSERT INTO t_delete_and_trivial_count SELECT '2024-01-01', number, number FROM numbers(5);
+INSERT INTO t_delete_and_trivial_count SELECT '2024-01-02', number, number FROM numbers(5);
+ALTER TABLE t_delete_and_trivial_count DELETE WHERE m < 3;
+SELECT count() FROM t_delete_and_trivial_count SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 4
+SELECT count() FROM t_delete_and_trivial_count WHERE d = '2024-01-01' SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 2
+SELECT count() FROM t_delete_and_trivial_count WHERE d = '2024-01-10' SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 0
+SELECT count() FROM t_delete_and_trivial_count WHERE _partition_id = '20240102' SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 2
+DROP TABLE t_delete_and_trivial_count
+
+CREATE TABLE t_delete_and_trivial_count_u(d Date, k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY d ORDER BY k UNIQUE KEY k;
+SYSTEM START MERGES t_delete_and_trivial_count_u;
+INSERT INTO t_delete_and_trivial_count_u SELECT '2024-01-01', number, number FROM numbers(5);
+INSERT INTO t_delete_and_trivial_count_u SELECT '2024-01-02', number, number FROM numbers(5);
+ALTER TABLE t_delete_and_trivial_count_u DELETE WHERE m < 3; -- { serverError 36 }
+DELETE FROM t_delete_and_trivial_count_u WHERE m < 3;
+SELECT count() FROM t_delete_and_trivial_count_u SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 4
+SELECT count() FROM t_delete_and_trivial_count_u WHERE d = '2024-01-01' SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 2
+SELECT count() FROM t_delete_and_trivial_count_u WHERE d = '2024-01-10' SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 0
+SELECT count() FROM t_delete_and_trivial_count_u WHERE _partition_id = '20240102' SETTINGS enable_optimizer = 1, optimize_trivial_count_query = 1; -- 2
+DROP TABLE t_delete_and_trivial_count_u

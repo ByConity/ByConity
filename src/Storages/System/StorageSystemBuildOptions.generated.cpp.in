@@ -12,6 +12,9 @@ const char * auto_config_build[]
     "VERSION_DATE", "@VERSION_DATE@",
     "KERNEL_VERSION", "@KERNEL_VERSION@",
     "BUILD_TYPE", "@CMAKE_BUILD_TYPE@",
+    "BUILD_DATE", "@BUILD_DATE@",
+    "BUILD_SCM", "@BUILD_SCM@",
+    "VERSION_BRANCH", "@VERSION_BRANCH@",
     "SYSTEM_PROCESSOR", "@CMAKE_SYSTEM_PROCESSOR@",
     "LIBRARY_ARCHITECTURE", "@CMAKE_LIBRARY_ARCHITECTURE@",
     "CMAKE_VERSION", "@CMAKE_VERSION@",
@@ -53,6 +56,7 @@ const char * auto_config_build[]
     "TZDATA_VERSION", "@TZDATA_VERSION@",
     "USE_KRB5", "@USE_KRB5@",
     "USE_BYTEDANCE_RDKAFKA", "@USE_BYTEDANCE_RDKAFKA@",
+    "USE_HUALLOC", "@USE_HUALLOC@",
 
     nullptr, nullptr
 };

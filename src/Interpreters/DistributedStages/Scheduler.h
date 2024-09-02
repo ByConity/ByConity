@@ -10,6 +10,7 @@
 #include <Interpreters/DAGGraph.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/NodeSelector.h>
 #include <Parsers/queryToString.h>
 #include <butil/endpoint.h>
@@ -32,12 +33,12 @@ enum class TaskStatus : uint8_t
 /// Indicates a plan segment.
 struct SegmentTask
 {
-    explicit SegmentTask(size_t task_id_, bool is_source_ = false) : task_id(task_id_), is_source(is_source_)
+    explicit SegmentTask(size_t task_id_, bool has_table_scan_ = false) : task_id(task_id_), has_table_scan(has_table_scan_)
     {
     }
     // plan segment id.
     size_t task_id;
-    bool is_source;
+    bool has_table_scan;
 };
 
 /// Indicates a plan segment instance.
@@ -102,14 +103,18 @@ public:
     Scheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
         : query_id(query_id_)
         , query_context(query_context_)
+        , query_unique_id(query_context->getCurrentTransactionID().toUInt64())
         , dag_graph_ptr(dag_graph_ptr_)
         , cluster_nodes(query_context_)
         , node_selector(cluster_nodes, query_context, dag_graph_ptr)
         , local_address(getLocalAddress(*query_context))
         , log(&Poco::Logger::get("Scheduler"))
     {
-        cluster_nodes.rank_workers.emplace_back(local_address, NodeType::Local, "");
+        cluster_nodes.all_workers.emplace_back(local_address, NodeType::Local, "");
+        timespec query_expiration_ts = query_context->getQueryExpirationTimeStamp();
+        query_expiration_ms = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
     }
+
     virtual ~Scheduler() = default;
     // Pop tasks from queue and schedule them.
     void schedule();
@@ -128,6 +133,7 @@ protected:
 
     const String query_id;
     ContextPtr query_context;
+    size_t query_unique_id;
     std::shared_ptr<DAGGraph> dag_graph_ptr;
     std::mutex segment_bufs_mutex;
     std::unordered_map<size_t, std::shared_ptr<butil::IOBuf>> segment_bufs;
@@ -147,18 +153,32 @@ protected:
     std::atomic<bool> stopped{false};
 
     void genTopology();
-    void genSourceTasks();
+    void genLeafTasks();
     bool getBatchTaskToSchedule(BatchTaskPtr & task);
+    virtual void sendResources(PlanSegment * plan_segment_ptr)
+    {
+        (void)plan_segment_ptr;
+    }
     virtual void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
     {
         (void)plan_segment_ptr;
         (void)parallel_size;
     }
+    virtual PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index)
+    {
+        (void)task_id;
+        PlanSegmentExecutionInfo execution_info;
+        execution_info.parallel_id = index;
+        return execution_info;
+    }
     void dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
     void prepareFinalTask();
 
+    std::mutex node_selector_result_mutex;
     NodeSelector::SelectorResultMap node_selector_result;
+
+    size_t query_expiration_ms;
 };
 
 }

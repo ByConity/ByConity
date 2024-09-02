@@ -12,5 +12,6 @@ using FunctionIndexOf = FunctionArrayIndex<IndexOfAction, NameIndexOf>;
 REGISTER_FUNCTION(IndexOf)
 {
     factory.registerFunction<FunctionIndexOf>();
+    factory.registerAlias("array_position", NameIndexOf::name, FunctionFactory::CaseInsensitive);
 }
 }

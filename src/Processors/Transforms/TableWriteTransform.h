@@ -1,8 +1,8 @@
 #pragma once
+#include <DataStreams/IBlockStream_fwd.h>
+#include <Interpreters/Context_fwd.h>
 #include <Processors/IProcessor.h>
-#include "DataStreams/IBlockStream_fwd.h"
-#include "Interpreters/Context_fwd.h"
-#include "Storages/IStorage_fwd.h"
+#include <Storages/IStorage_fwd.h>
 
 namespace DB
 {
@@ -30,7 +30,7 @@ public:
     }
 
 private:
-    void consume(Chunk block);
+    void consume(Chunk chunk);
     void onFinish();
     Block getHeader();
 

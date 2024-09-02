@@ -16,6 +16,7 @@
 #include <CloudServices/RpcClientBase.h>
 
 #include <errno.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <brpc/errno.pb.h>
@@ -34,8 +35,20 @@ namespace ErrorCodes
 
 static auto getDefaultChannelOptions()
 {
-    brpc::ChannelOptions options;
-    options.timeout_ms = 3000;
+    // brpc::ChannelOptions options;
+    // options.timeout_ms = 3000;
+    // return options;
+
+    // TODO: getting config dynamically implementation below has flaws.
+    // This is a IDEMPOTENT method!!! It always returns the options when it's first called.
+    // Besides, it can be called from RpcClientBase::initChannel.
+    // Mutex is needed for getting options dynamically in RpcChannelPool's member.
+    //
+    static std::once_flag init_flag;
+    static brpc::ChannelOptions options;
+    std::call_once(init_flag, []() {
+        options = RpcChannelPool::getInstance().getChannelPoolOptions(BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
+    });
     return options;
 }
 
@@ -61,24 +74,25 @@ void RpcClientBase::assertController(const brpc::Controller & cntl)
     if (cntl.Failed())
     {
         auto err = cntl.ErrorCode();
+        const String err_prefix = "Error on connecting " + (!host_ports.id.empty() ? host_ports.id : host_ports.toDebugString()) + " by rpc: ";
 
         if (err == ECONNREFUSED || err == ECONNRESET || err == ENETUNREACH)
         {
             ok_.store(false, std::memory_order_relaxed);
-            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_CONNECT_ERROR);
+            throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_CONNECT_ERROR);
         }
         else if (err == EHOSTDOWN)
         {
             /// TODO: handle more error codes, temporarily remove EHOSTDOWN error https://github.com/apache/incubator-brpc/issues/936
 
-            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_HOST_DOWN);
+            throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_HOST_DOWN);
         }
         else if (err == brpc::Errno::ERPCTIMEDOUT)
         {
-            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_TIMEOUT);
+            throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_TIMEOUT);
         }
         else /// Should we throw exception here to cover all other errors?
-            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_EXCEPTION);
+            throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_EXCEPTION);
     }
     else
     {

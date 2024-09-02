@@ -6,12 +6,16 @@
 #define ORC_MAGIC_BYTES "ORC"
 #define PARQUET_MAGIC_BYTES "PAR1"
 #define ARROW_MAGIC_BYTES "ARROW1"
+
+#include <optional>
+
 namespace DB
 {
 
 class ReadBuffer;
 class SeekableReadBuffer;
 class WriteBuffer;
+struct FormatSettings;
 
 class ArrowBufferedOutputStream : public arrow::io::OutputStream
 {
@@ -39,7 +43,7 @@ private:
 class RandomAccessFileFromSeekableReadBuffer : public arrow::io::RandomAccessFile
 {
 public:
-    RandomAccessFileFromSeekableReadBuffer(SeekableReadBuffer & in_, off_t file_size_, bool avoid_buffering_);
+    RandomAccessFileFromSeekableReadBuffer(SeekableReadBuffer & in_, std::optional<off_t> file_size_, bool avoid_buffering_);
 
     arrow::Result<int64_t> GetSize() override;
 
@@ -57,7 +61,7 @@ public:
 
 private:
     SeekableReadBuffer & in;
-    off_t file_size;
+    std::optional<off_t> file_size;
     bool is_open = false;
     bool avoid_buffering =false;
     ARROW_DISALLOW_COPY_AND_ASSIGN(RandomAccessFileFromSeekableReadBuffer);
@@ -110,7 +114,26 @@ private:
 };
 
 std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(ReadBuffer & in);
-std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(SeekableReadBuffer & in, size_t file_size, bool avoid_buffering = false);
+
+std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(
+    ReadBuffer & in,
+    const FormatSettings & settings,
+    std::atomic<int> & is_cancelled,
+    const std::string & format_name,
+    const std::string & magic_bytes,
+    // If true, we'll use ReadBuffer::setReadUntilPosition() to avoid buffering and readahead as
+    // much as possible. For HTTP or S3 ReadBuffer, this means that each RandomAccessFile
+    // read call will do a new HTTP request. Used in parquet pre-buffered reading mode, which makes
+    // arrow do its own buffering and coalescing of reads.
+    // (ReadBuffer is not a good abstraction in this case, but it works.)
+    bool avoid_buffering = false);
+
+// Reads the whole file into a memory buffer, owned by the returned RandomAccessFile.
+std::shared_ptr<arrow::io::RandomAccessFile> asArrowFileLoadIntoMemory(
+    ReadBuffer & in,
+    std::atomic<int> & is_cancelled,
+    const std::string & format_name,
+    const std::string & magic_bytes);
 
 }
 

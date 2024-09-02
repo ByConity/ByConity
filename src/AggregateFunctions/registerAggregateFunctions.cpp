@@ -92,8 +92,10 @@ void registerAggregateFunctionRetention2(AggregateFunctionFactory &);
 void registerAggregateFunctionRetentionLoss(AggregateFunctionFactory &);
 void registerAggregateFunctionGenArray(AggregateFunctionFactory & factory);
 void registerAggregateFunctionGenArrayMonth(AggregateFunctionFactory & factory);
+void registerAggregateFunctionAttribution(AggregateFunctionFactory &);
 void registerAggregateFunctionAttributionAnalysis(AggregateFunctionFactory &);
 void registerAggregateFunctionAttributionAnalysisFuse(AggregateFunctionFactory &);
+void registerAggregateFunctionAttributionCorrelation(AggregateFunctionFactory &);
 void registerAggregateFunctionAttributionCorrelationFuse(AggregateFunctionFactory &);
 void registerAggregateFunctionFinderFunnel(AggregateFunctionFactory & factory);
 void registerAggregateFunctionFinderGroupFunnel(AggregateFunctionFactory & factory);
@@ -125,6 +127,7 @@ void registerAggregateFunctionHllSketchEstimate(AggregateFunctionFactory &);
 void registerAggregateFunctionAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionFastAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionFastAuc2(AggregateFunctionFactory &);
+void registerAggregateFunctionFastPrevAuc2(AggregateFunctionFactory &);
 void registerAggregateFunctionFastAuc3(AggregateFunctionFactory &);
 void registerAggregateFunctionRegAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionRegAucV2(AggregateFunctionFactory &);
@@ -145,6 +148,7 @@ void registerAggregateFunctionCombinatorResample(AggregateFunctionCombinatorFact
 void registerAggregateFunctionCombinatorDistinct(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorStack(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCombinatorMap(AggregateFunctionCombinatorFactory & factory);
+void registerAggregateFunctionCombinatorOrderBy(AggregateFunctionCombinatorFactory &);
 
 void registerWindowFunctions(AggregateFunctionFactory & factory);
 
@@ -219,8 +223,10 @@ void registerAggregateFunctions()
         registerAggregateFunctionRetentionLoss(factory);
         registerAggregateFunctionGenArray(factory);
         registerAggregateFunctionGenArrayMonth(factory);
+        registerAggregateFunctionAttribution(factory);
         registerAggregateFunctionAttributionAnalysis(factory);
         registerAggregateFunctionAttributionAnalysisFuse(factory);
+        registerAggregateFunctionAttributionCorrelation(factory);
         registerAggregateFunctionAttributionCorrelationFuse(factory);
         registerAggregateFunctionFinderFunnel(factory);
         registerAggregateFunctionFinderGroupFunnel(factory);
@@ -256,6 +262,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionAuc(factory);
         registerAggregateFunctionFastAuc(factory);
         registerAggregateFunctionFastAuc2(factory);
+        registerAggregateFunctionFastPrevAuc2(factory);
         registerAggregateFunctionFastAuc3(factory);
         registerAggregateFunctionRegAuc(factory);
         registerAggregateFunctionRegAucV2(factory);
@@ -279,6 +286,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionCombinatorDistinct(factory);
         registerAggregateFunctionCombinatorStack(factory);
         registerAggregateFunctionCombinatorMap(factory);
+        registerAggregateFunctionCombinatorOrderBy(factory);
     }
 }
 

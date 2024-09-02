@@ -477,8 +477,11 @@ public:
 
     void clearHasZero()
     {
-        has_zero = false;
-        zeroValue()->~Cell();
+        if (has_zero)
+        {
+            has_zero = false;
+            zeroValue()->~Cell();
+        }
     }
 
     Cell * zeroValue()             { return std::launder(reinterpret_cast<Cell*>(&zero_value_storage)); }
@@ -538,6 +541,8 @@ public:
         = Grower::initial_count * sizeof(Cell);
     static_assert(allocatorInitialBytes<Allocator> == 0
         || allocatorInitialBytes<Allocator> == initial_buffer_bytes);
+
+    static constexpr bool IS_SPECIAL_HT_FOR_SMALL_KEYS = false;
 
     /// Increase the size of the buffer.
     void resize(size_t for_num_elems = 0, size_t for_buf_size = 0)

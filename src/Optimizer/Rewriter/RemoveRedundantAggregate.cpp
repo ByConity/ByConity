@@ -5,6 +5,8 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
+#include <Optimizer/PredicateUtils.h>
+#include "Parsers/IAST_fwd.h"
 
 namespace DB
 {
@@ -107,7 +109,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitAggregatingNode(AggregatingNod
         flag_distinct = (flag_distinct || isDistinctNames(keys, distinct_set));
     }
     //when distinct columns keys contains all the distinct keys of child nodes and func is empty, equivalent distinct node, remove
-    if (flag_distinct && descs.empty())
+    if (flag_distinct && descs.empty() && !step->isPartial())
     {
         ctx.distincts = std::move(child_context.distincts);
         return child;
@@ -299,14 +301,16 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, Remo
 PlanNodePtr RemoveRedundantAggregateVisitor::visitTableScanNode(TableScanNode & node, RemoveRedundantAggregateContext & ctx)
 {
     const auto * step = dynamic_cast<const TableScanStep *>(node.getStep().get());
-    String database = step->getDatabase();
     auto storage = step->getStorage();
 
     auto meta = storage->getInMemoryMetadataPtr();
     if (!meta->getUniqueKey().definition_ast)
         return node.shared_from_this();
 
-    std::vector<NameSet> distincts_;
+    if (meta->hasPartitionKey())
+        return node.shared_from_this();
+
+    std::vector<NameSet> distincts;
     NameSet distinct_set;
     NameSet distinct_alias;
 
@@ -329,8 +333,8 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitTableScanNode(TableScanNode & 
     //when output alias include all distinct column, push to father context
     if (distinct_set.size() == distinct_alias.size())
     {
-        distincts_.emplace_back(distinct_alias);
-        ctx.distincts = std::move(distincts_);
+        distincts.emplace_back(distinct_alias);
+        ctx.distincts = std::move(distincts);
     }
 
     return node.shared_from_this();

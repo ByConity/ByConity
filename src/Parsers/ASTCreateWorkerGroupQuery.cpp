@@ -34,7 +34,6 @@ void ASTCreateWorkerGroupQuery::formatImpl(const FormatSettings & s, FormatState
 {
     s.ostr << (s.hilite ? hilite_keyword : "")
            << "CREATE WORKER GROUP "
-           << (if_not_exists ? "IF NOT EXISTS " : "")
            << (s.hilite ? hilite_none : "");
 
     s.ostr << (s.hilite ? hilite_identifier : "")

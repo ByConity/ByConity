@@ -27,8 +27,11 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/IAST.h>
+#include <Storages/StorageDistributed.h>
 #include <boost/math/special_functions/math_fwd.hpp>
 #include <common/logger_useful.h>
+#include "Parsers/IAST.h"
 
 extern const char * build_version;
 
@@ -106,6 +109,16 @@ bool isIdentity(const ProjectionStep & step)
     return !step.isFinalProject() && Utils::isIdentity(step.getAssignments());
 }
 
+bool isAlias(const Assignment & assignment)
+{
+    return assignment.second->getType() == ASTType::ASTIdentifier;
+}
+
+bool isAlias(const Assignments & assignments)
+{
+    return std::all_of(assignments.begin(), assignments.end(), [](const Assignment & assignment) { return isAlias(assignment); });
+}
+
 bool isIdentifierOrIdentifierCast(const ConstASTPtr & expression)
 {
     if (const auto * function = expression->as<ASTFunction>())
@@ -144,12 +157,12 @@ NameToNameMap extractIdentities(const ProjectionStep & project)
     return result;
 }
 
-std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments)
+std::unordered_map<String, String> computeIdentityTranslations(const Assignments & assignments)
 {
     std::unordered_map<String, String> output_to_input;
-    for (auto & assignment : assignments)
+    for (const auto & assignment : assignments)
     {
-        if (auto identifier = assignment.second->as<ASTIdentifier>())
+        if (const auto * identifier = assignment.second->as<ASTIdentifier>())
         {
             output_to_input[assignment.first] = identifier->name();
         }
@@ -183,6 +196,12 @@ bool containsAggregateFunction(const ASTPtr & ast)
         if (containsAggregateFunction(child))
             return true;
     return false;
+}
+
+
+bool canIgnoreNullsDirection(const DataTypePtr & type)
+{
+    return !type->isNullable() && type->getTypeId() != TypeIndex::Float32 && type->getTypeId() != TypeIndex::Float64;
 }
 
 bool checkFunctionName(const ASTFunction & function, const String & expect_name)

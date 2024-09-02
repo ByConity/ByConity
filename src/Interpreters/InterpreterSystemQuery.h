@@ -89,11 +89,14 @@ private:
     void executeMetastoreCmd(ASTSystemQuery & query) const;
     void executeCleanTrashTable(const ASTSystemQuery & query);
     void executeGc(const ASTSystemQuery & query);
+    void executeCheckpoint(const ASTSystemQuery & query);
+    /// dedup staging parts within the specific partition with high priority
+    void dedupWithHighPriority(const ASTSystemQuery & query);
     void executeDedup(const ASTSystemQuery & query);
 
     void dumpCnchServerStatus();
 
-    void dropCnchPartCache();
+    void dropCnchMetaCache(bool skip_part_cache = false, bool skip_delete_bitmap_cache = false);
 
     void dropChecksumsCache(const StorageID & table_id) const;
 
@@ -103,6 +106,8 @@ private:
     void executeBGTaskInCnchServer(ContextMutablePtr & system_context, ASTSystemQuery::Type type) const;
 
     void executeSyncDedupWorker(ContextMutablePtr & system_context) const;
+
+    void executeSyncRepairTask(ContextMutablePtr & system_context) const;
 
     // clear Broken Table infos
     void clearBrokenTables(ContextMutablePtr & system_context) const;
@@ -120,6 +125,12 @@ private:
 
     /// a command to test MemoryLock
     void lockMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
+
+    void releaseMemoryLock(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
+
+    /// drop materialized view previous meta
+    void dropMvMeta(ASTSystemQuery & query);
+
 };
 
 

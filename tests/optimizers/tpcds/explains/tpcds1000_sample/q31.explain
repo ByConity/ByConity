@@ -1,88 +1,72 @@
-Projection Est. 237879 rows
-│     Expressions: ca_county:=ca_county_1, d_year:=d_year_1, store_q1_q2_increase:=`expr#divide(ss2.store_sales, ss1.store_sales)`, store_q2_q3_increase:=`expr#divide(ss3.store_sales, ss2.store_sales)`, web_q1_q2_increase:=`expr#divide(ws2.web_sales, ws1.web_sales)`, web_q2_q3_increase:=`expr#divide(ws3.web_sales, ws2.web_sales)`
-└─ Sorting Est. 237879 rows
-   │     Order by: {ca_county_1 ASC NULLS LAST}
-   └─ Gather Exchange Est. 237879 rows
-      └─ Sorting Est. 237879 rows
-         │     Order by: {ca_county_1 ASC NULLS LAST}
-         └─ Projection Est. 237879 rows
-            │     Expressions: [ca_county_1, d_year_1], expr#divide(ss2.store_sales, ss1.store_sales):=`expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, expr#divide(ss3.store_sales, ss2.store_sales):=`expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, expr#divide(ws2.web_sales, ws1.web_sales):=`expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, expr#divide(ws3.web_sales, ws2.web_sales):=`expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`
-            └─ Inner Join Est. 237895 rows
-               │     Condition: ca_county_5 == ca_county_1
-               │     Filter: (multiIf(`expr#sum(ws_ext_sales_price)_1` > 0, `expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_1` > 0, `expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, NULL)) AND (multiIf(`expr#sum(ws_ext_sales_price)_2` > 0, `expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_2` > 0, `expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, NULL))
-               ├─ Inner Join Est. 12076 rows
-               │  │     Condition: ca_county_6 == ca_county_5
+Projection Est. 59469 rows
+│     Expressions: ca_county:=ca_county_3, d_year:=d_year_1, store_q1_q2_increase:=`expr#divide(ss2.store_sales, ss1.store_sales)`, store_q2_q3_increase:=`expr#divide(ss3.store_sales, ss2.store_sales)`, web_q1_q2_increase:=`expr#divide(ws2.web_sales, ws1.web_sales)`, web_q2_q3_increase:=`expr#divide(ws3.web_sales, ws2.web_sales)`
+└─ Sorting Est. 59469 rows
+   │     Order by: {ca_county_3 ASC NULLS LAST}
+   └─ Gather Exchange Est. 59469 rows
+      └─ Sorting Est. 59469 rows
+         │     Order by: {ca_county_3 ASC NULLS LAST}
+         └─ Projection Est. 59472 rows
+            │     Expressions: [ca_county_3, d_year_1], expr#divide(ss2.store_sales, ss1.store_sales):=`expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, expr#divide(ss3.store_sales, ss2.store_sales):=`expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, expr#divide(ws2.web_sales, ws1.web_sales):=`expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, expr#divide(ws3.web_sales, ws2.web_sales):=`expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`
+            └─ Inner Join Est. 59472 rows
+               │     Condition: ca_county_3 == ca_county_1
+               │     Filter: multiIf(`expr#sum(ws_ext_sales_price)_1` > 0, `expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_1` > 0, `expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, NULL)
+               ├─ Inner Join Est. 16319 rows
+               │  │     Condition: ca_county_3 == ca_county_7
+               │  │     Filter: multiIf(`expr#sum(ws_ext_sales_price)_2` > 0, `expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_2` > 0, `expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, NULL)
                │  ├─ Inner Join Est. 4473 rows
-               │  │  │     Condition: ca_county_7 == ca_county_6
+               │  │  │     Condition: ca_county_3 == ca_county_2
                │  │  ├─ Repartition Exchange Est. 1673 rows
-               │  │  │  │     Partition by: {ca_county_7}
-               │  │  │  └─ Filter Est. 4485 rows
-               │  │  │     │     Condition: (d_year_7 = 2000) AND (d_qoy_7 = 3)
-               │  │  │     └─ Buffer Est. 4984 rows
-               │  │  │        └─ CTERef[1] Est. 4984 rows
+               │  │  │  │     Partition by: {ca_county_3}
+               │  │  │  └─ Projection Est. 1246 rows
+               │  │  │     │     Expressions: [ca_county_3, expr#sum(ss_ext_sales_price)_3]
+               │  │  │     └─ Filter Est. 1246 rows
+               │  │  │        │     Condition: (d_year_3 = 2000) AND (d_qoy_3 = 3)
+               │  │  │        └─ Buffer Est. 4984 rows
+               │  │  │           └─ CTERef[0] Est. 4984 rows
                │  │  └─ Repartition Exchange Est. 1655 rows
-               │  │     │     Partition by: {ca_county_6}
-               │  │     └─ Filter Est. 4485 rows
-               │  │        │     Condition: (d_qoy_6 = 2) AND (d_year_6 = 2000)
-               │  │        └─ Buffer Est. 4984 rows
-               │  │           └─ CTERef[1] Est. 4984 rows
-               │  └─ Repartition Exchange Est. 1655 rows
-               │     │     Partition by: {ca_county_5}
-               │     └─ Filter Est. 4485 rows
-               │        │     Condition: (d_qoy_5 = 1) AND (d_year_5 = 2000)
-               │        └─ Buffer Est. 4984 rows
-               │           └─ CTERef[1] Est. 4984 rows
-               └─ Inner Join Est. 12076 rows
-                  │     Condition: ca_county_2 == ca_county_1
-                  ├─ Inner Join Est. 4473 rows
-                  │  │     Condition: ca_county_3 == ca_county_2
-                  │  ├─ Repartition Exchange Est. 1673 rows
-                  │  │  │     Partition by: {ca_county_3}
-                  │  │  └─ Filter Est. 4485 rows
-                  │  │     │     Condition: (d_qoy_3 = 3) AND (d_year_3 = 2000)
-                  │  │     └─ Buffer Est. 4984 rows
-                  │  │        └─ CTERef[0] Est. 4984 rows
-                  │  └─ Repartition Exchange Est. 1655 rows
-                  │     │     Partition by: {ca_county_2}
-                  │     └─ Filter Est. 4485 rows
-                  │        │     Condition: (d_year_2 = 2000) AND (d_qoy_2 = 2)
+               │  │     │     Partition by: {ca_county_2}
+               │  │     └─ Projection Est. 1246 rows
+               │  │        │     Expressions: [ca_county_2, expr#sum(ss_ext_sales_price)_2]
+               │  │        └─ Filter Est. 1246 rows
+               │  │           │     Condition: (d_qoy_2 = 2) AND (d_year_2 = 2000)
+               │  │           └─ Buffer Est. 4984 rows
+               │  │              └─ CTERef[0] Est. 4984 rows
+               │  └─ Inner Join Est. 4473 rows
+               │     │     Condition: ca_county_7 == ca_county_6
+               │     ├─ Repartition Exchange Est. 1673 rows
+               │     │  │     Partition by: {ca_county_7}
+               │     │  └─ Projection Est. 1246 rows
+               │     │     │     Expressions: [ca_county_7, expr#sum(ws_ext_sales_price)_3]
+               │     │     └─ Filter Est. 1246 rows
+               │     │        │     Condition: (d_qoy_7 = 3) AND (d_year_7 = 2000)
+               │     │        └─ Buffer Est. 4984 rows
+               │     │           └─ CTERef[1] Est. 4984 rows
+               │     └─ Repartition Exchange Est. 1655 rows
+               │        │     Partition by: {ca_county_6}
+               │        └─ Projection Est. 1246 rows
+               │           │     Expressions: [ca_county_6, expr#sum(ws_ext_sales_price)_2]
+               │           └─ Filter Est. 1246 rows
+               │              │     Condition: (d_year_6 = 2000) AND (d_qoy_6 = 2)
+               │              └─ Buffer Est. 4984 rows
+               │                 └─ CTERef[1] Est. 4984 rows
+               └─ Inner Join Est. 4468 rows
+                  │     Condition: ca_county_1 == ca_county_5
+                  ├─ Repartition Exchange Est. 1655 rows
+                  │  │     Partition by: {ca_county_1}
+                  │  └─ Projection Est. 1246 rows
+                  │     │     Expressions: [ca_county_1, d_year_1, expr#sum(ss_ext_sales_price)_1]
+                  │     └─ Filter Est. 1246 rows
+                  │        │     Condition: (d_year_1 = 2000) AND (d_qoy_1 = 1)
                   │        └─ Buffer Est. 4984 rows
                   │           └─ CTERef[0] Est. 4984 rows
                   └─ Repartition Exchange Est. 1655 rows
-                     │     Partition by: {ca_county_1}
-                     └─ Filter Est. 4485 rows
-                        │     Condition: (d_year_1 = 2000) AND (d_qoy_1 = 1)
-                        └─ Buffer Est. 4984 rows
-                           └─ CTERef[0] Est. 4984 rows
-CTEDef [1]
-   MergingAggregated Est. 4984 rows
-   └─ Repartition Exchange Est. 4984 rows
-      │     Partition by: {ca_county_4, d_qoy_4, d_year_4}
-      └─ Aggregating Est. 4984 rows
-         │     Group by: {ca_county_4, d_qoy_4, d_year_4}
-         │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-         └─ Inner (PARALLEL_HASH) Join Est. 106613722 rows
-            │     Condition: ws_bill_addr_sk == ca_address_sk_1
-            ├─ Repartition Exchange Est. 107822327 rows
-            │  │     Partition by: {ws_bill_addr_sk}
-            │  └─ Inner Join Est. 107822327 rows
-            │     │     Condition: ws_sold_date_sk == d_date_sk_1
-            │     │     Runtime Filters Builder: {d_date_sk_1}
-            │     ├─ Filter Est. 720000376 rows
-            │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
-            │     │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
-            │     │           Where: Runtime Filters: {ws_sold_date_sk}
-            │     │           Outputs: [ws_sold_date_sk, ws_bill_addr_sk, ws_ext_sales_price]
-            │     └─ Broadcast Exchange Est. 274 rows
-            │        └─ Filter Est. 274 rows
-            │           │     Condition: (d_year_4 = 2000) AND (d_qoy_4 IN (1, 2, 3))
-            │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-            │                    Where: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
-            │                    Outputs: d_date_sk_1:=d_date_sk, d_year_4:=d_year, d_qoy_4:=d_qoy
-            └─ Repartition Exchange Est. 6000000 rows
-               │     Partition by: {ca_address_sk_1}
-               └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
-                        Outputs: ca_address_sk_1:=ca_address_sk, ca_county_4:=ca_county
+                     │     Partition by: {ca_county_5}
+                     └─ Projection Est. 1246 rows
+                        │     Expressions: [ca_county_5, expr#sum(ws_ext_sales_price)_1]
+                        └─ Filter Est. 1246 rows
+                           │     Condition: (d_year_5 = 2000) AND (d_qoy_5 = 1)
+                           └─ Buffer Est. 4984 rows
+                              └─ CTERef[1] Est. 4984 rows
 CTEDef [0]
    MergingAggregated Est. 4984 rows
    └─ Repartition Exchange Est. 4984 rows
@@ -90,11 +74,11 @@ CTEDef [0]
       └─ Aggregating Est. 4984 rows
          │     Group by: {ca_county, d_qoy, d_year}
          │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-         └─ Inner (PARALLEL_HASH) Join Est. 425455131 rows
+         └─ Inner (PARALLEL_HASH) Join Est. 417662913 rows
             │     Condition: ss_addr_sk == ca_address_sk
-            ├─ Repartition Exchange Est. 431287286 rows
+            ├─ Repartition Exchange Est. 423388252 rows
             │  │     Partition by: {ss_addr_sk}
-            │  └─ Inner Join Est. 431287286 rows
+            │  └─ Inner Join Est. 423388252 rows
             │     │     Condition: ss_sold_date_sk == d_date_sk
             │     │     Runtime Filters Builder: {d_date_sk}
             │     ├─ Filter Est. 2879987999 rows
@@ -102,15 +86,44 @@ CTEDef [0]
             │     │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
             │     │           Where: Runtime Filters: {ss_sold_date_sk}
             │     │           Outputs: [ss_sold_date_sk, ss_addr_sk, ss_ext_sales_price]
-            │     └─ Broadcast Exchange Est. 274 rows
-            │        └─ Filter Est. 274 rows
-            │           │     Condition: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
+            │     └─ Broadcast Exchange Est. 268 rows
+            │        └─ Filter Est. 268 rows
+            │           │     Condition: (d_year = 2000) AND ((d_qoy = 1) OR (d_qoy = 2) OR (d_qoy = 3))
             │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-            │                    Where: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
+            │                    Where: (d_year = 2000) AND ((d_qoy = 1) OR (d_qoy = 2) OR (d_qoy = 3))
             │                    Outputs: [d_date_sk, d_year, d_qoy]
             └─ Repartition Exchange Est. 6000000 rows
                │     Partition by: {ca_address_sk}
                └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
                         Outputs: [ca_address_sk, ca_county]
+CTEDef [1]
+   MergingAggregated Est. 4984 rows
+   └─ Repartition Exchange Est. 4984 rows
+      │     Partition by: {ca_county_4, d_qoy_4, d_year_4}
+      └─ Aggregating Est. 4984 rows
+         │     Group by: {ca_county_4, d_qoy_4, d_year_4}
+         │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
+         └─ Inner (PARALLEL_HASH) Join Est. 104661089 rows
+            │     Condition: ws_bill_addr_sk == ca_address_sk_1
+            ├─ Repartition Exchange Est. 105847559 rows
+            │  │     Partition by: {ws_bill_addr_sk}
+            │  └─ Inner Join Est. 105847559 rows
+            │     │     Condition: ws_sold_date_sk == d_date_sk_1
+            │     │     Runtime Filters Builder: {d_date_sk_1}
+            │     ├─ Filter Est. 720000376 rows
+            │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
+            │     │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+            │     │           Where: Runtime Filters: {ws_sold_date_sk}
+            │     │           Outputs: [ws_sold_date_sk, ws_bill_addr_sk, ws_ext_sales_price]
+            │     └─ Broadcast Exchange Est. 268 rows
+            │        └─ Filter Est. 268 rows
+            │           │     Condition: (d_year_4 = 2000) AND ((d_qoy_4 = 1) OR (d_qoy_4 = 2) OR (d_qoy_4 = 3))
+            │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+            │                    Where: (d_year = 2000) AND ((d_qoy = 1) OR (d_qoy = 2) OR (d_qoy = 3))
+            │                    Outputs: d_date_sk_1:=d_date_sk, d_year_4:=d_year, d_qoy_4:=d_qoy
+            └─ Repartition Exchange Est. 6000000 rows
+               │     Partition by: {ca_address_sk_1}
+               └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
+                        Outputs: ca_address_sk_1:=ca_address_sk, ca_county_4:=ca_county
 note: Runtime Filter is applied for 2 times.
 note: CTE(Common Table Expression) is applied for 6 times.

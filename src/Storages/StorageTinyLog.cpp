@@ -55,6 +55,7 @@
 #include <Storages/CheckResults.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageTinyLog.h>
+#include "IO/ReadSettings.h"
 #include "StorageLogSettings.h"
 
 #include <Processors/Sources/SourceWithProgress.h>
@@ -116,7 +117,7 @@ private:
     struct Stream
     {
         Stream(const DiskPtr & disk, const String & data_path, size_t max_read_buffer_size_, size_t file_size)
-            : plain(file_size ? disk->readFile(data_path, {.buffer_size = std::min(max_read_buffer_size_, file_size)}) : std::make_unique<ReadBuffer>(nullptr, 0)),
+            : plain(file_size ? disk->readFile(data_path, ReadSettings().initializeReadSettings(std::min(max_read_buffer_size_, file_size))) : std::make_unique<ReadBuffer>(nullptr, 0)),
             limited(std::make_unique<LimitReadBuffer>(*plain, file_size, false)),
             compressed(*limited)
         {

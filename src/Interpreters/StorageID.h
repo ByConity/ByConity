@@ -80,6 +80,8 @@ struct StorageID
         assertNotEmpty();
     }
 
+    StorageID(const QualifiedTableName & qualified_name);
+
     StorageID(const ASTQueryWithTableAndOutput & query);
     StorageID(const ASTTableIdentifier & table_identifier_node);
     StorageID(const ASTPtr & node);
@@ -107,6 +109,11 @@ struct StorageID
     bool hasUUID() const
     {
         return uuid != UUIDHelpers::Nil;
+    }
+
+    void clearUUID()
+    { 
+        uuid = UUIDHelpers::Nil;
     }
 
     bool isDatabase() const
@@ -141,11 +148,33 @@ struct StorageID
 
     void toProto(Protos::StorageID & proto) const;
     static StorageID fromProto(const Protos::StorageID & proto, ContextPtr context);
+    static StorageID tryFromProto(const Protos::StorageID & proto, ContextPtr context);
 
     UInt64 hash() const
     {
         return getQualifiedName().hash();
     }
+
+    /// Calculates hash using only the database and table name of a StorageID.
+    struct DatabaseAndTableNameHash
+    {
+        size_t operator()(const StorageID & storage_id) const
+        {
+            SipHash hash_state;
+            hash_state.update(storage_id.database_name.data(), storage_id.database_name.size());
+            hash_state.update(storage_id.table_name.data(), storage_id.table_name.size());
+            return hash_state.get64();
+        }
+    };
+
+    /// Checks if the database and table name of two StorageIDs are equal.
+    struct DatabaseAndTableNameEqual
+    {
+        bool operator()(const StorageID & left, const StorageID & right) const
+        {
+            return (left.database_name == right.database_name) && (left.table_name == right.table_name);
+        }
+    };
 
 private:
     StorageID() = default;
@@ -164,6 +193,21 @@ struct hash<DB::StorageID>
     result_type operator()(const argument_type & storage_id) const
     {
         return storage_id.hash();
+    }
+};
+}
+
+namespace fmt
+{
+template <>
+struct formatter<DB::StorageID>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::StorageID & storage_id, FormatContext & ctx)
+    {
+        return fmt::format_to(ctx.out(), "{}", storage_id.getNameForLogs());
     }
 };
 }

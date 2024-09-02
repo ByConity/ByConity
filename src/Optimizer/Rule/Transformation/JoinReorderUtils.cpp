@@ -112,7 +112,7 @@ namespace JoinReorderUtils
         Names right_output_names = right->getOutputNames();
         NameOrderedSet right_possible_output(right_output_names.begin(), right_output_names.end());
 
-        auto join_filter = PredicateUtils::combineConjuncts(std::vector<ASTPtr>{JoinEnumOnGraph::getJoinFilter(graph.getFilter(), left_possible_output, right_possible_output, rule_context.context)});
+        auto join_filter = PredicateUtils::combineConjuncts(JoinEnumOnGraph::getJoinFilter(graph.getFilter(), left_possible_output, right_possible_output, rule_context.context));
 
         NamesAndTypes output;
         for (const auto & item : left->getOutputNamesAndTypes())
@@ -140,14 +140,12 @@ namespace JoinReorderUtils
 
     double computeFilterSelectivity(GroupId child, const Memo & memo)
     {
-        if (!memo.getGroupById(child)->getLogicalExpressions().empty()
-            && memo.getGroupById(child)->getLogicalExpressions()[0]->getStep()->getType() == IQueryPlanStep::Type::Filter)
+        if (memo.getGroupById(child)->getLogicalOtherwisePhysicalExpressions()[0]->getStep()->getType() == IQueryPlanStep::Type::Filter)
         {
-            if (memo.getGroupById(child)->getLogicalExpressions()[0]->getChildrenGroups().size() == 1)
+            if (memo.getGroupById(child)->getLogicalOtherwisePhysicalExpressions()[0]->getChildrenGroups().size() == 1)
             {
-                auto filter_child = memo.getGroupById(child)->getLogicalExpressions()[0]->getChildrenGroups()[0];
-                if (memo.getGroupById(filter_child)->getLogicalExpressions()[0]->getStep()->getType()
-                        == IQueryPlanStep::Type::TableScan
+                auto filter_child = memo.getGroupById(child)->getLogicalOtherwisePhysicalExpressions()[0]->getChildrenGroups()[0];
+                if (memo.getGroupById(filter_child)->getLogicalOtherwisePhysicalExpressions()[0]->getStep()->getType() == IQueryPlanStep::Type::TableScan
                     && memo.getGroupById(child)->getStatistics().has_value()
                     && memo.getGroupById(filter_child)->getStatistics().has_value())
                 {

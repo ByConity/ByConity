@@ -128,7 +128,7 @@ void ISerialization::serializeBinaryBulk(const IColumn & column, WriteBuffer &, 
     throw Exception(ErrorCodes::MULTIPLE_STREAMS_REQUIRED, "Column {} must be serialized with multiple streams", column.getName());
 }
 
-void ISerialization::deserializeBinaryBulk(IColumn & column, ReadBuffer &, size_t, double) const
+void ISerialization::deserializeBinaryBulk(IColumn & column, ReadBuffer &, size_t, double, bool) const
 {
     throw Exception(ErrorCodes::MULTIPLE_STREAMS_REQUIRED, "Column {} must be deserialized with multiple streams", column.getName());
 }
@@ -159,7 +159,7 @@ void ISerialization::deserializeBinaryBulkWithMultipleStreams(
     else if (ReadBuffer * stream = settings.getter(settings.path))
     {
         auto mutable_column = column->assumeMutable();
-        deserializeBinaryBulk(*mutable_column, *stream, limit, settings.avg_value_size_hint);
+        deserializeBinaryBulk(*mutable_column, *stream, limit, settings.avg_value_size_hint, settings.zero_copy_read_from_cache);
         column = std::move(mutable_column);
         addToSubstreamsCache(cache, settings.path, column);
     }
@@ -231,9 +231,8 @@ String ISerialization::getFileNameForStream(const NameAndTypePair & column, cons
 String ISerialization::getFileNameForStream(const String & name_in_storage, const SubstreamPath & path)
 {
     String stream_name;
-    auto nested_storage_name = Nested::extractTableName(name_in_storage);
-    if (name_in_storage != nested_storage_name && (path.size() == 1 && path[0].type == ISerialization::Substream::ArraySizes))
-        stream_name = escapeForFileName(nested_storage_name);
+    if (isSharedOffsetSubstream(name_in_storage, path))
+        stream_name = escapeForFileName(Nested::extractTableName(name_in_storage));
     else
         stream_name = escapeForFileName(name_in_storage);
 
@@ -283,6 +282,12 @@ bool ISerialization::isSpecialCompressionAllowed(const SubstreamPath & path)
             return false;
     }
     return true;
+}
+
+bool ISerialization::isSharedOffsetSubstream(const String & name_in_storage, const SubstreamPath & path)
+{
+    auto nested_storage_name = Nested::extractTableName(name_in_storage);
+    return name_in_storage != nested_storage_name && (path.size() == 1 && path[0].type == ISerialization::Substream::ArraySizes);
 }
 
 void ISerialization::serializeMemComparable(const IColumn &, size_t, WriteBuffer &) const

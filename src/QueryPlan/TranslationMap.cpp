@@ -109,6 +109,7 @@ public:
     ASTPtr visitASTFunction(ASTPtr & node, const Void &) override;
     ASTPtr visitASTSubquery(ASTPtr & node, const Void &) override;
     ASTPtr visitASTQuantifiedComparison(ASTPtr & node, const Void &) override;
+    ASTPtr visitASTPreparedParameter(ASTPtr & node, const Void &) override;
 
     TranslationMapVisitor(Analysis & analysis_, const TranslationMap & translation_map_)
         : analysis(analysis_),
@@ -293,6 +294,11 @@ ASTPtr TranslationMapVisitor::visitASTQuantifiedComparison(ASTPtr & node, const 
     return preferToUseMapped(node, [&](ASTPtr & ) -> ASTPtr {
         throw Exception("Ast should be planned to symbols before translating", ErrorCodes::LOGICAL_ERROR);
     });
+}
+
+ASTPtr TranslationMapVisitor::visitASTPreparedParameter(ASTPtr & pre_node, const Void &)
+{
+    return preferToUseMapped(pre_node, [&](ASTPtr & node) -> ASTPtr { return node; });
 }
 
 ASTPtr TranslationMapVisitor::handleColumnReference(const ResolvedField & column_reference, const ASTPtr & node)

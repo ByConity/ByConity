@@ -39,12 +39,21 @@ namespace ErrorCodes
 }
 
 ColumnGathererStream::ColumnGathererStream(
-        const String & column_name_, const BlockInputStreams & source_streams, ReadBuffer & row_sources_buf_,
-        bool enable_low_cardinality_merge_new_algo_, size_t fallback_threshold_, size_t block_preferred_size_)
-    : column_name(column_name_), sources(source_streams.size()), row_sources_buf(row_sources_buf_)
+    const String & column_name_,
+    const BlockInputStreams & source_streams,
+    ReadBuffer & row_sources_buf_,
+    size_t block_preferred_size_rows_,
+    size_t block_preferred_size_bytes_,
+    bool enable_low_cardinality_merge_new_algo_,
+    size_t fallback_threshold_)
+    : column_name(column_name_)
+    , sources(source_streams.size())
+    , row_sources_buf(row_sources_buf_)
     , enable_low_cardinality_merge_new_algo(enable_low_cardinality_merge_new_algo_)
     , low_cardinality_fallback_threshold(fallback_threshold_)
-    , block_preferred_size(block_preferred_size_), log(&Poco::Logger::get("ColumnGathererStream"))
+    , block_preferred_size_rows(block_preferred_size_rows_)
+    , block_preferred_size_bytes(block_preferred_size_bytes_)
+    , log(&Poco::Logger::get("ColumnGathererStream"))
 {
     if (source_streams.empty())
         throw Exception("There are no streams to gather", ErrorCodes::EMPTY_DATA_PASSED);
@@ -185,9 +194,11 @@ void ColumnGathererStream::gatherLowCardinality(ColumnLowCardinality &column_res
     size_t cur_block_preferred_size = static_cast<size_t>(row_sources_end - row_source_pos);
     column_res.reserve(cur_block_preferred_size);
 
-    if (cardinalityDict)
-        column_res.loadDictionaryFrom(*cardinalityDict);
+    if (cardinality_dict)
+        column_res.loadDictionaryFrom(*cardinality_dict);
 
+    /// No need to limit rows or bytes here, since dictionary will be saved after each gathering,
+    /// memory usage can not be reduced by reducing index rows.
     while (row_source_pos < row_sources_end)
     {
         RowSourcePart row_source = *row_source_pos;
@@ -253,12 +264,12 @@ void ColumnGathererStream::gatherLowCardinality(ColumnLowCardinality &column_res
 
     if (need_save_dict)
     {
-        cardinalityDict = column_res.cloneEmpty();
-        (typeid_cast<ColumnLowCardinality *>(cardinalityDict.get()))->loadDictionaryFrom(column_res);
+        cardinality_dict = column_res.cloneEmpty();
+        (typeid_cast<ColumnLowCardinality *>(cardinality_dict.get()))->loadDictionaryFrom(column_res);
     }
     else
     {
-        cardinalityDict = nullptr;
+        cardinality_dict = nullptr;
     }
 
     is_first_merge = false;
@@ -330,11 +341,16 @@ void ColumnGathererStream::gatherLowCardinalityInFullState(ColumnLowCardinality 
     RowSourcePart * row_source_pos = reinterpret_cast<RowSourcePart *>(row_sources_buf.position());
     RowSourcePart * row_sources_end = reinterpret_cast<RowSourcePart *>(row_sources_buf.buffer().end());
 
-    size_t cur_block_preferred_size = static_cast<size_t>(row_sources_end - row_source_pos);
-    column_res.reserve(cur_block_preferred_size);
+    /// Actually reserve works only for fixed size columns.
+    /// So it's safe to ignore preferred size in bytes and call reserve for number of rows.
+    size_t size_to_reserve = std::min(static_cast<size_t>(row_sources_end - row_source_pos), block_preferred_size_rows);
+    column_res.reserve(size_to_reserve);
 
-    while (row_source_pos < row_sources_end)
+    do
     {
+        if (row_source_pos >= row_sources_end)
+            break;
+
         RowSourcePart row_source = *row_source_pos;
         size_t source_num = row_source.getSourceNum();
         Source & source = sources[source_num];
@@ -371,7 +387,8 @@ void ColumnGathererStream::gatherLowCardinalityInFullState(ColumnLowCardinality 
         }
 
         source.pos += len;
-    }
+
+    } while (column_res.size() < block_preferred_size_rows && column_res.byteSize() < block_preferred_size_bytes);
 }
 
 

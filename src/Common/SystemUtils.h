@@ -26,6 +26,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
+#include <IO/ReadBufferFromFile.h>
 #include <boost/algorithm/string.hpp>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -40,6 +41,7 @@ namespace ErrorCodes
     extern const int CANNOT_OPEN_FILE;
     extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
     extern const int CANNOT_READ_ALL_DATA;
+    extern const int FILE_DOESNT_EXIST;
 }
 
 extern size_t max_numa_node;
@@ -59,6 +61,8 @@ struct CpuUsageInfo
 };
 
 size_t buffer_to_number(const std::string & buffer);
+
+void init_numa_nodes_cpu_mask();
 
 class SystemUtils
 {
@@ -132,6 +136,16 @@ public:
         file_writer.close();
     }
 
+    static int ReadFileToString(const String & filename, String & content)
+    {
+        if (!std::filesystem::exists(filename))
+            throw  Exception("file " + filename + " not exists", ErrorCodes::FILE_DOESNT_EXIST);
+
+        ReadBufferFromFile file_reader(filename);
+        readStringUntilEOF(content, file_reader);
+        return 0;
+    }
+
     static size_t gettid()
     {
 #if defined(__linux__)
@@ -147,6 +161,8 @@ public:
 #endif
         return 0;
     }
+
+    static std::vector<cpu_set_t> getNumaNodesCpuMask();
 
     static void getCpuUsageInfo(const std::unordered_set<size_t> & cpu_nodes, std::vector<CpuUsageInfo> & cpu_usage_info_vec)
     {
@@ -182,4 +198,7 @@ public:
 #endif
     }
 };
+
+std::vector<size_t> parse_cpu_list(const std::string & cpu_list_str);
+
 }

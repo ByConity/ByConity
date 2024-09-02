@@ -27,6 +27,7 @@ public:
     static std::vector<RulePtr> normalizeExpressionRules();
     static std::vector<RulePtr> swapPredicateRules();
     static std::vector<RulePtr> simplifyExpressionRules();
+    static std::vector<RulePtr> simplifyPrewhereRules();
     static std::vector<RulePtr> inlineProjectionRules();
     static std::vector<RulePtr> pushPartialStepRules();
     static std::vector<RulePtr> optimizeAggregateRules();
@@ -42,9 +43,14 @@ public:
     static std::vector<RulePtr> pushTableScanEmbeddedStepRules();
     static std::vector<RulePtr> explainAnalyzeRules();
     static std::vector<RulePtr> pushApplyRules();
+    static std::vector<RulePtr> unnestingSubqueryRules();
     static std::vector<RulePtr> pushDownBitmapProjection();
     static std::vector<RulePtr> pushProjectionIntoTableScanRules();
     static std::vector<RulePtr> pushIndexProjectionIntoTableScanRules();
+    static std::vector<RulePtr> crossJoinToUnion();
+    static std::vector<RulePtr> sumIfToCountIf();
+    static std::vector<RulePtr> extractBitmapImplicitFilterRules();
+    static std::vector<RulePtr> pushUnionThroughJoin();
 };
 
 }

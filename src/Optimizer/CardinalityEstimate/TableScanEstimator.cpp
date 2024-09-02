@@ -17,7 +17,6 @@
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Poco/Logger.h>
-#include "Common/DefaultCatalogName.h"
 #include <common/ErrorHandlers.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Optimizer/CardinalityEstimate/LimitEstimator.h>
@@ -90,7 +89,7 @@ std::optional<PlanNodeStatisticsPtr> TableScanEstimator::estimate(
 
     PlanNodeStatisticsPtr plan_node_stats;
     try {
-        Statistics::StatisticsCollector collector(context, catalog, table_info_opt.value());
+        Statistics::StatisticsCollector collector(context, catalog, table_info_opt.value(), {});
         collector.readFromCatalog(columns);
         auto plan_node_stats_opt = collector.toPlanNodeStatistics();
         if (!plan_node_stats_opt.has_value())

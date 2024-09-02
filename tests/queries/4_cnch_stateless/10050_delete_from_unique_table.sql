@@ -74,3 +74,22 @@ select 'select unique table';
 select * from unique_table_without_partitionby order by product_id, amount;
 
 DROP TABLE unique_table_without_partitionby;
+
+--------------------------------------------
+select '';
+select 'execute DELETE FROM with delete bitmap depth issue';
+CREATE table unique_table_without_partitionby(
+    `product_id` UInt64,
+    `amount` UInt32,
+    `revenue` UInt64)
+ENGINE = CnchMergeTree()
+partition by tuple()
+order by (product_id)
+unique key product_id settings max_delete_bitmap_meta_depth = 1;
+
+insert into unique_table_without_partitionby select number, 100, 500 from system.numbers limit 30;
+select count() from unique_table_without_partitionby;
+DELETE FROM unique_table_without_partitionby where product_id < 50;
+select * from unique_table_without_partitionby;
+
+DROP TABLE unique_table_without_partitionby;

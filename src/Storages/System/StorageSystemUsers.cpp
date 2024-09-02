@@ -15,6 +15,7 @@
 #include <Poco/JSON/JSON.h>
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Stringifier.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <sstream>
 
 
@@ -185,17 +186,26 @@ void StorageSystemUsers::fillData(MutableColumns & res_columns, ContextPtr conte
         column_grantees_except_offsets.push_back(column_grantees_except.size());
     };
 
+    const String & tenant_id = context->getTenantId();
     for (const auto & id : ids)
     {
         auto user = access_control.tryRead<User>(id);
         if (!user)
             continue;
 
+        String user_name = user->getName();
+        if (!tenant_id.empty())
+        {
+            if (!startsWith(user->getName(), tenant_id + "."))
+                continue;
+            user_name = user_name.substr(tenant_id.length() + 1);
+        }
+
         auto storage = access_control.findStorage(id);
         if (!storage)
             continue;
 
-        add_row(user->getName(), id, storage->getStorageName(), user->authentication, user->allowed_client_hosts, user->default_roles, user->grantees);
+        add_row(user_name, id, storage->getStorageName(), user->authentication, user->allowed_client_hosts, user->default_roles, user->grantees);
     }
 }
 

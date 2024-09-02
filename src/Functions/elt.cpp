@@ -112,7 +112,7 @@ public:
                 continue;
             }
 
-            auto index = col_index->getInt(i);
+            auto index = raw_column_maps[0]->getInt(i);
             // TODO: add optimizations for constant index
             if (unlikely(index < 1 || static_cast<unsigned long>(index) > arg_size - 1 || (nullable_args_map[index] && nullable_args_map[index][i])))
             {

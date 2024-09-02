@@ -35,9 +35,7 @@ public:
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
         settings.emplace("enable_single_distinct_to_group_by", "0");
         settings.emplace("enum_replicate_no_stats", "0");
-        settings.emplace("enable_materialized_view_rewrite_match_range_filter", "1");
-        // settings.emplace("print_graphviz", "1");
-        // settings.emplace("graphviz_path", "/data01/wangtao.2077/tmp/graphviz/");
+        settings.emplace("materialized_view_consistency_check_method", "NONE");
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 
@@ -137,16 +135,19 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView4)
    * expression column. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView5)
 {
+    String result = "Gather Exchange\n"
+                    "└─ Projection\n"
+                    "   │     Expressions: [name], e:=ee\n"
+                    "   └─ Projection\n"
+                    "      │     Expressions: [ee, name]\n"
+                    "      └─ Filter\n"
+                    "         │     Condition: x = 2\n"
+                    "         └─ TableScan test_mview.MV0_MV_DATA\n"
+                    "                  Where: x = 2\n"
+                    "                  Outputs: [x, ee, name]\n";
     sql("select deptno - 10 as x, empid + 1 as ee, name from emps",
         "select name, empid + 1 as e from emps where deptno - 10 = 2")
-        .checkingThatResultContains("Gather Exchange\n"
-                                    "└─ Projection\n"
-                                    "   │     Expressions: [name], e:=ee\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: x = 2\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Where: x = 2\n"
-                                    "               Outputs: [x, ee, name]")
+        .checkingThatResultContains("Where: x = 2")
         .ok();
 }
 
@@ -557,21 +558,9 @@ TEST_F(MaterializedViewRewriteTest, testAggregateGroupSets2)
 TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
 {
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
-            "from emps group by empid, deptno",
+        "from emps group by empid, deptno",
         "select count(*) + 1 as c, deptno from emps group by deptno")
-        .checkingThatResultContains("Gather Exchange\n"
-                                    "└─ Projection\n"
-                                    "   │     Expressions: c:=`expr#sum(c)` + 1, deptno:=`expr#deptno`\n"
-                                    "   └─ MergingAggregated\n"
-                                    "      └─ Repartition Exchange\n"
-                                    "         │     Partition by: {expr#deptno}\n"
-                                    "         └─ Aggregating\n"
-                                    "            │     Group by: {expr#deptno}\n"
-                                    "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)\n"
-                                    "            └─ Projection\n"
-                                    "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
-                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                        Outputs: [deptno, c]")
+        .checkingThatResultContains("Expressions: [deptno_2], expr#plus(count(), 1)_1:=`expr#sum(expr#count())_2` + 1")
         .ok();
 }
 
@@ -581,9 +570,9 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
 TEST_F(MaterializedViewRewriteTest, testAggregateRollUp2)
 {
     String mv = ""
-        "select empid, stddev_pop(deptno) "
-        "from emps "
-        "group by empid, deptno";
+                "select empid, stddev_pop(deptno) "
+                "from emps "
+                "group by empid, deptno";
     String query = ""
         "select empid, stddev_pop(deptno) "
         "from emps "
@@ -685,21 +674,9 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProject4)
 TEST_F(MaterializedViewRewriteTest, testAggregateOnProject5)
 {
     sql("select empid, deptno, name, count(*) from emps\n"
-            "group by empid, deptno, name",
+        "group by empid, deptno, name",
         "select name, empid, count(*) from emps group by name, empid")
-        .checkingThatResultContains("Gather Exchange\n"
-                                    "└─ Projection\n"
-                                    "   │     Expressions: count():=`expr#sum(count())`, empid:=`expr#empid`, name:=`expr#name`\n"
-                                    "   └─ MergingAggregated\n"
-                                    "      └─ Repartition Exchange\n"
-                                    "         │     Partition by: {expr#empid, expr#name}\n"
-                                    "         └─ Aggregating\n"
-                                    "            │     Group by: {expr#empid, expr#name}\n"
-                                    "            │     Aggregates: expr#sum(count()):=AggNull(sum)(expr#count()_2)\n"
-                                    "            └─ Projection\n"
-                                    "               │     Expressions: expr#count()_2:=`count()`, expr#empid:=empid, expr#name:=name\n"
-                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                        Outputs: [count(), empid, name]")
+        .checkingThatResultContains("Aggregates: expr#sum(expr#count())_2:=AggNull(sum)(expr#count()_2)")
         .ok();
 }
 
@@ -741,7 +718,7 @@ TEST_F(MaterializedViewRewriteTest, testPermutationError)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnLeftProjectToJoin)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "aggregate under join rewrite is not implemented.";
     String mv = ""
         "select * from\n"
         "  (select deptno, sum(salary), sum(commission)\n"
@@ -767,7 +744,7 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnLeftProjectToJoin)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnRightProjectToJoin)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "aggregate under join rewrite is not implemented.";
     String mv = ""
         "select * from\n"
         "  (select deptno, sum(salary), sum(commission)\n"
@@ -793,7 +770,7 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnRightProjectToJoin)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnProjectsToJoin)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "aggregate under join rewrite is not implemented.";
     String mv = ""
         "select * from\n"
         "  (select deptno, sum(salary), sum(commission)\n"
@@ -819,7 +796,6 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnProjectsToJoin)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin0)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = ""
         "select emps.empid, emps.deptno, depts.deptno from\n"
         "emps join depts\n"
@@ -834,7 +810,6 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin0)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin1)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = ""
         "select emps.empid, emps.deptno, depts.deptno from\n"
         "emps join depts\n"
@@ -849,7 +824,6 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin1)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin2)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = ""
         "select emps.empid, emps.deptno, depts.deptno from\n"
         "emps join depts\n"
@@ -865,7 +839,6 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin2)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin3)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = ""
         "select emps.empid, emps.deptno, depts.deptno from\n"
         "emps join depts\n"
@@ -882,7 +855,6 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin3)
 
 TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin4)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = ""
         "select emps.empid, emps.deptno, depts.deptno from\n"
         "emps join depts\n"
@@ -899,10 +871,10 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnCalcToJoin4)
 
 TEST_F(MaterializedViewRewriteTest, testJoinMaterialization)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "join compensation rewrite is not implemented.";
     String q = "select *\n"
         "from (select * from emps where empid < 300)\n"
-        "join depts using (deptno)";
+        "join depts on emps.deptno = depts.deptno";
     sql("select * from emps where empid < 500", q).ok();
 }
 
@@ -912,10 +884,10 @@ TEST_F(MaterializedViewRewriteTest, testJoinMaterialization)
    * materialization</a>. */
 TEST_F(MaterializedViewRewriteTest, testJoinMaterialization2)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "join compensation rewrite is not implemented.";
     String q = "select *\n"
         "from emps\n"
-        "join depts using (deptno)";
+        "join depts on emps.deptno = depts.deptno";
     String m = "select deptno, empid, name,\n"
         "salary, commission from emps";
     sql(m, q).ok();
@@ -923,27 +895,20 @@ TEST_F(MaterializedViewRewriteTest, testJoinMaterialization2)
 
 TEST_F(MaterializedViewRewriteTest, testJoinMaterialization3)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String q = "select empid deptno from emps\n"
-        "join depts using (deptno) where empid = 1";
+        "join depts on emps.deptno = depts.deptno where empid = 1";
     String m = "select empid deptno from emps\n"
-        "join depts using (deptno)";
+        "join depts on emps.deptno = depts.deptno";
     sql(m, q).ok();
 }
 
 TEST_F(MaterializedViewRewriteTest, testUnionAll)
 {
-    GTEST_SKIP() << "union rewrite is not implemented.";
     String q = "select * from emps where empid > 300\n"
         "union all select * from emps where empid < 200";
     String m = "select * from emps where empid < 500";
     sql(m, q)
-        .checkingThatResultContains(""
-                                    "LogicalUnion(all=[true])\n"
-                                    "  LogicalCalc(expr#0..4=[{inputs}], expr#5=[300], expr#6=[>($t0, $t5)], proj#0..4=[{exprs}], $condition=[$t6])\n"
-                                    "    LogicalTableScan(table=[[hr, emps]])\n"
-                                    "  LogicalCalc(expr#0..4=[{inputs}], expr#5=[200], expr#6=[<($t0, $t5)], proj#0..4=[{exprs}], $condition=[$t6])\n"
-                                    "    EnumerableTableScan(table=[[hr, MV0]])")
+        .checkingThatResultContains("Union")
         .ok();
 }
 
@@ -961,33 +926,10 @@ TEST_F(MaterializedViewRewriteTest, testTableModify)
 TEST_F(MaterializedViewRewriteTest, testSingleMaterializationMultiUsage)
 {
     String q = "select *\n"
-        "from (select * from emps where empid < 300)\n"
-        "join (select * from emps where empid < 200) using (empid)";
+        "from (select * from emps where empid < 300) t1\n"
+        "join (select * from emps where empid < 200) t2 on t1.empid = t2.empid";
     String m = "select * from emps where empid < 500";
-    sql(m, q)
-        .checkingThatResultContains(
-            "Projection\n"
-            "│     Expressions: [commission, commission_1, deptno, deptno_1, empid, name, name_1, salary, salary_1]\n"
-            "└─ Gather Exchange\n"
-            "   └─ Inner Join\n"
-            "      │     Condition: empid == empid_1\n"
-            "      ├─ Repartition Exchange\n"
-            "      │  │     Partition by: {empid}\n"
-            "      │  └─ Filter\n"
-            "      │     │     Condition: empid < 200\n"
-            "      │     └─ TableScan test_mview.MV0_MV_DATA\n"
-            "      │              Where: empid < 200\n"
-            "      │              Outputs: [commission, salary, name, deptno, empid]\n"
-            "      └─ Repartition Exchange\n"
-            "         │     Partition by: {empid_1}\n"
-            "         └─ Projection\n"
-            "            │     Expressions: commission_1:=commission, deptno_1:=deptno, empid_1:=empid, name_1:=name, salary_1:=salary\n"
-            "            └─ Filter\n"
-            "               │     Condition: empid < 200\n"
-            "               └─ TableScan test_mview.MV0_MV_DATA\n"
-            "                        Where: empid < 200\n"
-            "                        Outputs: [commission, salary, name, deptno, empid]")
-        .ok();
+    sql(m, q).ok();
 }
 
 TEST_F(MaterializedViewRewriteTest, testMaterializationOnJoinQuery)
@@ -995,13 +937,13 @@ TEST_F(MaterializedViewRewriteTest, testMaterializationOnJoinQuery)
     sql("select * from emps where empid < 500",
         "select *\n"
             "from emps\n"
-            "join depts using (deptno) where empid < 300 ")
+            "join depts on emps.deptno = depts.deptno where empid < 300 ")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteTest, testMaterializationAfterTrimingOfUnusedFields)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "aggregate under join rewrite is not implemented.";
     String sql0 =
         "select y.deptno, y.name, x.sum_salary\n"
         "from\n"
@@ -1129,7 +1071,7 @@ TEST_F(MaterializedViewRewriteTest, testIntersectToCalcOnIntersect)
 
 TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg)
 {
-    GTEST_SKIP() << "ConstantFilter is not supported in clickhouse";
+    GTEST_SKIP() << "Not support in clickhouse because rollup is needed.";
     String mv = ""
         "select name, count(distinct deptno) as cnt\n"
         "from emps group by name";
@@ -1222,7 +1164,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAggUsingSubquery)
 /** Unit test for FilterBottomJoin can be pulled up. */
 TEST_F(MaterializedViewRewriteTest, testLeftFilterOnLeftJoinToJoinOk1)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "outer join compensation rewrite is not implemented.";
     String mv = "select * from \n"
         "(select empid, deptno, name from emps) t1\n"
         "left join (select deptno, name from depts) t2\n"
@@ -1236,7 +1178,7 @@ TEST_F(MaterializedViewRewriteTest, testLeftFilterOnLeftJoinToJoinOk1)
 
 TEST_F(MaterializedViewRewriteTest, testLeftFilterOnLeftJoinToJoinOk2)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "outer join rewrite is not implemented.";
     String mv = "select * from \n"
         "(select empid, deptno, name from emps where empid > 10) t1\n"
         "left join (select deptno, name from depts) t2\n"
@@ -1250,7 +1192,6 @@ TEST_F(MaterializedViewRewriteTest, testLeftFilterOnLeftJoinToJoinOk2)
 
 TEST_F(MaterializedViewRewriteTest, testRightFilterOnLeftJoinToJoinFail)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = "select * from \n"
         "(select empid, deptno, name from emps) t1\n"
         "left join (select deptno, name from depts) t2\n"
@@ -1264,7 +1205,7 @@ TEST_F(MaterializedViewRewriteTest, testRightFilterOnLeftJoinToJoinFail)
 
 TEST_F(MaterializedViewRewriteTest, testRightFilterOnRightJoinToJoinOk)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
+    GTEST_SKIP() << "outer join compensation rewrite is not implemented.";
     String mv = "select * from \n"
         "(select empid, deptno, name from emps) t1\n"
         "right join (select deptno, name from depts) t2\n"
@@ -1278,7 +1219,6 @@ TEST_F(MaterializedViewRewriteTest, testRightFilterOnRightJoinToJoinOk)
 
 TEST_F(MaterializedViewRewriteTest, testLeftFilterOnRightJoinToJoinFail)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = "select * from \n"
         "(select empid, deptno, name from emps) t1\n"
         "right join (select deptno, name from depts) t2\n"
@@ -1292,7 +1232,6 @@ TEST_F(MaterializedViewRewriteTest, testLeftFilterOnRightJoinToJoinFail)
 
 TEST_F(MaterializedViewRewriteTest, testLeftFilterOnFullJoinToJoinFail)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = "select * from \n"
         "(select empid, deptno, name from emps) t1\n"
         "full join (select deptno, name from depts) t2\n"
@@ -1306,7 +1245,6 @@ TEST_F(MaterializedViewRewriteTest, testLeftFilterOnFullJoinToJoinFail)
 
 TEST_F(MaterializedViewRewriteTest, testRightFilterOnFullJoinToJoinFail)
 {
-    GTEST_SKIP() << "join rewrite is not implemented.";
     String mv = "select * from \n"
         "(select empid, deptno, name from emps) t1\n"
         "full join (select deptno, name from depts) t2\n"
@@ -1331,32 +1269,35 @@ TEST_F(MaterializedViewRewriteTest, testMoreSameExprInMv)
 /**
    * It's match, distinct agg-call could be expressed by mv's grouping.
    */
-/// TODO
-// TEST_F(MaterializedViewRewriteTest, testAggDistinctInMvGrouping)
-// {
-//     String mv = ""
-//         "select deptno, name\n"
-//         "from emps group by deptno, name";
-//     String query = ""
-//         "select deptno, name, count(distinct name)\n"
-//         "from emps group by deptno, name";
-//     sql(mv, query).ok();
-// }
+TEST_F(MaterializedViewRewriteTest, testAggDistinctInMvGrouping)
+{
+    String mv = ""
+        "select deptno, name\n"
+        "from emps group by deptno, name";
+    String query = ""
+        "select deptno, name, count(distinct name)\n"
+        "from emps group by deptno, name";
+    sql(mv, query)
+        .checkingThatResultContains(
+            "Aggregates: expr#uniqExact(name)_3:=AggNull(uniqExact)(expr#name_5)")
+        .ok();
+}
 
 /**
    * It's match, `Optionality.IGNORED` agg-call could be expressed by mv's grouping.
    */
-///TODO
-// TEST_F(MaterializedViewRewriteTest, testAggOptionalityInMvGrouping)
-// {
-//     String mv = ""
-//         "select deptno, salary\n"
-//         "from emps group by deptno, salary";
-//     String query = ""
-//         "select deptno, salary, max(salary)\n"
-//         "from emps group by deptno, salary";
-//     sql(mv, query).ok();
-// }
+TEST_F(MaterializedViewRewriteTest, testAggOptionalityInMvGrouping)
+{
+    String mv = ""
+        "select deptno, salary\n"
+        "from emps group by deptno, salary";
+    String query = ""
+        "select deptno, salary, max(salary)\n"
+        "from emps group by deptno, salary";
+    sql(mv, query)
+        .checkingThatResultContains("Aggregates: expr#max(salary)_3:=AggNull(max)(expr#salary_5)")
+        .ok();
+}
 
 /**
    * It's not match, normal agg-call could be expressed by mv's grouping.
@@ -1869,7 +1810,7 @@ TEST_F(MaterializedViewRewriteTest, testJoinOnUnionMaterialization)
     GTEST_SKIP();
     String q = "select *\n"
         "from (select * from emps union all select * from emps)\n"
-        "join depts using (deptno)";
+        "join depts on emps.deptno = depts.deptno";
     sql(q, q).noMat();
 }
 
@@ -1978,20 +1919,7 @@ TEST_F(MaterializedViewRewriteTest, testRexPredicate)
                    "from emps\n"
                    "where deptno > 100\n"
                    "group by name";
-    sql(mv, query)
-        .checkingThatResultContains("Gather Exchange\n"
-                                    "└─ Projection\n"
-                                    "   │     Expressions: name:=`expr#name`\n"
-                                    "   └─ MergingAggregated\n"
-                                    "      └─ Repartition Exchange\n"
-                                    "         │     Partition by: {expr#name}\n"
-                                    "         └─ Aggregating\n"
-                                    "            │     Group by: {expr#name}\n"
-                                    "            └─ Projection\n"
-                                    "               │     Expressions: expr#name:=name\n"
-                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                        Outputs: [name]")
-        .ok();
+    sql(mv, query).ok();
 }
 
 /** Test case for

@@ -268,7 +268,7 @@ ReservationPtr StoragePolicy::makeEmptyReservationOnLargestDisk() const
     {
         for (const auto & disk : volume->getDisks())
         {
-            auto avail_space = disk->getAvailableSpace();
+            auto avail_space = disk->getAvailableSpace().bytes;
             if (avail_space > max_space)
             {
                 max_space = avail_space;

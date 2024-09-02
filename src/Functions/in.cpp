@@ -143,8 +143,15 @@ public:
 
             if (const auto * lc = typeid_cast<const ColumnLowCardinality *>(col))
             {
-                lc_indexes = lc->getIndexesPtr();
-                arg.column = lc->getDictionary().getNestedColumn();
+                if (!lc->isFullState())
+                {
+                    lc_indexes = lc->getIndexesPtr();
+                    arg.column = lc->getDictionary().getNestedColumn();
+                }
+                else
+                {
+                    arg.column = lc->getNestedColumnPtr();
+                }
                 arg.type = removeLowCardinality(arg.type);
             }
         }

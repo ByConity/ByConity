@@ -43,6 +43,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <Common/parseGlobs.h>
+#include "Storages/SelectQueryInfo.h"
 #include <Storages/ColumnsDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
@@ -309,13 +310,15 @@ public:
         ContextPtr context_,
         UInt64 max_block_size_,
         FilesInfoPtr files_info_,
-        ColumnsDescription columns_description_)
+        ColumnsDescription columns_description_,
+        SelectQueryInfo & query_info_)
         : SourceWithProgress(getBlockForSource(storage_, storage_snapshot_, columns_description_, files_info_))
         , storage(std::move(storage_))
         , storage_snapshot(storage_snapshot_)
         , files_info(std::move(files_info_))
         , columns_description(std::move(columns_description_))
         , context(context_)
+        , query_info(query_info_)
         , max_block_size(max_block_size_)
     {
         if (storage->use_table_fd)
@@ -409,6 +412,7 @@ public:
 
                 auto format = FormatFactory::instance().getInput(
                     storage->format_name, *read_buf, get_block_for_format(), context, max_block_size, storage->format_settings);
+                format->setQueryInfo(query_info, context);
 
                 pipeline = std::make_unique<QueryPipeline>();
                 pipeline->init(Pipe(format));
@@ -476,6 +480,7 @@ private:
     ColumnsDescription columns_description;
 
     ContextPtr context;    /// TODO Untangle potential issues with context lifetime.
+    SelectQueryInfo query_info;
     UInt64 max_block_size;
 
     bool finished_generate = false;
@@ -487,7 +492,7 @@ private:
 Pipe StorageFile::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
@@ -542,7 +547,7 @@ Pipe StorageFile::read(
                 return storage_snapshot->metadata->getColumns();
         };
         pipes.emplace_back(std::make_shared<StorageFileSource>(
-            this_ptr, storage_snapshot, context, max_block_size, files_info, get_columns_for_format()));
+            this_ptr, storage_snapshot, context, max_block_size, files_info, get_columns_for_format(), query_info));
     }
 
     return Pipe::unitePipes(std::move(pipes));

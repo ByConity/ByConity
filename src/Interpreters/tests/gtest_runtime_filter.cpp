@@ -18,9 +18,11 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/BloomFilter.h>
-#include <Interpreters/BlockBloomFilter.h>
 #include <Common/Stopwatch.h>
-
+#include <Interpreters/Context.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterTypes.h>
+#include <Common/LinkedHashMap.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
 #include <random>
 #include <gtest/gtest.h>
 
@@ -129,4 +131,128 @@ TEST(RuntimeFilterTest, BlockBloomFilterRandomTest)
     for (const auto num : random_numbers) {
         EXPECT_TRUE(bloom_filter.probeKey(num));
     }
+}
+
+TEST(RuntimeFilterTest, DiffMerge1)
+{
+    Settings setting;
+    LinkedHashMap<String, RuntimeFilterBuildInfos> rfs;
+
+    RuntimeFilterBuildInfos rf1{1, RuntimeFilterDistribution::LOCAL};
+    RuntimeFilterBuildInfos rf2{2, RuntimeFilterDistribution::DISTRIBUTED};
+
+    rfs.emplace_back("local1", rf1);
+    rfs.emplace_back("distr1", rf2);
+
+    std::map<UInt32, RuntimeFilterData>  data_sets;
+
+    /// worker 1
+    std::unordered_map<RuntimeFilterId, RuntimeFilterVal> runtime_wk1;
+    DataTypePtr type_ptr = std::make_shared<DataTypeNumber<Int32>>();
+    BloomFilterWithRangePtr bloom_wk1 = std::make_shared<BloomFilterWithRange>(10124, type_ptr);
+    for (int i = 0; i < 10124; ++i)
+    {
+        bloom_wk1->addKey(i);
+    }
+    bloom_wk1->is_pre_enlarged = true;
+    RuntimeFilterVal wk1{true, bloom_wk1, nullptr };
+    runtime_wk1.emplace(1, wk1);
+    data_sets.insert(std::make_pair(0, RuntimeFilterData{std::move(runtime_wk1)}));
+
+    /// worker 2
+    std::unordered_map<RuntimeFilterId, RuntimeFilterVal> runtime_wk2;
+    ValueSetWithRangePtr value_wk2 = std::make_shared<ValueSetWithRange>(type_ptr);
+    for (int i = 0; i < 1023; ++i)
+    {
+        value_wk2->insert(i);
+    }
+
+    RuntimeFilterVal wk2{false, nullptr, value_wk2 };
+    runtime_wk2.emplace(1, wk2);
+    data_sets.insert(std::make_pair(1, RuntimeFilterData{std::move(runtime_wk2)}));
+
+
+   /// worker 3
+    std::unordered_map<RuntimeFilterId, RuntimeFilterVal> runtime_wk3;
+    BloomFilterWithRangePtr bloom_wk3 = std::make_shared<BloomFilterWithRange>(10124, type_ptr);
+    for (int i = 0; i < 10124; ++i)
+    {
+        bloom_wk3->addKey(i);
+    }
+    bloom_wk3->is_pre_enlarged = false;
+    RuntimeFilterVal wk3{true, bloom_wk3, nullptr };
+    runtime_wk3.emplace(1, wk3);
+    data_sets.insert(std::make_pair(2, RuntimeFilterData{std::move(runtime_wk3)}));
+
+
+
+    /// start build
+    RuntimeFilterBuilder builder(setting, rfs);
+    auto && dt = builder.merge(std::move(data_sets));
+    EXPECT_EQ(dt.bypass, BypassType::NO_BYPASS);
+    EXPECT_EQ(dt.runtime_filters.size(), 0);
+
+}
+
+
+
+TEST(RuntimeFilterTest, DiffMerge2)
+{
+    Settings setting;
+    LinkedHashMap<String, RuntimeFilterBuildInfos> rfs;
+
+    RuntimeFilterBuildInfos rf1{1, RuntimeFilterDistribution::LOCAL};
+    RuntimeFilterBuildInfos rf2{2, RuntimeFilterDistribution::DISTRIBUTED};
+
+    rfs.emplace_back("local1", rf1);
+    rfs.emplace_back("distr1", rf2);
+
+    std::map<UInt32, RuntimeFilterData>  data_sets;
+
+    /// worker 1
+    std::unordered_map<RuntimeFilterId, RuntimeFilterVal> runtime_wk1;
+    DataTypePtr type_ptr = std::make_shared<DataTypeNumber<Int32>>();
+    ValueSetWithRangePtr value_wk1 = std::make_shared<ValueSetWithRange>(type_ptr);
+    for (int i = 0; i < 10124; ++i)
+    {
+        value_wk1->insert(i);
+    }
+    RuntimeFilterVal wk1{false, nullptr, value_wk1 };
+    runtime_wk1.emplace(1, wk1);
+    data_sets.insert(std::make_pair(0, RuntimeFilterData{std::move(runtime_wk1)}));
+
+    /// worker 2
+    std::unordered_map<RuntimeFilterId, RuntimeFilterVal> runtime_wk2;
+    ValueSetWithRangePtr value_wk2 = std::make_shared<ValueSetWithRange>(type_ptr);
+    for (int i = 0; i < 1023; ++i)
+    {
+        value_wk2->insert(i);
+    }
+
+    RuntimeFilterVal wk2{false, nullptr, value_wk2 };
+    runtime_wk2.emplace(1, wk2);
+    data_sets.insert(std::make_pair(1, RuntimeFilterData{std::move(runtime_wk2)}));
+
+
+   /// worker 3
+    std::unordered_map<RuntimeFilterId, RuntimeFilterVal> runtime_wk3;
+    BloomFilterWithRangePtr bloom_wk3 = std::make_shared<BloomFilterWithRange>(10124, type_ptr);
+    for (int i = 0; i < 10124; ++i)
+    {
+        bloom_wk3->addKey(i);
+    }
+    bloom_wk3->is_pre_enlarged = true;
+    RuntimeFilterVal wk3{true, bloom_wk3, nullptr };
+    runtime_wk3.emplace(1, wk3);
+    data_sets.insert(std::make_pair(2, RuntimeFilterData{std::move(runtime_wk3)}));
+
+
+    /// start build
+    RuntimeFilterBuilder builder(setting, rfs);
+    auto && dt = builder.merge(std::move(data_sets));
+    EXPECT_EQ(dt.bypass, BypassType::NO_BYPASS);
+    EXPECT_EQ(dt.runtime_filters.size(), 1);
+    EXPECT_EQ(dt.runtime_filters[1].is_bf, true);
+
+
 }

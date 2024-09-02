@@ -255,6 +255,29 @@ public:
         return erase_items;
     }
 
+    template<typename Pred>
+    size_t erase_if(const KeysVec & keys, Pred pred)
+    {
+        if (keys.empty())
+            return 0;
+        size_t erase_items{0};
+        NodePtrList current_trash_nodes;
+        auto lock = WriteLockHolder(this);
+        for (const auto key : keys)
+        {
+            auto it = store_map.find(key);
+            if (it == store_map.end() || !pred(it->second->value))
+                continue;
+            removeNode(it->second.get());
+            current_trash_nodes.push_back(it->second);
+            store_map.erase(it);
+            ++erase_items;
+        }
+        handleTrash(std::move(current_trash_nodes));
+        updateSize();
+        return erase_items;
+    }
+
     void clear()
     {
         auto lock = WriteLockHolder(this);

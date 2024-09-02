@@ -16,6 +16,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <Core/Types.h>
 #include <boost/noncopyable.hpp>
 #include <brpc/channel.h>
@@ -32,12 +33,14 @@ namespace ErrorCodes
 class RpcClient : private boost::noncopyable
 {
 public:
-    RpcClient(String host_port_, brpc::ChannelOptions * options = nullptr);
+    RpcClient(String host_port_, std::function<void()> report_err_, brpc::ChannelOptions * options = nullptr);
     ~RpcClient() = default;
 
     const auto & getAddress() const { return host_port; }
     bool ok() const { return ok_.load(std::memory_order_relaxed); }
-    void reset() { ok_.store(true, std::memory_order_relaxed); }
+    void setOk(bool ok) { ok_.store(ok, std::memory_order_relaxed); }
+    void reportError() { report_err(); }
+
     void checkAliveWithController(const brpc::Controller & cntl) noexcept;
 
     auto & getChannel() { return *brpc_channel; }
@@ -49,6 +52,7 @@ protected:
 
     Poco::Logger * log;
     String host_port;
+    std::function<void()> report_err;
 
     std::unique_ptr<brpc::Channel> brpc_channel;
     std::atomic_bool ok_{true};

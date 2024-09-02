@@ -13,14 +13,20 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Optimizer/Rule/Rules.h>
 
+#include <Optimizer/Rewriter/RemoveApply.h>
+#include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
+#include <Optimizer/Rule/Rewrite/EagerAggregation.h>
 #include <Optimizer/Rule/Rewrite/ExplainAnalyzeRules.h>
+#include <Optimizer/Rule/Rewrite/ExtractBitmapImplicitFilter.h>
 #include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 #include <Optimizer/Rule/Rewrite/ImplementSetOperationRules.h>
 #include <Optimizer/Rule/Rewrite/InlineProjections.h>
 #include <Optimizer/Rule/Rewrite/MergeSetOperationRules.h>
+#include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToExpandAggregate.h>
 #include <Optimizer/Rule/Rewrite/MultipleDistinctAggregationToMarkDistinct.h>
 #include <Optimizer/Rule/Rewrite/OptimizeAggregateRules.h>
 #include <Optimizer/Rule/Rewrite/PullProjectionOnJoinThroughJoin.h>
@@ -31,11 +37,15 @@
 #include <Optimizer/Rule/Rewrite/PushPartialStepThroughExchangeRules.h>
 #include <Optimizer/Rule/Rewrite/PushProjectionRules.h>
 #include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
+#include <Optimizer/Rule/Rewrite/PushUnionThroughJoin.h>
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/Rule/Rewrite/SingleDistinctAggregationToGroupBy.h>
 #include <Optimizer/Rule/Rewrite/SwapAdjacentRules.h>
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
+#include <Optimizer/Rule/Rewrite/EagerAggregation.h>
+#include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
+#include <Optimizer/Rule/Rewrite/SumIfToCountIf.h>
 
 namespace DB
 {
@@ -57,6 +67,11 @@ std::vector<RulePtr> Rules::normalizeExpressionRules()
 std::vector<RulePtr> Rules::swapPredicateRules()
 {
     return {std::make_shared<SwapPredicateRewriteRule>()};
+}
+
+std::vector<RulePtr> Rules::sumIfToCountIf()
+{
+    return {std::make_shared<SumIfToCountIf>()};
 }
 
 std::vector<RulePtr> Rules::simplifyExpressionRules()
@@ -113,7 +128,7 @@ std::vector<RulePtr> Rules::removeRedundantRules()
 
 std::vector<RulePtr> Rules::pushAggRules()
 {
-    return {std::make_shared<PushAggThroughOuterJoin>()};
+    return {std::make_shared<PushAggThroughOuterJoin>(), std::make_shared<EagerAggregation>()};
 }
 
 std::vector<RulePtr> Rules::pushDownLimitRules()
@@ -127,8 +142,7 @@ std::vector<RulePtr> Rules::pushDownLimitRules()
         std::make_shared<PushLimitThroughUnion>(),
         std::make_shared<PushdownLimitIntoWindow>(),
         std::make_shared<PushTopNThroughProjection>(),
-        std::make_shared<PushLimitIntoSorting>()
-    };
+        std::make_shared<PushLimitIntoSorting>()};
 }
 
 std::vector<RulePtr> Rules::distinctToAggregateRules()
@@ -136,7 +150,9 @@ std::vector<RulePtr> Rules::distinctToAggregateRules()
     return {
         // std::make_shared<DistinctToAggregate>(),
         std::make_shared<SingleDistinctAggregationToGroupBy>(),
-        std::make_shared<MultipleDistinctAggregationToMarkDistinct>()};
+        std::make_shared<MultipleDistinctAggregationToMarkDistinct>(),
+        std::make_shared<MultipleDistinctAggregationToExpandAggregate>(),
+    };
 }
 
 std::vector<RulePtr> Rules::pushIntoTableScanRules()
@@ -203,5 +219,31 @@ std::vector<RulePtr> Rules::pushApplyRules()
 {
     return {std::make_shared<PushDownApplyThroughJoin>()};
 }
+
+std::vector<RulePtr> Rules::unnestingSubqueryRules()
+{
+    return {
+        std::make_shared<UnnestingWithWindow>(),
+        std::make_shared<UnnestingWithProjectionWindow>(),
+        std::make_shared<ExistsToSemiJoin>(),
+        std::make_shared<InToSemiJoin>()};
+}
+
+std::vector<RulePtr> Rules::crossJoinToUnion()
+{
+    return {std::make_shared<CrossJoinToUnion>()};
+}
+
+std::vector<RulePtr> Rules::extractBitmapImplicitFilterRules()
+{
+    return {std::make_shared<ExtractBitmapImplicitFilter>()};
+}
+
+std::vector<RulePtr> Rules::pushUnionThroughJoin()
+{
+    return {
+        std::make_shared<PushUnionThroughJoin>(), std::make_shared<PushUnionThroughProjection>()};
+}
+
 
 }

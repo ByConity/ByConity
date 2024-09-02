@@ -25,21 +25,27 @@ Projection
                   │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_time_sk, ss_store_sk}
                   │  │  │           Outputs: [ss_sold_time_sk, ss_hdemo_sk, ss_store_sk]
                   │  │  └─ Broadcast Exchange
-                  │  │     └─ Filter
-                  │  │        │     Condition: (t_hour = 20) AND (t_minute >= 30)
-                  │  │        └─ TableScan tpcds1000.time_dim
-                  │  │                 Where: (t_hour = 20) AND (t_minute >= 30)
-                  │  │                 Outputs: [t_time_sk, t_hour, t_minute]
+                  │  │     └─ Projection
+                  │  │        │     Expressions: [t_time_sk]
+                  │  │        └─ Filter
+                  │  │           │     Condition: (t_hour = 20) AND (t_minute >= 30)
+                  │  │           └─ TableScan tpcds1000.time_dim
+                  │  │                    Where: (t_hour = 20) AND (t_minute >= 30)
+                  │  │                    Outputs: [t_time_sk, t_hour, t_minute]
                   │  └─ Broadcast Exchange
-                  │     └─ Filter
-                  │        │     Condition: hd_dep_count = 7
-                  │        └─ TableScan tpcds1000.household_demographics
-                  │                 Where: hd_dep_count = 7
-                  │                 Outputs: [hd_demo_sk, hd_dep_count]
+                  │     └─ Projection
+                  │        │     Expressions: [hd_demo_sk]
+                  │        └─ Filter
+                  │           │     Condition: hd_dep_count = 7
+                  │           └─ TableScan tpcds1000.household_demographics
+                  │                    Where: hd_dep_count = 7
+                  │                    Outputs: [hd_demo_sk, hd_dep_count]
                   └─ Broadcast Exchange
-                     └─ Filter
-                        │     Condition: s_store_name = 'ese'
-                        └─ TableScan tpcds1000.store
-                                 Where: s_store_name = 'ese'
-                                 Outputs: [s_store_sk, s_store_name]
+                     └─ Projection
+                        │     Expressions: [s_store_sk]
+                        └─ Filter
+                           │     Condition: s_store_name = 'ese'
+                           └─ TableScan tpcds1000.store
+                                    Where: s_store_name = 'ese'
+                                    Outputs: [s_store_sk, s_store_name]
 note: Runtime Filter is applied for 3 times.

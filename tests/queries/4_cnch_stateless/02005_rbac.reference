@@ -2,8 +2,8 @@ Not enough privileges
 Not enough privileges
 CREATE TABLE default.t\n(\n    `a` Int32\n)\nENGINE = CnchMergeTree\nORDER BY a\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
 Not enough privileges
-"GRANT CREATE ON *.* TO user_test_02184"
-"GRANT role1 TO user_test_02184"
-"user_test_02184",\N,"role1",1,0
+"GRANT CREATE ON *.* TO `1234.user_test_02184`"
+"GRANT `1234.role1` TO `1234.user_test_02184`"
+"1234.user_test_02184",\N,"1234.role1",1,0
 1
 1

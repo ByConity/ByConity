@@ -844,7 +844,7 @@ void QueryPlan::fromProtoTreeLike(const Protos::QueryPlan & proto)
         this->cte_info.add(cte_id, id_to_plan.at(plan_id));
     }
     auto root_id = proto.root_id();
-    this->setPlanNodeRoot(id_to_plan.at(root_id));
+    this->setPlanNode(id_to_plan.at(root_id));
 }
 
 // TODO: deprecate when proto rpc is ready
@@ -1014,5 +1014,14 @@ QueryPlanPtr QueryPlan::copy(ContextMutablePtr context)
     for (const auto & [cte_id, cte_def] : cte_info.getCTEs())
         copy_cte_info.add(cte_id, copyPlanNode(cte_def, context));
     return std::make_unique<QueryPlan>(copy_plan_node, copy_cte_info, context->getPlanNodeIdAllocator());
+}
+
+void QueryPlan::prepare(const PreparedStatementContext & prepared_context)
+{
+    if (plan_node)
+        plan_node->prepare(prepared_context);
+
+    for (const auto & [cte_id, cte_def] : cte_info.getCTEs())
+        cte_def->prepare(prepared_context);
 }
 }

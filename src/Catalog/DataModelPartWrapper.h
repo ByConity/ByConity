@@ -41,7 +41,7 @@ public:
     std::shared_ptr<Protos::DataModelPart> part_model;
     String name;
 
-    MergeTreePartition partition;
+    std::shared_ptr<MergeTreePartition> partition = std::make_shared<MergeTreePartition>();
     std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> minmax_idx;
 
     std::shared_ptr<MergeTreePartInfo> info;
@@ -53,6 +53,21 @@ public:
     /// To handle this case, we need to set txnID and part_info::mutation separately, see DataModelHelpers::fillPartsModel.
     /// And when getting txnID, use DataModelPart::txnID by default, and use mutation as fallback.
     inline UInt64 txnID() const { return part_model->txnid() ? part_model->txnid() : part_model->part_info().mutation(); }
+
+    Int64 bucketNumber() const { return part_model->bucket_number(); }
+
+    // used in `assignCnchParts` when distrubuting parts into workers.
+    const String getNameForAllocation() const { return info->getBasicPartName(); }
+
+    // No actual use. Just required in assignParts
+    void setHostPort(const String & disk_cache_host_port_, const String & assign_compute_host_port_) const
+    {
+        disk_cache_host_port = disk_cache_host_port_;
+        assign_compute_host_port = assign_compute_host_port_;
+    }
+
+    mutable String disk_cache_host_port;
+    mutable String assign_compute_host_port;
 };
 
 class DataPartInterface
@@ -79,6 +94,8 @@ public:
 
     mutable std::forward_list<DataModelDeleteBitmapPtr> delete_bitmap_metas;
 
+    UInt64 deletedRowsCount(const MergeTreeMetaBase & storage, bool ignore_error = false) const;
+
     const ImmutableDeleteBitmapPtr & getDeleteBitmap(const MergeTreeMetaBase & storage, bool is_unique_new_part) const;
 
     UInt64 getCommitTime() const;
@@ -86,6 +103,7 @@ public:
     UInt64 getColumnsCommitTime() const;
     UInt64 getMutationCommitTime() const;
     UInt64 getEndTime() const;
+    UInt64 getLastModificationTime() const;
     void setEndTime(UInt64 end_time) const;
 
     bool containsExactly(const ServerDataPart & other) const;
@@ -97,6 +115,8 @@ public:
 
     bool isEmpty() const;
     UInt64 rowsCount() const;
+    UInt64 marksCount() const;
+    UInt64 rowExistsCount() const;
     UInt64 size() const;
     bool isPartial() const;
     bool isDropRangePart() const;
@@ -104,6 +124,7 @@ public:
     const Protos::DataModelPart & part_model() const;
     const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & minmax_idx() const;
     UInt64 txnID() const;
+    bool hasStagingTxnID() const;
 
     const MergeTreePartInfo & info() const;
     const String & name() const;
@@ -115,6 +136,9 @@ public:
     decltype(auto) get_deleted() const { return deleted(); }
     decltype(auto) get_commit_time() const { return getCommitTime(); }
     UUID get_uuid() const;
+
+    // used in `assignCnchParts` when distrubuting parts into workers.
+    String getNameForAllocation() const { return part_model_wrapper->getNameForAllocation(); }
 
     void serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & storage, WriteBuffer & buf) const;
     void serializeDeleteBitmapMetas(const MergeTreeMetaBase & storage, WriteBuffer & buffer) const;
@@ -138,10 +162,20 @@ public:
 
 private:
     mutable std::optional<UInt64> commit_time;
+    mutable std::optional<UInt64> last_modification_time;
     mutable ServerDataPartPtr prev_part;
     mutable UInt64 virtual_part_size = 0;
     mutable ImmutableDeleteBitmapPtr delete_bitmap;
 
+};
+
+struct ServerVirtualPart
+{
+    const ServerDataPartPtr part;
+    std::unique_ptr<MarkRanges> mark_ranges;
+    explicit ServerVirtualPart(const ServerDataPartPtr & part_, std::unique_ptr<MarkRanges> mark_ranges_)
+        : part(part_), mark_ranges(std::move(mark_ranges_))
+    {}
 };
 
 }

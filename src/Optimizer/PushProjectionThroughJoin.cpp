@@ -30,7 +30,7 @@ std::optional<PlanNodePtr> PushProjectionThroughJoin::pushProjectionThroughJoin(
     auto & step = *project.getStep();
 
     bool all_deterministic = true;
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     const NameToType & name_to_type = step.getNameToType();
     for (auto & assigment : assignments)
     {

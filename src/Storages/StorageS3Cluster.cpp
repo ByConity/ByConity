@@ -58,11 +58,11 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/getVirtualsForStorage.h>
 #include <common/logger_useful.h>
 
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/s3/S3Client.h>
-#include <aws/s3/model/ListObjectsV2Request.h>
 
 #include <ios>
 #include <memory>
@@ -73,31 +73,60 @@
 namespace DB
 {
 StorageS3Cluster::StorageS3Cluster(
-    const String & filename_,
-    const String & access_key_id_,
-    const String & secret_access_key_,
+    const String & cluster_name_,
+    const StorageS3::Configuration & configuration_,
     const StorageID & table_id_,
-    String cluster_name_,
-    const String & format_name_,
-    UInt64 max_connections_,
     const ColumnsDescription & columns_,
     const ConstraintsDescription & constraints_,
-    ContextPtr context_,
-    const String & compression_method_)
-    : IStorage(table_id_)
-    , client_auth{S3::URI{Poco::URI{filename_}}, access_key_id_, secret_access_key_, max_connections_, {}, {}}
-    , filename(filename_)
+    ContextPtr context_)
+    : IStorage(table_id_) 
     , cluster_name(cluster_name_)
-    , format_name(format_name_)
-    , compression_method(compression_method_)
+    , s3_configuration{configuration_}
 {
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
+    updateConfigurationIfChanged(context_);
+
+    if (columns_.empty())
+    {
+        /// `format_settings` is set to std::nullopt, because StorageS3Cluster is used only as table function
+        auto columns = StorageS3::getTableStructureFromData(s3_configuration, /*format_settings=*/std::nullopt, context_);
+        storage_metadata.setColumns(columns);
+    }
+    else
+        storage_metadata.setColumns(columns_);
+    
     storage_metadata.setConstraints(constraints_);
     setInMemoryMetadata(storage_metadata);
-    StorageS3::updateClientAndAuthSettings(context_, client_auth);
+
+    auto default_virtuals = NamesAndTypesList{
+        {"_path", std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>())},
+        {"_file", std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>())}};
+
+    auto columns = storage_metadata.getSampleBlock().getNamesAndTypesList();
+    virtual_columns = getVirtualsForStorage(columns, default_virtuals);
+    for (const auto & column : virtual_columns)
+        virtual_block.insert({column.type->createColumn(), column.type, column.name});
+
 }
 
+// void StorageS3Cluster::addColumnsStructureToQuery(ASTPtr & query, const String & structure, const ContextPtr & context)
+// {
+//     ASTExpressionList * expression_list = extractTableFunctionArgumentsFromSelectQuery(query);
+//     if (!expression_list)
+//         throw Exception(ErrorCodes::LOGICAL_ERROR, "Expected SELECT query from table function s3Cluster, got '{}'", queryToString(query));
+
+//     TableFunctionS3Cluster::addColumnsStructureToArguments(expression_list->children, structure, context);
+// }
+
+void StorageS3Cluster::updateConfigurationIfChanged(ContextPtr local_context)
+{
+    s3_configuration.update(local_context);
+}
+
+NamesAndTypesList StorageS3Cluster::getVirtuals() const
+{
+    return virtual_columns;
+}
 /// The code executes on initiator
 Pipe StorageS3Cluster::read(
     const Names & column_names,
@@ -108,17 +137,12 @@ Pipe StorageS3Cluster::read(
     size_t /*max_block_size*/,
     unsigned /*num_streams*/)
 {
-    StorageS3::updateClientAndAuthSettings(context, client_auth);
+    updateConfigurationIfChanged(context);
 
     auto cluster = context->getCluster(cluster_name)->getClusterWithReplicasAsShards(context->getSettings());
-    S3::URI s3_uri(Poco::URI{filename});
-    StorageS3::updateClientAndAuthSettings(context, client_auth);
-
-    auto iterator = std::make_shared<StorageS3Source::DisclosedGlobIterator>(*client_auth.client, client_auth.uri);
-    auto callback = std::make_shared<StorageS3Source::IteratorWrapper>([iterator]() mutable -> String
-    {
-        return iterator->next();
-    });
+    auto iterator = std::make_shared<StorageS3Source::DisclosedGlobIterator>(
+        *s3_configuration.client, s3_configuration.url, getVirtuals(), context);
+    auto callback = std::make_shared<std::function<String()>>([iterator]() mutable -> String { return iterator->next()->key; });
 
     /// Calculate the header. This is significant, because some columns could be thrown away in some cases like query with count(*)
     Block header =
@@ -168,15 +192,6 @@ QueryProcessingStage::Enum StorageS3Cluster::getQueryProcessingStage(
 
     /// Follower just reads the data.
     return QueryProcessingStage::Enum::FetchColumns;
-}
-
-
-NamesAndTypesList StorageS3Cluster::getVirtuals() const
-{
-    return NamesAndTypesList{
-        {"_path", std::make_shared<DataTypeString>()},
-        {"_file", std::make_shared<DataTypeString>()}
-    };
 }
 
 

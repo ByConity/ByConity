@@ -11,39 +11,21 @@ Projection Est. 1 rows
                └─ Aggregating Est. 1 rows
                   │     Group by: {o_orderpriority}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ Inner (PARALLEL_HASH) Join Est. 5734392 rows
+                  └─ Right Semi (PARALLEL_HASH) Join Est. 5734392 rows
                      │     Condition: l_orderkey == o_orderkey
                      │     Runtime Filters Builder: {o_orderkey}
-                     ├─ Aggregating Est. 5734392 rows
-                     │  │     Group by: {l_orderkey}
-                     │  └─ Inner (PARALLEL_HASH) Join Est. 22673958 rows
-                     │     │     Condition: l_orderkey == o_orderkey_1
-                     │     │     Runtime Filters Builder: {o_orderkey_1}
-                     │     ├─ Repartition Exchange Est. 600037902 rows
-                     │     │  │     Partition by: {l_orderkey}
-                     │     │  └─ Filter Est. 600037902 rows
-                     │     │     │     Condition: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
-                     │     │     └─ TableScan tpch100.lineitem Est. 600037902 rows
-                     │     │              Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
-                     │     │              Outputs: [l_orderkey, l_commitdate, l_receiptdate]
-                     │     └─ MergingAggregated Est. 5734392 rows
-                     │        └─ Repartition Exchange Est. 5734392 rows
-                     │           │     Partition by: {o_orderkey_1}
-                     │           └─ Aggregating Est. 5734392 rows
-                     │              │     Group by: {o_orderkey_1}
-                     │              └─ Projection Est. 5734392 rows
-                     │                 │     Expressions: o_orderkey_1:=o_orderkey
-                     │                 └─ Filter Est. 5734392 rows
-                     │                    │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
-                     │                    └─ TableScan tpch100.orders Est. 150000000 rows
-                     │                             Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date')) Runtime Filters: {o_orderkey}
-                     │                             Outputs: [o_orderkey, o_orderdate]
-                     └─ Repartition Exchange Est. 5734392 rows
-                        │     Partition by: {o_orderkey}
+                     ├─ Projection Est. 150009475 rows
+                     │  │     Expressions: [l_orderkey]
+                     │  └─ Filter Est. 150009475 rows
+                     │     │     Condition: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
+                     │     └─ TableScan tpch100.lineitem Est. 600037902 rows
+                     │              Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
+                     │              Outputs: [l_orderkey, l_commitdate, l_receiptdate]
+                     └─ Projection Est. 5734392 rows
+                        │     Expressions: [o_orderkey, o_orderpriority]
                         └─ Filter Est. 5734392 rows
                            │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
                            └─ TableScan tpch100.orders Est. 150000000 rows
                                     Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
                                     Outputs: [o_orderkey, o_orderdate, o_orderpriority]
-note: Magic Set is applied for 1 parts.
-note: Runtime Filter is applied for 3 times.
+note: Runtime Filter is applied for 1 times.

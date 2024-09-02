@@ -20,11 +20,12 @@
 
 namespace DB
 {
-PatternPtr LeftJoinToRightJoin::getPattern() const
+ConstRefPatternPtr LeftJoinToRightJoin::getPattern() const
 {
-    return Patterns::join()
-        .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
+    static auto pattern = Patterns::join()
+        .matchingStep<JoinStep>([](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
         .with(Patterns::any(), Patterns::any()).result();
+    return pattern;
 }
 
 TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

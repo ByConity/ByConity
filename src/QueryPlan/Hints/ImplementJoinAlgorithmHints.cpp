@@ -8,7 +8,7 @@ namespace DB
 
 void ImplementJoinAlgorithmHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    JoinAlgorithmHintsVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
+    JoinAlgorithmHintsVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     VisitorUtil::accept(*plan.getPlanNode(), visitor, v);
 }
@@ -73,7 +73,7 @@ HintsStringSet JoinAlgorithmHintsVisitor::visitPlanNode(PlanNodeBase & node, Voi
 HintsStringSet JoinAlgorithmHintsVisitor::visitCTERefNode(CTERefNode & node, Void & v)
 {
     CTEId cte_id = node.getStep()->getId();
-    post_order_cte_helper.accept(cte_id, *this, v);
+    cte_helper.accept(cte_id, *this, v);
     return {};
 }
 

@@ -1,0 +1,11 @@
+		"rows_read": 1,
+		"bytes_read": 16
+		"rows_read": 1,
+		"bytes_read": 16
+		"rows_read": 4,
+		"bytes_read": 64
+		"rows_read": 2,
+		"bytes_read": 9
+< X-ClickHouse-Summary: {"read_rows":"1","read_bytes":"16","written_rows":"0","written_bytes":"0","total_rows_to_read":"8192"}
+		"rows_read": 1,
+		"bytes_read": 16

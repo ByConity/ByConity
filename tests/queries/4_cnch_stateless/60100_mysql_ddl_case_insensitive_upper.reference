@@ -1,0 +1,15 @@
+1	String
+TEST_CASE0	CREATE TABLE TEST_UPPERCASE.TEST_CASE0 (\n    `XX` String NOT NULL\n)\nENGINE = CnchMergeTree\nORDER BY XX\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\', index_granularity = 8192
+TEST_CASE1	CREATE TABLE TEST_UPPERCASE.TEST_CASE1 (\n    `EVENT_DATE` Date NULL,\n    `EVENT_TYPE` String NULL,\n    `EVENT_COUNT` Int32 NULL,\n    `EVENTDATE` Date NULL DEFAULT toDate(EVENT_DATE)\n)\nENGINE = CnchMergeTree\nPARTITION BY toYYYYMM(EVENT_DATE)\nORDER BY (EVENT_TYPE, EVENT_COUNT)\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\', index_granularity = 8192
+TEST_CASE2	CREATE TABLE TEST_UPPERCASE.TEST_CASE2 (\n    `ID` UInt64 NULL,\n    `UPDATED_AT` DateTime NULL MATERIALIZED now(),\n    `SIZE_BYTES` Int64 NULL,\n    `SIZE` String NULL ALIAS formatReadableSize(SIZE_BYTES)\n)\nENGINE = CnchMergeTree\nPRIMARY KEY ID\nORDER BY ID\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'MYSQL\', index_granularity = 8192
+2022-01-01	Type1
+2022-01-02	Type2
+2022-01-03	Type3
+Type1	10
+Type2	20
+Type3	30
+2022-01-01	1
+2022-01-02	1
+2022-01-03	1
+2022-01-02	Type2	20	2022-01-02
+2022-01-03	Type3	30	2022-01-03

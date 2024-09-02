@@ -44,7 +44,8 @@ MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcess
     MergeTreeBaseSelectProcessor{
         pool_->getHeader(), storage_, storage_snapshot_, query_info_, stream_settings_, virt_column_names_},
     thread{thread_},
-    pool{pool_}
+    pool{pool_},
+    log(&Poco::Logger::get("MergeTreeThreadSelectBlockInputProcessor"))
 {
     /// round min_marks_to_read up to nearest multiple of block_size expressed in marks
     /// If granularity is adaptive it doesn't make sense
@@ -78,6 +79,7 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
         pre_index_executor.reset();
         return false;
     }
+    LOG_TRACE(log, "Thread {} get one new task with {} marks.", thread, task->mark_ranges_once_read.size());
 
     const std::string part_name = task->data_part->isProjectionPart() ? task->data_part->getParentPart()->name : task->data_part->name;
 

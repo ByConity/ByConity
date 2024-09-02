@@ -13,20 +13,27 @@
  * limitations under the License.
  */
 
+#include <mutex>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/PartLog.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Interpreters/CnchSystemLog.h>
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
+#include <Parsers/ASTPartition.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationType.h>
-
+#include <Core/SettingsEnums.h>
+#include <iostream>
 namespace DB
 {
 namespace ErrorCodes
@@ -42,17 +49,77 @@ CloudMergeTreeBlockOutputStream::CloudMergeTreeBlockOutputStream(
     MergeTreeMetaBase & storage_,
     StorageMetadataPtr metadata_snapshot_,
     ContextPtr context_,
-    bool to_staging_area_)
+    ASTPtr overwrite_partition_)
     : storage(storage_)
     , log(storage.getLogger())
     , metadata_snapshot(std::move(metadata_snapshot_))
     , context(std::move(context_))
-    , to_staging_area(to_staging_area_)
     , writer(storage, IStorage::StorageLocation::AUXILITY)
     , cnch_writer(storage, context, ManipulationType::Insert)
+    , overwrite_partition(overwrite_partition_)
 {
-    if (!metadata_snapshot->hasUniqueKey() && to_staging_area)
-        throw Exception("Table doesn't have UNIQUE KEY specified, can't write to staging area", ErrorCodes::LOGICAL_ERROR);
+    checkAndInit();
+}
+
+void CloudMergeTreeBlockOutputStream::checkAndInit()
+{
+    if (metadata_snapshot->hasUniqueKey())
+    {
+        dedup_parameters.enable_staging_area = context->getSettingsRef().enable_staging_area_for_write.value || storage.getSettings()->cloud_enable_staging_area;
+        dedup_parameters.enable_append_mode = context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+
+        if (dedup_parameters.enable_staging_area)
+        {
+            if (dedup_parameters.enable_append_mode)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "In APPEND dedup key mode, can't write to staging area.");
+            if (context->getSettings().dedup_key_mode == DedupKeyMode::THROW)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Insert VALUES into staging area with dedup_key_mode=DedupKeyMode::THROW is not allowed");
+            LOG_DEBUG(log, "enable staging area for write");
+        }
+        else
+        {
+            switch (context->getSettings().dedup_key_mode) {
+                case DedupKeyMode::APPEND:
+                    /// case 1(unique table with async insert): commit all the temp parts as staged parts, which will be converted to visible parts later by dedup worker
+                    /// case 2(unique table with append mode): just commit all the temp parts as visible parts with empty delete bitmaps. Insert is lock-free and faster than upsert due to its simplicity.
+                    cnch_writer.setDedupMode(CnchDedupHelper::DedupMode::APPEND);
+                    LOG_DEBUG(log, "enable append dedup key mode");
+                    break;
+                case DedupKeyMode::THROW:
+                    /// case 3(unique table with sync insert and throw when there has same key with existing parts)
+                    cnch_writer.setDedupMode(CnchDedupHelper::DedupMode::THROW);
+                    LOG_DEBUG(log, "enable throw dedup key mode");
+                    break;
+                case DedupKeyMode::REPLACE:
+                    /// case 4(unique table with sync insert): In commit stage, acquire the necessary locks to avoid write-write conflicts and then remove duplicate keys between visible parts and temp parts.
+                    cnch_writer.setDedupMode(CnchDedupHelper::DedupMode::UPSERT);
+                    LOG_TRACE(log, "enable upsert dedup mode");
+                    break;
+                default:
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR, "Unsupported dedup key mode: {}", context->getSettings().dedup_key_mode.toString());
+            }
+        }
+    }
+
+    initOverwritePartitionPruner();
+}
+
+void CloudMergeTreeBlockOutputStream::initOverwritePartitionPruner()
+{
+    if (!overwrite_partition)
+        return;
+
+    if (auto * partition_list = typeid_cast<ASTExpressionList *>(overwrite_partition.get()))
+    {
+        /// Get overwrite partition ids from query
+        for (const auto & partition : partition_list->children)
+            overwrite_partition_ids.insert(storage.getPartitionIDFromQuery(partition, context));
+    }
+    else
+    {
+        overwrite_partition_ids.insert(storage.getPartitionIDFromQuery(overwrite_partition, context));
+    }
 }
 
 Block CloudMergeTreeBlockOutputStream::getHeader() const
@@ -75,21 +142,37 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
     /// Generate delete bitmaps, delete bitmap is valid only when using delete_flag info for unique table
     LocalDeleteBitmaps bitmaps;
     const auto & txn = context->getCurrentTransaction();
-    for (const auto & part : temp_parts)
+
+    if (metadata_snapshot->hasUniqueKey())
     {
-        auto delete_bitmap = part->getDeleteBitmap(/*allow_null*/ true);
-        if (delete_bitmap && delete_bitmap->cardinality())
+        /// Handle delete flag and generate emtpy bitmap for unique table in APPEND mode
+        for (const auto & part : temp_parts)
         {
-            bitmaps.emplace_back(LocalDeleteBitmap::createBase(
-                part->info, std::const_pointer_cast<Roaring>(delete_bitmap), txn->getPrimaryTransactionID().toUInt64()));
-            part->delete_flag = true;
+            auto delete_bitmap = part->getDeleteBitmap(/*allow_null*/ true);
+            if (delete_bitmap && delete_bitmap->cardinality())
+            {
+                if (dedup_parameters.enable_append_mode)
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Delete flag can not used in APPEND dedup key mode.");
+
+                bitmaps.emplace_back(LocalDeleteBitmap::createBase(
+                    part->info,
+                    std::const_pointer_cast<Roaring>(delete_bitmap),
+                    txn->getPrimaryTransactionID().toUInt64(),
+                    part->bucket_number));
+                part->delete_flag = true;
+            }
+            else if (dedup_parameters.enable_append_mode)
+            {
+                bitmaps.emplace_back(LocalDeleteBitmap::createBase(
+                    part->info, std::make_shared<Roaring>(), txn->getPrimaryTransactionID().toUInt64(), part->bucket_number));
+            }
         }
     }
     LOG_DEBUG(storage.getLogger(), "Finish converting block into parts, elapsed {} ms", watch.elapsedMilliseconds());
     watch.restart();
 
     IMutableMergeTreeDataPartsVector temp_staged_parts;
-    if (to_staging_area)
+    if (dedup_parameters.enable_staging_area)
     {
         temp_staged_parts.swap(temp_parts);
     }
@@ -124,15 +207,44 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     else
         part_blocks = writer.splitBlockIntoParts(block, settings.max_partitions_per_insert_block, metadata_snapshot, context);
 
+    std::mutex parts_mutex;
     IMutableMergeTreeDataPartsVector parts;
-    LOG_DEBUG(storage.getLogger(), "size of part_blocks {}", part_blocks.size());
+    size_t rows_size = 0;
+    LOG_DEBUG(storage.getLogger(), "Size of blocks is {} after split by partition", part_blocks.size());
 
     const auto & txn = context->getCurrentTransaction();
     auto primary_txn_id = txn->getPrimaryTransactionID();
 
-    // Get all blocks of partition by expression
-    for (auto & block_with_partition : part_blocks)
-    {
+    auto processBlockWithBucket = [&](BlockWithPartition & bucketed_block_with_partition) {
+        Stopwatch watch;
+        auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
+
+        MergeTreeMutableDataPartPtr temp_part
+            = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
+
+        if (txn->isSecondary())
+            temp_part->secondary_txn_id = txn->getTransactionID();
+        if (part_log)
+            part_log->addNewPart(context, temp_part, watch.elapsed());
+        LOG_DEBUG(
+            storage.getLogger(),
+            "Write part {}, {} rows, elapsed {} ms",
+            temp_part->name,
+            bucketed_block_with_partition.block.rows(),
+            watch.elapsedMilliseconds());
+
+        std::lock_guard parts_lock(parts_mutex);
+        parts.push_back(std::move(temp_part));
+        rows_size += bucketed_block_with_partition.block.rows();
+    };
+
+    size_t thread_num = storage.getSettings()->cnch_write_part_threads;
+    bool use_thread_pool = thread_num > 1;
+    /// Set queue size to unlimited to avoid dead lock
+    ThreadPool write_pool(thread_num, thread_num, /*queue_size=*/ 0);
+    Stopwatch write_pool_watch;
+    auto thread_group = CurrentThread::getGroup();
+    auto processBlockWithPartition = [&](BlockWithPartition & block_with_partition) {
         Row original_partition{block_with_partition.partition};
 
         /// We need to dedup in block before split block by cluster key when unique table supports cluster key because cluster key may be different with unique key. Otherwise, we will lost the insert order.
@@ -146,30 +258,67 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
 
         auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(
             block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
-        LOG_TRACE(storage.getLogger(), "size of bucketed_part_blocks {}", bucketed_part_blocks.size());
+        LOG_TRACE(storage.getLogger(), "Size of blocks is {} after split by bucket", bucketed_part_blocks.size());
 
         for (auto & bucketed_block_with_partition : bucketed_part_blocks)
         {
-            Stopwatch watch;
             bucketed_block_with_partition.partition = Row(original_partition);
+            if (use_thread_pool)
+                write_pool.scheduleOrThrowOnError([&, bucketed_block = std::move(bucketed_block_with_partition), thread_group]() mutable {
+                    SCOPE_EXIT({
+                        if (thread_group)
+                            CurrentThread::detachQueryIfNotDetached();
+                    });
+                    if (thread_group)
+                        CurrentThread::attachToIfDetached(thread_group);
+                    setThreadName("WritePart");
 
-            auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
-
-            MergeTreeMutableDataPartPtr temp_part
-                = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
-
-            if (txn->isSecondary())
-                temp_part->secondary_txn_id = txn->getTransactionID();
-            if (part_log)
-                part_log->addNewPart(context, temp_part, watch.elapsed());
-            LOG_DEBUG(
-                storage.getLogger(),
-                "Write part {}, {} rows, elapsed {} ms",
-                temp_part->name,
-                bucketed_block_with_partition.block.rows(),
-                watch.elapsedMilliseconds());
-            parts.push_back(std::move(temp_part));
+                    processBlockWithBucket(bucketed_block);
+                });
+            else
+                processBlockWithBucket(bucketed_block_with_partition);
         }
+    };
+
+    // Get all blocks of partition by expression
+    for (auto & block_with_partition : part_blocks)
+    {
+        if (overwrite_partition)
+        {
+            auto partition_id = MergeTreePartition{block_with_partition.partition}.getID(storage);
+            if (!overwrite_partition_ids.count(partition_id))
+            {
+                LOG_DEBUG(storage.getLogger(), "Ignore part block due to not match overwrite partition for partition id: {}", partition_id);
+                continue;
+            }
+        }
+
+        if (use_thread_pool)
+            write_pool.scheduleOrThrowOnError([&, block_data = std::move(block_with_partition), thread_group]() mutable {
+                SCOPE_EXIT({
+                    if (thread_group)
+                        CurrentThread::detachQueryIfNotDetached();
+                });
+                if (thread_group)
+                    CurrentThread::attachToIfDetached(thread_group);
+                setThreadName("WritePart");
+
+                processBlockWithPartition(block_data);
+            });
+        else
+            processBlockWithPartition(block_with_partition);
+    }
+
+    if (use_thread_pool)
+    {
+        write_pool.wait();
+        LOG_DEBUG(
+            storage.getLogger(),
+            "Write pool totally write {} part, {} rows, pool size {}, elapsed {} ms",
+            parts.size(),
+            rows_size,
+            thread_num,
+            write_pool_watch.elapsedMilliseconds());
     }
 
     return parts;
@@ -209,29 +358,10 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
 {
     cnch_writer.preload(preload_parts);
 
-    if (!metadata_snapshot->hasUniqueKey() || to_staging_area)
-    {
-        /// case1(normal table): commit all the temp parts as visible parts
-        /// case2(unique table with async insert): commit all the temp parts as staged parts,
-        ///     which will be converted to visible parts later by dedup worker
-        /// insert is lock-free and faster than upsert due to its simplicity.
-        writeSuffixForInsert();
-    }
-    else
-    {
-        /// case(unique table with sync insert): acquire the necessary locks to avoid write-write conflicts
-        /// and then remove duplicate keys between visible parts and temp parts.
-        writeSuffixForUpsert();
-    }
-}
-
-void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
-{
-    // Commit for insert values in server side.
     auto txn = context->getCurrentTransaction();
     if (dynamic_pointer_cast<CnchServerTransaction>(txn) && !disable_transaction_commit)
     {
-        txn->setMainTableUUID(storage.getStorageUUID());
+        txn->setMainTableUUID(storage.getCnchStorageUUID());
         txn->commitV2();
         LOG_DEBUG(storage.getLogger(), "Finishing insert values commit in cnch server.");
     }
@@ -243,7 +373,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
         auto kafka_table_id = txn->getKafkaTableID();
         if (!kafka_table_id.empty() && !worker_txn->hasEnableExplicitCommit())
         {
-            txn->setMainTableUUID(UUIDHelpers::toUUID(storage.getSettings()->cnch_table_uuid.value));
+            txn->setMainTableUUID(storage.getCnchStorageUUID());
             Stopwatch watch;
             txn->commitV2();
             LOG_TRACE(
@@ -288,120 +418,11 @@ namespace
     };
 }
 
-void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
-{
-    auto txn = context->getCurrentTransaction();
-    if (!txn)
-        throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
-
-    /// prefer to get cnch table uuid from settings as CloudMergeTree has no uuid for Kafka task
-    String uuid_str = storage.getSettings()->cnch_table_uuid.value;
-    if (uuid_str.empty())
-        uuid_str = UUIDHelpers::UUIDToString(storage.getStorageUUID());
-
-    txn->setMainTableUUID(UUIDHelpers::toUUID(uuid_str));
-    if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn); worker_txn && !worker_txn->tryGetServerClient())
-    {
-        /// case: server initiated "insert select/infile" txn, need to set server client here in order to commit from worker
-        if (const auto & client_info = context->getClientInfo(); client_info.rpc_port)
-            worker_txn->setServerClient(context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port));
-        else
-            throw Exception("Missing rpc_port, can't obtain server client to commit txn", ErrorCodes::LOGICAL_ERROR);
-    }
-    else
-    {
-        /// no need to set server client
-        /// case: server initiated "insert values" txn, server client not required
-        /// case: worker initiated "insert values|select|infile" txn, server client already set
-    }
-
-    auto catalog = context->getCnchCatalog();
-    /// must use cnch table to construct staged parts.
-    TxnTimestamp ts = context->getTimestamp();
-    auto table = catalog->tryGetTableByUUID(*context, uuid_str, ts);
-    if (!table)
-        throw Exception("Table " + storage.getStorageID().getNameForLogs() + " has been dropped", ErrorCodes::ABORTED);
-    auto cnch_table = dynamic_pointer_cast<StorageCnchMergeTree>(table);
-    if (!cnch_table)
-        throw Exception("Table " + storage.getStorageID().getNameForLogs() + " is not cnch merge tree", ErrorCodes::LOGICAL_ERROR);
-
-    if (preload_parts.empty())
-    {
-        Stopwatch watch;
-        txn->commitV2();
-        LOG_INFO(
-            log,
-            "Committed transaction {} in {} ms, preload_parts is empty",
-            txn->getTransactionID(),
-            watch.elapsedMilliseconds(),
-            preload_parts.size());
-        return;
-    }
-
-    CnchLockHolderPtr cnch_lock;
-    MergeTreeDataPartsCNCHVector visible_parts, staged_parts;
-    bool force_normal_dedup = false;
-    Stopwatch lock_watch;
-    do
-    {
-        CnchDedupHelper::DedupScope scope = CnchDedupHelper::getDedupScope(*cnch_table, preload_parts, force_normal_dedup);
-
-        std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
-            scope, txn->getTransactionID(), *cnch_table, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
-        lock_watch.restart();
-        cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
-        if (!cnch_lock->tryLock())
-            throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
-
-        lock_watch.restart();
-        ts = context->getTimestamp(); /// must get a new ts after locks are acquired
-        visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
-        staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);
-
-        /// In some case, visible parts or staged parts doesn't have same bucket definition or not a bucket part, we need to convert bucket lock to normal lock.
-        /// Otherwise, it may lead to duplicated data.
-        if (scope.isBucketLock() && !cnch_table->getSettings()->enable_bucket_level_unique_keys
-            && !CnchDedupHelper::checkBucketParts(*cnch_table, visible_parts, staged_parts))
-        {
-            force_normal_dedup = true;
-            cnch_lock->unlock();
-            LOG_TRACE(log, "Check bucket parts failed, switch to normal lock to dedup.");
-            continue;
-        }
-        else
-        {
-            /// Filter staged parts if lock scope is bucket level
-            scope.filterParts(staged_parts);
-            break;
-        }
-    } while (true);
-
-    MergeTreeDataDeduper deduper(*cnch_table, context);
-    LocalDeleteBitmaps bitmaps_to_dump = deduper.dedupParts(
-        txn->getTransactionID(),
-        CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts),
-        CnchPartsHelper::toIMergeTreeDataPartsVector(staged_parts),
-        {preload_parts.begin(), preload_parts.end()});
-
-    Stopwatch watch;
-    cnch_writer.publishStagedParts(staged_parts, bitmaps_to_dump);
-    LOG_DEBUG(log, "Publishing staged parts take {} ms", watch.elapsedMilliseconds());
-
-    watch.restart();
-    txn->commitV2();
-    LOG_INFO(
-        log,
-        "Committed transaction {} in {} ms (with {} ms holding lock)",
-        txn->getTransactionID(),
-        watch.elapsedMilliseconds(),
-        lock_watch.elapsedMilliseconds());
-}
-
 CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::dedupWithUniqueKey(const Block & block)
 {
     if (!metadata_snapshot->hasUniqueKey())
         return FilterInfo{};
-    
+
     const ColumnWithTypeAndName * version_column = nullptr;
     if (metadata_snapshot->hasUniqueKey() && storage.merging_params.hasExplicitVersionColumn())
         version_column = &block.getByName(storage.merging_params.version_column);

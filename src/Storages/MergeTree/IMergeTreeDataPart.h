@@ -170,6 +170,8 @@ public:
     /// Otherwise return information about column size on disk.
     ColumnSize getColumnSize(const String & column_name, const IDataType & /* type */) const;
 
+    ColumnSize getMapColumnSize(const String & map_implicit_column_name, const IDataType & type) const;
+
     /// Return information about column size on disk for all columns in part
     ColumnSize getTotalColumnsSize() const { return total_columns_size; }
 
@@ -241,6 +243,7 @@ public:
     const auto & get_deleted() const { return deleted; }
     const auto & get_commit_time() const { return commit_time; }
     const auto & get_uuid() const { return uuid; }
+    String getNameForAllocation() const { return info.getBasicPartName(); }
 
     const MergeTreeMetaBase & storage;
 
@@ -262,6 +265,8 @@ public:
 
     size_t rows_count = 0;
 
+    /// How many rows in the part are marked as existing after DELETE mutation.
+    std::optional<size_t> row_exists_count = std::nullopt;
 
     time_t modification_time = 0;
     /// When the part is removed from the working set. Changes once.
@@ -432,6 +437,9 @@ public:
 
     IMergeTreeDataPartPtr getMvccDataPart(const String & file_name) const;
 
+    /// Restore MVCC columns from prev parts. All undeleted columns in prev part chain will be added to columns_ptr.
+    void restoreMvccColumns();
+
     // collect all the visible projection parts' and corresponding checksums from the historical parts into the current visible part (head part)
     // this function must be called when finishing the loading parts
     void gatherProjections();
@@ -439,11 +447,11 @@ public:
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;
 
-    /// Generate unique path to detach part based on table path
-    String getRelativePathForDetachedPart(const String & prefix) const;
+    /// Generate unique path to detach part relative to table path
+    virtual String getRelativePathForDetachedPart(const String & prefix) const;
 
-    /// Generate unique path to detach part based on disk path
-    String getRelativePathToDiskForDetachedPart(const String & prefix) const;
+    /// Generate unique path to detach part relative to disk path
+    String getFullRelativePathForDetachedPart(const String & prefix) const;
 
     void createDeleteBitmapForDetachedPart() const;
 
@@ -478,7 +486,7 @@ public:
     static UInt64 calculateTotalSizeOnDisk(const DiskPtr & disk_, const String & from);
     void calculateColumnsSizesOnDisk();
 
-    String getRelativePathForPrefix(const String & prefix) const;
+    String getRelativePathForPrefix(const String & prefix, bool is_detach) const;
 
     bool isProjectionPart() const { return parent_part != nullptr; }
 
@@ -561,6 +569,7 @@ public:
 
     TxnTimestamp columns_commit_time;
     TxnTimestamp mutation_commit_time;
+    TxnTimestamp last_modification_time;
 
     UInt64 staging_txn_id = 0;
 
@@ -569,6 +578,9 @@ public:
     String max_unique_key;
 
     mutable UInt64 virtual_part_size = 0;
+
+    /// Mark ranges, if we divide parts into virtual parts in server side 
+    std::unique_ptr<MarkRanges> mark_ranges_for_virtual_part;
 
     /// secondary_txn_id > 0 mean this parts belong to an explicit transaction
     mutable TxnTimestamp secondary_txn_id {0};
@@ -588,7 +600,7 @@ public:
     /// If true it means that the part is belongs to unique table engine and from dumper tool
     bool low_priority = false;
 
-    Int64 bucket_number = -1;               /// bucket_number > 0 if the part is assigned to bucket
+    Int64 bucket_number = -1;               /// bucket_number >= 0 if the part is assigned to bucket
     UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
 
     /************** Unique Table Delete Bitmap ***********/
@@ -612,6 +624,14 @@ public:
     {
         DeleteBitmapReadLock rlock(delete_bitmap_mutex);
         return std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end());
+    }
+
+    UInt64 getDeleteBitmapVersion() const
+    {
+        DeleteBitmapReadLock rlock(delete_bitmap_mutex);
+        if (delete_bitmap_metas.empty())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap meta is empty for part {}", name);
+        return delete_bitmap_metas.front()->commit_time();
     }
 
     /// Return null if the part doesn't have delete bitmap.

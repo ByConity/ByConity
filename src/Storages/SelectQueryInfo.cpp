@@ -15,7 +15,9 @@
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Protos/PreparedStatementHelper.h>
 #include <Protos/plan_node_utils.pb.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -32,7 +34,7 @@ void InputOrderInfo::toProto(Protos::InputOrderInfo & proto) const
     proto.set_direction(direction);
 }
 
-std::shared_ptr<InputOrderInfo> InputOrderInfo::fromProto(const Protos::InputOrderInfo & proto, ContextPtr)
+std::shared_ptr<InputOrderInfo> InputOrderInfo::fromProto(const Protos::InputOrderInfo & proto)
 {
     SortDescription order_key_prefix_descr;
     for (const auto & proto_element : proto.order_key_prefix_descr())
@@ -52,6 +54,9 @@ void SelectQueryInfo::toProto(Protos::SelectQueryInfo & proto) const
     serializeASTToProto(query, *proto.mutable_query());
     serializeASTToProto(view_query, *proto.mutable_view_query());
     serializeASTToProto(partition_filter, *proto.mutable_partition_filter());
+    cache_info.toProto(*proto.mutable_cache_info());
+    if (input_order_info)
+        input_order_info->toProto(*proto.mutable_input_order_info());
 }
 
 void SelectQueryInfo::fillFromProto(const Protos::SelectQueryInfo & proto)
@@ -59,28 +64,20 @@ void SelectQueryInfo::fillFromProto(const Protos::SelectQueryInfo & proto)
     query = deserializeASTFromProto(proto.query());
     view_query = deserializeASTFromProto(proto.view_query());
     partition_filter = deserializeASTFromProto(proto.partition_filter());
-}
-
-std::shared_ptr<InterpreterSelectQuery> SelectQueryInfo::buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info)
-{
-    ReadBufferFromString rb(query);
-    ASTPtr query_ptr = deserializeAST(rb);
-    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_ptr, context, storage);
-    query_info.query = query_ptr;
-    query_info.syntax_analyzer_result = interpreter->syntax_analyzer_result;
-    query_info.prewhere_info = interpreter->analysis_result.prewhere_info;
-    query_info.sets = interpreter->query_analyzer->getPreparedSets();
-    query_info.index_context = interpreter->query_analyzer->getIndexContext();
-    return interpreter;
+    input_order_info = proto.has_input_order_info() ? InputOrderInfo::fromProto(proto.input_order_info()) : nullptr;
+    cache_info.fillFromProto(proto.cache_info());
 }
 
 ASTPtr getFilterFromQueryInfo(const SelectQueryInfo & query_info, bool clone)
 {
     const ASTSelectQuery & select = query_info.query->as<ASTSelectQuery &>();
+    ASTs conjuncts;
     if (select.where())
-        return clone ? select.where()->clone() : select.where();
+        conjuncts.emplace_back(clone ? select.where()->clone() : select.where());
     if (select.prewhere())
-        return clone ? select.prewhere()->clone() : select.prewhere();
+        conjuncts.emplace_back(clone ? select.prewhere()->clone() : select.prewhere());
+    if (!conjuncts.empty())
+        return PredicateUtils::combineConjuncts(conjuncts);
     if (!query_info.atomic_predicates_expr.empty())
     {
         ASTPtr filter_query;
@@ -134,4 +131,26 @@ MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info)
     return query_info.projection ? nullptr : query_info.index_context;
 }
 
+void SelectQueryInfo::appendPartitonFilters(ASTs conjuncts)
+{
+    ASTPtr new_partition_filter;
+
+    if (partition_filter)
+    {
+        conjuncts.push_back(partition_filter);
+        new_partition_filter = PredicateUtils::combineConjuncts(conjuncts);
+    }
+    else
+    {
+        new_partition_filter = PredicateUtils::combineConjuncts<false>(conjuncts);
+    }
+
+    if (!PredicateUtils::isTruePredicate(new_partition_filter))
+        partition_filter = std::move(new_partition_filter);
+}
+
+TableScanCacheInfo getTableScanCacheInfo(const SelectQueryInfo & query_info)
+{
+    return query_info.cache_info;
+}
 }

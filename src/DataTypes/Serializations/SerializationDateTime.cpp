@@ -24,7 +24,7 @@ namespace
 
 /// DateTime is stored as UInt32 for the seconds since unix epoch
 /// Under mysql dialect the allowed range is [1970-01-01 00:00:00, 2106-02-07 06:28:15]
-constexpr time_t MIN_DATETIME_TIMESTAMP = 0;
+/// constexpr time_t MIN_DATETIME_TIMESTAMP = 0;
 constexpr time_t MAX_DATETIME_TIMESTAMP = std::numeric_limits<uint32_t>::max();
 
 inline void readText(time_t & x, ReadBuffer & istr, const FormatSettings & settings, const DateLUTImpl & time_zone, const DateLUTImpl & utc_time_zone)
@@ -51,27 +51,17 @@ SerializationDateTime::SerializationDateTime(
 {
 }
 
-void SerializationDateTime::checkDateOverflow(time_t & x, const FormatSettings & settings) const
+void SerializationDateTime::checkDataOverflow(const time_t & x, const FormatSettings & settings)
 {
-    if (!settings.check_date_overflow || !current_thread)
+    if (!settings.check_data_overflow || !current_thread)
         return;
 
-    /// there is a special case: when year=0000, x is set to 0 and has_truncated_date is turned on
-    if (std::make_unsigned_t<time_t>(x) <= MAX_DATETIME_TIMESTAMP && !current_thread->has_truncated_date)
+    /// there is a special case: when year=0000, x is set to 0 and overflow bit is turned on
+    if (std::make_unsigned_t<time_t>(x) <= MAX_DATETIME_TIMESTAMP && !current_thread->getOverflow(ThreadStatus::OverflowFlag::Date))
         return;
 
-    if (x > MAX_DATETIME_TIMESTAMP)
-        x = MAX_DATETIME_TIMESTAMP;
-    else
-        x = MIN_DATETIME_TIMESTAMP;
-
-    if (settings.throw_on_date_overflow)
-    {
-        current_thread->has_truncated_date = false;
-        throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "Under MYSQL dialect or check_date_overflow = 1, the DateTime value should be within [1970-01-01 00:00:00, 2106-02-07 06:28:15]");
-    }
-
-    current_thread->has_truncated_date = in_serialization_nullable;
+    current_thread->unsetOverflow(ThreadStatus::OverflowFlag::Date);
+    throw Exception(ErrorCodes::VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE, "Under MYSQL dialect or check_data_overflow = 1, the DateTime value should be within UTC [1970-01-01 00:00:00, 2106-02-07 06:28:15]");
 }
 
 void SerializationDateTime::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
@@ -105,7 +95,7 @@ void SerializationDateTime::deserializeTextEscaped(IColumn & column, ReadBuffer 
 {
     time_t x = 0;
     readText(x, istr, settings, time_zone, utc_time_zone);
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
     if (x < 0)
         x = 0;
     assert_cast<ColumnType &>(column).getData().push_back(x);
@@ -130,7 +120,7 @@ void SerializationDateTime::deserializeTextQuoted(IColumn & column, ReadBuffer &
     {
         readIntText(x, istr);
     }
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
     if (x < 0)
         x = 0;
     assert_cast<ColumnType &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
@@ -155,7 +145,7 @@ void SerializationDateTime::deserializeTextJSON(IColumn & column, ReadBuffer & i
     {
         readIntText(x, istr);
     }
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
     if (x < 0)
         x = 0;
     assert_cast<ColumnType &>(column).getData().push_back(x);
@@ -181,7 +171,7 @@ void SerializationDateTime::deserializeTextCSV(IColumn & column, ReadBuffer & is
         ++istr.position();
 
     readText(x, istr, settings, time_zone, utc_time_zone);
-    checkDateOverflow(x, settings);
+    checkDataOverflow(x, settings);
 
     if (maybe_quote == '\'' || maybe_quote == '\"')
         assertChar(maybe_quote, istr);

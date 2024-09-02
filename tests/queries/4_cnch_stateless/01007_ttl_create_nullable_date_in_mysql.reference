@@ -1,0 +1,8 @@
+------ TEST CREATE QUERY ------
+------ TEST INSERT QUERY ------
+------ TEST TTL ------
+------ TEST MERGE ------
+------ TEST SELECT ------
+6
+------ TEST ALTER ------
+6

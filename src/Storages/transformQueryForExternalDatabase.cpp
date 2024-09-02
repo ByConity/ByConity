@@ -12,6 +12,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <Storages/transformQueryForExternalDatabase.h>
 #include <Storages/MergeTree/KeyCondition.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 
 namespace DB
@@ -240,6 +241,7 @@ String transformQueryForExternalDatabase(
     const String & table,
     ContextPtr context)
 {
+    DisableTenantGuard disable_tenant_guard;
     auto clone_query = query_info.query->clone();
     const Names used_columns = query_info.syntax_analyzer_result->requiredSourceColumns();
 

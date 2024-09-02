@@ -14,9 +14,9 @@ Projection
                └─ Window
                   └─ Repartition Exchange
                      │     Partition by: {i_category}
-                     └─ PartitionTopN
-                        └─ Projection
-                           │     Expressions: [d_moy, d_qoy, d_year, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)), i_brand, i_category, i_class, i_product_name, s_store_id]
+                     └─ Projection
+                        │     Expressions: [d_moy, d_qoy, d_year, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)), i_brand, i_category, i_class, i_product_name, s_store_id]
+                        └─ PartitionTopN
                            └─ MergingAggregated
                               └─ Repartition Exchange
                                  │     Partition by: {i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy, s_store_id, __grouping_set}
@@ -27,29 +27,27 @@ Projection
                                        │     Expressions: [d_moy, d_qoy, d_year, i_brand, i_category, i_class, i_product_name, s_store_id], expr#coalesce(multiply(ss_sales_price, ss_quantity), 0):=coalesce(ss_sales_price * ss_quantity, 0)
                                        └─ Inner Join
                                           │     Condition: ss_item_sk == i_item_sk
-                                          ├─ Repartition Exchange
-                                          │  │     Partition by: {ss_item_sk}
-                                          │  └─ Inner Join
-                                          │     │     Condition: ss_store_sk == s_store_sk
-                                          │     ├─ Inner Join
-                                          │     │  │     Condition: ss_sold_date_sk == d_date_sk
-                                          │     │  │     Runtime Filters Builder: {d_date_sk}
-                                          │     │  ├─ Filter
-                                          │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-                                          │     │  │  └─ TableScan tpcds1000.store_sales
-                                          │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
-                                          │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_quantity, ss_sales_price]
-                                          │     │  └─ Broadcast Exchange
-                                          │     │     └─ Filter
-                                          │     │        │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                          │     │        └─ TableScan tpcds1000.date_dim
-                                          │     │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                          │     │                 Outputs: [d_date_sk, d_month_seq, d_year, d_moy, d_qoy]
-                                          │     └─ Broadcast Exchange
-                                          │        └─ TableScan tpcds1000.store
-                                          │                 Outputs: [s_store_sk, s_store_id]
-                                          └─ Repartition Exchange
-                                             │     Partition by: {i_item_sk}
-                                             └─ TableScan tpcds1000.item
-                                                      Outputs: [i_item_sk, i_brand, i_class, i_category, i_product_name]
+                                          ├─ Inner Join
+                                          │  │     Condition: ss_store_sk == s_store_sk
+                                          │  ├─ Inner Join
+                                          │  │  │     Condition: ss_sold_date_sk == d_date_sk
+                                          │  │  │     Runtime Filters Builder: {d_date_sk}
+                                          │  │  ├─ Filter
+                                          │  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                                          │  │  │  └─ TableScan tpcds1000.store_sales
+                                          │  │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                                          │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_quantity, ss_sales_price]
+                                          │  │  └─ Broadcast Exchange
+                                          │  │     └─ Projection
+                                          │  │        │     Expressions: [d_date_sk, d_moy, d_qoy, d_year]
+                                          │  │        └─ Filter
+                                          │  │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                                          │  │           └─ TableScan tpcds1000.date_dim
+                                          │  │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
+                                          │  │                    Outputs: [d_date_sk, d_month_seq, d_year, d_moy, d_qoy]
+                                          │  └─ Broadcast Exchange
+                                          │     └─ TableScan tpcds1000.store
+                                          │              Outputs: [s_store_sk, s_store_id]
+                                          └─ TableScan tpcds1000.item
+                                                   Outputs: [i_item_sk, i_brand, i_class, i_category, i_product_name]
 note: Runtime Filter is applied for 1 times.

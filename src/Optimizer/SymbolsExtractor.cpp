@@ -20,7 +20,7 @@
 
 namespace DB
 {
-std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
+std::vector<std::string> SymbolsExtractor::extractVector(ConstASTPtr node)
 {
     SymbolVisitor visitor;
     SymbolVisitorContext context;
@@ -33,12 +33,18 @@ std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
     return std::move(context.result);
 }
 
+std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
+{
+    auto result = extractVector(node);
+    return std::set(result.begin(), result.end());
+}
+
 std::set<std::string> SymbolsExtractor::extract(PlanNodePtr & node)
 {
     std::vector<ConstASTPtr> expressions;
     for (ConstASTPtr expr : ExpressionExtractor::extract(node))
     {
-        expressions.emplace_back(expr);
+        expressions.emplace_back(std::move(expr));
     }
     return extract(expressions);
 }
@@ -51,7 +57,7 @@ std::set<std::string> SymbolsExtractor::extract(std::vector<ConstASTPtr> & nodes
     {
         ASTVisitorUtil::accept(node, visitor, context);
     }
-    return std::move(context.result);
+    return std::set(context.result.begin(), context.result.end());
 }
 
 Void SymbolVisitor::visitNode(const ConstASTPtr & node, SymbolVisitorContext & context)
@@ -66,9 +72,9 @@ Void SymbolVisitor::visitNode(const ConstASTPtr & node, SymbolVisitorContext & c
 Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
     const auto & identifier = node->as<ASTIdentifier &>();
-    if (!context.exclude_symbols.count(identifier.name()))
+    if (context.exclude_symbols.empty() || !context.exclude_symbols.count(identifier.name()))
     {
-        context.result.insert(identifier.name());
+        context.result.emplace_back(identifier.name());
     }
     return Void{};
 }
@@ -76,7 +82,7 @@ Void SymbolVisitor::visitASTIdentifier(const ConstASTPtr & node, SymbolVisitorCo
 Void SymbolVisitor::visitASTFunction(const ConstASTPtr & node, SymbolVisitorContext & context)
 {
     const auto & ast_func = node->as<const ASTFunction &>();
-    if (ast_func.name == "lambda")
+    if (unlikely(ast_func.name == "lambda"))
     {
         auto exclude_symbols = RequiredSourceColumnsMatcher::extractNamesFromLambda(ast_func);
         for (auto & es : exclude_symbols)

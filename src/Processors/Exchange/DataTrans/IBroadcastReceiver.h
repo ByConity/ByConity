@@ -16,12 +16,13 @@
 #pragma once
 
 #include <variant>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Common/time.h>
+#include <butil/iobuf.h>
 #include <bvar/reducer.h>
+#include <Common/time.h>
 #include <common/types.h>
-#include <Interpreters/QueryExchangeLog.h>
 
 namespace DB
 {
@@ -38,11 +39,11 @@ public:
     }
     struct ReceiverMetrics
     {
-        bvar::Adder<size_t> recv_time_ms;
-        bvar::Adder<size_t> register_time_ms;
-        bvar::Adder<size_t> recv_rows;
-        bvar::Adder<size_t> recv_bytes;
-        bvar::Adder<size_t> recv_io_bytes;
+        bvar::Adder<size_t> recv_time_ms{};
+        bvar::Adder<size_t> register_time_ms{};
+        bvar::Adder<size_t> recv_rows{};
+        bvar::Adder<size_t> recv_bytes{};
+        bvar::Adder<size_t> recv_uncompressed_bytes{};
         bvar::Adder<size_t> recv_counts;
         bvar::Adder<size_t> dser_time_ms;
         std::atomic<Int32> finish_code{0};
@@ -64,6 +65,8 @@ public:
 
     bool enable_receiver_metrics = false;
     ReceiverMetrics receiver_metrics; // by default, metrics are disabled
+    void addToMetricsMaybe(size_t recv_time_ms, size_t dser_time_ms, size_t recv_counts, const Chunk & chunk);
+    void addToMetricsMaybe(size_t recv_time_ms, size_t dser_time_ms, size_t recv_counts, const butil::IOBuf & io_buf);
 };
 
 }

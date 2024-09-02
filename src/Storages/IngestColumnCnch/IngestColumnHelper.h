@@ -11,6 +11,7 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/StorageCloudMergeTree.h>
 
 
 namespace DB
@@ -49,5 +50,19 @@ void updateTempPartWithData(
     const MergeTreeDataPartPtr & target_part,
     const BlockInputStreamPtr & data_block_input_stream,
     const StorageMetadataPtr & target_meta_data_ptr);
+
+// check ingest table on server
+bool checkIngestWithBucketTable(
+    const MergeTreeMetaBase & source_table,
+    const MergeTreeMetaBase & target_table,
+    const Names & ordered_key_names,
+    const Names & ingest_column_names);
+
+// split ingest buckets for worker on server
+std::vector<std::vector<Int64>> splitBucketsForWorker(size_t total_worker_num, const std::vector<Int64> & buckets_for_ingest);
+
+// split ingest parts with bucket on worker
+std::vector<IMergeTreeDataPartsVector>
+clusterDataPartWithBucketTable(const StorageCloudMergeTree & table, const IMergeTreeDataPartsVector & data_parts);
 
 }

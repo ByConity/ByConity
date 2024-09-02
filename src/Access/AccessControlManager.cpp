@@ -44,12 +44,18 @@ public:
         auto x = cache.get(params);
         if (x)
         {
-            if ((*x)->getUser())
+            auto user_ptr = (*x)->getUser();
+            if (user_ptr)
+            {
+                if (params.load_roles && params.use_default_roles)
+                    (*x)->loadRoles(user_ptr);
                 return *x;
+            }
             /// No user, probably the user has been dropped while it was in the cache.
             cache.remove(params);
         }
         auto res = std::shared_ptr<ContextAccess>(new ContextAccess(manager, params));
+        res->initialize(params.load_roles);
         cache.add(params, res);
         return res;
     }
@@ -107,19 +113,46 @@ private:
     mutable std::mutex mutex;
 };
 
+class AccessControlManager::SensitivePermissionTenants
+{
+public:
+    void registerTenants(const Strings & tenants_)
+    {
+        std::lock_guard lock{mutex};
+        tenants.clear();
+        tenants.reserve(tenants_.size());
+        tenants.insert(tenants_.begin(), tenants_.end());
+    }
+
+    bool isSensitivePermissionEnabled(const String & tenant) const
+    {
+        std::lock_guard lock{mutex};
+        return tenants.contains(tenant);
+    }
+
+private:
+    std::unordered_set<String> tenants;
+    mutable std::mutex mutex;
+};
 
 AccessControlManager::AccessControlManager()
     : MultipleAccessStorage("KV Storage"),
       context_access_cache(std::make_unique<ContextAccessCache>(*this)),
-      role_cache(std::make_unique<RoleCache>(*this)),
+      role_cache(std::make_unique<RoleCache>(*this, 600)),
       row_policy_cache(std::make_unique<RowPolicyCache>(*this)),
       quota_cache(std::make_unique<QuotaCache>(*this)),
       settings_profiles_cache(std::make_unique<SettingsProfilesCache>(*this)),
       external_authenticators(std::make_unique<ExternalAuthenticators>()),
-      custom_settings_prefixes(std::make_unique<CustomSettingsPrefixes>())
+      custom_settings_prefixes(std::make_unique<CustomSettingsPrefixes>()),
+      sensitive_permission_tenants(std::make_unique<SensitivePermissionTenants>())
 {
 }
 
+
+bool AccessControlManager::isSensitiveTenant(const String & tenant) const
+{
+    return sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
+}
 
 AccessControlManager::~AccessControlManager() = default;
 
@@ -214,17 +247,8 @@ void AccessControlManager::addKVStorage(const ContextPtr & context)
     }
     auto new_storage = std::make_shared<KVAccessStorage>(context);
     addStorage(new_storage);
+    sensitive_resource_getter = [catalog = context->getCnchCatalog()] (String db) { return catalog->getSensitiveResource(db); };
     LOG_DEBUG(getLogger(), "Added {} access storage '{}'", String(new_storage->getStorageType()), new_storage->getStorageName());
-}
-
-void AccessControlManager::stopBgJobForKVStorage()
-{
-    auto storages = getStoragesPtr();
-    for (const auto & storage : *storages)
-    {
-        if (auto kv_storage = typeid_cast<std::shared_ptr<KVAccessStorage>>(storage))
-            kv_storage->stopBgJob();
-    }
 }
 
 void AccessControlManager::addDiskStorage(const String & directory_, bool readonly_)
@@ -333,13 +357,17 @@ void AccessControlManager::setUpFromMainConfig(const Poco::Util::AbstractConfigu
 {
     if (config_.has("custom_settings_prefixes"))
         setCustomSettingsPrefixes(config_.getString("custom_settings_prefixes"));
-   
+
     /// Optional improvements in access control system.
     /// The default values are false because we need to be compatible with earlier access configurations
     setSelectFromSystemDatabaseRequiresGrant(config_.getBool("access_control_improvements.select_from_system_db_requires_grant", false));
     setSelectFromInformationSchemaRequiresGrant(config_.getBool("access_control_improvements.select_from_information_schema_requires_grant", false));
+    setSelectFromMySQLRequiresGrant(config_.getBool("access_control_improvements.select_from_mysql_requires_grant", false));
 
     addStoragesFromMainConfig(config_, config_path_, get_zookeeper_function_);
+
+    if (config_.has("sensitive_permission_tenants"))
+        setSensitivePermissionTenants(config_.getString("sensitive_permission_tenants"));
 }
 
 
@@ -392,6 +420,13 @@ void AccessControlManager::setCustomSettingsPrefixes(const String & comma_separa
     setCustomSettingsPrefixes(prefixes);
 }
 
+void AccessControlManager::setSensitivePermissionTenants(const String & comma_separated_tenants)
+{
+    Strings tenants;
+    splitInto<','>(tenants, comma_separated_tenants);
+    sensitive_permission_tenants->registerTenants(tenants);
+}
+
 bool AccessControlManager::isSettingNameAllowed(const std::string_view & setting_name) const
 {
     return custom_settings_prefixes->isSettingNameAllowed(setting_name);
@@ -402,14 +437,15 @@ void AccessControlManager::checkSettingNameIsAllowed(const std::string_view & se
     custom_settings_prefixes->checkSettingNameIsAllowed(setting_name);
 }
 
-
-std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
+ContextAccessParams AccessControlManager::getContextAccessParams(
     const UUID & user_id,
     const std::vector<UUID> & current_roles,
     bool use_default_roles,
     const Settings & settings,
     const String & current_database,
-    const ClientInfo & client_info) const
+    const ClientInfo & client_info,
+    const String & tenant,
+    bool load_roles) const
 {
     ContextAccessParams params;
     params.user_id = user_id;
@@ -423,6 +459,9 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
     params.http_method = client_info.http_method;
     params.address = client_info.current_address.host();
     params.quota_key = client_info.quota_key;
+    params.has_tenant_id_in_username = !tenant.empty();
+    params.enable_sensitive_permission = sensitive_permission_tenants->isSensitivePermissionEnabled(tenant);
+    params.load_roles = load_roles;
 
     /// Extract the last entry from comma separated list of X-Forwarded-For addresses.
     /// Only the last proxy can be trusted (if any).
@@ -434,8 +473,7 @@ std::shared_ptr<const ContextAccess> AccessControlManager::getContextAccess(
         boost::trim(last_forwarded_address);
         params.forwarded_address = last_forwarded_address;
     }
-
-    return getContextAccess(params);
+    return params;
 }
 
 

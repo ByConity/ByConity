@@ -13,33 +13,60 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Optimizer/Rewriter/RemoveApply.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Core/NameToType.h>
+#include <Core/Names.h>
+#include <Core/SortDescription.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
+#include <Interpreters/StorageID.h>
+#include <Interpreters/WindowDescription.h>
+#include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
 #include <Optimizer/Correlation.h>
+#include <Optimizer/ExpressionRewriter.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Rule/Patterns.h>
+#include <Optimizer/SymbolsExtractor.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/IAST_fwd.h>
+#include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
 #include <QueryPlan/Assignment.h>
+#include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/DistinctStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/JoinStep.h>
+#include <QueryPlan/PlanNode.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/SymbolAllocator.h>
-#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
-#include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
+#include <QueryPlan/TableScanStep.h>
+#include <QueryPlan/WindowStep.h>
+#include "DataTypes/DataTypesNumber.h"
+#include "DataTypes/IDataType.h"
 
 namespace DB
 {
-
 static ASTPtr getEmptySetResult(const QuantifierType & quantifier_type);
-static ASTPtr getBoundComparisons(const String & left, const String & minValue, const String & maxValue, const ASTQuantifiedComparison & qc_ast);
+static ASTPtr
+getBoundComparisons(const String & left, const String & minValue, const String & maxValue, const ASTQuantifiedComparison & qc_ast);
 static bool shouldCompareValueWithLowerBound(const ASTQuantifiedComparison & qc_ast);
-static void makeAggDescriptionsMinMaxCountCount2(AggregateDescriptions & aggregate_descriptions, ContextMutablePtr & context, String & min_value, String & max_value,
-                                                 String & count_all_value, String & count_non_null_value, PlanNodePtr & subquery_ptr, Names & qc_right);
+static void makeAggDescriptionsMinMaxCountCount2(
+    AggregateDescriptions & aggregate_descriptions,
+    ContextMutablePtr & context,
+    String & min_value,
+    String & max_value,
+    String & count_all_value,
+    String & count_non_null_value,
+    PlanNodePtr & subquery_ptr,
+    Names & qc_right);
 
 namespace ErrorCodes
 {
@@ -91,7 +118,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
 
     auto subquery_step_ptr = subquery_ptr->getStep();
     // match pattern : scalar subquery without aggregation
-    if (subquery_step_ptr->getType() == IQueryPlanStep::Type::EnforceSingleRow) 
+    if (subquery_step_ptr->getType() == IQueryPlanStep::Type::EnforceSingleRow)
     {
         // step 1 : try to get the un-correlation part of subquery
         std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(subquery_ptr->getChildren()[0], correlation, *context);
@@ -100,7 +127,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
             throw Exception(
                 "Correlated Scalar subquery de-correlation error, correlation filter not exists: ", ErrorCodes::REMOVE_SUBQUERY_ERROR);
         }
-        
+
         DecorrelationResult & result_value = result.value();
         PlanNodePtr join_left = input_ptr;
         PlanNodePtr join_right = result_value.node;
@@ -110,12 +137,12 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         String unique = context->getSymbolAllocator()->newSymbol("assign_unique_id_symbol");
         auto unique_id_step = std::make_unique<AssignUniqueIdStep>(join_left->getStep()->getOutputStream(), unique);
         auto unique_id_node = std::make_shared<AssignUniqueIdNode>(context->nextNodeId(), std::move(unique_id_step), PlanNodes{join_left});
-        
+
         // step 3 : construct a Left JoinNode to replace ApplyNode
         const DataStream & left_data_stream = unique_id_node->getStep()->getOutputStream();
         const DataStream & right_data_stream = join_right->getStep()->getOutputStream();
         DataStreams streams = {left_data_stream, right_data_stream};
-        
+
         auto left_header = left_data_stream.header;
         auto right_header = right_data_stream.header;
         NamesAndTypes output;
@@ -143,7 +170,7 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
             DistributionType::UNKNOWN);
         PlanNodePtr join_node
             = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{unique_id_node, join_right});
-        
+
         String marker = context->getSymbolAllocator()->newSymbol("is_distinct");
         std::vector<String> distinct_symbols_list;
         for (const auto & item : left_header)
@@ -153,15 +180,16 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         auto mark_distinct_step
             = std::make_shared<MarkDistinctStep>(join_node->getStep()->getOutputStream(), marker, distinct_symbols_list);
         auto mark_distinct_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(mark_distinct_step), PlanNodes{join_node});
-        
+
         auto check_subquery = makeASTFunction("check_subquery_return_single_row", ASTs{std::make_shared<ASTIdentifier>(marker)});
-        
+
         auto filter_step = std::make_shared<FilterStep>(join_node->getStep()->getOutputStream(), check_subquery);
-        PlanNodePtr filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{mark_distinct_node}); 
-        
+        PlanNodePtr filter_node
+            = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{mark_distinct_node});
+
         return filter_node;
     }
-        
+
     bool match = false;
     PlanNodePtr scalar_agg;
     PlanNodePtr scalar_agg_source;
@@ -398,21 +426,21 @@ PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, 
         int rule_id = context->getRuleId();
         String sub_query_id = std::to_string(context->incAndGetSubQueryId());
         String subquery_name_prefix = std::to_string(rule_id) + "_RemoveUnCorrelatedScalarSubquery_ExecuteSubQuery_" + sub_query_id + "_";
-        
+
         context->setExecuteSubQueryPath(subquery_name_prefix);
-        
+
         // set a different query id for sub query.
         String query_id = context->getCurrentQueryId();
         context->setCurrentQueryId(query_id + "_sub_query_" + sub_query_id);
-        
+
         SelectQueryOptions sub_query_options;
         InterpreterSelectQueryUseOptimizer interpreter{subquery_ptr, cte_helper.getCTEInfo(), context, sub_query_options};
         BlockIO sub_query_result = interpreter.execute();
-        
+
         context->removeExecuteSubQueryPath();
         context->setCurrentQueryId(query_id);
         context->setRuleId(rule_id);
-        
+
         BlockInputStreamPtr sub_query_block_stream = sub_query_result.getInputStream();
         Block block = sub_query_block_stream->read();
 
@@ -457,7 +485,7 @@ PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, 
             types[column.name] = column.type;
         }
 
-        // add sub query column 
+        // add sub query column
         assignments.emplace_back(sub_query_column_name, sub_query_column_value);
         types[sub_query_column_name] = sub_query_column_type;
 
@@ -483,7 +511,7 @@ PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, 
         streams,
         DataStream{.header = std::move(output)},
         ASTTableJoin::Kind::Cross,
-        ASTTableJoin::Strictness::All,
+        ASTTableJoin::Strictness::Unspecified,
         context->getSettingsRef().max_threads,
         context->getSettingsRef().optimize_read_in_order,
         Names{},
@@ -686,7 +714,8 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
     aggregate_desc_2.argument_names = Names{null_match_condition_symbol};
 
     AggregateDescriptions aggregate_descs{aggregate_desc_1, aggregate_desc_2};
-    auto count_step = std::make_shared<AggregatingStep>(pre_expression_node->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descs, GroupingSetsParamsList{}, true);
+    auto count_step = std::make_shared<AggregatingStep>(
+        pre_expression_node->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descs, GroupingSetsParamsList{}, true);
     auto count_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_step), PlanNodes{pre_expression_node});
 
     // step 8 project match values
@@ -777,9 +806,10 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
     if (context->getSettingsRef().enable_execute_uncorrelated_subquery)
     {
         std::optional<PlanNodeStatisticsPtr> stats = CardinalityEstimator::estimate(*subquery_ptr, cte_helper.getCTEInfo(), context, true);
-        
+
         // For large in subquery, execution performance is slow !!!
-        if (stats.has_value() && stats.value()->getRowCount() <= context->getSettingsRef().execute_uncorrelated_in_subquery_size) {
+        if (stats.has_value() && stats.value()->getRowCount() <= context->getSettingsRef().execute_uncorrelated_in_subquery_size)
+        {
             const Assignment & apply_assignment = apply_step.getAssignment();
             String sub_query_column_name = apply_assignment.first;
             DataTypePtr sub_query_column_type = apply_step.getAssignmentDataType();
@@ -787,23 +817,23 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
             int rule_id = context->getRuleId();
             String sub_query_id = std::to_string(context->incAndGetSubQueryId());
             String subquery_name_prefix = std::to_string(rule_id) + "_RemoveUnCorrelatedInSubquery_ExecuteSubQuery_" + sub_query_id + "_";
-        
+
             context->setExecuteSubQueryPath(subquery_name_prefix);
-        
+
             // set a different query id for sub query.
             String query_id = context->getCurrentQueryId();
             context->setCurrentQueryId(query_id + "_sub_query_" + sub_query_id);
-        
+
             SelectQueryOptions sub_query_options;
             InterpreterSelectQueryUseOptimizer interpreter{subquery_ptr, cte_helper.getCTEInfo(), context, sub_query_options};
             BlockIO sub_query_result = interpreter.execute();
-        
+
             context->removeExecuteSubQueryPath();
             context->setCurrentQueryId(query_id);
             context->setRuleId(rule_id);
-            
+
             BlockInputStreamPtr sub_query_block_stream = sub_query_result.getInputStream();
-        
+
             ASTs sub_query_column_values;
             while (Block block = sub_query_block_stream->read())
             {
@@ -814,7 +844,7 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
                     sub_query_column_values.emplace_back(sub_query_column_value);
                 }
             }
-            
+
             // create a new projection step, include scalar sub query result.
             Assignments assignments_in;
             NameToType types;
@@ -833,7 +863,7 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
                 sub_query_column_values.emplace_back(std::make_shared<ASTLiteral>(DB::Field()));
             }
             ASTPtr value_tuple = makeASTFunction("tuple", sub_query_column_values);
-            
+
             // add sub query column
             assignments_in.emplace_back(sub_query_column_name, makeASTFunction(in_fun.name, ASTs{in_fun.arguments->children[0], value_tuple}));
             types[sub_query_column_name] = sub_query_column_type;
@@ -967,7 +997,8 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
             ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(fun_left));
 
             Assignment not_in_ass{
-                apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Field()), not_equals_fn)};
+                apply_step.getAssignment().first,
+                makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Field()), not_equals_fn)};
             in_assignments.emplace_back(not_in_ass);
         }
         else
@@ -1116,14 +1147,29 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
 
         Assignments exists_assignments;
         NameToType exists_name_to_type;
+
+        bool is_not_exist = false;
+        if (const auto * literal = apply_step.getAssignment().second->as<ASTLiteral>())
+        {
+            UInt64 value = 1;
+            literal->value.tryGet(value);
+            if (!value)
+            {
+                is_not_exist = true;
+            }
+        }
         for (const auto & column : join_node->getStep()->getOutputStream().header)
         {
             // if predicate match, then non_null symbol equals to 1, else equals to 0.
             if (column.name == non_null_symbol)
             {
                 ASTPtr coalesce
-                    = makeASTFunction("coalesce", ASTs{std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(0u)});
-                auto cast = makeASTFunction("cast", coalesce, std::make_shared<ASTLiteral>("UInt8"));
+                    = makeASTFunction("coalesce", ASTs{std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(0)});
+                ASTPtr cast = makeASTFunction("cast", coalesce, std::make_shared<ASTLiteral>("UInt8"));
+                if (is_not_exist)
+                {
+                    cast = makeASTFunction("not", cast);
+                }
                 Assignment exists{apply_step.getAssignment().first, cast};
                 exists_assignments.emplace_back(exists);
                 exists_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
@@ -1286,8 +1332,8 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     aggregate_desc.argument_names = Names{non_null_symbol};
     AggregateDescriptions aggregate_descs{aggregate_desc};
 
-    auto count_non_null_step
-        = std::make_shared<AggregatingStep>(remove_null_node->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descs, GroupingSetsParamsList{}, true);
+    auto count_non_null_step = std::make_shared<AggregatingStep>(
+        remove_null_node->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descs, GroupingSetsParamsList{}, true);
     auto count_non_null_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_non_null_step), PlanNodes{remove_null_node});
 
@@ -1300,6 +1346,15 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         {
             ASTs arguments{std::make_shared<ASTIdentifier>(count_non_null_value), std::make_shared<ASTLiteral>(0u)};
             auto predicate = makeASTFunction("greater", arguments);
+            if (const auto * literal = apply_step.getAssignment().second->as<ASTLiteral>())
+            {
+                UInt64 value = 1;
+                literal->value.tryGet(value);
+                if (!value)
+                {
+                    predicate = makeASTFunction("not", ASTs{predicate});
+                }
+            }
             Assignment exists{apply_step.getAssignment().first, predicate};
             exist_assignments.emplace_back(exists);
             exist_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
@@ -1358,7 +1413,8 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     aggregate_desc.parameters = parameters;
     aggregate_desc.function = agg_fun;
     AggregateDescriptions aggregate_descs{aggregate_desc};
-    auto count_subquery_step = std::make_shared<AggregatingStep>(subquery_ptr->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descs, GroupingSetsParamsList{}, true);
+    auto count_subquery_step = std::make_shared<AggregatingStep>(
+        subquery_ptr->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descs, GroupingSetsParamsList{}, true);
     auto count_subquery_node
         = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_subquery_step), PlanNodes{subquery_ptr});
 
@@ -1377,40 +1433,40 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     auto project_exists_symbol_node
         = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(project_exists_symbol_step), expression_children);
 
-    if (context->getSettingsRef().enable_execute_uncorrelated_subquery) 
+    if (context->getSettingsRef().enable_execute_uncorrelated_subquery)
     {
         const Assignment & apply_assignment = apply_step.getAssignment();
         String sub_query_column_name = apply_assignment.first;
         DataTypePtr sub_query_column_type = apply_step.getAssignmentDataType();
-        
+
         int rule_id = context->getRuleId();
         String sub_query_id = std::to_string(context->incAndGetSubQueryId());
         String subquery_name_prefix = std::to_string(rule_id) + "_RemoveUnCorrelatedExistsSubquery_ExecuteSubQuery_" + sub_query_id + "_";
-        
+
         context->setExecuteSubQueryPath(subquery_name_prefix);
-        
+
         // set a different query id for sub query.
         String query_id = context->getCurrentQueryId();
         context->setCurrentQueryId(query_id + "_sub_query_" + sub_query_id);
-        
+
         SelectQueryOptions sub_query_options;
         InterpreterSelectQueryUseOptimizer interpreter{project_exists_symbol_node, cte_helper.getCTEInfo(), context, sub_query_options};
         BlockIO sub_query_result = interpreter.execute();
-        
+
         context->removeExecuteSubQueryPath();
         context->setCurrentQueryId(query_id);
         context->setRuleId(rule_id);
-        
+
         BlockInputStreamPtr sub_query_block_stream = sub_query_result.getInputStream();
         Block block = sub_query_block_stream->read();
-        
+
         size_t rows = block.rows();
         Utils::checkArgument(rows == 1, "Exists sub-query must return single row");
 
         const auto & sub_query_column = *(block.getByName(sub_query_column_name).column);
 
         ASTPtr sub_query_column_value = std::make_shared<ASTLiteral>(sub_query_column[0]);
-        
+
         // create a new projection step, include exists sub query result.
         Assignments assignments_exists;
         NameToType types_new;
@@ -1422,13 +1478,14 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
             types_new[column.name] = column.type;
         }
 
-        // add sub query column 
+        // add sub query column
         assignments_exists.emplace_back(sub_query_column_name, sub_query_column_value);
         types_new[sub_query_column_name] = sub_query_column_type;
 
         auto step_exists = std::make_shared<ProjectionStep>(input_ptr->getStep()->getOutputStream(), assignments_exists, types_new);
         return PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(step_exists), PlanNodes{input_ptr});
     }
+
     const DataStream & left_data_stream = input_ptr->getStep()->getOutputStream();
     const DataStream & right_data_stream = project_exists_symbol_node->getStep()->getOutputStream();
 
@@ -1449,7 +1506,7 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
         std::move(streams),
         DataStream{.header = std::move(output)},
         ASTTableJoin::Kind::Cross,
-        ASTTableJoin::Strictness::All,
+        ASTTableJoin::Strictness::Unspecified,
         context->getSettingsRef().max_threads,
         context->getSettingsRef().optimize_read_in_order,
         Names{},
@@ -1462,7 +1519,43 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
 
     // Exists function has been rewritten into "exists" symbols
     // if exists values is true, then condition match, else not match.
-    return std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{input_ptr, project_exists_symbol_node});
+    auto join_node
+        = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{input_ptr, project_exists_symbol_node});
+
+
+    if (const auto * literal = apply_step.getAssignment().second->as<ASTLiteral>())
+    {
+        UInt64 literal_value = 1;
+        literal->value.tryGet(literal_value);
+        if (!literal_value)
+        {
+            Assignments exists_assignments;
+            NameToType exists_name_to_type;
+            for (const auto & column : join_node->getStep()->getOutputStream().header)
+            {
+                // if predicate match, then non_null symbol equals to 1, else equals to 0.
+                if (column.name == apply_step.getAssignment().first)
+                {
+                    ASTPtr cast = makeASTFunction("not", std::make_shared<ASTIdentifier>(apply_step.getAssignment().first));
+                    Assignment exists{apply_step.getAssignment().first, cast};
+                    exists_assignments.emplace_back(exists);
+                    exists_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
+                }
+                else
+                {
+                    Assignment assignment{column.name, std::make_shared<ASTIdentifier>(column.name)};
+                    exists_assignments.emplace_back(assignment);
+                    exists_name_to_type[column.name] = column.type;
+                }
+            }
+            auto exists_step
+                = std::make_shared<ProjectionStep>(join_node->getStep()->getOutputStream(), exists_assignments, exists_name_to_type);
+            auto exists_node = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(exists_step), PlanNodes{join_node});
+            return exists_node;
+        }
+    }
+
+    return join_node;
 }
 
 void RemoveUnCorrelatedQuantifiedComparisonSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
@@ -1508,19 +1601,20 @@ PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(Appl
     String min_value, max_value, count_all_value, count_non_null_value;
     AggregateDescriptions aggregate_descriptions;
 
-    makeAggDescriptionsMinMaxCountCount2(aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
+    makeAggDescriptionsMinMaxCountCount2(
+        aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
 
     Names keys;
-    auto agg_step = std::make_shared<AggregatingStep>(right_data_stream, keys, NameSet{}, aggregate_descriptions, GroupingSetsParamsList{}, true);
-    auto agg_node
-        = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(agg_step), PlanNodes{subquery_ptr});
+    auto agg_step
+        = std::make_shared<AggregatingStep>(right_data_stream, keys, NameSet{}, aggregate_descriptions, GroupingSetsParamsList{}, true);
+    auto agg_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(agg_step), PlanNodes{subquery_ptr});
 
     //step2 : construct a join node to replace apply node
     const DataStream & agg_data_stream = agg_node->getStep()->getOutputStream();
     DataStreams streams = {left_data_stream, agg_data_stream};
     auto left_header = left_data_stream.header;
     auto right_header = agg_data_stream.header;
-    NamesAndTypes  output;
+    NamesAndTypes output;
     for (const auto & item : left_header)
     {
         output.emplace_back(NameAndTypePair{item.name, item.type});
@@ -1534,7 +1628,7 @@ PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(Appl
         streams,
         DataStream{.header = output},
         ASTTableJoin::Kind::Cross,
-        ASTTableJoin::Strictness::All,
+        ASTTableJoin::Strictness::Unspecified,
         context->getSettingsRef().max_threads,
         context->getSettingsRef().optimize_read_in_order,
         Names{},
@@ -1544,8 +1638,7 @@ PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(Appl
         std::nullopt,
         ASOF::Inequality::GreaterOrEquals,
         DistributionType::UNKNOWN);
-    PlanNodePtr join_node
-        = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{input_ptr, agg_node});
+    PlanNodePtr join_node = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{input_ptr, agg_node});
 
     // step 3: compute function result, project it as a bool symbol.
     // A > ALL B  => if (isNull(a), NULL, multiIf (count_non_null_value = 0, 1, count_all_value = count_non_null_value, if (a > max_value, 1, 0), NULL));
@@ -1571,20 +1664,29 @@ PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(Appl
 
     ASTPtr empty_set_result = getEmptySetResult(quantifier_type);
 
-    ASTPtr comparison_with_extreme_value = getBoundComparisons(qc_child_left.name() , min_value,max_value, qc_ast);
+    ASTPtr comparison_with_extreme_value = getBoundComparisons(qc_child_left.name(), min_value, max_value, qc_ast);
 
     //if the number of right table is 0(countAllValue == 0), then output 'emptySetResult'
-    ASTPtr right_num_is_zero = makeASTFunction("equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTLiteral>(0u));
+    ASTPtr right_num_is_zero
+        = makeASTFunction("equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTLiteral>(0u));
 
     //If right TABLE contains the values NULL ,e.g.({100.00, NULL, 300.00}), the expression is UNKNOWN: when NULLs are involved, ALL/ANY is UNKNOWN.
-    ASTPtr not_involve_null = makeASTFunction("equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTIdentifier>(count_non_null_value));
+    ASTPtr not_involve_null = makeASTFunction(
+        "equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTIdentifier>(count_non_null_value));
 
-    ASTPtr multi_if = makeASTFunction("multiIf", right_num_is_zero, empty_set_result, not_involve_null, comparison_with_extreme_value, std::make_shared<ASTLiteral>(Null{}));
+    ASTPtr multi_if = makeASTFunction(
+        "multiIf",
+        right_num_is_zero,
+        empty_set_result,
+        not_involve_null,
+        comparison_with_extreme_value,
+        std::make_shared<ASTLiteral>(Null{}));
 
     // if left is NULL, then result is null
     ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(qc_child_left));
 
-    Assignment qc_ass{apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Null{}), multi_if)};
+    Assignment qc_ass{
+        apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Null{}), multi_if)};
     qc_assignments.emplace_back(qc_ass);
     qc_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
 
@@ -1709,22 +1811,22 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
         std::nullopt,
         ASOF::Inequality::GreaterOrEquals,
         DistributionType::UNKNOWN);
-    PlanNodePtr join_node = std::make_shared<JoinNode>(context-> nextNodeId(), std::move(join_step), PlanNodes{join_left, join_right});
+    PlanNodePtr join_node = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{join_left, join_right});
 
     // step4 : project min_value, max_value, count_all_value, count_non_null_value, whether_num_of_matching_join_result_is_zero which group by left_header's colomns
     String min_value, max_value, count_all_value, count_non_null_value;
     AggregateDescriptions aggregate_descriptions;
 
-    makeAggDescriptionsMinMaxCountCount2(aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
+    makeAggDescriptionsMinMaxCountCount2(
+        aggregate_descriptions, context, min_value, max_value, count_all_value, count_non_null_value, subquery_ptr, qc_right);
 
     AggregateFunctionProperties properties;
     String num_of_matching_is_zero_symbol = context->getSymbolAllocator()->newSymbol("whether_num_of_matching_join_result_is_zero");
-    AggregateDescription count_if_agg_desc = {
-        .function = AggregateFunctionFactory::instance().get("count",{std::make_shared<DataTypeUInt8>()},Array(), properties),
-        .parameters = Array(),
-        .argument_names = Names{non_null},
-        .column_name = num_of_matching_is_zero_symbol
-    };
+    AggregateDescription count_if_agg_desc
+        = {.function = AggregateFunctionFactory::instance().get("count", {std::make_shared<DataTypeUInt8>()}, Array(), properties),
+           .parameters = Array(),
+           .argument_names = Names{non_null},
+           .column_name = num_of_matching_is_zero_symbol};
     aggregate_descriptions.emplace_back(count_if_agg_desc);
 
     Names keys;
@@ -1733,7 +1835,8 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
         keys.emplace_back(item.name);
     }
 
-    auto count_step = std::make_shared<AggregatingStep>(join_node->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descriptions, GroupingSetsParamsList{}, true);
+    auto count_step = std::make_shared<AggregatingStep>(
+        join_node->getStep()->getOutputStream(), keys, NameSet{}, aggregate_descriptions, GroupingSetsParamsList{}, true);
     auto count_node = std::make_shared<AggregatingNode>(context->nextNodeId(), std::move(count_step), PlanNodes{join_node});
 
     // step5 : project match values;
@@ -1747,20 +1850,29 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
     }
     ASTPtr empty_set_result = getEmptySetResult(quantified_comparison.quantifier_type);
 
-    ASTPtr comparison_with_extreme_value = getBoundComparisons(qc_child_left.name() , min_value, max_value, quantified_comparison);
+    ASTPtr comparison_with_extreme_value = getBoundComparisons(qc_child_left.name(), min_value, max_value, quantified_comparison);
 
     //if the number of right table is 0(num_of_matching_is_zero_symbol == 0), then output 'emptySetResult'
-    ASTPtr right_num_is_zero = makeASTFunction("equals", std::make_shared<ASTIdentifier>(num_of_matching_is_zero_symbol), std::make_shared<ASTLiteral>(0u));
+    ASTPtr right_num_is_zero
+        = makeASTFunction("equals", std::make_shared<ASTIdentifier>(num_of_matching_is_zero_symbol), std::make_shared<ASTLiteral>(0u));
 
     //If right TABLE contains the values NULL ,e.g.({100.00, NULL, 300.00}), the expression is UNKNOWN: when NULLs are involved, ALL/ANY is UNKNOWN.
-    ASTPtr not_involve_null = makeASTFunction("equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTIdentifier>(count_non_null_value));
+    ASTPtr not_involve_null = makeASTFunction(
+        "equals", std::make_shared<ASTIdentifier>(count_all_value), std::make_shared<ASTIdentifier>(count_non_null_value));
 
-    ASTPtr multi_if = makeASTFunction("multiIf", right_num_is_zero, empty_set_result, not_involve_null, comparison_with_extreme_value, std::make_shared<ASTLiteral>(Null{}));
+    ASTPtr multi_if = makeASTFunction(
+        "multiIf",
+        right_num_is_zero,
+        empty_set_result,
+        not_involve_null,
+        comparison_with_extreme_value,
+        std::make_shared<ASTLiteral>(Null{}));
 
     // if left is NULL, then result is null
     ASTPtr left_is_null = makeASTFunction("isNull", std::make_shared<ASTIdentifier>(qc_child_left));
 
-    Assignment qc_ass{apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Null{}), multi_if)};
+    Assignment qc_ass{
+        apply_step.getAssignment().first, makeASTFunction("if", left_is_null, std::make_shared<ASTLiteral>(Null{}), multi_if)};
     qc_assignments.emplace_back(qc_ass);
     qc_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
 
@@ -1771,7 +1883,7 @@ PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyN
 
 ASTPtr getEmptySetResult(const QuantifierType & quantifier_type)
 {
-    if(quantifier_type == QuantifierType::ALL)
+    if (quantifier_type == QuantifierType::ALL)
     {
         return std::make_shared<ASTLiteral>(1u);
     }
@@ -1780,7 +1892,7 @@ ASTPtr getEmptySetResult(const QuantifierType & quantifier_type)
 
 ASTPtr getBoundComparisons(const String & left, const String & minValue, const String & maxValue, const ASTQuantifiedComparison & qc_ast)
 {
-    if(qc_ast.comparator == "equals" && qc_ast.quantifier_type == QuantifierType::ALL)
+    if (qc_ast.comparator == "equals" && qc_ast.quantifier_type == QuantifierType::ALL)
     {
         // A = ALL B <=> min B = max B && A = min B
         ConstASTs combine_filters{
@@ -1804,18 +1916,24 @@ ASTPtr getBoundComparisons(const String & left, const String & minValue, const S
     // A > ANY B <=> A > min B
     const String & boundValue = shouldCompareValueWithLowerBound(qc_ast) ? minValue : maxValue;
     return makeASTFunction(qc_ast.comparator, std::make_shared<ASTIdentifier>(left), std::make_shared<ASTIdentifier>(boundValue));
-
 }
 
 bool shouldCompareValueWithLowerBound(const ASTQuantifiedComparison & qc_ast)
 {
     bool is_all = qc_ast.quantifier_type == QuantifierType::ALL;
     bool is_less = qc_ast.comparator == "less" || qc_ast.comparator == "lessOrEquals";
-    return  is_all == is_less;
+    return is_all == is_less;
 }
 
-void makeAggDescriptionsMinMaxCountCount2(AggregateDescriptions & aggregate_descriptions, ContextMutablePtr & context, String & min_value, String & max_value,
-                                          String & count_all_value, String & count_non_null_value, PlanNodePtr & subquery_ptr, Names & qc_right)
+void makeAggDescriptionsMinMaxCountCount2(
+    AggregateDescriptions & aggregate_descriptions,
+    ContextMutablePtr & context,
+    String & min_value,
+    String & max_value,
+    String & count_all_value,
+    String & count_non_null_value,
+    PlanNodePtr & subquery_ptr,
+    Names & qc_right)
 {
     min_value = context->getSymbolAllocator()->newSymbol("min_value");
     max_value = context->getSymbolAllocator()->newSymbol("max_value");
@@ -1824,34 +1942,682 @@ void makeAggDescriptionsMinMaxCountCount2(AggregateDescriptions & aggregate_desc
     DataTypes argument_types = {subquery_ptr->getOutputNamesToTypes()[qc_right[0]]};
 
     AggregateFunctionProperties properties;
-    AggregateDescription min_agg_desc = {
-        .function = AggregateFunctionFactory::instance().get("min", argument_types, Array(), properties),
-        .parameters = Array(),
-        .argument_names = qc_right,
-        .column_name = min_value
-    };
-    AggregateDescription max_agg_desc = {
-        .function = AggregateFunctionFactory::instance().get("max", argument_types, Array(), properties),
-        .parameters = Array(),
-        .argument_names = qc_right,
-        .column_name = max_value
-    };
-    AggregateDescription count_all_value_agg_desc = {
-        .function = AggregateFunctionFactory::instance().get("count", {}, Array(), properties),
-        .parameters = Array(),
-        .argument_names = {},
-        .column_name = count_all_value
-    };
-    AggregateDescription count_non_null_value_agg_desc = {
-        .function = AggregateFunctionFactory::instance().get("count", argument_types, Array(), properties),
-        .parameters = Array(),
-        .argument_names = qc_right,
-        .column_name = count_non_null_value
-    };
+    AggregateDescription min_agg_desc
+        = {.function = AggregateFunctionFactory::instance().get("min", argument_types, Array(), properties),
+           .parameters = Array(),
+           .argument_names = qc_right,
+           .column_name = min_value};
+    AggregateDescription max_agg_desc
+        = {.function = AggregateFunctionFactory::instance().get("max", argument_types, Array(), properties),
+           .parameters = Array(),
+           .argument_names = qc_right,
+           .column_name = max_value};
+    AggregateDescription count_all_value_agg_desc
+        = {.function = AggregateFunctionFactory::instance().get("count", {}, Array(), properties),
+           .parameters = Array(),
+           .argument_names = {},
+           .column_name = count_all_value};
+    AggregateDescription count_non_null_value_agg_desc
+        = {.function = AggregateFunctionFactory::instance().get("count", argument_types, Array(), properties),
+           .parameters = Array(),
+           .argument_names = qc_right,
+           .column_name = count_non_null_value};
     aggregate_descriptions.emplace_back(min_agg_desc);
     aggregate_descriptions.emplace_back(max_agg_desc);
     aggregate_descriptions.emplace_back(count_all_value_agg_desc);
     aggregate_descriptions.emplace_back(count_non_null_value_agg_desc);
+}
+
+
+ConstRefPatternPtr UnnestingWithWindow::getPattern() const
+{
+    static NameSet agg_white_list{"count", "sum", "avg", "min", "max"};
+    static auto pattern = Patterns::filter()
+        .with(Patterns::apply()
+                  .matchingStep<ApplyStep>([](const ApplyStep & s) {
+                      return s.getSubqueryType() == ApplyStep::SubqueryType::SCALAR && !s.getCorrelation().empty();
+                  })
+                  .with(Patterns::any(), Patterns::aggregating().matchingStep<AggregatingStep>([](const AggregatingStep & agg) {
+                      return agg.getAggregates().size() == 1 && agg_white_list.count(agg.getAggregates()[0].function->getName());
+                  })))
+        .result();
+    return pattern;
+}
+
+PlanNodes collectPlanNodes(PlanNodePtr node)
+{
+    PlanNodes result;
+    std::queue<PlanNodePtr> q;
+    q.push(node);
+    while (!q.empty())
+    {
+        auto item = q.front();
+        result.emplace_back(item);
+        for (auto & child : item->getChildren())
+        {
+            q.push(child);
+        }
+        q.pop();
+    }
+    return result;
+}
+
+TransformResult UnnestingWithWindow::transformImpl(PlanNodePtr filter_node, const Captures &, RuleContext & rule_context)
+{
+        auto apply_node = filter_node->getChildren()[0];
+    auto apply_step = dynamic_cast<ApplyNode *>(apply_node.get())->getStep();
+    auto left_node = apply_node->getChildren()[0];
+    auto right_node = apply_node->getChildren()[1];
+    AggregatingStep * agg_step = nullptr;
+    ProjectionStep * proj_step = nullptr;
+    if (right_node->getStep()->getType() == IQueryPlanStep::Type::Aggregating)
+    {
+        agg_step = dynamic_cast<AggregatingNode *>(right_node.get())->getStep().get();
+    }
+    else
+    {
+        proj_step = dynamic_cast<ProjectionNode *>(right_node.get())->getStep().get();
+        right_node = right_node->getChildren()[0];
+        agg_step = dynamic_cast<AggregatingNode *>(right_node.get())->getStep().get();
+    }
+    auto left_nodes = collectPlanNodes(left_node);
+    auto right_nodes = collectPlanNodes(right_node->getChildren()[0]);
+
+    // todo support more types
+    std::set<IQueryPlanStep::Type> left_support_step_types{
+        IQueryPlanStep::Type::Projection,
+        IQueryPlanStep::Type::TableScan,
+        IQueryPlanStep::Type::Join,
+    };
+    std::set<IQueryPlanStep::Type> right_support_step_types{
+        IQueryPlanStep::Type::TableScan,
+        IQueryPlanStep::Type::Join,
+        IQueryPlanStep::Type::Filter,
+    };
+
+
+    std::unordered_map<StorageID, TableScanStep *> outer_id_to_plan_node;
+    std::vector<StorageID> left_tables;
+    for (const auto & node : left_nodes)
+    {
+        // check children type
+        auto step_type = node->getStep()->getType();
+        if (!left_support_step_types.count(step_type))
+            return {};
+        if (step_type == IQueryPlanStep::Type::Join)
+        {
+            // todo support more join type (inner)
+            auto join_step = dynamic_cast<JoinNode *>(node.get())->getStep();
+            if (!join_step->isCrossJoin())
+                return {};
+        }
+        if (step_type == IQueryPlanStep::Type::TableScan)
+        {
+            auto table_scan = dynamic_cast<TableScanNode *>(node.get())->getStep();
+            left_tables.emplace_back(table_scan->getStorageID());
+            outer_id_to_plan_node[table_scan->getStorageID()] = table_scan.get();
+        }
+    }
+
+    std::unordered_map<StorageID, TableScanStep *> sub_id_to_plan_node;
+    std::vector<StorageID> right_tables;
+    size_t filter_count = 0;
+    FilterStep * sub_filter_step = nullptr;
+    for (const auto & node : right_nodes)
+    {
+        // check children type
+        auto step_type = node->getStep()->getType();
+        if (!right_support_step_types.count(step_type))
+            return {};
+        if (step_type == IQueryPlanStep::Type::Join)
+        {
+            // todo support more join type (inner)
+            auto join_step = dynamic_cast<JoinNode *>(node.get())->getStep();
+            if (!join_step->isCrossJoin())
+                return {};
+        }
+        if (step_type == IQueryPlanStep::Type::TableScan)
+        {
+            auto table_scan = dynamic_cast<TableScanNode *>(node.get())->getStep();
+            right_tables.emplace_back(table_scan->getStorageID());
+            sub_id_to_plan_node[table_scan->getStorageID()] = table_scan.get();
+        }
+        if (step_type == IQueryPlanStep::Type::Filter)
+        {
+            filter_count++;
+            sub_filter_step = dynamic_cast<FilterNode *>(node.get())->getStep().get();
+            // todo
+            // subquery only one filter
+            if (filter_count > 1)
+            {
+                return {};
+            }
+        }
+    }
+
+    std::unordered_set<StorageID> left_table_set{left_tables.begin(), left_tables.end()};
+    std::unordered_set<StorageID> right_table_set{right_tables.begin(), right_tables.end()};
+    if (left_table_set.size() != left_tables.size() || right_table_set.size() != right_tables.size()
+        || left_tables.size() != right_tables.size() + 1)
+    {
+        return {};
+    }
+
+    for (const auto & item : right_tables)
+    {
+        left_table_set.erase(item);
+    }
+
+    auto * correlation_table_step = outer_id_to_plan_node[*left_table_set.begin()];
+    auto output_names = correlation_table_step->getTableOutputStream().header.getNameSet();
+    for (const auto & col : apply_step->getCorrelation())
+    {
+        if (!output_names.count(col))
+            return {};
+    }
+
+    auto filter_step = dynamic_cast<FilterNode *>(filter_node.get())->getStep();
+    auto filter_ast = filter_step->getFilter();
+    auto outer_conjuncts = PredicateUtils::extractConjuncts(filter_ast);
+
+    // 1. remove correlation predicate
+    auto correlation = apply_step->getCorrelation();
+    std::optional<DecorrelationResult> result
+        = Decorrelation::decorrelateFilters(right_node->getChildren()[0], correlation, *rule_context.context);
+    if (!result.has_value())
+    {
+        throw Exception(
+            "Correlated Scalar subquery de-correlation error, correlation filter not exists: ", ErrorCodes::REMOVE_SUBQUERY_ERROR);
+    }
+
+    DecorrelationResult & result_value = result.value();
+    PlanNodePtr join_right = result_value.node;
+    std::pair<Names, Names> key_pairs = result_value.buildJoinClause(left_node, join_right, correlation, rule_context.context);
+
+    auto extract_symbol_mapping = [](const std::unordered_map<StorageID, TableScanStep *> & id_to_plan_node) {
+        ConstASTMap symbol_mapping;
+        NameToNameMap col_to_symbol;
+        for (const auto & item : id_to_plan_node)
+        {
+            for (const auto & alias : item.second->getColumnAlias())
+            {
+                ASTPtr a = std::make_shared<ASTIdentifier>(alias.second);
+                auto col = ConstHashAST::make(std::make_shared<ASTIdentifier>(alias.first));
+                symbol_mapping.emplace(a, col);
+                col_to_symbol.emplace(alias.first, alias.second);
+            }
+        }
+        return std::make_pair(symbol_mapping, col_to_symbol);
+    };
+
+    auto [outer_symbol_mapping, outer_col_to_symbol] = extract_symbol_mapping(outer_id_to_plan_node);
+    auto [sub_symbol_mapping, sub_col_to_symbol] = extract_symbol_mapping(sub_id_to_plan_node);
+
+    NameToNameMap sub_to_outer;
+    for (auto & item : sub_col_to_symbol)
+        if (outer_col_to_symbol.contains(item.first))
+        {
+            sub_to_outer[item.second] = outer_col_to_symbol[item.first];
+        }
+
+
+    EqualityASTSet distinct{outer_conjuncts.begin(), outer_conjuncts.end()};
+    for (size_t i = 0; i < key_pairs.first.size(); i++)
+    {
+        auto left = sub_to_outer.contains(key_pairs.first[i]) ? sub_to_outer[key_pairs.first[i]] : key_pairs.first[i];
+        auto right = sub_to_outer.contains(key_pairs.second[i]) ? sub_to_outer[key_pairs.second[i]] : key_pairs.second[i];
+        ConstASTPtr join_predicate
+            = makeASTFunction("equals", ASTs{std::make_shared<ASTIdentifier>(left), std::make_shared<ASTIdentifier>(right)});
+
+        // todo rewrite using sub to outer
+        join_predicate = ExpressionRewriter::rewrite(join_predicate, sub_symbol_mapping);
+        if (distinct.erase(join_predicate))
+        {
+            continue;
+        }
+
+        join_predicate = makeASTFunction("equals", ASTs{std::make_shared<ASTIdentifier>(left), std::make_shared<ASTIdentifier>(right)});
+        join_predicate = ExpressionRewriter::rewrite(join_predicate, sub_symbol_mapping);
+        if (distinct.erase(join_predicate))
+        {
+            continue;
+        }
+        return {};
+    }
+
+    if (distinct.empty())
+        return {};
+
+    // 2. remove subquery conjunct and only outer table conjunct
+    ConstASTPtr subquery_conjunct;
+    ConstASTs removed_conjuncts;
+    for (auto & conjunct : outer_conjuncts)
+    {
+        auto symbols = SymbolsExtractor::extract(conjunct);
+        //  remove subquery conjunct
+        if (symbols.contains(apply_step->getAssignment().first))
+        {
+            subquery_conjunct = conjunct;
+            continue;
+        }
+        // remove only outer table conjunct
+        bool only_outer_table = true;
+        for (const auto & symbol : symbols)
+        {
+            if (!output_names.contains(symbol))
+            {
+                only_outer_table = false;
+                break;
+            }
+        }
+        if (only_outer_table)
+        {
+            continue;
+        }
+        removed_conjuncts.emplace_back(conjunct);
+    }
+
+    if (!subquery_conjunct)
+        return {};
+
+
+    auto normalize_expr = [](ConstASTPtr & compare) {
+        if (const auto * func = compare->as<ASTFunction>())
+        {
+            if (func->name == "equals")
+            {
+                if (func->arguments->children.size() == 2)
+                {
+                    if (auto * left = func->arguments->children[0]->as<ASTIdentifier>())
+                    {
+                        auto left_name = left->name();
+                        if (auto * right = func->arguments->children[1]->as<ASTIdentifier>())
+                        {
+                            auto right_name = right->name();
+                            if (right_name > left_name)
+                            {
+                                compare = makeASTFunction(
+                                    "equals",
+                                    ASTs{std::make_shared<ASTIdentifier>(right_name), std::make_shared<ASTIdentifier>(left_name)});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    if (sub_filter_step)
+    {
+        auto sub_conjuncts = PredicateUtils::extractConjuncts(sub_filter_step->getFilter());
+        if (removed_conjuncts.size() != sub_conjuncts.size())
+        {
+            return {};
+        }
+        for (auto & removed_conjunct : removed_conjuncts)
+        {
+            removed_conjunct = ExpressionRewriter::rewrite(removed_conjunct, outer_symbol_mapping);
+            normalize_expr(removed_conjunct);
+        }
+        for (auto & sub_conjunct : sub_conjuncts)
+        {
+            sub_conjunct = ExpressionRewriter::rewrite(sub_conjunct, sub_symbol_mapping);
+            normalize_expr(sub_conjunct);
+        }
+        std::sort(removed_conjuncts.begin(), removed_conjuncts.end(), [](auto & a, auto & b) { return ASTEquality::compareTree(a, b); });
+        std::sort(sub_conjuncts.begin(), sub_conjuncts.end(), [](auto & a, auto & b) { return ASTEquality::compareTree(a, b); });
+
+        auto outer_predicate = PredicateUtils::combineConjuncts(removed_conjuncts);
+        auto sub_predicate = PredicateUtils::combineConjuncts(sub_conjuncts);
+        auto outer_str = serializeAST(*outer_predicate);
+        auto sub_str = serializeAST(*sub_predicate);
+        if (outer_str != sub_str)
+        {
+            return {};
+        }
+    }
+    else if (!removed_conjuncts.empty())
+    {
+        return {};
+    }
+
+    WindowDescription desc;
+    desc.window_name = rule_context.context->getSymbolAllocator()->newSymbol("__window_name");
+    for (const auto & col : apply_step->getCorrelation())
+    {
+        desc.partition_by.emplace_back(SortColumnDescription{col, 1, 1});
+    }
+    desc.full_sort_description = desc.partition_by;
+
+    WindowFunctionDescription func_desc;
+    func_desc.column_name = agg_step->getAggregates()[0].column_name;
+    func_desc.aggregate_function = agg_step->getAggregates()[0].function;
+    func_desc.function_parameters = agg_step->getAggregates()[0].parameters;
+    auto input_header = agg_step->getInputStreams()[0].header;
+    for (const auto & arg_name : agg_step->getAggregates()[0].argument_names)
+    {
+        func_desc.argument_types.emplace_back(input_header.getByName(arg_name).type);
+        func_desc.argument_names.emplace_back(sub_to_outer.contains(arg_name) ? sub_to_outer[arg_name] : arg_name);
+    }
+    desc.window_functions.emplace_back(func_desc);
+
+    auto new_outer_conjuncts = PredicateUtils::extractConjuncts(filter_step->getFilter());
+    ConstASTs removed_outer_conjuncts;
+    ConstASTPtr correlation_filter;
+    for (auto & conjunct : new_outer_conjuncts)
+    {
+        auto symbols = SymbolsExtractor::extract(conjunct);
+        //  remove subquery conjunct
+        if (symbols.contains(apply_step->getAssignment().first))
+        {
+            correlation_filter = conjunct;
+            continue;
+        }
+        removed_outer_conjuncts.emplace_back(conjunct);
+    }
+
+    auto new_filter_ast = PredicateUtils::combineConjuncts(removed_outer_conjuncts);
+    auto new_filter_step = std::make_shared<FilterStep>(left_node->getCurrentDataStream(), new_filter_ast);
+    auto new_filter_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), new_filter_step, {left_node});
+
+    auto window_step = std::make_shared<WindowStep>(new_filter_node->getCurrentDataStream(), desc, true, SortDescription{});
+    auto window_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), window_step, {new_filter_node});
+
+    if (proj_step)
+    {
+        auto window_output = window_step->getOutputStream().header;
+        Assignments assignments;
+        NameToType name_to_type;
+        for (const auto & item : filter_node->getCurrentDataStream().header)
+        {
+            if (window_output.has(item.name))
+            {
+                assignments.emplace(item.name, std::make_shared<ASTIdentifier>(item.name));
+                name_to_type[item.name] = item.type;
+            }
+            else
+            {
+                if (proj_step->getAssignments().contains(item.name))
+                {
+                    assignments.emplace(item.name, proj_step->getAssignments().at(item.name));
+                    name_to_type[item.name] = item.type;
+                }
+                else
+                    return {};
+            }
+        }
+
+        auto new_proj_step = std::make_shared<ProjectionStep>(left_node->getCurrentDataStream(), assignments, name_to_type);
+        window_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), new_proj_step, {window_node});
+    }
+
+    auto after_filter_step = std::make_shared<FilterStep>(left_node->getCurrentDataStream(), correlation_filter);
+    auto after_filter_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), after_filter_step, {window_node});
+
+    return after_filter_node;
+}
+
+
+ConstRefPatternPtr UnnestingWithProjectionWindow::getPattern() const
+{
+    static NameSet agg_white_list{"count", "sum", "avg", "min", "max"};
+    static auto pattern = Patterns::filter()
+        .with(Patterns::apply()
+                  .matchingStep<ApplyStep>([](const ApplyStep & s) {
+                      return s.getSubqueryType() == ApplyStep::SubqueryType::SCALAR && !s.getCorrelation().empty();
+                  })
+                  .with(
+                      Patterns::any(),
+                      Patterns::project().with(Patterns::aggregating().matchingStep<AggregatingStep>([](const AggregatingStep & agg) {
+                          return agg.getAggregates().size() == 1 && agg_white_list.count(agg.getAggregates()[0].function->getName());
+                      }))))
+        .result();
+    return pattern;
+}
+
+ConstRefPatternPtr ExistsToSemiJoin::getPattern() const
+{
+    static auto pattern = Patterns::apply()
+        .matchingStep<ApplyStep>([](const ApplyStep & s) {
+            return s.supportSemiAnti() && s.getSubqueryType() == ApplyStep::SubqueryType::EXISTS && !s.getCorrelation().empty();
+        })
+        .result();
+    return pattern;
+}
+
+TransformResult ExistsToSemiJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    auto & context = rule_context.context;
+    if (context->getSettingsRef().enable_unnesting_subquery_with_semi_anti_join)
+    {
+        auto * apply = dynamic_cast<ApplyNode *>(node.get());
+        auto & apply_step = *apply->getStep();
+
+        PlanNodePtr input_ptr = apply->getChildren()[0];
+        PlanNodePtr subquery_ptr = apply->getChildren()[1];
+
+        PlanNodePtr source = subquery_ptr;
+        auto correlation = apply_step.getCorrelation();
+
+        std::optional<DecorrelationResult> result = Decorrelation::decorrelateFilters(source, correlation, *context);
+        if (!result.has_value())
+        {
+            throw Exception(
+                "Correlated Exists subquery de-correlation error, correlation filter not exists: ", ErrorCodes::REMOVE_SUBQUERY_ERROR);
+        }
+
+        DecorrelationResult & result_value = result.value();
+        subquery_ptr = result_value.node;
+
+        std::pair<Names, Names> key_pairs = result->buildJoinClause(input_ptr, subquery_ptr, correlation, context);
+
+        std::vector<ConstASTPtr> filter = result->extractFilter();
+
+        auto strictness = ASTTableJoin::Strictness::Unspecified;
+
+        if (const auto * literal = apply_step.getAssignment().second->as<ASTLiteral>())
+        {
+            UInt64 value = 1;
+            literal->value.tryGet(value);
+            if (!value)
+            {
+                strictness = ASTTableJoin::Strictness::Anti;
+            }
+            else
+            {
+                strictness = ASTTableJoin::Strictness::Semi;
+            }
+        }
+
+        else
+        {
+            return {};
+        }
+
+        Assignments right_correlation_assignments;
+        NameToType right_correlation_name_to_type;
+        for (const auto & column : subquery_ptr->getStep()->getOutputStream().header)
+        {
+            if (std::find(key_pairs.second.begin(), key_pairs.second.end(), column.name) != key_pairs.second.end())
+            {
+                Assignment assignment{column.name, std::make_shared<ASTIdentifier>(column.name)};
+                right_correlation_assignments.emplace_back(assignment);
+                right_correlation_name_to_type[column.name] = column.type;
+            }
+            }
+
+            auto right_correlation_step = std::make_shared<ProjectionStep>(
+                subquery_ptr->getStep()->getOutputStream(), right_correlation_assignments, right_correlation_name_to_type);
+            auto right_correlation_node
+                = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(right_correlation_step), PlanNodes{subquery_ptr});
+
+
+            const auto & join_left = input_ptr;
+            const auto & join_right = right_correlation_node;
+            DataStreams streams = {join_left->getCurrentDataStream(), join_right->getCurrentDataStream()};
+            auto left_header = join_left->getCurrentDataStream().header;
+            auto right_header = join_right->getCurrentDataStream().header;
+            NamesAndTypes output;
+            for (const auto & item : left_header)
+            {
+                output.emplace_back(NameAndTypePair{item.name, item.type});
+            }
+            for (const auto & item : right_header)
+            {
+                output.emplace_back(NameAndTypePair{item.name, item.type});
+            }
+
+            auto join_step = std::make_shared<JoinStep>(
+                streams,
+                DataStream{.header = output},
+                ASTTableJoin::Kind::Left,
+                strictness,
+                context->getSettingsRef().max_threads,
+                context->getSettingsRef().optimize_read_in_order,
+                key_pairs.first,
+                key_pairs.second,
+                PredicateUtils::combineConjuncts(filter),
+                false,
+                std::nullopt,
+                ASOF::Inequality::GreaterOrEquals,
+                DistributionType::UNKNOWN);
+            PlanNodePtr join_node
+                = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{join_left, join_right});
+
+            Assignments exist_assignments;
+        NameToType exist_name_to_type;
+        for (const auto & column : join_node->getStep()->getOutputStream().header)
+        {
+            Assignment assignment{column.name, std::make_shared<ASTIdentifier>(column.name)};
+            exist_assignments.emplace_back(assignment);
+            exist_name_to_type[column.name] = column.type;
+        }
+        Assignment assignment{apply_step.getAssignment().first, std::make_shared<ASTLiteral>(1u)};
+        exist_assignments.emplace_back(assignment);
+        exist_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
+
+        // Exists function has been rewritten into "exists" symbols
+        auto exists_step = std::make_shared<ProjectionStep>(join_node->getStep()->getOutputStream(), exist_assignments, exist_name_to_type);
+            PlanNodePtr exists_node = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(exists_step), PlanNodes{join_node});
+            return exists_node;
+            }
+
+    return {};
+}
+
+
+ConstRefPatternPtr InToSemiJoin::getPattern() const
+{
+     static auto pattern = Patterns::apply()
+        .matchingStep<ApplyStep>([](const ApplyStep & s) {
+            return s.supportSemiAnti() && s.getSubqueryType() == ApplyStep::SubqueryType::IN && s.getCorrelation().empty();
+        })
+        .result();
+    return pattern;
+}
+
+TransformResult InToSemiJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    auto & context = rule_context.context;
+    if (context->getSettingsRef().enable_unnesting_subquery_with_semi_anti_join)
+    {
+        auto * apply = dynamic_cast<ApplyNode *>(node.get());
+        auto & apply_step = *apply->getStep();
+
+        const auto & correlation = apply_step.getCorrelation();
+        if (!correlation.empty())
+        {
+            return {};
+        }
+
+        PlanNodePtr input_ptr = node->getChildren()[0];
+        PlanNodePtr subquery_ptr = node->getChildren()[1];
+
+        // const DataStream & left_data_stream = input_ptr->getStep()->getOutputStream();
+        // const DataStream & right_data_stream = subquery_ptr->getStep()->getOutputStream();
+
+        const auto & in_assignment = apply_step.getAssignment();
+        const auto & in_fun = in_assignment.second->as<ASTFunction &>();
+        ASTIdentifier & fun_left = in_fun.arguments->children[0]->as<ASTIdentifier &>();
+        ASTIdentifier & fun_right = in_fun.arguments->children[1]->as<ASTIdentifier &>();
+
+        Names in_left{fun_left.name()};
+        Names in_right{fun_right.name()};
+
+        auto strictness = ASTTableJoin::Strictness::Unspecified;
+
+        if (in_fun.name == "notIn")
+        {
+            if (!isNullableOrLowCardinalityNullable(subquery_ptr->getOutputNamesToTypes().at(fun_right.name())))
+                strictness = ASTTableJoin::Strictness::Anti;
+            else
+                return {};
+        }
+        else if (in_fun.name == "in")
+        {
+            strictness = ASTTableJoin::Strictness::Semi;
+        }
+        else
+        {
+            return {};
+        }
+
+        if (strictness == ASTTableJoin::Strictness::Unspecified)
+        {
+            return {};
+        }
+
+
+        const auto & join_left = node->getChildren()[0];
+        const auto & join_right = node->getChildren()[1];
+        DataStreams streams = {join_left->getCurrentDataStream(), join_right->getCurrentDataStream()};
+        auto left_header = join_left->getCurrentDataStream().header;
+        auto right_header = join_right->getCurrentDataStream().header;
+        NamesAndTypes output;
+        for (const auto & item : left_header)
+        {
+            output.emplace_back(NameAndTypePair{item.name, item.type});
+        }
+        for (const auto & item : right_header)
+        {
+            output.emplace_back(NameAndTypePair{item.name, item.type});
+        }
+
+        auto join_step = std::make_shared<JoinStep>(
+            streams,
+            DataStream{.header = output},
+            ASTTableJoin::Kind::Left,
+            strictness,
+            context->getSettingsRef().max_threads,
+            context->getSettingsRef().optimize_read_in_order,
+            in_left,
+            in_right,
+            PredicateConst::TRUE_VALUE,
+            false,
+            std::nullopt,
+            ASOF::Inequality::GreaterOrEquals,
+            DistributionType::UNKNOWN);
+        PlanNodePtr join_node = std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{join_left, join_right});
+
+        Assignments exist_assignments;
+        NameToType exist_name_to_type;
+        for (const auto & column : join_node->getStep()->getOutputStream().header)
+        {
+            Assignment assignment{column.name, std::make_shared<ASTIdentifier>(column.name)};
+            exist_assignments.emplace_back(assignment);
+            exist_name_to_type[column.name] = column.type;
+        }
+        Assignment assignment{apply_step.getAssignment().first, std::make_shared<ASTLiteral>(1u)};
+        exist_assignments.emplace_back(assignment);
+        exist_name_to_type[apply_step.getAssignment().first] = std::make_shared<DataTypeUInt8>();
+
+        // Exists function has been rewritten into "exists" symbols
+        auto exists_step = std::make_shared<ProjectionStep>(join_node->getStep()->getOutputStream(), exist_assignments, exist_name_to_type);
+        PlanNodePtr exists_node = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(exists_step), PlanNodes{join_node});
+        return exists_node;
+    }
+
+    return {};
 }
 
 }

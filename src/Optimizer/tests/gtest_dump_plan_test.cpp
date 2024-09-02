@@ -82,7 +82,7 @@ TEST_F(PlanDumpTest, testDumpWithoutStats)
 
     DB::QueryDumper::Query query_elem(query_id, sql, context->getCurrentDatabase());
     auto & workload_query = query_dumper.add(query_elem);
-    workload_query.settings = std::make_shared<DB::Settings>(context->getSettings());
+    workload_query.settings = std::make_shared<DB::Settings>(context->getSettingsRef());
 
     DB::ContextMutablePtr query_context = workload_query.buildQueryContextFrom(context);
     DB::ASTPtr ast = DB::ReproduceUtils::parse(workload_query.query, query_context);
@@ -113,8 +113,8 @@ TEST_F(PlanDumpTest, testDumpWithoutStats)
 TEST_F(PlanDumpTest, testDumpMaterializedView)
 {
     const char * folder = "test";
-    tester->execute("create table test_table(a Int32 not null, b Int32 not null) engine=Memory()");
-    tester->execute("create materialized view test_view(a Int32 not null, b Int32 not null) engine=Memory() as select * from test_table");
+    tester->execute("create table test_table(a Int32 not null, b Int32 not null) engine=CnchMergeTree() order by tuple()");
+    tester->execute("create materialized view test_view(a Int32 not null, b Int32 not null) engine=CnchMergeTree() order by tuple() as select * from test_table");
     tester->execute(String{"dump compress_directory=1 ddl from "} + tester->getDefaultDatabase() + " into '" + PLAN_DUMP_PATH + folder + "'");
     auto database = DB::DatabaseCatalog::instance().tryGetDatabase(tester->getDefaultDatabase(), tester->createQueryContext());
     ASSERT_TRUE(database);

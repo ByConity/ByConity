@@ -30,7 +30,8 @@ ENUM_WITH_PROTO_CONVERTER(
     (LOCAL_MAY_NEED_REPARTITION, 2), /// for local join, if we want to increase the parallel size, we need repartition
     (REPARTITION, 3),
     (BROADCAST, 4),
-    (GATHER, 5));
+    (GATHER, 5),
+    (BUCKET_REPARTITION, 6));
 
 String exchangeModeToString(const ExchangeMode & exchange_mode);
 

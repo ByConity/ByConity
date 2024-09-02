@@ -1,14 +1,14 @@
 Projection Est. ? rows
 │     Expressions: count():=`expr#count()`
 └─ Gather Exchange Est. ? rows
-   └─ MergingAggregated Est. ? rows
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {item_id}
-         └─ Aggregating Est. ? rows
-            │     Group by: {item_id}
-            │     Aggregates: expr#count():=AggNull(count)()
-            └─ Projection Est. ? rows
-               │     Expressions: [item_id]
+   └─ Projection Est. ? rows
+      │     Expressions: [expr#count()]
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {item_id}
+            └─ Aggregating Est. ? rows
+               │     Group by: {item_id}
+               │     Aggregates: expr#count():=AggNull(count)()
                └─ MergingAggregated Est. ? rows
                   └─ Repartition Exchange Est. ? rows
                      │     Partition by: {item_id, name}

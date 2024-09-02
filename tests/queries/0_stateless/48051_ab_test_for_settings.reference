@@ -1,0 +1,4 @@
+Projection Est. ? rows
+│     Expressions: [dummy]
+└─ TableScan system.one Est. ? rows
+         Outputs: [dummy]

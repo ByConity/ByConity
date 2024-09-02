@@ -15,17 +15,21 @@
 
 #include <sstream>
 #include <unordered_map>
+#include <Access/ContextAccess.h>
 #include <Analyzers/ExprAnalyzer.h>
 #include <Analyzers/ExpressionVisitor.h>
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/ScopeAwareEquals.h>
 #include <Analyzers/analyze_common.h>
 #include <Analyzers/function_utils.h>
+#include <Analyzers/resolveNamesAsMySQL.h>
 #include <Analyzers/tryEvaluateConstantExpression.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/ArrayJoinedColumnsVisitor.h>
@@ -34,34 +38,45 @@
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Interpreters/join_common.h>
+#include <Interpreters/processColumnTransformers.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Optimizer/Utils.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTFieldReference.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTVisitor.h>
+#include <Parsers/formatAST.h>
 #include <Parsers/queryToString.h>
 #include <QueryPlan/Void.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMemory.h>
+
 #if USE_HIVE
 #    include <Storages/Hive/StorageCnchHive.h>
 #endif
-#include <Optimizer/Utils.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeArray.h>
-#include <Storages/MergeTree/MergeTreeMeta.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Interpreters/join_common.h>
-#include <unordered_map>
 #include <sstream>
-#include <Storages/RemoteFile/IStorageCnchFile.h>
-#include "Parsers/formatAST.h"
+#include <unordered_map>
 #include <Access/ContextAccess.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <Interpreters/join_common.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Optimizer/Utils.h>
+#include <Storages/MergeTree/MergeTreeMeta.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageDistributed.h>
+#include "Parsers/formatAST.h"
+
+#include <common/logger_useful.h>
 
 using namespace std::string_literals;
 
@@ -99,9 +114,18 @@ public:
     Void visitASTSelectQuery(ASTPtr & node, const Void &) override;
     Void visitASTSubquery(ASTPtr & node, const Void &) override;
     Void visitASTExplainQuery(ASTPtr & node, const Void &) override;
+    Void visitASTCreatePreparedStatementQuery(ASTPtr & node, const Void &) override
+    {
+        auto & prepare = node->as<ASTCreatePreparedStatementQuery &>();
+        auto query = prepare.getQuery();
+        process(query);
+        analysis.setOutputDescription(*node, analysis.getOutputDescription(*query));
+        return {};
+    }
 
     QueryAnalyzerVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr outer_query_scope_)
-        : context(std::move(context_))
+        : ASTVisitor(context_->getSettingsRef().max_ast_depth)
+        , context(std::move(context_))
         , analysis(analysis_)
         , outer_query_scope(outer_query_scope_)
         , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
@@ -109,7 +133,8 @@ public:
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
         , enable_subcolumn_optimization_through_union(context->getSettingsRef().enable_subcolumn_optimization_through_union)
-    {}
+    {
+    }
 
 private:
     ContextPtr context;
@@ -120,6 +145,8 @@ private:
     const bool enable_implicit_type_conversion;
     const bool allow_extended_conversion;
     const bool enable_subcolumn_optimization_through_union;
+
+    Poco::Logger * logger = &Poco::Logger::get("QueryAnalyzerVisitor");
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 
@@ -164,6 +191,8 @@ private:
     void analyzeLimitBy(ASTSelectQuery & select_query, ASTs & select_expressions, ScopePtr output_scope);
     void analyzeLimitAndOffset(ASTSelectQuery & select_query);
 
+    void analyzeOutfile(ASTSelectWithUnionQuery & outfile_query);
+
     /// utils
     ScopePtr createScope(FieldDescriptions field_descriptions, ScopePtr parent = nullptr);
     DatabaseAndTableWithAlias extractTableWithAlias(const ASTTableExpression & table_expression);
@@ -172,7 +201,7 @@ private:
     void verifyNoFreeReferencesToLambdaArgument(ASTSelectQuery & select_query);
     UInt64 analyzeUIntConstExpression(const ASTPtr & expression);
     void countLeadingHint(const IAST & ast);
-    void rewriteAliasesForANSI(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
+    void rewriteSelectInANSIMode(ASTSelectQuery & select_query, const Aliases & aliases, const NameSet & source_columns_set);
     void normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr);
     void normalizeAliases(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
 };
@@ -193,7 +222,7 @@ AnalysisPtr QueryAnalyzer::analyze(ASTPtr & ast, ContextPtr context)
 
 void QueryAnalyzer::analyze(ASTPtr & query, ScopePtr outer_query_scope, ContextPtr context, Analysis & analysis)
 {
-    QueryAnalyzerVisitor analyzer_visitor {std::move(context), analysis, outer_query_scope};
+    QueryAnalyzerVisitor analyzer_visitor{std::move(context), analysis, outer_query_scope};
     analyzer_visitor.process(query);
 }
 
@@ -228,7 +257,9 @@ Void QueryAnalyzerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
     std::unordered_set<String> insert_columns_set;
     if (insert_query.columns)
     {
-        for (auto & column_ast : insert_query.columns->children)
+        const auto columns_ast = processColumnTransformers(context->getCurrentDatabase(), storage, storage_metadata, insert_query.columns);
+
+        for (auto & column_ast : columns_ast->children)
         {
             const auto & column_name = column_ast->as<ASTIdentifier &>().name();
             if (!insert_columns_set.emplace(column_name).second)
@@ -291,14 +322,15 @@ Void QueryAnalyzerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, const Voi
 
     // some ASTSelectWithUnionQueries are generated by QueryRewriter,
     // thus are not normalized. see also: JoinToSubqueryTransformVisitor.cpp
-    bool normalized =
-        (select_with_union.is_normalized && (select_with_union.union_mode == ASTSelectWithUnionQuery::Mode::UNION_ALL ||
-                                             select_with_union.union_mode == ASTSelectWithUnionQuery::Mode::UNION_DISTINCT))
+    bool normalized = (select_with_union.is_normalized
+                       && (select_with_union.union_mode == ASTSelectWithUnionQuery::Mode::UNION_ALL
+                           || select_with_union.union_mode == ASTSelectWithUnionQuery::Mode::UNION_DISTINCT))
         || select_with_union.list_of_selects->children.size() == 1;
     if (!normalized)
         throw Exception("Invalid ASTSelectWithUnionQuery found", ErrorCodes::LOGICAL_ERROR);
 
     analyzeSetOperation(node, select_with_union.list_of_selects->children);
+    analyzeOutfile(select_with_union);
     return {};
 }
 
@@ -311,14 +343,14 @@ Void QueryAnalyzerVisitor::visitASTSelectQuery(ASTPtr & node, const Void &)
     // since aliases rewritting for CLICKHOUSE is done by QueryRewriter
     Aliases query_aliases;
     if (use_ansi_semantic)
-        QueryAliasesVisitor(query_aliases).visit(node);
+        QueryAliasesAllowAmbiguousNoSubqueriesVisitor(query_aliases).visit(node);
 
     if (select_query.tables())
         source_scope = analyzeFrom(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query, query_aliases);
     else
         source_scope = analyzeWithoutFrom(select_query);
 
-    rewriteAliasesForANSI(node, query_aliases, source_scope->getNamesSet());
+    rewriteSelectInANSIMode(select_query, query_aliases, source_scope->getNamesSet());
     analyzeWindow(select_query);
     analyzeWhere(select_query, source_scope);
     // analyze SELECT first since SELECT item may be referred in GROUP BY/ORDER BY
@@ -378,15 +410,16 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
     size_t column_size = 0;
 
     // analyze union elements
-    for (auto & select: selects)
+    for (auto & select : selects)
     {
         process(select);
 
         if (column_size == 0)
             column_size = analysis.getOutputDescription(*select).size();
         else if (column_size != analysis.getOutputDescription(*select).size())
-            throw Exception("Different number of columns for UNION ALL elements: " + serializeAST(*node),
-                            ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
+            throw Exception(
+                "Different number of columns for UNION ALL elements: " + serializeAST(*node),
+                ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
     }
 
     // analyze output fields
@@ -404,7 +437,7 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
             DataTypes elem_types;
             FieldDescription::OriginColumns origin_columns;
 
-            for (auto & select: selects)
+            for (auto & select : selects)
             {
                 const auto & elem_field = analysis.getOutputDescription(*select)[column_idx];
                 elem_types.push_back(elem_field.type);
@@ -431,7 +464,7 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
     // record type coercion
     if (selects.size() != 1)
     {
-        for (auto & select: selects)
+        for (auto & select : selects)
         {
             auto & input_desc = analysis.getOutputDescription(*select);
             DataTypes type_coercion(column_size, nullptr);
@@ -450,8 +483,8 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
                     else
                     {
                         std::ostringstream errormsg;
-                        errormsg << "Column type mismatch for UNION: " << serializeAST(*node) << ", expect type: "
-                                 << output_type->getName() << ", but found type: " << input_type->getName();
+                        errormsg << "Column type mismatch for UNION: " << serializeAST(*node) << ", expect type: " << output_type->getName()
+                                 << ", but found type: " << input_type->getName();
                         throw Exception(errormsg.str(), ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
                     }
                 }
@@ -468,7 +501,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeWithoutFrom(ASTSelectQuery & select_query)
 {
     FieldDescriptions fields;
     fields.emplace_back("dummy", std::make_shared<DataTypeUInt8>());
-    const auto *scope = createScope(fields);
+    const auto * scope = createScope(fields);
     analysis.setQueryWithoutFromScope(select_query, scope);
     return scope;
 }
@@ -479,8 +512,7 @@ QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_select, AST
     if (tables_in_select.children.empty())
         throw Exception("ASTTableInSelectQuery can not be empty.", ErrorCodes::LOGICAL_ERROR);
 
-    auto analyze_first_table_element = [&](ASTPtr & ast) -> ScopePtr
-    {
+    auto analyze_first_table_element = [&](ASTPtr & ast) -> ScopePtr {
         auto & table_element = ast->as<ASTTablesInSelectQueryElement &>();
 
         if (table_element.table_expression)
@@ -503,7 +535,6 @@ QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_select, AST
     for (size_t idx = 1; idx < tables_in_select.children.size(); ++idx)
     {
         auto & table_element = tables_in_select.children[idx]->as<ASTTablesInSelectQueryElement &>();
-
         if (table_element.table_expression)
         {
             auto * table_expression = table_element.table_expression->as<ASTTableExpression>();
@@ -513,7 +544,8 @@ QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_select, AST
             ScopePtr joined_table_scope = analyzeTableExpression(
                 *table_expression, QualifiedName::extractQualifiedName(table_with_alias), select_query, query_aliases);
             auto & table_join = table_element.table_join->as<ASTTableJoin &>();
-            current_scope = analyzeJoin(table_join, current_scope, joined_table_scope, table_with_alias.getQualifiedNamePrefix(true), select_query);
+            current_scope
+                = analyzeJoin(table_join, current_scope, joined_table_scope, table_with_alias.getQualifiedNamePrefix(true), select_query);
         }
         else if (table_element.array_join)
         {
@@ -556,25 +588,21 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
     // get storage information
     StoragePtr storage;
     String full_table_name;
+
     {
         auto storage_id = context->tryResolveStorageID(db_and_table.getTableId());
         storage = DatabaseCatalog::instance().getTable(storage_id, context);
-        if(!storage_id.hasUUID())
+        if (!storage_id.hasUUID())
         {
             storage_id.uuid = storage->getStorageUUID();
         }
         storage->renameInMemory(storage_id);
         full_table_name = storage_id.getFullTableName();
 
-        if (storage_id.getDatabaseName() != "system" &&
-            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get())
-              || dynamic_cast<const StorageMemory *>(storage.get())
-              || dynamic_cast<const StorageCnchHive *>(storage.get())
-              || dynamic_cast<const IStorageCnchFile *>(storage.get())))
-            throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
+        if (storage_id.getDatabaseName() != "system" && !storage->supportsOptimizer())
+            throw Exception("table is not supported in optimizer", ErrorCodes::NOT_IMPLEMENTED);
 
-        analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
-
+        analysis.storage_results[&db_and_table] = StorageAnalysis{storage_id.getDatabaseName(), storage_id.getTableName(), storage};
     }
 
     StorageMetadataPtr storage_metadata = storage->getInMemoryMetadataPtr();
@@ -586,7 +614,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
         // when diff server diff remote database name, the database name is empty.
         if (!storage_distributed->getRemoteDatabaseName().empty())
         {
-            StorageID local_id {storage_distributed->getRemoteDatabaseName(), storage_distributed->getRemoteTableName()};
+            StorageID local_id{storage_distributed->getRemoteDatabaseName(), storage_distributed->getRemoteTableName()};
             auto storage_local = DatabaseCatalog::instance().getTable(local_id, context);
             storage_metadata = storage_local->getInMemoryMetadataPtr();
         }
@@ -606,16 +634,19 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
     {
         for (const auto & column : columns_description.getOrdinary())
         {
+            LOG_TRACE(logger, "analyze table {}, add ordinary field {}", full_table_name, column.name);
             add_field(column.name, column.type, true);
         }
 
         for (const auto & column : columns_description.getMaterialized())
         {
+            LOG_TRACE(logger, "analyze table {}, add materialized field {}", full_table_name, column.name);
             add_field(column.name, column.type, false);
         }
 
         for (const auto & column : storage->getVirtuals())
         {
+            LOG_TRACE(logger, "analyze table {}, add virtual field {}", full_table_name, column.name);
             add_field(column.name, column.type, false);
         }
 
@@ -623,6 +654,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
         {
             for (const auto & column : columns_description.getSubcolumnsOfAllPhysical())
             {
+                LOG_TRACE(logger, "analyze table {}, add subcolumn field {}", full_table_name, column.name);
                 add_field(column.name, column.type, false);
             }
         }
@@ -659,6 +691,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
         {
             auto col_type = ExprAnalyzer::analyze(alias_col, scope, context, analysis, options);
             auto col_name = alias_col->tryGetAlias();
+            LOG_TRACE(logger, "analyze table {}, add alias field {}", full_table_name, col_name);
             add_field(col_name, col_type, false);
         }
 
@@ -676,7 +709,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeSubquery(ASTPtr & node, const QualifiedNam
 
     auto & subquery = node->as<ASTSubquery &>();
     FieldDescriptions field_descriptions;
-    for (auto & col: analysis.getOutputDescription(subquery))
+    for (auto & col : analysis.getOutputDescription(subquery))
     {
         field_descriptions.emplace_back(col.withNewPrefix(column_prefix));
     }
@@ -691,8 +724,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & table_function
     // execute table function
     StoragePtr storage = context->getQueryContext()->executeTableFunction(table_function.ptr());
     StorageID storage_id = storage->getStorageID();
-    analysis.storage_results[&table_function] =
-    StorageAnalysis{ .database = storage_id.getDatabaseName(), .table = storage_id.getTableName(), .storage = storage};
+    analysis.storage_results[&table_function]
+        = StorageAnalysis{.database = storage_id.getDatabaseName(), .table = storage_id.getTableName(), .storage = storage};
 
     // get columns information
     auto storage_metadata = storage->getInMemoryMetadataPtr();
@@ -718,8 +751,12 @@ ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & table_function
     return table_function_scope;
 }
 
-ScopePtr QueryAnalyzerVisitor::analyzeJoin(ASTTableJoin & table_join, ScopePtr left_scope, ScopePtr right_scope,
-                                           const String & right_table_qualifier, ASTSelectQuery & select_query)
+ScopePtr QueryAnalyzerVisitor::analyzeJoin(
+    ASTTableJoin & table_join,
+    ScopePtr left_scope,
+    ScopePtr right_scope,
+    const String & right_table_qualifier,
+    ASTSelectQuery & select_query)
 {
     // set join strictness if unspecified
     {
@@ -737,10 +774,9 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoin(ASTTableJoin & table_join, ScopePtr l
         }
     }
 
-    if (context->getSettings().any_join_distinct_right_table_keys)
+    if (context->getSettingsRef().any_join_distinct_right_table_keys)
     {
-        if (table_join.strictness == ASTTableJoin::Strictness::Any &&
-            table_join.kind == ASTTableJoin::Kind::Inner)
+        if (table_join.strictness == ASTTableJoin::Strictness::Any && table_join.kind == ASTTableJoin::Kind::Inner)
         {
             table_join.strictness = ASTTableJoin::Strictness::Semi;
             table_join.kind = ASTTableJoin::Kind::Left;
@@ -810,8 +846,12 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoin(ASTTableJoin & table_join, ScopePtr l
     return joined_scope;
 }
 
-ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, ScopePtr left_scope, ScopePtr right_scope,
-                                                const String & right_table_qualifier, ASTSelectQuery & select_query)
+ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
+    ASTTableJoin & table_join,
+    ScopePtr left_scope,
+    ScopePtr right_scope,
+    const String & right_table_qualifier,
+    ASTSelectQuery & select_query)
 {
     auto & expr_list = table_join.using_expression_list->children;
 
@@ -825,19 +865,20 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
     DataTypes right_coercions;
     std::unordered_map<size_t, size_t> left_join_field_reverse_map;
     std::unordered_map<size_t, size_t> right_join_field_reverse_map;
-    std::vector<bool> require_right_keys;  // Clickhouse semantic specific
+    std::vector<bool> require_right_keys; // Clickhouse semantic specific
     NameSet seen_names;
     FieldDescriptions output_fields;
 
     if (use_ansi_semantic)
     {
-        auto resolve_join_key = [&](const QualifiedName & name, ScopePtr scope, bool left, std::vector<size_t> & join_field_indices) -> ResolvedField
-        {
+        auto resolve_join_key
+            = [&](const QualifiedName & name, ScopePtr scope, bool left, std::vector<size_t> & join_field_indices) -> ResolvedField {
             std::optional<ResolvedField> resolved = scope->resolveFieldByAnsi(name);
 
             if (!resolved)
-                throw Exception("Can not find column '" + name.toString() + "' in join " + (left ? "left" : "right") + " side",
-                                ErrorCodes::UNKNOWN_IDENTIFIER);
+                throw Exception(
+                    "Can not find column '" + name.toString() + "' in join " + (left ? "left" : "right") + " side",
+                    ErrorCodes::UNKNOWN_IDENTIFIER);
 
             join_field_indices.emplace_back(resolved->hierarchy_index);
             analysis.addReadColumn(*resolved, true);
@@ -845,7 +886,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
         };
 
         /// Step 1. resolve join key
-        for (const auto& join_key_ast : expr_list)
+        for (const auto & join_key_ast : expr_list)
         {
             auto * iden = join_key_ast->as<ASTIdentifier>();
 
@@ -859,7 +900,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
                 throw Exception("Duplicated join key found in join using list.", ErrorCodes::LOGICAL_ERROR);
 
             join_key_asts.push_back(join_key_ast);
-            QualifiedName qualified_name {iden->name()};
+            QualifiedName qualified_name{iden->name()};
 
             auto left_field = resolve_join_key(qualified_name, left_scope, true, left_join_fields);
             auto right_field = resolve_join_key(qualified_name, right_scope, false, right_join_fields);
@@ -880,8 +921,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
                 catch (DB::Exception & ex)
                 {
                     throw Exception(
-                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
-                            + "Can't get supertype: " + ex.message(),
+                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName()
+                            + " at right. " + "Can't get supertype: " + ex.message(),
                         ErrorCodes::TYPE_MISMATCH);
                 }
             }
@@ -895,9 +936,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
         }
 
         /// Step 2. add non join fields
-        auto add_non_join_fields = [&](ScopePtr scope, std::vector<size_t> & join_fields_list)
-        {
-            std::unordered_set<size_t> join_fields {join_fields_list.begin(), join_fields_list.end()};
+        auto add_non_join_fields = [&](ScopePtr scope, std::vector<size_t> & join_fields_list) {
+            std::unordered_set<size_t> join_fields{join_fields_list.begin(), join_fields_list.end()};
 
             for (size_t i = 0; i < scope->size(); ++i)
             {
@@ -972,8 +1012,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
                 catch (DB::Exception & ex)
                 {
                     throw Exception(
-                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
-                            + "Can't get supertype: " + ex.message(),
+                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName()
+                            + " at right. " + "Can't get supertype: " + ex.message(),
                         ErrorCodes::TYPE_MISMATCH);
                 }
             }
@@ -1033,14 +1073,15 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
         }
     }
 
-    analysis.join_using_results[&table_join] = JoinUsingAnalysis {join_key_asts
-                                                                 , left_join_fields
-                                                                 , left_coercions
-                                                                 , right_join_fields
-                                                                 , right_coercions
-                                                                 , left_join_field_reverse_map
-                                                                 , right_join_field_reverse_map
-                                                                 , require_right_keys};
+    analysis.join_using_results[&table_join] = JoinUsingAnalysis{
+        join_key_asts,
+        left_join_fields,
+        left_coercions,
+        right_join_fields,
+        right_coercions,
+        left_join_field_reverse_map,
+        right_join_field_reverse_map,
+        require_right_keys};
     return createScope(output_fields);
 }
 
@@ -1049,7 +1090,8 @@ static constexpr int table_deps(int a, int b)
     return (a << 16) + b;
 };
 
-ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr left_scope, ScopePtr right_scope, const String & right_table_qualifier)
+ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
+    ASTTableJoin & table_join, ScopePtr left_scope, ScopePtr right_scope, const String & right_table_qualifier)
 {
     ScopePtr output_scope;
     {
@@ -1057,20 +1099,20 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
 
         if (use_ansi_semantic)
         {
-            for (const auto & f: left_scope->getFields())
+            for (const auto & f : left_scope->getFields())
                 output_fields.emplace_back(f);
-            for (const auto & f: right_scope->getFields())
+            for (const auto & f : right_scope->getFields())
                 output_fields.emplace_back(f);
         }
         else
         {
-            for (const auto & f: left_scope->getFields())
+            for (const auto & f : left_scope->getFields())
                 output_fields.emplace_back(f);
 
             auto source_names = collectNames(left_scope);
             bool check_identifier_begin_valid = context->getSettingsRef().check_identifier_begin_valid;
 
-            for (const auto & f: right_scope->getFields())
+            for (const auto & f : right_scope->getFields())
             {
                 auto new_name = qualifyJoinedName(f.name, right_table_qualifier, source_names, check_identifier_begin_valid);
                 output_fields.emplace_back(f.withNewName(new_name));
@@ -1083,18 +1125,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
     if (table_join.on_expression)
     {
         // forbid arrayJoin in JOIN ON, see also the same check in CollectJoinOnKeysVisitor
-        auto array_join_exprs = extractExpressions(context, analysis, table_join.on_expression, false,
-                                                   [&](const ASTPtr & node)
-                                                   {
-                                                       if (const auto * func = node->as<ASTFunction>())
-                                                           if (func->name == "arrayJoin" && (!context->getSettingsRef().ignore_array_join_check_in_join_on_condition))
-                                                               return true;
+        auto array_join_exprs = extractExpressions(context, analysis, table_join.on_expression, false, [&](const ASTPtr & node) {
+            if (const auto * func = node->as<ASTFunction>())
+                if (func->name == "arrayJoin" && (!context->getSettingsRef().ignore_array_join_check_in_join_on_condition))
+                    return true;
 
-                                                       return false;
-                                                   });
+            return false;
+        });
         if (!array_join_exprs.empty())
-            throw Exception("Not allowed function in JOIN ON. Unexpected '" + queryToString(table_join.on_expression) + "'",
-                            ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
+            throw Exception(
+                "Not allowed function in JOIN ON. Unexpected '" + queryToString(table_join.on_expression) + "'",
+                ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
 
         /// We split ON expression into CNF factors, and classify each factor into 3 categories:
         /// - Join Equality Condition: expressions with structure `expression_depends_left_table_fields = expression_depends_right_table_fields`
@@ -1108,8 +1149,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
         ///          0 - dependencies come from both left side & right side
         ///          1 - dependencies only come from left side
         ///          2 - dependencies only come from right side
-        auto choose_table_for_dependencies = [&](const std::vector<ASTPtr> & dependencies) -> int
-        {
+        auto choose_table_for_dependencies = [&](const std::vector<ASTPtr> & dependencies) -> int {
             int table = -1;
 
             for (const auto & dep : dependencies)
@@ -1126,13 +1166,13 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
             return table;
         };
 
-        for (auto & conjunct: expressionToCnf(table_join.on_expression))
+        for (auto & conjunct : expressionToCnf(table_join.on_expression))
         {
             ExprAnalyzer::analyze(conjunct, output_scope, context, analysis, "JOIN ON expression"s);
 
             bool is_join_expr = false;
 
-            if (auto *func = conjunct->as<ASTFunction>(); func && isComparisonFunction(*func))
+            if (auto * func = conjunct->as<ASTFunction>(); func && isComparisonFunction(*func))
             {
                 auto & left_arg = func->arguments->children[0];
                 auto & right_arg = func->arguments->children[1];
@@ -1146,8 +1186,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
 
                 using namespace ASOF;
 
-                auto add_join_exprs = [&](const ASTPtr & left_ast, const ASTPtr & right_ast, Inequality inequality)
-                {
+                auto add_join_exprs = [&](const ASTPtr & left_ast, const ASTPtr & right_ast, Inequality inequality) {
                     DataTypePtr left_coercion = nullptr;
                     DataTypePtr right_coercion = nullptr;
 
@@ -1170,8 +1209,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
                                 catch (DB::Exception & ex)
                                 {
                                     throw Exception(
-                                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
-                                            + "Can't get supertype: " + ex.message(),
+                                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, "
+                                            + right_type->getName() + " at right. " + "Can't get supertype: " + ex.message(),
                                         ErrorCodes::TYPE_MISMATCH);
                                 }
                                 if (!left_type->equals(*super_type))
@@ -1180,7 +1219,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
                                     right_coercion = super_type;
                             }
 
-                            if (!super_type){
+                            if (!super_type)
+                            {
                                 throw Exception("Type mismatch for join keys: " + serializeAST(table_join), ErrorCodes::TYPE_MISMATCH);
                             }
                         }
@@ -1214,7 +1254,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
                 complex_expressions.push_back(conjunct);
         }
 
-        analysis.join_on_results[&table_join] = JoinOnAnalysis {equality_conditions, inequality_conditions, complex_expressions};
+        analysis.join_on_results[&table_join] = JoinOnAnalysis{equality_conditions, inequality_conditions, complex_expressions};
     }
 
     return output_scope;
@@ -1253,16 +1293,15 @@ ScopePtr QueryAnalyzerVisitor::analyzeArrayJoin(ASTArrayJoin & array_join, ASTSe
         // To determine if a scope is from outer query, we should use Scope::isLocalScope.
         // Practically, scopes belonging to FROM clause don't have parent scopes, so we can use operator== for convenience.
         if (col_ref && source_scope != col_ref->scope)
-            throw Exception("Outer query columns cannot be used in ARRAY JOIN: " + array_join_expr->getColumnName(),
-                            ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(
+                "Outer query columns cannot be used in ARRAY JOIN: " + array_join_expr->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
 
         ArrayJoinDescription array_join_desc;
         array_join_desc.expr = array_join_expr;
 
         if (col_ref && array_join_expr->tryGetAlias().empty())
         {
-            output_fields[col_ref->local_index] =
-                FieldDescription {output_fields[col_ref->local_index].name, array_type->getNestedType()};
+            output_fields[col_ref->local_index] = FieldDescription{output_fields[col_ref->local_index].name, array_type->getNestedType()};
         }
         else
         {
@@ -1286,16 +1325,14 @@ void QueryAnalyzerVisitor::analyzeWindow(ASTSelectQuery & select_query)
 
     auto & window_list = select_query.window()->children;
 
-    for (auto & window: window_list)
+    for (auto & window : window_list)
     {
         auto & window_elem = window->as<ASTWindowListElement &>();
 
         const auto & registered_windows = analysis.getRegisteredWindows(select_query);
 
         if (registered_windows.find(window_elem.name) != registered_windows.end())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                            "Window '{}' is defined twice in the WINDOW clause",
-                            window_elem.name);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Window '{}' is defined twice in the WINDOW clause", window_elem.name);
 
         auto resolved_window = resolveWindow(window_elem.definition, registered_windows, context);
         analysis.setRegisteredWindow(select_query, window_elem.name, resolved_window);
@@ -1312,8 +1349,9 @@ void QueryAnalyzerVisitor::analyzePrewhere(
         throw Exception("Prewhere is not supported in query with join", ErrorCodes::ILLEGAL_PREWHERE);
 
     auto prewhere = select_query.prewhere()->clone();
-    // normalize query aliases
-    rewriteAliasesForANSI(prewhere, query_aliases, source_scope->getNamesSet());
+    // normalize query aliases in ANSI mode
+    if (use_ansi_semantic)
+        normalizeAliases(prewhere, query_aliases, source_scope->getNamesSet());
     // normalize ALIAS columns
     normalizeAliases(prewhere, alias_columns);
 
@@ -1323,8 +1361,9 @@ void QueryAnalyzerVisitor::analyzePrewhere(
     if (auto inner_type = removeNullable(removeLowCardinality(prewhere_filter_type)))
     {
         if (!inner_type->equals(DataTypeUInt8()) && !inner_type->equals(DataTypeNothing()))
-            throw Exception("Illegal type " + prewhere_filter_type->getName() + " for PREWHERE. Must be UInt8 or Nullable(UInt8).",
-                            ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+            throw Exception(
+                "Illegal type " + prewhere_filter_type->getName() + " for PREWHERE. Must be UInt8 or Nullable(UInt8).",
+                ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
     }
     analysis.setPrewhere(select_query, prewhere);
 }
@@ -1334,17 +1373,16 @@ void QueryAnalyzerVisitor::analyzeWhere(ASTSelectQuery & select_query, ScopePtr 
     if (!select_query.where())
         return;
 
-    ExprAnalyzerOptions expr_options {"WHERE expression"};
-    expr_options
-        .selectQuery(select_query)
-        .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED);
+    ExprAnalyzerOptions expr_options{"WHERE expression"};
+    expr_options.selectQuery(select_query).subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED).subqueryToSemiAnti(true);
     auto filter_type = ExprAnalyzer::analyze(select_query.where(), source_scope, context, analysis, expr_options);
 
     if (auto inner_type = removeNullable(removeLowCardinality(filter_type)))
     {
         if (!inner_type->equals(DataTypeUInt8()) && !inner_type->equals(DataTypeNothing()))
-            throw Exception("Illegal type " + filter_type->getName() + " for WHERE. Must be UInt8 or Nullable(UInt8).",
-                            ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
+            throw Exception(
+                "Illegal type " + filter_type->getName() + " for WHERE. Must be UInt8 or Nullable(UInt8).",
+                ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
     }
 }
 
@@ -1355,20 +1393,17 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
 
     ASTs select_expressions;
     FieldDescriptions output_description;
-    ExprAnalyzerOptions expr_options {"SELECT expression"};
+    ExprAnalyzerOptions expr_options{"SELECT expression"};
 
-    expr_options
-        .selectQuery(select_query)
+    expr_options.selectQuery(select_query)
         .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED)
         .aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED)
         .windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
 
-    auto add_select_expression = [&](const ASTPtr & expression)
-    {
+    auto add_select_expression = [&](const ASTPtr & expression) {
         auto expression_type = ExprAnalyzer::analyze(expression, source_scope, context, analysis, expr_options);
 
-        auto get_output_name = [&](const ASTPtr & expr) -> String
-        {
+        auto get_output_name = [&](const ASTPtr & expr) -> String {
             // clickhouse semantic
             if (!use_ansi_semantic)
             {
@@ -1394,7 +1429,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
         };
 
         auto output_name = get_output_name(expression);
-        FieldDescription output_field {output_name, expression_type};
+        FieldDescription output_field{output_name, expression_type};
 
         if (auto source_field = analysis.tryGetColumnReference(expression))
         {
@@ -1405,7 +1440,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
         output_description.push_back(output_field);
     };
 
-    for (auto & select_item: select_query.refSelect()->children)
+    for (auto & select_item : select_query.refSelect()->children)
     {
         if (select_item->as<ASTAsterisk>())
         {
@@ -1423,8 +1458,8 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
             if (select_item->children.empty() || !select_item->getChildren()[0]->as<ASTTableIdentifier>())
                 throw Exception("Unable to resolve qualified asterisk", ErrorCodes::UNKNOWN_IDENTIFIER);
 
-            ASTIdentifier& astidentifier = select_item->getChildren()[0]->as<ASTTableIdentifier&>();
-            auto prefix =  QualifiedName::extractQualifiedName(astidentifier);
+            ASTIdentifier & astidentifier = select_item->getChildren()[0]->as<ASTTableIdentifier &>();
+            auto prefix = QualifiedName::extractQualifiedName(astidentifier);
             bool matched = false;
 
             for (size_t field_index = 0; field_index < source_scope->size(); ++field_index)
@@ -1436,14 +1471,15 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
                     add_select_expression(field_reference);
                 }
             }
-            if(!matched)
+            if (!matched)
                 throw Exception("Can not find column of " + prefix.toString() + " in Scope", ErrorCodes::UNKNOWN_IDENTIFIER);
         }
         else if (auto * asterisk_pattern = select_item->as<ASTColumnsMatcher>())
         {
             for (size_t field_index = 0; field_index < source_scope->size(); ++field_index)
             {
-                if (source_scope->at(field_index).substituted_by_asterisk && asterisk_pattern->isColumnMatching(source_scope->at(field_index).name))
+                if (source_scope->at(field_index).substituted_by_asterisk
+                    && asterisk_pattern->isColumnMatching(source_scope->at(field_index).name))
                 {
                     auto field_reference = std::make_shared<ASTFieldReference>(field_index);
                     add_select_expression(field_reference);
@@ -1454,12 +1490,16 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
         {
             auto * function = select_item->as<ASTFunction>();
             if (function->arguments->children.size() != 1)
-                throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Number of arguments for function untuple doesn't match. Passed {}, should be 1", function->arguments->children.size());
+                throw Exception(
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Number of arguments for function untuple doesn't match. Passed {}, should be 1",
+                    function->arguments->children.size());
 
             auto expression_type = ExprAnalyzer::analyze(function->arguments->children[0], source_scope, context, analysis, expr_options);
             const auto * tuple_type = typeid_cast<const DataTypeTuple *>(expression_type.get());
             if (!tuple_type)
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function untuple expect tuple argument, got {}", expression_type->getName());
+                throw Exception(
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function untuple expect tuple argument, got {}", expression_type->getName());
 
             size_t tid = 0;
             for (const auto & name [[maybe_unused]] : tuple_type->getElementNames())
@@ -1486,20 +1526,18 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
 
     if (select_query.groupBy())
     {
-        bool allow_group_by_position = context->getSettingsRef().enable_positional_arguments
-            && !select_query.group_by_with_rollup && !select_query.group_by_with_cube && !select_query.group_by_with_grouping_sets;
+        bool allow_group_by_position = context->getSettingsRef().enable_positional_arguments && !select_query.group_by_with_rollup
+            && !select_query.group_by_with_cube && !select_query.group_by_with_grouping_sets;
 
-        auto analyze_grouping_set = [&](ASTs & grouping_expr_list)
-        {
+        auto analyze_grouping_set = [&](ASTs & grouping_expr_list) {
             std::vector<ASTPtr> analyzed_grouping_set;
 
-            for (ASTPtr grouping_expr: grouping_expr_list)
+            for (ASTPtr grouping_expr : grouping_expr_list)
             {
                 if (allow_group_by_position)
-                    if (auto * literal = grouping_expr->as<ASTLiteral>();
-                        literal &&
-                        literal->tryGetAlias().empty() &&                 // avoid aliased expr being interpreted as positional argument
-                                                                          // e.g. SELECT 1 AS a ORDER BY a
+                    if (auto * literal = grouping_expr->as<ASTLiteral>(); literal && literal->tryGetAlias().empty()
+                        && // avoid aliased expr being interpreted as positional argument
+                        // e.g. SELECT 1 AS a ORDER BY a
                         literal->value.getType() == Field::Types::UInt64)
                     {
                         auto index = literal->value.get<UInt64>();
@@ -1536,7 +1574,7 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
 
         if (select_query.group_by_with_grouping_sets)
         {
-            for (auto & grouping_set_element: select_query.groupBy()->children)
+            for (auto & grouping_set_element : select_query.groupBy()->children)
                 analyze_grouping_set(grouping_set_element->children);
         }
         else
@@ -1553,7 +1591,7 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
         }
     }
 
-    analysis.group_by_results[&select_query] = GroupByAnalysis {std::move(grouping_expressions), std::move(grouping_sets)};
+    analysis.group_by_results[&select_query] = GroupByAnalysis{std::move(grouping_expressions), std::move(grouping_sets)};
 }
 
 /*
@@ -1606,9 +1644,8 @@ void QueryAnalyzerVisitor::analyzeHaving(ASTSelectQuery & select_query, ScopePtr
     if (!select_query.having())
         return;
 
-    ExprAnalyzerOptions expr_options {"HAVING clause"};
-    expr_options
-        .selectQuery(select_query)
+    ExprAnalyzerOptions expr_options{"HAVING clause"};
+    expr_options.selectQuery(select_query)
         .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED)
         .aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED);
     ExprAnalyzer::analyze(select_query.having(), source_scope, context, analysis, expr_options);
@@ -1620,23 +1657,21 @@ void QueryAnalyzerVisitor::analyzeOrderBy(ASTSelectQuery & select_query, ASTs & 
     {
         std::vector<std::shared_ptr<ASTOrderByElement>> result;
 
-        ExprAnalyzerOptions expr_options {"ORDER BY expression"};
+        ExprAnalyzerOptions expr_options{"ORDER BY expression"};
 
-        expr_options
-            .selectQuery(select_query)
+        expr_options.selectQuery(select_query)
             .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED)
             .aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED)
             .windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
 
-        for (auto order_item: select_query.orderBy()->children)
+        for (auto order_item : select_query.orderBy()->children)
         {
             auto & order_elem = order_item->as<ASTOrderByElement &>();
 
             if (context->getSettingsRef().enable_positional_arguments)
-                if (auto *literal = order_elem.children.front()->as<ASTLiteral>();
-                    literal &&
-                    literal->tryGetAlias().empty() &&                   // avoid aliased expr being interpreted as positional argument
-                                                                        // e.g. SELECT 1 AS a ORDER BY a
+                if (auto * literal = order_elem.children.front()->as<ASTLiteral>(); literal && literal->tryGetAlias().empty()
+                    && // avoid aliased expr being interpreted as positional argument
+                    // e.g. SELECT 1 AS a ORDER BY a
                     literal->value.getType() == Field::Types::UInt64)
                 {
                     auto index = literal->value.get<UInt64>();
@@ -1665,10 +1700,9 @@ void QueryAnalyzerVisitor::analyzeLimitBy(ASTSelectQuery & select_query, ASTs & 
 {
     if (select_query.limitBy())
     {
-        ExprAnalyzerOptions expr_options {"LIMIT BY expression"};
+        ExprAnalyzerOptions expr_options{"LIMIT BY expression"};
 
-        expr_options
-            .selectQuery(select_query)
+        expr_options.selectQuery(select_query)
             .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED)
             .aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED)
             .windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
@@ -1676,10 +1710,9 @@ void QueryAnalyzerVisitor::analyzeLimitBy(ASTSelectQuery & select_query, ASTs & 
         for (auto limit_item : select_query.limitBy()->children)
         {
             if (context->getSettingsRef().enable_positional_arguments)
-                if (auto * literal = limit_item->as<ASTLiteral>();
-                    literal &&
-                    literal->tryGetAlias().empty() &&                 // avoid aliased expr being interpreted as positional argument
-                                                                        // e.g. SELECT 1 AS a ORDER BY a
+                if (auto * literal = limit_item->as<ASTLiteral>(); literal && literal->tryGetAlias().empty()
+                    && // avoid aliased expr being interpreted as positional argument
+                    // e.g. SELECT 1 AS a ORDER BY a
                     literal->value.getType() == Field::Types::UInt64)
                 {
                     auto index = literal->value.get<UInt64>();
@@ -1724,8 +1757,7 @@ ScopePtr QueryAnalyzerVisitor::createScope(FieldDescriptions field_descriptions,
         query_boundary = true;
     }
 
-    return analysis.scope_factory.createScope(Scope::ScopeType::RELATION, parent, query_boundary,
-                                              std::move(field_descriptions));
+    return analysis.scope_factory.createScope(Scope::ScopeType::RELATION, parent, query_boundary, std::move(field_descriptions));
 }
 
 DatabaseAndTableWithAlias QueryAnalyzerVisitor::extractTableWithAlias(const ASTTableExpression & table_expression)
@@ -1733,17 +1765,51 @@ DatabaseAndTableWithAlias QueryAnalyzerVisitor::extractTableWithAlias(const ASTT
     return DatabaseAndTableWithAlias{table_expression, context->getCurrentDatabase()};
 }
 
+void QueryAnalyzerVisitor::analyzeOutfile(ASTSelectWithUnionQuery & outfile_query)
+{
+    String out_file;
+    String format;
+    String compression_method;
+    size_t compression_level = 0;
+
+    if (outfile_query.out_file)
+    {
+        out_file = outfile_query.out_file->as<ASTLiteral &>().value.safeGet<std::string>();
+
+        if (outfile_query.format)
+        {
+            format = outfile_query.format->as<ASTIdentifier &>().name();
+        }
+
+        if (outfile_query.compression_method)
+        {
+            compression_method = outfile_query.compression_method->as<ASTLiteral &>().value.safeGet<std::string>();
+
+            if (outfile_query.compression_level)
+            {
+                const auto & compression_level_node = outfile_query.compression_level->as<ASTLiteral &>();
+                if (!compression_level_node.value.tryGet<UInt64>(compression_level))
+                {
+                    throw Exception("Invalid compression level", ErrorCodes::BAD_ARGUMENTS);
+                }
+            }
+        }
+        analysis.outfile_analysis = OutfileAnalysis{out_file, format, compression_method, compression_level};
+    }
+}
+
 namespace
 {
-    class VerifyNoAggregateWindowOrGroupingOperationsVisitor: public AnalyzerExpressionVisitor<const Void>
+    class VerifyNoAggregateWindowOrGroupingOperationsVisitor : public AnalyzerExpressionVisitor<const Void>
     {
     public:
         VerifyNoAggregateWindowOrGroupingOperationsVisitor(String statement_name_, ContextPtr context_)
             : AnalyzerExpressionVisitor(context_), statement_name(std::move(statement_name_))
-        {}
+        {
+        }
 
     protected:
-        void visitExpression(ASTPtr &, IAST &, const Void &) override {}
+        void visitExpression(ASTPtr &, IAST &, const Void &) override { }
 
         void visitAggregateFunction(ASTPtr &, ASTFunction &, const Void &) override
         {
@@ -1763,7 +1829,7 @@ namespace
     private:
         String statement_name;
 
-        [[ noreturn ]] void throwException(const String & expr_type, int code)
+        [[noreturn]] void throwException(const String & expr_type, int code)
         {
             throw Exception(expr_type + " is not allowed in " + statement_name, code);
         }
@@ -1772,31 +1838,22 @@ namespace
 
 void QueryAnalyzerVisitor::verifyNoAggregateWindowOrGroupingOperations(ASTPtr & expression, const String & statement_name)
 {
-    VerifyNoAggregateWindowOrGroupingOperationsVisitor visitor {statement_name, context};
+    VerifyNoAggregateWindowOrGroupingOperationsVisitor visitor{statement_name, context};
     traverseExpressionTree(expression, visitor, {}, analysis, context);
 }
 
 namespace
 {
-    class PostAggregateAnalyzerExpressionVisitor: public AnalyzerExpressionVisitor<const Void>
+    class PostAggregateAnalyzerExpressionVisitor : public AnalyzerExpressionVisitor<const Void>
     {
     protected:
-        void visitExpression(ASTPtr &, IAST &, const Void &) override {}
+        void visitExpression(ASTPtr &, IAST &, const Void &) override { }
 
-        void visitIdentifier(ASTPtr &node, ASTIdentifier &, const Void &) override
-        {
-            verifyNoReferenceToNonGroupingKey(node);
-        }
+        void visitIdentifier(ASTPtr & node, ASTIdentifier &, const Void &) override { verifyNoReferenceToNonGroupingKey(node); }
 
-        void visitFieldReference(ASTPtr &node, ASTFieldReference &, const Void &) override
-        {
-            verifyNoReferenceToNonGroupingKey(node);
-        }
+        void visitFieldReference(ASTPtr & node, ASTFieldReference &, const Void &) override { verifyNoReferenceToNonGroupingKey(node); }
 
-        void visitScalarSubquery(ASTPtr &node, ASTSubquery &, const Void &) override
-        {
-            verifyNoReferenceToNonGroupingKeyInSubquery(node);
-        }
+        void visitScalarSubquery(ASTPtr & node, ASTSubquery &, const Void &) override { verifyNoReferenceToNonGroupingKeyInSubquery(node); }
 
         void visitInSubquery(ASTPtr &, ASTFunction & function, const Void &) override
         {
@@ -1808,10 +1865,7 @@ namespace
             verifyNoReferenceToNonGroupingKeyInSubquery(ast.children[1]);
         }
 
-        void visitExistsSubquery(ASTPtr &node, ASTFunction &, const Void &) override
-        {
-            verifyNoReferenceToNonGroupingKeyInSubquery(node);
-        }
+        void visitExistsSubquery(ASTPtr & node, ASTFunction &, const Void &) override { verifyNoReferenceToNonGroupingKeyInSubquery(node); }
 
     private:
         Analysis & analysis;
@@ -1828,7 +1882,8 @@ namespace
             , analysis(analysis_)
             , source_scope(source_scope_)
             , grouping_field_indices(std::move(grouping_field_indices_))
-        {}
+        {
+        }
     };
 
     void PostAggregateAnalyzerExpressionVisitor::verifyNoReferenceToNonGroupingKey(ASTPtr & node)
@@ -1846,7 +1901,7 @@ namespace
     void PostAggregateAnalyzerExpressionVisitor::verifyNoReferenceToNonGroupingKeyInSubquery(ASTPtr & node)
     {
         auto col_ref_exprs = extractReferencesToScope(context, analysis, node, source_scope, true);
-        for (const auto & col_ref_expr: col_ref_exprs)
+        for (const auto & col_ref_expr : col_ref_exprs)
         {
             if (auto col_ref = analysis.tryGetColumnReference(col_ref_expr))
                 if (!grouping_field_indices.count(col_ref->local_index))
@@ -1854,11 +1909,11 @@ namespace
         }
     }
 
-    class PostAggregateExpressionTraverser: public ExpressionTraversalVisitor<const Void>
+    class PostAggregateExpressionTraverser : public ExpressionTraversalVisitor<const Void>
     {
     protected:
         // don't go into aggregate function, since it will be evaluated during aggregate phase
-        void visitAggregateFunction(ASTPtr &, ASTFunction &, const Void &) override {}
+        void visitAggregateFunction(ASTPtr &, ASTFunction &, const Void &) override { }
 
     public:
         void process(ASTPtr & node, const Void & traversal_context) override
@@ -1870,10 +1925,16 @@ namespace
             ExpressionTraversalVisitor::process(node, traversal_context);
         }
 
-        PostAggregateExpressionTraverser(AnalyzerExpressionVisitor<const Void> & user_visitor_, const Void & user_context_, Analysis & analysis_,
-                                         ContextPtr context_, ScopeAwaredASTSet grouping_expressions_):
-            ExpressionTraversalVisitor(user_visitor_, user_context_, analysis_, context_), grouping_expressions(std::move(grouping_expressions_))
-        {}
+        PostAggregateExpressionTraverser(
+            AnalyzerExpressionVisitor<const Void> & user_visitor_,
+            const Void & user_context_,
+            Analysis & analysis_,
+            ContextPtr context_,
+            ScopeAwaredASTSet grouping_expressions_)
+            : ExpressionTraversalVisitor(user_visitor_, user_context_, analysis_, context_)
+            , grouping_expressions(std::move(grouping_expressions_))
+        {
+        }
 
         using ExpressionTraversalVisitor::process;
 
@@ -1901,7 +1962,7 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
     std::unordered_set<size_t> grouping_field_indices;
     auto & group_by_analysis = analysis.getGroupByAnalysis(select_query);
 
-    for (const auto & group_by_key: group_by_analysis.grouping_expressions)
+    for (const auto & group_by_key : group_by_analysis.grouping_expressions)
     {
         grouping_expressions.emplace(group_by_key);
         if (auto col_ref = analysis.tryGetColumnReference(group_by_key); col_ref && col_ref->scope == source_scope)
@@ -1911,56 +1972,54 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
     // verify argument of grouping operations are grouping keys
     if (auto & grouping_ops = analysis.getGroupingOperations(select_query); !grouping_ops.empty())
     {
-        for (const auto & grouping_op: grouping_ops)
-            for (const auto & grouping_op_arg: grouping_op->arguments->children)
+        for (const auto & grouping_op : grouping_ops)
+            for (const auto & grouping_op_arg : grouping_op->arguments->children)
                 if (!grouping_expressions.count(grouping_op_arg))
                     throw Exception("Invalid grouping operation: " + serializeAST(*grouping_op), ErrorCodes::BAD_ARGUMENTS);
     }
 
     // verify no reference to non grouping fields after aggregate
-    PostAggregateAnalyzerExpressionVisitor post_agg_visitor {context, analysis, source_scope, grouping_field_indices};
-    PostAggregateExpressionTraverser post_agg_traverser {post_agg_visitor, {}, analysis, context, grouping_expressions};
+    PostAggregateAnalyzerExpressionVisitor post_agg_visitor{context, analysis, source_scope, grouping_field_indices};
+    PostAggregateExpressionTraverser post_agg_traverser{post_agg_visitor, {}, analysis, context, grouping_expressions};
 
     ASTs source_expressions;
 
     if (select_query.having())
         source_expressions.push_back(select_query.having());
 
-    for (const auto & expr: analysis.getSelectExpressions(select_query))
+    for (const auto & expr : analysis.getSelectExpressions(select_query))
         source_expressions.push_back(expr);
 
-    for (const auto & expr: analysis.getOrderByAnalysis(select_query))
+    for (const auto & expr : analysis.getOrderByAnalysis(select_query))
         source_expressions.push_back(expr);
 
     if (select_query.limitBy())
         source_expressions.push_back(select_query.limitBy());
 
-    for (auto & expr: source_expressions)
+    for (auto & expr : source_expressions)
         post_agg_traverser.process(expr);
 }
 
 namespace
 {
 
-    class FreeReferencesToLambdaArgumentVisitor: public AnalyzerExpressionVisitor<const Void>
+    class FreeReferencesToLambdaArgumentVisitor : public AnalyzerExpressionVisitor<const Void>
     {
     public:
         FreeReferencesToLambdaArgumentVisitor(String function_name_, int error_code_, ContextPtr context_, Analysis & analysis_)
             : AnalyzerExpressionVisitor(context_), analysis(analysis_), function_name(std::move(function_name_)), error_code(error_code_)
-        {}
+        {
+        }
 
     protected:
-        void visitExpression(ASTPtr &, IAST &, const Void &) override {}
+        void visitExpression(ASTPtr &, IAST &, const Void &) override { }
 
-        void visitLambdaExpression(ASTPtr &, ASTFunction & ast, const Void &) override
-        {
-            lambda_scopes.emplace(analysis.getScope(ast));
-        }
+        void visitLambdaExpression(ASTPtr &, ASTFunction & ast, const Void &) override { lambda_scopes.emplace(analysis.getScope(ast)); }
 
         void visitIdentifier(ASTPtr & node, ASTIdentifier &, const Void &) override
         {
             if (auto lambda_ref = analysis.tryGetLambdaArgumentReference(node); lambda_ref && !lambda_scopes.count(lambda_ref->scope))
-                throw Exception("Free lambda argument reference found in "  + function_name + ": " + serializeAST(*node), error_code);
+                throw Exception("Free lambda argument reference found in " + function_name + ": " + serializeAST(*node), error_code);
         }
 
         // no need to override visitFieldReference, as it can not refer to lambda argument
@@ -1974,16 +2033,16 @@ namespace
 
 void QueryAnalyzerVisitor::verifyNoFreeReferencesToLambdaArgument(ASTSelectQuery & select_query)
 {
-    FreeReferencesToLambdaArgumentVisitor aggregate_visitor {"aggregate function", ErrorCodes::UNKNOWN_IDENTIFIER, context, analysis};
-    FreeReferencesToLambdaArgumentVisitor window_visitor {"window function", ErrorCodes::UNKNOWN_IDENTIFIER, context, analysis};
+    FreeReferencesToLambdaArgumentVisitor aggregate_visitor{"aggregate function", ErrorCodes::UNKNOWN_IDENTIFIER, context, analysis};
+    FreeReferencesToLambdaArgumentVisitor window_visitor{"window function", ErrorCodes::UNKNOWN_IDENTIFIER, context, analysis};
 
-    for (auto & aggregate: analysis.getAggregateAnalysis(select_query))
+    for (auto & aggregate : analysis.getAggregateAnalysis(select_query))
     {
         ASTPtr expr = aggregate.expression;
         traverseExpressionTree(expr, aggregate_visitor, {}, analysis, context);
     }
 
-    for (auto & window: analysis.getWindowAnalysisOfSelectQuery(select_query))
+    for (auto & window : analysis.getWindowAnalysisOfSelectQuery(select_query))
     {
         ASTPtr expr = window->expression;
         traverseExpressionTree(expr, window_visitor, {}, analysis, context);
@@ -1996,8 +2055,8 @@ UInt64 QueryAnalyzerVisitor::analyzeUIntConstExpression(const ASTPtr & expressio
     auto val = tryEvaluateConstantExpression(expression, context);
 
     if (!val)
-        throw Exception("Element of set in IN, VALUES or LIMIT is not a constant expression: " + serializeAST(*expression),
-                  ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Element of set in IN, VALUES or LIMIT is not a constant expression: " + serializeAST(*expression), ErrorCodes::BAD_ARGUMENTS);
 
     auto uint_val = convertFieldToType(*val, DataTypeUInt64());
 
@@ -2013,10 +2072,62 @@ void QueryAnalyzerVisitor::countLeadingHint(const IAST & ast)
     }
 }
 
-void QueryAnalyzerVisitor::rewriteAliasesForANSI(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set)
+void QueryAnalyzerVisitor::rewriteSelectInANSIMode(
+    ASTSelectQuery & select_query, const Aliases & aliases, const NameSet & source_columns_set)
 {
     if (use_ansi_semantic)
-        normalizeAliases(expr, aliases, source_columns_set);
+    {
+        QueryNormalizer::Data normalizer_prefer_source_data(
+            aliases,
+            source_columns_set,
+            false, /* ignore_alias */
+            context->getSettingsRef(),
+            true, /* allow_self_aliases */
+            context,
+            nullptr, /* storage */
+            nullptr, /* metadata_snapshot */
+            false /* rewrite_map_col */);
+        QueryNormalizer normalizer_prefer_source(normalizer_prefer_source_data);
+
+        QueryNormalizer::Data normalizer_prefer_alias_data(
+            aliases,
+            source_columns_set,
+            false, /* ignore_alias */
+            context->getSettingsRef(),
+            true, /* allow_self_aliases */
+            context,
+            nullptr, /* storage */
+            nullptr, /* metadata_snapshot */
+            false /* rewrite_map_col */);
+        normalizer_prefer_alias_data.settings.prefer_column_name_to_alias = false;
+        QueryNormalizer normalizer_prefer_alias(normalizer_prefer_alias_data);
+
+        auto select_id = select_query.getTreeHash().first;
+        LOG_DEBUG(
+            logger, "ANSI alias process, select id {}, before query: {}", select_id, select_query.formatForErrorMessageWithoutAlias());
+        LOG_TRACE(logger, "ANSI alias process, select id {}, before ast: {}", select_id, select_query.dumpTree());
+
+        if (select_query.select())
+            normalizer_prefer_source.visit(select_query.refSelect());
+        if (select_query.where())
+            normalizer_prefer_source.visit(select_query.refWhere());
+        if (select_query.groupBy())
+            normalizer_prefer_source.visit(select_query.refGroupBy());
+        if (select_query.having())
+        {
+            if (context->getSettingsRef().allow_mysql_having_name_resolution)
+                resolveNamesInHavingAsMySQL(select_query);
+            else
+                normalizer_prefer_source.visit(select_query.refHaving());
+        }
+        if (select_query.window())
+            normalizer_prefer_source.visit(select_query.refWindow());
+        if (select_query.orderBy())
+            normalizer_prefer_alias.visit(select_query.refOrderBy());
+
+        LOG_DEBUG(logger, "ANSI alias process, select id {}, after query: {}", select_id, select_query.formatForErrorMessageWithoutAlias());
+        LOG_TRACE(logger, "ANSI alias process, select id {}, after ast: {}", select_id, select_query.dumpTree());
+    }
 }
 
 void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr)
@@ -2037,8 +2148,7 @@ void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, const Aliases & alias
         context,
         nullptr, /* storage */
         nullptr, /* metadata_snapshot */
-        false, /* rewrite_map_col */
-        use_ansi_semantic /* aliases_rewrite_scope */);
+        false /* rewrite_map_col */);
     QueryNormalizer(normalizer_data).visit(expr);
 }
 

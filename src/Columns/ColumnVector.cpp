@@ -50,6 +50,8 @@
 namespace DB
 {
 
+
+
 namespace ErrorCodes
 {
     extern const int PARAMETER_OUT_OF_BOUND;
@@ -58,36 +60,48 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-template <typename T>
-StringRef ColumnVector<T>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
+template <typename T, bool has_buf>
+StringRef ColumnVector<T, has_buf>::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     auto * pos = arena.allocContinue(sizeof(T), begin);
     unalignedStore<T>(pos, data[n]);
     return StringRef(pos, sizeof(T));
 }
 
-template <typename T>
-const char * ColumnVector<T>::deserializeAndInsertFromArena(const char * pos)
+template <typename T, bool has_buf>
+const char * ColumnVector<T, has_buf>::deserializeAndInsertFromArena(const char * pos)
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     data.emplace_back(unalignedLoad<T>(pos));
     return pos + sizeof(T);
 }
 
-template <typename T>
-const char * ColumnVector<T>::skipSerializedInArena(const char * pos) const
+template <typename T, bool has_buf>
+const char * ColumnVector<T, has_buf>::skipSerializedInArena(const char * pos) const
 {
     return pos + sizeof(T);
 }
 
-template <typename T>
-void ColumnVector<T>::updateHashWithValue(size_t n, SipHash & hash) const
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::updateHashWithValue(size_t n, SipHash & hash) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     hash.update(data[n]);
 }
 
-template <typename T>
-void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash) const
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::updateWeakHash32(WeakHash32 & hash) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     auto s = data.size();
 
     if (hash.getData().size() != s)
@@ -106,27 +120,34 @@ void ColumnVector<T>::updateWeakHash32(WeakHash32 & hash) const
     }
 }
 
-template <typename T>
-void ColumnVector<T>::updateHashFast(SipHash & hash) const
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::updateHashFast(SipHash & hash) const
 {
-    hash.update(reinterpret_cast<const char *>(data.data()), size() * sizeof(data[0]));
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
+    hash.update(reinterpret_cast<const char *>(data.data()), size() * sizeof(T));
 }
 
-template <typename T>
-struct ColumnVector<T>::less
+template <typename T, bool has_buf>
+struct ColumnVector<T, has_buf>::less
 {
     const Self & parent;
     int nan_direction_hint;
-    less(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    less(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {
+        parent_.tryToFlushZeroCopyBufferImpl();
+    }
     bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::less(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
 };
 
-template <typename T>
-struct ColumnVector<T>::less_stable
+template <typename T, bool has_buf>
+struct ColumnVector<T, has_buf>::less_stable
 {
     const Self & parent;
     int nan_direction_hint;
-    less_stable(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    less_stable(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {
+        parent_.tryToFlushZeroCopyBufferImpl();
+    }
     bool operator()(size_t lhs, size_t rhs) const
     {
         if (unlikely(parent.data[lhs] == parent.data[rhs]))
@@ -144,21 +165,25 @@ struct ColumnVector<T>::less_stable
     }
 };
 
-template <typename T>
-struct ColumnVector<T>::greater
+template <typename T, bool has_buf>
+struct ColumnVector<T, has_buf>::greater
 {
     const Self & parent;
     int nan_direction_hint;
-    greater(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    greater(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {
+        parent_.tryToFlushZeroCopyBufferImpl();
+    }
     bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::greater(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
 };
 
-template <typename T>
-struct ColumnVector<T>::greater_stable
+template <typename T, bool has_buf>
+struct ColumnVector<T, has_buf>::greater_stable
 {
     const Self & parent;
     int nan_direction_hint;
-    greater_stable(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    greater_stable(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {
+        parent_.tryToFlushZeroCopyBufferImpl();
+    }
     bool operator()(size_t lhs, size_t rhs) const
     {
         if (unlikely(parent.data[lhs] == parent.data[rhs]))
@@ -176,12 +201,14 @@ struct ColumnVector<T>::greater_stable
     }
 };
 
-template <typename T>
-struct ColumnVector<T>::equals
+template <typename T, bool has_buf>
+struct ColumnVector<T, has_buf>::equals
 {
     const Self & parent;
     int nan_direction_hint;
-    equals(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {}
+    equals(const Self & parent_, int nan_direction_hint_) : parent(parent_), nan_direction_hint(nan_direction_hint_) {
+        parent_.tryToFlushZeroCopyBufferImpl();
+    }
     bool operator()(size_t lhs, size_t rhs) const { return CompareHelper<T>::equals(parent.data[lhs], parent.data[rhs], nan_direction_hint); }
 };
 
@@ -206,10 +233,13 @@ namespace
 }
 
 
-template <typename T>
-void ColumnVector<T>::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::getPermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
                                     size_t limit, int nan_direction_hint, IColumn::Permutation & res) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     size_t s = data.size();
     res.resize(s);
 
@@ -293,10 +323,13 @@ void ColumnVector<T>::getPermutation(IColumn::PermutationSortDirection direction
     }
 }
 
-template <typename T>
-void ColumnVector<T>::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::updatePermutation(IColumn::PermutationSortDirection direction, IColumn::PermutationSortStability stability,
                                     size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     if (direction == IColumn::PermutationSortDirection::Ascending && stability == IColumn::PermutationSortStability::Unstable)
     {
         this->updatePermutationImpl(
@@ -331,76 +364,125 @@ void ColumnVector<T>::updatePermutation(IColumn::PermutationSortDirection direct
     }
 }
 
-template <typename T>
-MutableColumnPtr ColumnVector<T>::cloneResized(size_t size) const
+template <typename T, bool has_buf>
+MutableColumnPtr ColumnVector<T, has_buf>::cloneResized(size_t size) const
 {
-    auto res = this->create();
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
+    auto res =ColumnVector<T>::create();
 
     if (size > 0)
     {
-        auto & new_col = static_cast<Self &>(*res);
-        new_col.data.resize(size);
+        auto & new_col = static_cast<ColumnVector<T> &>(*res);
+        auto & col_data = new_col.getData();
+        col_data.resize(size);
 
         size_t count = std::min(this->size(), size);
-        memcpy(new_col.data.data(), data.data(), count * sizeof(data[0]));
+        memcpy(col_data.data(), data.data(), count * sizeof(T));
 
         if (size > count)
-            memset(static_cast<void *>(&new_col.data[count]), 0, (size - count) * sizeof(ValueType));
+            memset(static_cast<void *>(&col_data[count]), 0, (size - count) * sizeof(ValueType));
     }
 
     return res;
 }
 
-template <typename T>
-UInt64 ColumnVector<T>::get64(size_t n [[maybe_unused]]) const
+template <typename T, bool has_buf>
+UInt64 ColumnVector<T, has_buf>::get64(size_t n [[maybe_unused]]) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     if constexpr (is_arithmetic_v<T>)
         return bit_cast<UInt64>(data[n]);
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot get the value of {} as UInt64", TypeName<T>);
 }
 
-template <typename T>
-inline Float64 ColumnVector<T>::getFloat64(size_t n [[maybe_unused]]) const
+template <typename T, bool has_buf>
+inline Float64 ColumnVector<T, has_buf>::getFloat64(size_t n [[maybe_unused]]) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     if constexpr (is_arithmetic_v<T>)
         return static_cast<Float64>(data[n]);
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot get the value of {} as Float64", TypeName<T>);
 }
 
-template <typename T>
-Float32 ColumnVector<T>::getFloat32(size_t n [[maybe_unused]]) const
+template <typename T, bool has_buf>
+Float32 ColumnVector<T, has_buf>::getFloat32(size_t n [[maybe_unused]]) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     if constexpr (is_arithmetic_v<T>)
         return static_cast<Float32>(data[n]);
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot get the value of {} as Float32", TypeName<T>);
 }
 
-template <typename T>
-void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t length)
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
+    // this func supports zero copy buffer 
     const ColumnVector & src_vec = assert_cast<const ColumnVector &>(src);
 
-    if (start + length > src_vec.data.size())
+    if (unlikely(start + length > src_vec.size()))
         throw Exception("Parameters start = "
             + toString(start) + ", length = "
-            + toString(length) + " are out of bound in ColumnVector<T>::insertRangeFrom method"
-            " (data.size() = " + toString(src_vec.data.size()) + ").",
+            + toString(length) + " are out of bound in ColumnVector<T, has_buf>::insertRangeFrom method"
+            " (data.size() = " + toString(src_vec.size()) + ").",
             ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
-    size_t old_size = data.size();
-    data.resize(old_size + length);
-    memcpy(data.data() + old_size, &src_vec.data[start], length * sizeof(data[0]));
+    size_t old_size = size();
+
+    if (start || src_vec.getZeroCopyBuf().size() == 0 
+        // || !has_zero_buf
+        ) 
+    { // only zerocpy buf class can use zerocpy buf
+        if constexpr (has_buf) {
+            tryToFlushZeroCopyBufferImpl() ;
+        }
+        src_vec.tryToFlushZeroCopyBufferImpl();
+        data.resize(old_size + length);
+        ::memcpy(data.data() + old_size, &src_vec.data[start], length * sizeof(T));
+    } else { // branch condition: start == 0 && src_vec.getZeroCopyBuf().size() != 0
+
+        if (
+            // has_zero_buf && 
+            src_vec.getNonBufDataSize() == 0 && length == src_vec.size()) {
+            for(const auto &ref: src_vec.getZeroCopyBuf().refs()) {
+                zero_copy_buf.add(ref.getData(), ref.getSize(), ref.getCellHolder());
+            }
+
+        } else {
+            if constexpr (has_buf) {
+                tryToFlushZeroCopyBufferImpl() ;
+            }
+            data.resize(old_size + length);
+            src_vec.copyDataFromStart(reinterpret_cast<char *>(data.data() + old_size), length);
+        }
+        
+    }
+
 }
 
-template <typename T>
-void ColumnVector<T>::insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length)
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length)
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     size_t old_size = data.size();
     data.resize(old_size + length);
-    const auto & src_data = (static_cast<const Self &>(src)).getData();
+    const auto & src_vec = (static_cast<const Self &>(src));
+    if (unlikely(src_vec.getZeroCopyBuf().size())) {
+        src_vec.tryToFlushZeroCopyBufferImpl();
+    }
+    const auto & src_data = src_vec.getData();
     for (size_t i = 0; i < length; ++i)
     {
         data[old_size + i] = src_data[selector[selector_start + i]];
@@ -408,21 +490,12 @@ void ColumnVector<T>::insertRangeSelective(const IColumn & src, const IColumn::S
 }
 
 template <typename T>
-ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_size_hint) const
+inline void filterImpl(const UInt8 * &filt_pos, size_t cur_size, const T * data_pos, PaddedPODArray<T> & res_data) 
 {
-    size_t size = data.size();
-    if (size != filt.size())
-        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of filter ({}) doesn't match size of column ({})", filt.size(), size);
-
-    auto res = this->create();
-    Container & res_data = res->getData();
-
-    if (result_size_hint)
-        res_data.reserve(result_size_hint > 0 ? result_size_hint : size);
-
-    const UInt8 * filt_pos = filt.data();
-    const UInt8 * filt_end = filt_pos + size;
-    const T * data_pos = data.data();
+  
+    // const UInt8 * filt_pos = filt.data();
+    const UInt8 * filt_end = filt_pos + cur_size;
+    // const T * data_pos = data.data();
 
     /** A slightly more optimized version.
     * Based on the assumption that often pieces of consecutive values
@@ -430,7 +503,7 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
     * Therefore, we will optimistically check the parts of `SIMD_BYTES` values.
     */
     static constexpr size_t SIMD_BYTES = 64;
-    const UInt8 * filt_end_aligned = filt_pos + size / SIMD_BYTES * SIMD_BYTES;
+    const UInt8 * filt_end_aligned = filt_pos + cur_size / SIMD_BYTES * SIMD_BYTES;
 
     while (filt_pos < filt_end_aligned)
     {
@@ -466,20 +539,47 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter & filt, ssize_t result_s
         ++filt_pos;
         ++data_pos;
     }
+}
 
+template <typename T, bool has_buf>
+ColumnPtr ColumnVector<T, has_buf>::filter(const IColumn::Filter & filt, ssize_t result_size_hint) const
+{
+     // this func supports zero copy buffer 
+    size_t size = this->size();
+    if (unlikely(size != filt.size()))
+        throw Exception(ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH, "Size of filter ({}) doesn't match size of column ({})", filt.size(), size);
+
+    auto res = ColumnVector<T>::create();
+    Container & res_data = res->getData();
+     if (result_size_hint)
+            res_data.reserve(result_size_hint > 0 ? result_size_hint : size);
+
+    const UInt8 * filt_pos = filt.data();
+    filterImpl(filt_pos, data.size(), data.data(), res_data);
+    if (zero_copy_buf.size() == 0)
+        return res;
+    for(const auto &ref: zero_copy_buf.refs()) 
+        filterImpl(filt_pos, ref.getSize(), ref.getData(), res_data);
     return res;
 }
 
 
-template <typename T>
-void ColumnVector<T>::expand(const IColumn::Filter & mask, bool inverted)
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::expand(const IColumn::Filter & mask, bool inverted)
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
+
     expandDataByMask<T>(data, mask, inverted);
 }
 
-template <typename T>
-void ColumnVector<T>::applyZeroMap(const IColumn::Filter & filt, bool inverted)
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::applyZeroMap(const IColumn::Filter & filt, bool inverted)
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     size_t size = data.size();
     if (size != filt.size())
         throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
@@ -502,9 +602,12 @@ void ColumnVector<T>::applyZeroMap(const IColumn::Filter & filt, bool inverted)
     }
 }
 
-template <typename T>
-ColumnPtr ColumnVector<T>::permute(const IColumn::Permutation & perm, size_t limit) const
+template <typename T, bool has_buf>
+ColumnPtr ColumnVector<T, has_buf>::permute(const IColumn::Permutation & perm, size_t limit) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     size_t size = data.size();
 
     if (limit == 0)
@@ -515,7 +618,7 @@ ColumnPtr ColumnVector<T>::permute(const IColumn::Permutation & perm, size_t lim
     if (perm.size() < limit)
         throw Exception("Size of permutation is less than required.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
-    auto res = this->create(limit);
+    auto res = ColumnVector<T>::create(limit);
     typename Self::Container & res_data = res->getData();
     for (size_t i = 0; i < limit; ++i)
         res_data[i] = data[perm[i]];
@@ -523,23 +626,94 @@ ColumnPtr ColumnVector<T>::permute(const IColumn::Permutation & perm, size_t lim
     return res;
 }
 
-template <typename T>
-ColumnPtr ColumnVector<T>::index(const IColumn & indexes, size_t limit) const
+template <typename T, bool has_buf>
+ColumnPtr ColumnVector<T, has_buf>::index(const IColumn & indexes, size_t limit) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
+    if (const auto * col_uint8 = typeid_cast<const ColumnVector<UInt8> *>(&indexes, false)) {
+        if (col_uint8->getZeroCopyBuf().size() == 0) {
+            return (*this).template indexImpl<UInt8>(col_uint8->getData(), limit);
+        } else {
+            return col_uint8->useSelfAsIndex(*this, limit);
+        }
+    } else if (const auto * col_uint16 = typeid_cast<const ColumnVector<UInt16> *>(&indexes, false)) {
+        if (col_uint16->getZeroCopyBuf().size() == 0) {
+            return (*this).template indexImpl<UInt16>(col_uint16->getData(), limit);
+        } else {
+            return col_uint16->useSelfAsIndex(*this, limit);
+        }
+    } else if (const auto * col_uint32 = typeid_cast<const ColumnVector<UInt32> *>(&indexes, false)) {
+        if (col_uint32->getZeroCopyBuf().size() == 0) {
+            return (*this).template indexImpl<UInt32>(col_uint32->getData(), limit);
+        } else {
+            return col_uint32->useSelfAsIndex(*this, limit);
+        }
+    } else if (const auto * col_uint64 = typeid_cast<const ColumnVector<UInt64> *>(&indexes, false)) {
+        if (col_uint64->getZeroCopyBuf().size() == 0) {
+            return (*this).template indexImpl<UInt64>(col_uint64->getData(), limit);
+        } else {
+             return col_uint64->useSelfAsIndex(*this, limit);
+        }
+    } else {
+        throw Exception("Indexes column for IColumn::select must be ColumnUInt, got " + indexes.getName(),
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
     return selectIndexImpl(*this, indexes, limit);
 }
 
-template <typename T>
-ColumnPtr ColumnVector<T>::replicate(const IColumn::Offsets & offsets) const
+template <typename T, bool has_buf>
+template <typename Type, bool o_has_buf>
+ColumnPtr  ColumnVector<T, has_buf>::useSelfAsIndex(const ColumnVector<Type, o_has_buf> & src_data_col, size_t limit) const
 {
+    // this func supports zero copy buffer
+    size_t size = this->size();
+
+    if (limit == 0)
+        limit = size;
+    else
+        limit = std::min(size, limit);
+
+    auto res = ColumnVector<Type>::create(limit);
+    const auto &s_data = src_data_col.getData();
+
+    auto & res_data = res->getData();
+    size_t cur_limit = std::min(limit, data.size());
+    size_t i = 0;
+    auto &cur_index = data;
+
+    for (i = 0; i < cur_limit; ++i)
+        res_data[i] = s_data[cur_index[i]];
+    limit -= cur_limit;
+    for(const auto &ref: zero_copy_buf.refs())
+    {
+        if (limit <= 0)
+            break;
+        const T* ref_cur_index = ref.getData();
+        cur_limit = std::min(limit, ref.getSize());
+        for(size_t j = 0; j < cur_limit; j++)
+            res_data[i++] = s_data[ref_cur_index[j]];
+        limit -= cur_limit;
+    }
+    return res;
+}
+
+template <typename T, bool has_buf>
+ColumnPtr ColumnVector<T, has_buf>::replicate(const IColumn::Offsets & offsets) const
+{
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     const size_t size = data.size();
     if (size != offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     if (0 == size)
-        return this->create();
+        return ColumnVector<T>::create();
 
-    auto res = this->create(offsets.back());
+    auto res = ColumnVector<T>::create(offsets.back());
 
     auto it = res->getData().begin(); // NOLINT
     for (size_t i = 0; i < size; ++i)
@@ -552,15 +726,21 @@ ColumnPtr ColumnVector<T>::replicate(const IColumn::Offsets & offsets) const
     return res;
 }
 
-template <typename T>
-void ColumnVector<T>::gather(ColumnGathererStream & gatherer)
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::gather(ColumnGathererStream & gatherer)
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     gatherer.gather(*this);
 }
 
-template <typename T>
-void ColumnVector<T>::getExtremes(Field & min, Field & max) const
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::getExtremes(Field & min, Field & max) const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     size_t size = data.size();
 
     if (size == 0)
@@ -607,9 +787,12 @@ void ColumnVector<T>::getExtremes(Field & min, Field & max) const
 
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 
-template <typename T>
-ColumnPtr ColumnVector<T>::compress() const
+template <typename T, bool has_buf>
+ColumnPtr ColumnVector<T, has_buf>::compress() const
 {
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
     size_t source_size = data.size() * sizeof(T);
 
     /// Don't compress small blocks.
@@ -649,5 +832,21 @@ template class ColumnVector<Float64>;
 template class ColumnVector<UUID>;
 template class ColumnVector<IPv4>;
 template class ColumnVector<IPv6>;
+
+template class ColumnVector<UInt8, true>;
+template class ColumnVector<UInt16, true>;
+template class ColumnVector<UInt32, true>;
+template class ColumnVector<UInt64, true>;
+template class ColumnVector<UInt128, true>;
+template class ColumnVector<UInt256, true>;
+template class ColumnVector<Int8, true>;
+template class ColumnVector<Int16, true>;
+template class ColumnVector<Int32, true>;
+template class ColumnVector<Int64, true>;
+template class ColumnVector<Int128, true>;
+template class ColumnVector<Int256, true>;
+template class ColumnVector<Float32, true>;
+template class ColumnVector<Float64, true>;
+template class ColumnVector<UUID, true>;
 
 }

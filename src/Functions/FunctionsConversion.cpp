@@ -52,7 +52,7 @@ REGISTER_FUNCTION(Conversion)
     /// Hive compatibility alias.
     factory.registerFunction<FunctionToDate>("to_date", FunctionFactory::CaseInsensitive);
     /// MysQL compatibility alias.
-    factory.registerFunction<FunctionToDateMySql>("DATE", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionToDate>("DATE", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionToDate32>();
     factory.registerFunction<FunctionToTime>();
     /// MysQL compatibility alias.

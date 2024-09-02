@@ -7,6 +7,13 @@ import "hive_models.proto";
 
 option cc_generic_services = true;
 
+message WorkerInfo
+{
+  required uint32 index = 1;
+  required uint32 num_workers = 2;
+  required string worker_id = 3;
+}
+
 message ExecuteSimpleQueryReq
 {
   required string query = 1;
@@ -43,12 +50,37 @@ message SubmitManipulationTaskReq
   optional bool is_bucket_table = 11;
   /// used for json column merge
   optional string dynamic_object_column_schema = 12;
+
+  /// ManipulationTaskParams
+  required uint64 parts_preload_level = 13;
 }
 
 message SubmitManipulationTaskResp
 {
   optional string exception = 1;
 }
+
+// ManipulationTaskParams::type = MvRefresh
+message SubmitMVRefreshTaskReq
+{
+  required uint64 txn_id = 1;
+  required uint64 timestamp = 2;
+
+  required string task_id = 3;
+  required uint32 rpc_port = 4;
+  required StorageID mv_storage_id = 5;
+
+  required string create_table_query = 6;
+  required string drop_partition_query = 7;
+  required string insert_select_query = 8;
+  repeated string target_partitions = 9;
+}
+
+message SubmitMVRefreshTaskResp
+{
+  optional string exception = 1;
+}
+
 
 message SubmitKafkaConsumeTaskReq
 {
@@ -62,6 +94,7 @@ message SubmitKafkaConsumeTaskReq
   required uint64 assigned_consumer = 7;
   repeated string create_table_command = 8;
   repeated TopicPartitionModel tpl = 9;
+  repeated TopicPartitionModel sample_partitions = 10;
 }
 
 message SubmitKafkaConsumeTaskResp
@@ -279,9 +312,34 @@ message CreateDedupWorkerReq
   required StorageID table = 1;
   required string create_table_query = 2;
   required HostWithPorts host_ports = 3;
+  optional uint64 deduper_index = 4;
 }
 
 message CreateDedupWorkerResp
+{
+  optional string exception = 1;
+}
+
+message AssignHighPriorityDedupPartitionReq
+{
+  required StorageID table = 1;
+  repeated string partition_id = 2;
+}
+
+message AssignHighPriorityDedupPartitionResp
+{
+  optional string exception = 1;
+}
+
+message AssignRepairGranReq
+{
+  required StorageID table = 1;
+  required string partition_id = 2;
+  required int64 bucket_number = 3;
+  required uint64 max_event_time = 4;
+}
+
+message AssignRepairGranResp
 {
   optional string exception = 1;
 }
@@ -318,6 +376,7 @@ message GetDedupWorkerStatusResp
   optional int64 last_task_visible_part_total_rows = 13;
   optional string last_exception = 14;
   optional int64 last_exception_time = 15;
+  repeated string dedup_tasks_progress = 16;
 }
 
 message SendCreateQueryReq
@@ -326,6 +385,7 @@ message SendCreateQueryReq
   required uint64 primary_txn_id = 2;
   required uint64 timeout = 3;
   repeated string create_queries = 4;
+  repeated string cnch_table_create_queries = 5;
 }
 
 message SendCreateQueryResp
@@ -425,6 +485,28 @@ message TableDataParts
   repeated CnchFilePartModel file_parts = 7;
   /// mutations: CloudMergeTree need this to find the actual column name in storage.
   repeated string cnch_mutation_entries = 8;
+  repeated DataModelVirtualPart virtual_parts = 9;
+  repeated DataModelDeleteBitmap virtual_part_bitmaps = 10;
+  optional uint64 table_version = 11;
+}
+
+// Send original (cnch) table definition and override to worker, in order to
+// 1. remove server's parsing & formatting overhead
+//   before
+//     server: parse(create query) -> rewrite(ast) -> format(ast) -> send(new create query)
+//     worker: parse(new create query) -> create table(ast)
+//   after
+//     server: send(create query, override)
+//     worker: parse(create query) -> rewrite(ast) -> create table(ast, override)
+// 2. be able to cache table template at worker
+message CacheableTableDefinition
+{
+  required StorageID storage_id = 1;
+  required string definition = 2;
+  optional string dynamic_object_column_schema = 3; // present if not empty
+  required uint32 local_engine_type = 4; // WorkerEngineType
+  required string local_table_name = 5;
+  optional string local_underlying_dictionary_tables = 6; // for bitengine
 }
 
 message SendResourcesReq
@@ -432,13 +514,14 @@ message SendResourcesReq
   required uint64 txn_id = 1;
   required uint64 primary_txn_id = 2;
   required uint64 timeout = 3;
-  /// create queries
   repeated string create_queries = 4;
-  /// data parts
   repeated TableDataParts data_parts = 5;
   optional string disk_cache_mode = 6;
   repeated UDFInfo udf_infos = 7;
   repeated string dynamic_object_column_schema = 8;
+  optional WorkerInfo worker_info = 9;
+  // can coexist with `create_queries'
+  repeated CacheableTableDefinition cacheable_create_queries = 10;
 }
 
 message SendResourcesResp
@@ -487,6 +570,40 @@ message CheckMySQLSyncThreadStatusResp
   optional bool is_running = 2;
 }
 
+message DropMemoryDictCacheReq
+{
+  optional uint64 txn_id = 1;
+  optional string create_table_query = 2;
+  repeated string uuid_list = 3;
+}
+
+message DropMemoryDictCacheResp
+{
+  optional string exception = 1;
+}
+
+message ExecuteDedupTaskReq
+{
+  required uint64 txn_id = 1;
+  required uint32 rpc_port = 2;
+  required UUID table_uuid = 3;
+  repeated DataModelPart new_parts = 4;
+  repeated string new_parts_paths = 5;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_new_parts = 6;
+  repeated DataModelPart staged_parts = 7;
+  repeated string staged_parts_paths = 8;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_staged_parts = 9;
+  repeated DataModelPart visible_parts = 10;
+  repeated string visible_parts_paths = 11;
+  repeated DataModelDeleteBitmap delete_bitmaps_for_visible_parts = 12;
+  required uint32 dedup_mode = 13;
+}
+
+message ExecuteDedupTaskResp
+{
+  optional string exception = 1;
+}
+
 service CnchWorkerService
 {
   rpc executeSimpleQuery(ExecuteSimpleQueryReq) returns (ExecuteSimpleQueryResp);
@@ -496,6 +613,7 @@ service CnchWorkerService
   rpc touchManipulationTasks(TouchManipulationTasksReq) returns (TouchManipulationTasksResp);
   rpc shutdownManipulationTasks(ShutdownManipulationTasksReq) returns (ShutdownManipulationTasksResp);
   rpc getManipulationTasksStatus(GetManipulationTasksStatusReq) returns (GetManipulationTasksStatusResp);
+  rpc submitMVRefreshTask(SubmitMVRefreshTaskReq) returns (SubmitMVRefreshTaskResp);
 
   rpc submitKafkaConsumeTask(SubmitKafkaConsumeTaskReq) returns (SubmitKafkaConsumeTaskResp);
   rpc getConsumerStatus(GetConsumerStatusReq) returns (GetConsumerStatusResp);
@@ -516,6 +634,8 @@ service CnchWorkerService
   rpc ClearPreallocatedDataParts(ClearPreallocatedDataPartsReq) returns (ClearPreallocatedDataPartsResp);
 
   rpc createDedupWorker(CreateDedupWorkerReq) returns (CreateDedupWorkerResp);
+  rpc assignHighPriorityDedupPartition(AssignHighPriorityDedupPartitionReq) returns (AssignHighPriorityDedupPartitionResp);
+  rpc assignRepairGran(AssignRepairGranReq) returns (AssignRepairGranResp);
   rpc dropDedupWorker(DropDedupWorkerReq) returns (DropDedupWorkerResp);
   rpc getDedupWorkerStatus(GetDedupWorkerStatusReq) returns (GetDedupWorkerStatusResp);
 
@@ -529,4 +649,7 @@ service CnchWorkerService
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
   rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
   rpc dropPartDiskCache(DropPartDiskCacheReq) returns (DropPartDiskCacheResp);
+  rpc dropMemoryDictCache(DropMemoryDictCacheReq) returns (DropMemoryDictCacheResp);
+
+  rpc executeDedupTask(ExecuteDedupTaskReq) returns (ExecuteDedupTaskResp);
 }

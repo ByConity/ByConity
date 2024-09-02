@@ -20,18 +20,20 @@
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/ASTCheckQuery.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTColumnsTransformers.h>
 #include <Parsers/ASTConstraintDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
 #include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTCreateRoleQuery.h>
 #include <Parsers/ASTCreateRowPolicyQuery.h>
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
 #include <Parsers/ASTCreateUserQuery.h>
-#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDataType.h>
+#include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDictionary.h>
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
@@ -54,6 +56,8 @@
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTPartToolKit.h>
 #include <Parsers/ASTPartition.h>
+#include <Parsers/ASTPreparedParameter.h>
+#include <Parsers/ASTPreparedStatement.h>
 #include <Parsers/ASTProjectionDeclaration.h>
 #include <Parsers/ASTProjectionSelectQuery.h>
 #include <Parsers/ASTQualifiedAsterisk.h>
@@ -73,6 +77,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTSetSensitiveQuery.h>
 #include <Parsers/ASTSetRoleQuery.h>
 #include <Parsers/ASTSettingsProfileElement.h>
 #include <Parsers/ASTShowAccessEntitiesQuery.h>
@@ -108,7 +113,6 @@
 
 namespace DB
 {
-
 ASTPtr createWithASTType(ASTType type, ReadBuffer & buf)
 {
     switch (type)

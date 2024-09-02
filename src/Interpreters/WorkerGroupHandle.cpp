@@ -38,6 +38,20 @@ namespace ErrorCodes
     extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
 }
 
+WorkerGroupHandle WorkerGroupHandleImpl::mockWorkerGroupHandle(const String & worker_id_prefix_, UInt64 worker_number_, const ContextPtr & context_)
+{
+    HostWithPortsVec hosts_vec;
+    for (size_t i=0; i<worker_number_; i++)
+    {
+        String worker_id = worker_id_prefix_ + toString(i);
+        HostWithPorts mock_host;
+        mock_host.id = std::move(worker_id);
+        hosts_vec.emplace_back(std::move(mock_host));
+    }
+
+    return std::make_shared<WorkerGroupHandleImpl>("", WorkerGroupHandleSource::RM, "", hosts_vec, context_);
+}
+
 std::unique_ptr<DB::ConsistentHashRing> WorkerGroupHandleImpl::buildRing(const ShardsInfo & shards_info, const ContextPtr global_context)
 {
     UInt32 num_replicas = global_context->getConfigRef().getInt("consistent_hash_ring.num_replicas", 16);
@@ -64,6 +78,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     , vw_name(std::move(vw_name_))
     , hosts(std::move(hosts_))
     , metrics(metrics_)
+    , worker_num(hosts.size())
 {
     auto current_context = getContext();
 
@@ -98,7 +113,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
             default_database, user_password.first, user_password.second,
             /*cluster_*/"",/*cluster_secret_*/"",
             "server", address.compression, address.secure, 1,
-            host.exchange_port, host.exchange_status_port, host.rpc_port);
+            host.exchange_port, host.exchange_status_port, host.rpc_port, host.id);
 
         info.pool = std::make_shared<ConnectionPoolWithFailover>(
             ConnectionPoolPtrs{pool}, settings.load_balancing, settings.connections_with_failover_max_tries);
@@ -106,20 +121,17 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
 
         shards_info.emplace_back(std::move(info));
     }
+    
+    ring = buildRing(this->shards_info, current_context);
+    LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
 
-    /// if not jump consistent hash, build ring
-    if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
-    {
-        ring = buildRing(this->shards_info, current_context);
-        LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
-
-    }
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const ContextPtr & context_)
     : WorkerGroupHandleImpl(data.id, WorkerGroupHandleSource::RM, data.vw_name, data.host_ports_vec, context_, data.metrics)
 {
     type = data.type;
+    worker_num = data.num_workers;
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from, [[maybe_unused]] const std::vector<size_t> & indices)
@@ -135,10 +147,9 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
         shards_info.emplace_back(from.getShardsInfo().at(index));
     }
 
-    if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
-    {
-        ring = buildRing(this->shards_info, current_context);
-    }
+    ring = buildRing(this->shards_info, current_context);
+
+    worker_num = from.workerNum();
 }
 
 static std::unordered_set<UInt64> getBusyWorkerIndexes(double ratio, const WorkerGroupMetrics & metrics)

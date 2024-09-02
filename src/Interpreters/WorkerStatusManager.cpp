@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <vector>
 #include <Interpreters/Context.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -153,6 +154,11 @@ void WorkerStatusManager::updateWorkerNode(const Protos::WorkerNodeResourceData 
     global_extra_workers_status.updateEmplaceIfNotExist(
         id,
         [new_status, &old_status, id, this, &now, &worker_status, &need_callback](WorkerStatusExtra & val) {
+            // Worker has restarted. We must put it ahead of status update.
+            if (worker_status->register_time > val.worker_status->register_time)
+            {
+                getContext()->getSegmentScheduler()->workerRestarted(id);
+            }
             if (val.worker_status->last_status_create_time < worker_status->last_status_create_time)
             {
                 old_status = val.worker_status->getStatus();

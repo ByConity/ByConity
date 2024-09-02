@@ -133,7 +133,7 @@ public:
 
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
     {
-        if (isArray(arguments.at(0).type))
+        if (isArray(removeNullable(arguments.at(0).type)))
             return FunctionFactory::instance().getImpl("arrayReverse", context)->build(arguments);
         else
             return std::make_unique<FunctionToFunctionBaseAdaptor>(
@@ -144,7 +144,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (isArray(arguments.at(0)))
+        if (isArray(removeNullable(arguments.at(0))))
             return arguments.at(0);
         else
             return FunctionReverse::create(context)->getReturnTypeImpl(arguments);

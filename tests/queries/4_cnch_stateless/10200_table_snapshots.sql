@@ -24,7 +24,7 @@ system start merges t2;
 select 'create s1';
 create snapshot s1 to t1 ttl 1 days;
 create snapshot if not exists s1 to t1 ttl 1 days; -- no op
-select name, table_uuid is not null, ttl_in_days from system.cnch_snapshots where database = currentDatabase() and name = 's1';
+select name, table_uuid is not null, ttl_in_days from system.cnch_snapshots where database = currentDatabase(0) and name = 's1';
 
 create snapshot s1 to t1 ttl 1 days; -- { serverError 1150 }
 create snapshot bad to unknown_table ttl 1 days; -- { serverError 60 }
@@ -68,7 +68,7 @@ select 'drop s2, s3';
 drop snapshot s2;
 drop snapshot s3;
 system gc t1;
-select count(), countIf(visible), countIf(outdated) from system.cnch_parts where database = currentDatabase() and table = 't1';
+select count(), countIf(visible), countIf(outdated) from system.cnch_parts where database = currentDatabase(1) and table = 't1';
 
 -- test snapshot and mutation
 select 'delete i = 4';
@@ -93,7 +93,7 @@ select 't2 drop 20231101';
 alter table t2 drop partition id '20231101';
 select * from t2 order by d, i settings use_snapshot='s5'; -- { serverError 1152 }
 system gc t2; -- normal parts should be cleared
-select count() from system.cnch_parts where database = currentDatabase() and table = 't2'; -- expect only one tombstone part
+select count() from system.cnch_parts where database = currentDatabase(1) and table = 't2'; -- expect only one tombstone part
 select 'drop s5';
 drop snapshot s5;
 

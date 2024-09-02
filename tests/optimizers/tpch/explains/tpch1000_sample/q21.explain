@@ -5,96 +5,85 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#count() DESC NULLS LAST, s_name ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 7946152 rows
+      └─ Gather Exchange Est. 2452516 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#count() DESC NULLS LAST, s_name ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 7946152 rows
-               └─ Repartition Exchange Est. 7946152 rows
+            └─ MergingAggregated Est. 2452516 rows
+               └─ Repartition Exchange Est. 2452516 rows
                   │     Partition by: {s_name}
-                  └─ Aggregating Est. 7946152 rows
+                  └─ Aggregating Est. 2452516 rows
                      │     Group by: {s_name}
                      │     Aggregates: expr#count():=AggNull(count)()
-                     └─ Projection Est. 5637458178 rows
-                        │     Expressions: [s_name]
-                        └─ Filter Est. 5637458178 rows
-                           │     Condition: count_non_null_value_1 <= 0
-                           └─ Aggregating Est. 6263842420 rows
-                              │     Group by: {s_suppkey, n_nationkey, l_orderkey, assign_unique_id_symbol, l_suppkey, n_name, s_name, l_commitdate, s_nationkey, l_receiptdate, o_orderkey, _exists_subquery, o_orderstatus, assign_unique_id_symbol_1}
-                              │     Aggregates: count_non_null_value_1:=AggNull(countIf)(build_side_non_null_symbol_1)
-                              └─ Projection Est. 6263842420 rows
-                                 │     Expressions: [_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol_1:=cast(multiIf(if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = 1, 1, if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
-                                 └─ Right (PARALLEL_HASH) Join Est. 6263842420 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 55429412 rows
+                        │     Condition: o_orderkey == l_orderkey
+                        ├─ Repartition Exchange Est. 730771717 rows
+                        │  │     Partition by: {o_orderkey}
+                        │  └─ Projection Est. 730771717 rows
+                        │     │     Expressions: [o_orderkey]
+                        │     └─ Filter Est. 730771717 rows
+                        │        │     Condition: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
+                        │        └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
+                        │                 Where: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
+                        │                 Outputs: [o_orderkey, o_orderstatus]
+                        └─ Repartition Exchange Est. 35999940 rows
+                           │     Partition by: {l_orderkey}
+                           └─ Right Semi (PARALLEL_HASH) Join Est. 35999940 rows
+                              │     Condition: l_orderkey_1 == l_orderkey
+                              │     Filter: l_suppkey_1 != l_suppkey
+                              │     Runtime Filters Builder: {l_orderkey}
+                              ├─ Repartition Exchange Est. 5999989709 rows
+                              │  │     Partition by: {l_orderkey_1}
+                              │  └─ Filter Est. 5999989709 rows
+                              │     │     Condition: Runtime Filters: {l_orderkey_1}
+                              │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
+                              │              Where: Runtime Filters: {l_orderkey}
+                              │              Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
+                              └─ Repartition Exchange Est. 35999940 rows
+                                 │     Partition by: {l_orderkey}
+                                 └─ Right Anti (PARALLEL_HASH) Join Est. 35999940 rows
                                     │     Condition: l_orderkey_2 == l_orderkey
+                                    │     Filter: l_suppkey_2 != l_suppkey
                                     │     Runtime Filters Builder: {l_orderkey}
-                                    ├─ Repartition Exchange Est. 5999989709 rows
+                                    ├─ Repartition Exchange Est. 1499997427 rows
                                     │  │     Partition by: {l_orderkey_2}
-                                    │  └─ Projection Est. 5999989709 rows
-                                    │     │     Expressions: [l_orderkey_2, l_suppkey_2], build_side_non_null_symbol_1:=1
-                                    │     └─ Filter Est. 5999989709 rows
+                                    │  └─ Projection Est. 1499997427 rows
+                                    │     │     Expressions: [l_orderkey_2, l_suppkey_2]
+                                    │     └─ Filter Est. 1499997427 rows
                                     │        │     Condition: l_receiptdate_2 > l_commitdate_2 Runtime Filters: {l_orderkey_2}
                                     │        └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                                     │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey}
                                     │                 Outputs: l_orderkey_2:=l_orderkey, l_suppkey_2:=l_suppkey, l_commitdate_2:=l_commitdate, l_receiptdate_2:=l_receiptdate
-                                    └─ AssignUniqueId Est. 1010621716 rows
-                                       └─ Projection Est. 1010621716 rows
-                                          │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], _exists_subquery:=count_non_null_value > 0
-                                          └─ Filter Est. 1010621716 rows
-                                             │     Condition: count_non_null_value > 0
-                                             └─ Aggregating Est. 1122913018 rows
-                                                │     Group by: {o_orderstatus, o_orderkey, l_receiptdate, s_nationkey, l_suppkey, l_commitdate, s_name, n_name, l_orderkey, n_nationkey, s_suppkey, assign_unique_id_symbol}
-                                                │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
-                                                └─ Projection Est. 1122913018 rows
-                                                   │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol:=cast(multiIf(if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
-                                                   └─ Right (PARALLEL_HASH) Join Est. 1122913018 rows
-                                                      │     Condition: l_orderkey_1 == l_orderkey
-                                                      │     Runtime Filters Builder: {l_orderkey}
-                                                      ├─ Repartition Exchange Est. 5999989709 rows
-                                                      │  │     Partition by: {l_orderkey_1}
-                                                      │  └─ Projection Est. 5999989709 rows
-                                                      │     │     Expressions: [l_orderkey_1, l_suppkey_1], build_side_non_null_symbol:=1
-                                                      │     └─ Filter Est. 5999989709 rows
-                                                      │        │     Condition: Runtime Filters: {l_orderkey_1}
-                                                      │        └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
-                                                      │                 Where: Runtime Filters: {l_orderkey}
-                                                      │                 Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
-                                                      └─ AssignUniqueId Est. 181173185 rows
-                                                         └─ Inner (PARALLEL_HASH) Join Est. 369529411 rows
-                                                            │     Condition: o_orderkey == l_orderkey
-                                                            │     Runtime Filters Builder: {l_orderkey}
-                                                            ├─ Repartition Exchange Est. 730771717 rows
-                                                            │  │     Partition by: {o_orderkey}
-                                                            │  └─ Filter Est. 730771717 rows
-                                                            │     │     Condition: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
-                                                            │     └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
-                                                            │              Where: o_orderstatus = 'F' Runtime Filters: {o_orderkey}
-                                                            │              Outputs: [o_orderkey, o_orderstatus]
-                                                            └─ Repartition Exchange Est. 239999588 rows
-                                                               │     Partition by: {l_orderkey}
-                                                               └─ Inner Join Est. 240763727 rows
-                                                                  │     Condition: l_suppkey == s_suppkey
-                                                                  │     Runtime Filters Builder: {s_suppkey}
-                                                                  ├─ Repartition Exchange Est. 5999989709 rows
-                                                                  │  │     Partition by: {l_suppkey}
-                                                                  │  └─ Filter Est. 5999989709 rows
-                                                                  │     │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
-                                                                  │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
-                                                                  │              Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
-                                                                  │              Outputs: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
-                                                                  └─ Repartition Exchange Est. 400000 rows
-                                                                     │     Partition by: {s_suppkey}
-                                                                     └─ Inner Join Est. 400000 rows
-                                                                        │     Condition: s_nationkey == n_nationkey
-                                                                        │     Runtime Filters Builder: {n_nationkey}
-                                                                        ├─ Filter Est. 10000000 rows
-                                                                        │  │     Condition: Runtime Filters: {s_nationkey}
-                                                                        │  └─ TableScan tpch1000_sample.supplier Est. 10000000 rows
-                                                                        │           Where: Runtime Filters: {s_nationkey}
-                                                                        │           Outputs: [s_suppkey, s_name, s_nationkey]
-                                                                        └─ Broadcast Exchange Est. 1 rows
-                                                                           └─ Filter Est. 1 rows
-                                                                              │     Condition: n_name = 'SAUDI ARABIA'
-                                                                              └─ TableScan tpch1000_sample.nation Est. 25 rows
-                                                                                       Where: n_name = 'SAUDI ARABIA'
-                                                                                       Outputs: [n_nationkey, n_name]
+                                    └─ Repartition Exchange Est. 59999897 rows
+                                       │     Partition by: {l_orderkey}
+                                       └─ Inner Join Est. 59999897 rows
+                                          │     Condition: l_suppkey == s_suppkey
+                                          │     Runtime Filters Builder: {s_suppkey}
+                                          ├─ Repartition Exchange Est. 1499997427 rows
+                                          │  │     Partition by: {l_suppkey}
+                                          │  └─ Projection Est. 1499997427 rows
+                                          │     │     Expressions: [l_orderkey, l_suppkey]
+                                          │     └─ Filter Est. 1499997427 rows
+                                          │        │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                                          │        └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
+                                          │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                                          │                 Outputs: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
+                                          └─ Repartition Exchange Est. 400000 rows
+                                             │     Partition by: {s_suppkey}
+                                             └─ Inner Join Est. 400000 rows
+                                                │     Condition: s_nationkey == n_nationkey
+                                                │     Runtime Filters Builder: {n_nationkey}
+                                                ├─ Filter Est. 10000000 rows
+                                                │  │     Condition: Runtime Filters: {s_nationkey}
+                                                │  └─ TableScan tpch1000_sample.supplier Est. 10000000 rows
+                                                │           Where: Runtime Filters: {s_nationkey}
+                                                │           Outputs: [s_suppkey, s_name, s_nationkey]
+                                                └─ Broadcast Exchange Est. 1 rows
+                                                   └─ Projection Est. 1 rows
+                                                      │     Expressions: [n_nationkey]
+                                                      └─ Filter Est. 1 rows
+                                                         │     Condition: n_name = 'SAUDI ARABIA'
+                                                         └─ TableScan tpch1000_sample.nation Est. 25 rows
+                                                                  Where: n_name = 'SAUDI ARABIA'
+                                                                  Outputs: [n_nationkey, n_name]
 note: Runtime Filter is applied for 5 times.

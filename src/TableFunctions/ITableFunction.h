@@ -22,6 +22,7 @@
 #pragma once
 
 #include <Parsers/IAST_fwd.h>
+#include <Interpreters/Context.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/ColumnsDescription.h>
 
@@ -61,6 +62,8 @@ public:
 
     /// Get the main function name.
     virtual std::string getName() const = 0;
+    /// Functions shouldn't be exposed to tenant
+    virtual bool isPreviledgedFunction() const { return false; }
 
     /// Returns true if we always know table structure when executing table function
     /// (e.g. structure is specified in table function arguments)
@@ -72,6 +75,25 @@ public:
 
     /// Returns actual table structure probably requested from remote server, may fail
     virtual ColumnsDescription getActualTableStructure(ContextPtr /*context*/) const = 0;
+
+    /// Check if table function needs a structure hint from SELECT query in case of
+    /// INSERT INTO FUNCTION ... SELECT ... and INSERT INTO ... SELECT ... FROM table_function(...)
+    /// It's used for schema inference.
+    virtual bool needStructureHint() const { return false; }
+
+    /// Set a structure hint from SELECT query in case of
+    /// INSERT INTO FUNCTION ... SELECT ... and INSERT INTO ... SELECT ... FROM table_function(...)
+    /// This hint could be used not to repeat schema in function arguments.
+    virtual void setStructureHint(const ColumnsDescription &) {}
+
+    /// Used for table functions that can use structure hint during INSERT INTO ... SELECT ... FROM table_function(...)
+    /// It returns possible virtual column names of corresponding storage. If select query contains
+    /// one of these columns, the structure from insertion table won't be used as a structure hint,
+    /// because we cannot determine which column from table correspond to this virtual column.
+    virtual std::unordered_set<String> getVirtualsToCheckBeforeUsingStructureHint() const { return {}; }
+
+    virtual bool supportsReadingSubsetOfColumns(const ContextPtr &) { return false; }
+
 
     /// Create storage according to the query.
     StoragePtr

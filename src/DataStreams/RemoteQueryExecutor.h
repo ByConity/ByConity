@@ -238,8 +238,6 @@ private:
     /// Reads packet by packet
     Block readPackets();
 
-    void parseQueryWorkerMetrics(const QueryWorkerMetricElements & elements);
-
 };
 
 }

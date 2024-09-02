@@ -17,6 +17,7 @@
 #include <Statistics/BucketBoundsImpl.h>
 #include <Statistics/StatsKllSketchImpl.h>
 #include <Poco/JSON/Parser.h>
+#include <sstream>
 
 namespace DB::Statistics
 {
@@ -55,9 +56,9 @@ String BucketBoundsImpl<T>::serializeToJson() const
     auto type_id = SerdeDataTypeFrom<T>;
     String type_string = ProtoEnumUtils::serdeDataTypeToString(type_id);
     Poco::JSON::Array array_json;
+    object_json.set("type_id", type_string);
     if constexpr (!std::is_same_v<T, UInt128> && !std::is_same_v<T, Int128> && !std::is_same_v<T, UInt256> && !std::is_same_v<T, Int256>)
     {
-        object_json.set("type_id", type_string);
         for (auto ptr : bounds_)
         {   
             if constexpr (std::is_same_v<T, UInt8>)
@@ -68,10 +69,10 @@ String BucketBoundsImpl<T>::serializeToJson() const
     }
     else if constexpr (std::is_same_v<T, UInt128> || std::is_same_v<T, Int128> || std::is_same_v<T, UInt256> || std::is_same_v<T, Int256>)
     {
-        for (auto ptr : bounds_)
+        for (auto value : bounds_)
         {
             std::ostringstream out_str;
-            out_str << ptr;
+            out_str << value;
             array_json.add(out_str.str());
         }
     }
@@ -118,17 +119,10 @@ void BucketBoundsImpl<T>::deserializeFromJson(std::string_view blob)
             else if constexpr (
                 std::is_same_v<T, UInt128> || std::is_same_v<T, Int128> || std::is_same_v<T, UInt256> || std::is_same_v<T, Int256>)
             {
-                String ele = array->getElement<String>(j);
-                int len = ele.length();
-                char * data;
-                data = static_cast<char *>(malloc((len + 1) * sizeof(char)));
-                ele.copy(data, len, 0);
-                ReadBuffer buffers(data, ele.size());
-                EmbeddedType type_ele;
-                buffers.readStrict(reinterpret_cast<char *>(&type_ele), sizeof(type_ele));
-                bounds_.push_back(type_ele);
-                throw Exception(
-                    "when load stats from json to bound, not sure 128 or 256 is correct, so throw error", ErrorCodes::LOGICAL_ERROR);
+                String text = array->getElement<String>(j);
+                T ele;
+                wideIntFromString(ele, text);
+                bounds_.push_back(ele);
             }
         }
     }

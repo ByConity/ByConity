@@ -1,6 +1,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,6 +13,7 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <Interpreters/sendPlanSegment.h>
 #include <butil/iobuf.h>
+#include <fmt/core.h>
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
 #include <common/types.h>
@@ -33,15 +35,19 @@ bool Scheduler::addBatchTask(BatchTaskPtr batch_task)
 
 bool Scheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
 {
-    return queue.tryPop(task, timespec_to_duration(query_context->getQueryExpirationTimeStamp()).count() / 1000);
+    return queue.tryPop(task, query_expiration_ms);
 }
 
 void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
 {
-    const auto & selector_info = node_selector_result[task.task_id];
-    const auto & worker_node = selector_info.worker_nodes[idx];
-    PlanSegmentExecutionInfo execution_info;
-    execution_info.parallel_id = idx;
+    WorkerNode worker_node;
+    NodeSelectorResult selector_info;
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        selector_info = node_selector_result[task.task_id];
+        worker_node = selector_info.worker_nodes[idx];
+    }
+    PlanSegmentExecutionInfo execution_info = generateExecutionInfo(task.task_id, idx);
     std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
     {
         std::unique_lock<std::mutex> lk(segment_bufs_mutex);
@@ -67,31 +73,38 @@ void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask &
     if (const auto & id_to_addr_iter = dag_graph_ptr->id_to_address.find(task.task_id);
         id_to_addr_iter != dag_graph_ptr->id_to_address.end())
     {
-        id_to_addr_iter->second.push_back(worker_node.address);
+        id_to_addr_iter->second.at(idx) = worker_node.address;
     }
     else
     {
-        dag_graph_ptr->id_to_address.emplace(task.task_id, AddressInfos{worker_node.address});
+        AddressInfos infos(selector_info.worker_nodes.size());
+        dag_graph_ptr->id_to_address.emplace(task.task_id, std::move(infos));
+        dag_graph_ptr->id_to_address[task.task_id].at(idx) = worker_node.address;
     }
 }
 
 TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     TaskResult res;
-    auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
-    auto & selector_info = selector_result.first->second;
+    sendResources(plan_segment_ptr);
+    NodeSelectorResult selector_info;
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.has_table_scan));
+        selector_info = selector_result.first->second;
+    }
     prepareTask(plan_segment_ptr, selector_info.worker_nodes.size());
     dag_graph_ptr->scheduled_segments.emplace(task.task_id);
-    dag_graph_ptr->segment_paralle_size_map[task.task_id] = selector_info.worker_nodes.size();
+    dag_graph_ptr->segment_parallel_size_map[task.task_id] = selector_info.worker_nodes.size();
 
     PlanSegmentExecutionInfo execution_info;
 
     for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
     {
-        if (auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
+        if (const auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
             iter != selector_info.source_addresses.end())
         {
-            plan_segment_input->insertSourceAddresses(iter->second.addresses, query_context->getSettingsRef().bsp_mode);
+            plan_segment_input->insertSourceAddresses(iter->second.addresses);
         }
     }
     std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
@@ -124,15 +137,30 @@ void Scheduler::schedule()
 {
     Stopwatch sw;
     genTopology();
-    genSourceTasks();
+    genLeafTasks();
 
     /// Leave final segment alone.
     while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
+        auto curr = time_in_milliseconds(std::chrono::system_clock::now());
         if (stopped.load(std::memory_order_relaxed))
         {
-            LOG_INFO(log, "Schedule interrupted");
-            return;
+            if (error_msg.empty())
+            {
+                LOG_INFO(log, "Schedule interrupted");
+                return;
+            }
+            else
+            {
+                // Now it's only used to handle worker restarting.
+                // TODO(wangtao.vip): In future it might be removed.
+                throw Exception(error_msg, ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        else if (curr > query_expiration_ms)
+        {
+            throw Exception(
+                fmt::format("schedule timeout, current ts {} expire ts {}", curr, query_expiration_ms), ErrorCodes::TIMEOUT_EXCEEDED);
         }
         /// nullptr means invalid task
         BatchTaskPtr batch_task;
@@ -140,7 +168,7 @@ void Scheduler::schedule()
         {
             for (auto task : *batch_task)
             {
-                LOG_DEBUG(log, "Schedule segment {}", task.task_id);
+                LOG_INFO(log, "Schedule segment {}", task.task_id);
                 if (task.task_id == 0)
                 {
                     prepareFinalTask();
@@ -158,20 +186,20 @@ void Scheduler::schedule()
     LOG_DEBUG(log, "Scheduling takes {} ms", sw.elapsedMilliseconds());
 }
 
-void Scheduler::genSourceTasks()
+void Scheduler::genLeafTasks()
 {
-    LOG_DEBUG(log, "Begin generate source tasks");
+    LOG_DEBUG(log, "Begin generate leaf tasks");
     auto batch_task = std::make_shared<BatchTask>();
-    batch_task->reserve(dag_graph_ptr->sources.size());
-    for (auto source_id : dag_graph_ptr->sources)
+    batch_task->reserve(dag_graph_ptr->leaf_segments.size());
+    for (auto leaf_id : dag_graph_ptr->leaf_segments)
     {
-        LOG_TRACE(log, "Generate task for source segment {}", source_id);
-        if (source_id == dag_graph_ptr->final)
+        LOG_TRACE(log, "Generate task for leaf segment {}", leaf_id);
+        if (leaf_id == dag_graph_ptr->final)
             continue;
 
-        batch_task->emplace_back(source_id, true);
-        plansegment_topology.erase(source_id);
-        LOG_TRACE(log, "Task for source segment {} generated", source_id);
+        batch_task->emplace_back(leaf_id, true);
+        plansegment_topology.erase(leaf_id);
+        LOG_TRACE(log, "Task for leaf segment {} generated", leaf_id);
     }
     addBatchTask(std::move(batch_task));
 }
@@ -191,7 +219,7 @@ void Scheduler::genTopology()
             }
             auto depend_id = plan_segment_input->getPlanSegmentId();
             current.emplace(depend_id);
-            LOG_TRACE(log, "{} depends on {} by exchange_id:{}", id, depend_id, plan_segment_input->getExchangeId());
+            LOG_INFO(log, "Segment {} depends on {} by exchange_id {}", id, depend_id, plan_segment_input->getExchangeId());
         }
     }
 }
@@ -220,7 +248,7 @@ void Scheduler::prepareFinalTask()
                 "Logical error: address of segment " + std::to_string(plan_segment_input->getPlanSegmentId()) + " not found",
                 ErrorCodes::LOGICAL_ERROR);
         if (plan_segment_input->getSourceAddresses().empty())
-            plan_segment_input->insertSourceAddresses(address_it->second, query_context->getSettingsRef().bsp_mode);
+            plan_segment_input->insertSourceAddresses(address_it->second);
     }
     dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start = true;
 }
@@ -230,15 +258,15 @@ void Scheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
     std::lock_guard<std::mutex> guard(plansegment_topology_mutex);
     auto batch_task = std::make_shared<BatchTask>();
     const auto & task_id = task.task_id;
-    LOG_TRACE(log, "Remove dependency {} for segments", task_id);
+    LOG_INFO(log, "Remove dependency {} for segments", task_id);
 
     for (auto & [id, dependencies] : plansegment_topology)
     {
         if (dependencies.erase(task_id))
-            LOG_TRACE(log, "Erase dependency {} for segment {}", task_id, id);
+            LOG_INFO(log, "Erase dependency {} for segment {}", task_id, id);
         if (dependencies.empty())
         {
-            batch_task->emplace_back(id);
+            batch_task->emplace_back(id, dag_graph_ptr->segments_has_table_scan.contains(id));
         }
     }
     for (const auto & t : *batch_task)

@@ -36,6 +36,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int SEEK_POSITION_OUT_OF_BOUND;
+}
+
 static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context, const MergeTreeMetaBase & data)
 {
     MergeTreeReaderSettings settings{
@@ -137,8 +142,22 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
                 disk->readFile(data_path, merge_tree_reader_settings.read_settings), stream_file_pos.file_offset,
                 stream_file_pos.file_size, true);
 
-            source_buffer->seek(stream_file_pos.file_offset + marks_loader.getMark(right_mark).offset_in_compressed_file, 0);
-            cache_data_right_offset = marks_loader.getMark(right_mark).offset_in_compressed_file + source_buffer->getSizeCompressed();
+            const auto & right_mark_pos = marks_loader.getMark(right_mark);
+            cache_data_right_offset = right_mark_pos.offset_in_compressed_file;
+
+            if (right_mark_pos.offset_in_decompressed_block > 0)
+            {
+                source_buffer->seek(stream_file_pos.file_offset + right_mark_pos.offset_in_compressed_file, 0);
+                
+                /// Need to trigger CompressedReadBufferFromFile::nextImpl to get current block size.
+                /// As right_mark_pos.offset_in_decompressed_block > 0, should not get EOF here.
+                if (source_buffer->eof())
+                    throw Exception(
+                        ErrorCodes::SEEK_POSITION_OUT_OF_BOUND, 
+                        "Failed to get last compressed block size for segment {}, encounter EOF", segment_number);
+
+                cache_data_right_offset += source_buffer->getSizeCompressed();
+            }
         }
 
         size_t cache_data_bytes = cache_data_right_offset - cache_data_left_offset;

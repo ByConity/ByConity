@@ -7,7 +7,7 @@ namespace DB::Patterns
 PatternBuilder topN()
 {
     auto result = typeOf(IQueryPlanStep::Type::Sorting);
-    result.matchingStep<SortingStep>([&](const SortingStep & s) { return s.getLimit() != 0; });
+    result.matchingStep<SortingStep>([&](const SortingStep & s) { return !s.hasPreparedParam() && s.getLimitValue() != 0; });
     return result;
 }
 PatternBuilder & PatternBuilder::capturedAs(const Capture & capture)
@@ -27,23 +27,44 @@ PatternBuilder & PatternBuilder::capturedAs(const Capture & capture, const Patte
     return *this;
 }
 
-PatternBuilder & PatternBuilder::matching(const PatternPredicate & predicate)
+PatternBuilder & PatternBuilder::matching(PatternPredicate predicate)
 {
-    return matching(predicate, "unknown");
+    return matching(std::move(predicate), "unknown");
 }
 
-PatternBuilder & PatternBuilder::matching(const PatternPredicate & predicate, const std::string & name)
+PatternBuilder & PatternBuilder::matching(PatternPredicate predicate, const std::string &)
 {
-    current = std::make_unique<FilterPattern>(name, predicate, std::move(current));
+    if (auto * type_pattern = dynamic_cast<TypeOfPattern *>(current.get()))
+    {
+        if (type_pattern->attaching_predicate)
+           throw Exception(
+                "TypeOfPattern already has an attaching_predicate", ErrorCodes::LOGICAL_ERROR);
+        else
+            type_pattern->attaching_predicate = predicate;
+    }
+    else if (auto * capture_pattern = dynamic_cast<CapturePattern *>(current.get()))
+    {
+        if (capture_pattern->attaching_predicate)
+           throw Exception(
+                "CapturePattern already has an attaching_predicate", ErrorCodes::LOGICAL_ERROR);
+        else
+            capture_pattern->attaching_predicate = predicate;
+    }
+    else
+    {
+        throw Exception(
+            "Previous pattern of FilterPattern must be a TypeOfPattern/CapturePattern", ErrorCodes::LOGICAL_ERROR);
+    }
+
     return *this;
 }
 
-PatternBuilder & PatternBuilder::matchingCapture(const std::function<bool(const Captures &)> & capture_predicate)
+PatternBuilder & PatternBuilder::matchingCapture(std::function<bool(const Captures &)> capture_predicate)
 {
-    return matchingCapture(capture_predicate, "unknown");
+    return matchingCapture(std::move(capture_predicate), "unknown");
 }
 
-PatternBuilder & PatternBuilder::matchingCapture(const std::function<bool(const Captures &)> & capture_predicate, const std::string & name)
+PatternBuilder & PatternBuilder::matchingCapture(std::function<bool(const Captures &)> capture_predicate, const std::string & name)
 {
     return matching(std::bind(capture_predicate, std::placeholders::_2), name); // NOLINT(modernize-avoid-bind)
 }

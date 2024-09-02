@@ -42,7 +42,9 @@ StorageCloudHDFS::FileBufferClient::FileBufferClient(const ContextPtr & query_co
 
 std::unique_ptr<ReadBuffer> StorageCloudHDFS::FileBufferClient::createReadBuffer(const DB::String & file)
 {
-    return std::make_unique<ReadBufferFromByteHDFS>(file, query_context->getGlobalContext()->getHdfsConnectionParams(), true);
+    ReadSettings settings;
+    settings.byte_hdfs_pread = true;
+    return std::make_unique<ReadBufferFromByteHDFS>(file, query_context->getGlobalContext()->getHdfsConnectionParams(), settings);
 }
 
 std::unique_ptr<WriteBuffer> StorageCloudHDFS::FileBufferClient::createWriteBuffer(const DB::String & file)

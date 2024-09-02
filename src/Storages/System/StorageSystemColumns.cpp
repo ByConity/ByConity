@@ -11,6 +11,7 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Access/ContextAccess.h>
 #include <Databases/IDatabase.h>
 #include <Processors/Sources/NullSource.h>
@@ -80,7 +81,9 @@ public:
         , databases(std::move(databases_)), tables(std::move(tables_)), storages(std::move(storages_))
         , client_info_interface(context->getClientInfo().interface)
         , total_tables(tables->size()), access(context->getAccess())
-        , query_id(context->getCurrentQueryId()), lock_acquire_timeout(context->getSettingsRef().lock_acquire_timeout)
+        , query_id(context->getCurrentQueryId())
+        , lock_acquire_timeout(context->getSettingsRef().lock_acquire_timeout)
+        , tenant_id(context->getTenantId())
     {
     }
 
@@ -143,6 +146,8 @@ protected:
 
             bool check_access_for_columns = check_access_for_tables && !access->isGranted(AccessType::SHOW_COLUMNS, database_name, table_name);
 
+            const String & database_strip_tenantid = !tenant_id.empty() && startsWith(database_name, tenant_id + ".") ? getOriginalDatabaseName(database_name, tenant_id) : database_name;
+
             size_t position = 0;
             for (const auto & column : columns)
             {
@@ -154,7 +159,7 @@ protected:
                 size_t res_index = 0;
 
                 if (columns_mask[src_index++])
-                    res_columns[res_index++]->insert(database_name);
+                    res_columns[res_index++]->insert(database_strip_tenantid);
                 if (columns_mask[src_index++])
                     res_columns[res_index++]->insert(table_name);
                 if (columns_mask[src_index++])
@@ -301,6 +306,7 @@ private:
     std::shared_ptr<const ContextAccess> access;
     String query_id;
     std::chrono::milliseconds lock_acquire_timeout;
+    String tenant_id;
 };
 
 
@@ -339,8 +345,10 @@ Pipe StorageSystemColumns::read(
     {
         /// Add `database` column.
         MutableColumnPtr database_column_mut = ColumnString::create();
+        MutableColumnPtr stripped_db_column_mut = ColumnString::create();
 
         const auto databases = DatabaseCatalog::instance().getDatabases(context);
+        const String & tenant_id = context->getTenantId();
         for (const auto & [database_name, database] : databases)
         {
             if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
@@ -349,8 +357,31 @@ Pipe StorageSystemColumns::read(
             /// We are skipping "Lazy" database because we cannot afford initialization of all its tables.
             /// This should be documented.
 
-            if (database->getEngineName() != "Lazy")
-                database_column_mut->insert(database_name);
+            if (database->getEngineName() == "Lazy")
+                continue;
+
+            if (!tenant_id.empty())
+            {
+                if (startsWith(database_name, tenant_id + "."))
+                {
+                    stripped_db_column_mut->insert(getOriginalDatabaseName(database_name, tenant_id));
+                }
+                else
+                {
+                    // Will skip database of other tenants and default user (without tenantid prefix)
+                    if (database_name.find(".") != std::string::npos)
+                        continue;
+
+                    if (!DatabaseCatalog::isDefaultVisibleSystemDatabase(database_name))
+                        continue;
+                    stripped_db_column_mut->insert(database_name);
+                }
+            }
+            else
+            {
+                stripped_db_column_mut->insert(database_name);
+            }
+            database_column_mut->insert(database_name);
         }
 
         Tables external_tables;
@@ -358,10 +389,15 @@ Pipe StorageSystemColumns::read(
         {
             external_tables = context->getSessionContext()->getExternalTables();
             if (!external_tables.empty())
+            {
                 database_column_mut->insertDefault(); /// Empty database for external tables.
+                stripped_db_column_mut->insertDefault();
+            }
         }
 
-        block_to_filter.insert(ColumnWithTypeAndName(std::move(database_column_mut), std::make_shared<DataTypeString>(), "database"));
+        chassert(stripped_db_column_mut->size() == database_column_mut->size());
+        block_to_filter.insert(ColumnWithTypeAndName(std::move(stripped_db_column_mut), std::make_shared<DataTypeString>(), "database"));
+        block_to_filter.insert(ColumnWithTypeAndName(std::move(database_column_mut), std::make_shared<DataTypeString>(), "database_nonstripped"));
 
         /// Filter block with `database` column.
         VirtualColumnUtils::filterBlockWithQuery(query_info.query, block_to_filter, context);
@@ -372,7 +408,8 @@ Pipe StorageSystemColumns::read(
             return Pipe::unitePipes(std::move(pipes));
         }
 
-        ColumnPtr & database_column = block_to_filter.getByName("database").column;
+        ColumnPtr & database_column = block_to_filter.getByName("database_nonstripped").column;
+        ColumnPtr & stripped_database_column = block_to_filter.getByName("database").column;
 
         /// Add `table` column.
         MutableColumnPtr table_column_mut = ColumnString::create();
@@ -406,6 +443,7 @@ Pipe StorageSystemColumns::read(
         }
 
         database_column = database_column->replicate(offsets);
+        stripped_database_column = stripped_database_column->replicate(offsets);
         block_to_filter.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "table"));
     }
 
@@ -418,7 +456,7 @@ Pipe StorageSystemColumns::read(
         return Pipe::unitePipes(std::move(pipes));
     }
 
-    ColumnPtr filtered_database_column = block_to_filter.getByName("database").column;
+    ColumnPtr filtered_database_column = block_to_filter.getByName("database_nonstripped").column;
     ColumnPtr filtered_table_column = block_to_filter.getByName("table").column;
 
     pipes.emplace_back(std::make_shared<ColumnsSource>(

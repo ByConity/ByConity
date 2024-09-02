@@ -45,7 +45,7 @@
 //         if (e.code() == ErrorCodes::UNKNOWN_STORAGE
 //             && (scheme.empty() || scheme == "file"))
 //         {
-//             disk = std::make_shared<DiskLocal>("hive_disk", "/", 0);
+//             disk = std::make_shared<DiskLocal>("hive_disk", "/", DiskStats{});
 //         }
 //         else
 //             throw;
@@ -54,7 +54,6 @@
 //     HiveFiles hive_files;
 //     size_t file_size = disk->getFileSize(path);
 //     hive_files.push_back(IHiveFile::create(format, path, file_size, disk, std::make_shared<HivePartition>()));
-
 //     storage->loadHiveFiles(hive_files);
 //     return storage;
 // }

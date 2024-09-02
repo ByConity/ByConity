@@ -23,6 +23,7 @@ namespace DB
 class SymbolsExtractor
 {
 public:
+    static std::vector<std::string> extractVector(ConstASTPtr node);
     static std::set<std::string> extract(ConstASTPtr node);
     static std::set<std::string> extract(PlanNodePtr & node);
     static std::set<std::string> extract(std::vector<ConstASTPtr> & nodes);
@@ -31,7 +32,7 @@ public:
 
 struct SymbolVisitorContext
 {
-    std::set<std::string> result;
+    std::vector<std::string> result;
     // count of forbidden list
     std::unordered_map<std::string, UInt64> exclude_symbols;
 };

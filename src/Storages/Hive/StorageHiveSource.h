@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Common/config.h"
+#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include "Storages/StorageInMemoryMetadata.h"
 #if USE_HIVE
 
 #include "Processors/QueryPipeline.h"
@@ -18,7 +20,7 @@ public:
     struct BlockInfo
     {
         BlockInfo() = delete;
-        BlockInfo(const Block & header_, bool need_path_column_, bool need_file_column_, KeyDescription partition_);
+        BlockInfo(const Block & header_, bool need_path_column_, bool need_file_column_, const StorageMetadataPtr & metadata);
         Block getHeader() const;
 
         Block header;   /// phsical columns + partition columns
@@ -27,38 +29,26 @@ public:
         bool need_file_column = false;
 
         KeyDescription partition_description;
-        std::vector<size_t> partition_column_idx;
+        std::unordered_map<String, size_t> partition_name_to_index;
+        bool all_partition_column = false; /// whether only partition columns present
     };
     using BlockInfoPtr = std::shared_ptr<BlockInfo>;
 
-    struct FileSlice
-    {
-        int file {-1};
-        int slice {0};
-
-        bool empty() const { return file == -1; }
-        void reset() { file = -1; }
-    };
     struct Allocator
     {
         explicit Allocator(HiveFiles files_);
-        size_t size() const { return files.size(); }
 
         /// next file slice to read from
-        void next(FileSlice & file_slice) const;
+        HiveFilePtr next() const;
 
-        HiveFiles files;
-        bool allow_allocate_by_slice = true;
-
+        HiveFiles hive_files;
     private:
-        mutable std::atomic_int unallocated = 0;
-        bool nextSlice(FileSlice & file_slice) const;
-        mutable std::vector<std::atomic_int> slice_progress;
+        mutable std::atomic_size_t unallocated = 0;
     };
 
     using AllocatorPtr = std::shared_ptr<Allocator>;
 
-    StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_);
+    StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_, const std::shared_ptr<SelectQueryInfo> & query_info_);
     ~StorageHiveSource() override;
 
     Chunk generate() override;
@@ -66,18 +56,16 @@ public:
     void prepareReader();
 
 private:
-    void buildResultChunk(Chunk & chunk) const;
+    Chunk buildResultChunk(Chunk & chunk) const;
 
-    bool need_partition_columns = true;
-    FileSlice current_file_slice;
     std::shared_ptr<const BlockInfo> block_info;
     std::shared_ptr<const Allocator> allocator;
 
+    HiveFilePtr hive_file;
     SourcePtr data_source;
     std::shared_ptr<IHiveFile::ReadParams> read_params;
     std::unique_ptr<QueryPipeline> pipeline;
     std::unique_ptr<PullingPipelineExecutor> reader;
-
     Poco::Logger * log {&Poco::Logger::get("StorageHiveSource")};
 };
 

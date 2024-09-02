@@ -77,8 +77,11 @@ void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::func
     copyDataImpl(from, to, is_cancelled, doNothing);
 }
 
-void copyData(IBlockInputStream & from, IBlockOutputStream & to, const std::function<bool()> & is_cancelled,
-              const std::function<void(const Block & block)> & progress)
+void copyData(
+    IBlockInputStream & from,
+    IBlockOutputStream & to,
+    const std::function<bool()> & is_cancelled,
+    const std::function<void(const Block & block)> & progress)
 {
     copyDataImpl(from, to, is_cancelled, progress);
 }

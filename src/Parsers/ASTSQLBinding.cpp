@@ -60,6 +60,12 @@ void ASTCreateBinding::formatImpl(const FormatSettings & format, FormatState & s
     }
     format.ostr << (format.hilite ? hilite_keyword : "") << " BINDING";
 
+    if (if_not_exists)
+        format.ostr << (format.hilite ? hilite_keyword : "") << "IF NOT EXISTS " << (format.hilite ? hilite_none : "");
+    else if (or_replace)
+        format.ostr << (format.hilite ? hilite_keyword : "") << "OR REPLACE " << (format.hilite ? hilite_none : "");
+
+
     if (!re_expression.empty())
     {
         format.ostr << format.nl_or_ws << (format.hilite ? hilite_none : "") << re_expression;

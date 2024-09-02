@@ -72,12 +72,13 @@ public:
 class ParserIdentifier : public IParserBase
 {
 public:
-    explicit ParserIdentifier(bool allow_query_parameter_ = false) : allow_query_parameter(allow_query_parameter_) {}
+    explicit ParserIdentifier(bool allow_query_parameter_ = false, bool allow_single_quoted_identifier_ = false) : allow_query_parameter(allow_query_parameter_), allow_single_quoted_identifier(allow_single_quoted_identifier_) {}
 
 protected:
     const char * getName() const override { return "identifier"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
     bool allow_query_parameter;
+    bool allow_single_quoted_identifier;
 };
 
 
@@ -288,6 +289,15 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserBinaryExpression : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "BINARY expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 class ParserTrimExpression : public IParserDialectBase
 {
 protected:
@@ -384,11 +394,13 @@ protected:
 /** String in single quotes.
   * String in heredoc $here$txt$here$ equivalent to 'txt'.
   */
-class ParserStringLiteral : public IParserBase
+class ParserStringLiteral : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "string literal"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
@@ -469,12 +481,14 @@ public:
 class ParserAlias : public IParserBase
 {
 public:
-    explicit ParserAlias(bool allow_alias_without_as_keyword_) : allow_alias_without_as_keyword(allow_alias_without_as_keyword_) { }
+    explicit ParserAlias(bool allow_alias_without_as_keyword_, bool allow_single_quoted_identifier_ = false) : allow_alias_without_as_keyword(allow_alias_without_as_keyword_), allow_single_quoted_identifier(allow_single_quoted_identifier_) { }
 
 private:
     static const char * restricted_keywords[];
 
     bool allow_alias_without_as_keyword;
+    /// default false; set to true for mysql, which allows: select 123 as 'offset'
+    bool allow_single_quoted_identifier;
 
     const char * getName() const override { return "alias"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
@@ -599,7 +613,7 @@ public:
 };
 
 /** Element of TTL expression - same as expression element, but in addition,
- *   TO DISK 'xxx' | TO VOLUME 'xxx' | DELETE could be specified
+ *   TO DISK 'xxx' | TO VOLUME 'xxx' | TO BYTECOOL 'xxx' | DELETE could be specified
   */
 class ParserTTLElement : public IParserDialectBase
 {

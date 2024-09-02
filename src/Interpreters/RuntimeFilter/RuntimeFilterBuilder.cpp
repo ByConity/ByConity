@@ -12,6 +12,19 @@
 namespace DB
 {
 
+String distributionToString(RuntimeFilterDistribution distribution)
+{
+    switch (distribution)
+    {
+        case RuntimeFilterDistribution::LOCAL:
+            return "Local";
+        case RuntimeFilterDistribution::DISTRIBUTED:
+            return "Distributed";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 String bypassTypeToString(BypassType type)
 {
     switch (type)
@@ -28,8 +41,9 @@ String bypassTypeToString(BypassType type)
 }
 
 
-RuntimeFilterBuilder::RuntimeFilterBuilder(ContextPtr context, const LinkedHashMap<String, RuntimeFilterBuildInfos> & runtime_filters_)
-    : runtime_filters(runtime_filters_), enable_range_cover(context->getSettingsRef().enable_range_cover)
+RuntimeFilterBuilder::RuntimeFilterBuilder(const Settings & settings, const LinkedHashMap<String, RuntimeFilterBuildInfos> & runtime_filters_)
+    : runtime_filters(runtime_filters_)
+    , enable_range_cover(settings.enable_range_cover)
 {
     // use min runtime filter id as builder id in coordinator merge.
     builder_id = std::min_element(runtime_filters.begin(), runtime_filters.end(), [](const auto & lhs, const auto & rhs) {
@@ -37,13 +51,13 @@ RuntimeFilterBuilder::RuntimeFilterBuilder(ContextPtr context, const LinkedHashM
                  })->second.id;
 }
 
-RuntimeFilterData RuntimeFilterBuilder::merge(std::vector<RuntimeFilterData> & data_sets) const
+RuntimeFilterData RuntimeFilterBuilder::merge(std::map<UInt32, RuntimeFilterData> && data_sets) const
 {
     RuntimeFilterData res;
     // if all empty bypass
     bool all_empty = true;
     for (auto & ds : data_sets)
-        all_empty = ds.bypass == BypassType::BYPASS_EMPTY_HT && all_empty;
+        all_empty = ds.second.bypass == BypassType::BYPASS_EMPTY_HT && all_empty;
 
     if (all_empty)
     {
@@ -54,7 +68,7 @@ RuntimeFilterData RuntimeFilterBuilder::merge(std::vector<RuntimeFilterData> & d
     // should be no large bypass
     bool all_ready = true;
     for (auto & ds : data_sets)
-        all_ready = ds.bypass != BypassType::BYPASS_LARGE_HT && all_ready;
+        all_ready = ds.second.bypass != BypassType::BYPASS_LARGE_HT && all_ready;
 
     if (!all_ready)
     {
@@ -63,35 +77,82 @@ RuntimeFilterData RuntimeFilterBuilder::merge(std::vector<RuntimeFilterData> & d
         return res;
     }
 
-    std::vector<RuntimeFilterId> invalid_ids;
-    for (auto & data : data_sets)
+    /// if all pre enlarged, use pre enlarge else use the shuffle-aware grf
+    std::map<RuntimeFilterId, bool> is_all_pre_enlarged;
+    for (const auto & data : data_sets)
     {
-        if (data.bypass == BypassType::BYPASS_EMPTY_HT)
-            continue ; // some component is empty
-
-        for (auto & rfs : data.runtime_filters)
+        for (const auto & rf : data.second.runtime_filters)
         {
-            if (res.runtime_filters.contains(rfs.first))
+            if (rf.second.is_bf && is_all_pre_enlarged.contains(rf.first))
+                is_all_pre_enlarged[rf.first] = is_all_pre_enlarged[rf.first] && rf.second.bloom_filter->is_pre_enlarged;
+            else
+                is_all_pre_enlarged[rf.first] = !rf.second.is_bf ||  rf.second.bloom_filter->is_pre_enlarged; /// value set treat as enlarged
+        }
+    }
+
+    std::vector<RuntimeFilterId> invalid_ids;
+    for (auto && [pid, rfs] : data_sets)
+    {
+        if (rfs.bypass == BypassType::BYPASS_EMPTY_HT)
+            continue ; // it's ok if some worker's rf is empty
+
+        for (auto && [rf_id, rfv] : rfs.runtime_filters)
+        {
+            if (res.runtime_filters.contains(rf_id))
             {
-                if (res.runtime_filters[rfs.first].is_bf != rfs.second.is_bf)
+                if (res.runtime_filters[rf_id].is_bf != rfv.is_bf)
                 {
+                    /// try merge the value set back to bloom filter, only support numeric type
+                    bool merge_value_set_success = false;
+                    if (res.runtime_filters[rf_id].is_bf)
+                    {
+                        if (res.runtime_filters[rf_id].bloom_filter->num_partitions > 0) /// shuffle's component cannot merge value set
+                        {
+                            invalid_ids.push_back(rf_id);
+                            continue;
+                        }
+
+                        if (res.runtime_filters[rf_id].bloom_filter->has_min_max && rfv.values_set->has_min_max)
+                        {
+                            res.runtime_filters[rf_id].bloom_filter->mergeValueSet(*rfv.values_set);
+                            merge_value_set_success = true;
+                        }
+                    }
+                    else
+                    {
+                        if (rfv.bloom_filter->has_min_max && res.runtime_filters[rf_id].values_set->has_min_max)
+                        {
+                            rfv.bloom_filter->mergeValueSet(*res.runtime_filters[rf_id].values_set);
+                            res.runtime_filters[rf_id] = std::move(rfv);
+                            merge_value_set_success = true;
+                        }
+                    }
+
                     // for global rf, if different worker generate different rf, this rf should be invalid
-                    invalid_ids.push_back(rfs.first);
+                    if (!merge_value_set_success)
+                        invalid_ids.push_back(rf_id);
                     continue ;
                 }
 
-                if (rfs.second.is_bf)
+                if (rfv.is_bf)
                 {
-                    res.runtime_filters[rfs.first].bloom_filter->mergeInplace(std::move(*rfs.second.bloom_filter));
+                    if (is_all_pre_enlarged.at(rf_id))
+                        res.runtime_filters[rf_id].bloom_filter->mergeInplace(std::move(*rfv.bloom_filter));
+                    else
+                        res.runtime_filters[rf_id].bloom_filter->concatInplace(std::move(*rfv.bloom_filter));
                 }
                 else
                 {
-                    res.runtime_filters[rfs.first].values_set->merge(*rfs.second.values_set);
+                    res.runtime_filters[rf_id].values_set->merge(*rfv.values_set);
                 }
             }
             else
             {
-                res.runtime_filters.emplace(rfs.first, std::move(rfs.second));
+                res.runtime_filters.emplace(rf_id, std::move(rfv));
+                if (!is_all_pre_enlarged.at(rf_id) && res.runtime_filters.at(rf_id).is_bf)
+                {
+                    res.runtime_filters[rf_id].bloom_filter->initForConcat();
+                }
             }
         }
     }
@@ -101,17 +162,19 @@ RuntimeFilterData RuntimeFilterBuilder::merge(std::vector<RuntimeFilterData> & d
         res.runtime_filters.erase(id);
     }
 
+    data_sets.clear();
     return res;
 }
 
-
-std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::extractValues(RuntimeFilterData && data) const
+std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::extractDistributedValues(RuntimeFilterData && data) const
 {
     std::unordered_map<RuntimeFilterId, InternalDynamicData> res;
     if (data.bypass == BypassType::BYPASS_LARGE_HT)
     {
         for (const auto & rf : runtime_filters)
         {
+            if (rf.second.distribution != RuntimeFilterDistribution::DISTRIBUTED)
+                continue;
             InternalDynamicData d;
             d.bypass = BypassType::BYPASS_LARGE_HT;
             res.emplace(rf.second.id, d);
@@ -124,6 +187,8 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
     {
         for (const auto & rf : runtime_filters)
         {
+            if (rf.second.distribution != RuntimeFilterDistribution::DISTRIBUTED)
+                continue;
             InternalDynamicData d;
             d.bypass = BypassType::BYPASS_EMPTY_HT;
             res.emplace(rf.second.id, d);
@@ -136,6 +201,9 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
 
     for (const auto & runtime_filter : runtime_filters)
     {
+        if (runtime_filter.second.distribution != RuntimeFilterDistribution::DISTRIBUTED)
+            continue;
+
         auto id = runtime_filter.second.id;
         InternalDynamicData filter;
 
@@ -146,8 +214,8 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
                 if (enable_range_cover && data.runtime_filters[id].bloom_filter->isRangeMatch())
                 {
                     Array array;
-                    array.emplace_back(data.runtime_filters[id].bloom_filter->Min());
-                    array.emplace_back(data.runtime_filters[id].bloom_filter->Max());
+                    array.emplace_back(data.runtime_filters[id].bloom_filter->min());
+                    array.emplace_back(data.runtime_filters[id].bloom_filter->max());
                     filter.range = std::move(array);
                     res[id] = std::move(filter);
                     continue;
@@ -159,8 +227,8 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
                 if (!enable_range_cover && data.runtime_filters[id].bloom_filter->has_min_max)
                 {
                     Array array;
-                    array.emplace_back(data.runtime_filters[id].bloom_filter->Min());
-                    array.emplace_back(data.runtime_filters[id].bloom_filter->Max());
+                    array.emplace_back(data.runtime_filters[id].bloom_filter->min());
+                    array.emplace_back(data.runtime_filters[id].bloom_filter->max());
                     filter.range = std::move(array);
                 }
                 res[id] = std::move(filter);
@@ -232,7 +300,7 @@ String RuntimeFilterVal::dump() const
     if (bloom_filter)
         ss << "bloom filter";
     else if (values_set)
-        ss << "values set";
+        ss << "values set"; 
     else
         ss << "empty";
     return ss.str();

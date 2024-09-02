@@ -34,12 +34,16 @@ public:
         TransactionRecord record,
         ManipulationType type_,
         const StoragePtr table_,
-        const Strings & source_part_names_)
+        const Strings & source_part_names_,
+        UInt64 manipulation_submit_time_ns_ = 0,
+        UInt64 peak_memory_usage_ = 0)
         : IAction(query_context_, txn_id_)
         , txn_record(std::move(record))
         , type(type_)
         , table(table_)
         , source_part_names(source_part_names_)
+        , manipulation_submit_time_ns(manipulation_submit_time_ns_)
+        , peak_memory_usage(peak_memory_usage_)
         , log(&Poco::Logger::get("MergeMutationAction"))
     {
     }
@@ -71,6 +75,10 @@ private:
     ManipulationType type;
     const StoragePtr table;
     Strings source_part_names;
+
+    UInt64 manipulation_submit_time_ns;
+    UInt64 peak_memory_usage;
+
     Poco::Logger * log;
 
     MutableMergeTreeDataPartsCNCHVector parts;

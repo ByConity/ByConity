@@ -34,6 +34,14 @@ bool ParserAlterWarehouseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserKeyword s_alter_warehouse("ALTER WAREHOUSE ");
     ParserKeyword s_rename_to("RENAME TO");
     ParserKeyword s_settings("SETTINGS");
+    ParserKeyword s_add_rule("ADD RULE");
+    ParserKeyword s_delete_rule("DELETE RULE");
+    ParserKeyword s_modify_rule("MODIFY RULE");
+    ParserKeyword s_set("SET");
+    ParserKeyword s_where("WHERE");
+
+    ParserList parser_assignment_list(std::make_unique<ParserAssignment>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserExpression parser_exp_elem;
     ParserIdentifier rename_p;
     ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
 
@@ -62,6 +70,35 @@ bool ParserAlterWarehouseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
         }
 
         break;
+    }
+
+    if (s_add_rule.ignore(pos, expected))
+    {
+        query->type = ASTAlterWarehouseQuery::Type::ADD_RULE; 
+        if (!s_set.ignore(pos, expected))
+            return false;
+
+        if (!parser_assignment_list.parse(pos, query->assignment_list, expected))
+            return false;
+    }
+    else if (s_delete_rule.ignore(pos, expected))
+    {
+        query->type = ASTAlterWarehouseQuery::Type::DELETE_RULE; 
+    }
+    else if (s_modify_rule.ignore(pos, expected))
+    {
+        query->type = ASTAlterWarehouseQuery::Type::MODIFY_RULE; 
+        if (!s_set.ignore(pos, expected))
+            return false;
+
+        if (!parser_assignment_list.parse(pos, query->assignment_list, expected))
+            return false;
+    }
+
+    if (s_where.ignore(pos, expected))
+    {
+        if (!parser_exp_elem.parse(pos, query->predicate, expected))
+            return false;
     }
 
     if (s_settings.ignore(pos, expected))

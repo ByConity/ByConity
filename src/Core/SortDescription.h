@@ -94,7 +94,7 @@ struct SortColumnDescription
     bool operator == (const SortColumnDescription & other) const
     {
         return column_name == other.column_name && column_number == other.column_number
-            && direction == other.direction && nulls_direction == other.nulls_direction;
+            && direction == other.direction && (nulls_direction == other.nulls_direction || nulls_direction == 0 || other.nulls_direction == 0);
     }
 
     bool operator != (const SortColumnDescription & other) const
@@ -110,7 +110,11 @@ struct SortColumnDescription
     std::string format() const
     {
         return fmt::format(
-            "{} {} {}", column_name, direction == 1 ? "ASC" : "DESC", nulls_direction == direction ? "NULLS LAST" : "NULLS FIRST");
+            "{} {} {}", 
+            column_name, 
+            direction == 1 ? "ASC" : "DESC", 
+            nulls_direction == 0 ? "ANY" : 
+                (nulls_direction == direction ? "NULLS LAST" : "NULLS FIRST"));
     }
 
     void explain(JSONBuilder::JSONMap & map, const Block & header) const;

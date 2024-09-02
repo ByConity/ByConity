@@ -28,10 +28,10 @@ class LiteralEncoder
 {
 public:
     // create an ASTLiteral by a Field and its desired type
-    static ASTPtr encode(Field field, const DataTypePtr & type, ContextMutablePtr context);
+    static ASTPtr encode(Field field, const DataTypePtr & type, ContextPtr context);
 
     // create an ASTLiteral for a comparison expression e.g. symbol_x = ASTLiteral(`field`),
     // param `type` is the type of symbol_x
-    static ASTPtr encodeForComparisonExpr(Field field, const DataTypePtr & type, ContextMutablePtr context);
+    static ASTPtr encodeForComparisonExpr(Field field, const DataTypePtr & type, ContextPtr context);
 };
 }

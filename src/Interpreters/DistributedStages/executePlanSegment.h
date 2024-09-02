@@ -119,12 +119,6 @@ using AsyncContextPtr = std::shared_ptr<AsyncContext>;
 BlockIO lazyExecutePlanSegmentLocally(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context);
 
 void executePlanSegmentInternal(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context, bool async);
-void executePlanSegmentRemotely(
-    const PlanSegment & plan_segment,
-    const PlanSegmentExecutionInfo & execution_info,
-    ContextPtr context,
-    AsyncContextPtr & async_context,
-    const WorkerId & worker_id = WorkerId{});
 
 // void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context);
 

@@ -2,6 +2,7 @@ syntax = "proto2";
 package DB.Protos;
 
 import "data_models.proto";
+import "data_models_mv.proto";
 import "cnch_common.proto";
 import "auto_statistics.proto";
 
@@ -68,6 +69,16 @@ message CommitTransactionResp {
   optional uint64 commit_ts = 2;
 };
 
+message RedirectCommitTransactionReq
+{
+  required TransactionMetadata txn_meta = 1;
+}
+
+message RedirectCommitTransactionResp
+{
+  optional string exception = 1;
+}
+
 message PrecommitTransactionReq {
   required uint64 txn_id = 1;
   required UUID main_table_uuid = 2;
@@ -102,6 +113,8 @@ message CommitPartsReq {
 
   // Binlog will be committed with parts while sync MaterializedMySQL
   optional MySQLBinlogModel binlog = 14;
+  optional uint64 peak_memory_usage = 15;
+  optional uint32 dedup_mode = 16;
 };
 
 message CommitPartsResp {
@@ -183,11 +196,27 @@ message FetchDataPartsReq {
   required uint64 table_commit_time = 4;
   repeated string partitions = 5;
   required uint64 timestamp = 6;
+  repeated int64 bucket_numbers = 7;
 }
 
 message FetchDataPartsResp {
   optional string exception = 1;
   repeated DataModelPart parts = 2;
+}
+
+message FetchDeleteBitmapsReq {
+  required string remote_host = 1;
+  required string database = 2;
+  required string table = 3;
+  required uint64 table_commit_time = 4;
+  repeated string partitions = 5;
+  required uint64 timestamp = 6;
+  repeated int64 bucket_numbers = 7;
+}
+
+message FetchDeleteBitmapsResp {
+  optional string exception = 1;
+  repeated DataModelDeleteBitmap delete_bitmaps = 2;
 }
 
 message FetchUniqueTableMetaReq {
@@ -204,6 +233,19 @@ message FetchUniqueTableMetaResp {
   optional string exception = 1;
   repeated DataModelPart parts = 2;
   repeated DataModelDeleteBitmap bitmaps = 3;
+}
+
+message FetchCloudTableMetaReq
+{
+  required StorageID storage_id = 1;
+  required uint64 timestamp = 2;
+  repeated int64 bucket_numbers = 3;
+}
+
+message FetchCloudTableMetaResp
+{
+  optional string exception = 1;
+  repeated DataModelPart parts = 2;
 }
 
 message GetTablePartitionInfoReq { repeated DataModelTable tables = 1; }
@@ -332,6 +374,17 @@ message RedirectCommitPartsReq {
 
 message RedirectCommitPartsResp { optional string exception = 1; }
 
+message RedirectClearPartsReq {
+  required string database = 1;
+  required string table = 2;
+  required UUID uuid = 3;
+  repeated DataModelPart parts = 5;
+  repeated DataModelPart staged_parts = 6;
+  repeated DataModelDeleteBitmap delete_bitmaps = 7;
+}
+
+message RedirectClearPartsResp { optional string exception = 1; }
+
 enum DetachAttachType {
   ATTACH_DETACHED_PARTS = 1; DETACH_ATTACHED_PARTS = 2; ATTACH_DETACHED_RAW = 3;
   DETACH_ATTACHED_RAW = 4;
@@ -433,14 +486,32 @@ message ForceRecalculateMetricsReq { required StorageID storage_id = 1; }
 
 message ForceRecalculateMetricsResp { optional string exception = 1; }
 
-message notifyAccessEntityChangeReq
-{
+message notifyAccessEntityChangeReq {
   required string type = 1;
   required string name = 2;
   required UUID uuid = 3;
 }
 
-message notifyAccessEntityChangeResp
+message notifyAccessEntityChangeResp { optional string exception = 1; }
+
+message getLastModificationTimeHintsReq { required StorageID storage_id = 1; }
+message getLastModificationTimeHintsResp {
+  optional string exception = 1;
+  repeated LastModificationTimeHint last_modification_time_hints = 2;
+}
+
+message notifyTableCreatedReq { required UUID storage_uuid = 1; }
+
+message notifyTableCreatedResp { optional string exception = 1; }
+
+message handleRefreshTaskOnFinishReq
+{
+  required string task_id = 1;
+  required uint64 txn_id = 2;
+  required StorageID mv_storage_id = 3;
+}
+
+message handleRefreshTaskOnFinishResp
 {
   optional string exception = 1;
 }
@@ -461,6 +532,8 @@ service CnchServerService {
   rpc finishTransaction(FinishTransactionReq) returns(FinishTransactionResp);
 
   rpc commitTransaction(CommitTransactionReq) returns(CommitTransactionResp);
+
+  rpc redirectCommitTransaction(RedirectCommitTransactionReq) returns(RedirectCommitTransactionResp); 
 
   rpc precommitTransaction(PrecommitTransactionReq)
       returns(PrecommitTransactionResp);
@@ -484,10 +557,14 @@ service CnchServerService {
 
   rpc fetchDataParts(FetchDataPartsReq) returns(FetchDataPartsResp);
 
+  rpc fetchDeleteBitmaps(FetchDeleteBitmapsReq) returns(FetchDeleteBitmapsResp);
+
   rpc fetchPartitions(FetchPartitionsReq) returns(FetchPartitionsResp);
 
   rpc fetchUniqueTableMeta(FetchUniqueTableMetaReq)
       returns(FetchUniqueTableMetaResp);
+
+  rpc fetchCloudTableMeta(FetchCloudTableMetaReq) returns (FetchCloudTableMetaResp);
 
   rpc getTablePartitionInfo(GetTablePartitionInfoReq)
       returns(GetTablePartitionInfoResp);
@@ -536,6 +613,9 @@ service CnchServerService {
   rpc redirectCommitParts(RedirectCommitPartsReq)
       returns(RedirectCommitPartsResp);
 
+  rpc redirectClearParts(RedirectClearPartsReq)
+      returns(RedirectClearPartsResp);
+
   rpc redirectSetCommitTime(RedirectCommitPartsReq)
       returns(RedirectCommitPartsResp);
 
@@ -566,5 +646,13 @@ service CnchServerService {
   rpc forceRecalculateMetrics(ForceRecalculateMetricsReq)
       returns(ForceRecalculateMetricsResp);
 
-  rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
+  rpc notifyAccessEntityChange(notifyAccessEntityChangeReq)
+      returns(notifyAccessEntityChangeResp);
+
+  rpc getLastModificationTimeHints(getLastModificationTimeHintsReq)
+      returns(getLastModificationTimeHintsResp);
+  rpc notifyTableCreated(notifyTableCreatedReq) returns(notifyTableCreatedResp);
+
+  rpc handleRefreshTaskOnFinish(handleRefreshTaskOnFinishReq) 
+      returns (handleRefreshTaskOnFinishResp);
 };

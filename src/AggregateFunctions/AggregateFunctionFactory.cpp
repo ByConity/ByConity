@@ -71,9 +71,12 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
 {
     auto type_without_low_cardinality = convertLowCardinalityTypesToNested(argument_types);
 
-    /// If one of the types is Nullable, we apply aggregate function combinator "Null".
-
-    if (std::any_of(type_without_low_cardinality.begin(), type_without_low_cardinality.end(),
+    /// If one of the types is Nullable, we apply aggregate function combinator "Null" if it's not window function.
+    /// Window functions are not real aggregate functions. Applying combinators doesn't make sense for them,
+    /// they must handle the nullability themselves
+    auto properties = tryGetPropertiesImpl(name);
+    bool is_window_function = properties.has_value() && properties->is_window_function;
+    if (!is_window_function && std::any_of(type_without_low_cardinality.begin(), type_without_low_cardinality.end(),
         [](const auto & type) { return type->isNullable(); }))
     {
         AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("Null");
@@ -81,7 +84,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             throw Exception("Logical error: cannot find aggregate function combinator to apply a function to Nullable arguments.",
                 ErrorCodes::LOGICAL_ERROR);
 
-        DataTypes nested_types = combinator->transformArguments(type_without_low_cardinality);
+        DataTypes nested_types = combinator->transformArguments(type_without_low_cardinality, parameters);
         Array nested_parameters = combinator->transformParameters(parameters);
 
         bool has_null_arguments = std::any_of(type_without_low_cardinality.begin(), type_without_low_cardinality.end(),
@@ -169,7 +172,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
             query_context->addQueryFactoriesInfo(Context::QueryLogFactories::AggregateFunctionCombinator, combinator->getName());
 
         String nested_name = name.substr(0, name.size() - combinator->getName().size());
-        DataTypes nested_types = combinator->transformArguments(argument_types);
+        DataTypes nested_types = combinator->transformArguments(argument_types, parameters);
         Array nested_parameters = combinator->transformParameters(parameters);
 
         AggregateFunctionPtr nested_function = get(nested_name, nested_types, nested_parameters, out_properties);

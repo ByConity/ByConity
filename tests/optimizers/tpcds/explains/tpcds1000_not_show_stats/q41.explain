@@ -16,21 +16,23 @@ Projection
                      │     Group by: {i_product_name}
                      └─ Inner Join
                         │     Condition: 
-                        │     Filter: coalesce(`expr#count()`, countIf) != 0
+                        │     Filter: coalesce(`expr#count()_2`, countIf) != 0
                         ├─ Left Join
                         │  │     Condition: i_manufact == i_manufact_1
-                        │  ├─ Filter
-                        │  │  │     Condition: (i_manufact_id >= 738) AND (i_manufact_id <= 778)
-                        │  │  └─ TableScan tpcds1000.item
-                        │  │           Where: (i_manufact_id >= 738) AND (i_manufact_id <= 778)
-                        │  │           Outputs: [i_manufact_id, i_manufact, i_product_name]
+                        │  ├─ Projection
+                        │  │  │     Expressions: [i_manufact, i_product_name]
+                        │  │  └─ Filter
+                        │  │     │     Condition: (i_manufact_id >= 738) AND (i_manufact_id <= cast(778, 'UInt32'))
+                        │  │     └─ TableScan tpcds1000.item
+                        │  │              Where: (i_manufact_id >= 738) AND (i_manufact_id <= cast(778, 'UInt32'))
+                        │  │              Outputs: [i_manufact_id, i_manufact, i_product_name]
                         │  └─ Broadcast Exchange
                         │     └─ MergingAggregated
                         │        └─ Repartition Exchange
                         │           │     Partition by: {i_manufact_1}
                         │           └─ Aggregating
                         │              │     Group by: {i_manufact_1}
-                        │              │     Aggregates: expr#count():=AggNull(countIf)(build_side_non_null_symbol)
+                        │              │     Aggregates: expr#count()_2:=AggNull(countIf)(build_side_non_null_symbol)
                         │              └─ Projection
                         │                 │     Expressions: [i_manufact_1], build_side_non_null_symbol:=1
                         │                 └─ Filter

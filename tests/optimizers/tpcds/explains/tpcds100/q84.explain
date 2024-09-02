@@ -1,52 +1,58 @@
 Projection Est. 100 rows
-│     Expressions: customer_id:=c_customer_id, customername:=concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))
-└─ Limit Est. 100 rows
-   │     Limit: 100
-   └─ Sorting Est. 100 rows
-      │     Order by: {c_customer_id ASC NULLS LAST}
+│     Expressions: customer_id:=c_customer_id, customername:=`expr#concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))`
+└─ Projection Est. 100 rows
+   │     Expressions: [c_customer_id], expr#concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, '')):=concat(coalesce(c_last_name, ''), ', ', coalesce(c_first_name, ''))
+   └─ Limit Est. 100 rows
       │     Limit: 100
-      └─ Gather Exchange Est. 93298 rows
-         └─ Sorting Est. 100 rows
-            │     Order by: {c_customer_id ASC NULLS LAST}
-            │     Limit: 100
-            └─ Inner Join Est. 93298 rows
-               │     Condition: sr_cdemo_sk == c_current_cdemo_sk
-               │     Runtime Filters Builder: {c_current_cdemo_sk}
-               ├─ Filter Est. 28795080 rows
-               │  │     Condition: Runtime Filters: {sr_cdemo_sk}
-               │  └─ TableScan tpcds100.store_returns Est. 28795080 rows
-               │           Where: Runtime Filters: {sr_cdemo_sk}
-               │           Outputs: [sr_cdemo_sk]
-               └─ Broadcast Exchange Est. 6207 rows
-                  └─ Inner Join Est. 6432 rows
-                     │     Condition: c_current_hdemo_sk == hd_demo_sk
-                     │     Runtime Filters Builder: {hd_demo_sk}
-                     ├─ Repartition Exchange Est. 20692 rows
-                     │  │     Partition by: {c_current_hdemo_sk}
-                     │  └─ Inner Join Est. 20692 rows
-                     │     │     Condition: c_current_addr_sk == ca_address_sk
-                     │     │     Runtime Filters Builder: {ca_address_sk}
-                     │     ├─ Filter Est. 1930057 rows
-                     │     │  │     Condition: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
-                     │     │  └─ TableScan tpcds100.customer Est. 2000000 rows
-                     │     │           Where: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
-                     │     │           Outputs: [c_customer_id, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_name, c_last_name]
-                     │     └─ Broadcast Exchange Est. 8969 rows
-                     │        └─ Filter Est. 8969 rows
-                     │           │     Condition: ca_city = 'Edgewood'
-                     │           └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                     │                    Where: ca_city = 'Edgewood'
-                     │                    Outputs: [ca_address_sk, ca_city]
-                     └─ Repartition Exchange Est. 2160 rows
-                        │     Partition by: {hd_demo_sk}
-                        └─ Inner Join Est. 2160 rows
-                           │     Condition: hd_income_band_sk == ib_income_band_sk
-                           ├─ TableScan tpcds100.household_demographics Est. 7200 rows
-                           │        Outputs: [hd_demo_sk, hd_income_band_sk]
-                           └─ Broadcast Exchange Est. 6 rows
-                              └─ Filter Est. 6 rows
-                                 │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
-                                 └─ TableScan tpcds100.income_band Est. 20 rows
-                                          Where: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
-                                          Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
+      └─ Sorting Est. 100 rows
+         │     Order by: {c_customer_id ASC NULLS LAST}
+         │     Limit: 100
+         └─ Gather Exchange Est. 90488 rows
+            └─ Sorting Est. 100 rows
+               │     Order by: {c_customer_id ASC NULLS LAST}
+               │     Limit: 100
+               └─ Inner Join Est. 90488 rows
+                  │     Condition: sr_cdemo_sk == c_current_cdemo_sk
+                  │     Runtime Filters Builder: {c_current_cdemo_sk}
+                  ├─ Filter Est. 28795080 rows
+                  │  │     Condition: Runtime Filters: {sr_cdemo_sk}
+                  │  └─ TableScan tpcds100.store_returns Est. 28795080 rows
+                  │           Where: Runtime Filters: {sr_cdemo_sk}
+                  │           Outputs: [sr_cdemo_sk]
+                  └─ Broadcast Exchange Est. 6020 rows
+                     └─ Inner Join Est. 6020 rows
+                        │     Condition: c_current_hdemo_sk == hd_demo_sk
+                        │     Runtime Filters Builder: {hd_demo_sk}
+                        ├─ Repartition Exchange Est. 20069 rows
+                        │  │     Partition by: {c_current_hdemo_sk}
+                        │  └─ Inner Join Est. 20069 rows
+                        │     │     Condition: c_current_addr_sk == ca_address_sk
+                        │     │     Runtime Filters Builder: {ca_address_sk}
+                        │     ├─ Filter Est. 1930057 rows
+                        │     │  │     Condition: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
+                        │     │  └─ TableScan tpcds100.customer Est. 2000000 rows
+                        │     │           Where: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
+                        │     │           Outputs: [c_customer_id, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_name, c_last_name]
+                        │     └─ Broadcast Exchange Est. 8699 rows
+                        │        └─ Projection Est. 8699 rows
+                        │           │     Expressions: [ca_address_sk]
+                        │           └─ Filter Est. 8699 rows
+                        │              │     Condition: ca_city = 'Edgewood'
+                        │              └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                        │                       Where: ca_city = 'Edgewood'
+                        │                       Outputs: [ca_address_sk, ca_city]
+                        └─ Repartition Exchange Est. 2160 rows
+                           │     Partition by: {hd_demo_sk}
+                           └─ Inner Join Est. 2160 rows
+                              │     Condition: hd_income_band_sk == ib_income_band_sk
+                              ├─ TableScan tpcds100.household_demographics Est. 7200 rows
+                              │        Outputs: [hd_demo_sk, hd_income_band_sk]
+                              └─ Broadcast Exchange Est. 6 rows
+                                 └─ Projection Est. 6 rows
+                                    │     Expressions: [ib_income_band_sk]
+                                    └─ Filter Est. 6 rows
+                                       │     Condition: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                                       └─ TableScan tpcds100.income_band Est. 20 rows
+                                                Where: (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                                                Outputs: [ib_income_band_sk, ib_lower_bound, ib_upper_bound]
 note: Runtime Filter is applied for 3 times.

@@ -81,6 +81,8 @@ void registerInputFormatProcessorJSONAsString(FormatFactory & factory);
 void registerInputFormatProcessorLineAsString(FormatFactory & factory);
 
 
+void registerParquetSchemaReader(FormatFactory & factory);
+
 void registerFormats()
 {
     auto & factory = FormatFactory::instance();
@@ -152,6 +154,8 @@ void registerFormats()
 
     registerInputFormatCapnProto(factory);
     registerOutputFormatCapnProto(factory);
+
+    registerParquetSchemaReader(factory);
 }
 
 }

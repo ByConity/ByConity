@@ -70,6 +70,12 @@ public:
         Protos::PrecommitTransactionResp * response,
         google::protobuf::Closure * done) override;
 
+    void redirectCommitTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::RedirectCommitTransactionReq * request,
+        Protos::RedirectCommitTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
     void rollbackTransaction(
         google::protobuf::RpcController * cntl,
         const Protos::RollbackTransactionReq * request,
@@ -98,6 +104,12 @@ public:
         ::google::protobuf::RpcController * controller,
         const ::DB::Protos::FetchDataPartsReq * request,
         ::DB::Protos::FetchDataPartsResp * response,
+        ::google::protobuf::Closure * done) override;
+
+    void fetchDeleteBitmaps(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::FetchDeleteBitmapsReq * request,
+        ::DB::Protos::FetchDeleteBitmapsResp * response,
         ::google::protobuf::Closure * done) override;
 
     void fetchPartitions(
@@ -269,6 +281,12 @@ public:
         Protos::RedirectCommitPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void redirectClearParts(
+        google::protobuf::RpcController * controller,
+        const Protos::RedirectClearPartsReq * request,
+        Protos::RedirectClearPartsResp * response,
+        google::protobuf::Closure * done) override;
+
     void redirectSetCommitTime(
         google::protobuf::RpcController * controller,
         const Protos::RedirectCommitPartsReq * request,
@@ -317,6 +335,12 @@ public:
         Protos::notifyAccessEntityChangeResp * response,
         google::protobuf::Closure *done) override;
 
+    void handleRefreshTaskOnFinish(
+        google::protobuf::RpcController *,
+        const Protos::handleRefreshTaskOnFinishReq * request,
+        Protos::handleRefreshTaskOnFinishResp * response,
+        google::protobuf::Closure *done) override;
+
 #if USE_MYSQL
     void submitMaterializedMySQLDDLQuery(
         google::protobuf::RpcController * cntl,
@@ -341,6 +365,18 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::ForceRecalculateMetricsReq * request,
         Protos::ForceRecalculateMetricsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getLastModificationTimeHints(
+        google::protobuf::RpcController * cntl,
+        const Protos::getLastModificationTimeHintsReq * request,
+        Protos::getLastModificationTimeHintsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void notifyTableCreated(
+        google::protobuf::RpcController * cntl,
+        const Protos::notifyTableCreatedReq * request,
+        Protos::notifyTableCreatedResp * response,
         google::protobuf::Closure * done) override;
 
 private:

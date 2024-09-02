@@ -27,6 +27,9 @@ namespace DB
  * [MIN_CLUSTER_COUNT = <num>,]
  * [WORKER_COUNT = <num>,]
  * [MAX_CONCURRENCY_LEVEL = num]
+ * [DELETE RULE where rule_name = <rule> and queue_name = <queue>]
+ * [ADD RULE rule_name set database = [<db>], table = [<table>] WHERE queue_name = <queue>]
+ * [MODIFY RULE  set max_concurrency = <size> WHERE queue_name = <queue>]
  */
 class ParserAlterWarehouseQuery : public IParserBase
 {

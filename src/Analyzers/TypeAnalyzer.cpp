@@ -56,6 +56,16 @@ DataTypePtr TypeAnalyzer::getType(const ConstASTPtr & expr) const
     return ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis, options);
 }
 
+DataTypePtr TypeAnalyzer::getTypeWithoutCheck(const ConstASTPtr & expr) const
+{
+    Analysis analysis;
+    ExprAnalyzerOptions options;
+    options.expandUntuple(false);
+    options.aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED);
+    options.windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
+    return ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis, options);
+}
+
 ExpressionTypes TypeAnalyzer::getExpressionTypes(const ConstASTPtr & expr) const
 {
     Analysis analysis;

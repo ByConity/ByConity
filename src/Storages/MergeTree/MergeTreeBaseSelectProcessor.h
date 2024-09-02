@@ -110,7 +110,9 @@ protected:
     MergeTreeReaderPtr pre_reader;
     MergeTreeIndexExecutorPtr index_executor;
     MergeTreeIndexExecutorPtr pre_index_executor;
-    NameSet bitmap_index_columns_superset; 
+    NameSet bitmap_index_columns_superset;
+    bool support_intermedicate_result_cache;
+
 };
 
 }

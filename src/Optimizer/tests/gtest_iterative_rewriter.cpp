@@ -37,8 +37,12 @@ struct MergeRule : public Rule
 
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override { return filter().withSingle(filter().capturedAs(subNodeCap)).result(); }
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
+    {
+        static auto pattern = filter().withSingle(filter().capturedAs(subNodeCap)).result();
+        return pattern;
+    }
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext &) override
     {
         auto subNode = captures.at<PlanNodePtr>(subNodeCap);
@@ -60,8 +64,12 @@ struct RemoveRule : public Rule
     RemoveRule(int target_) : target(target_) { }
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override { return filter().result(); }
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
+    {
+        static auto pattern = filter().result();
+        return pattern;
+    }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
         if (node->getChildren().size() == 1 && dynamic_cast<const MockedStepForRewriterTest *>(node->getStep().get())->i == target)
@@ -77,8 +85,12 @@ struct RecorderRule : public Rule
     std::unordered_set<PlanNodePtr> seen;
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override { return DB::Patterns::any().result(); }
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
+    {
+        static auto pattern = DB::Patterns::any().result();
+        return pattern;
+    }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
         ++calls;
@@ -91,15 +103,23 @@ struct AddExchangeRule : public Rule
 {
     const static Capture subNodeCap;
 
+    AddExchangeRule()
+    {
+        pattern
+            = join()
+                  .withAny(DB::Patterns::any()
+                               .capturedAs(subNodeCap))
+                  .result();
+    }
+    bool excludeIfTransformSuccess() const override { return true; }
+    bool excludeIfTransformFailure() const override { return true; }
+
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
     {
-        return join().withAny(
-            DB::Patterns::any()
-                .matchingStep<IQueryPlanStep>([](auto & step) { return step.getType() != IQueryPlanStep::Type::Exchange; })
-                .capturedAs(subNodeCap)).result();
+        return pattern;
     }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext & context) override
     {
@@ -128,17 +148,20 @@ struct AddExchangeRule : public Rule
         node->setStep(new_step);
         return node;
     }
+private:
+    PatternPtr pattern;
 };
-const Capture AddExchangeRule::subNodeCap;
+const Capture AddExchangeRule::subNodeCap{"subNodeCap"};
 
 struct FillDbNameRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
     {
-        return tableScan().matchingStep<MockedTableScanStep>([](auto & step) { return step.database == ""; }).result();
+        static auto pattern = tableScan().matchingStep<MockedTableScanStep>([](auto & step) { return step.database == ""; }).result();
+        return pattern;
     }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
@@ -155,8 +178,12 @@ struct RemoveFilterNodeRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override { return filter().result(); }
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
+    {
+        static auto pattern = filter().result();
+        return pattern;
+    }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
         return node->getChildren().empty() ? nullptr : node->getChildren()[0];
@@ -168,16 +195,21 @@ struct SortRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
     {
-        static Capture outerValCap;
-        static Capture innerValCap;
+        static Capture outerValCap{"outerValCap"};
+        static Capture innerValCap{"innerValCap"};
 
-        return filter()
-                  .capturedStepAs<MockedStepForRewriterTest>(outerValCap, &MockedStepForRewriterTest::i)
-                  .withSingle(filter().capturedStepAs<MockedStepForRewriterTest>(innerValCap, &MockedStepForRewriterTest::i))
-                  .matchingCapture([](const Captures & caps) { return caps.at<int>(outerValCap) > caps.at<int>(innerValCap); }).result();
+        static auto pattern = filter()
+                                  .capturedStepAs<MockedStepForRewriterTest>(outerValCap, &MockedStepForRewriterTest::i)
+                                  .withSingle(filter()
+                                                  .capturedStepAs<MockedStepForRewriterTest>(innerValCap, &MockedStepForRewriterTest::i)
+                                                  .matchingCapture([](const Captures & caps) {
+                                                      return caps.at<int>(outerValCap) > caps.at<int>(innerValCap);
+                                                  }))
+                                  .result();
+        return pattern;
     }
 
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
@@ -193,8 +225,12 @@ struct NeverEndRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override { return DB::Patterns::any().result(); }
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
+    {
+        static auto pattern = DB::Patterns::any().result();
+        return pattern;
+    }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override { return node; }
 };
 
@@ -206,8 +242,12 @@ struct SleepRule : public Rule
     int64_t sleep;
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;}
-    PatternPtr getPattern() const override { return DB::Patterns::any().result(); }
+    bool isEnabled(ContextPtr) const override { return true; }
+    ConstRefPatternPtr getPattern() const override
+    {
+        static auto pattern = DB::Patterns::any().result();
+        return pattern;
+    }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
         ++runs;
@@ -222,16 +262,20 @@ struct SleepRule : public Rule
     }
 };
 
-void check_continuous_nodes(PlanNodePtr node, int index, std::string testname)
+void check_continuous_nodes(PlanNodePtr node, int index, int max_index, std::string testname)
 {
     ASSERT_EQ(dynamic_cast<const MockedStepForRewriterTest *>(node->getStep().get())->i, index)
         << testname << " fails, index: " + std::to_string(index) << ", reason: "
         << "not expected number";
-    if (node->getChildren().size() > 0)
+    if (index < max_index)
     {
         ASSERT_EQ(node->getChildren().size(), 1) << testname << " fails, index: " + std::to_string(index) << ", reason: "
                                                    << "not single child";
-        check_continuous_nodes(node->getChildren()[0], index + 1, testname);
+        check_continuous_nodes(node->getChildren()[0], index + 1, max_index, testname);
+    }
+    else
+    {
+        ASSERT_EQ(node->getChildren().size(), 0);
     }
 }
 
@@ -480,7 +524,7 @@ TEST(OptimizerIterativeRewriterTest, ChildrenRewriteLeadToNodeRewriteLeadToChild
     auto context = Context::createCopy(getContext().context);
     rewriter.rewritePlan(query_plan, context);
 
-    check_continuous_nodes(query_plan.getPlanNode(), 1, "test 4 nodes sorting");
+    check_continuous_nodes(query_plan.getPlanNode(), 1, 4, "test 4 nodes sorting");
 }
 
 TEST(OptimizerIterativeRewriterTest, SortRule)
@@ -502,7 +546,7 @@ TEST(OptimizerIterativeRewriterTest, SortRule)
     auto context = Context::createCopy(getContext().context);
     rewriter.rewritePlan(query_plan1, context);
 
-    check_continuous_nodes(query_plan1.getPlanNode(), 1, "test 8 nodes sorting case 1");
+    check_continuous_nodes(query_plan1.getPlanNode(), 1, 8, "test 8 nodes sorting case 1");
 
     PlanNodePtr plan2 = createRewriteTestNode(
         4,
@@ -518,5 +562,5 @@ TEST(OptimizerIterativeRewriterTest, SortRule)
     QueryPlan query_plan2 = createQueryPlan(plan2);
     rewriter.rewritePlan(query_plan2, context);
 
-    check_continuous_nodes(query_plan2.getPlanNode(), 1, "test 8 nodes sorting case 2");
+    check_continuous_nodes(query_plan2.getPlanNode(), 1, 8, "test 8 nodes sorting case 2");
 }

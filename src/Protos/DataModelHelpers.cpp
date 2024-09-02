@@ -12,6 +12,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <memory>
+#include <optional>
+#include <Protos/DataModelHelpers.h>
 
 #include <memory>
 #include <Catalog/DataModelPartWrapper.h>
@@ -49,7 +52,7 @@ namespace ErrorCodes
     extern const int EMPTY_PARTITION_IN_DATA_MODEL_PART;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, Protos::DataModelPart && part_model, String && part_name)
+DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart && part_model, const String && part_name)
 {
     DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(std::move(part_model), std::move(part_name));
 
@@ -58,7 +61,7 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
     if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
         throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
 
-    part_model_wrapper->partition.load(storage, partition_minmax_buf);
+    part_model_wrapper->partition->load(storage, partition_minmax_buf);
     if (part_model_wrapper->part_model->rows_count() > 0)
     {
         part_model_wrapper->minmax_idx = std::make_shared<IMergeTreeDataPart::MinMaxIndex>();
@@ -68,7 +71,7 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
     return part_model_wrapper;
 }
 
-DataModelPartWrapperPtr createPartWrapperFromModelBasic(Protos::DataModelPart && part_model, String && part_name)
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart && part_model, const String && part_name)
 {
     DataModelPartWrapperPtr part_model_wrapper = std::make_shared<DataModelPartWrapper>();
 
@@ -144,6 +147,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
 
     part->bytes_on_disk = part_model.size();
     part->rows_count = part_model.rows_count();
+    part->row_exists_count = part_model.has_row_exists_count() ? part_model.row_exists_count() : part_model.rows_count();
     if (!part_model.has_marks_count())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cnch parts must have mark count");
     if (!part->isPartial() || !part->isEmpty())
@@ -158,6 +162,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     part->bucket_number = part_model.bucket_number();
     part->table_definition_hash = part_model.table_definition_hash();
     part->mutation_commit_time = part_model.has_mutation_commit_time() ? part_model.mutation_commit_time() : 0;
+    part->last_modification_time = part_model.last_modification_time();
     if (part_model.has_commit_time())
         part->commit_time = TxnTimestamp{part_model.commit_time()};
     else
@@ -189,6 +194,10 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     std::unordered_set<std::string> projection_parts_names(part_model.projections().begin(), part_model.projections().end());
     part->setProjectionPartsNames(projection_parts_names);
     part->setHostPort(part_model.disk_cache_host_port(), part_model.assign_compute_host_port());
+
+    part->ttl_infos.part_min_ttl = part_model.part_ttl_info().part_min_ttl();
+    part->ttl_infos.part_max_ttl = part_model.part_ttl_info().part_max_ttl();
+    part->ttl_infos.part_finished = part_model.part_ttl_info().part_finished();
 
     return part;
 }
@@ -241,8 +250,12 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     Protos::DataModelPartInfo * model_info = part_model.mutable_part_info();
     fillPartInfoModel(part, *model_info);
 
+    Protos::DataModelPartTTLInfo * model_ttl_info = part_model.mutable_part_ttl_info();
+    fillPartTTLInfoModel(part, *model_ttl_info);
+
     part_model.set_size(part.bytes_on_disk);
     part_model.set_rows_count(part.rows_count);
+    part_model.set_row_exists_count(part.row_exists_count.has_value() ? part.row_exists_count.value() : part.rows_count);
     ///TODO: if we need marks_count in ce?
     if (part.index_granularity_info.is_adaptive)
     {
@@ -282,6 +295,8 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
         part_model.set_delete_flag(part.delete_flag);
     if (part.low_priority)
         part_model.set_low_priority(part.low_priority);
+    if (part.last_modification_time)
+        part_model.set_last_modification_time(part.last_modification_time);
 
     if (!ignore_column_commit_time && part.columns_commit_time)
     {
@@ -297,7 +312,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
         part_model.set_columns(part.getColumns().toString());
     }
 
-    if (DB::hasDynamicSubcolumns(storage.getInMemoryMetadata().columns))
+    if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         if (auto commit_time = DB::getColumnsCommitTimeForJSONTable(storage, *(part.getColumnsPtr())))
             part_model.set_columns_commit_time(commit_time);
@@ -370,6 +385,13 @@ void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInf
     part_info_model.set_hint_mutation(part.info.hint_mutation);
 }
 
+void fillPartTTLInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartTTLInfo & part_ttl_info_model)
+{
+    part_ttl_info_model.set_part_min_ttl(part.ttl_infos.part_min_ttl);
+    part_ttl_info_model.set_part_max_ttl(part.ttl_infos.part_max_ttl);
+    part_ttl_info_model.set_part_finished(!part.ttl_infos.hasAnyNonFinishedTTLs());
+}
+
 void fillPartsModelForSend(
     const IStorage & storage, const ServerDataPartsVector & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model)
 {
@@ -381,14 +403,8 @@ void fillPartsModelForSend(
         part_model.set_commit_time(part->getCommitTime());
         part_model.set_virtual_part_size(part->getVirtualPartSize());
 
-        auto table_has_dynamic_subcolumns = hasDynamicSubcolumns(storage.getInMemoryMetadataPtr()->columns);
-        if (table_has_dynamic_subcolumns)
-        {
-            if (part_model.has_columns())
-            {
-                continue;
-            }
-        }
+        if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns() && part_model.has_columns())
+            continue;
 
         if (part_model.has_columns_commit_time() && sent_columns_commit_time.count(part_model.columns_commit_time()) == 0)
         {
@@ -399,6 +415,40 @@ void fillPartsModelForSend(
         }
         part_model.set_disk_cache_host_port(part->disk_cache_host_port);
         part_model.set_assign_compute_host_port(part->assign_compute_host_port);
+    }
+}
+
+void fillPartsModelForSend(
+    const IStorage & storage, const ServerVirtualPartVector & parts, pb::RepeatedPtrField<Protos::DataModelVirtualPart> & parts_model)
+{
+    std::set<UInt64> sent_columns_commit_time;
+    for (const auto & part_with_ranges : parts)
+    {
+        const auto & part = part_with_ranges->part;
+        const auto & ranges = part_with_ranges->mark_ranges;
+        auto & model = *parts_model.Add();
+        auto * part_model = model.mutable_part();
+        *part_model = part->part_model();
+
+        part_model->set_commit_time(part->getCommitTime());
+        part_model->set_virtual_part_size(part->getVirtualPartSize());
+
+        auto * ranges_model = model.mutable_mark_ranges();
+        ranges_model->Reserve(2 * ranges->size());
+        for (const auto & range : *ranges)
+        {
+            ranges_model->Add(range.begin);
+            ranges_model->Add(range.end);
+        }
+
+        if (storage.getInMemoryMetadataPtr()->hasDynamicSubcolumns() && part_model->has_columns())
+            continue;
+
+        if (part_model->has_columns_commit_time() && sent_columns_commit_time.count(part_model->columns_commit_time()) == 0)
+        {
+            part_model->set_columns(storage.getPartColumns(part_model->columns_commit_time())->toString());
+            sent_columns_commit_time.insert(part_model->columns_commit_time());
+        }
     }
 }
 
@@ -443,7 +493,7 @@ LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model)
     lock_info->setLockID(model.lock_id())
         .setMode(mode)
         .setTimeout(model.timeout())
-        .setTablePrefix(field.table_prefix())
+        .setUUIDAndPrefixFromModel(field.table_prefix())
         .setBucket(bucket)
         .setPartition(partition);
     return lock_info;

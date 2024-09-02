@@ -1,123 +1,98 @@
-Projection Est. 120113470 rows
-│     Expressions: cov:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_1`, cov_1:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_2`, d_moy:=d_moy_1, d_moy_1:=d_moy_2, i_item_sk:=i_item_sk_1, i_item_sk_1:=i_item_sk_2, mean:=`expr#avg(inv_quantity_on_hand)_1`, mean_1:=`expr#avg(inv_quantity_on_hand)_2`, w_warehouse_sk:=w_warehouse_sk_1, w_warehouse_sk_1:=w_warehouse_sk_2
-└─ Sorting Est. 120113470 rows
+Projection Est. 62985548 rows
+│     Expressions: [i_item_sk_1, w_warehouse_sk_1], cov:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_1`, cov_1:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_2`, d_moy:=d_moy_1, d_moy_1:=d_moy_2, i_item_sk:=i_item_sk_1, mean:=`expr#avg(inv_quantity_on_hand)_1`, mean_1:=`expr#avg(inv_quantity_on_hand)_2`, w_warehouse_sk:=w_warehouse_sk_1
+└─ Sorting Est. 62985548 rows
    │     Order by: {w_warehouse_sk_1 ASC NULLS LAST, i_item_sk_1 ASC NULLS LAST, d_moy_1 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_1 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_1 ASC NULLS LAST, d_moy_2 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_2 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_2 ASC NULLS LAST}
-   └─ Gather Exchange Est. 120113470 rows
-      └─ Sorting Est. 120113470 rows
+   └─ Gather Exchange Est. 62985548 rows
+      └─ Sorting Est. 62985548 rows
          │     Order by: {w_warehouse_sk_1 ASC NULLS LAST, i_item_sk_1 ASC NULLS LAST, d_moy_1 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_1 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_1 ASC NULLS LAST, d_moy_2 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_2 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_2 ASC NULLS LAST}
-         └─ Inner (PARALLEL_HASH) Join Est. 204073295 rows
+         └─ Inner (PARALLEL_HASH) Join Est. 62985548 rows
             │     Condition: i_item_sk_1 == i_item_sk_2, w_warehouse_sk_1 == w_warehouse_sk_2
-            ├─ Filter Est. 7873199 rows
+            ├─ Filter Est. 607499 rows
             │  │     Condition: d_moy_1 = 1
-            │  └─ Buffer Est. 8747999 rows
-            │     └─ CTERef[0] Est. 8747999 rows
-            └─ Filter Est. 7873199 rows
-               │     Condition: d_moy_2 = 2
-               └─ Buffer Est. 8747999 rows
-                  └─ CTERef[0] Est. 8747999 rows
+            │  └─ Buffer Est. 2429999 rows
+            │     └─ CTERef[0] Est. 2429999 rows
+            └─ Filter Est. 607499 rows
+               │     Condition: d_moy_2 = cast(2, 'UInt16')
+               └─ Buffer Est. 2429999 rows
+                  └─ CTERef[0] Est. 2429999 rows
 CTEDef [0]
-   Projection Est. 8747999 rows
-   │     Expressions: [d_moy, expr#avg(inv_quantity_on_hand), i_item_sk, w_warehouse_sk], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean)):=caseWithExpression(`expr#avg(inv_quantity_on_hand)`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)` / `expr#avg(inv_quantity_on_hand)`)
-   └─ Filter Est. 8747999 rows
+   Projection Est. 2429999 rows
+   │     Expressions: [d_moy, expr#avg(inv_quantity_on_hand)], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean)):=caseWithExpression(`expr#avg(inv_quantity_on_hand)`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)` / `expr#avg(inv_quantity_on_hand)`), i_item_sk:=inv_item_sk, w_warehouse_sk:=inv_warehouse_sk
+   └─ Filter Est. 2429999 rows
       │     Condition: caseWithExpression(`expr#avg(inv_quantity_on_hand)`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)` / `expr#avg(inv_quantity_on_hand)`) > 1.
       └─ Aggregating Est. 9719999 rows
-         │     Group by: {w_warehouse_sk, i_item_sk, d_moy}
+         │     Group by: {inv_warehouse_sk, inv_item_sk, d_moy}
          │     Aggregates: expr#stddevSamp(inv_quantity_on_hand):=AggNull(stddevSamp)(inv_quantity_on_hand), expr#avg(inv_quantity_on_hand):=AggNull(avg)(inv_quantity_on_hand)
-         └─ Inner Join Est. 177000000 rows
+         └─ Inner Join Est. 168000000 rows
             │     Condition: inv_warehouse_sk == w_warehouse_sk
-            ├─ Repartition Exchange Est. 177000000 rows
-            │  │     Partition by: {inv_warehouse_sk}
-            │  └─ Inner Join Est. 177000000 rows
-            │     │     Condition: inv_date_sk == d_date_sk
-            │     │     Runtime Filters Builder: {d_date_sk}
-            │     ├─ Projection Est. 783000000 rows
-            │     │  │     Expressions: [inv_date_sk, inv_quantity_on_hand, inv_warehouse_sk], i_item_sk:=inv_item_sk
-            │     │  └─ Filter Est. 783000000 rows
-            │     │     │     Condition: isNotNull(inv_item_sk) Runtime Filters: {inv_date_sk}
-            │     │     └─ TableScan tpcds1000.inventory Est. 783000000 rows
-            │     │              Where: isNotNull(inv_item_sk) Runtime Filters: {inv_date_sk}
-            │     │              Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
-            │     └─ Broadcast Exchange Est. 59 rows
-            │        └─ Filter Est. 59 rows
-            │           │     Condition: (d_year = 2001) AND (d_moy IN (1, 2))
+            ├─ Inner Join Est. 168000000 rows
+            │  │     Condition: inv_date_sk == d_date_sk
+            │  │     Runtime Filters Builder: {d_date_sk}
+            │  ├─ Filter Est. 783000000 rows
+            │  │  │     Condition: Runtime Filters: {inv_date_sk}
+            │  │  └─ TableScan tpcds1000.inventory Est. 783000000 rows
+            │  │           Where: Runtime Filters: {inv_date_sk}
+            │  │           Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
+            │  └─ Broadcast Exchange Est. 56 rows
+            │     └─ Projection Est. 56 rows
+            │        │     Expressions: [d_date_sk, d_moy]
+            │        └─ Filter Est. 56 rows
+            │           │     Condition: (d_year = 2001) AND ((d_moy = 1) OR (d_moy = cast(2, 'UInt16')))
             │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-            │                    Where: (d_year = 2001) AND (d_moy IN (1, 2))
+            │                    Where: (d_year = 2001) AND ((d_moy = 1) OR (d_moy = cast(2, 'UInt16')))
             │                    Outputs: [d_date_sk, d_year, d_moy]
-            └─ Repartition Exchange Est. 20 rows
-               │     Partition by: {w_warehouse_sk}
+            └─ Broadcast Exchange Est. 20 rows
                └─ TableScan tpcds1000.warehouse Est. 20 rows
                         Outputs: [w_warehouse_sk]
 note: Runtime Filter is applied for 1 times.
 note: CTE(Common Table Expression) is applied for 2 times.
-Projection Est. 69983972 rows
-│     Expressions: cov:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6`, cov_1:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7`, d_moy:=d_moy_6, d_moy_1:=d_moy_7, i_item_sk:=i_item_sk_6, i_item_sk_1:=i_item_sk_7, mean:=`expr#avg(inv_quantity_on_hand)_6`, mean_1:=`expr#avg(inv_quantity_on_hand)_7`, w_warehouse_sk:=w_warehouse_sk_6, w_warehouse_sk_1:=w_warehouse_sk_7
-└─ Sorting Est. 69983972 rows
-   │     Order by: {w_warehouse_sk_6 ASC NULLS LAST, i_item_sk_6 ASC NULLS LAST, d_moy_6 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_6 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6 ASC NULLS LAST, d_moy_7 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_7 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7 ASC NULLS LAST}
-   └─ Gather Exchange Est. 69983972 rows
-      └─ Sorting Est. 69983972 rows
-         │     Order by: {w_warehouse_sk_6 ASC NULLS LAST, i_item_sk_6 ASC NULLS LAST, d_moy_6 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_6 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6 ASC NULLS LAST, d_moy_7 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_7 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7 ASC NULLS LAST}
-         └─ Inner (PARALLEL_HASH) Join Est. 69983972 rows
-            │     Condition: i_item_sk_6 == i_item_sk_7, w_warehouse_sk_6 == w_warehouse_sk_7
-            ├─ Repartition Exchange Est. 4859999 rows
-            │  │     Partition by: {i_item_sk_6, w_warehouse_sk_6}
-            │  └─ Projection Est. 4859999 rows
-            │     │     Expressions: [d_moy_6, expr#avg(inv_quantity_on_hand)_6, i_item_sk_6, w_warehouse_sk_6], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`)
-            │     └─ Filter Est. 4859999 rows
-            │        │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.) AND (((d_moy_6 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.5)) OR (d_moy_6 = 2)) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_6`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_6`) > 1.5)
-            │        └─ Aggregating Est. 5399999 rows
-            │           │     Group by: {w_warehouse_sk_6, i_item_sk_6, d_moy_6}
-            │           │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_8:=AggNull(stddevSamp)(inv_quantity_on_hand_4), expr#avg(inv_quantity_on_hand)_6:=AggNull(avg)(inv_quantity_on_hand_4)
-            │           └─ Inner Join Est. 90000000 rows
-            │              │     Condition: inv_warehouse_sk_4 == w_warehouse_sk_6
-            │              ├─ Repartition Exchange Est. 90000000 rows
-            │              │  │     Partition by: {inv_warehouse_sk_4}
-            │              │  └─ Inner Join Est. 90000000 rows
-            │              │     │     Condition: inv_date_sk_4 == d_date_sk_4
-            │              │     │     Runtime Filters Builder: {d_date_sk_4}
-            │              │     ├─ Filter Est. 783000000 rows
-            │              │     │  │     Condition: isNotNull(i_item_sk_6) Runtime Filters: {inv_date_sk_4}
-            │              │     │  └─ TableScan tpcds1000.inventory Est. 783000000 rows
-            │              │     │           Where: isNotNull(inv_item_sk) Runtime Filters: {inv_date_sk}
-            │              │     │           Outputs: inv_date_sk_4:=inv_date_sk, i_item_sk_6:=inv_item_sk, inv_warehouse_sk_4:=inv_warehouse_sk, inv_quantity_on_hand_4:=inv_quantity_on_hand
-            │              │     └─ Broadcast Exchange Est. 30 rows
-            │              │        └─ Filter Est. 30 rows
-            │              │           │     Condition: (d_year_4 = 2001) AND (d_moy_6 = 1)
-            │              │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-            │              │                    Where: (d_year = 2001) AND (d_moy = 1)
-            │              │                    Outputs: d_date_sk_4:=d_date_sk, d_year_4:=d_year, d_moy_6:=d_moy
-            │              └─ Repartition Exchange Est. 20 rows
-            │                 │     Partition by: {w_warehouse_sk_6}
-            │                 └─ TableScan tpcds1000.warehouse Est. 20 rows
-            │                          Outputs: w_warehouse_sk_6:=w_warehouse_sk
-            └─ Repartition Exchange Est. 4859999 rows
-               │     Partition by: {i_item_sk_7, w_warehouse_sk_7}
-               └─ Projection Est. 4859999 rows
-                  │     Expressions: [d_moy_7, expr#avg(inv_quantity_on_hand)_7, i_item_sk_7, w_warehouse_sk_7], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`)
-                  └─ Filter Est. 4859999 rows
-                     │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`) > 1.) AND (((d_moy_7 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_7`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_7`) > 1.5)) OR (d_moy_7 = 2))
-                     └─ Aggregating Est. 5399999 rows
-                        │     Group by: {w_warehouse_sk_7, i_item_sk_7, d_moy_7}
-                        │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_9:=AggNull(stddevSamp)(inv_quantity_on_hand_5), expr#avg(inv_quantity_on_hand)_7:=AggNull(avg)(inv_quantity_on_hand_5)
-                        └─ Inner Join Est. 84000000 rows
-                           │     Condition: inv_warehouse_sk_5 == w_warehouse_sk_7
-                           ├─ Repartition Exchange Est. 84000000 rows
-                           │  │     Partition by: {inv_warehouse_sk_5}
-                           │  └─ Inner Join Est. 84000000 rows
-                           │     │     Condition: inv_date_sk_5 == d_date_sk_5
-                           │     │     Runtime Filters Builder: {d_date_sk_5}
-                           │     ├─ Filter Est. 783000000 rows
-                           │     │  │     Condition: isNotNull(i_item_sk_7) Runtime Filters: {inv_date_sk_5}
-                           │     │  └─ TableScan tpcds1000.inventory Est. 783000000 rows
-                           │     │           Where: isNotNull(inv_item_sk) Runtime Filters: {inv_date_sk}
-                           │     │           Outputs: inv_date_sk_5:=inv_date_sk, i_item_sk_7:=inv_item_sk, inv_warehouse_sk_5:=inv_warehouse_sk, inv_quantity_on_hand_5:=inv_quantity_on_hand
-                           │     └─ Broadcast Exchange Est. 28 rows
-                           │        └─ Filter Est. 28 rows
-                           │           │     Condition: (d_year_5 = 2001) AND (d_moy_7 = 2)
-                           │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                           │                    Where: (d_year = 2001) AND (d_moy = 2)
-                           │                    Outputs: d_date_sk_5:=d_date_sk, d_year_5:=d_year, d_moy_7:=d_moy
-                           └─ Repartition Exchange Est. 20 rows
-                              │     Partition by: {w_warehouse_sk_7}
-                              └─ TableScan tpcds1000.warehouse Est. 20 rows
-                                       Outputs: w_warehouse_sk_7:=w_warehouse_sk
-note: Runtime Filter is applied for 2 times.
+Projection Est. 32957240 rows
+│     Expressions: cov:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6`, cov_1:=`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7`, d_moy:=d_moy_6, d_moy_1:=d_moy_7, i_item_sk:=i_item_sk_5, i_item_sk_1:=i_item_sk_5, mean:=`expr#avg(inv_quantity_on_hand)_6`, mean_1:=`expr#avg(inv_quantity_on_hand)_7`, w_warehouse_sk:=w_warehouse_sk_7, w_warehouse_sk_1:=w_warehouse_sk_7
+└─ Sorting Est. 32957240 rows
+   │     Order by: {w_warehouse_sk_7 ASC NULLS LAST, i_item_sk_5 ASC NULLS LAST, d_moy_6 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_6 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6 ASC NULLS LAST, d_moy_7 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_7 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7 ASC NULLS LAST}
+   └─ Gather Exchange Est. 32957240 rows
+      └─ Sorting Est. 32957240 rows
+         │     Order by: {w_warehouse_sk_7 ASC NULLS LAST, i_item_sk_5 ASC NULLS LAST, d_moy_6 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_6 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6 ASC NULLS LAST, d_moy_7 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_7 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7 ASC NULLS LAST}
+         └─ Inner Join Est. 32957240 rows
+            │     Condition: i_item_sk_5 == i_item_sk_4, w_warehouse_sk_7 == w_warehouse_sk_6
+            ├─ Filter Est. 607499 rows
+            │  │     Condition: d_moy_7 = cast(2, 'UInt16')
+            │  └─ Buffer Est. 2429999 rows
+            │     └─ CTERef[0] Est. 2429999 rows
+            └─ Filter Est. 607499 rows
+               │     Condition: (`expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6` > 1.5) AND (d_moy_6 = 1)
+               └─ Buffer Est. 2429999 rows
+                  └─ CTERef[0] Est. 2429999 rows
+CTEDef [0]
+   Projection Est. 2429999 rows
+   │     Expressions: [d_moy_5, expr#avg(inv_quantity_on_hand)_5], expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_5:=`expr#caseWithExpression(expr#avg(inv_quantity_on_hand)_5, 0, NULL, divide(expr#stddevSamp(inv_quantity_on_hand)_5, expr#avg(inv_quantity_on_hand)_5))`, i_item_sk_3:=inv_item_sk_3, w_warehouse_sk_5:=inv_warehouse_sk_5
+   └─ Filter Est. 2429999 rows
+      │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_5`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_5` / `expr#avg(inv_quantity_on_hand)_5`) > 1.) AND ((`expr#caseWithExpression(expr#avg(inv_quantity_on_hand)_5, 0, NULL, divide(expr#stddevSamp(inv_quantity_on_hand)_5, expr#avg(inv_quantity_on_hand)_5))` > 1.5) OR (d_moy_5 = cast(2, 'UInt16')))
+      └─ Projection Est. 9719999 rows
+         │     Expressions: [d_moy_5, expr#avg(inv_quantity_on_hand)_5, expr#stddevSamp(inv_quantity_on_hand)_5, inv_item_sk_3, inv_warehouse_sk_5], expr#caseWithExpression(expr#avg(inv_quantity_on_hand)_5, 0, NULL, divide(expr#stddevSamp(inv_quantity_on_hand)_5, expr#avg(inv_quantity_on_hand)_5)):=caseWithExpression(`expr#avg(inv_quantity_on_hand)_5`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_5` / `expr#avg(inv_quantity_on_hand)_5`)
+         └─ Aggregating Est. 9719999 rows
+            │     Group by: {inv_warehouse_sk_5, inv_item_sk_3, d_moy_5}
+            │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_5:=AggNull(stddevSamp)(inv_quantity_on_hand_3), expr#avg(inv_quantity_on_hand)_5:=AggNull(avg)(inv_quantity_on_hand_3)
+            └─ Inner Join Est. 168000000 rows
+               │     Condition: inv_warehouse_sk_5 == w_warehouse_sk_5
+               ├─ Inner Join Est. 168000000 rows
+               │  │     Condition: inv_date_sk_3 == d_date_sk_3
+               │  │     Runtime Filters Builder: {d_date_sk_3}
+               │  ├─ Filter Est. 783000000 rows
+               │  │  │     Condition: Runtime Filters: {inv_date_sk_3}
+               │  │  └─ TableScan tpcds1000.inventory Est. 783000000 rows
+               │  │           Where: Runtime Filters: {inv_date_sk}
+               │  │           Outputs: inv_date_sk_3:=inv_date_sk, inv_item_sk_3:=inv_item_sk, inv_warehouse_sk_5:=inv_warehouse_sk, inv_quantity_on_hand_3:=inv_quantity_on_hand
+               │  └─ Broadcast Exchange Est. 56 rows
+               │     └─ Projection Est. 56 rows
+               │        │     Expressions: [d_date_sk_3, d_moy_5]
+               │        └─ Filter Est. 56 rows
+               │           │     Condition: (d_year_3 = 2001) AND ((d_moy_5 = 1) OR (d_moy_5 = cast(2, 'UInt16')))
+               │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+               │                    Where: (d_year = 2001) AND ((d_moy = 1) OR (d_moy = cast(2, 'UInt16')))
+               │                    Outputs: d_date_sk_3:=d_date_sk, d_year_3:=d_year, d_moy_5:=d_moy
+               └─ Broadcast Exchange Est. 20 rows
+                  └─ TableScan tpcds1000.warehouse Est. 20 rows
+                           Outputs: w_warehouse_sk_5:=w_warehouse_sk
+note: Runtime Filter is applied for 1 times.
+note: CTE(Common Table Expression) is applied for 2 times.

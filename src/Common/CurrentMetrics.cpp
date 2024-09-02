@@ -143,6 +143,7 @@
     M(RWLockWaitingReaders, "Number of threads waiting for read on a table RWLock.") \
     M(RWLockWaitingWriters, "Number of threads waiting for write on a table RWLock.") \
     M(RWLockActiveReaders, "Number of threads holding read lock in a table RWLock.") \
+    M(MergesMutationsMemoryTracking, "Total amount of memory (bytes) allocated by background tasks (merges and mutations).") \
     M(RWLockActiveWriters, "Number of threads holding write lock in a table RWLock.") \
     M(GlobalThread, "Number of threads in global thread pool.") \
     M(GlobalThreadActive, "Number of threads in global thread pool running a task.") \
@@ -195,6 +196,10 @@
 \
     M(SystemCnchPartsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_parts_info system table.") \
     M(SystemCnchTrashItemsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_trash_items_info system table.") \
+\
+    M(StorageS3Threads, "Number of threads in the StorageS3 thread pool.") \
+    M(StorageS3ThreadsActive, "Number of threads in the StorageS3 thread pool running a task.") \
+    M(StorageS3ThreadsScheduled, "Number of queued or active jobs in the StorageS3 thread pool.") \
 \
     M(BigHashItemCount, "BigHash item count") \
     M(BigHashUsedSizeBytes, "BigHash used size in bytes") \

@@ -1,2 +1,2 @@
-SELECT count() FROM system.parts WHERE table = NULL AND database = currentDatabase();
-SELECT DISTINCT marks FROM system.parts WHERE (table = NULL) AND (database = currentDatabase()) AND (active = 1);
+SELECT count() FROM system.parts WHERE table = NULL AND database = currentDatabase(0);
+SELECT DISTINCT marks FROM system.parts WHERE (table = NULL) AND (database = currentDatabase(0)) AND (active = 1);

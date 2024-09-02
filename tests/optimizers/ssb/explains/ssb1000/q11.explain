@@ -18,7 +18,7 @@ Projection Est. 10826 rows
                         │     Runtime Filters Builder: {P_PARTKEY}
                         ├─ Repartition Exchange Est. 361618391 rows
                         │  │     Partition by: {LO_PARTKEY}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 361618390 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 361618391 rows
                         │     │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     │     Runtime Filters Builder: {C_CUSTKEY}
                         │     ├─ Repartition Exchange Est. 1199859470 rows
@@ -35,23 +35,29 @@ Projection Est. 10826 rows
                         │     │     │              Outputs: [LO_CUSTKEY, LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE, LO_SUPPLYCOST]
                         │     │     └─ Repartition Exchange Est. 399954 rows
                         │     │        │     Partition by: {S_SUPPKEY}
-                        │     │        └─ Filter Est. 399954 rows
-                        │     │           │     Condition: S_REGION = 'AMERICA'
-                        │     │           └─ TableScan ssb1000.supplier Est. 2000000 rows
-                        │     │                    Where: S_REGION = 'AMERICA'
-                        │     │                    Outputs: [S_SUPPKEY, S_REGION]
+                        │     │        └─ Projection Est. 399954 rows
+                        │     │           │     Expressions: [S_SUPPKEY]
+                        │     │           └─ Filter Est. 399954 rows
+                        │     │              │     Condition: S_REGION = 'AMERICA'
+                        │     │              └─ TableScan ssb1000.supplier Est. 2000000 rows
+                        │     │                       Where: S_REGION = 'AMERICA'
+                        │     │                       Outputs: [S_SUPPKEY, S_REGION]
                         │     └─ Repartition Exchange Est. 6000975 rows
                         │        │     Partition by: {C_CUSTKEY}
-                        │        └─ Filter Est. 6000975 rows
-                        │           │     Condition: C_REGION = 'AMERICA'
-                        │           └─ TableScan ssb1000.customer Est. 30000000 rows
-                        │                    Where: C_REGION = 'AMERICA'
-                        │                    Outputs: [C_CUSTKEY, C_NATION, C_REGION]
+                        │        └─ Projection Est. 6000975 rows
+                        │           │     Expressions: [C_CUSTKEY, C_NATION]
+                        │           └─ Filter Est. 6000975 rows
+                        │              │     Condition: C_REGION = 'AMERICA'
+                        │              └─ TableScan ssb1000.customer Est. 30000000 rows
+                        │                       Where: C_REGION = 'AMERICA'
+                        │                       Outputs: [C_CUSTKEY, C_NATION, C_REGION]
                         └─ Repartition Exchange Est. 799457 rows
                            │     Partition by: {P_PARTKEY}
-                           └─ Filter Est. 799457 rows
-                              │     Condition: P_MFGR IN ('MFGR#1', 'MFGR#2')
-                              └─ TableScan ssb1000.part Est. 2000000 rows
-                                       Where: P_MFGR IN ('MFGR#1', 'MFGR#2')
-                                       Outputs: [P_PARTKEY, P_MFGR]
+                           └─ Projection Est. 799457 rows
+                              │     Expressions: [P_PARTKEY]
+                              └─ Filter Est. 799457 rows
+                                 │     Condition: P_MFGR IN ('MFGR#1', 'MFGR#2')
+                                 └─ TableScan ssb1000.part Est. 2000000 rows
+                                          Where: P_MFGR IN ('MFGR#1', 'MFGR#2')
+                                          Outputs: [P_PARTKEY, P_MFGR]
 note: Runtime Filter is applied for 3 times.

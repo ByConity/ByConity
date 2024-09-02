@@ -62,6 +62,8 @@
 
 namespace DB
 {
+bool isDebugBuild();
+
 struct MockedTableScanStep : public IQueryPlanStep
 {
     std::string database;

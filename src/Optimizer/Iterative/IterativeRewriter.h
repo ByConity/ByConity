@@ -54,7 +54,7 @@ public:
     static std::map<std::underlying_type_t<RuleType>, size_t> getRuleCallTimes();
     String name() const override { return names; }
 private:
-    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_iterative_rewriter;}    
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_iterative_rewriter; }
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 
     String names;

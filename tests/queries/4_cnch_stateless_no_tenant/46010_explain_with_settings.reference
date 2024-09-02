@@ -1,44 +1,11 @@
-Projection Est. ? rows
-│     Expressions: id:=id_2
-└─ Gather Exchange Est. ? rows
-   └─ MergingAggregated Est. ? rows
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {id_2}
-         └─ Union Est. ? rows
-            │     OutputToInputs: id_2 = [id,id_1]
-            ├─ TableScan test_distinct.unique_1 Est. ? rows
-            │        Outputs: [id]
-            └─ Aggregating Est. ? rows
-               │     Group by: {id_1}
-               └─ MergingAggregated Est. ? rows
-                  └─ Repartition Exchange Est. ? rows
-                     │     Partition by: {id_1}
-                     └─ Aggregating Est. ? rows
-                        │     Group by: {id_1}
-                        └─ TableScan test_distinct.unique_2 Est. ? rows
-                                 Outputs: id_1:=id
-Projection Est. ? rows
-│     Expressions: id:=id_2
-└─ Gather Exchange Est. ? rows
-   └─ MergingAggregated Est. ? rows
-      └─ Local Exchange Est. ? rows
-         └─ Union Est. ? rows
-            │     OutputToInputs: id_2 = [id,id_1]
-            ├─ Aggregating Est. ? rows
-            │  │     Group by: {id}
-            │  └─ MergingAggregated Est. ? rows
-            │     └─ Repartition Exchange Est. ? rows
-            │        │     Partition by: {id}
-            │        └─ Aggregating Est. ? rows
-            │           │     Group by: {id}
-            │           └─ TableScan test_distinct.unique_1 Est. ? rows
-            │                    Outputs: [id]
-            └─ Aggregating Est. ? rows
-               │     Group by: {id_1}
-               └─ MergingAggregated Est. ? rows
-                  └─ Repartition Exchange Est. ? rows
-                     │     Partition by: {id_1}
-                     └─ Aggregating Est. ? rows
-                        │     Group by: {id_1}
-                        └─ TableScan test_distinct.unique_2 Est. ? rows
-                                 Outputs: id_1:=id
+Projection
+└─ Distinct
+   └─ Gather Exchange
+      └─ Distinct
+         └─ TableScan explain_setting.test4601
+Projection
+└─ Gather Exchange
+   └─ MergingAggregated
+      └─ Repartition Exchange
+         └─ Aggregating
+            └─ TableScan explain_setting.test4601

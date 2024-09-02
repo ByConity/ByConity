@@ -26,6 +26,7 @@
 #include <Core/Names.h>
 #include <Common/MySqlEnums.h>
 #include <DataTypes/IDataType.h>
+#include <Interpreters/JIT/JITContext.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -78,6 +79,8 @@ protected:
     {
         return executeImpl(arguments, result_type, input_rows_count);
     }
+
+    virtual bool isPreviledgedFunction() const { return false; }
 
     /** Default implementation in presence of Nullable arguments or NULL constants as arguments is the following:
       *  if some of arguments are NULL constants then return NULL constant,
@@ -160,7 +163,16 @@ public:
 
     /// Do preparations and return executable.
     /// sample_columns should contain data types of arguments and values of constants, if relevant.
-    virtual ExecutableFunctionPtr prepare(const ColumnsWithTypeAndName & arguments) const = 0;
+    virtual ExecutableFunctionPtr prepare(const ColumnsWithTypeAndName & /*arguments*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "prepare is not implemented for function {}", getName());
+    }
+
+    /// Do preparations with extra parameters and return executable.
+    virtual ExecutableFunctionPtr prepareWithParameters(const ColumnsWithTypeAndName & /*arguments*/, const Array & /*parameters*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "prepare with extra parameters is not implemented for function {}", getName());
+    }
 
 #if USE_EMBEDDED_COMPILER
 
@@ -174,7 +186,7 @@ public:
       *       templates with default arguments is impossible and including LLVM in such a generic header
       *       as this one is a major pain.
       */
-    virtual llvm::Value * compile(llvm::IRBuilderBase & /*builder*/, Values /*values*/) const
+    virtual llvm::Value * compile(llvm::IRBuilderBase & /*builder*/, Values /*values*/, JITContext & /*jit_context*/) const
     {
         throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
     }
@@ -311,7 +323,7 @@ class IFunctionOverloadResolver
 public:
     virtual ~IFunctionOverloadResolver() = default;
 
-    FunctionBasePtr build(const ColumnsWithTypeAndName & arguments) const;
+    virtual FunctionBasePtr build(const ColumnsWithTypeAndName & arguments) const;
 
     DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments) const;
 
@@ -356,7 +368,10 @@ public:
     friend class ExpressionInterpreter;
 protected:
 
-    virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const = 0;
+    virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "buildImpl is not implemented for {}", getName());
+    }
 
     virtual DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const
     {
@@ -426,6 +441,7 @@ public:
         return executeImpl(arguments, result_type, input_rows_count);
     }
 
+    virtual bool isPreviledgedFunction() const { return false; }
     /** Default implementation in presence of Nullable arguments or NULL constants as arguments is the following:
       *  if some of arguments are NULL constants then return NULL constant,
       *  if some of arguments are Nullable, then execute function as usual for columns,
@@ -519,7 +535,7 @@ public:
 
     bool isCompilable(const DataTypes & arguments) const;
 
-    llvm::Value * compile(llvm::IRBuilderBase &, const DataTypes & arguments, Values values) const;
+    llvm::Value * compile(llvm::IRBuilderBase &, const DataTypes & arguments, Values values, JITContext & jit_context) const;
 
 #endif
 
@@ -529,7 +545,7 @@ protected:
 
     virtual bool isCompilableImpl(const DataTypes &) const { return false; }
 
-    virtual llvm::Value * compileImpl(llvm::IRBuilderBase &, const DataTypes &, Values) const
+    virtual llvm::Value * compileImpl(llvm::IRBuilderBase &, const DataTypes &, Values, JITContext & ) const
     {
         throw Exception(getName() + " is not JIT-compilable", ErrorCodes::NOT_IMPLEMENTED);
     }

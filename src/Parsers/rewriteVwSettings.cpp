@@ -24,7 +24,7 @@ bool tryRewriteVwSettings(String &name, Field &value, IParser::Pos & pos)
             value = std::move(new_value);
             return true;
         }
-        else if (name == "virtual_warehouse" || name == "cnch_vw_default" || name == "cnch_vw_read" || name == "cnch_vw_write" || name == "cnch_vw_task" || name == "cnch_server_vw")
+        else if (name == "virtual_warehouse" || name == "cnch_vw_default" || name == "cnch_vw_read" || name == "cnch_vw_write" || name == "cnch_vw_task")
         {
             // if virtual_warehouse does not match the structure i.e. --> 'vw-{tenant_id}-{vw}', then we return true and move on
             String current_tenant_id = context->getTenantId();

@@ -9,6 +9,11 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Common/Exception.h>
 
+namespace ProfileEvents
+{
+    extern const Event PrewhereSelectedRows;
+}
+
 namespace DB
 {
 namespace ErrorCodes
@@ -260,6 +265,7 @@ Chunk MergeTreeBaseSelectProcessorLM::readFromPartImpl()
             ErrorCodes::LOGICAL_ERROR);
 
     progress({read_result.numReadRows(), read_result.numBytesRead()});
+    ProfileEvents::increment(ProfileEvents::PrewhereSelectedRows, read_result.num_rows);
 
     if (read_result.num_rows == 0) /// read nothing
         return {};

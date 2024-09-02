@@ -27,103 +27,16 @@ using CTEId = UInt32;
 class PlanNodeBase;
 using PlanNodePtr = std::shared_ptr<PlanNodeBase>;
 
-class CTEPreorderVisitHelper
-{
-public:
-    explicit CTEPreorderVisitHelper(CTEInfo & cte_info_) : cte_info(cte_info_) { }
-
-    template <typename R, typename C>
-    void accept(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context)
-    {
-        if (!visit_flags.contains(id))
-        {
-            visit_flags.emplace(id);
-            VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
-        }
-    }
-
-    template <typename C>
-    PlanNodePtr acceptAndUpdate(CTEId id, PlanNodeVisitor<PlanNodePtr, C> & visitor, C & context)
-    {
-        auto & cte_def = cte_info.getCTEDef(id);
-        if (!visit_flags.contains(id))
-        {
-            visit_flags.emplace(id);
-            cte_def = VisitorUtil::accept(cte_def, visitor, context);
-        }
-        return cte_def;
-    }
-
-    template <typename C, typename Func>
-    PlanNodePtr acceptAndUpdate(CTEId id, PlanNodeVisitor<PlanNodePtr, C> & visitor, Func && context_provider)
-    {
-        auto & cte_def = cte_info.getCTEDef(id);
-        if (!visit_flags.contains(id))
-        {
-            visit_flags.emplace(id);
-            auto context = context_provider();
-            cte_def = VisitorUtil::accept(cte_def, visitor, context);
-        }
-        return cte_def;
-    }
-
-    CTEInfo & getCTEInfo() { return cte_info; }
-    bool hasVisited(CTEId cte_id) { return visit_flags.contains(cte_id); }
-
-private:
-    CTEInfo & cte_info;
-    std::unordered_set<CTEId> visit_flags;
-};
-
-class CTEPostorderVisitHelper
-{
-public:
-    explicit CTEPostorderVisitHelper(CTEInfo & cte_info_, PlanNodePtr & root)
-        : cte_info(cte_info_), cte_reference_counts(cte_info.collectCTEReferenceCounts(root))
-    {
-    }
-
-    template <typename R, typename C>
-    void accept(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context)
-    {
-        if (++visit_counts[id] == cte_reference_counts.at(id))
-            VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
-    }
-
-    template <typename C>
-    PlanNodePtr acceptAndUpdate(CTEId id, PlanNodeVisitor<PlanNodePtr, C> & visitor, C & context)
-    {
-        auto & cte_def = cte_info.getCTEDef(id);
-        if (++visit_counts[id] == cte_reference_counts.at(id))
-            cte_def = VisitorUtil::accept(cte_def, visitor, context);
-        return cte_def;
-    }
-
-    template <typename C, typename Func>
-    PlanNodePtr acceptAndUpdate(CTEId id, PlanNodeVisitor<PlanNodePtr, C> & visitor, Func && context_provider)
-    {
-        auto & cte_def = cte_info.getCTEDef(id);
-        if (++visit_counts[id] == cte_reference_counts.at(id))
-        {
-            auto context = context_provider();
-            cte_def = VisitorUtil::accept(cte_def, visitor, context);
-        }
-        return cte_def;
-    }
-
-    CTEInfo & getCTEInfo() { return cte_info; }
-
-private:
-    CTEInfo & cte_info;
-    const std::unordered_map<CTEId, UInt64> cte_reference_counts;
-    std::unordered_map<CTEId, UInt64> visit_counts;
-};
-
-template<typename R>
+/**
+ * visit each cte def only once, when its cte-ref node has been first visited.
+ */
+template <typename R>
 class SimpleCTEVisitHelper
 {
 public:
-    explicit SimpleCTEVisitHelper(CTEInfo & cte_info_) : cte_info(cte_info_) { }
+    explicit SimpleCTEVisitHelper(CTEInfo & cte_info_) : cte_info(cte_info_)
+    {
+    }
 
     template <typename C>
     R accept(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context)
@@ -136,11 +49,114 @@ public:
         return res;
     }
 
+    template <typename C>
+    R acceptAndUpdate(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context)
+    {
+        auto it = visit_results.find(id);
+        if (it != visit_results.end())
+            return it->second;
+        auto res = VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
+        cte_info.update(id, res);
+        visit_results.emplace(id, res);
+        return res;
+    }
+
+    template <typename C>
+    R acceptAndUpdate(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context, std::function<PlanNodePtr(R &)> && proj_func)
+    {
+        auto it = visit_results.find(id);
+        if (it != visit_results.end())
+            return it->second;
+        auto res = VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
+        cte_info.update(id, proj_func(res));
+        visit_results.emplace(id, res);
+        return res;
+    }
+
     CTEInfo & getCTEInfo() { return cte_info; }
-    bool hasVisited(CTEId cte_id) { return visit_results.contains(cte_id); }
+    bool hasVisited(CTEId cte_id)
+    {
+        return visit_results.contains(cte_id);
+    }
 
 private:
     CTEInfo & cte_info;
     std::unordered_map<CTEId, R> visit_results;
+};
+
+/**
+ * Ignore return value, just visit plan node
+ */
+template <>
+class SimpleCTEVisitHelper<void>
+{
+public:
+    explicit SimpleCTEVisitHelper(CTEInfo & cte_info_) : cte_info(cte_info_)
+    {
+    }
+
+    template <typename R, typename C>
+    void accept(CTEId id, PlanNodeVisitor<R, C> & visitor, C & context)
+    {
+        if (!visit_flags.emplace(id).second)
+            return;
+        VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
+    }
+
+    CTEInfo & getCTEInfo()
+    {
+        return cte_info;
+    }
+    bool hasVisited(CTEId cte_id)
+    {
+        return visit_flags.contains(cte_id);
+    }
+
+private:
+    CTEInfo & cte_info;
+    std::unordered_set<CTEId> visit_flags;
+};
+
+/**
+ * visit each cte def only once, when all its all cte-ref nodes have been visited.
+ */
+class PostorderCTEVisitHelper
+{
+public:
+    explicit PostorderCTEVisitHelper(CTEInfo & cte_info_, PlanNodePtr & root)
+        : cte_info(cte_info_), cte_reference_counts(cte_info.collectCTEReferenceCounts(root))
+    {
+    }
+
+    template <typename R, typename C>
+    void accept(CTEId id, PlanNodeBase & plan_node_id, PlanNodeVisitor<R, C> & visitor, C & context)
+    {
+        auto & plan_nodes = visit_flags[id];
+        plan_nodes.emplace(plan_node_id);
+        if (plan_nodes.size() == cte_reference_counts.at(id))
+            VisitorUtil::accept(cte_info.getCTEDef(id), visitor, context);
+    }
+
+    template <typename C>
+    PlanNodePtr acceptAndUpdate(CTEId id, PlanNodeId plan_node_id, PlanNodeVisitor<PlanNodePtr, C> & visitor, C & context)
+    {
+        auto & plan_nodes = visit_flags[id];
+        plan_nodes.emplace(plan_node_id);
+
+        auto & cte_def = cte_info.getCTEDef(id);
+        if (plan_nodes.size() == cte_reference_counts.at(id))
+            cte_def = VisitorUtil::accept(cte_def, visitor, context);
+        return cte_def;
+    }
+
+    CTEInfo & getCTEInfo()
+    {
+        return cte_info;
+    }
+
+private:
+    CTEInfo & cte_info;
+    const std::unordered_map<CTEId, UInt64> cte_reference_counts;
+    std::unordered_map<CTEId, std::unordered_set<PlanNodeId>> visit_flags;
 };
 }

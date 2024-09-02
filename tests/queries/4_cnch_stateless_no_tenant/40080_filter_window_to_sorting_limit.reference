@@ -1,0 +1,61 @@
+Projection
+│     Expressions: [package_name]
+└─ Limit
+   │     Limit: 10
+   └─ Sorting
+      │     Order by: {recv_timestamp DESC NULLS LAST}
+      │     Limit: 10
+      └─ Gather Exchange
+         └─ Sorting
+            │     Order by: {recv_timestamp DESC NULLS LAST}
+            │     Limit: 10
+            └─ Projection
+               │     Expressions: [package_name, recv_timestamp]
+               └─ Filter
+                  │     Condition: (uuid = \'xx\') AND (recv_timestamp > 100000000)
+                  └─ TableScan test.t40080_tfpoc
+                           Where: (uuid = \'xx\') AND (recv_timestamp > 100000000)
+                           Outputs: [uuid, package_name, recv_timestamp]
+Projection
+│     Expressions: [package_name]
+└─ Filter
+   │     Condition: uuid = \'xx\'
+   └─ Limit
+      │     Limit: 10
+      └─ Sorting
+         │     Order by: {recv_timestamp DESC NULLS LAST}
+         │     Limit: 10
+         └─ Gather Exchange
+            └─ Sorting
+               │     Order by: {recv_timestamp DESC NULLS LAST}
+               │     Limit: 10
+               └─ Filter
+                  │     Condition: recv_timestamp > 100000000
+                  └─ TableScan test.t40080_tfpoc
+                           Where: recv_timestamp > 100000000
+                           Outputs: [uuid, package_name, recv_timestamp]
+Projection
+│     Expressions: [package_name]
+└─ Inner Join
+   │     Condition: package_name == package_name_1
+   ├─ Projection
+   │  │     Expressions: [package_name]
+   │  └─ Filter
+   │     │     Condition: uuid = \'xx\'
+   │     └─ Limit
+   │        │     Limit: 10
+   │        └─ Sorting
+   │           │     Order by: {recv_timestamp DESC NULLS LAST}
+   │           │     Limit: 10
+   │           └─ Gather Exchange
+   │              └─ Sorting
+   │                 │     Order by: {recv_timestamp DESC NULLS LAST}
+   │                 │     Limit: 10
+   │                 └─ Filter
+   │                    │     Condition: recv_timestamp > 100000000
+   │                    └─ TableScan test.t40080_tfpoc
+   │                             Where: recv_timestamp > 100000000
+   │                             Outputs: [uuid, package_name, recv_timestamp]
+   └─ Broadcast Exchange
+      └─ TableScan test.t40080_tfpoc
+               Outputs: package_name_1:=package_name

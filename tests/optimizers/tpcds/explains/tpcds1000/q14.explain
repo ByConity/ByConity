@@ -5,585 +5,524 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#'store'_1 ASC NULLS LAST, i_brand_id_9 ASC NULLS LAST, i_class_id_9 ASC NULLS LAST, i_category_id_9 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 370137 rows
+      └─ Gather Exchange Est. 185067 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#'store'_1 ASC NULLS LAST, i_brand_id_9 ASC NULLS LAST, i_class_id_9 ASC NULLS LAST, i_category_id_9 ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 370137 rows
-               └─ Repartition Exchange Est. 333123 rows
-                  │     Partition by: {expr#'store'_1, i_brand_id_9, i_class_id_9, i_category_id_9, __grouping_set}
-                  └─ Union Est. 333123 rows
-                     │     OutputToInputs: expr#sum(number_sales) = [expr#sum(number_sales),expr#sum(number_sales),expr#sum(number_sales)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], i_category_id_9 = [i_category_id,i_category_id_7,i_category_id_8], i_class_id_9 = [i_class_id,i_class_id_7,i_class_id_8], i_brand_id_9 = [i_brand_id,i_brand_id_7,i_brand_id_8], expr#'store'_1 = [expr#'store',expr#'catalog',expr#'web'], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
-                     ├─ Aggregating Est. 111041 rows
-                     │  │     Group by: {expr#'store', i_brand_id, i_class_id, i_category_id}
-                     │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(ss_quantity, ss_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count())
-                     │  └─ Projection Est. 123379 rows
-                     │     │     Expressions: [expr#count(), expr#sum(multiply(ss_quantity, ss_list_price)), i_brand_id, i_category_id, i_class_id], expr#'store':='store'
-                     │     └─ Inner Join Est. 123379 rows
-                     │        │     Condition: 
-                     │        │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))` > `expr#avg(multiply(quantity, list_price))_1`
-                     │        ├─ MergingAggregated Est. 123379 rows
-                     │        │  └─ Repartition Exchange Est. 123379 rows
-                     │        │     │     Partition by: {i_brand_id, i_class_id, i_category_id}
-                     │        │     └─ Aggregating Est. 123379 rows
-                     │        │        │     Group by: {i_brand_id, i_class_id, i_category_id}
-                     │        │        │     Aggregates: expr#sum(multiply(ss_quantity, ss_list_price)):=AggNull(sum)(expr#multiply(ss_quantity, ss_list_price)), expr#count():=AggNull(count)()
-                     │        │        └─ Projection Est. 45814400 rows
-                     │        │           │     Expressions: [i_brand_id, i_category_id, i_class_id], expr#multiply(ss_quantity, ss_list_price):=ss_quantity * ss_list_price
-                     │        │           └─ Inner Join Est. 45814400 rows
-                     │        │              │     Condition: ss_item_sk == i_item_sk
-                     │        │              ├─ Repartition Exchange Est. 45814400 rows
-                     │        │              │  │     Partition by: {ss_item_sk}
-                     │        │              │  └─ Inner Join Est. 45814400 rows
-                     │        │              │     │     Condition: ss_sold_date_sk == d_date_sk
-                     │        │              │     │     Runtime Filters Builder: {d_date_sk}
-                     │        │              │     ├─ Filter Est. 2879987999 rows
-                     │        │              │     │  │     Condition: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-                     │        │              │     │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                     │        │              │     │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-                     │        │              │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_quantity, ss_list_price]
-                     │        │              │     └─ Broadcast Exchange Est. 29 rows
-                     │        │              │        └─ Filter Est. 29 rows
-                     │        │              │           │     Condition: (d_year = 2001) AND (d_moy = 11)
-                     │        │              │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                     │        │              │                    Where: (d_year = 2001) AND (d_moy = 11)
-                     │        │              │                    Outputs: [d_date_sk, d_year, d_moy]
-                     │        │              └─ Inner Join Est. 300000 rows
-                     │        │                 │     Condition: i_item_sk_5 == i_item_sk
-                     │        │                 ├─ MergingAggregated Est. 300000 rows
-                     │        │                 │  └─ Repartition Exchange Est. 270000 rows
-                     │        │                 │     │     Partition by: {i_item_sk_5}
-                     │        │                 │     └─ Aggregating Est. 270000 rows
-                     │        │                 │        │     Group by: {i_item_sk_5}
-                     │        │                 │        └─ Filter Est. 20155341 rows
-                     │        │                 │           │     Condition: isNotNull(i_item_sk_5)
-                     │        │                 │           └─ CTERef[0] Est. 22394824 rows
-                     │        │                 └─ Repartition Exchange Est. 300000 rows
-                     │        │                    │     Partition by: {i_item_sk}
-                     │        │                    └─ Filter Est. 300000 rows
-                     │        │                       │     Condition: isNotNull(i_item_sk)
-                     │        │                       └─ TableScan tpcds1000.item Est. 300000 rows
-                     │        │                                Where: isNotNull(i_item_sk)
-                     │        │                                Outputs: [i_item_sk, i_brand_id, i_class_id, i_category_id]
-                     │        └─ Broadcast Exchange Est. 1 rows
-                     │           └─ EnforceSingleRow Est. 1 rows
-                     │              └─ CTERef[1] Est. 1 rows
-                     ├─ Aggregating Est. 111041 rows
-                     │  │     Group by: {expr#'catalog', i_brand_id_7, i_class_id_7, i_category_id_7}
-                     │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(cs_quantity, cs_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count()_1)
-                     │  └─ Projection Est. 123379 rows
-                     │     │     Expressions: [expr#count()_1, expr#sum(multiply(cs_quantity, cs_list_price)), i_brand_id_7, i_category_id_7, i_class_id_7], expr#'catalog':='catalog'
-                     │     └─ Inner Join Est. 123379 rows
-                     │        │     Condition: 
-                     │        │     Filter: `expr#sum(multiply(cs_quantity, cs_list_price))` > `expr#avg(multiply(quantity, list_price))_2`
-                     │        ├─ MergingAggregated Est. 123379 rows
-                     │        │  └─ Repartition Exchange Est. 123379 rows
-                     │        │     │     Partition by: {i_brand_id_7, i_class_id_7, i_category_id_7}
-                     │        │     └─ Aggregating Est. 123379 rows
-                     │        │        │     Group by: {i_brand_id_7, i_class_id_7, i_category_id_7}
-                     │        │        │     Aggregates: expr#sum(multiply(cs_quantity, cs_list_price)):=AggNull(sum)(expr#multiply(cs_quantity, cs_list_price)), expr#count()_1:=AggNull(count)()
-                     │        │        └─ Projection Est. 22744788 rows
-                     │        │           │     Expressions: [i_brand_id_7, i_category_id_7, i_class_id_7], expr#multiply(cs_quantity, cs_list_price):=cs_quantity_1 * cs_list_price_1
-                     │        │           └─ Inner Join Est. 22744788 rows
-                     │        │              │     Condition: cs_item_sk_1 == i_item_sk_6
-                     │        │              ├─ Repartition Exchange Est. 22744788 rows
-                     │        │              │  │     Partition by: {cs_item_sk_1}
-                     │        │              │  └─ Inner Join Est. 22744788 rows
-                     │        │              │     │     Condition: cs_sold_date_sk_2 == d_date_sk_7
-                     │        │              │     │     Runtime Filters Builder: {d_date_sk_7}
-                     │        │              │     ├─ Filter Est. 1439980416 rows
-                     │        │              │     │  │     Condition: isNotNull(cs_item_sk_1) Runtime Filters: {cs_sold_date_sk_2}
-                     │        │              │     │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-                     │        │              │     │           Where: isNotNull(cs_item_sk) Runtime Filters: {cs_sold_date_sk}
-                     │        │              │     │           Outputs: cs_sold_date_sk_2:=cs_sold_date_sk, cs_item_sk_1:=cs_item_sk, cs_quantity_1:=cs_quantity, cs_list_price_1:=cs_list_price
-                     │        │              │     └─ Broadcast Exchange Est. 29 rows
-                     │        │              │        └─ Filter Est. 29 rows
-                     │        │              │           │     Condition: (d_moy_1 = 11) AND (d_year_7 = 2001)
-                     │        │              │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                     │        │              │                    Where: (d_moy = 11) AND (d_year = 2001)
-                     │        │              │                    Outputs: d_date_sk_7:=d_date_sk, d_year_7:=d_year, d_moy_1:=d_moy
-                     │        │              └─ Inner Join Est. 300000 rows
-                     │        │                 │     Condition: i_item_sk_7 == i_item_sk_6
-                     │        │                 ├─ MergingAggregated Est. 300000 rows
-                     │        │                 │  └─ Repartition Exchange Est. 270000 rows
-                     │        │                 │     │     Partition by: {i_item_sk_7}
-                     │        │                 │     └─ Aggregating Est. 270000 rows
-                     │        │                 │        │     Group by: {i_item_sk_7}
-                     │        │                 │        └─ Filter Est. 20155341 rows
-                     │        │                 │           │     Condition: isNotNull(i_item_sk_7)
-                     │        │                 │           └─ CTERef[0] Est. 22394824 rows
-                     │        │                 └─ Repartition Exchange Est. 300000 rows
-                     │        │                    │     Partition by: {i_item_sk_6}
-                     │        │                    └─ Filter Est. 300000 rows
-                     │        │                       │     Condition: isNotNull(i_item_sk_6)
-                     │        │                       └─ TableScan tpcds1000.item Est. 300000 rows
-                     │        │                                Where: isNotNull(i_item_sk)
-                     │        │                                Outputs: i_item_sk_6:=i_item_sk, i_brand_id_7:=i_brand_id, i_class_id_7:=i_class_id, i_category_id_7:=i_category_id
-                     │        └─ Broadcast Exchange Est. 1 rows
-                     │           └─ EnforceSingleRow Est. 1 rows
-                     │              └─ CTERef[1] Est. 1 rows
-                     └─ Aggregating Est. 111041 rows
-                        │     Group by: {expr#'web', i_brand_id_8, i_class_id_8, i_category_id_8}
-                        │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(ws_quantity, ws_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count()_2)
-                        └─ Projection Est. 123379 rows
-                           │     Expressions: [expr#count()_2, expr#sum(multiply(ws_quantity, ws_list_price)), i_brand_id_8, i_category_id_8, i_class_id_8], expr#'web':='web'
-                           └─ Inner Join Est. 123379 rows
-                              │     Condition: 
-                              │     Filter: `expr#sum(multiply(ws_quantity, ws_list_price))` > `expr#avg(multiply(quantity, list_price))_3`
-                              ├─ MergingAggregated Est. 123379 rows
-                              │  └─ Repartition Exchange Est. 123379 rows
-                              │     │     Partition by: {i_brand_id_8, i_class_id_8, i_category_id_8}
-                              │     └─ Aggregating Est. 123379 rows
-                              │        │     Group by: {i_brand_id_8, i_class_id_8, i_category_id_8}
-                              │        │     Aggregates: expr#sum(multiply(ws_quantity, ws_list_price)):=AggNull(sum)(expr#multiply(ws_quantity, ws_list_price)), expr#count()_2:=AggNull(count)()
-                              │        └─ Projection Est. 11453653 rows
-                              │           │     Expressions: [i_brand_id_8, i_category_id_8, i_class_id_8], expr#multiply(ws_quantity, ws_list_price):=ws_quantity_1 * ws_list_price_1
-                              │           └─ Inner Join Est. 11453653 rows
-                              │              │     Condition: ws_item_sk_1 == i_item_sk_8
-                              │              ├─ Repartition Exchange Est. 11453653 rows
-                              │              │  │     Partition by: {ws_item_sk_1}
-                              │              │  └─ Inner Join Est. 11453653 rows
-                              │              │     │     Condition: ws_sold_date_sk_2 == d_date_sk_8
-                              │              │     │     Runtime Filters Builder: {d_date_sk_8}
-                              │              │     ├─ Filter Est. 720000376 rows
-                              │              │     │  │     Condition: isNotNull(ws_item_sk_1) Runtime Filters: {ws_sold_date_sk_2}
-                              │              │     │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-                              │              │     │           Where: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
-                              │              │     │           Outputs: ws_sold_date_sk_2:=ws_sold_date_sk, ws_item_sk_1:=ws_item_sk, ws_quantity_1:=ws_quantity, ws_list_price_1:=ws_list_price
-                              │              │     └─ Broadcast Exchange Est. 29 rows
-                              │              │        └─ Filter Est. 29 rows
-                              │              │           │     Condition: (d_year_8 = 2001) AND (d_moy_2 = 11)
-                              │              │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                              │              │                    Where: (d_year = 2001) AND (d_moy = 11)
-                              │              │                    Outputs: d_date_sk_8:=d_date_sk, d_year_8:=d_year, d_moy_2:=d_moy
-                              │              └─ Inner Join Est. 300000 rows
-                              │                 │     Condition: i_item_sk_9 == i_item_sk_8
-                              │                 ├─ MergingAggregated Est. 300000 rows
-                              │                 │  └─ Repartition Exchange Est. 270000 rows
-                              │                 │     │     Partition by: {i_item_sk_9}
-                              │                 │     └─ Aggregating Est. 270000 rows
-                              │                 │        │     Group by: {i_item_sk_9}
-                              │                 │        └─ Filter Est. 20155341 rows
-                              │                 │           │     Condition: isNotNull(i_item_sk_9)
-                              │                 │           └─ CTERef[0] Est. 22394824 rows
-                              │                 └─ Repartition Exchange Est. 300000 rows
-                              │                    │     Partition by: {i_item_sk_8}
-                              │                    └─ Filter Est. 300000 rows
-                              │                       │     Condition: isNotNull(i_item_sk_8)
-                              │                       └─ TableScan tpcds1000.item Est. 300000 rows
-                              │                                Where: isNotNull(i_item_sk)
-                              │                                Outputs: i_item_sk_8:=i_item_sk, i_brand_id_8:=i_brand_id, i_class_id_8:=i_class_id, i_category_id_8:=i_category_id
-                              └─ Broadcast Exchange Est. 1 rows
-                                 └─ EnforceSingleRow Est. 1 rows
-                                    └─ CTERef[1] Est. 1 rows
-CTEDef [1]
-   MergingAggregated Est. 1 rows
-   └─ Gather Exchange Est. 1 rows
-      └─ Aggregating Est. 1 rows
-         │     Group by: {}
-         │     Aggregates: expr#avg(multiply(quantity, list_price)):=AggNull(avg)(expr#multiply(quantity, list_price))
-         └─ Projection Est. 3015656458 rows
-            │     Expressions: expr#multiply(quantity, list_price):=ss_quantity_2 * ss_list_price_2
-            └─ Union Est. 3015656458 rows
-               │     OutputToInputs: ss_list_price_2 = [ss_list_price_1,cs_list_price,ws_list_price], ss_quantity_2 = [ss_quantity_1,cs_quantity,ws_quantity]
-               ├─ Inner Join Est. 1726728953 rows
-               │  │     Condition: ss_sold_date_sk_2 == d_date_sk_4
-               │  │     Runtime Filters Builder: {d_date_sk_4}
-               │  ├─ Filter Est. 2879987999 rows
-               │  │  │     Condition: Runtime Filters: {ss_sold_date_sk_2}
-               │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-               │  │           Where: Runtime Filters: {ss_sold_date_sk}
-               │  │           Outputs: ss_sold_date_sk_2:=ss_sold_date_sk, ss_quantity_1:=ss_quantity, ss_list_price_1:=ss_list_price
-               │  └─ Broadcast Exchange Est. 1096 rows
-               │     └─ Filter Est. 1096 rows
-               │        │     Condition: (d_year_4 >= 1999) AND (d_year_4 <= 2001)
-               │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │                 Where: (d_year >= 1999) AND (d_year <= 2001)
-               │                 Outputs: d_date_sk_4:=d_date_sk, d_year_4:=d_year
-               ├─ Inner Join Est. 857243243 rows
-               │  │     Condition: cs_sold_date_sk_1 == d_date_sk_5
-               │  │     Runtime Filters Builder: {d_date_sk_5}
-               │  ├─ Filter Est. 1439980416 rows
-               │  │  │     Condition: Runtime Filters: {cs_sold_date_sk_1}
-               │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-               │  │           Where: Runtime Filters: {cs_sold_date_sk}
-               │  │           Outputs: [cs_quantity, cs_list_price], cs_sold_date_sk_1:=cs_sold_date_sk
-               │  └─ Broadcast Exchange Est. 1096 rows
-               │     └─ Filter Est. 1096 rows
-               │        │     Condition: (d_year_5 >= 1999) AND (d_year_5 <= 2001)
-               │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │                 Where: (d_year >= 1999) AND (d_year <= 2001)
-               │                 Outputs: d_date_sk_5:=d_date_sk, d_year_5:=d_year
-               └─ Inner Join Est. 431684262 rows
-                  │     Condition: ws_sold_date_sk_1 == d_date_sk_6
-                  │     Runtime Filters Builder: {d_date_sk_6}
-                  ├─ Filter Est. 720000376 rows
-                  │  │     Condition: Runtime Filters: {ws_sold_date_sk_1}
-                  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-                  │           Where: Runtime Filters: {ws_sold_date_sk}
-                  │           Outputs: [ws_quantity, ws_list_price], ws_sold_date_sk_1:=ws_sold_date_sk
-                  └─ Broadcast Exchange Est. 1096 rows
-                     └─ Filter Est. 1096 rows
-                        │     Condition: (d_year_6 >= 1999) AND (d_year_6 <= 2001)
-                        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                 Where: (d_year >= 1999) AND (d_year <= 2001)
-                                 Outputs: d_date_sk_6:=d_date_sk, d_year_6:=d_year
+            └─ Projection Est. 185067 rows
+               │     Expressions: [expr#'store'_1, expr#sum(number_sales), expr#sum(sales), i_brand_id_9, i_category_id_9, i_class_id_9]
+               └─ MergingAggregated Est. 185067 rows
+                  └─ Repartition Exchange Est. 41640 rows
+                     │     Partition by: {expr#'store'_1, i_brand_id_9, i_class_id_9, i_category_id_9, __grouping_set}
+                     └─ Union Est. 41640 rows
+                        │     OutputToInputs: expr#sum(number_sales) = [expr#sum(number_sales),expr#sum(number_sales),expr#sum(number_sales)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], i_category_id_9 = [i_category_id,i_category_id_7,i_category_id_8], i_class_id_9 = [i_class_id,i_class_id_7,i_class_id_8], i_brand_id_9 = [i_brand_id,i_brand_id_7,i_brand_id_8], expr#'store'_1 = [expr#'store',expr#'catalog',expr#'web'], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
+                        ├─ Aggregating Est. 13880 rows
+                        │  │     Group by: {expr#'store', i_brand_id, i_class_id, i_category_id}
+                        │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(ss_quantity, ss_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count())
+                        │  └─ Projection Est. 61689 rows
+                        │     │     Expressions: [expr#count(), expr#sum(multiply(ss_quantity, ss_list_price)), i_brand_id, i_category_id, i_class_id], expr#'store':='store'
+                        │     └─ Inner Join Est. 61689 rows
+                        │        │     Condition: 
+                        │        │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))` > `expr#avg(multiply(quantity, list_price))_1`
+                        │        ├─ MergingAggregated Est. 123379 rows
+                        │        │  └─ Repartition Exchange Est. 123379 rows
+                        │        │     │     Partition by: {i_brand_id, i_class_id, i_category_id}
+                        │        │     └─ Aggregating Est. 123379 rows
+                        │        │        │     Group by: {i_brand_id, i_class_id, i_category_id}
+                        │        │        │     Aggregates: expr#sum(multiply(ss_quantity, ss_list_price)):=AggNull(sum)(expr#multiply(ss_quantity, ss_list_price)), expr#count():=AggNull(count)()
+                        │        │        └─ Projection Est. 45814400 rows
+                        │        │           │     Expressions: [i_brand_id, i_category_id, i_class_id], expr#multiply(ss_quantity, ss_list_price):=ss_quantity * ss_list_price
+                        │        │           └─ Left Semi (PARALLEL_HASH) Join Est. 45814400 rows
+                        │        │              │     Condition: ss_item_sk == i_item_sk_5
+                        │        │              ├─ Repartition Exchange Est. 45814400 rows
+                        │        │              │  │     Partition by: {ss_item_sk}
+                        │        │              │  └─ Inner Join Est. 45814400 rows
+                        │        │              │     │     Condition: ss_item_sk == i_item_sk
+                        │        │              │     ├─ Inner Join Est. 45814400 rows
+                        │        │              │     │  │     Condition: ss_sold_date_sk == d_date_sk
+                        │        │              │     │  │     Runtime Filters Builder: {d_date_sk}
+                        │        │              │     │  ├─ Filter Est. 2879987999 rows
+                        │        │              │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                        │        │              │     │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                        │        │              │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                        │        │              │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_quantity, ss_list_price]
+                        │        │              │     │  └─ Broadcast Exchange Est. 29 rows
+                        │        │              │     │     └─ Projection Est. 29 rows
+                        │        │              │     │        │     Expressions: [d_date_sk]
+                        │        │              │     │        └─ Filter Est. 29 rows
+                        │        │              │     │           │     Condition: (d_moy = 11) AND (d_year = cast(2001, 'UInt32'))
+                        │        │              │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                        │        │              │     │                    Where: (d_moy = 11) AND (d_year = cast(2001, 'UInt32'))
+                        │        │              │     │                    Outputs: [d_date_sk, d_year, d_moy]
+                        │        │              │     └─ TableScan tpcds1000.item Est. 300000 rows
+                        │        │              │              Outputs: [i_item_sk, i_brand_id, i_class_id, i_category_id]
+                        │        │              └─ Buffer Est. 6220638 rows
+                        │        │                 └─ CTERef[0] Est. 6220638 rows
+                        │        └─ Broadcast Exchange Est. 1 rows
+                        │           └─ Buffer Est. 1 rows
+                        │              └─ CTERef[2] Est. 1 rows
+                        ├─ Aggregating Est. 13880 rows
+                        │  │     Group by: {expr#'catalog', i_brand_id_7, i_class_id_7, i_category_id_7}
+                        │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(cs_quantity, cs_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count()_1)
+                        │  └─ Projection Est. 61689 rows
+                        │     │     Expressions: [expr#count()_1, expr#sum(multiply(cs_quantity, cs_list_price)), i_brand_id_7, i_category_id_7, i_class_id_7], expr#'catalog':='catalog'
+                        │     └─ Inner Join Est. 61689 rows
+                        │        │     Condition: 
+                        │        │     Filter: `expr#sum(multiply(cs_quantity, cs_list_price))` > `expr#avg(multiply(quantity, list_price))_2`
+                        │        ├─ MergingAggregated Est. 123379 rows
+                        │        │  └─ Repartition Exchange Est. 123379 rows
+                        │        │     │     Partition by: {i_brand_id_7, i_class_id_7, i_category_id_7}
+                        │        │     └─ Aggregating Est. 123379 rows
+                        │        │        │     Group by: {i_brand_id_7, i_class_id_7, i_category_id_7}
+                        │        │        │     Aggregates: expr#sum(multiply(cs_quantity, cs_list_price)):=AggNull(sum)(expr#multiply(cs_quantity, cs_list_price)), expr#count()_1:=AggNull(count)()
+                        │        │        └─ Projection Est. 22744788 rows
+                        │        │           │     Expressions: [i_brand_id_7, i_category_id_7, i_class_id_7], expr#multiply(cs_quantity, cs_list_price):=cs_quantity_1 * cs_list_price_1
+                        │        │           └─ Left Semi (PARALLEL_HASH) Join Est. 22744788 rows
+                        │        │              │     Condition: cs_item_sk_1 == i_item_sk_7
+                        │        │              ├─ Repartition Exchange Est. 22744788 rows
+                        │        │              │  │     Partition by: {cs_item_sk_1}
+                        │        │              │  └─ Inner Join Est. 22744788 rows
+                        │        │              │     │     Condition: cs_item_sk_1 == i_item_sk_6
+                        │        │              │     ├─ Inner Join Est. 22744788 rows
+                        │        │              │     │  │     Condition: cs_sold_date_sk_2 == d_date_sk_7
+                        │        │              │     │  │     Runtime Filters Builder: {d_date_sk_7}
+                        │        │              │     │  ├─ Filter Est. 1439980416 rows
+                        │        │              │     │  │  │     Condition: Runtime Filters: {cs_sold_date_sk_2}
+                        │        │              │     │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                        │        │              │     │  │           Where: Runtime Filters: {cs_sold_date_sk}
+                        │        │              │     │  │           Outputs: cs_sold_date_sk_2:=cs_sold_date_sk, cs_item_sk_1:=cs_item_sk, cs_quantity_1:=cs_quantity, cs_list_price_1:=cs_list_price
+                        │        │              │     │  └─ Broadcast Exchange Est. 29 rows
+                        │        │              │     │     └─ Projection Est. 29 rows
+                        │        │              │     │        │     Expressions: [d_date_sk_7]
+                        │        │              │     │        └─ Filter Est. 29 rows
+                        │        │              │     │           │     Condition: (d_year_7 = cast(2001, 'UInt32')) AND (d_moy_1 = 11)
+                        │        │              │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                        │        │              │     │                    Where: (d_year = cast(2001, 'UInt32')) AND (d_moy = 11)
+                        │        │              │     │                    Outputs: d_date_sk_7:=d_date_sk, d_year_7:=d_year, d_moy_1:=d_moy
+                        │        │              │     └─ TableScan tpcds1000.item Est. 300000 rows
+                        │        │              │              Outputs: i_item_sk_6:=i_item_sk, i_brand_id_7:=i_brand_id, i_class_id_7:=i_class_id, i_category_id_7:=i_category_id
+                        │        │              └─ Buffer Est. 6220638 rows
+                        │        │                 └─ CTERef[0] Est. 6220638 rows
+                        │        └─ Broadcast Exchange Est. 1 rows
+                        │           └─ Buffer Est. 1 rows
+                        │              └─ CTERef[2] Est. 1 rows
+                        └─ Aggregating Est. 13880 rows
+                           │     Group by: {expr#'web', i_brand_id_8, i_class_id_8, i_category_id_8}
+                           │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(ws_quantity, ws_list_price))), expr#sum(number_sales):=AggNull(sum)(expr#count()_2)
+                           └─ Projection Est. 61689 rows
+                              │     Expressions: [expr#count()_2, expr#sum(multiply(ws_quantity, ws_list_price)), i_brand_id_8, i_category_id_8, i_class_id_8], expr#'web':='web'
+                              └─ Inner Join Est. 61689 rows
+                                 │     Condition: 
+                                 │     Filter: `expr#sum(multiply(ws_quantity, ws_list_price))` > `expr#avg(multiply(quantity, list_price))_3`
+                                 ├─ MergingAggregated Est. 123379 rows
+                                 │  └─ Repartition Exchange Est. 123379 rows
+                                 │     │     Partition by: {i_brand_id_8, i_class_id_8, i_category_id_8}
+                                 │     └─ Aggregating Est. 123379 rows
+                                 │        │     Group by: {i_brand_id_8, i_class_id_8, i_category_id_8}
+                                 │        │     Aggregates: expr#sum(multiply(ws_quantity, ws_list_price)):=AggNull(sum)(expr#multiply(ws_quantity, ws_list_price)), expr#count()_2:=AggNull(count)()
+                                 │        └─ Projection Est. 11453653 rows
+                                 │           │     Expressions: [i_brand_id_8, i_category_id_8, i_class_id_8], expr#multiply(ws_quantity, ws_list_price):=ws_quantity_1 * ws_list_price_1
+                                 │           └─ Left Semi (PARALLEL_HASH) Join Est. 11453653 rows
+                                 │              │     Condition: ws_item_sk_1 == i_item_sk_9
+                                 │              ├─ Repartition Exchange Est. 11453653 rows
+                                 │              │  │     Partition by: {ws_item_sk_1}
+                                 │              │  └─ Inner Join Est. 11453653 rows
+                                 │              │     │     Condition: ws_item_sk_1 == i_item_sk_8
+                                 │              │     ├─ Inner Join Est. 11453653 rows
+                                 │              │     │  │     Condition: ws_sold_date_sk_2 == d_date_sk_8
+                                 │              │     │  │     Runtime Filters Builder: {d_date_sk_8}
+                                 │              │     │  ├─ Filter Est. 720000376 rows
+                                 │              │     │  │  │     Condition: Runtime Filters: {ws_sold_date_sk_2}
+                                 │              │     │  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
+                                 │              │     │  │           Where: Runtime Filters: {ws_sold_date_sk}
+                                 │              │     │  │           Outputs: ws_sold_date_sk_2:=ws_sold_date_sk, ws_item_sk_1:=ws_item_sk, ws_quantity_1:=ws_quantity, ws_list_price_1:=ws_list_price
+                                 │              │     │  └─ Broadcast Exchange Est. 29 rows
+                                 │              │     │     └─ Projection Est. 29 rows
+                                 │              │     │        │     Expressions: [d_date_sk_8]
+                                 │              │     │        └─ Filter Est. 29 rows
+                                 │              │     │           │     Condition: (d_year_8 = cast(2001, 'UInt32')) AND (d_moy_2 = 11)
+                                 │              │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                                 │              │     │                    Where: (d_year = cast(2001, 'UInt32')) AND (d_moy = 11)
+                                 │              │     │                    Outputs: d_date_sk_8:=d_date_sk, d_year_8:=d_year, d_moy_2:=d_moy
+                                 │              │     └─ TableScan tpcds1000.item Est. 300000 rows
+                                 │              │              Outputs: i_item_sk_8:=i_item_sk, i_brand_id_8:=i_brand_id, i_class_id_8:=i_class_id, i_category_id_8:=i_category_id
+                                 │              └─ Buffer Est. 6220638 rows
+                                 │                 └─ CTERef[0] Est. 6220638 rows
+                                 └─ Broadcast Exchange Est. 1 rows
+                                    └─ Buffer Est. 1 rows
+                                       └─ CTERef[2] Est. 1 rows
 CTEDef [0]
-   Inner Join Est. 22394824 rows
-   │     Condition: i_brand_id_1 == i_brand_id_6, i_category_id_1 == i_category_id_6, i_class_id_1 == i_class_id_6
-   ├─ Repartition Exchange Est. 300000 rows
-   │  │     Partition by: {i_brand_id_1, i_category_id_1, i_class_id_1}
-   │  └─ Filter Est. 300000 rows
-   │     │     Condition: isNotNull(i_item_sk_1)
-   │     └─ TableScan tpcds1000.item Est. 300000 rows
-   │              Where: isNotNull(i_item_sk)
-   │              Outputs: i_item_sk_1:=i_item_sk, i_brand_id_1:=i_brand_id, i_class_id_1:=i_class_id, i_category_id_1:=i_category_id
-   └─ Repartition Exchange Est. 111041 rows
-      │     Partition by: {i_brand_id_6, i_category_id_6, i_class_id_6}
-      └─ Filter Est. 111041 rows
-         │     Condition: (count >= 1) AND (count_1 >= 1) AND (count_2 >= 1)
-         └─ MergingAggregated Est. 123379 rows
-            └─ Repartition Exchange Est. 123379 rows
-               │     Partition by: {i_brand_id_6, i_class_id_6, i_category_id_6}
-               └─ Aggregating Est. 123379 rows
-                  │     Group by: {i_brand_id_6, i_class_id_6, i_category_id_6}
-                  │     Aggregates: count:=AggNull(sum)(marker), count_1:=AggNull(sum)(marker_1), count_2:=AggNull(sum)(marker_2)
-                  └─ Projection Est. 1005218819 rows
-                     │     Expressions: [marker, marker_1, marker_2], i_brand_id_6:=i_brand_id_10, i_category_id_6:=i_category_id_10, i_class_id_6:=i_class_id_10
-                     └─ Inner Join Est. 1005218819 rows
-                        │     Condition: ss_item_sk_2 == i_item_sk_10
-                        ├─ Repartition Exchange Est. 3015656458 rows
-                        │  │     Partition by: {ss_item_sk_2}
-                        │  └─ Union Est. 3015656458 rows
-                        │     │     OutputToInputs: ss_item_sk_2 = [ss_item_sk_1,cs_item_sk,ws_item_sk], marker_2 = [marker_5,marker_8,marker_11], marker_1 = [marker_4,marker_7,marker_10], marker = [marker_3,marker_6,marker_9]
-                        │     ├─ Projection Est. 1726728953 rows
-                        │     │  │     Expressions: [ss_item_sk_1], marker_3:=1, marker_4:=0, marker_5:=0
-                        │     │  └─ Inner Join Est. 1726728953 rows
-                        │     │     │     Condition: ss_sold_date_sk_1 == d_date_sk_1
-                        │     │     │     Runtime Filters Builder: {d_date_sk_1}
-                        │     │     ├─ Filter Est. 2879987999 rows
-                        │     │     │  │     Condition: isNotNull(ss_item_sk_1) Runtime Filters: {ss_sold_date_sk_1}
-                        │     │     │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                        │     │     │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-                        │     │     │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_item_sk_1:=ss_item_sk
-                        │     │     └─ Broadcast Exchange Est. 1096 rows
-                        │     │        └─ Filter Est. 1096 rows
-                        │     │           │     Condition: (d_year_1 >= 1999) AND (d_year_1 <= 2001)
-                        │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                        │     │                    Where: (d_year >= 1999) AND (d_year <= 2001)
-                        │     │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
-                        │     ├─ Projection Est. 857243243 rows
-                        │     │  │     Expressions: [cs_item_sk], marker_6:=0, marker_7:=1, marker_8:=0
-                        │     │  └─ Inner Join Est. 857243243 rows
-                        │     │     │     Condition: cs_sold_date_sk == d_date_sk_2
-                        │     │     │     Runtime Filters Builder: {d_date_sk_2}
-                        │     │     ├─ Filter Est. 1439980416 rows
-                        │     │     │  │     Condition: isNotNull(cs_item_sk) Runtime Filters: {cs_sold_date_sk}
-                        │     │     │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-                        │     │     │           Where: isNotNull(cs_item_sk) Runtime Filters: {cs_sold_date_sk}
-                        │     │     │           Outputs: [cs_sold_date_sk, cs_item_sk]
-                        │     │     └─ Broadcast Exchange Est. 1096 rows
-                        │     │        └─ Filter Est. 1096 rows
-                        │     │           │     Condition: (d_year_2 >= 1999) AND (d_year_2 <= 2001)
-                        │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                        │     │                    Where: (d_year >= 1999) AND (d_year <= 2001)
-                        │     │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
-                        │     └─ Projection Est. 431684262 rows
-                        │        │     Expressions: [ws_item_sk], marker_10:=0, marker_11:=1, marker_9:=0
-                        │        └─ Inner Join Est. 431684262 rows
-                        │           │     Condition: ws_sold_date_sk == d_date_sk_3
-                        │           │     Runtime Filters Builder: {d_date_sk_3}
-                        │           ├─ Filter Est. 720000376 rows
-                        │           │  │     Condition: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
-                        │           │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-                        │           │           Where: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
-                        │           │           Outputs: [ws_sold_date_sk, ws_item_sk]
-                        │           └─ Broadcast Exchange Est. 1096 rows
-                        │              └─ Filter Est. 1096 rows
-                        │                 │     Condition: (d_year_3 >= 1999) AND (d_year_3 <= 2001)
-                        │                 └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                        │                          Where: (d_year >= 1999) AND (d_year <= 2001)
-                        │                          Outputs: d_date_sk_3:=d_date_sk, d_year_3:=d_year
-                        └─ Repartition Exchange Est. 300000 rows
-                           │     Partition by: {i_item_sk_10}
+   Repartition Exchange Est. 6220638 rows
+   │     Partition by: {i_item_sk_1}
+   └─ Inner Join Est. 6220638 rows
+      │     Condition: i_brand_id_1 == i_brand_id_10, i_category_id_1 == i_category_id_10, i_class_id_1 == i_class_id_10
+      │     Runtime Filters Builder: {i_brand_id_10,i_category_id_10,i_class_id_10}
+      ├─ Repartition Exchange Est. 300000 rows
+      │  │     Partition by: {i_brand_id_1, i_category_id_1, i_class_id_1}
+      │  └─ Filter Est. 300000 rows
+      │     │     Condition: Runtime Filters: {i_brand_id_1, i_category_id_1, i_class_id_1}
+      │     └─ TableScan tpcds1000.item Est. 300000 rows
+      │              Where: Runtime Filters: {i_brand_id, i_category_id, i_class_id}
+      │              Outputs: i_item_sk_1:=i_item_sk, i_brand_id_1:=i_brand_id, i_class_id_1:=i_class_id, i_category_id_1:=i_category_id
+      └─ Repartition Exchange Est. 30844 rows
+         │     Partition by: {i_brand_id_10, i_category_id_10, i_class_id_10}
+         └─ Projection Est. 30844 rows
+            │     Expressions: [i_brand_id_10, i_category_id_10, i_class_id_10]
+            └─ Filter Est. 30844 rows
+               │     Condition: (count >= 1) AND (count_1 >= 1) AND (count_2 >= 1)
+               └─ MergingAggregated Est. 123379 rows
+                  └─ Repartition Exchange Est. 123379 rows
+                     │     Partition by: {i_brand_id_10, i_class_id_10, i_category_id_10}
+                     └─ Aggregating Est. 123379 rows
+                        │     Group by: {i_brand_id_10, i_class_id_10, i_category_id_10}
+                        │     Aggregates: count:=AggNull(sum)(marker), count_1:=AggNull(sum)(marker_1), count_2:=AggNull(sum)(marker_2)
+                        └─ Inner Join Est. 1005218819 rows
+                           │     Condition: ss_item_sk_2 == i_item_sk_10
+                           │     Runtime Filters Builder: {i_item_sk_10}
+                           ├─ Union Est. 3015656458 rows
+                           │  │     OutputToInputs: ss_item_sk_2 = [ss_item_sk_1,cs_item_sk,ws_item_sk], marker_2 = [marker_5,marker_8,marker_11], marker_1 = [marker_4,marker_7,marker_10], marker = [marker_3,marker_6,marker_9]
+                           │  ├─ Projection Est. 1726728953 rows
+                           │  │  │     Expressions: [ss_item_sk_1], marker_3:=1, marker_4:=0, marker_5:=0
+                           │  │  └─ Inner Join Est. 1726728953 rows
+                           │  │     │     Condition: ss_sold_date_sk_1 == d_date_sk_1
+                           │  │     │     Runtime Filters Builder: {d_date_sk_1}
+                           │  │     ├─ Filter Est. 2879987999 rows
+                           │  │     │  │     Condition: Runtime Filters: {ss_item_sk_1, ss_sold_date_sk_1}
+                           │  │     │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                           │  │     │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                           │  │     │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_item_sk_1:=ss_item_sk
+                           │  │     └─ Broadcast Exchange Est. 1096 rows
+                           │  │        └─ Projection Est. 1096 rows
+                           │  │           │     Expressions: [d_date_sk_1]
+                           │  │           └─ Filter Est. 1096 rows
+                           │  │              │     Condition: (d_year_1 >= 1999) AND (d_year_1 <= cast(2001, 'UInt32'))
+                           │  │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │  │                       Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                           │  │                       Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+                           │  ├─ Projection Est. 857243243 rows
+                           │  │  │     Expressions: [cs_item_sk], marker_6:=0, marker_7:=1, marker_8:=0
+                           │  │  └─ Inner Join Est. 857243243 rows
+                           │  │     │     Condition: cs_sold_date_sk == d_date_sk_2
+                           │  │     │     Runtime Filters Builder: {d_date_sk_2}
+                           │  │     ├─ Filter Est. 1439980416 rows
+                           │  │     │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                           │  │     │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                           │  │     │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                           │  │     │           Outputs: [cs_sold_date_sk, cs_item_sk]
+                           │  │     └─ Broadcast Exchange Est. 1096 rows
+                           │  │        └─ Projection Est. 1096 rows
+                           │  │           │     Expressions: [d_date_sk_2]
+                           │  │           └─ Filter Est. 1096 rows
+                           │  │              │     Condition: (d_year_2 >= 1999) AND (d_year_2 <= cast(2001, 'UInt32'))
+                           │  │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │  │                       Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                           │  │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                           │  └─ Projection Est. 431684262 rows
+                           │     │     Expressions: [ws_item_sk], marker_10:=0, marker_11:=1, marker_9:=0
+                           │     └─ Inner Join Est. 431684262 rows
+                           │        │     Condition: ws_sold_date_sk == d_date_sk_3
+                           │        │     Runtime Filters Builder: {d_date_sk_3}
+                           │        ├─ Filter Est. 720000376 rows
+                           │        │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                           │        │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
+                           │        │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                           │        │           Outputs: [ws_sold_date_sk, ws_item_sk]
+                           │        └─ Broadcast Exchange Est. 1096 rows
+                           │           └─ Projection Est. 1096 rows
+                           │              │     Expressions: [d_date_sk_3]
+                           │              └─ Filter Est. 1096 rows
+                           │                 │     Condition: (d_year_3 >= 1999) AND (d_year_3 <= cast(2001, 'UInt32'))
+                           │                 └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │                          Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                           │                          Outputs: d_date_sk_3:=d_date_sk, d_year_3:=d_year
                            └─ TableScan tpcds1000.item Est. 300000 rows
                                     Outputs: i_item_sk_10:=i_item_sk, i_brand_id_10:=i_brand_id, i_class_id_10:=i_class_id, i_category_id_10:=i_category_id
-note: Runtime Filter is applied for 9 times.
+CTEDef [2]
+   Projection Est. 1 rows
+   │     Expressions: expr#avg(multiply(quantity, list_price))_1:=`expr#avg(multiply(quantity, list_price))_4`
+   └─ MergingAggregated Est. 1 rows
+      └─ Gather Exchange Est. 1 rows
+         └─ Aggregating Est. 1 rows
+            │     Group by: {}
+            │     Aggregates: expr#avg(multiply(quantity, list_price))_4:=AggNull(avg)(expr#multiply(quantity, list_price)_1)
+            └─ Projection Est. 1004867911 rows
+               │     Expressions: expr#multiply(quantity, list_price)_1:=ss_quantity_4 * ss_list_price_4
+               └─ Inner Join Est. 1004867911 rows
+                  │     Condition: ss_sold_date_sk_5 == d_date_sk_9
+                  │     Runtime Filters Builder: {d_date_sk_9}
+                  ├─ Union Est. 5039968791 rows
+                  │  │     OutputToInputs: ss_list_price_4 = [ss_list_price_3,cs_list_price_2,ws_list_price_2], ss_quantity_4 = [ss_quantity_3,cs_quantity_2,ws_quantity_2], ss_sold_date_sk_5 = [ss_sold_date_sk_4,cs_sold_date_sk_3,ws_sold_date_sk_3]
+                  │  ├─ Filter Est. 2879987999 rows
+                  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk_4}
+                  │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                  │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                  │  │           Outputs: ss_sold_date_sk_4:=ss_sold_date_sk, ss_quantity_3:=ss_quantity, ss_list_price_3:=ss_list_price
+                  │  ├─ Filter Est. 1439980416 rows
+                  │  │  │     Condition: Runtime Filters: {cs_sold_date_sk_3}
+                  │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                  │  │           Where: Runtime Filters: {cs_sold_date_sk}
+                  │  │           Outputs: cs_sold_date_sk_3:=cs_sold_date_sk, cs_quantity_2:=cs_quantity, cs_list_price_2:=cs_list_price
+                  │  └─ Filter Est. 720000376 rows
+                  │     │     Condition: Runtime Filters: {ws_sold_date_sk_3}
+                  │     └─ TableScan tpcds1000.web_sales Est. 720000376 rows
+                  │              Where: Runtime Filters: {ws_sold_date_sk}
+                  │              Outputs: ws_sold_date_sk_3:=ws_sold_date_sk, ws_quantity_2:=ws_quantity, ws_list_price_2:=ws_list_price
+                  └─ Broadcast Exchange Est. 1096 rows
+                     └─ Projection Est. 1096 rows
+                        │     Expressions: [d_date_sk_9]
+                        └─ Filter Est. 1096 rows
+                           │     Condition: (d_year_9 >= 1999) AND (d_year_9 <= cast(2001, 'UInt32'))
+                           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                                    Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                                    Outputs: d_date_sk_9:=d_date_sk, d_year_9:=d_year
+note: Runtime Filter is applied for 15 times.
 note: CTE(Common Table Expression) is applied for 6 times.
 Projection Est. 100 rows
-│     Expressions: ly_brand:=i_brand_id_27, ly_category:=i_category_id_27, ly_channel:=`expr#'store'_3`, ly_class:=i_class_id_27, ly_number_sales:=`expr#count()_5`, ly_sales:=`expr#sum(multiply(ss_quantity, ss_list_price))_3`, ty_brand:=i_brand_id_20, ty_category:=i_category_id_20, ty_channel:=`expr#'store'_2`, ty_class:=i_class_id_20, ty_number_sales:=`expr#count()_4`, ty_sales:=`expr#sum(multiply(ss_quantity, ss_list_price))_2`
+│     Expressions: ly_brand:=i_brand_id_27, ly_category:=i_category_id_27, ly_channel:=`expr#'store'_3`, ly_class:=i_class_id_27, ly_number_sales:=`expr#count()_6`, ly_sales:=`expr#sum(multiply(ss_quantity, ss_list_price))_4`, ty_brand:=i_brand_id_27, ty_category:=i_category_id_27, ty_channel:=`expr#'store'_2`, ty_class:=i_class_id_27, ty_number_sales:=`expr#count()_5`, ty_sales:=`expr#sum(multiply(ss_quantity, ss_list_price))_3`
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#'store'_2 ASC NULLS LAST, i_brand_id_20 ASC NULLS LAST, i_class_id_20 ASC NULLS LAST, i_category_id_20 ASC NULLS LAST}
+      │     Order by: {expr#'store'_2 ASC NULLS LAST, i_brand_id_27 ASC NULLS LAST, i_class_id_27 ASC NULLS LAST, i_category_id_27 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 10233531 rows
+      └─ Gather Exchange Est. 3196 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#'store'_2 ASC NULLS LAST, i_brand_id_20 ASC NULLS LAST, i_class_id_20 ASC NULLS LAST, i_category_id_20 ASC NULLS LAST}
+            │     Order by: {expr#'store'_2 ASC NULLS LAST, i_brand_id_27 ASC NULLS LAST, i_class_id_27 ASC NULLS LAST, i_category_id_27 ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 10233531 rows
-               │     Condition: i_brand_id_20 == i_brand_id_27, i_category_id_20 == i_category_id_27, i_class_id_20 == i_class_id_27
-               ├─ Projection Est. 123379 rows
-               │  │     Expressions: [expr#count()_4, expr#sum(multiply(ss_quantity, ss_list_price))_2, i_brand_id_20, i_category_id_20, i_class_id_20], expr#'store'_2:='store'
-               │  └─ Inner Join Est. 123379 rows
+            └─ Inner Join Est. 3196 rows
+               │     Condition: i_brand_id_27 == i_brand_id_30, i_category_id_27 == i_category_id_30, i_class_id_27 == i_class_id_30
+               │     Runtime Filters Builder: {i_brand_id_30,i_category_id_30,i_class_id_30}
+               ├─ Projection Est. 771 rows
+               │  │     Expressions: [expr#count()_5, expr#sum(multiply(ss_quantity, ss_list_price))_3, i_brand_id_27, i_category_id_27, i_class_id_27], expr#'store'_2:='store'
+               │  └─ Inner Join Est. 771 rows
                │     │     Condition: 
-               │     │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_2` > `expr#avg(multiply(quantity, list_price))_8`
-               │     ├─ MergingAggregated Est. 123379 rows
-               │     │  └─ Repartition Exchange Est. 123379 rows
-               │     │     │     Partition by: {i_brand_id_20, i_class_id_20, i_category_id_20}
-               │     │     └─ Aggregating Est. 123379 rows
-               │     │        │     Group by: {i_brand_id_20, i_class_id_20, i_category_id_20}
-               │     │        │     Aggregates: expr#sum(multiply(ss_quantity, ss_list_price))_2:=AggNull(sum)(expr#multiply(ss_quantity, ss_list_price)_1), expr#count()_4:=AggNull(count)()
-               │     │        └─ Projection Est. 9478841 rows
-               │     │           │     Expressions: [i_brand_id_20, i_category_id_20, i_class_id_20], expr#multiply(ss_quantity, ss_list_price)_1:=ss_quantity_9 * ss_list_price_9
-               │     │           └─ Inner Join Est. 276579 rows
-               │     │              │     Condition: i_item_sk_17 == ss_item_sk_9
-               │     │              ├─ Inner Join Est. 300000 rows
-               │     │              │  │     Condition: i_item_sk_22 == i_item_sk_17
-               │     │              │  ├─ MergingAggregated Est. 300000 rows
-               │     │              │  │  └─ Repartition Exchange Est. 270000 rows
-               │     │              │  │     │     Partition by: {i_item_sk_22}
-               │     │              │  │     └─ Aggregating Est. 270000 rows
-               │     │              │  │        │     Group by: {i_item_sk_22}
-               │     │              │  │        └─ Filter Est. 20155341 rows
-               │     │              │  │           │     Condition: isNotNull(i_item_sk_22)
-               │     │              │  │           └─ Buffer Est. 22394824 rows
-               │     │              │  │              └─ CTERef[0] Est. 22394824 rows
-               │     │              │  └─ Repartition Exchange Est. 300000 rows
-               │     │              │     │     Partition by: {i_item_sk_17}
-               │     │              │     └─ Filter Est. 300000 rows
-               │     │              │        │     Condition: isNotNull(i_item_sk_17)
-               │     │              │        └─ TableScan tpcds1000.item Est. 300000 rows
-               │     │              │                 Where: isNotNull(i_item_sk)
-               │     │              │                 Outputs: i_item_sk_17:=i_item_sk, i_brand_id_20:=i_brand_id, i_class_id_20:=i_class_id, i_category_id_20:=i_category_id
-               │     │              └─ Repartition Exchange Est. 275966 rows
-               │     │                 │     Partition by: {ss_item_sk_9}
-               │     │                 └─ Inner Join Est. 9478841 rows
-               │     │                    │     Condition: ss_sold_date_sk_9 == d_date_sk_27
-               │     │                    │     Runtime Filters Builder: {d_date_sk_27}
-               │     │                    ├─ Filter Est. 2879987999 rows
-               │     │                    │  │     Condition: isNotNull(ss_item_sk_9) Runtime Filters: {ss_sold_date_sk_9}
-               │     │                    │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-               │     │                    │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-               │     │                    │           Outputs: ss_sold_date_sk_9:=ss_sold_date_sk, ss_item_sk_9:=ss_item_sk, ss_quantity_9:=ss_quantity, ss_list_price_9:=ss_list_price
-               │     │                    └─ Broadcast Exchange Est. 6 rows
-               │     │                       └─ Inner Join Est. 6 rows
-               │     │                          │     Condition: d_week_seq == d_week_seq_1
-               │     │                          │     Runtime Filters Builder: {d_week_seq_1}
-               │     │                          ├─ Filter Est. 73049 rows
-               │     │                          │  │     Condition: Runtime Filters: {d_week_seq}
-               │     │                          │  └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │     │                          │           Where: Runtime Filters: {d_week_seq}
-               │     │                          │           Outputs: [d_week_seq], d_date_sk_27:=d_date_sk
-               │     │                          └─ Broadcast Exchange Est. 1 rows
-               │     │                             └─ EnforceSingleRow Est. 1 rows
-               │     │                                └─ Gather Exchange Est. 1 rows
-               │     │                                   └─ Projection Est. 1 rows
-               │     │                                      │     Expressions: [d_week_seq_1]
-               │     │                                      └─ Filter Est. 1 rows
-               │     │                                         │     Condition: (d_year_27 = 2000) AND (d_moy_3 = 12) AND (d_dom = 11)
-               │     │                                         └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │     │                                                  Where: (d_year = 2000) AND (d_moy = 12) AND (d_dom = 11)
-               │     │                                                  Outputs: [d_dom], d_week_seq_1:=d_week_seq, d_year_27:=d_year, d_moy_3:=d_moy
+               │     │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_3` > `expr#avg(multiply(quantity, list_price))_9`
+               │     ├─ MergingAggregated Est. 1542 rows
+               │     │  └─ Repartition Exchange Est. 1542 rows
+               │     │     │     Partition by: {i_brand_id_27, i_class_id_27, i_category_id_27}
+               │     │     └─ Aggregating Est. 1542 rows
+               │     │        │     Group by: {i_brand_id_27, i_class_id_27, i_category_id_27}
+               │     │        │     Aggregates: expr#sum(multiply(ss_quantity, ss_list_price))_3:=AggNull(sum)(expr#multiply(ss_quantity, ss_list_price)_1), expr#count()_5:=AggNull(count)()
+               │     │        └─ Projection Est. 9494465 rows
+               │     │           │     Expressions: [i_brand_id_27, i_category_id_27, i_class_id_27], expr#multiply(ss_quantity, ss_list_price)_1:=ss_quantity_17 * ss_list_price_17
+               │     │           └─ Left Semi (PARALLEL_HASH) Join Est. 9494465 rows
+               │     │              │     Condition: ss_item_sk_15 == i_item_sk_22
+               │     │              ├─ Repartition Exchange Est. 9494465 rows
+               │     │              │  │     Partition by: {ss_item_sk_15}
+               │     │              │  └─ Inner Join Est. 9478841 rows
+               │     │              │     │     Condition: ss_sold_date_sk_22 == d_date_sk_22
+               │     │              │     │     Runtime Filters Builder: {d_date_sk_22}
+               │     │              │     ├─ Inner Join Est. 2879987999 rows
+               │     │              │     │  │     Condition: ss_item_sk_15 == i_item_sk_26
+               │     │              │     │  ├─ Filter Est. 2879987999 rows
+               │     │              │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk_22}
+               │     │              │     │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+               │     │              │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
+               │     │              │     │  │           Outputs: ss_sold_date_sk_22:=ss_sold_date_sk, ss_item_sk_15:=ss_item_sk, ss_quantity_17:=ss_quantity, ss_list_price_17:=ss_list_price
+               │     │              │     │  └─ Filter Est. 300000 rows
+               │     │              │     │     │     Condition: Runtime Filters: {i_brand_id_27, i_category_id_27, i_class_id_27}
+               │     │              │     │     └─ TableScan tpcds1000.item Est. 300000 rows
+               │     │              │     │              Where: Runtime Filters: {i_brand_id, i_category_id, i_class_id}
+               │     │              │     │              Outputs: i_item_sk_26:=i_item_sk, i_brand_id_27:=i_brand_id, i_class_id_27:=i_class_id, i_category_id_27:=i_category_id
+               │     │              │     └─ Broadcast Exchange Est. 6 rows
+               │     │              │        └─ Inner Join Est. 6 rows
+               │     │              │           │     Condition: d_week_seq == d_week_seq_2
+               │     │              │           │     Runtime Filters Builder: {d_week_seq_2}
+               │     │              │           ├─ Filter Est. 73049 rows
+               │     │              │           │  │     Condition: Runtime Filters: {d_week_seq}
+               │     │              │           │  └─ TableScan tpcds1000.date_dim Est. 73049 rows
+               │     │              │           │           Where: Runtime Filters: {d_week_seq}
+               │     │              │           │           Outputs: [d_week_seq], d_date_sk_22:=d_date_sk
+               │     │              │           └─ Broadcast Exchange Est. 1 rows
+               │     │              │              └─ EnforceSingleRow Est. 1 rows
+               │     │              │                 └─ Gather Exchange Est. 1 rows
+               │     │              │                    └─ Projection Est. 1 rows
+               │     │              │                       │     Expressions: d_week_seq_2:=cast(d_week_seq_1, 'Nullable(Int16)')
+               │     │              │                       └─ Filter Est. 1 rows
+               │     │              │                          │     Condition: (d_year_22 = cast(2000, 'UInt32')) AND (d_moy_3 = 12) AND (d_dom = 11)
+               │     │              │                          └─ TableScan tpcds1000.date_dim Est. 73049 rows
+               │     │              │                                   Where: (d_year = cast(2000, 'UInt32')) AND (d_moy = 12) AND (d_dom = 11)
+               │     │              │                                   Outputs: [d_dom], d_week_seq_1:=d_week_seq, d_year_22:=d_year, d_moy_3:=d_moy
+               │     │              └─ Buffer Est. 6220638 rows
+               │     │                 └─ CTERef[0] Est. 6220638 rows
                │     └─ Broadcast Exchange Est. 1 rows
-               │        └─ EnforceSingleRow Est. 1 rows
-               │           └─ CTERef[1] Est. 1 rows
-               └─ Projection Est. 123379 rows
-                  │     Expressions: [expr#count()_5, expr#sum(multiply(ss_quantity, ss_list_price))_3, i_brand_id_27, i_category_id_27, i_class_id_27], expr#'store'_3:='store'
-                  └─ Inner Join Est. 123379 rows
+               │        └─ Buffer Est. 1 rows
+               │           └─ CTERef[3] Est. 1 rows
+               └─ Projection Est. 771 rows
+                  │     Expressions: [expr#count()_6, expr#sum(multiply(ss_quantity, ss_list_price))_4, i_brand_id_30, i_category_id_30, i_class_id_30], expr#'store'_3:='store'
+                  └─ Inner Join Est. 771 rows
                      │     Condition: 
-                     │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_3` > `expr#avg(multiply(quantity, list_price))_9`
-                     ├─ MergingAggregated Est. 123379 rows
-                     │  └─ Repartition Exchange Est. 123379 rows
-                     │     │     Partition by: {i_brand_id_27, i_class_id_27, i_category_id_27}
-                     │     └─ Aggregating Est. 123379 rows
-                     │        │     Group by: {i_brand_id_27, i_class_id_27, i_category_id_27}
-                     │        │     Aggregates: expr#sum(multiply(ss_quantity, ss_list_price))_3:=AggNull(sum)(expr#multiply(ss_quantity, ss_list_price)_2), expr#count()_5:=AggNull(count)()
-                     │        └─ Projection Est. 9478841 rows
-                     │           │     Expressions: [i_brand_id_27, i_category_id_27, i_class_id_27], expr#multiply(ss_quantity, ss_list_price)_2:=ss_quantity_12 * ss_list_price_12
-                     │           └─ Inner Join Est. 276579 rows
-                     │              │     Condition: i_item_sk_23 == ss_item_sk_11
-                     │              ├─ Inner Join Est. 300000 rows
-                     │              │  │     Condition: i_item_sk_24 == i_item_sk_23
-                     │              │  ├─ MergingAggregated Est. 300000 rows
-                     │              │  │  └─ Repartition Exchange Est. 270000 rows
-                     │              │  │     │     Partition by: {i_item_sk_24}
-                     │              │  │     └─ Aggregating Est. 270000 rows
-                     │              │  │        │     Group by: {i_item_sk_24}
-                     │              │  │        └─ Filter Est. 20155341 rows
-                     │              │  │           │     Condition: isNotNull(i_item_sk_24)
-                     │              │  │           └─ Buffer Est. 22394824 rows
-                     │              │  │              └─ CTERef[0] Est. 22394824 rows
-                     │              │  └─ Repartition Exchange Est. 300000 rows
-                     │              │     │     Partition by: {i_item_sk_23}
-                     │              │     └─ Filter Est. 300000 rows
-                     │              │        │     Condition: isNotNull(i_item_sk_23)
-                     │              │        └─ TableScan tpcds1000.item Est. 300000 rows
-                     │              │                 Where: isNotNull(i_item_sk)
-                     │              │                 Outputs: i_item_sk_23:=i_item_sk, i_brand_id_27:=i_brand_id, i_class_id_27:=i_class_id, i_category_id_27:=i_category_id
-                     │              └─ Repartition Exchange Est. 275966 rows
-                     │                 │     Partition by: {ss_item_sk_11}
-                     │                 └─ Inner Join Est. 9478841 rows
-                     │                    │     Condition: ss_sold_date_sk_12 == d_date_sk_34
-                     │                    │     Runtime Filters Builder: {d_date_sk_34}
-                     │                    ├─ Filter Est. 2879987999 rows
-                     │                    │  │     Condition: isNotNull(ss_item_sk_11) Runtime Filters: {ss_sold_date_sk_12}
-                     │                    │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                     │                    │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-                     │                    │           Outputs: ss_sold_date_sk_12:=ss_sold_date_sk, ss_item_sk_11:=ss_item_sk, ss_quantity_12:=ss_quantity, ss_list_price_12:=ss_list_price
-                     │                    └─ Broadcast Exchange Est. 6 rows
-                     │                       └─ Inner Join Est. 6 rows
-                     │                          │     Condition: d_week_seq_2 == d_week_seq_3
-                     │                          │     Runtime Filters Builder: {d_week_seq_3}
-                     │                          ├─ Filter Est. 73049 rows
-                     │                          │  │     Condition: Runtime Filters: {d_week_seq_2}
-                     │                          │  └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                     │                          │           Where: Runtime Filters: {d_week_seq}
-                     │                          │           Outputs: d_date_sk_34:=d_date_sk, d_week_seq_2:=d_week_seq
-                     │                          └─ Broadcast Exchange Est. 1 rows
-                     │                             └─ EnforceSingleRow Est. 1 rows
-                     │                                └─ Gather Exchange Est. 1 rows
-                     │                                   └─ Projection Est. 1 rows
-                     │                                      │     Expressions: [d_week_seq_3]
-                     │                                      └─ Filter Est. 1 rows
-                     │                                         │     Condition: (d_year_34 = 1999) AND (d_moy_4 = 12) AND (d_dom_1 = 11)
-                     │                                         └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                     │                                                  Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
-                     │                                                  Outputs: d_week_seq_3:=d_week_seq, d_year_34:=d_year, d_moy_4:=d_moy, d_dom_1:=d_dom
+                     │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_4` > `expr#avg(multiply(quantity, list_price))_10`
+                     ├─ MergingAggregated Est. 1542 rows
+                     │  └─ Repartition Exchange Est. 1542 rows
+                     │     │     Partition by: {i_brand_id_30, i_class_id_30, i_category_id_30}
+                     │     └─ Aggregating Est. 1542 rows
+                     │        │     Group by: {i_brand_id_30, i_class_id_30, i_category_id_30}
+                     │        │     Aggregates: expr#sum(multiply(ss_quantity, ss_list_price))_4:=AggNull(sum)(expr#multiply(ss_quantity, ss_list_price)_2), expr#count()_6:=AggNull(count)()
+                     │        └─ Projection Est. 9494465 rows
+                     │           │     Expressions: [i_brand_id_30, i_category_id_30, i_class_id_30], expr#multiply(ss_quantity, ss_list_price)_2:=ss_quantity_20 * ss_list_price_20
+                     │           └─ Left Semi (PARALLEL_HASH) Join Est. 9494465 rows
+                     │              │     Condition: ss_item_sk_18 == i_item_sk_24
+                     │              ├─ Repartition Exchange Est. 9494465 rows
+                     │              │  │     Partition by: {ss_item_sk_18}
+                     │              │  └─ Inner Join Est. 9478841 rows
+                     │              │     │     Condition: ss_sold_date_sk_26 == d_date_sk_29
+                     │              │     │     Runtime Filters Builder: {d_date_sk_29}
+                     │              │     ├─ Inner Join Est. 2879987999 rows
+                     │              │     │  │     Condition: ss_item_sk_18 == i_item_sk_29
+                     │              │     │  ├─ Filter Est. 2879987999 rows
+                     │              │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk_26}
+                     │              │     │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                     │              │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                     │              │     │  │           Outputs: ss_sold_date_sk_26:=ss_sold_date_sk, ss_item_sk_18:=ss_item_sk, ss_quantity_20:=ss_quantity, ss_list_price_20:=ss_list_price
+                     │              │     │  └─ TableScan tpcds1000.item Est. 300000 rows
+                     │              │     │           Outputs: i_item_sk_29:=i_item_sk, i_brand_id_30:=i_brand_id, i_class_id_30:=i_class_id, i_category_id_30:=i_category_id
+                     │              │     └─ Broadcast Exchange Est. 6 rows
+                     │              │        └─ Inner Join Est. 6 rows
+                     │              │           │     Condition: d_week_seq_3 == d_week_seq_5
+                     │              │           │     Runtime Filters Builder: {d_week_seq_5}
+                     │              │           ├─ Filter Est. 73049 rows
+                     │              │           │  │     Condition: Runtime Filters: {d_week_seq_3}
+                     │              │           │  └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                     │              │           │           Where: Runtime Filters: {d_week_seq}
+                     │              │           │           Outputs: d_date_sk_29:=d_date_sk, d_week_seq_3:=d_week_seq
+                     │              │           └─ Broadcast Exchange Est. 1 rows
+                     │              │              └─ EnforceSingleRow Est. 1 rows
+                     │              │                 └─ Gather Exchange Est. 1 rows
+                     │              │                    └─ Projection Est. 1 rows
+                     │              │                       │     Expressions: d_week_seq_5:=cast(d_week_seq_4, 'Nullable(Int16)')
+                     │              │                       └─ Filter Est. 1 rows
+                     │              │                          │     Condition: (d_year_29 = 1999) AND (d_moy_4 = 12) AND (d_dom_1 = 11)
+                     │              │                          └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                     │              │                                   Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
+                     │              │                                   Outputs: d_week_seq_4:=d_week_seq, d_year_29:=d_year, d_moy_4:=d_moy, d_dom_1:=d_dom
+                     │              └─ Buffer Est. 6220638 rows
+                     │                 └─ CTERef[0] Est. 6220638 rows
                      └─ Broadcast Exchange Est. 1 rows
-                        └─ EnforceSingleRow Est. 1 rows
-                           └─ CTERef[1] Est. 1 rows
-CTEDef [1]
-   MergingAggregated Est. 1 rows
-   └─ Gather Exchange Est. 1 rows
-      └─ Aggregating Est. 1 rows
-         │     Group by: {}
-         │     Aggregates: expr#avg(multiply(quantity, list_price))_7:=AggNull(avg)(expr#multiply(quantity, list_price)_4)
-         └─ Projection Est. 3015656458 rows
-            │     Expressions: expr#multiply(quantity, list_price)_4:=ss_quantity_11 * ss_list_price_11
-            └─ Union Est. 3015656458 rows
-               │     OutputToInputs: ss_list_price_11 = [ss_list_price_10,cs_list_price_5,ws_list_price_5], ss_quantity_11 = [ss_quantity_10,cs_quantity_5,ws_quantity_5]
-               ├─ Inner Join Est. 1726728953 rows
-               │  │     Condition: ss_sold_date_sk_11 == d_date_sk_31
-               │  │     Runtime Filters Builder: {d_date_sk_31}
-               │  ├─ Filter Est. 2879987999 rows
-               │  │  │     Condition: Runtime Filters: {ss_sold_date_sk_11}
-               │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-               │  │           Where: Runtime Filters: {ss_sold_date_sk}
-               │  │           Outputs: ss_sold_date_sk_11:=ss_sold_date_sk, ss_quantity_10:=ss_quantity, ss_list_price_10:=ss_list_price
-               │  └─ Broadcast Exchange Est. 1096 rows
-               │     └─ Filter Est. 1096 rows
-               │        │     Condition: (d_year_31 >= 1999) AND (d_year_31 <= 2001)
-               │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │                 Where: (d_year >= 1999) AND (d_year <= 2001)
-               │                 Outputs: d_date_sk_31:=d_date_sk, d_year_31:=d_year
-               ├─ Inner Join Est. 857243243 rows
-               │  │     Condition: cs_sold_date_sk_10 == d_date_sk_32
-               │  │     Runtime Filters Builder: {d_date_sk_32}
-               │  ├─ Filter Est. 1439980416 rows
-               │  │  │     Condition: Runtime Filters: {cs_sold_date_sk_10}
-               │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-               │  │           Where: Runtime Filters: {cs_sold_date_sk}
-               │  │           Outputs: cs_sold_date_sk_10:=cs_sold_date_sk, cs_quantity_5:=cs_quantity, cs_list_price_5:=cs_list_price
-               │  └─ Broadcast Exchange Est. 1096 rows
-               │     └─ Filter Est. 1096 rows
-               │        │     Condition: (d_year_32 >= 1999) AND (d_year_32 <= 2001)
-               │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-               │                 Where: (d_year >= 1999) AND (d_year <= 2001)
-               │                 Outputs: d_date_sk_32:=d_date_sk, d_year_32:=d_year
-               └─ Inner Join Est. 431684262 rows
-                  │     Condition: ws_sold_date_sk_10 == d_date_sk_33
-                  │     Runtime Filters Builder: {d_date_sk_33}
-                  ├─ Filter Est. 720000376 rows
-                  │  │     Condition: Runtime Filters: {ws_sold_date_sk_10}
-                  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-                  │           Where: Runtime Filters: {ws_sold_date_sk}
-                  │           Outputs: ws_sold_date_sk_10:=ws_sold_date_sk, ws_quantity_5:=ws_quantity, ws_list_price_5:=ws_list_price
-                  └─ Broadcast Exchange Est. 1096 rows
-                     └─ Filter Est. 1096 rows
-                        │     Condition: (d_year_33 >= 1999) AND (d_year_33 <= 2001)
-                        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                 Where: (d_year >= 1999) AND (d_year <= 2001)
-                                 Outputs: d_date_sk_33:=d_date_sk, d_year_33:=d_year
+                        └─ Buffer Est. 1 rows
+                           └─ CTERef[3] Est. 1 rows
 CTEDef [0]
-   Inner Join Est. 22394824 rows
-   │     Condition: i_brand_id_21 == i_brand_id_26, i_category_id_21 == i_category_id_26, i_class_id_21 == i_class_id_26
-   ├─ Repartition Exchange Est. 300000 rows
-   │  │     Partition by: {i_brand_id_21, i_category_id_21, i_class_id_21}
-   │  └─ Filter Est. 300000 rows
-   │     │     Condition: isNotNull(i_item_sk_18)
-   │     └─ TableScan tpcds1000.item Est. 300000 rows
-   │              Where: isNotNull(i_item_sk)
-   │              Outputs: i_item_sk_18:=i_item_sk, i_brand_id_21:=i_brand_id, i_class_id_21:=i_class_id, i_category_id_21:=i_category_id
-   └─ Repartition Exchange Est. 111041 rows
-      │     Partition by: {i_brand_id_26, i_category_id_26, i_class_id_26}
-      └─ Filter Est. 111041 rows
-         │     Condition: (count_12 >= 1) AND (count_13 >= 1) AND (count_14 >= 1)
-         └─ MergingAggregated Est. 123379 rows
-            └─ Repartition Exchange Est. 123379 rows
-               │     Partition by: {i_brand_id_26, i_class_id_26, i_category_id_26}
-               └─ Aggregating Est. 123379 rows
-                  │     Group by: {i_brand_id_26, i_class_id_26, i_category_id_26}
-                  │     Aggregates: count_12:=AggNull(sum)(marker_48), count_13:=AggNull(sum)(marker_49), count_14:=AggNull(sum)(marker_50)
-                  └─ Projection Est. 1005218819 rows
-                     │     Expressions: [marker_48, marker_49, marker_50], i_brand_id_26:=i_brand_id_28, i_category_id_26:=i_category_id_28, i_class_id_26:=i_class_id_28
-                     └─ Inner Join Est. 1005218819 rows
-                        │     Condition: ss_item_sk_12 == i_item_sk_25
-                        ├─ Repartition Exchange Est. 3015656458 rows
-                        │  │     Partition by: {ss_item_sk_12}
-                        │  └─ Union Est. 3015656458 rows
-                        │     │     OutputToInputs: ss_item_sk_12 = [ss_item_sk_10,cs_item_sk_5,ws_item_sk_5], marker_50 = [marker_53,marker_56,marker_59], marker_49 = [marker_52,marker_55,marker_58], marker_48 = [marker_51,marker_54,marker_57]
-                        │     ├─ Projection Est. 1726728953 rows
-                        │     │  │     Expressions: [ss_item_sk_10], marker_51:=1, marker_52:=0, marker_53:=0
-                        │     │  └─ Inner Join Est. 1726728953 rows
-                        │     │     │     Condition: ss_sold_date_sk_10 == d_date_sk_28
-                        │     │     │     Runtime Filters Builder: {d_date_sk_28}
-                        │     │     ├─ Filter Est. 2879987999 rows
-                        │     │     │  │     Condition: isNotNull(ss_item_sk_10) Runtime Filters: {ss_sold_date_sk_10}
-                        │     │     │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                        │     │     │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-                        │     │     │           Outputs: ss_sold_date_sk_10:=ss_sold_date_sk, ss_item_sk_10:=ss_item_sk
-                        │     │     └─ Broadcast Exchange Est. 1096 rows
-                        │     │        └─ Filter Est. 1096 rows
-                        │     │           │     Condition: (d_year_28 >= 1999) AND (d_year_28 <= 2001)
-                        │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                        │     │                    Where: (d_year >= 1999) AND (d_year <= 2001)
-                        │     │                    Outputs: d_date_sk_28:=d_date_sk, d_year_28:=d_year
-                        │     ├─ Projection Est. 857243243 rows
-                        │     │  │     Expressions: [cs_item_sk_5], marker_54:=0, marker_55:=1, marker_56:=0
-                        │     │  └─ Inner Join Est. 857243243 rows
-                        │     │     │     Condition: cs_sold_date_sk_9 == d_date_sk_29
-                        │     │     │     Runtime Filters Builder: {d_date_sk_29}
-                        │     │     ├─ Filter Est. 1439980416 rows
-                        │     │     │  │     Condition: isNotNull(cs_item_sk_5) Runtime Filters: {cs_sold_date_sk_9}
-                        │     │     │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-                        │     │     │           Where: isNotNull(cs_item_sk) Runtime Filters: {cs_sold_date_sk}
-                        │     │     │           Outputs: cs_sold_date_sk_9:=cs_sold_date_sk, cs_item_sk_5:=cs_item_sk
-                        │     │     └─ Broadcast Exchange Est. 1096 rows
-                        │     │        └─ Filter Est. 1096 rows
-                        │     │           │     Condition: (d_year_29 >= 1999) AND (d_year_29 <= 2001)
-                        │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                        │     │                    Where: (d_year >= 1999) AND (d_year <= 2001)
-                        │     │                    Outputs: d_date_sk_29:=d_date_sk, d_year_29:=d_year
-                        │     └─ Projection Est. 431684262 rows
-                        │        │     Expressions: [ws_item_sk_5], marker_57:=0, marker_58:=0, marker_59:=1
-                        │        └─ Inner Join Est. 431684262 rows
-                        │           │     Condition: ws_sold_date_sk_9 == d_date_sk_30
-                        │           │     Runtime Filters Builder: {d_date_sk_30}
-                        │           ├─ Filter Est. 720000376 rows
-                        │           │  │     Condition: isNotNull(ws_item_sk_5) Runtime Filters: {ws_sold_date_sk_9}
-                        │           │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-                        │           │           Where: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
-                        │           │           Outputs: ws_sold_date_sk_9:=ws_sold_date_sk, ws_item_sk_5:=ws_item_sk
-                        │           └─ Broadcast Exchange Est. 1096 rows
-                        │              └─ Filter Est. 1096 rows
-                        │                 │     Condition: (d_year_30 >= 1999) AND (d_year_30 <= 2001)
-                        │                 └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                        │                          Where: (d_year >= 1999) AND (d_year <= 2001)
-                        │                          Outputs: d_date_sk_30:=d_date_sk, d_year_30:=d_year
-                        └─ Repartition Exchange Est. 300000 rows
-                           │     Partition by: {i_item_sk_25}
+   Repartition Exchange Est. 6220638 rows
+   │     Partition by: {i_item_sk_18}
+   └─ Inner Join Est. 6220638 rows
+      │     Condition: i_brand_id_19 == i_brand_id_26, i_category_id_19 == i_category_id_26, i_class_id_19 == i_class_id_26
+      │     Runtime Filters Builder: {i_brand_id_26,i_category_id_26,i_class_id_26}
+      ├─ Repartition Exchange Est. 300000 rows
+      │  │     Partition by: {i_brand_id_19, i_category_id_19, i_class_id_19}
+      │  └─ Filter Est. 300000 rows
+      │     │     Condition: Runtime Filters: {i_brand_id_19, i_category_id_19, i_class_id_19}
+      │     └─ TableScan tpcds1000.item Est. 300000 rows
+      │              Where: Runtime Filters: {i_brand_id, i_category_id, i_class_id}
+      │              Outputs: i_item_sk_18:=i_item_sk, i_brand_id_19:=i_brand_id, i_class_id_19:=i_class_id, i_category_id_19:=i_category_id
+      └─ Repartition Exchange Est. 30844 rows
+         │     Partition by: {i_brand_id_26, i_category_id_26, i_class_id_26}
+         └─ Projection Est. 30844 rows
+            │     Expressions: [i_brand_id_26, i_category_id_26, i_class_id_26]
+            └─ Filter Est. 30844 rows
+               │     Condition: (count_12 >= 1) AND (count_13 >= 1) AND (count_14 >= 1)
+               └─ MergingAggregated Est. 123379 rows
+                  └─ Repartition Exchange Est. 123379 rows
+                     │     Partition by: {i_brand_id_26, i_class_id_26, i_category_id_26}
+                     └─ Aggregating Est. 123379 rows
+                        │     Group by: {i_brand_id_26, i_class_id_26, i_category_id_26}
+                        │     Aggregates: count_12:=AggNull(sum)(marker_48), count_13:=AggNull(sum)(marker_49), count_14:=AggNull(sum)(marker_50)
+                        └─ Inner Join Est. 1005218819 rows
+                           │     Condition: ss_item_sk_13 == i_item_sk_25
+                           │     Runtime Filters Builder: {i_item_sk_25}
+                           ├─ Union Est. 3015656458 rows
+                           │  │     OutputToInputs: ss_item_sk_13 = [ss_item_sk_11,cs_item_sk_5,ws_item_sk_5], marker_50 = [marker_53,marker_56,marker_59], marker_49 = [marker_52,marker_55,marker_58], marker_48 = [marker_51,marker_54,marker_57]
+                           │  ├─ Projection Est. 1726728953 rows
+                           │  │  │     Expressions: [ss_item_sk_11], marker_51:=1, marker_52:=0, marker_53:=0
+                           │  │  └─ Inner Join Est. 1726728953 rows
+                           │  │     │     Condition: ss_sold_date_sk_16 == d_date_sk_23
+                           │  │     │     Runtime Filters Builder: {d_date_sk_23}
+                           │  │     ├─ Filter Est. 2879987999 rows
+                           │  │     │  │     Condition: Runtime Filters: {ss_item_sk_11, ss_sold_date_sk_16}
+                           │  │     │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                           │  │     │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                           │  │     │           Outputs: ss_sold_date_sk_16:=ss_sold_date_sk, ss_item_sk_11:=ss_item_sk
+                           │  │     └─ Broadcast Exchange Est. 1096 rows
+                           │  │        └─ Projection Est. 1096 rows
+                           │  │           │     Expressions: [d_date_sk_23]
+                           │  │           └─ Filter Est. 1096 rows
+                           │  │              │     Condition: (d_year_23 >= 1999) AND (d_year_23 <= cast(2001, 'UInt32'))
+                           │  │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │  │                       Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                           │  │                       Outputs: d_date_sk_23:=d_date_sk, d_year_23:=d_year
+                           │  ├─ Projection Est. 857243243 rows
+                           │  │  │     Expressions: [cs_item_sk_5], marker_54:=0, marker_55:=1, marker_56:=0
+                           │  │  └─ Inner Join Est. 857243243 rows
+                           │  │     │     Condition: cs_sold_date_sk_10 == d_date_sk_24
+                           │  │     │     Runtime Filters Builder: {d_date_sk_24}
+                           │  │     ├─ Filter Est. 1439980416 rows
+                           │  │     │  │     Condition: Runtime Filters: {cs_item_sk_5, cs_sold_date_sk_10}
+                           │  │     │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                           │  │     │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                           │  │     │           Outputs: cs_sold_date_sk_10:=cs_sold_date_sk, cs_item_sk_5:=cs_item_sk
+                           │  │     └─ Broadcast Exchange Est. 1096 rows
+                           │  │        └─ Projection Est. 1096 rows
+                           │  │           │     Expressions: [d_date_sk_24]
+                           │  │           └─ Filter Est. 1096 rows
+                           │  │              │     Condition: (d_year_24 >= 1999) AND (d_year_24 <= cast(2001, 'UInt32'))
+                           │  │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │  │                       Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                           │  │                       Outputs: d_date_sk_24:=d_date_sk, d_year_24:=d_year
+                           │  └─ Projection Est. 431684262 rows
+                           │     │     Expressions: [ws_item_sk_5], marker_57:=0, marker_58:=0, marker_59:=1
+                           │     └─ Inner Join Est. 431684262 rows
+                           │        │     Condition: ws_sold_date_sk_10 == d_date_sk_25
+                           │        │     Runtime Filters Builder: {d_date_sk_25}
+                           │        ├─ Filter Est. 720000376 rows
+                           │        │  │     Condition: Runtime Filters: {ws_item_sk_5, ws_sold_date_sk_10}
+                           │        │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
+                           │        │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                           │        │           Outputs: ws_sold_date_sk_10:=ws_sold_date_sk, ws_item_sk_5:=ws_item_sk
+                           │        └─ Broadcast Exchange Est. 1096 rows
+                           │           └─ Projection Est. 1096 rows
+                           │              │     Expressions: [d_date_sk_25]
+                           │              └─ Filter Est. 1096 rows
+                           │                 │     Condition: (d_year_25 >= 1999) AND (d_year_25 <= cast(2001, 'UInt32'))
+                           │                 └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │                          Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                           │                          Outputs: d_date_sk_25:=d_date_sk, d_year_25:=d_year
                            └─ TableScan tpcds1000.item Est. 300000 rows
-                                    Outputs: i_item_sk_25:=i_item_sk, i_brand_id_28:=i_brand_id, i_class_id_28:=i_class_id, i_category_id_28:=i_category_id
-note: Runtime Filter is applied for 10 times.
+                                    Outputs: i_item_sk_25:=i_item_sk, i_brand_id_26:=i_brand_id, i_class_id_26:=i_class_id, i_category_id_26:=i_category_id
+CTEDef [3]
+   Projection Est. 1 rows
+   │     Expressions: expr#avg(multiply(quantity, list_price))_9:=`expr#avg(multiply(quantity, list_price))_11`
+   └─ MergingAggregated Est. 1 rows
+      └─ Gather Exchange Est. 1 rows
+         └─ Aggregating Est. 1 rows
+            │     Group by: {}
+            │     Aggregates: expr#avg(multiply(quantity, list_price))_11:=AggNull(avg)(expr#multiply(quantity, list_price)_6)
+            └─ Projection Est. 1004867911 rows
+               │     Expressions: expr#multiply(quantity, list_price)_6:=ss_quantity_16 * ss_list_price_16
+               └─ Inner Join Est. 1004867911 rows
+                  │     Condition: ss_sold_date_sk_21 == d_date_sk_30
+                  │     Runtime Filters Builder: {d_date_sk_30}
+                  ├─ Union Est. 5039968791 rows
+                  │  │     OutputToInputs: ss_list_price_16 = [ss_list_price_15,cs_list_price_7,ws_list_price_7], ss_quantity_16 = [ss_quantity_15,cs_quantity_7,ws_quantity_7], ss_sold_date_sk_21 = [ss_sold_date_sk_20,cs_sold_date_sk_12,ws_sold_date_sk_12]
+                  │  ├─ Filter Est. 2879987999 rows
+                  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk_20}
+                  │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                  │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                  │  │           Outputs: ss_sold_date_sk_20:=ss_sold_date_sk, ss_quantity_15:=ss_quantity, ss_list_price_15:=ss_list_price
+                  │  ├─ Filter Est. 1439980416 rows
+                  │  │  │     Condition: Runtime Filters: {cs_sold_date_sk_12}
+                  │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                  │  │           Where: Runtime Filters: {cs_sold_date_sk}
+                  │  │           Outputs: cs_sold_date_sk_12:=cs_sold_date_sk, cs_quantity_7:=cs_quantity, cs_list_price_7:=cs_list_price
+                  │  └─ Filter Est. 720000376 rows
+                  │     │     Condition: Runtime Filters: {ws_sold_date_sk_12}
+                  │     └─ TableScan tpcds1000.web_sales Est. 720000376 rows
+                  │              Where: Runtime Filters: {ws_sold_date_sk}
+                  │              Outputs: ws_sold_date_sk_12:=ws_sold_date_sk, ws_quantity_7:=ws_quantity, ws_list_price_7:=ws_list_price
+                  └─ Broadcast Exchange Est. 1096 rows
+                     └─ Projection Est. 1096 rows
+                        │     Expressions: [d_date_sk_30]
+                        └─ Filter Est. 1096 rows
+                           │     Condition: (d_year_30 >= 1999) AND (d_year_30 <= cast(2001, 'UInt32'))
+                           └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                                    Where: (d_year >= 1999) AND (d_year <= cast(2001, 'UInt32'))
+                                    Outputs: d_date_sk_30:=d_date_sk, d_year_30:=d_year
+note: Runtime Filter is applied for 19 times.
 note: CTE(Common Table Expression) is applied for 4 times.

@@ -16,6 +16,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int CANNOT_PARSE_TEXT;
+    extern const int ILLEGAL_COLUMN;
 }
 
 class FunctionConvertTz : public IFunction
@@ -43,6 +44,11 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         const ColumnWithTypeAndName & to_tz = arguments[2];
+        if (to_tz.column == nullptr)
+        {
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN,
+                "Argument at index 2 for function {} must be constant", getName());
+        }
         return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromMysqlColumn(*to_tz.column));  
     }
 

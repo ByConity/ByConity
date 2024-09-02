@@ -11,7 +11,7 @@ namespace DB
 
 void HintsPropagator::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    HintsVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
+    HintsVisitor visitor{context, plan.getCTEInfo()};
     HintsVisitorContext hints_context;
     VisitorUtil::accept(plan.getPlanNode(), visitor, hints_context);
 }
@@ -95,16 +95,6 @@ void HintsVisitor::visitFilterNode(FilterNode & node, HintsVisitorContext & hint
     processNodeWithHints(node, hints_context, hint_options);
 }
 
-void HintsVisitor::visitAggregatingNode(AggregatingNode & node, HintsVisitorContext & hints_context)
-{
-    HintOptions hint_options;
-    auto & step = node.getStep();
-    for (const auto & agg : step->getAggregates())
-        hint_options.func_names.emplace_back(agg.function->getName());
-
-    processNodeWithHints(node, hints_context, hint_options);
-}
-
 void HintsVisitor::visitTableScanNode(TableScanNode & node, HintsVisitorContext & hints_context)
 {
     hints_context.name_list.clear();
@@ -138,7 +128,7 @@ void HintsVisitor::visitCTERefNode(CTERefNode & node, HintsVisitorContext &)
     auto hints_list_tmp = hints_list;
     hints_list.clear();
     HintsVisitorContext hints_context;
-    post_order_cte_helper.accept(cte_id, *this, hints_context);
+    cte_helper.accept(cte_id, *this, hints_context);
     hints_list = hints_list_tmp;
 }
 

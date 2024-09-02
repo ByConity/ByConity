@@ -33,7 +33,7 @@
 #include <Parsers/formatAST.h>
 #include <IO/ReadHelpers.h>
 #include <Poco/DirectoryIterator.h>
-#include <Common/renameat2.h>
+#include <Common/atomicRename.h>
 #include <Common/CurrentMetrics.h>
 #include <common/logger_useful.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -294,12 +294,6 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     {
         if (auto worker_resource = context_->tryGetCnchWorkerResource())
         {
-            /// try get table from session resource
-            /// Note: the tables in cnch session doesn't belong to any DatabasePtr
-
-            // if (worker_resource->isCnchTableInWorker(table_id))
-            //     return getCnchTable()
-
             if (auto table = worker_resource->getTable(table_id))
             {
                 LOG_INFO(log, "got table {} from worker resource", table_id.getNameForLogs());
@@ -308,6 +302,17 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         }
     }
 
+    auto aeolus_check = [&table_id, &context_](const StoragePtr & storage)
+    {
+        // check aeolus table access before return required storage.
+        if (context_->getServerType() != ServerType::cnch_server)
+            return;
+
+        if (!storage || storage->getName() == "MaterializedView")
+            return;
+
+        context_->checkAeolusTableAccess(table_id.database_name, table_id.table_name);
+    };
 
     if (table_id.hasUUID() && table_id.database_name == TEMPORARY_DATABASE)
     {
@@ -337,6 +342,8 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
                db_and_table.second = std::make_shared<StorageMaterializeMySQL>(std::move(db_and_table.second), db_and_table.first.get());
         }
 #endif
+
+        aeolus_check(db_and_table.second);
         return db_and_table;
     }
 
@@ -351,8 +358,11 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         return {};
     }
 
+    /// when worker have cnch table is worker resource try to get table from cnch
+    bool is_worker_cnch_table = context_->getServerType() == ServerType::cnch_worker && context_->tryGetCnchWorkerResource()
+        && context_->tryGetCnchWorkerResource()->isCnchTableInWorker(table_id);
     DatabasePtr database{};
-    if (preferCnchCatalog(*context_))
+    if (preferCnchCatalog(*context_) || is_worker_cnch_table)
         database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
 
     if (!database)
@@ -389,12 +399,13 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         database = nullptr;
     }
 
-    if (table && hasDynamicSubcolumns(table->getInMemoryMetadata().getColumns()))
+    if (table && table->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
     {
         if (auto cnch_table = std::dynamic_pointer_cast<StorageCnchMergeTree>(table))
             cnch_table->resetObjectColumns(context_);
     }
 
+    aeolus_check(table);
     return {database, table};
 }
 
@@ -727,7 +738,9 @@ void DatabaseCatalog::updateUUIDMapping(const UUID & uuid, DatabasePtr database,
 std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
-    : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
+    : WithMutableContext(global_context_)
+    , view_dependencies("DatabaseCatalog")
+    , log(&Poco::Logger::get("DatabaseCatalog"))
     , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server}
 {
     TemporaryLiveViewCleaner::init(global_context_);
@@ -799,7 +812,7 @@ void DatabaseCatalog::addDependency(const StorageID & from, const StorageID & wh
     std::lock_guard lock{databases_mutex};
     // FIXME when loading metadata storage may not know UUIDs of it's dependencies, because they are not loaded yet,
     // so UUID of `from` is not used here. (same for remove, get and update)
-    view_dependencies[{from_tenant_db, from.getTableName()}].insert(tenant_where);
+    view_dependencies.addDependency(StorageID{from_tenant_db, from.getTableName()}, tenant_where);
 }
 
 void DatabaseCatalog::removeDependency(const StorageID & from, const StorageID & where)
@@ -808,18 +821,14 @@ void DatabaseCatalog::removeDependency(const StorageID & from, const StorageID &
     StorageID tenant_where = StorageID {formatTenantDatabaseName(where.database_name), where.table_name, where.uuid};
 
     std::lock_guard lock{databases_mutex};
-    view_dependencies[{from_tenant_db, from.getTableName()}].erase(tenant_where);
+    view_dependencies.removeDependency(StorageID{from_tenant_db, from.getTableName()}, tenant_where);
 }
 
 Dependencies DatabaseCatalog::getDependencies(const StorageID & from) const
 {
     String from_tenant_db = formatTenantDatabaseName(from.database_name);
-
     std::lock_guard lock{databases_mutex};
-    auto iter = view_dependencies.find({from_tenant_db, from.getTableName()});
-    if (iter == view_dependencies.end())
-        return {};
-    return Dependencies(iter->second.begin(), iter->second.end());
+    return view_dependencies.getDependencies(StorageID{from_tenant_db, from.getTableName()});
 }
 
 void DatabaseCatalog::updateDependency(const StorageID & old_from, const StorageID & old_where, const StorageID & new_from,
@@ -827,12 +836,11 @@ void DatabaseCatalog::updateDependency(const StorageID & old_from, const Storage
 {
     StorageID tenant_old_where = StorageID {formatTenantDatabaseName(old_where.database_name), old_where.table_name, old_where.uuid};
     StorageID tenant_new_where = StorageID {formatTenantDatabaseName(new_where.database_name), new_where.table_name, new_where.uuid};
-
     std::lock_guard lock{databases_mutex};
     if (!old_from.empty())
-        view_dependencies[{formatTenantDatabaseName(old_from.database_name), old_from.getTableName()}].erase(tenant_old_where);
+        view_dependencies.removeDependency(StorageID{formatTenantDatabaseName(old_from.database_name), old_from.getTableName()}, tenant_old_where);
     if (!new_from.empty())
-        view_dependencies[{formatTenantDatabaseName(new_from.database_name), new_from.getTableName()}].insert(tenant_new_where);
+        view_dependencies.addDependency(StorageID{formatTenantDatabaseName(new_from.database_name), new_from.getTableName()}, tenant_new_where);
 }
 
 DDLGuardPtr DatabaseCatalog::getDDLGuard(const String & database, const String & table)
@@ -1151,6 +1159,15 @@ void DatabaseCatalog::waitTableFinallyDropped(const UUID & uuid)
     {
         return tables_marked_dropped_ids.count(uuid) == 0;
     });
+}
+
+bool DatabaseCatalog::isDefaultVisibleSystemDatabase(const String & database_name)
+{
+    return database_name == SYSTEM_DATABASE
+        || database_name == INFORMATION_SCHEMA
+        || database_name == INFORMATION_SCHEMA_UPPERCASE
+        || database_name == MYSQL
+        || database_name == MYSQL_UPPERCASE;
 }
 
 static DatabasePtr

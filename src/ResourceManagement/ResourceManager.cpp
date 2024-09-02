@@ -33,6 +33,7 @@
 #include <Poco/Util/HelpFormatter.h>
 
 #include <ResourceManagement/CommonData.h>
+#include <Common/Brpc/BrpcApplication.h>
 
 namespace brpc
 {
@@ -65,6 +66,7 @@ void ResourceManager::initialize(Poco::Util::Application & self)
 
 int ResourceManager::run()
 {
+    BrpcApplication::getInstance().initialize(config());
     if (config().hasOption("help"))
     {
         Poco::Util::HelpFormatter helpFormatter(ResourceManager::options());
@@ -98,7 +100,7 @@ int ResourceManager::main(const std::vector<std::string> &)
 
 
     registerServiceDiscovery();
-    const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+    const char * consul_http_host = getConsulIPFromEnv();
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
     if (consul_http_host != nullptr && consul_http_port != nullptr)
         brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);

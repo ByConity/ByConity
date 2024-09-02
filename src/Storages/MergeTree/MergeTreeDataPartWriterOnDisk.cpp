@@ -656,7 +656,8 @@ void MergeTreeDataPartWriterOnDisk::addStreams(
             part_path + stream_name, marks_file_extension,
             compression_codec,
             settings.max_compress_block_size,
-            false,
+            /*write_append*/ false,
+            /*is_compact_map*/ false,
             write_compressed_index);
     };
 
@@ -686,6 +687,7 @@ void MergeTreeDataPartWriterOnDisk::addByteMapStreams(
         if (data_part->versions->enable_compact_map_data)
             col_stream_name = ISerialization::getFileNameForStream(col_name, substream_path);
 
+        // TODO(shiyuze): support big string in map
         column_streams[stream_name] = std::make_unique<Stream>(
             stream_name,
             data_part->volume->getDisk(),
@@ -782,6 +784,8 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
 
     auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
 
+    const auto & storage_columns = metadata_snapshot->getColumns();
+    auto map_effective_codec_desc = storage_columns.getCodecDescOrDefault(name, default_codec);
     // We should construct or build WriteBuffer(ColumnStream) based on unique keys
     for (auto & k_n : key_name_map)
     {
@@ -805,11 +809,11 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
 
         if (need_fix_new_key)
         {
-            this->deepCopyAndAdd(map_base_stream_name, implicit_stream_name, *null_val_type_ptr);
+            this->deepCopyAndAdd(map_base_stream_name, implicit_stream_name, *null_val_type_ptr, map_effective_codec_desc);
         }
         else
         {
-            this->addStreams(implicit_column, default_codec->getFullCodecDesc());
+            this->addByteMapStreams(implicit_column, name, map_effective_codec_desc);
         }
 
 
@@ -842,7 +846,7 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
             serializations.emplace(stream_name, null_val_serial);
 
             NameAndTypePair implicit_column{stream_name, null_val_type_ptr};
-            this->addStreams(implicit_column, default_codec->getFullCodecDesc());
+            this->addByteMapStreams(implicit_column, name, map_effective_codec_desc);
             this->writeColumn(implicit_column, *fake_col, offset_columns, granules);
         }
     }
@@ -854,7 +858,7 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     if (!map_base_stream_exist)
         implicit_columns_list.emplace_back(base_column);
 
-    this->addStreams(base_column, default_codec->getFullCodecDesc());
+    this->addByteMapStreams(base_column, name, map_effective_codec_desc);
     this->writeColumn(base_column, *fake_col, offset_columns, granules);
 
     // after write this map column, update exist keys for next block check
@@ -934,6 +938,9 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
 
 	auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
 
+    const auto & storage_columns = metadata_snapshot->getColumns();
+    auto map_effective_codec_desc = storage_columns.getCodecDescOrDefault(name, default_codec);
+
     for (auto & k_n : key_name_map)
     {
         String implicit_stream_name = getImplicitColNameForMapKey(name, k_n.second);
@@ -950,7 +957,7 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
 		serializations.emplace(implicit_stream_name, null_val_serial);
 
         // All implicit column data store in the same file
-        this->addByteMapStreams({implicit_stream_name, null_val_type_ptr}, name, default_codec->getFullCodecDesc());
+        this->addByteMapStreams({implicit_stream_name, null_val_type_ptr}, name, map_effective_codec_desc);
 
         ColumnPtr implicit_value_col;
         if (optimize_map_column_serialization)
@@ -1117,7 +1124,7 @@ ISerialization::StreamCallback MergeTreeDataPartWriterOnDisk::finalizeStreams(co
     };
 }
 
-void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(const String & source_name, const String & target_name, const IDataType & type)
+void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(const String & source_name, const String & target_name, const IDataType & type, const ASTPtr & effective_codec_desc)
 {
     // This is done in three steps:
     // 1. copy synced data in file
@@ -1135,6 +1142,13 @@ void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(const String & source_name, c
                         "Prerequist is not matched while calling MergeTreeDataPartWriterOnDisk::deepCopyAndAdd", ErrorCodes::LOGICAL_ERROR);
                 }
 
+                CompressionCodecPtr compression_codec;
+                /// If we can use special codec then just get it
+                if (ISerialization::isSpecialCompressionAllowed(substream_path))
+                    compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, substream_path.back().data.type, default_codec);
+                else /// otherwise return only generic codecs and don't use info about the` data_type
+                    compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, nullptr, default_codec, true);
+
                 column_streams[source_stream_name]->sync();
 
                 // copy flushed files
@@ -1147,6 +1161,7 @@ void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(const String & source_name, c
                     files_to_copy.emplace_back(part_path + source_stream_name + marks_file_extension, part_path + target_stream_name + marks_file_extension);
                 disk->copyFiles(files_to_copy, disk);
 
+                // TODO(shiyuze): support big string in map
                 // addStreams
                 column_streams[target_stream_name] = std::make_unique<Stream>(
                     target_stream_name,
@@ -1155,7 +1170,7 @@ void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(const String & source_name, c
                     DATA_FILE_EXTENSION,
                     part_path + target_stream_name,
                     marks_file_extension,
-                    default_codec,
+                    compression_codec,
                     settings.max_compress_block_size,
                     /* write_append = */true,
                     /* is_compact_map = */false);

@@ -31,6 +31,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnMap.h>
+#include <Columns/ColumnBitMap64.h>
 #include <Core/callOnTypeIndex.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesDecimal.h>
@@ -689,6 +690,30 @@ namespace DB
         checkStatus(status, write_column->getName(), format_name);
     }
 
+    static void fillArrowArrayWithBitmapColumnData(
+        ColumnPtr write_column,
+        const String & format_name,
+        arrow::ArrayBuilder * array_builder,
+        size_t start,
+        size_t end)
+    {
+        const auto * column_bitmap = assert_cast<const ColumnBitMap64 *>(write_column.get());
+        arrow::Status status;
+        arrow::ListBuilder & list_builder = assert_cast<arrow::ListBuilder &>(*array_builder);
+        arrow::UInt64Builder & uint64_builder = assert_cast<arrow::UInt64Builder &>(*list_builder.value_builder());
+        for (size_t i = start; i != end; ++i)
+        {
+            status = list_builder.Append();
+            checkStatus(status, column_bitmap->getName(), format_name);
+            const auto & bitmap = column_bitmap->getBitMapAt(i);
+            for (auto it = bitmap.begin(); it != bitmap.end(); ++it)
+            {
+                status = uint64_builder.Append(static_cast<UInt64>(*it));
+                checkStatus(status, column_bitmap->getName(), format_name);
+            }
+        }
+    }
+
     static void fillArrowArray(
         const String & column_name,
         ColumnPtr & column,
@@ -806,6 +831,9 @@ namespace DB
                 break;
             case TypeIndex::UInt256:
                 fillArrowArrayWithBigIntegerColumnData<ColumnUInt256>(column, null_bytemap, format_name, array_builder, start, end);
+                break;
+            case TypeIndex::BitMap64:
+                fillArrowArrayWithBitmapColumnData(column, format_name, array_builder, start, end);
                 break;
 #define DISPATCH(CPP_NUMERIC_TYPE, ARROW_BUILDER_TYPE) \
             case TypeIndex::CPP_NUMERIC_TYPE: \
@@ -955,6 +983,9 @@ namespace DB
 
         if (isIPv4(column_type))
             return arrow::uint32();
+
+        if (isBitmap64(column_type))
+            return arrow::list(arrow::uint64());
 
         const std::string type_name = column_type->getFamilyName();
         if (const auto * arrow_type_it = std::find_if(

@@ -1,0 +1,44 @@
+add column
+p	Int32	false						
+x	Int8	true						
+y	String	true						
+z	Float32	true						
+z1	Float32	true						
+z2	String	false						
+z3	Array(Int32 NOT NULL)	true						
+z4	DateTime	true		DEFAULT	\'2024-02-24 17:00:00\'			
+0	0	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
+1	1	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
+2	2	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
+modify column
+p	Int32	false						
+x	Int32	true						
+y	String	true		DEFAULT	\'hello\'			
+z	Float64	true		DEFAULT	\'1.2\'			
+z1	Float32	true						
+z2	String	true						
+z3	Array(Int32 NOT NULL)	true						
+z4	DateTime	true		DEFAULT	\'2024-02-24 17:00:00\'			
+0	0	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
+1	1	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
+2	2	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
+alter index
+0	0	hello	1
+1	1	hello	1
+2	2	hello	1
+rename column
+p	Int32	false						
+x1	Int8	true						
+y	String	true						
+z	Float32	true						
+0	0	hello	1
+1	1	hello	1
+2	2	hello	1
+drop column
+p	Int32	false						
+x1	Int8	true						
+0	0
+1	1
+2	2
+primary key
+rename table

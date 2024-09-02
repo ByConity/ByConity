@@ -71,6 +71,11 @@ size_t ExpressionReorderNormalizer::reorder(ASTPtr & ast)
     return ASTVisitorUtil::accept(ast, normalizer, ctx);
 }
 
+void ExpressionReorderNormalizer::reorder(ColumnsWithTypeAndName & columnas)
+{
+    std::sort(columnas.begin(), columnas.end(), [](const auto & left, const auto & right) { return left.name < right.name; });
+}
+
 size_t ExpressionReorderNormalizer::visitNode(ASTPtr & ast, Void & ctx)
 {
     for (auto & child : ast->getChildren())

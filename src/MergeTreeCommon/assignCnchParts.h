@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <vector>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerGroupHandle.h>
@@ -28,6 +29,8 @@ namespace DB
 {
 using WorkerList = std::vector<String>;
 using ServerAssignmentMap = std::unordered_map<String, ServerDataPartsVector>;
+// map: hostname -> (map: part_index -> mark ranges)
+using VirtualPartAssignmentMap = std::unordered_map<String, std::map<int, std::unique_ptr<MarkRanges>>>;
 using FilePartsAssignMap = std::unordered_map<String, FileDataPartsCNCHVector>;
 using AssignmentMap = std::unordered_map<String, MergeTreeDataPartsCNCHVector>;
 using BucketNumbersAssignmentMap = std::unordered_map<String, std::set<Int64>>;
@@ -45,7 +48,7 @@ FilePartsAssignMap assignCnchFileParts(const WorkerGroupHandle & worker_group, c
 HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts);
 
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts);
+std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & context, MergeTreeSettingsPtr settings);
 
 /**
  * splitCnchParts will split server parts into bucketed parts and leftover server parts.
@@ -54,7 +57,73 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
  */
 std::pair<ServerDataPartsVector, ServerDataPartsVector>
 splitCnchParts(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts);
-void moveBucketTablePartsToAssignedParts(std::unordered_map<String, ServerDataPartsVector> & assigned_map, ServerDataPartsVector & bucket_parts, const WorkerList & workers, std::set<Int64> required_bucket_numbers = {});
-BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers = {});
+void moveBucketTablePartsToAssignedParts(
+    std::unordered_map<String, ServerDataPartsVector> & assigned_map,
+    ServerDataPartsVector & bucket_parts,
+    const WorkerList & workers,
+    std::set<Int64> required_bucket_numbers = {},
+    bool replicated = false);
+BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(
+    const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers = {}, bool replicated = false);
 
+bool satisfyBucketWorkerRelation(const StoragePtr & storage, const Context & query_context);
+
+/////////////////////////////////////////////////
+////////       Hybrid allocation related methods
+/////////////////////////////////////////////////
+
+struct HybridPart
+{
+    String key;
+    bool is_virtual;
+    // part index, only used in one allocation
+    size_t index;
+    UInt64 marks_count;
+    size_t begin;
+    size_t end;
+
+    HybridPart(const String & _key, bool _is_virtual, size_t _index, UInt64 _marks_count, size_t _begin, size_t _end)
+        : key(_key), is_virtual(_is_virtual), index(_index), marks_count(_marks_count), begin(_begin), end(_end)
+    {
+    }
+
+    String toString() const
+    {
+        std::stringstream ss;
+        ss << key << ", ";
+        ss << is_virtual << ", ";
+        ss << index << ", ";
+        ss << marks_count << ", ";
+        ss << begin << ", ";
+        ss << end << ".";
+        return ss.str();
+    }
+};
+
+size_t computeVirtualPartSize(size_t min_rows_per_vp, size_t index_granularity);
+
+std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
+    const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */, const ContextPtr & context);
+
+void sortByMarksCount(std::vector<HybridPart> & hybrid_parts);
+
+void splitHybridParts(const ServerDataPartsVector & parts, size_t virtual_part_size, std::vector<HybridPart> & hybrid_parts);
+
+void mergeConsecutiveRanges(VirtualPartAssignmentMap & virtual_part_assignment);
+
+ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts, std::map<int, std::unique_ptr<MarkRanges>> & parts_entry);
+}
+
+template <class F>
+constexpr void filterParts(std::vector<F> & parts, size_t index, size_t count)
+{
+    size_t c = 0;
+    for (auto iter = parts.begin(); iter != parts.end();)
+    {
+        if (c % count != index)
+            iter = parts.erase(iter);
+        else
+            iter++;
+        c++;
+    }
 }

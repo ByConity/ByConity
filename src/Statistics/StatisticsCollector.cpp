@@ -13,27 +13,40 @@
  * limitations under the License.
  */
 
+#include <chrono>
+#include <cmath>
 #include <set>
 #include <tuple>
 #include <vector>
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <Optimizer/CardinalityEstimate/SymbolStatistics.h>
+#include <Statistics/Bucket.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CachedStatsProxy.h>
 #include <Statistics/CollectStep.h>
 #include <Statistics/SimplifyHistogram.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
+#include <Statistics/StatsTableIdentifier.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
 #include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string/join.hpp>
 #include <common/logger_useful.h>
+#include "Storages/ColumnsDescription.h"
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Functions/now64.h>
 
 namespace DB::Statistics
 {
+
+StorageMetadataPtr getStorageMetaData(ContextPtr context, StoragePtr storage)
+{
+    (void) context;
+    StorageMetadataPtr storage_metadata = storage->getInMemoryMetadataPtr();
+    // for Cnch, no need to workaround Distribtued
+    return storage_metadata;
+}
 
 void StatisticsCollector::collect(const ColumnDescVector & cols_desc)
 {
@@ -65,11 +78,17 @@ void StatisticsCollector::writeToCatalog()
     }
     StatsData data;
     data.table_stats = table_stats.writeToCollection();
+    std::vector<String> columns;
     for (auto & [name, stats] : columns_stats)
     {
+        columns.emplace_back(name);
         data.column_stats[name] = stats.writeToCollection();
     }
     auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
+    auto cols_desc = catalog->filterCollectableColumns(table_info, columns);
+    // drop old columns to ensure other data is deleted
+    // especially when collecting statistics_collect_histogram=0
+    proxy->dropColumns(table_info, cols_desc);
     proxy->put(table_info, std::move(data));
     catalog->invalidateClusterStatsCache(table_info);
     // clear udi whenever it is to create/drop stats
@@ -134,6 +153,124 @@ static bool isInteger(SerdeDataType type)
     }
 }
 
+PlanNodeStatisticsPtr expandToCurrent(ContextPtr context, PlanNodeStatisticsPtr plan_node_stats, time_t stats_time)
+{
+    auto [input_now, input_skip] = [&] {
+        time_t now = context->getSettingsRef().statistics_current_timestamp.value;
+        time_t skip_seconds = context->getSettingsRef().statistics_expand_to_current_threshold_days * 3600 * 24;
+        time_t skip_time;
+
+        if (now == 0)
+        {
+            now = time(nullptr);
+            skip_time = stats_time - skip_seconds;
+        }
+        else
+        {
+            // for testing, stats_time is not useful, use now
+            skip_time = now - skip_seconds;
+        }
+        return std::make_pair(now, skip_time);
+    }();
+
+
+    auto full_count = plan_node_stats->getRowCount();
+    // first step: find the scale ratio
+
+    struct TypeHelper
+    {
+        double now;
+        double skip;
+    };
+
+    auto datetime_helper = TypeHelper{.now = static_cast<double>(input_now), .skip = static_cast<double>(input_skip)};
+    auto date_helper = TypeHelper{.now = datetime_helper.now / (24 * 3600), .skip = datetime_helper.skip / (24 * 3600)};
+
+    std::set<String> modified_cols;
+    auto all_scale_factor = 0.0;
+    for (auto & [col_name, symbol] : plan_node_stats->getSymbolStatistics())
+    {
+        auto type = symbol->getType();
+        auto & symbol_stats = plan_node_stats->getSymbolStatistics().at(col_name);
+
+        auto is_date = isDateOrDate32(type);
+        auto is_datetime = isDateTime(type) || isDateTime64(type);
+
+        if (is_date || is_datetime)
+        {
+            auto helper = is_date ? date_helper : datetime_helper;
+
+            auto stats_min = symbol_stats->getMin();
+            auto stats_max = symbol_stats->getMax();
+            if (std::isnan(stats_min) || std::isnan(stats_max))
+            {
+                continue;
+            }
+
+            if (stats_max <= helper.skip)
+            {
+                // highly possible ancient data or unused column, skip it
+                continue;
+            }
+
+            if (stats_max >= helper.now)
+            {
+                // up to date, no need to fix
+                continue;
+            }
+
+            // +1 to avoid inf
+            auto scale_factor = (helper.now - stats_min + 1) / (stats_max - stats_min + 1);
+
+            // we hard code scale_factor limit to 2, to avoid unexpected situations
+            // like some column stores a fixed old date_time
+            scale_factor = std::min(scale_factor, 2.0);
+
+            // we just set max here, scale it in next step
+            symbol_stats->setMax(helper.now);
+            auto & histogram = symbol_stats->getHistogram();
+            if (!histogram.empty())
+            {
+                auto count = (scale_factor - 1) * (full_count - symbol_stats->getNullsCount());
+                auto ndv = (scale_factor - 1) * symbol_stats->getNdv();
+                auto new_bucket = Bucket(stats_max, helper.now, ndv, count, false, true);
+                histogram.emplaceBackBucket(new_bucket);
+            }
+            symbol_stats->setNdv(symbol_stats->getNdv() * scale_factor);
+            modified_cols.insert(col_name);
+
+            all_scale_factor = std::max(all_scale_factor, scale_factor);
+        }
+    }
+
+    if (modified_cols.empty())
+    {
+        return plan_node_stats;
+    }
+
+    if (all_scale_factor == 0.0)
+    {
+        return plan_node_stats;
+    }
+
+    auto old_count = plan_node_stats->getRowCount();
+    plan_node_stats->updateRowCount(old_count * all_scale_factor);
+
+    for (auto & [col, symbol] : plan_node_stats->getSymbolStatistics())
+    {
+        if (modified_cols.count(col))
+        {
+            continue;
+        }
+
+        // NOTE: we have made sure selectivity can be larger than 1 using this API
+        // NOTE: future improvement should consider this scenario
+        symbol = symbol->applySelectivity(all_scale_factor, 1);
+    }
+
+    return plan_node_stats;
+}
+
 std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics() const
 {
     if (!table_stats.basic)
@@ -144,10 +281,16 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
 
     auto result = std::make_shared<PlanNodeStatistics>();
     auto table_row_count = table_stats.basic->getRowCount();
+    // Datetime64(3) to time_t, just do a simple division
+    time_t stats_time = table_stats.basic->getTimestamp() / 1000;
+
+
     result->updateRowCount(table_row_count);
 
     // whether to construct single bucket histogram from min/max if there is no histogram
-    for (auto & [col, stats] : columns_stats)
+    auto meta = storage->getInMemoryMetadataPtr();
+
+    for (const auto & [col, stats] : columns_stats)
     {
         auto symbol = std::make_shared<SymbolStatistics>();
 
@@ -181,11 +324,19 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
                 symbol->histogram.emplaceBackBucket(std::move(bucket));
             }
 
+            auto type = meta->getColumns().tryGetColumn(GetColumnsOptions::All, col)->type;
+            auto decay_type = decayDataType(type);
+            symbol->type = decay_type;
 
             result->updateSymbolStatistics(col, symbol);
         }
     }
+
+    if (context->getSettingsRef().statistics_expand_to_current)
+    {
+        result = expandToCurrent(context, std::move(result), stats_time);
+    }
+
     return result;
 }
-
 }

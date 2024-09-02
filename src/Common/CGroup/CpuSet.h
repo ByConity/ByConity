@@ -68,7 +68,7 @@ public:
     CpuSet(String name_, String path_);
     CpuSet(PassKey pass_key, String name_, String path_, Cpus cpus_, bool enable_exclusive_);
     ~CpuSet() = default;
-    void addTask(size_t tid);
+    void addTask([[maybe_unused]] size_t tid);
     void addTasks(const std::vector<size_t> & tids);
     std::vector<size_t> getTasks();
     void resetCpuSet();

@@ -16,6 +16,8 @@
 1
 0
 0
+\N
+\N
 SELECT arrayJoin([\'hello\', \'world\']) = \'hello\'
 SELECT arrayJoin([\'hello\', \'world\']) LIKE \'%hello%\'
 SELECT arrayJoin([\'hello\', \'world\']) LIKE \'hell_\'

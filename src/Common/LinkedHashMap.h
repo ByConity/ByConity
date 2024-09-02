@@ -101,6 +101,14 @@ public:
         }
     }
 
+    void erase(const Key& key) {
+        auto iter = mapping.find(key);
+        if (iter == mapping.end())
+            return;
+        auto index = iter->second;
+        ordered_storage.erase(index + begin());
+    }
+
     template<typename Iter>
     Iter erase(Iter iter)
     {

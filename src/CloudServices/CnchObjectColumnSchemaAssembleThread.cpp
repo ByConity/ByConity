@@ -38,7 +38,7 @@ void CnchObjectColumnSchemaAssembleThread::runImpl()
             return;
         }
 
-        if (storage->supportsDynamicSubcolumns() && hasDynamicSubcolumns(storage->getInMemoryMetadata().getColumns()))
+        if (storage->supportsDynamicSubcolumns() && storage->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
         {
             LOG_INFO(log, "{}.{} Start assemble partial schemas", database_name, table_name);
             auto catalog = getContext()->getCnchCatalog();

@@ -1,0 +1,26 @@
+db1
+db1	tb	x
+db1	tb	x
+db1	tb	y
+db1	tb
+no grant
+1
+show databases grant
+db1
+1
+show tables grant
+db1
+db1	tb	x
+db1	tb
+vix
+1
+show columns grant
+db1
+db1	tb	x
+db1	tb	x
+db1	tb	y
+db1	tb
+vix
+1
+show users grant
+1

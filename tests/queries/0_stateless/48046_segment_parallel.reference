@@ -1,0 +1,45 @@
+Segment[0] [OUTPUT]
+   Output Exchange: Output
+   Parallel Size: 1, Cluster Name: test_cluster_two_shards, Exchange Parallel Size: 1
+   Inputs: [(SegmentId:1 ExchangeId:3 ExchangeMode:GATHER ExchangeParallelSize:1 KeepOrder:0)]
+   Output Columns: [server_time]
+      Projection Est. ? rows
+      │     Expressions: server_time:=server_time_2
+      └─ Gather Exchange segment[1] Est. ? rows
+
+Segment[1] [PROCESS]
+   Output Exchange: GATHER
+   Parallel Size: 2, Cluster Name: test_cluster_two_shards, Exchange Parallel Size: 1
+   Outputs: [(SegmentId:0 ExchangeId:3 ExchangeMode:GATHER ParallelSize:1 KeepOrder:0)]
+   Inputs: [(SegmentId:2 ExchangeId:1 ExchangeMode:LOCAL_NO_NEED_REPARTITION ExchangeParallelSize:0 KeepOrder:0)
+             (SegmentId:2 ExchangeId:2 ExchangeMode:LOCAL_NO_NEED_REPARTITION ExchangeParallelSize:0 KeepOrder:0)]
+   Output Columns: [server_time_2]
+      Union Est. ? rows
+      │     OutputToInputs: server_time_2 = [server_time,expr#sum(server_time)_1,expr#sum(server_time)_2]
+      ├─ TableScan default.ts_table Est. ? rows
+      │        Outputs: [server_time]
+      ├─ CTERef[0] <-- segment[2] Est. ? rows
+      └─ CTERef[0] <-- segment[2] Est. ? rows
+
+Segment[2] [PROCESS]
+   Output Exchange: LOCAL_NO_NEED_REPARTITION
+   Parallel Size: 2, Cluster Name: test_cluster_two_shards, Exchange Parallel Size: 1
+   Outputs: [(SegmentId:1 ExchangeId:1 ExchangeMode:LOCAL_NO_NEED_REPARTITION ParallelSize:2 KeepOrder:0)
+             (SegmentId:1 ExchangeId:2 ExchangeMode:LOCAL_NO_NEED_REPARTITION ParallelSize:2 KeepOrder:0)]
+   Inputs: [(SegmentId:3 ExchangeId:0 ExchangeMode:REPARTITION ExchangeParallelSize:1 KeepOrder:0)]
+   Output Columns: [expr#sum(server_time), hour]
+      MergingAggregated Est. ? rows
+      └─ Repartition Exchange segment[3] Est. ? rows
+               Partition by: {hour}
+
+Segment[3] [SOURCE]
+   Output Exchange: REPARTITION Shufflekeys: hour
+   Parallel Size: 2, Cluster Name: test_cluster_two_shards, Exchange Parallel Size: 1
+   Outputs: [(SegmentId:2 ExchangeId:0 ExchangeMode:REPARTITION ParallelSize:2 KeepOrder:0)]
+   Output Columns: [expr#sum(server_time), hour]
+      Aggregating Est. ? rows
+      │     Group by: {hour}
+      │     Aggregates: expr#sum(server_time):=sum(server_time_1)
+      └─ TableScan default.ts_table Est. ? rows
+               Outputs: [hour], server_time_1:=server_time
+

@@ -201,6 +201,8 @@ public:
         UInt64 size;
 
         bool operator== (const DictionaryKey & other) const { return hash == other.hash && size == other.size; }
+
+        bool operator<(const DictionaryKey & other) const {return hash < other.hash || (hash==other.hash && size < other.size);}
     };
 
     struct DictionaryKeyHash

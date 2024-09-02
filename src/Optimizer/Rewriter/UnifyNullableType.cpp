@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -24,15 +25,22 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/join_common.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/CTERefStep.h>
+#include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/MergeSortingStep.h>
+#include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
+#include <QueryPlan/PlanNode.h>
 #include <QueryPlan/ProjectionStep.h>
+#include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Common/Exception.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -44,17 +52,234 @@ namespace ErrorCodes
 
 void UnifyNullableType::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    UnifyNullableVisitor visitor{context, plan.getCTEInfo()};
-    Void v;
-    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
+    UnifyNullableVisitor visitor{plan.getCTEInfo(), plan.getPlanNode()};
+    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, context);
     plan.update(result);
 }
 
-PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, Void & v)
+PlanNodePtr UnifyNullableVisitor::visitPlanNode(PlanNodeBase & node, ContextMutablePtr & context)
 {
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
+    PlanNodes new_children;
+    DataStreams new_inputs;
+
+    for (auto & i : node.getChildren())
+    {
+        PlanNodePtr rewritten_child = VisitorUtil::accept(*i, *this, context);
+        new_children.emplace_back(rewritten_child);
+        new_inputs.push_back(rewritten_child->getStep()->getOutputStream());
+    }
+
+    QueryPlanStepPtr step = node.getStep();
+    step->setInputStreams(new_inputs);
+
+    return PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(step), new_children, node.getStatistics());
+}
+
+PlanNodePtr UnifyNullableVisitor::visitArrayJoinNode(ArrayJoinNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitExceptNode(ExceptNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitIntersectNode(IntersectNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitExtremesNode(ExtremesNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitFillingNode(FillingNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitFinalSampleNode(FinalSampleNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitBufferNode(BufferNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitTotalsHavingNode(TotalsHavingNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitOffsetNode(OffsetNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitRemoteExchangeSourceNode(RemoteExchangeSourceNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitSortingNode(SortingNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitTableWriteNode(TableWriteNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitOutfileWriteNode(OutfileWriteNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitApplyNode(ApplyNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitIntersectOrExceptNode(IntersectOrExceptNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitIntermediateResultCacheNode(IntermediateResultCacheNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitLocalExchangeNode(LocalExchangeNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitMultiJoinNode(MultiJoinNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitFilterNode(FilterNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitDistinctNode(DistinctNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitMarkDistinctNode(MarkDistinctNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitWindowNode(WindowNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitPartialSortingNode(PartialSortingNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitPartitionTopNNode(PartitionTopNNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitTopNFilteringNode(TopNFilteringNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitMergeSortingNode(MergeSortingNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitMergingSortedNode(MergingSortedNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitFinishSortingNode(FinishSortingNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitLimitNode(LimitNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitLimitByNode(LimitByNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitTableFinishNode(TableFinishNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitOutfileFinishNode(OutfileFinishNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitReadNothingNode(ReadNothingNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitReadStorageRowCountNode(ReadStorageRowCountNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitTableScanNode(TableScanNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitValuesNode(ValuesNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitExpandNode(ExpandNode & node, ContextMutablePtr & context)
+{
+    return visitPlanNode(node, context);
+}
+
+PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, ContextMutablePtr & context)
+{
+    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, context);
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     NameToType set_nullable;
     const auto & input_header = child->getStep()->getOutputStream().header;
     auto type_analyzer = TypeAnalyzer::create(context, input_header.getNamesAndTypes());
@@ -71,24 +296,13 @@ PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, Voi
     return ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expression_step), PlanNodes{child}, node.getStatistics());
 }
 
-PlanNodePtr UnifyNullableVisitor::visitFilterNode(FilterNode & node, Void & v)
-{
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
-    const DataStream & input = child->getStep()->getOutputStream();
-    const auto & step = *node.getStep();
-    // re-create filter step, update it's input/output stream types.
-    auto filter_step = std::make_shared<FilterStep>(input, step.getFilter(), step.removesFilterColumn());
-    auto filter_node = FilterNode::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{child}, node.getStatistics());
-    return filter_node;
-}
-
-PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
+PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, ContextMutablePtr & context)
 {
     PlanNodes children;
     DataStreams inputs;
     for (const auto & item : node.getChildren())
     {
-        PlanNodePtr child = VisitorUtil::accept(*item, *this, v);
+        PlanNodePtr child = VisitorUtil::accept(*item, *this, context);
         children.emplace_back(child);
         inputs.push_back(child->getStep()->getOutputStream());
     }
@@ -157,9 +371,9 @@ PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
     return JoinNode::createPlanNode(context->nextNodeId(), std::move(join_step_set_null), children, node.getStatistics());
 }
 
-PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, Void & v)
+PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, ContextMutablePtr & context)
 {
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
+    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, context);
 
     const auto & step = *node.getStep();
 
@@ -219,6 +433,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
         step.needOverflowRow(),
         step.shouldProduceResultsInOrderOfBucketNumber(),
         step.isNoShuffle(),
+        step.isStreamingForCache(),
         step.getHints());
     auto agg_node_set_null
         = AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step_set_null), PlanNodes{child}, node.getStatistics());
@@ -226,21 +441,84 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
     return agg_node_set_null;
 }
 
-PlanNodePtr UnifyNullableVisitor::visitWindowNode(WindowNode & node, Void & v)
+PlanNodePtr UnifyNullableVisitor::visitMergingAggregatedNode(MergingAggregatedNode & node, ContextMutablePtr & context)
 {
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
-
-    // TODO is window function needs adjust according to NullableType ?
-    const DataStream & input = child->getStep()->getOutputStream();
+    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, context);
 
     const auto & step = *node.getStep();
-    auto window_step = std::make_unique<WindowStep>(input, step.getWindow(), step.getFunctions(), step.needSort());
-    auto window_node = WindowNode::createPlanNode(context->nextNodeId(), std::move(window_step), PlanNodes{child}, node.getStatistics());
 
-    return window_node;
+    const AggregateDescriptions & descs = step.getAggregates();
+    AggregateDescriptions descs_set_nullable;
+
+    auto input_columns = child->getStep()->getOutputStream().header;
+    for (const auto & desc : descs)
+    {
+        AggregateDescription desc_with_null;
+        AggregateFunctionPtr fun = desc.function;
+
+        // get type from AggregateFunction(...);
+        auto argument_types = [&] {
+            auto argument_name = desc.column_name;
+            auto column = input_columns.getByName(argument_name, false);
+            auto partial_type = typeid_cast<std::shared_ptr<const DataTypeAggregateFunction>>(column.type);
+            if (!partial_type)
+                throw Exception("unexpected merge agg input type", ErrorCodes::LOGICAL_ERROR);
+
+            return partial_type->getArgumentsDataTypes();
+        }();
+
+        String fun_name = fun->getName();
+        AggregateFunctionPtr fun_with_null = desc.function;
+        // tmp fix: For AggregateFunctionNothing, the argument types may diff with
+        // the ones in `descr.function->argument_types`. In this case, reconstructing aggregate description will lead
+        // to a different result.
+        //
+        // see also similar fix in AggregatingStep.cpp
+        if (fun_name != "nothing")
+        {
+            AggregateFunctionProperties properties;
+            fun_with_null = AggregateFunctionFactory::instance().get(fun_name, argument_types, desc.parameters, properties);
+        }
+        desc_with_null.function = fun_with_null;
+        desc_with_null.parameters = desc.parameters;
+        desc_with_null.column_name = desc.column_name;
+        desc_with_null.argument_names = desc.argument_names;
+        desc_with_null.parameters = desc.parameters;
+        desc_with_null.arguments = desc.arguments;
+        desc_with_null.mask_column = desc.mask_column;
+
+        descs_set_nullable.emplace_back(desc_with_null);
+    }
+
+    auto trans_params = step.getAggregatingTransformParams();
+    const auto & agg_params = trans_params->params;
+    ColumnNumbers key_positions;
+    auto rewritten_header = child->getStep()->getOutputStream();
+    for (const auto & key : step.getKeys())
+        key_positions.emplace_back(rewritten_header.header.getPositionByName(key));
+
+    Aggregator::Params new_agg_params{
+        rewritten_header.header, key_positions, std::move(descs_set_nullable), agg_params.overflow_row, agg_params.max_threads};
+
+    auto new_trans_params = std::make_shared<AggregatingTransformParams>(new_agg_params, trans_params->final);
+
+    auto merge_agg_step_set_null = std::make_shared<MergingAggregatedStep>(
+        rewritten_header,
+        step.getKeys(),
+        step.getGroupingSetsParamsList(),
+        step.getGroupings(),
+        new_trans_params,
+        step.isMemoryEfficientAggregation(),
+        step.getMaxThreads(),
+        step.getMemoryEfficientMergeThreads());
+
+    auto merge_agg_node_set_null = MergingAggregatedNode::createPlanNode(
+        context->nextNodeId(), std::move(merge_agg_step_set_null), PlanNodes{child}, node.getStatistics());
+
+    return merge_agg_node_set_null;
 }
 
-PlanNodePtr UnifyNullableVisitor::visitUnionNode(UnionNode & node, Void & v)
+PlanNodePtr UnifyNullableVisitor::visitUnionNode(UnionNode & node, ContextMutablePtr & context)
 {
     const auto & step = *node.getStep();
     PlanNodes new_children;
@@ -271,7 +549,7 @@ PlanNodePtr UnifyNullableVisitor::visitUnionNode(UnionNode & node, Void & v)
 
     for (size_t i = 0; i < node.getChildren().size(); ++i)
     {
-        PlanNodePtr rewritten_child = VisitorUtil::accept(*node.getChildren()[i], *this, v);
+        PlanNodePtr rewritten_child = VisitorUtil::accept(*node.getChildren()[i], *this, context);
         new_children.emplace_back(rewritten_child);
         new_inputs.push_back(rewritten_child->getStep()->getOutputStream());
         update_output_data_type(new_output, rewritten_child->getStep()->getOutputStream().header.getNamesAndTypes(), i);
@@ -283,13 +561,68 @@ PlanNodePtr UnifyNullableVisitor::visitUnionNode(UnionNode & node, Void & v)
         new_output_header.insert(ColumnWithTypeAndName{item.type, item.name});
     }
 
+    // add cast projection, make Union's input stream/output stream type Nullable consistent.
+    PlanNodes children_add_nullable;
+    for (size_t i = 0; i < new_children.size(); i++)
+    {
+        Assignments add_cast;
+        NameToType name_to_type;
+
+        bool need_add_cast_projection = false;
+        for (auto const & value : step.getOutToInputs())
+        {
+            auto output_name = value.first;
+            auto output_type = new_output_header.getByName(output_name).type;
+
+            auto input_name = value.second[i];
+            auto input_type = new_children[i]->getOutputNamesToTypes().at(input_name);
+
+            if (isNullableOrLowCardinalityNullable(output_type) && !isNullableOrLowCardinalityNullable(input_type))
+            {
+                need_add_cast_projection = true;
+                input_type = JoinCommon::tryConvertTypeToNullable(input_type);
+                Assignment assignment{
+                    input_name,
+                    makeASTFunction(
+                        "cast", std::make_shared<ASTIdentifier>(input_name), std::make_shared<ASTLiteral>(input_type->getName()))};
+                add_cast.emplace_back(assignment);
+                name_to_type[input_name] = input_type;
+            }
+            else
+            {
+                Assignment assignment{input_name, std::make_shared<ASTIdentifier>(input_name)};
+                add_cast.emplace_back(assignment);
+                name_to_type[input_name] = input_type;
+            }
+        }
+
+        if (need_add_cast_projection)
+        {
+            auto add_cast_step = std::make_shared<ProjectionStep>(new_children[i]->getStep()->getOutputStream(), add_cast, name_to_type);
+            auto add_cast_node
+                = std::make_shared<ProjectionNode>(context->nextNodeId(), std::move(add_cast_step), PlanNodes{new_children[i]});
+            children_add_nullable.emplace_back(add_cast_node);
+        }
+        else
+        {
+            children_add_nullable.emplace_back(new_children[i]);
+        }
+    }
+
+    DataStreams new_inputs_add_cast;
+    for (auto & i : children_add_nullable)
+    {
+        new_inputs_add_cast.push_back(i->getStep()->getOutputStream());
+    }
+
     auto rewritten_step = std::make_unique<UnionStep>(
-        new_inputs, DataStream{new_output_header}, step.getOutToInputs(), step.getMaxThreads(), step.isLocal());
-    auto rewritten_node = UnionNode::createPlanNode(context->nextNodeId(), std::move(rewritten_step), new_children, node.getStatistics());
+        new_inputs_add_cast, DataStream{new_output_header}, step.getOutToInputs(), step.getMaxThreads(), step.isLocal());
+    auto rewritten_node
+        = UnionNode::createPlanNode(context->nextNodeId(), std::move(rewritten_step), children_add_nullable, node.getStatistics());
     return rewritten_node;
 }
 
-PlanNodePtr UnifyNullableVisitor::visitExchangeNode(ExchangeNode & node, Void & v)
+PlanNodePtr UnifyNullableVisitor::visitExchangeNode(ExchangeNode & node, ContextMutablePtr & context)
 {
     const auto & step = *node.getStep();
 
@@ -297,7 +630,7 @@ PlanNodePtr UnifyNullableVisitor::visitExchangeNode(ExchangeNode & node, Void & 
     DataStreams inputs;
     for (auto & item : node.getChildren())
     {
-        PlanNodePtr child = VisitorUtil::accept(*item, *this, v);
+        PlanNodePtr child = VisitorUtil::accept(*item, *this, context);
         children.emplace_back(child);
         inputs.emplace_back(child->getStep()->getOutputStream());
     }
@@ -309,70 +642,11 @@ PlanNodePtr UnifyNullableVisitor::visitExchangeNode(ExchangeNode & node, Void & 
     return exchange_node_set_null;
 }
 
-PlanNodePtr UnifyNullableVisitor::visitPartialSortingNode(PartialSortingNode & node, Void & v)
-{
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
-    const DataStream & input = child->getStep()->getOutputStream();
-    const auto & step = *node.getStep();
-
-    // update it's input/output stream types.
-    auto sort_step = std::make_unique<PartialSortingStep>(input, step.getSortDescription(), step.getLimit());
-    auto sort_node = PartialSortingNode::createPlanNode(context->nextNodeId(), std::move(sort_step), PlanNodes{child}, node.getStatistics());
-    return sort_node;
-}
-
-PlanNodePtr UnifyNullableVisitor::visitMergeSortingNode(MergeSortingNode & node, Void & v)
-{
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
-    const DataStream & input = child->getStep()->getOutputStream();
-    const auto & step = *node.getStep();
-
-    // update it's input/output stream types.
-    auto sort_step = std::make_unique<MergeSortingStep>(input, step.getSortDescription(), step.getLimit());
-    auto sort_node = MergeSortingNode::createPlanNode(context->nextNodeId(), std::move(sort_step), PlanNodes{child}, node.getStatistics());
-    return sort_node;
-}
-
-PlanNodePtr UnifyNullableVisitor::visitLimitNode(LimitNode & node, Void & v)
-{
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
-    const DataStream & input = child->getStep()->getOutputStream();
-    const auto & step = *node.getStep();
-
-    // update it's input/output stream types.
-    auto limit_step = std::make_unique<LimitStep>(input, step.getLimit(), step.getOffset());
-    auto limit_node = LimitNode::createPlanNode(context->nextNodeId(), std::move(limit_step), PlanNodes{child}, node.getStatistics());
-    return limit_node;
-}
-
-PlanNodePtr UnifyNullableVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & node, Void & v)
-{
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
-    const DataStream & input = child->getStep()->getOutputStream();
-
-    // update it's input/output stream types.
-    auto single_step = std::make_unique<EnforceSingleRowStep>(input);
-    auto single_node = EnforceSingleRowNode::createPlanNode(context->nextNodeId(), std::move(single_step), PlanNodes{child}, node.getStatistics());
-    return single_node;
-}
-
-PlanNodePtr UnifyNullableVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & node, Void & v)
-{
-    PlanNodePtr child = VisitorUtil::accept(node.getChildren()[0], *this, v);
-    const DataStream & input = child->getStep()->getOutputStream();
-    const auto & step = *node.getStep();
-
-    // update it's input/output stream types.
-    auto unique_step = std::make_unique<AssignUniqueIdStep>(input, step.getUniqueId());
-    auto unique_node = AssignUniqueIdNode::createPlanNode(context->nextNodeId(), std::move(unique_step), PlanNodes{child}, node.getStatistics());
-    return unique_node;
-}
-
-PlanNodePtr UnifyNullableVisitor::visitCTERefNode(CTERefNode & node, Void & v)
+PlanNodePtr UnifyNullableVisitor::visitCTERefNode(CTERefNode & node, ContextMutablePtr & context)
 {
     auto cte_step = node.getStep();
     auto cte_id = cte_step->getId();
-    auto cte_plan = cte_helper.acceptAndUpdate(cte_id, *this, v);
+    auto cte_plan = cte_helper.acceptAndUpdate(cte_id, *this, context);
 
     const auto & cte_output_stream = cte_plan->getStep()->getOutputStream().header;
 

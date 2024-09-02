@@ -90,7 +90,7 @@ public:
         auto client = getTargetServer();
         if (client)
         {
-            (*client)->assertLockAcquired(lock_info->txn_id, lock_info->lock_id);
+            (*client)->assertLockAcquired(lock_info);
         }
         else
         {
@@ -121,6 +121,14 @@ private:
     LockInfoPtr lock_info;
     CnchServerClientPtr server_client;
 };
+
+CnchLockHolder::CnchLockHolder(const ContextPtr & context_, LockInfoPtr && elem) : WithContext(context_)
+{
+    txn_id = elem->txn_id;
+    assert(txn_id);
+    elem->setLockID(context_->getTimestamp());
+    cnch_locks.push_back(std::make_unique<CnchLock>(context_, elem));
+}
 
 CnchLockHolder::CnchLockHolder(const ContextPtr & context_, std::vector<LockInfoPtr> && elems) : WithContext(context_)
 {
@@ -156,18 +164,19 @@ bool CnchLockHolder::tryLock()
     Stopwatch watch;
     SCOPE_EXIT({ LOG_DEBUG(&Poco::Logger::get("CnchLock"), "acquire {} locks in {} ms", cnch_locks.size(), watch.elapsedMilliseconds()); });
 
-    for (const auto & lock : cnch_locks)
-    {
-        if (!lock->tryLock())
-            return false;
-    }
-
-    /// init heartbeat task if needed
+    /// Init heartbeat task if needed
+    /// We need to start the heartbeat process in advance, otherwise txn may be aborted due to expiration time
     if (!report_lock_heartbeat_task)
     {
         report_lock_heartbeat_task
             = getContext()->getSchedulePool().createTask("reportLockHeartBeat", [this]() { reportLockHeartBeatTask(); });
         report_lock_heartbeat_task->activateAndSchedule();
+    }
+
+    for (const auto & lock : cnch_locks)
+    {
+        if (!lock->tryLock())
+            return false;
     }
     return true;
 }
@@ -199,9 +208,7 @@ void CnchLockHolder::reportLockHeartBeat()
 
     for (const auto & cnch_lock : cnch_locks)
     {
-        if (!cnch_lock->locked)
-            continue;
-
+        /// We need to start the heartbeat process in advance, otherwise txn may be aborted due to expiration time
         if (cnch_lock->server_client)
             clients.emplace(cnch_lock->server_client.get());
         else

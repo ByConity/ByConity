@@ -22,6 +22,7 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
@@ -410,6 +411,18 @@ bool PredicateUtils::containsAll(const Strings & partition_symbols, const std::s
     return contains;
 }
 
+bool PredicateUtils::containsAny(const Strings & partition_symbols, const std::set<String> & unique_symbols)
+{
+    for (const auto & unique : unique_symbols)
+    {
+        if (std::find(partition_symbols.begin(), partition_symbols.end(), unique) != partition_symbols.end())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool PredicateUtils::isInliningCandidate(ConstASTPtr & predicate, ProjectionNode & node)
 {
     // candidate symbols for inlining are
@@ -439,7 +452,7 @@ bool PredicateUtils::isInliningCandidate(ConstASTPtr & predicate, ProjectionNode
     }
 
     const auto & step = *node.getStep();
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
 
     bool all_match = true;
     for (auto & dependency : dependencies)
@@ -678,17 +691,17 @@ PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicat
     std::vector<std::pair<ConstASTPtr, ConstASTPtr>> equal_predicates;
     std::vector<ConstASTPtr> other_predicates;
 
-    for (auto & predicate : predicates)
+    for (const auto & predicate : predicates)
     {
         for (auto & filter : PredicateUtils::extractConjuncts(predicate))
         {
-            auto function = filter->as<ASTFunction>();
+            const auto * function = filter->as<ASTFunction>();
             if (function && function->name == "equals")
             {
-                if (function->children.size() == 2 && function->children[0]->getType() == ASTType::ASTIdentifier
-                    && function->children[1]->getType() == ASTType::ASTIdentifier)
+                if (function->arguments->children.size() == 2 && function->arguments->children[0]->getType() == ASTType::ASTIdentifier
+                    && function->arguments->children[1]->getType() == ASTType::ASTIdentifier)
                 {
-                    equal_predicates.emplace_back(function->children[0], function->children[1]);
+                    equal_predicates.emplace_back(function->arguments->children[0], function->arguments->children[1]);
                     continue;
                 }
             }
@@ -696,6 +709,12 @@ PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicat
         }
     }
     return {equal_predicates, other_predicates};
+}
+
+void PredicateUtils::subtract(ASTs & left, const ASTs & right)
+{
+    EqualityASTSet set{right.begin(), right.end()};
+    left.erase(std::remove_if(left.begin(), left.end(), [&](const auto & ast) -> bool { return set.count(ast); }), left.end());
 }
 
 template ASTPtr PredicateUtils::combineConjuncts<true, ASTPtr>(const std::vector<ASTPtr> & predicates);

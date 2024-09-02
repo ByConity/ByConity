@@ -8,3 +8,26 @@ Dan+Anna+Charlie+Eve+Bob+Frans
 #,#,#,#,#,#,#
 #
 Dan#Anna#Charlie#Eve#Bob#Frans
+Frans#Eve#Dan#Charlie#Bob#Anna
+Anna#Anna#Bob#Charlie#Dan#Eve#Frans
+Frans#Eve#Dan#Charlie#Bob#Anna#Anna
+Anna#Anna#Bob#Charlie#Dan#Eve#Frans	Frans#Eve#Dan#Charlie#Bob#Anna#Anna
+Frans#Eve#Dan#Charlie#Bob#Anna
+1	1a
+2	2b,3c
+3	4E,5C,6D,7d,8d,9D
+1	(1:a)
+2	(2:b),(3:c)
+3	(4:E),(5:C),(6:D),(7:d),(8:d),(9:D)
+1	1
+2	3,2
+3	7,8,4,6,9,5
+1	1
+2	23
+3	456789
+1	1
+2	23
+3	456789
+1	1
+2	23
+3	456789

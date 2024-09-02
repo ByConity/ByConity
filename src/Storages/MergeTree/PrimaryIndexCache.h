@@ -19,12 +19,15 @@ using PrimaryIndex = Columns;
 
 struct PrimaryIndexWeightFunction
 {
+    /// We spent additional bytes on key in hashmap, linked lists, shared pointers, etc ...
+    static constexpr size_t PRIMARY_INDEX_CACHE_OVERHEAD = 128;
+
     size_t operator()(const PrimaryIndex & index) const
     {
         size_t sum_bytes = 0;
         for (const auto & column : index)
             sum_bytes += column->allocatedBytes();
-        return sum_bytes;
+        return sum_bytes + PRIMARY_INDEX_CACHE_OVERHEAD;
     }
 };
 

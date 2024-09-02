@@ -27,7 +27,7 @@
 #include <Catalog/CatalogUtils.h>
 #include <Access/IAccessEntity.h>
 #include <Statistics/AutoStatisticsHelper.h>
-#include "Storages/MergeTree/MarkRange.h"
+#include <Storages/MergeTree/MarkRange.h>
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
 
 namespace DB
@@ -38,7 +38,11 @@ namespace Protos
 }
 
 class ICnchTransaction;
+class CnchServerTransaction;
+using CnchServerTransactionPtr = std::shared_ptr<CnchServerTransaction>;
 struct PrunedPartitions;
+class StorageCloudMergeTree;
+struct DumpedData;
 
 class CnchServerClient : public RpcClientBase
 {
@@ -55,9 +59,11 @@ public:
     std::pair<TxnTimestamp, TxnTimestamp> createTransactionForKafka(const StorageID & storage_id, const size_t consumer_index);
     TxnTimestamp commitTransaction(
         const ICnchTransaction & txn, const StorageID & kafka_storage_id = StorageID::createEmpty(), const size_t consumer_index = 0);
-    void precommitTransaction(const TxnTimestamp & txn_id, const UUID & uuid = UUIDHelpers::Nil);
+    void precommitTransaction(const ContextPtr & context, const TxnTimestamp & txn_id, const UUID & uuid = UUIDHelpers::Nil);
     TxnTimestamp rollbackTransaction(const TxnTimestamp & txn_id);
     void finishTransaction(const TxnTimestamp & txn_id);
+
+    void commitTransactionViaGlobalCommitter(const TransactionCnchPtr & txn);
 
     CnchTransactionStatus getTransactionStatus(const TxnTimestamp & txn_id, bool need_search_catalog = false);
 
@@ -70,7 +76,13 @@ public:
 
     void removeIntermediateData(const TxnTimestamp & txn_id);
 
-    ServerDataPartsVector fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
+    ServerDataPartsVector fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts, const std::set<Int64> & bucket_numbers);
+    DeleteBitmapMetaPtrVector fetchDeleteBitmaps(
+        const String & remote_host,
+        const ConstStoragePtr & table,
+        const Strings & partition_list,
+        const TxnTimestamp & ts,
+        const std::set<Int64> & bucket_numbers = {});
 
     PrunedPartitions fetchPartitions(
         const String & remote_host,
@@ -85,6 +97,8 @@ public:
         const TxnTimestamp & txnID,
         const bool is_merged_parts,
         const bool preallocate_mode);
+
+    void redirectClearParts(const StoragePtr & table, const Catalog::CommitItems & commit_data);
 
     void redirectSetCommitTime(
         const StoragePtr & table,
@@ -125,28 +139,29 @@ public:
         const TxnTimestamp & txn_id,
         ManipulationType type,
         MergeTreeMetaBase & storage,
-        const MutableMergeTreeDataPartsCNCHVector & parts,
-        const DeleteBitmapMetaPtrVector & delete_bitmaps,
-        const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+        const DumpedData & dumped_data,
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},
         const cppkafka::TopicPartitionList & tpl = {},
-        const MySQLBinLogInfo & binlog = {});
+        const MySQLBinLogInfo & binlog = {},
+        const UInt64 peak_memory_usage = 0);
 
     void precommitParts(
         ContextPtr context,
         const TxnTimestamp & txn_id,
         ManipulationType type,
         MergeTreeMetaBase & storage,
-        const MutableMergeTreeDataPartsCNCHVector & parts,
-        const DeleteBitmapMetaPtrVector & delete_bitmaps,
-        const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+        const DumpedData & dumped_data,
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},
         const cppkafka::TopicPartitionList & tpl = {},
-        const MySQLBinLogInfo & binlog = {});
+        const MySQLBinLogInfo & binlog = {},
+        const UInt64 peak_memory_usage = 0);
+
+    MergeTreeDataPartsCNCHVector fetchCloudTableMeta(
+        const StorageCloudMergeTree & storage, const TxnTimestamp & ts, const std::unordered_set<Int64> & bucket_numbers = {});
 
     google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);
@@ -157,7 +172,7 @@ public:
 
     void acquireLock(const LockInfoPtr & info);
     void releaseLock(const LockInfoPtr & info);
-    void assertLockAcquired(const TxnTimestamp & txn_id, LockID lock_ids);
+    void assertLockAcquired(const LockInfoPtr & info);
     void reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time = 0);
 
     std::optional<TxnTimestamp> getMinActiveTimestamp(const StorageID & storage_id);
@@ -168,10 +183,11 @@ public:
     google::protobuf::RepeatedPtrField<DB::Protos::BackgroundThreadStatus>
     getBackGroundStatus(const CnchBGThreadType & type);
 
-    void submitQueryWorkerMetrics(const QueryWorkerMetricElementPtr & query_worker_metric_element);
-    void submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 timeout_ms);
+    brpc::CallId submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 timeout_ms);
 
     UInt32 reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name);
+
+    void handleRefreshTaskOnFinish(StorageID & mv_storage_id, String task_id, Int64 txn_id);
 
     void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms);
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name);
@@ -183,7 +199,9 @@ public:
 #endif
 
     void forceRecalculateMetrics(const StorageID & storage_id);
-    
+    std::vector<Protos::LastModificationTimeHint> getLastModificationTimeHints(const StorageID & storage_id);
+    void notifyTableCreated(const UUID & storage_uuid, int64_t cnch_notify_table_created_rpc_timeout_ms);
+
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;

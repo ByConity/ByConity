@@ -19,6 +19,7 @@ namespace SQLBindingCacheCacheConfig
 struct SQLBindingObject
 {
     String pattern;
+    String tenant_id;
     ASTPtr target_ast; // use for sql binding
     ASTPtr settings; // use for re binding
     std::shared_ptr<boost::regex> re; // use for re binding
@@ -41,15 +42,15 @@ public:
 
     bool hasSqlBinding(const UUID & id) { return sql_binding_cache->has(id); }
 
-    void removeSqlBinding(const UUID & id) { sql_binding_cache->remove(id); }
+    void removeSqlBinding(const UUID & id, bool throw_if_not_exists = false);
 
-    void addSqlBinding(const UUID & id, const SQLBindingObject & binding) { sql_binding_cache->add(id, binding); }
+    void addSqlBinding(const UUID & id, const SQLBindingObject & binding, bool throw_if_exists, bool or_replace);
 
     bool hasReBinding(const UUID & id);
 
-    void removeReBinding(const UUID & id);
+    void removeReBinding(const UUID & id, bool throw_if_not_exists = false);
 
-    void addReBinding(const UUID & id, const SQLBindingObject & binding);
+    void addReBinding(const UUID & id, const SQLBindingObject & binding, bool throw_if_exists, bool or_replace);
 
     static std::shared_ptr<BindingCacheManager> getSessionBindingCacheManager(const ContextMutablePtr & query_context);
 
@@ -60,6 +61,12 @@ public:
     void setTimeStamp(long time_stamp) { global_update_time_stamp = time_stamp; }
 
     static void updateGlobalBindingsFromCatalog(const ContextPtr & context);
+
+    bool isReBindingEmpty() { return re_binding_cache->size() == 0; }
+
+    bool isSqlBindingEmpty() { return sql_binding_cache->size() == 0; }
+
+    String getTenantID(const UUID & id);
 private:
     std::unique_ptr<CacheType> sql_binding_cache;
     std::unique_ptr<CacheType> re_binding_cache;

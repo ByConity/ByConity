@@ -1,5 +1,8 @@
 #include <WorkerTasks/CnchMergePrefetcher.h>
 
+#include <Common/escapeForFileName.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/copyData.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -272,17 +275,38 @@ void CnchMergePrefetcher::submitDataPart(
         });
     };
 
+    auto callback_for_data_types = [&](const String & column_name, const DataTypePtr & column_type) {
+        if (column_type->isByteMap())
+        {
+            auto implicit_value_type = typeid_cast<const DataTypeMap &>(*column_type.get()).getValueTypeForImplicitColumn();
+            auto serialization = implicit_value_type->getDefaultSerialization();
+
+            auto [curr, end] = getMapColumnRangeFromOrderedFiles(column_name, checksums_files);
+            for (; curr != end; ++curr)
+            {
+                if (curr->second.is_deleted || !isMapImplicitDataFileNameNotBaseOfSpecialMapName(curr->first, column_name))
+                    continue;
+                const String & implicit_key_name = parseImplicitColumnFromImplicitFileName(curr->first, column_name);
+                calc_stage(implicit_key_name, implicit_value_type);
+            }
+        }
+        else
+        {
+            calc_stage(column_name, column_type);
+        }
+    };
+
     /// Horizontal stage
     prefetch_stages.emplace_back();
     for (const auto & [column_name, column_type] : merging_columns)
-        calc_stage(column_name, column_type);
+        callback_for_data_types(column_name, column_type);
 
     /// Vertical stage for normal column
     for (const auto & [column_name, column_type] : gathering_columns)
     {
         if (!prefetch_stages.back().empty())
             prefetch_stages.emplace_back();
-        calc_stage(column_name, column_type);
+        callback_for_data_types(column_name, column_type);
     }
 
     if (prefetch_stages.back().empty())

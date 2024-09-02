@@ -43,6 +43,6 @@ public:
     }
 
 protected:
-    CTEPreorderVisitHelper cte_helper;
+    SimpleCTEVisitHelper<void> cte_helper;
 };
 }

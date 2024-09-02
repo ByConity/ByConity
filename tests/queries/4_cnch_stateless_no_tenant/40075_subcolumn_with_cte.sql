@@ -55,7 +55,7 @@ FROM
         'zz' AS y
 ) t6
 WHERE t2y = t6.x{'dd'} AND t6.y != ''
-SETTINGS enable_optimizer=1, cte_mode='SHARED';
+SETTINGS enable_optimizer=1, cte_mode='SHARED', max_buffer_size_for_deadlock_cte=-1;
 
 SELECT '';
 

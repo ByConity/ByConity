@@ -215,7 +215,7 @@ static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars & data, ColumnSt
 }
 
 
-void SerializationString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+void SerializationString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool /*zero_copy_cache_read*/) const
 {
     ColumnString & column_string = typeid_cast<ColumnString &>(column);
     ColumnString::Chars & data = column_string.getChars();
@@ -327,9 +327,16 @@ void SerializationString::serializeTextJSON(const IColumn & column, size_t row_n
 }
 
 
-void SerializationString::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings &) const
+void SerializationString::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    read(column, [&](ColumnString::Chars & data) { readJSONStringInto(data, istr); });
+    if (settings.json.read_objects_as_strings && !istr.eof() && *istr.position() == '{')
+    {
+        String field;
+        readJSONObjectPossiblyInvalid(field, istr);
+        read(column, [&](ColumnString::Chars & data) { data.insert(field.begin(), field.end()); });
+    }
+    else
+        read(column, [&](ColumnString::Chars & data) { readJSONStringInto(data, istr); });
 }
 
 

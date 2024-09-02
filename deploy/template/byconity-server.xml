@@ -416,6 +416,13 @@
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
     </cnch_kafka_log>
 
+    <cnch_unique_table_log>
+        <database>cnch_system</database>
+        <table>cnch_unique_table_log</table>
+        <flush_max_row_count>1000</flush_max_row_count>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </cnch_unique_table_log>
+
     <part_allocation_algorithm>2</part_allocation_algorithm>
     <consistent_hash_ring>
         <num_replicas>16</num_replicas>

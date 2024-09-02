@@ -115,7 +115,7 @@ public:
     // status.
     //
     // Safe for concurrent use by multiple threads.
-    virtual Status Read(uint64_t offset, size_t n, Slice * result, char * scratch) const = 0;
+    virtual Status Read(uint64_t offset, size_t n, Slice * result, char * scratch, bool * from_local) const = 0;
 };
 
 // A file abstraction for sequential writing.  The implementation

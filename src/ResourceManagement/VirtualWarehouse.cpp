@@ -14,23 +14,22 @@
  */
 
 #include <Catalog/Catalog.h>
-#include <Common/Exception.h>
 #include <ResourceManagement/VirtualWarehouse.h>
+#include <Common/Exception.h>
+#include "ResourceManagement/CommonData.h"
 
 #include <chrono>
 
 namespace DB::ErrorCodes
 {
-    extern const int RESOURCE_MANAGER_ERROR;
-    extern const int RESOURCE_MANAGER_INCORRECT_SETTING;
-    extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER_GROUP;
+extern const int RESOURCE_MANAGER_ERROR;
+extern const int RESOURCE_MANAGER_INCORRECT_SETTING;
+extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER_GROUP;
 }
 
 namespace DB::ResourceManagement
 {
-
-VirtualWarehouse::VirtualWarehouse(String n, UUID u, const VirtualWarehouseSettings & s)
-    : name(std::move(n)), uuid(u), settings(s)
+VirtualWarehouse::VirtualWarehouse(String n, UUID u, const VirtualWarehouseSettings & s) : name(std::move(n)), uuid(u), settings(s)
 {
     query_scheduler = std::make_unique<QueryScheduler>(*this);
 }
@@ -44,8 +43,7 @@ void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & setti
         new_settings.type = *setting_changes.type;
     if (setting_changes.max_worker_groups)
     {
-        if ((setting_changes.min_worker_groups
-                && setting_changes.min_worker_groups.value() > setting_changes.max_worker_groups.value())
+        if ((setting_changes.min_worker_groups && setting_changes.min_worker_groups.value() > setting_changes.max_worker_groups.value())
             || (!setting_changes.min_worker_groups && settings.min_worker_groups > setting_changes.max_worker_groups.value()))
             throw Exception("min_worker_groups cannot be less than max_worker_groups", ErrorCodes::RESOURCE_MANAGER_INCORRECT_SETTING);
         new_settings.max_worker_groups = *setting_changes.max_worker_groups;
@@ -91,9 +89,106 @@ void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & setti
     if (setting_changes.cooldown_seconds_after_scaledown)
         new_settings.cooldown_seconds_after_scaledown = *setting_changes.cooldown_seconds_after_scaledown;
 
+    LOG_TRACE(&Poco::Logger::get("VirtualWarehouse"), "update settings alter type {}", setting_changes.queue_alter_type);
+    if (setting_changes.queue_alter_type == Protos::QueueAlterType::ADD_RULE)
+    {
+        if (!setting_changes.queue_data)
+        {
+            throw Exception("Can't find queue_data when ADD_RULE", ErrorCodes::RESOURCE_MANAGER_ERROR);
+        }
+        auto queue_iter = std::find_if(new_settings.queue_datas.begin(), new_settings.queue_datas.end(), [&](const QueueData & queue_data) {
+            return queue_data.queue_name == setting_changes.queue_data->queue_name;
+        });
+        if (queue_iter == new_settings.queue_datas.end())
+        {
+            QueueData queue_data;
+            queue_data.queue_name = setting_changes.queue_data->queue_name;
+            std::copy(
+                setting_changes.queue_data->queue_rules.begin(),
+                setting_changes.queue_data->queue_rules.end(),
+                std::back_inserter(queue_data.queue_rules));
+            new_settings.queue_datas.push_back(queue_data);
+        }
+        else
+        {
+            std::copy(
+                setting_changes.queue_data->queue_rules.begin(),
+                setting_changes.queue_data->queue_rules.end(),
+                std::back_inserter(queue_iter->queue_rules));
+        }
+    }
+    else if (setting_changes.queue_alter_type == Protos::QueueAlterType::DELETE_RULE)
+    {
+        if (!setting_changes.queue_name || !setting_changes.rule_name)
+        {
+            throw Exception("Can't find queue_name or rule_name when DELETE_RULE", ErrorCodes::RESOURCE_MANAGER_ERROR);
+        }
+        auto queue_iter = std::find_if(new_settings.queue_datas.begin(), new_settings.queue_datas.end(), [&](const QueueData & queue_data) {
+            return queue_data.queue_name == *setting_changes.queue_name;
+        });
+        if (queue_iter != new_settings.queue_datas.end())
+        {
+            queue_iter->queue_rules.erase(
+                std::remove_if(
+                    queue_iter->queue_rules.begin(),
+                    queue_iter->queue_rules.end(),
+                    [&setting_changes](const QueueRule & rule) { return rule.rule_name == *setting_changes.rule_name; }),
+                queue_iter->queue_rules.end());
+        }
+    }
+    else if (setting_changes.queue_alter_type == Protos::QueueAlterType::MODIFY_RULE)
+    {
+        if (!setting_changes.queue_name)
+        {
+            throw Exception("Can't find queue_name when MODIFY_RULE", ErrorCodes::RESOURCE_MANAGER_ERROR);
+        }
+        auto queue_iter = std::find_if(new_settings.queue_datas.begin(), new_settings.queue_datas.end(), [&](const QueueData & queue_data) {
+            return queue_data.queue_name == *setting_changes.queue_name;
+        });
+        if (queue_iter != new_settings.queue_datas.end())
+        {
+            if (setting_changes.max_concurrency)
+                queue_iter->max_concurrency = *setting_changes.max_concurrency;
+            if (setting_changes.query_queue_size)
+                queue_iter->query_queue_size = *setting_changes.query_queue_size;
+            if (setting_changes.rule_name)
+            {
+                auto rule_iter = std::find_if(queue_iter->queue_rules.begin(), queue_iter->queue_rules.end(), [&](const QueueRule & rule) {
+                    return rule.rule_name == *setting_changes.rule_name;
+                });
+                if (rule_iter != queue_iter->queue_rules.end())
+                {
+                    if (setting_changes.query_id)
+                        rule_iter->query_id = *setting_changes.query_id;
+                    if (setting_changes.ip)
+                        rule_iter->ip = *setting_changes.ip;
+                    if (setting_changes.has_table)
+                        rule_iter->tables = setting_changes.tables;
+                    if (setting_changes.has_database)
+                        rule_iter->databases = setting_changes.databases;
+                    if (setting_changes.user)
+                        rule_iter->user = *setting_changes.user;
+                    if (setting_changes.fingerprint)
+                        rule_iter->fingerprint = *setting_changes.fingerprint;
+                }
+            }
+        }
+        else
+        {
+            QueueData queue_data;
+            queue_data.queue_name = *setting_changes.queue_name;
+            if (setting_changes.max_concurrency)
+                queue_data.max_concurrency = *setting_changes.max_concurrency;
+            if (setting_changes.query_queue_size)
+                queue_data.query_queue_size = *setting_changes.query_queue_size;
+            new_settings.queue_datas.push_back(queue_data);
+        }
+    }
+
     catalog->alterVirtualWarehouse(name, data);
     {
         auto wlock = getWriteLock();
+        last_settings_timestamp = time(nullptr);
         settings = new_settings;
     }
 }
@@ -122,7 +217,7 @@ std::vector<WorkerGroupPtr> VirtualWarehouse::getAllWorkerGroups() const
 
     auto rlock = getReadLock();
 
-    for (const auto & [_, group]: groups)
+    for (const auto & [_, group] : groups)
         res.emplace_back(group);
 
     return res;
@@ -134,7 +229,7 @@ std::vector<WorkerGroupPtr> VirtualWarehouse::getNonborrowedGroups() const
 
     auto rlock = getReadLock();
 
-    for (const auto & [_, group]: groups)
+    for (const auto & [_, group] : groups)
     {
         if (borrowed_groups.find(group->getID()) == borrowed_groups.end())
             res.emplace_back(group);
@@ -204,36 +299,36 @@ void VirtualWarehouse::loadGroup(const WorkerGroupPtr & group)
 
 void VirtualWarehouse::lendGroup(const String & id)
 {
-   auto wlock = getWriteLock();
+    auto wlock = getWriteLock();
 
-   // Update lend count of group
-   auto it = lent_groups.find(id);
+    // Update lend count of group
+    auto it = lent_groups.find(id);
 
-   if (it != lent_groups.end())
-   {
-       it->second += 1;
-   }
-   else
-   {
-       lent_groups[id] = 1;
-   }
+    if (it != lent_groups.end())
+    {
+        it->second += 1;
+    }
+    else
+    {
+        lent_groups[id] = 1;
+    }
 }
 
 void VirtualWarehouse::unlendGroup(const String & id)
 {
-   auto wlock = getWriteLock();
-   auto it = lent_groups.find(id);
-   if (it == lent_groups.end())
-   {
-       throw Exception("Lent group " + id + " does not exist in VW " + name, ErrorCodes::LOGICAL_ERROR);
-   }
-   else
-   {
-       if (it->second == 1)
-           lent_groups.erase(it); // Erase group from lent groups if this is the last link
-       else
-           it->second -= 1;
-   }
+    auto wlock = getWriteLock();
+    auto it = lent_groups.find(id);
+    if (it == lent_groups.end())
+    {
+        throw Exception("Lent group " + id + " does not exist in VW " + name, ErrorCodes::LOGICAL_ERROR);
+    }
+    else
+    {
+        if (it->second == 1)
+            lent_groups.erase(it); // Erase group from lent groups if this is the last link
+        else
+            it->second -= 1;
+    }
 }
 
 size_t VirtualWarehouse::getNumBorrowedGroups() const
@@ -379,8 +474,7 @@ QueryQueueInfo VirtualWarehouse::getAggQueueInfo()
 {
     std::lock_guard lock(queue_map_mutex);
 
-    UInt64 time_now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()
-                                                                            .time_since_epoch()).count();
+    UInt64 time_now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     // TODO: Use setting vw_queue_server_sync_expiry_seconds
     auto timeout = 15;
     auto timeout_threshold = time_now - timeout * 1000;
@@ -394,9 +488,11 @@ QueryQueueInfo VirtualWarehouse::getAggQueueInfo()
         //Remove outdated entries
         if (it->second.last_sync < timeout_threshold)
         {
-            LOG_DEBUG(&Poco::Logger::get("VirtualWarehouse"),
-                        "Removing outdated server sync from {}, last synced {}",
-                        it->first, std::to_string(it->second.last_sync));
+            LOG_DEBUG(
+                &Poco::Logger::get("VirtualWarehouse"),
+                "Removing outdated server sync from {}, last synced {}",
+                it->first,
+                std::to_string(it->second.last_sync));
             it = server_query_queue_map.erase(it);
         }
         else

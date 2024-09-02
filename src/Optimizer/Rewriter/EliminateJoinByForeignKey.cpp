@@ -26,7 +26,6 @@
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageMemory.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -570,7 +569,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitProjectionNode(Projectio
 {
     auto step = static_cast<const ProjectionStep &>(*node.getStep());
 
-    auto assignments = step.getAssignments();
+    const auto & assignments = step.getAssignments();
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     std::unordered_map<String, String> revert_identifies;
 
@@ -729,7 +728,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitUnionNode(UnionNode & no
     collectEliminableJoin(old_winners);
     result.downgradePkTables(invalid_tables);
 
-    if (!result.getFPKeys().getPrimaryKeySet().empty() && context->getSettings().enable_eliminate_complicated_pk_fk_join_without_top_join)
+    if (!result.getFPKeys().getPrimaryKeySet().empty() && context->getSettingsRef().enable_eliminate_complicated_pk_fk_join_without_top_join)
     {
         // NOTE: Currently `eliminate the join by fk without top join` only supports the union node, because corresponding eliminator must be special rewrite such as Eliminator::visitUnionNode.
         join_info.electMultiChildNode(node.shared_from_this(),result.getFPKeys());
@@ -813,7 +812,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitProjectionNode(ProjectionNode & 
     if (node.getStep()->isFinalProject())
         assert(!c.in_eliminating);
 
-    auto assignments = node.getStep()->getAssignments();
+    const auto & assignments = node.getStep()->getAssignments();
     std::unordered_map<String, String> revert_identifies;
 
     for (auto & item : Utils::computeIdentityTranslations(assignments))
@@ -1120,6 +1119,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitAggregatingNode(AggregatingNode 
             false,
             step->shouldProduceResultsInOrderOfBucketNumber(),
             step->isNoShuffle(),
+            step->isStreamingForCache(),
             step->getHints());
 
         return AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step), node.getChildren());
@@ -1196,7 +1196,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
         column_alias.emplace_back(column.name, context->getSymbolAllocator()->newSymbol(column.name));
     }
 
-    table_scan_ptr = TableScanNode::createPlanNode(
+    auto new_table_scan_node = TableScanNode::createPlanNode(
         context->nextNodeId(),
         std::make_shared<TableScanStep>(
             context,
@@ -1211,11 +1211,9 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
             tb_step->getPushdownProjection(),
             tb_step->getPushdownFilter()));
 
-    auto new_table_scan_node = table_scan_ptr->copy(context->nextNodeId(), context);
-
     // 2. find pk_name as join right keys.
     NameToNameMap table_scan_translation;
-    for (const auto & item : static_cast<const TableScanStep &>(*table_scan_ptr->getStep()).getColumnAlias())
+    for (const auto & item : static_cast<const TableScanStep &>(*new_table_scan_node->getStep()).getColumnAlias())
         table_scan_translation.emplace(item.first, item.second);
 
     String pk_name = table_scan_translation.at(first_bottom_join.second.original_pk_name_from_definition);

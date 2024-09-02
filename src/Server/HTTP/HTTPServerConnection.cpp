@@ -82,7 +82,9 @@ void HTTPServerConnection::run()
                 session.networkException()->rethrow();
             }
             else
-                throw;
+            {
+                sendErrorResponse(session, Poco::Net::HTTPResponse::HTTP_BAD_REQUEST);
+            }
         }
     }
 }

@@ -30,6 +30,7 @@
 #include <Parsers/ParserWatchQuery.h>
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ParserSetQuery.h>
+#include <Parsers/ParserPartition.h>
 #include <Parsers/InsertQuerySettingsPushDownVisitor.h>
 #include <Common/typeid_cast.h>
 
@@ -46,6 +47,8 @@ namespace ErrorCodes
 bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_insert_into("INSERT INTO");
+    ParserKeyword s_replace_into("REPLACE INTO");
+    ParserKeyword s_insert_overwrite("INSERT OVERWRITE");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_function("FUNCTION");
     ParserToken s_dot(TokenType::Dot);
@@ -58,6 +61,8 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_infile("INFILE");
     ParserKeyword s_compression("COMPRESSION");
     ParserKeyword s_partition_by("PARTITION BY");
+    ParserKeyword s_overwrite_partition("PARTITION");
+    ParserPartition parser_overwrite_partition(dt);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ParserIdentifier name_p;
@@ -78,12 +83,23 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr compression;
     ASTPtr settings_ast;
     ASTPtr partition_by_expr;
+    bool is_overwrite {false};
+    bool is_replace {false};
+    ASTPtr overwrite_partition;
+
     /// Insertion data
     const char * data = nullptr;
 
-    // Check for key words `INSERT INTO`. If it isn't found, the query can't be parsed as insert query.
-    if (!s_insert_into.ignore(pos, expected))
-        return false;
+    // Check for key words `INSERT INTO` or `REPLACE INTO` or `INSERT OVERWRITE`. If it isn't found, the query can't be parsed as insert query.
+    if (s_insert_overwrite.ignore(pos, expected))
+        is_overwrite = true;
+    else if (s_replace_into.ignore(pos, expected))
+        is_replace = true;
+    else
+    {
+        if (!s_insert_into.ignore(pos, expected))
+            return false;
+    }
 
     // try to find 'TABLE'
     s_table.ignore(pos, expected);
@@ -119,6 +135,20 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (!name_p.parse(pos, table, expected))
                 return false;
         }
+    }
+
+    /// insert overwrite partition
+    if (is_overwrite && s_overwrite_partition.ignore(pos, expected))
+    {
+        if (!s_lparen.ignore(pos, expected))
+            return false;
+            
+        if (!ParserList{std::make_unique<ParserPartition>(), std::make_unique<ParserToken>(TokenType::Comma), false}.parse(
+                pos, overwrite_partition, expected))
+            return false;
+
+        if (!s_rparen.ignore(pos, expected))
+            return false;
     }
 
     /// Is there a list of columns
@@ -267,6 +297,9 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     tryGetIdentifierNameInto(format, query->format);
 
+    query->is_overwrite = is_overwrite;
+    query->is_replace = is_replace;
+    query->overwrite_partition = overwrite_partition;
     query->columns = columns;
     query->select = select;
     query->watch = watch;
@@ -295,7 +328,8 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         query->children.push_back(watch);
     if (settings_ast)
         query->children.push_back(settings_ast);
-
+    if (overwrite_partition)
+        query->children.push_back(overwrite_partition);
     return true;
 }
 

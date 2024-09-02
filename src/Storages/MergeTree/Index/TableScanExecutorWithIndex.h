@@ -17,8 +17,8 @@ class TableScanExecutorWithIndex
 {
 public:
     TableScanExecutorWithIndex(TableScanStep & step, ContextPtr context_);
-    
-    ExecutePlan buildExecutePlan();
+
+    ExecutePlan buildExecutePlan(const DistributedPipelineSettings & distributed_settings);
 
 private:
 

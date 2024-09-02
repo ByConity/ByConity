@@ -2,6 +2,8 @@
 
 #include <chrono>
 
+#include <Poco/Logger.h>
+
 #include <Storages/DiskCache/EvictionPolicy.h>
 #include <Storages/DiskCache/Types.h>
 #include <common/chrono_io.h>

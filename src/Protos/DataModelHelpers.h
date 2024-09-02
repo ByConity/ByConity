@@ -75,6 +75,7 @@ inline std::vector<T> createPartVectorFromModels(
 void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time = false, UInt64 txn_id = 0);
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model);
+void fillPartTTLInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartTTLInfo & part_ttl_info_model);
 
 template <class T>
 inline void fillPartsModel(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, UInt64 txn_id = 0)
@@ -93,6 +94,9 @@ inline void fillPartsInfoModel(const std::vector<T> & parts, pb::RepeatedPtrFiel
 
 void fillPartsModelForSend(
     const IStorage & storage, const ServerDataPartsVector & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
+
+void fillPartsModelForSend(
+    const IStorage & storage, const ServerVirtualPartVector & parts, pb::RepeatedPtrField<Protos::DataModelVirtualPart> & parts_model);
 
 template <class T>
 inline void
@@ -245,6 +249,78 @@ inline std::vector<T> createBasePartAndDeleteBitmapFromModelsForSend(
     return res;
 }
 
+template <class T>
+inline std::vector<T> createPartVectorFromModelsForSend(
+    const MergeTreeMetaBase & storage,
+    const pb::RepeatedPtrField<Protos::DataModelVirtualPart> & parts_model,
+    const pb::RepeatedPtrField<std::string> * paths = nullptr)
+{
+    std::vector<T> res;
+    res.reserve(parts_model.size());
+    std::map<UInt64, NamesAndTypesListPtr> columns_versions;
+    for (int i = 0; i < parts_model.size(); ++i)
+    {
+        const auto & part_model = parts_model[i].part();
+        auto part = createPartFromModelCommon(storage, part_model, (paths ? std::optional(paths->Get(i)) : std::nullopt));
+        part->columns_commit_time = part_model.columns_commit_time();
+        if (part_model.has_columns())
+        {
+            part->setColumns(NamesAndTypesList::parse(part_model.columns()));
+            if (part_model.has_columns_commit_time())
+            {
+                columns_versions[part_model.columns_commit_time()] = part->getColumnsPtr();
+            }
+        }
+        else
+        {
+            part->setColumnsPtr(columns_versions[part_model.columns_commit_time()]);
+        }
+
+        const auto & ranges = parts_model[i].mark_ranges();
+        if (!ranges.empty())
+        {
+            part->mark_ranges_for_virtual_part = std::make_unique<MarkRanges>();
+            for (int j = 0; j < ranges.size(); j += 2)
+            {
+                part->mark_ranges_for_virtual_part->emplace_back(ranges[j], ranges[j + 1]);
+            }
+        }
+        res.emplace_back(std::move(part));
+    }
+    return res;
+}
+
+template <class T>
+inline std::vector<T> createBasePartAndDeleteBitmapFromModelsForSend(
+    const MergeTreeMetaBase & storage,
+    const pb::RepeatedPtrField<Protos::DataModelVirtualPart> & parts_model,
+    const pb::RepeatedPtrField<Protos::DataModelDeleteBitmap> & bitmaps_model,
+    const pb::RepeatedPtrField<std::string> * paths = nullptr)
+{
+    std::vector<T> res = createPartVectorFromModelsForSend<T>(storage, parts_model, paths);
+
+    auto bitmap_it = bitmaps_model.begin();
+    auto same_block = [](const Protos::DataModelDeleteBitmap & bitmap, const T & part) {
+        return bitmap.partition_id() == part->info.partition_id && bitmap.part_min_block() == part->info.min_block
+            && bitmap.part_max_block() == part->info.max_block;
+    };
+    /// fill in bitmap metas for each part
+    for (auto & part : res)
+    {
+        /// partial parts don't have bitmap.
+        if (bitmap_it == bitmaps_model.end() || !same_block(*bitmap_it, part))
+            continue;
+
+        auto list_it = part->delete_bitmap_metas.before_begin();
+        do
+        {
+            list_it = part->delete_bitmap_metas.insert_after(list_it, std::make_shared<Protos::DataModelDeleteBitmap>(*bitmap_it));
+            bitmap_it++;
+        } while (bitmap_it != bitmaps_model.end() && same_block(*bitmap_it, part));
+    }
+    return res;
+}
+
 inline DataModelPartPtr createPtrFromModel(Protos::DataModelPart part_model)
 {
     return std::make_shared<Protos::DataModelPart>(std::move(part_model));
@@ -263,9 +339,9 @@ inline DeleteBitmapMetaPtr createFromModel(const MergeTreeMetaBase & storage, co
 void fillLockInfoModel(const LockInfo & lock_info, Protos::DataModelLockInfo & model);
 LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model);
 
-DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, Protos::DataModelPart && part_model, String && part_name = "");
+DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart && part_model, const String && part_name = "");
 
-DataModelPartWrapperPtr createPartWrapperFromModelBasic(Protos::DataModelPart && part_model, String && part_name = "");
+DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelPart && part_model, const String && part_name = "");
 
 ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage, const IMergeTreeDataPartPtr & part);
 

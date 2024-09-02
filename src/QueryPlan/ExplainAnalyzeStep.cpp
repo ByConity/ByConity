@@ -3,6 +3,7 @@
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/ExplainAnalyzeTransform.h>
 
+#include <type_traits>
 #include <utility>
 
 namespace DB
@@ -11,12 +12,12 @@ namespace DB
 
 ExplainAnalyzeStep::ExplainAnalyzeStep(
     const DataStream & input_stream_,
+    const String & output_name_,
     ASTExplainQuery::ExplainKind kind_,
     ContextMutablePtr context_,
     std::shared_ptr<QueryPlan> query_plan_ptr_,
-    QueryPlanSettings settings_
-    )
-    : ITransformingStep(std::move(input_stream_), {{std::make_shared<DataTypeString>(),"Explain Analyze"}}, {})
+    QueryPlanSettings settings_)
+    : ITransformingStep(std::move(input_stream_), {{std::make_shared<DataTypeString>(), output_name_}}, {})
     , kind(kind_)
     , context(context_)
     , query_plan_ptr(query_plan_ptr_)
@@ -35,12 +36,11 @@ void ExplainAnalyzeStep::transformPipeline(QueryPipeline & pipeline, const Build
 void ExplainAnalyzeStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
-    output_stream->header = Block{{std::make_shared<DataTypeString>(),"Explain Analyze"}};
 }
 
 std::shared_ptr<IQueryPlanStep> ExplainAnalyzeStep::copy(ContextPtr) const
 {
-    return std::make_shared<ExplainAnalyzeStep>(input_streams[0], kind, context, query_plan_ptr, settings);
+    return std::make_shared<ExplainAnalyzeStep>(input_streams[0], getOutputName(), kind, context, query_plan_ptr, settings);
 }
 
 }

@@ -49,12 +49,10 @@ TEST(ExchangeSource, LocalNormalTest)
     ts.tv_nsec += 200 * 1000000;
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
 
-    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto context = getContext().context;
-    auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_local_receiver_queue_size);
-    auto channel
-        = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    LocalChannelOptions options{context->getSettingsRef().exchange_local_receiver_queue_size, exchange_options.exchange_timeout_ts, false};
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->accept(getContext().context, Block());
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
@@ -102,12 +100,10 @@ TEST(ExchangeSource, LocalLimitTest)
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 200 * 1000000;
     ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
-    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto context = getContext().context;
-    auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_local_receiver_queue_size);
-    auto channel
-        = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
+    LocalChannelOptions options{context->getSettingsRef().exchange_local_receiver_queue_size, exchange_options.exchange_timeout_ts, false};
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
     local_sender->accept(getContext().context, Block());

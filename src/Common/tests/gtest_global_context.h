@@ -57,14 +57,14 @@ static std::string default_config = R"#(<?xml version="1.0"?>
         </default>
         <cnch_default_hdfs>
             <volumes>
-                <local>
-                    <default>local_disk</default>
-                    <disk>local_disk</disk>
-                </local>
                 <hdfs>
                     <default>hdfs_disk</default>
                     <disk>hdfs_disk</disk>
                 </hdfs>
+                <local>
+                    <default>local_disk</default>
+                    <disk>local_disk</disk>
+                </local>
             </volumes>
         </cnch_default_hdfs>
     </policies>

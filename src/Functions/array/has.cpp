@@ -8,5 +8,10 @@ struct NameHas { static constexpr auto name = "has"; };
 /// has(arr, x) - whether there is an element x in the array.
 using FunctionHas = FunctionArrayIndex<HasAction, NameHas>;
 
-REGISTER_FUNCTION(Has) { factory.registerFunction<FunctionHas>(); }
+REGISTER_FUNCTION(Has)
+{
+    factory.registerFunction<FunctionHas>();
+    factory.registerAlias("contains", NameHas::name, FunctionFactory::CaseInsensitive);
+}
+
 }

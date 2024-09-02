@@ -15,26 +15,25 @@
 
 #include "Storages/MergeTree/MergeTreeCNCHDataDumper.h"
 
+#include <metric_helper.h>
+#include <Core/UUID.h>
+#include <DataTypes/Serializations/ISerialization.h>
 #include <Disks/HDFS/DiskHDFS.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
+#include <IO/WriteSettings.h>
 #include <IO/copyData.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/S3ObjectMetadata.h>
 #include <Poco/Logger.h>
-
 #include <Common/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/escapeForFileName.h>
 #include <Common/filesystemHelpers.h>
 #include <common/logger_useful.h>
-#include <Common/escapeForFileName.h>
-#include <metric_helper.h>
-#include <DataTypes/Serializations/ISerialization.h>
-#include <Core/UUID.h>
-#include <IO/WriteSettings.h>
-#include <Storages/IStorage.h>
-#include <Common/StringUtils/StringUtils.h>
 
 #include <chrono>
 #include <filesystem>
@@ -43,9 +42,9 @@
 
 namespace ProfileEvents
 {
-    extern const Event CnchDumpParts;
-    extern const Event CnchDumpPartsElapsedMilliseconds;
-    extern const Event CnchDumpPartsBytes;
+extern const Event CnchDumpParts;
+extern const Event CnchDumpPartsElapsedMilliseconds;
+extern const Event CnchDumpPartsBytes;
 }
 
 namespace DB
@@ -59,7 +58,19 @@ namespace ErrorCodes
     extern const int NO_FILE_IN_DATA_PART;
 }
 
-static const std::vector<String> EXTENSION_LIST_FOR_TEMP_PART{DATA_FILE_EXTENSION, MARKS_FILE_EXTENSION, BITMAP_IDX_EXTENSION, BITMAP_IRK_EXTENSION, SEGMENT_BITMAP_IDX_EXTENSION, SEGMENT_BITMAP_TABLE_EXTENSION, SEGMENT_BITMAP_DIRECTORY_EXTENSION, COMPRESSED_DATA_INDEX_EXTENSION, GIN_SEGMENT_ID_FILE_EXTENSION, GIN_SEGMENT_METADATA_FILE_EXTENSION, GIN_DICTIONARY_FILE_EXTENSION, GIN_POSTINGS_FILE_EXTENSION};
+static const std::vector<String> EXTENSION_LIST_FOR_TEMP_PART{
+    DATA_FILE_EXTENSION,
+    MARKS_FILE_EXTENSION,
+    BITMAP_IDX_EXTENSION,
+    BITMAP_IRK_EXTENSION,
+    SEGMENT_BITMAP_IDX_EXTENSION,
+    SEGMENT_BITMAP_TABLE_EXTENSION,
+    SEGMENT_BITMAP_DIRECTORY_EXTENSION,
+    COMPRESSED_DATA_INDEX_EXTENSION,
+    GIN_SEGMENT_ID_FILE_EXTENSION,
+    GIN_SEGMENT_METADATA_FILE_EXTENSION,
+    GIN_DICTIONARY_FILE_EXTENSION,
+    GIN_POSTINGS_FILE_EXTENSION};
 
 MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
     MergeTreeMetaBase & data_,
@@ -101,17 +112,13 @@ void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDa
 
 /// Check correctness of data file in remote storage,
 /// Now we only check data file length.
-size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta) const
+size_t MergeTreeCNCHDataDumper::check(
+    MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta, bool skip_check) const
 {
-    DiskPtr remote_disk = remote_part->volume->getDisk();
-    String part_data_rel_path = remote_part->getFullRelativePath() + "data";
-    LOG_DEBUG(&Poco::Logger::get("MergeTreeCNCHDataDumper::check"), "Checking part {} from {}\n", remote_part->name, part_data_rel_path);
-
-    size_t cnch_data_file_size = remote_disk->getFileSize(part_data_rel_path);
     size_t data_files_size = MERGE_TREE_STORAGE_CNCH_DATA_HEADER_SIZE;
-    if(checksums)
+    if (checksums)
     {
-        for(auto & file : checksums->files)
+        for (auto & file : checksums->files)
         {
             if (!file.second.is_deleted)
                 data_files_size += file.second.file_size;
@@ -120,17 +127,29 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
     data_files_size += (meta.index_size + meta.checksums_size + meta.meta_info_size + meta.unique_key_index_size);
     data_files_size += MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE;
 
-    if(data_files_size != cnch_data_file_size)
+    if (skip_check)
+        return data_files_size;
+
+    DiskPtr remote_disk = remote_part->volume->getDisk();
+    String part_data_rel_path = remote_part->getFullRelativePath() + "data";
+    LOG_DEBUG(&Poco::Logger::get("MergeTreeCNCHDataDumper::check"), "Checking part {} from {}\n", remote_part->name, part_data_rel_path);
+
+    size_t cnch_data_file_size = remote_disk->getFileSize(part_data_rel_path);
+
+    if (data_files_size != cnch_data_file_size)
     {
-        throw Exception(fmt::format("Failed to check data in remote, path: {}, size: {}, local_size: {}",
-            fullPath(remote_disk, part_data_rel_path), cnch_data_file_size, data_files_size),
+        throw Exception(
+            fmt::format(
+                "Failed to check data in remote, path: {}, size: {}, local_size: {}",
+                fullPath(remote_disk, part_data_rel_path),
+                cnch_data_file_size,
+                data_files_size),
             ErrorCodes::BAD_CNCH_DATA_FILE);
     }
 
-    if(meta.checksums_size != 0)
+    if (meta.checksums_size != 0)
     {
-        std::unique_ptr<ReadBufferFromFileBase> reader = remote_disk->readFile(
-            part_data_rel_path, data.getContext()->getReadSettings());
+        std::unique_ptr<ReadBufferFromFileBase> reader = remote_disk->readFile(part_data_rel_path, data.getContext()->getReadSettings());
         reader->seek(meta.checksums_offset);
         assertString("checksums format version: ", *reader);
     }
@@ -139,9 +158,7 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
 
 /// Dump local part to vfs
 MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
-    const IMutableMergeTreeDataPartPtr & local_part,
-    const DiskPtr & remote_disk,
-    bool is_temp_prefix) const
+    const IMutableMergeTreeDataPartPtr & local_part, const DiskPtr & remote_disk, bool is_temp_prefix) const
 {
     ProfileEvents::increment(ProfileEvents::CnchDumpParts);
     Stopwatch watch;
@@ -169,10 +186,11 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
     LOG_DEBUG(log, "Disk type : " + DiskType::toString(disk->getType()));
 
-    switch(disk->getType())
+    switch (disk->getType())
     {
         case DiskType::Type::ByteHDFS: {
-            String relative_path = is_temp_prefix ? TMP_PREFIX + new_part_info.getPartNameWithHintMutation() : new_part_info.getPartNameWithHintMutation();
+            String relative_path
+                = is_temp_prefix ? TMP_PREFIX + new_part_info.getPartNameWithHintMutation() : new_part_info.getPartNameWithHintMutation();
             new_part = std::make_shared<MergeTreeDataPartCNCH>(data, part_name, new_part_info, volume, relative_path);
             break;
         }
@@ -192,18 +210,12 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     }
     new_part->fromLocalPart(*local_part);
     String new_part_rel_path = new_part->getFullRelativePath();
-    if (disk->exists(new_part_rel_path))
-    {
-        LOG_WARNING(log, "Removing old temporary directory  {}", disk->getPath() + new_part_rel_path);
-        disk->removeRecursive(new_part_rel_path);
-    }
     disk->createDirectories(new_part_rel_path);
 
     /// CheckSums & Primary Index will be stored in cloud data file,
     /// Other meta info will be stored to catalog serice,
     /// Here, we clear meta files in checksums.
-    auto erase_file_in_checksums = [new_part](const String & file_name)
-    {
+    auto erase_file_in_checksums = [new_part](const String & file_name) {
         if (new_part->checksums_ptr == nullptr)
             return;
 
@@ -250,17 +262,18 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         {
             const auto & column_name = k_it.name;
             const auto & column_type = k_it.type;
-            column_type->enumerateStreams(IDataType::getSerialization(k_it),[&](const ISerialization::SubstreamPath & substream_path, const IDataType & ) {
-                String stream_name = ISerialization::getFileNameForStream(column_name, substream_path);
-                for (const auto & extension : EXTENSION_LIST_FOR_TEMP_PART)
-                {
-                    if (auto it = checksums_files.find(stream_name + extension); it != checksums_files.end() && !it->second.is_deleted)
+            column_type->enumerateStreams(
+                IDataType::getSerialization(k_it), [&](const ISerialization::SubstreamPath & substream_path, const IDataType &) {
+                    String stream_name = ISerialization::getFileNameForStream(column_name, substream_path);
+                    for (const auto & extension : EXTENSION_LIST_FOR_TEMP_PART)
                     {
-                        reordered_checksums.push_back(&*it);
-                        key_streams.emplace(stream_name + extension);
+                        if (auto it = checksums_files.find(stream_name + extension); it != checksums_files.end() && !it->second.is_deleted)
+                        {
+                            reordered_checksums.push_back(&*it);
+                            key_streams.emplace(stream_name + extension);
+                        }
                     }
-                }
-            });
+                });
         }
 
         for (auto & file : checksums_files)
@@ -298,7 +311,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
         writeDataFileHeader(*data_out, new_part);
 
-        const DiskPtr& local_part_disk = local_part->volume->getDisk();
+        const DiskPtr & local_part_disk = local_part->volume->getDisk();
         LOG_TRACE(log, "Getting local disk {} at {}\n", local_part_disk->getName(), local_part_disk->getPath());
 
         if (new_part->checksums_ptr)
@@ -309,26 +322,30 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
                 String file_rel_path = local_part->getFullRelativePath() + file.first;
                 String file_full_path = local_part->getFullPath() + file.first;
-                if (!local_part_disk->exists(file_rel_path))
-                    throw Exception("Fail to dump local file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
+                if (!local_part_disk->fileExists(file_rel_path))
+                    throw Exception(
+                        "Fail to dump local file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
                 ReadBufferFromFile from(file_full_path);
                 copyData(from, *data_out);
                 /// TODO: fix getPositionInFile
                 if (file.second.file_offset + file.second.file_size != static_cast<UInt64>(data_out->count()))
                 {
-                    throw Exception(file.first + " in data part "  + part_name + " check error, checksum offset: " +
-                        std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size) +
-                        "disk size: " + std::to_string(local_part_disk->getFileSize(file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                    throw Exception(
+                        file.first + " in data part " + part_name + " check error, checksum offset: "
+                            + std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size)
+                            + "disk size: " + std::to_string(local_part_disk->getFileSize(file_rel_path)),
+                        ErrorCodes::BAD_CNCH_DATA_FILE);
                 }
             }
         }
 
         /// Write projection parts
-       for (const auto & [projection_name, projection_part] : new_part->getProjectionParts())
-       {
-           if (auto it = new_part->checksums_ptr->files.find(projection_name + ".proj"); it != new_part->checksums_ptr->files.end() && !it->second.is_deleted)
-           {
+        for (const auto & [projection_name, projection_part] : new_part->getProjectionParts())
+        {
+            if (auto it = new_part->checksums_ptr->files.find(projection_name + ".proj");
+                it != new_part->checksums_ptr->files.end() && !it->second.is_deleted)
+            {
                 projection_part->info.storage_type = StorageType::ByteHDFS;
                 if (projection_part->checksums_ptr)
                     projection_part->checksums_ptr->storage_type = StorageType::ByteHDFS;
@@ -338,16 +355,16 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                     projection_part->checksums_ptr = std::make_shared<MergeTreeDataPartChecksums>();
                     projection_part->checksums_ptr->storage_type = StorageType::ByteHDFS;
                 }
-               size_t current_file_offset = writeProjectionPart(projection_name, projection_part, data_out.get(), data_file_offset);
-               it->second.file_offset = data_file_offset;
-               it->second.file_size = current_file_offset - data_file_offset;
-               data_file_offset = current_file_offset;
-           }
-           else
-           {
-               throw Exception("Projection " + projection_name + " is missed in data part " + part_name, ErrorCodes::NO_FILE_IN_DATA_PART);
-           }
-       }
+                size_t current_file_offset = writeProjectionPart(projection_name, projection_part, data_out.get(), data_file_offset);
+                it->second.file_offset = data_file_offset;
+                it->second.file_size = current_file_offset - data_file_offset;
+                data_file_offset = current_file_offset;
+            }
+            else
+            {
+                throw Exception("Projection " + projection_name + " is missed in data part " + part_name, ErrorCodes::NO_FILE_IN_DATA_PART);
+            }
+        }
 
         /// Primary index
         off_t index_offset = data_file_offset;
@@ -355,7 +372,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         String index_file_full_path = local_part->getFullPath() + "primary.idx";
         size_t index_size = 0;
         uint128 index_hash;
-        if (local_part_disk->exists(index_file_rel_path))
+        if (local_part_disk->fileExists(index_file_rel_path))
         {
             ReadBufferFromFile from(index_file_full_path);
             copyData(from, *data_out);
@@ -366,7 +383,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                 throw Exception(
                     ErrorCodes::BAD_CNCH_DATA_FILE,
                     "primary.idx in data part {} check error, index offset: {} index size: {} disk size: {}",
-                    part_name, index_offset, index_size, local_part_disk->getFileSize(index_file_rel_path));
+                    part_name,
+                    index_offset,
+                    index_size,
+                    local_part_disk->getFileSize(index_file_rel_path));
             }
         }
 
@@ -383,9 +403,11 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             checksums_hash = checksums_hashing.getHash();
             if (checksums_offset + checksums_size != static_cast<UInt64>(data_out->count()))
             {
-                 throw Exception("checksums.txt in data part "  + part_name + " check error, checksum offset: " +
-                        std::to_string(index_offset) + " checksums size: " + std::to_string(index_size) +
-                        "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                throw Exception(
+                    "checksums.txt in data part " + part_name + " check error, checksum offset: " + std::to_string(index_offset)
+                        + " checksums size: " + std::to_string(index_size)
+                        + "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)),
+                    ErrorCodes::BAD_CNCH_DATA_FILE);
             }
         }
 
@@ -401,9 +423,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             meta_info_hash = meta_info_hashing.getHash();
             if (meta_info_offset + meta_info_size != static_cast<UInt64>(data_out->count()))
             {
-                 throw Exception("meta info in data part "  + part_name + " check error, meta offset: " +
-                        std::to_string(index_offset) + " meta size: " + std::to_string(index_size) +
-                        "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                throw Exception(
+                    "meta info in data part " + part_name + " check error, meta offset: " + std::to_string(index_offset) + " meta size: "
+                        + std::to_string(index_size) + "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)),
+                    ErrorCodes::BAD_CNCH_DATA_FILE);
             }
         }
 
@@ -413,25 +436,35 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             uki_checksum.file_offset = meta_info_offset + meta_info_size;
             String file_rel_path = local_part->getFullRelativePath() + "unique_key.idx";
             String file_full_path = local_part->getFullPath() + "unique_key.idx";
-            if (!local_part_disk->exists(file_rel_path))
-                throw Exception("unique_key.idx not found in part " + part_name + ", table " + data.getStorageID().getNameForLogs(),
-                                ErrorCodes::FILE_DOESNT_EXIST);
+            if (!local_part_disk->fileExists(file_rel_path))
+                throw Exception(
+                    "unique_key.idx not found in part " + part_name + ", table " + data.getStorageID().getNameForLogs(),
+                    ErrorCodes::FILE_DOESNT_EXIST);
             ReadBufferFromFile from(file_full_path);
             copyData(from, *data_out);
             data_out->next();
         }
 
         /// Data footer
-        meta = CNCHDataMeta{index_offset, index_size, index_hash,
-                            checksums_offset, checksums_size, checksums_hash,
-                            meta_info_offset, meta_info_size, meta_info_hash,
-                            static_cast<off_t>(uki_checksum.file_offset), uki_checksum.file_size, uki_checksum.file_hash};
+        meta = CNCHDataMeta{
+            index_offset,
+            index_size,
+            index_hash,
+            checksums_offset,
+            checksums_size,
+            checksums_hash,
+            meta_info_offset,
+            meta_info_size,
+            meta_info_hash,
+            static_cast<off_t>(uki_checksum.file_offset),
+            uki_checksum.file_size,
+            uki_checksum.file_hash};
         writeDataFileFooter(*data_out, meta);
         data_out->sync();
         data_out->finalize();
     }
 
-    size_t bytes_on_disk = check(new_part, new_part->checksums_ptr, meta);
+    size_t bytes_on_disk = check(new_part, new_part->checksums_ptr, meta, local_part->deleted);
 
     new_part->modification_time = time(nullptr);
     /// Merge fetcher may use this value to calculate segment size,
@@ -481,8 +514,7 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
     const String & projection_name, const IMutableMergeTreeDataPartPtr projection_part, WriteBuffer * out, size_t data_file_offset) const
 {
     const auto & projection_description = data.getInMemoryMetadataPtr()->getProjections().get(projection_name);
-    auto erase_file_in_checksums = [projection_part](const String & file_name)
-    {
+    auto erase_file_in_checksums = [projection_part](const String & file_name) {
         if (projection_part->checksums_ptr == nullptr)
             return;
 
@@ -491,20 +523,22 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
     erase_file_in_checksums("ttl.txt");
     erase_file_in_checksums("count.txt");
     erase_file_in_checksums("columns.txt");
-//    erase_file_in_checksums("partition.dat");
+    //    erase_file_in_checksums("partition.dat");
     MergeTreeDataPartChecksum index_checksum;
-    if (projection_part->checksums_ptr && projection_part->checksums_ptr->files.find("primary.idx") != projection_part->checksums_ptr->files.end())
+    if (projection_part->checksums_ptr
+        && projection_part->checksums_ptr->files.find("primary.idx") != projection_part->checksums_ptr->files.end())
         index_checksum = projection_part->checksums_ptr->files.at("primary.idx");
     erase_file_in_checksums("primary.idx");
 
     MergeTreeDataPartChecksum uki_checksum; /// unique key index checksum
-    if (projection_part->checksums_ptr && projection_part->checksums_ptr->files.find("unique_key.idx") != projection_part->checksums_ptr->files.end())
+    if (projection_part->checksums_ptr
+        && projection_part->checksums_ptr->files.find("unique_key.idx") != projection_part->checksums_ptr->files.end())
         uki_checksum = projection_part->checksums_ptr->files.at("unique_key.idx");
     erase_file_in_checksums("unique_key.idx");
 
     std::vector<MergeTreeDataPartChecksums::FileChecksums::value_type *> reordered_checksums;
 
-     if (projection_part->checksums_ptr)
+    if (projection_part->checksums_ptr)
     {
         auto & checksums_files = projection_part->checksums_ptr->files;
         reordered_checksums.reserve(checksums_files.size());
@@ -533,7 +567,7 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
     // Write data file
     CNCHDataMeta meta;
     {
-        const DiskPtr& proj_part_disk = projection_part->volume->getDisk();
+        const DiskPtr & proj_part_disk = projection_part->volume->getDisk();
         LOG_TRACE(log, "Getting local disk for projection {} at {}\n", proj_part_disk->getName(), proj_part_disk->getPath());
 
         if (projection_part->checksums_ptr)
@@ -544,8 +578,9 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
 
                 String file_rel_path = projection_part->getFullRelativePath() + file.first;
                 String file_full_path = projection_part->getFullPath() + file.first;
-                if (!proj_part_disk->exists(file_rel_path))
-                    throw Exception("Fail to dump projection file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
+                if (!proj_part_disk->fileExists(file_rel_path))
+                    throw Exception(
+                        "Fail to dump projection file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
                 ReadBufferFromFile from(file_full_path);
                 copyData(from, *out);
@@ -553,20 +588,22 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
                 /// TODO: fix getPositionInFile
                 if (file.second.file_offset + file.second.file_size != static_cast<UInt64>(out->count()))
                 {
-                    throw Exception(file.first + " in projection part "  + projection_name + " check error, checksum offset: " +
-                        std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size) +
-                        "disk size: " + std::to_string(proj_part_disk->getFileSize(file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                    throw Exception(
+                        file.first + " in projection part " + projection_name + " check error, checksum offset: "
+                            + std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size)
+                            + "disk size: " + std::to_string(proj_part_disk->getFileSize(file_rel_path)),
+                        ErrorCodes::BAD_CNCH_DATA_FILE);
                 }
             }
         }
 
-         /// Primary index
+        /// Primary index
         off_t index_offset = data_file_offset;
         String index_file_rel_path = projection_part->getFullRelativePath() + "primary.idx";
         String index_file_full_path = projection_part->getFullPath() + "primary.idx";
         size_t index_size = 0;
         uint128 index_hash;
-        if (proj_part_disk->exists(index_file_rel_path))
+        if (proj_part_disk->fileExists(index_file_rel_path))
         {
             ReadBufferFromFile from(index_file_full_path);
             copyData(from, *out);
@@ -578,7 +615,10 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
                 throw Exception(
                     ErrorCodes::BAD_CNCH_DATA_FILE,
                     "primary.idx in projection part {} check error, index offset: {} index size: {} disk size: {}",
-                    projection_name, index_offset, index_size, proj_part_disk->getFileSize(index_file_rel_path));
+                    projection_name,
+                    index_offset,
+                    index_size,
+                    proj_part_disk->getFileSize(index_file_rel_path));
             }
         }
 
@@ -596,9 +636,11 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
             checksums_hash = checksums_hashing.getHash();
             if (checksums_offset + checksums_size != static_cast<UInt64>(out->count()))
             {
-                 throw Exception("checksums.txt in projection part "  + projection_name + " check error, checksum offset: " +
-                        std::to_string(checksums_offset) + " checksums size: " + std::to_string(checksums_size) +
-                        "disk size: " + std::to_string(proj_part_disk->getFileSize(checksum_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                throw Exception(
+                    "checksums.txt in projection part " + projection_name + " check error, checksum offset: "
+                        + std::to_string(checksums_offset) + " checksums size: " + std::to_string(checksums_size)
+                        + "disk size: " + std::to_string(proj_part_disk->getFileSize(checksum_file_rel_path)),
+                    ErrorCodes::BAD_CNCH_DATA_FILE);
             }
         }
 
@@ -614,23 +656,37 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(
             meta_info_hash = meta_info_hashing.getHash();
             if (meta_info_offset + meta_info_size != static_cast<UInt64>(out->count()))
             {
-                 throw Exception("meta info in projection part "  + projection_name + " check error, meta offset: " + std::to_string(meta_info_offset) + " meta size: " + std::to_string(meta_info_size), ErrorCodes::BAD_CNCH_DATA_FILE);
+                throw Exception(
+                    "meta info in projection part " + projection_name + " check error, meta offset: " + std::to_string(meta_info_offset)
+                        + " meta size: " + std::to_string(meta_info_size),
+                    ErrorCodes::BAD_CNCH_DATA_FILE);
             }
         }
 
         /// Data footer
         off_t footer_offset = meta_info_offset + meta_info_size;
-        meta = CNCHDataMeta{index_offset, index_size, index_hash,
-                            checksums_offset, checksums_size, checksums_hash,
-                            meta_info_offset, meta_info_size, meta_info_hash,
-                            static_cast<off_t>(uki_checksum.file_offset), uki_checksum.file_size, uki_checksum.file_hash};
+        meta = CNCHDataMeta{
+            index_offset,
+            index_size,
+            index_hash,
+            checksums_offset,
+            checksums_size,
+            checksums_hash,
+            meta_info_offset,
+            meta_info_size,
+            meta_info_hash,
+            static_cast<off_t>(uki_checksum.file_offset),
+            uki_checksum.file_size,
+            uki_checksum.file_hash};
         writeDataFileFooter(*out, meta);
         out->next();
         data_file_offset = footer_offset + MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE;
         if (data_file_offset != static_cast<UInt64>(out->count()))
         {
-            throw Exception("data footer in projection part "  + projection_name + " check error, footer offset: " +
-                                std::to_string(footer_offset) + " footer size: " + std::to_string(MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE), ErrorCodes::BAD_CNCH_DATA_FILE);
+            throw Exception(
+                "data footer in projection part " + projection_name + " check error, footer offset: " + std::to_string(footer_offset)
+                    + " footer size: " + std::to_string(MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE),
+                ErrorCodes::BAD_CNCH_DATA_FILE);
         }
     }
 

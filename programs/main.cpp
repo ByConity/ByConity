@@ -121,6 +121,9 @@ int mainEntryClickHouseResourceManager(int argc, char ** argv);
 #if ENABLE_CLICKHOUSE_TSO_SERVER
 int mainEntryClickHouseTSOServer(int argc, char ** argv);
 #endif
+#if ENABLE_CLICKHOUSE_STORAGE_TOOLS
+int mainEntryStorageTools(int argc, char ** argv);
+#endif
 
 int mainEntryClickHouseHashBinary(int, char **)
 {
@@ -210,6 +213,10 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #if ENABLE_CLICKHOUSE_TSO_SERVER
     {"tso-server", mainEntryClickHouseTSOServer},
     {"tso_server", mainEntryClickHouseTSOServer},
+#endif
+#if ENABLE_CLICKHOUSE_STORAGE_TOOLS
+    {"storage-tools", mainEntryStorageTools},
+    {"storage_tools", mainEntryStorageTools},
 #endif
 };
 

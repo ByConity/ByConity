@@ -25,6 +25,8 @@ message SortOrder {
     DESC_NULLS_LAST = 3;
     ANY = 4;
     UNKNOWN = 5;
+    ASC_ANY = 6;
+    DESC_ANY = 7;
   }
 }
 
@@ -51,6 +53,7 @@ message ExchangeMode {
     REPARTITION = 3;
     BROADCAST = 4;
     GATHER = 5;
+    BUCKET_REPARTITION = 6;
   }
 }
 
@@ -156,8 +159,9 @@ message IntersectExceptOperator {
 
 message RuntimeFilterDistribution {
   enum Enum {
-    Local = 0;
-    Distributed = 1;
+    LOCAL = 0;
+    DISTRIBUTED = 1;
+    UNKNOWN = 2;
   }
 }
 

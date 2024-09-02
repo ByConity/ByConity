@@ -44,7 +44,6 @@ public:
     void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) override;
     void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) override;
     void dropStatsData(const StatsTableIdentifier & table) override;
-    void dropStatsDataAll(const String & database) override;
 
     void invalidateClusterStatsCache(const StatsTableIdentifier & table) override;
     void invalidateServerStatsCache(const StatsTableIdentifier & table) override;
@@ -56,8 +55,6 @@ public:
     StoragePtr tryGetStorageByUUID(const UUID & uuid) override;
     void invalidateAllServerStatsCache() override { Statistics::CacheManager::reset(); }
     UInt64 getUpdateTime() override;
-    bool isTableCollectable(const StatsTableIdentifier & identifier) override;
-    bool isTableAutoUpdated(const StatsTableIdentifier & table) override;
     const Settings & getSettingsRef() override { return context->getSettingsRef(); }
     static StatsData convertTableStats(const TableStatistics & table_stats);
 
@@ -197,14 +194,6 @@ void CatalogAdaptorCnch::dropStatsData(const StatsTableIdentifier & table)
     // step 2: write column stats
     catalog->removeAllColumnStatistics(uuid_str);
 }
-void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
-{
-    auto tables = this->getAllTablesID(database_name);
-    for (auto & identifier : tables)
-    {
-        dropStatsData(identifier);
-    }
-}
 
 void CatalogAdaptorCnch::dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc)
 {
@@ -273,68 +262,6 @@ UInt64 CatalogAdaptorCnch::getUpdateTime()
 {
     // TODO: support cache invalidate strategy
     return 0;
-}
-
-bool CatalogAdaptorCnch::isTableCollectable(const StatsTableIdentifier & identifier)
-{
-    auto storage = getStorageByTableId(identifier);
-
-    auto & pattern = context->getSettingsRef().statistics_exclude_tables_regex.value;
-    if (!pattern.empty())
-    {
-        try
-        {
-            boost::regex re(pattern);
-            boost::cmatch tmp;
-            if (boost::regex_match(identifier.getTableName().data(), tmp, re))
-            {
-                return false;
-            }
-        }
-        catch (boost::wrapexcept<boost::regex_error> & e)
-        {
-            auto err_msg = std::string("regex match error: ") + e.what();
-            throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
-        }
-    }
-
-    auto storage_name = storage->getName();
-    if (boost::algorithm::ends_with(storage_name, "MergeTree"))
-    {
-        return true;
-    }
-
-    // TODO: configure this in xml file
-    static std::set<String> allowed_storage_names = {
-        "CnchMergeTree",
-        "CloudMergeTree",
-        "CnchHive",
-        "Log",
-        "TinyLog",
-        "Memory",
-    };
-
-    if (allowed_storage_names.count(storage_name))
-    {
-        return true;
-    }
-
-    return false;
-}
-
-bool CatalogAdaptorCnch::isTableAutoUpdated(const StatsTableIdentifier & identifier)
-{
-    auto storage = getStorageByTableId(identifier);
-    auto storage_name = storage->getName();
-
-    // TODO: configure this in xml file
-    // currently, just auto collect cnch/cloud MergeTree
-    static std::set<String> auto_storage_names = {
-        "CnchMergeTree",
-        "CloudMergeTree",
-    };
-
-    return auto_storage_names.count(storage_name);
 }
 
 void CatalogAdaptorCnch::invalidateClusterStatsCache(const StatsTableIdentifier & table)

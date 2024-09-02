@@ -26,9 +26,10 @@ MergeTreeDataPartsVector getAndLoadPartsInWorker(
     StoragePtr storage,
     StorageCloudMergeTree & cloud_merge_tree,
     const String & partition_id,
+    TxnTimestamp ts,
     ContextPtr local_context)
 {
-    ServerDataPartsVector server_parts = catalog.getServerDataPartsInPartitions(storage, {partition_id}, local_context->getCurrentCnchStartTime(), local_context.get());
+    ServerDataPartsVector server_parts = catalog.getServerDataPartsInPartitions(storage, {partition_id}, ts, local_context.get());
 
     pb::RepeatedPtrField<Protos::DataModelPart> parts_model;
     StoragePtr storage_for_cnch_merge_tree = catalog.tryGetTable(
@@ -53,6 +54,20 @@ MergeTreeDataPartsVector getAndLoadPartsInWorker(
     return res;
 }
 
+}
+
+void IngestColumnBlockInputStream::logIngestWithBucketStatus()
+{
+    LOG_TRACE(
+        log,
+        fmt::format(
+            "Ingest Column with bucket: {}, cur_bucket_index {} with source parts: {}/{}  target parts: {}/{}",
+            buckets_for_ingest[cur_bucket_index],
+            cur_bucket_index,
+            getCurrentVisibleSourceParts().size(),
+            visible_source_parts.size(),
+            getCurrentVisibleTargetParts().size(),
+            visible_target_parts.size()));
 }
 
 IngestColumnBlockInputStream::IngestColumnBlockInputStream(
@@ -85,24 +100,81 @@ IngestColumnBlockInputStream::IngestColumnBlockInputStream(
 
     std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
     source_parts = getAndLoadPartsInWorker(
-        *catalog, source_storage, *source_cloud_merge_tree, partition_id, context);
+        *catalog, source_storage, *source_cloud_merge_tree, partition_id, context->getCurrentCnchStartTime(), context);
     LOG_DEBUG(log, "number of source parts: {}", source_parts.size());
+    /// ingest partition is a read-write txn, and the default RC isolation level will lead to duplicated keys
+    /// (e.g., running two ingest txns which add the same new key concurrently)
+    /// therefore should use new ts when fetching target table's parts
     target_parts = getAndLoadPartsInWorker(
-        *catalog, target_storage, *target_cloud_merge_tree, partition_id, context);
+        *catalog, target_storage, *target_cloud_merge_tree, partition_id, context->getTimestamp(), context);
     LOG_DEBUG(log, "number of target parts: {}", target_parts.size());
 
     visible_source_parts = CnchPartsHelper::calcVisibleParts(source_parts, false, CnchPartsHelper::EnableLogging);
     LOG_DEBUG(log, "number of visible source parts: {}", visible_source_parts.size());
     visible_target_parts = CnchPartsHelper::calcVisibleParts(target_parts, false, CnchPartsHelper::EnableLogging);
     LOG_DEBUG(log, "number of visible target parts: {}", visible_target_parts.size());
+
+    if (context->getSettingsRef().optimize_ingest_with_bucket
+        && checkIngestWithBucketTable(*source_cloud_merge_tree, *target_cloud_merge_tree, ordered_key_names, ingest_column_names))
+    {
+        if (command.bucket_nums.empty())
+            throw Exception("Receive empty bucket for ingest on worker", ErrorCodes::LOGICAL_ERROR);
+
+        LOG_TRACE(log, "try ingest with bucket table");
+        cur_bucket_index = 0;
+        buckets_for_ingest = command.bucket_nums;
+        visible_source_parts_with_bucket = clusterDataPartWithBucketTable(*source_cloud_merge_tree, visible_source_parts);
+        visible_target_parts_with_bucket = clusterDataPartWithBucketTable(*target_cloud_merge_tree, visible_target_parts);
+
+        if (visible_source_parts_with_bucket.empty() || visible_target_parts_with_bucket.empty())
+        {
+            cur_bucket_index = -1;
+            LOG_DEBUG(log, "try ingest with bucket table Failed, use ordinary ingest.");
+        }
+    }
 }
+
+
+IMergeTreeDataPartsVector & IngestColumnBlockInputStream::getCurrentVisibleSourceParts()
+{
+    if (cur_bucket_index == -1)
+    {
+        return visible_source_parts;
+    }
+    return visible_source_parts_with_bucket[buckets_for_ingest[cur_bucket_index]];
+}
+
+IMergeTreeDataPartsVector & IngestColumnBlockInputStream::getCurrentVisibleTargetParts()
+{
+    if (cur_bucket_index == -1)
+    {
+        return visible_target_parts;
+    }
+    return visible_target_parts_with_bucket[buckets_for_ingest[cur_bucket_index]];
+}
+
 
 Block IngestColumnBlockInputStream::readImpl()
 {
-    MemoryEfficientIngestColumn executor{*this};
-    executor.execute();
+    if (cur_bucket_index == -1)
+    {
+        MemoryEfficientIngestColumn executor{*this};
+        executor.execute();
+    }
+    else
+    {
+        for (; static_cast<size_t>(cur_bucket_index) < buckets_for_ingest.size(); cur_bucket_index++)
+        {
+            logIngestWithBucketStatus();
+
+            if (getCurrentVisibleSourceParts().empty())
+                continue;
+            
+            MemoryEfficientIngestColumn executor{*this};
+            executor.execute();
+        }
+    }
 
     return Block{};
 }
-
 }

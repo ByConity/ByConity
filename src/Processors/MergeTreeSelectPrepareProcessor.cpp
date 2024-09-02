@@ -45,6 +45,7 @@ IProcessor::Status MergeTreeSelectPrepareProcessor::prepare()
     auto input = inputs.begin();
     if (output->isFinished())
     {
+        input->close();
         finished = true;
         return Status::Finished;
     }
@@ -74,11 +75,17 @@ void MergeTreeSelectPrepareProcessor::work()
         if (timing.elapsed() > rf_wait_time_ns)
         {
             poll_done = true;
-            LOG_DEBUG(
-                &Poco::Logger::get("MergeTreeSelectPrepareProcessor"),
-                "wait time out:{} thread:{}",
-                timing.elapsed(),
-                current_thread->thread_id);
+            for (const auto & rf : runtime_filters)
+            {
+                if (!RuntimeFilterManager::getInstance().getDynamicValue(rf)->isReady())
+                {
+                     LOG_DEBUG(
+                        &Poco::Logger::get("MergeTreeSelectPrepareProcessor"),
+                        "wait time out:{} rf:{}",
+                        timing.elapsed(),
+                        rf);
+                }
+            }
         }
         else
         {

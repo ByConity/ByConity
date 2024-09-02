@@ -25,13 +25,9 @@ public:
 
     // Fill query log element with query kind, query databases, query tables and query columns.
     void extendQueryLogElem(
-        QueryLogElement & elem,
-        const ASTPtr & ast,
-        ContextPtr context,
-        const String & query_database,
-        const String & query_table) const;
+        QueryLogElement & elem, const ASTPtr & ast, ContextPtr context, const String & query_database, const String & query_table) const;
 
-    virtual void extendQueryLogElemImpl(QueryLogElement &, const ASTPtr &, ContextPtr) const {}
+    virtual void extendQueryLogElemImpl(QueryLogElement &, const ASTPtr &, ContextPtr) const { }
 
     virtual ~IInterpreter() = default;
 };

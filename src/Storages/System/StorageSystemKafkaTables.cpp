@@ -62,6 +62,7 @@ StorageSystemKafkaTables::StorageSystemKafkaTables(const StorageID & table_id_)
         { "consumer_tables",            std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "consumer_hosts",             std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "consumer_partitions",        std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
+        { "consumer_sample_paritions",  std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "consumer_offsets",           std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "last_exception",             std::make_shared<DataTypeString>()  },
 
@@ -164,7 +165,7 @@ Pipe StorageSystemKafkaTables::read(
         }
         else
         {
-            Array consumer_tables, consumer_hosts, consumer_assignments, offsets;
+            Array consumer_tables, consumer_hosts, consumer_assignments;
             for (const auto & consumer : consumer_infos)
             {
                 consumer_tables.emplace_back(table_info.table + consumer.table_suffix);
@@ -177,13 +178,19 @@ Pipe StorageSystemKafkaTables::read(
         }
 
         /// TODO: Avoid access to Catalog if offsets are not required
-        cppkafka::TopicPartitionList tpl;
-        std::for_each(consumer_infos.begin(), consumer_infos.end(), [& tpl] (const auto & c)
+        cppkafka::TopicPartitionList tpl, sample_tpl;
+        std::for_each(consumer_infos.begin(), consumer_infos.end(), [& tpl, &sample_tpl] (const auto & c)
         {
             tpl.insert(tpl.end(), c.partitions.begin(), c.partitions.end());
+            sample_tpl.insert(sample_tpl.end(), c.sample_partitions.begin(), c.sample_partitions.end());
         });
         cnch_catalog->getKafkaOffsets(kafka_table->getGroupForBytekv(), tpl);
-        res_columns[col_num++]->insert(Array{DB::Kafka::toString(tpl)});
+
+        Array offsets, sample_partitions;
+        offsets.emplace_back(DB::Kafka::toString(tpl));
+        sample_partitions.emplace_back(DB::Kafka::toString(sample_tpl));
+        res_columns[col_num++]->insert(sample_partitions);
+        res_columns[col_num++]->insert(offsets);
 
         res_columns[col_num++]->insert(manager->getLastException());
     }

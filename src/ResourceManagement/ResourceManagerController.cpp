@@ -169,7 +169,7 @@ void ResourceManagerController::createWorkerGroupsFromConfig(const String & pref
             if (config.has(prefix_key + ".shared_group"))
                 group_data.linked_id = config.getString(prefix_key + ".shared_group");
 
-            createWorkerGroup(name, false, vw_name, group_data, &vw_lock, &wg_lock);
+            createWorkerGroup(name, vw_name, group_data, &vw_lock, &wg_lock);
             LOG_DEBUG(log, "Created worker group " + name + " in Virtual Warehouse " + vw_name + " using config");
         }
     }
@@ -289,7 +289,7 @@ void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData 
             WorkerGroupData worker_group_data;
             worker_group_data.id = worker_group_id;
             worker_group_data.vw_name = vw_name;
-            group = createWorkerGroup(worker_group_id, false, vw_name, worker_group_data, &vw_lock, &wg_lock);
+            group = createWorkerGroup(worker_group_id, vw_name, worker_group_data, &vw_lock, &wg_lock);
             // vw->addWorkerGroup(group);
             // group->setVWName(vw->getName());
         }
@@ -329,7 +329,6 @@ void ResourceManagerController::removeWorkerNode(const std::string & worker_id, 
 
 WorkerGroupPtr ResourceManagerController::createWorkerGroup(
     const std::string & group_id,
-    bool if_not_exists,
     const std::string & vw_name,
     const WorkerGroupData & data,
     std::lock_guard<bthread::Mutex> * vw_lock,
@@ -365,7 +364,7 @@ WorkerGroupPtr ResourceManagerController::createWorkerGroup(
         source_physical_group->addLentGroupDestID(group_id);
     }
 
-    auto dest_group = group_manager->createWorkerGroupImpl(group_id, if_not_exists, vw_name, data, vw_lock, wg_lock);
+    auto dest_group = group_manager->createWorkerGroupImpl(group_id, vw_name, data, vw_lock, wg_lock);
     auto vw = vw_manager->getVirtualWarehouseImpl(vw_name, vw_lock);
     vw->addWorkerGroup(dest_group, is_auto_linked);
     dest_group->setVWName(vw->getName());

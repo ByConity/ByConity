@@ -14,23 +14,34 @@
  */
 
 #include <atomic>
-#include <Interpreters/QueryExchangeLog.h>
 #include <memory>
 #include <optional>
 #include <string>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
+#include <Processors/Exchange/DeserializeBufTransform.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 #include <Poco/Logger.h>
 #include <Common/CurrentThread.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include <Interpreters/Context_fwd.h>
-#include <Processors/Exchange/ExchangeUtils.h>
 
 namespace DB
 {
+LocalBroadcastChannel::LocalBroadcastChannel(
+    ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_)
+    : LocalBroadcastChannel(std::move(data_key_)
+    , options_
+    , name_
+    , std::make_shared<MultiPathBoundedQueue>(options_.queue_size, nullptr))
+{
+}
+
 LocalBroadcastChannel::LocalBroadcastChannel(
     ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_, MultiPathQueuePtr queue_, ContextPtr context_)
     : IBroadcastReceiver(options_.enable_metrics)
@@ -56,12 +67,10 @@ RecvDataPacket LocalBroadcastChannel::recv(timespec timeout_ts)
 
     if (receive_queue->tryPopUntil(data_packet, timeout_ts))
     {
-        if (std::holds_alternative<Chunk>(data_packet))
+        if (std::holds_alternative<DataPacket>(data_packet))
         {
-            Chunk& recv_chunk = std::get<Chunk>(data_packet);
-            if (enable_receiver_metrics)
-                receiver_metrics.recv_bytes << recv_chunk.bytes();
-            ExchangeUtils::transferGlobalMemoryToThread(recv_chunk.allocatedBytes());
+            Chunk & recv_chunk = std::get<DataPacket>(data_packet).chunk;
+            addToMetricsMaybe(s.elapsedMilliseconds(), 0, 1, recv_chunk);
             return RecvDataPacket(std::move(recv_chunk));
         }
         else if (std::holds_alternative<SendDoneMark>(data_packet))
@@ -89,12 +98,13 @@ BroadcastStatus LocalBroadcastChannel::sendImpl(Chunk chunk)
     if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
         return *current_status_ptr;
 
-    size_t allocated_bytes = chunk.allocatedBytes();
-    if (receive_queue->tryEmplaceUntil(options.max_timeout_ts, MultiPathDataPacket(std::move(chunk))))
+    if (enable_receiver_metrics)
     {
-        ExchangeUtils::transferThreadMemoryToGlobal(allocated_bytes);
-        return *broadcast_status.load(std::memory_order_acquire);
+        auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfoWithReceiver>();
+        chunk_info->receiver = shared_from_this();
     }
+    if (receive_queue->tryEmplaceUntil(options.max_timeout_ts, MultiPathDataPacket(DataPacket{std::move(chunk)})))
+        return *broadcast_status.load(std::memory_order_acquire);
 
     // finished in other thread, receive_queue is closed.
     if(receive_queue->closed())
@@ -109,7 +119,7 @@ BroadcastStatus LocalBroadcastChannel::sendImpl(Chunk chunk)
 
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
-        "Send to channel " + name + " timeout after ms: " + std::to_string(options.max_timeout_ts.tv_sec));
+        "Query send to local exchange channel " + name + " timeout after ms: " + std::to_string(options.max_timeout_ts.tv_sec));
     return current_status;
 }
 
@@ -134,7 +144,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         else
             receive_queue->tryEmplaceUntil(options.max_timeout_ts, getName());
         auto res = *new_status_ptr;
-        res.is_modifer = true;
+        res.is_modified_by_operator = true;
         sender_metrics.finish_code = new_status_ptr->code;
         sender_metrics.is_modifier = 1;
         sender_metrics.message = new_status_ptr->message;
@@ -208,9 +218,12 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
             element.message = sender_metrics.message;
 
             // receiver
+            element.recv_counts = receiver_metrics.recv_counts.get_value();
+            element.recv_rows = receiver_metrics.recv_rows.get_value();
             element.recv_time_ms = receiver_metrics.recv_time_ms.get_value();
             element.register_time_ms = receiver_metrics.register_time_ms.get_value();
             element.recv_bytes = receiver_metrics.recv_bytes.get_value();
+            element.recv_uncompressed_bytes = receiver_metrics.recv_uncompressed_bytes.get_value();
 
             query_exchange_log->add(element);
         }

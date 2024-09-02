@@ -154,8 +154,9 @@ std::shared_ptr<ProjectionStep> MergeTreeIndexContext::genProjectionForIndex(
     {
         //auto name = alias_to_name_map.contains(item.first) ? alias_to_name_map[item.first] : item.second->getColumnName();
         auto from_name = alias_to_name_map.contains(item.first) ? alias_to_name_map[item.first] : item.first;
-        auto to_ast = alias_to_name_map.contains(item.first) ? std::make_shared<ASTIdentifier>(from_name) : item.second;
-        new_assignments.emplace_back(from_name, ExpressionRewriter::rewrite(to_ast, symbol_map));
+        auto to_ast = alias_to_name_map.contains(item.first) ? std::make_shared<ASTIdentifier>(from_name)
+                                                             : ExpressionRewriter::rewrite(item.second, symbol_map);
+        new_assignments.emplace_back(from_name, to_ast);
         name_to_type[from_name] = pushdown_projection->getNameToType().at(item.first);
     }
 

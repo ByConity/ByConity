@@ -347,11 +347,10 @@ TEST_F(ProtobufTest, SortingStep)
         for (int i = 0; i < 2; ++i)
             result_description.emplace_back(generateSortColumnDescription(eng));
         auto limit = eng() % 1000;
-        auto partial = eng() % 2 == 1;
         SortDescription prefix_description;
         for (int i = 0; i < 2; ++i)
             prefix_description.emplace_back(generateSortColumnDescription(eng));
-        auto result = std::make_shared<SortingStep>(base_input_stream, result_description, limit, partial, prefix_description);
+        auto result = std::make_shared<SortingStep>(base_input_stream, result_description, limit, SortingStep::Stage::FULL, prefix_description);
         result->setStepDescription(step_description);
         return result;
     }();
@@ -675,7 +674,7 @@ TEST_F(ProtobufTest, TableWriteStep)
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
-        auto s = std::make_shared<TableWriteStep>(base_input_stream, target);
+        auto s = std::make_shared<TableWriteStep>(base_input_stream, target, false);
         s->setStepDescription(step_description);
         return s;
     }();
@@ -701,7 +700,7 @@ TEST_F(ProtobufTest, TableFinishStep)
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
         auto output_affected_row_count_symbol = fmt::format("text{}", eng() % 100);
-        auto s = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
+        auto s = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol, nullptr, false);
         s->setStepDescription(step_description);
         return s;
     }();
@@ -862,6 +861,7 @@ TEST_F(ProtobufTest, MergeSortingStep)
         auto max_bytes_before_external_sort = eng() % 1000;
         auto tmp_volume = context ? context->getTemporaryVolume() : nullptr;
         auto min_free_disk_space = eng() % 1000;
+        auto enable_auto_spill = eng() % 2;
         auto s = std::make_shared<MergeSortingStep>(
             base_input_stream,
             description,
@@ -871,7 +871,8 @@ TEST_F(ProtobufTest, MergeSortingStep)
             remerge_lowered_memory_bytes_ratio,
             max_bytes_before_external_sort,
             tmp_volume,
-            min_free_disk_space);
+            min_free_disk_space,
+            enable_auto_spill);
         s->setStepDescription(step_description);
         return s;
     }();
@@ -895,9 +896,10 @@ TEST_F(ProtobufTest, MergingAggregatedStep)
     auto step = [&eng] {
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng);
-        Names keys;
+        NameSet distinct_keys;
         for (int i = 0; i < 10; ++i)
-            keys.emplace_back(fmt::format("text{}", eng() % 100));
+            distinct_keys.emplace(fmt::format("text{}", eng() % 100));
+        Names keys{distinct_keys.begin(), distinct_keys.end()};
         GroupingSetsParamsList grouping_sets_params;
         for (int i = 0; i < 2; ++i)
             grouping_sets_params.emplace_back(generateGroupingSetsParams(eng));
@@ -940,9 +942,10 @@ TEST_F(ProtobufTest, AggregatingStep)
     auto step = [&eng] {
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng);
-        Names keys;
+        NameSet distinct_keys;
         for (int i = 0; i < 10; ++i)
-            keys.emplace_back(fmt::format("text{}", eng() % 100));
+            distinct_keys.emplace(fmt::format("text{}", eng() % 100));
+        Names keys{distinct_keys.begin(), distinct_keys.end()};
         NameSet keys_not_hashed;
         for (int i = 0; i < 10; ++i)
             keys_not_hashed.emplace(fmt::format("text{}", eng() % 100));
@@ -1121,9 +1124,10 @@ TEST_F(ProtobufTest, ReadStorageRowCountStep)
         auto base_output_header = generateBlock(eng);
         auto storage_id = test_storage_ids[eng() % 3];
         auto query = generateAST(eng);
-        auto agg_desc = generateAggregateDescription(eng);
+        auto agg_desc = generateAggregateDescription(eng, 0);
         auto num_rows = eng() % 1000;
-        auto s = std::make_shared<ReadStorageRowCountStep>(base_output_header, storage_id, query, agg_desc, num_rows);
+        auto is_final_agg = false;
+        auto s = std::make_shared<ReadStorageRowCountStep>(base_output_header, query, agg_desc, num_rows, is_final_agg);
 
         return s;
     }();

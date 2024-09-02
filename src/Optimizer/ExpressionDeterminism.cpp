@@ -21,10 +21,10 @@
 
 namespace DB
 {
-std::set<String> ExpressionDeterminism::getDeterministicSymbols(Assignments & assignments, ContextPtr context)
+std::set<String> ExpressionDeterminism::getDeterministicSymbols(const Assignments & assignments, ContextPtr context)
 {
     std::set<String> deterministic_symbols;
-    for (auto & assignment : assignments)
+    for (const auto & assignment : assignments)
     {
         if (ExpressionDeterminism::isDeterministic(assignment.second, context))
         {
@@ -115,11 +115,11 @@ Void DeterminismVisitor::visitASTFunction(const ConstASTPtr & node, ContextPtr &
 {
     visitNode(node, context);
     const auto & fun = node->as<const ASTFunction &>();
-    if (!context->isFunctionDeterministic(fun.name))
+    if (unlikely(context->isNonDeterministicFunction(fun.name)))
     {
         is_deterministic = false;
     }
-    if (fun.name == "arrayJoin")
+    if (unlikely(fun.name == "arrayJoin"))
     {
         can_change_output_rows = true;
     }

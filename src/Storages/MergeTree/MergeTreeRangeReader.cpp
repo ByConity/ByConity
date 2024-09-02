@@ -31,6 +31,11 @@
 #include <emmintrin.h>
 #endif
 
+namespace ProfileEvents
+{
+    extern const Event PrewhereSelectedMarks;
+}
+
 namespace DB
 {
 namespace ErrorCodes
@@ -847,6 +852,16 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
         read_result.num_rows = read_result.countBytesInResultFilter(read_result.getFilter()->getData());
     }
 
+    if (last_reader_in_chain)
+    {
+        for(auto &col: read_result.columns)
+        {
+            if (col) {
+                col->tryToFlushZeroCopyBuffer();
+            }
+        }
+    }
+
     return read_result;
 }
 
@@ -857,11 +872,12 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
     result.columns.resize(merge_tree_reader->numColumnsInResult());
 
     size_t current_task_last_mark = getLastMark(ranges);
+    size_t num_selected_marks = 0;
 
     ColumnUInt8::MutablePtr delete_filter_column;
     bool delete_filter_always_true = true;
     if (delete_bitmap)
-    {   
+    {
         delete_filter_column = ColumnUInt8::create(max_rows, 1);
     }
 
@@ -904,7 +920,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             /// Otherwise read the next `rows_to_read` rows (maybe < unread_rows_in_current_granule) from
             /// the current granule and prepare the delete filter that'll be used later to remove deleted rows
             else
-            {   
+            {
                 size_t filter_column_offset = max_rows - space_left;
                 /// populate delete filter for this granule
                 if (delete_bitmap)
@@ -923,6 +939,12 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
                         delete_filter_always_true = false;
                 }
 
+                if (last_reader_in_chain)
+                {
+                    num_selected_marks += (!last_selected_mark.has_value() || *last_selected_mark != stream.currentMark());
+                    last_selected_mark = stream.currentMark();
+                }
+
                 bool last = rows_to_read == space_left;
                 result.addRows(stream.read(result.columns, rows_to_read, !last));
                 result.addGranule(rows_to_read);
@@ -935,6 +957,8 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
     /// Last granule may be incomplete.
     result.adjustLastGranule();
+
+    ProfileEvents::increment(ProfileEvents::PrewhereSelectedMarks, num_selected_marks);
 
     if (delete_bitmap && !delete_filter_always_true)
     {
@@ -972,6 +996,7 @@ Columns MergeTreeRangeReader::continueReadingChain(ReadResult & result,
     size_t read_cursor = 0;
     size_t expected_rows = 0;
     auto size = rows_per_granule.size();
+    size_t num_selected_marks = 0;
     for (auto i : collections::range(0, size))
     {
         if (next_range_to_start < started_ranges.size()
@@ -981,6 +1006,13 @@ Columns MergeTreeRangeReader::continueReadingChain(ReadResult & result,
             const auto & range = started_ranges[next_range_to_start].range;
             ++next_range_to_start;
             stream = Stream(range.begin, range.end, current_task_last_mark, merge_tree_reader);
+        }
+
+        if (last_reader_in_chain && rows_per_granule[i])
+        {
+            /// maintain last_selected_mark here to avoid counting the same mark more than once
+            num_selected_marks += (!last_selected_mark.has_value() || *last_selected_mark != stream.currentMark());
+            last_selected_mark = stream.currentMark();
         }
 
         if (const ColumnUInt8* filter = result.getFilter(); filter != nullptr && filter_when_read)
@@ -1009,6 +1041,8 @@ Columns MergeTreeRangeReader::continueReadingChain(ReadResult & result,
 
     stream.skip(result.numRowsToSkipInLastGranule());
     num_rows += stream.finalize(columns);
+
+    ProfileEvents::increment(ProfileEvents::PrewhereSelectedMarks, num_selected_marks);
 
     /// added_rows may be zero if all columns were read in prewhere and it's ok.
     if (num_rows)
@@ -1098,7 +1132,7 @@ static ColumnPtr combineFilterEqualSize(ColumnPtr first, ColumnPtr second)
 
     if (first_const_descr.always_true)
         return second;
-    
+
     if (first_const_descr.always_false)
         return first;
 

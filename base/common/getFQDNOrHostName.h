@@ -29,3 +29,4 @@
   */
 const std::string & getFQDNOrHostName();
 const std::string & getIPOrFQDNOrHostName();
+const std::string & getPodOrHostName();

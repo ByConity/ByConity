@@ -36,7 +36,7 @@ const String CpuSet::CPUS = "cpuset.cpus";
 const String CpuSet::MEMS = "cpuset.mems";
 const String CpuSet::PROC = "cgroup.procs";
 
-static String getDefaultMems()
+[[maybe_unused]] static String getDefaultMems()
 {
     size_t numa_node = SystemUtils::getMaxNumaNode();
     std::stringstream mems_ss;
@@ -93,7 +93,7 @@ void CpuSet::resetCpuSet()
 }
 
 
-void CpuSet::addTask(size_t tid)
+void CpuSet::addTask([[maybe_unused]] size_t tid)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex);
     std::filesystem::path task_path = dir_path + "/" + TASK_FILE;

@@ -14,76 +14,27 @@ RuntimeFilterConsumer::RuntimeFilterConsumer(
     std::string query_id_,
     size_t local_stream_parallel_,
     size_t parallel_,
-    size_t grf_ndv_enlarge_size_,
     AddressInfo coordinator_address_,
-    AddressInfo current_address_)
+    UInt32 parallel_id_)
     : builder(std::move(builder_))
     , query_id(std::move(query_id_))
     , local_stream_parallel(local_stream_parallel_)
-    , parallel(parallel_)
-    , grf_ndv_enlarge_size(grf_ndv_enlarge_size_)
+    , parallel_workers(parallel_)
     , coordinator_address(std::move(coordinator_address_))
-    , current_address(std::move(current_address_))
+    , parallel_id(parallel_id_)
+    , build_params_blocks(local_stream_parallel)
     , timer{CLOCK_MONOTONIC_COARSE}
     , log(&Poco::Logger::get("RuntimeFilterBuild"))
 {
     timer.start();
 }
 
-
-void RuntimeFilterConsumer::addFinishRuntimeFilter(RuntimeFilterData && data, bool is_local)
+bool RuntimeFilterConsumer::addBuildParams(size_t ht_size, const DB::BlocksList * blocks)
 {
-    std::lock_guard<std::mutex> guard(mutex);
-    runtime_filters.emplace_back(std::move(data));
-    // no need to unlock since all other streams are finished.
-    if (runtime_filters.size() == local_stream_parallel)
-    {
-        if (is_local)
-        {
-            if (runtime_filters.size() == 1)
-            {
-                // no merge need
-                for (auto && dy : runtime_filters[0].runtime_filters)
-                {
-                    DynamicData dd;
-                    dd.is_local = true;
-                    dd.data = std::move(dy.second);
-                    RuntimeFilterManager::getInstance().addDynamicValue(query_id, dy.first, std::move(dd), 1);
-                }
-            }
-            else
-            {
-                auto && dynamic_data = builder->merge(runtime_filters);
-                if (dynamic_data.bypass != BypassType::NO_BYPASS)
-                {
-                    for (const auto & rf: builder->getRuntimeFilters())
-                    {
-                        DynamicData local_data;
-                        local_data.is_local = true;
-                        local_data.bypass = dynamic_data.bypass;
-                        RuntimeFilterManager::getInstance().addDynamicValue(query_id, rf.second.id, std::move(local_data), 1);
-                    }
-                }
-                else
-                {
-                    for (auto && dy : dynamic_data.runtime_filters)
-                    {
-                        DynamicData dd;
-                        dd.is_local = true;
-                        dd.data = std::move(dy.second);
-                        RuntimeFilterManager::getInstance().addDynamicValue(query_id, dy.first, std::move(dd), 1);
-                    }
-                }
-            }
-        }
-        else
-        {
-            if (runtime_filters.size() == 1)
-                transferRuntimeFilter(std::move(runtime_filters[0]));
-            else
-                transferRuntimeFilter(builder->merge(runtime_filters));
-        }
-    }
+    auto index = num_partial.fetch_add(1, std::memory_order_relaxed);
+    build_params_blocks[index] = blocks;
+    ht_sizes.fetch_add(ht_size, std::memory_order_relaxed);
+    return static_cast<size_t>(index) == (local_stream_parallel - 1);
 }
 
 void RuntimeFilterConsumer::addFinishRF(BloomFilterWithRangePtr && bf_ptr, RuntimeFilterId id, bool is_local)
@@ -91,9 +42,17 @@ void RuntimeFilterConsumer::addFinishRF(BloomFilterWithRangePtr && bf_ptr, Runti
     RuntimeFilterVal val;
     val.is_bf = true;
     val.bloom_filter = std::move(bf_ptr);
-    RuntimeFilterData data;
-    data.runtime_filters.emplace(id, std::move(val));
-    addFinishRuntimeFilter(std::move(data), is_local);
+    if (is_local)
+    {
+        DynamicData dd;
+        dd.is_local = true;
+        dd.data = std::move(val);
+        RuntimeFilterManager::getInstance().addDynamicValue(query_id, id, std::move(dd), 1);
+    }
+    else
+    {
+        global_rf_data.runtime_filters.emplace(id, std::move(val));
+    }
 }
 
 void RuntimeFilterConsumer::addFinishRF(ValueSetWithRangePtr && vs_ptr, RuntimeFilterId id, bool is_local)
@@ -101,61 +60,57 @@ void RuntimeFilterConsumer::addFinishRF(ValueSetWithRangePtr && vs_ptr, RuntimeF
     RuntimeFilterVal val;
     val.is_bf = false;
     val.values_set = std::move(vs_ptr);
-    RuntimeFilterData data;
-    data.runtime_filters.emplace(id, std::move(val));
-    addFinishRuntimeFilter(std::move(data), is_local);
+    if (is_local)
+    {
+        DynamicData dd;
+        dd.is_local = true;
+        dd.data = std::move(val);
+        RuntimeFilterManager::getInstance().addDynamicValue(query_id, id, std::move(dd), 1);
+    }
+    else
+    {
+        global_rf_data.runtime_filters.emplace(id, std::move(val));
+    }
 }
 
-bool RuntimeFilterConsumer::isBloomFilter(DB::RuntimeFilterId id) const
+void RuntimeFilterConsumer::finalize()
 {
+    if (!global_rf_data.runtime_filters.empty())
+    {
+        transferRuntimeFilter(std::move(global_rf_data));
+    }
+}
+
+void RuntimeFilterConsumer::bypass(BypassType type)
+{
+    if (is_bypassed)
+        return;
+    is_bypassed = true;
+    const auto & runtime_filters = builder->getRuntimeFilters();
+    bool need_send_global = false;
     if (!runtime_filters.empty())
     {
         for (const auto & rf : runtime_filters)
-            if (rf.isBloomFilter(id))
-                return true;
-    }
-
-    return false;
-}
-
-bool RuntimeFilterConsumer::isValueSet(DB::RuntimeFilterId id) const
-{
-    if (!runtime_filters.empty())
-    {
-        for (const auto & rf : runtime_filters)
-            if (rf.isValueSet(id))
-                return true;
-    }
-
-    return false;
-}
-
-void RuntimeFilterConsumer::bypass(RuntimeFilterId id, bool is_local, BypassType type)
-{
-    // single empty or large bypass
-    if (local_stream_parallel == 1)
-    {
-        if (is_local)
         {
-            DynamicData data;
-            data.is_local = true;
-            data.bypass = type;
-            RuntimeFilterManager::getInstance().addDynamicValue(query_id, id, std::move(data), 1);
+            if (rf.second.distribution == RuntimeFilterDistribution::LOCAL)
+            {
+                DynamicData data;
+                data.is_local = true;
+                data.bypass = type;
+                RuntimeFilterManager::getInstance().addDynamicValue(query_id, rf.second.id, std::move(data), 1);
+            }
+            else
+            {
+                need_send_global = true;
+            }
         }
-        else
+
+        if (need_send_global)
         {
             RuntimeFilterData data;
             data.bypass = type;
             transferRuntimeFilter(std::move(data));
         }
-    }
-    else
-    {
-        // more than one ht, need merge final
-        RuntimeFilterData data;
-        data.bypass = type;
-        data.runtime_filters.emplace(id, RuntimeFilterVal{});
-        addFinishRuntimeFilter(std::move(data), is_local);
     }
 }
 
@@ -182,23 +137,23 @@ void RuntimeFilterConsumer::transferRuntimeFilter(RuntimeFilterData && data)
     auto * controller = new brpc::Controller;
     Protos::TransferRuntimeFilterRequest request;
     std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(
-        extractExchangeHostPort(coordinator_address), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        extractExchangeHostPort(coordinator_address), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
     Protos::RuntimeFilterService_Stub runtime_filter_service(&rpc_client->getChannel());
     request.set_query_id(query_id);
     request.set_builder_id(builder->getId());
-    request.set_worker_address(extractExchangeHostPort(current_address));
-    request.set_require_parallel_size(parallel);
+    request.set_parallel_id(parallel_id);
+    request.set_require_parallel_size(parallel_workers);
     request.set_filter_data(write_buffer.str());
     runtime_filter_service.transferRuntimeFilter(
         controller, &request, response, brpc::NewCallback(OnSendRuntimeFilterCallback, response, controller, rpc_client));
 
     LOG_DEBUG(
         log,
-        "build success, query id: {}, builer id: {}, stream parallel: {}, plan segment parallel: {}, cost: {} ms",
+        "build rf success, query id: {}, build id: {}, stream parallel: {}, plan segment parallel: {}, cost: {} ms",
         query_id,
         builder->getId(),
         local_stream_parallel,
-        parallel,
+        parallel_id,
         timer.elapsedMilliseconds());
 }
 

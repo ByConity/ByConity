@@ -25,6 +25,7 @@
 #include <Processors/Exchange/DeserializeBufTransform.h>
 #include <Processors/Exchange/ExchangeUtils.h>
 #include <Poco/Logger.h>
+#include "Common/Stopwatch.h"
 #include <common/logger_useful.h>
 
 namespace DB
@@ -53,8 +54,13 @@ void DeserializeBufTransform::transform(Chunk & chunk)
         buf = std::make_unique<CompressedReadBuffer>(*read_buffer);
     else
         buf = std::move(read_buffer);
+    s.restart();
     NativeChunkInputStream chunk_in(*buf, header);
     chunk = chunk_in.readImpl();
+    if (const auto * io_buf_with_receiver = dynamic_cast<const DeserializeBufTransform::IOBufChunkInfoWithReceiver *>(iobuf_info.get()))
+    {
+        if (auto receiver = io_buf_with_receiver->receiver.lock())
+            receiver->addToMetricsMaybe(0, s.elapsedMilliseconds(), 0, chunk);
+    }
 }
-
 }

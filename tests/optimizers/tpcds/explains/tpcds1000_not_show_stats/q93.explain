@@ -20,24 +20,22 @@ Projection
                         └─ Inner (PARALLEL_HASH) Join
                            │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │     Runtime Filters Builder: {sr_ticket_number}
-                           ├─ Repartition Exchange
-                           │  │     Partition by: {ss_item_sk, ss_ticket_number}
-                           │  └─ Filter
-                           │     │     Condition: Runtime Filters: {ss_ticket_number}
-                           │     └─ TableScan tpcds1000.store_sales
-                           │              Where: Runtime Filters: {ss_ticket_number}
-                           │              Outputs: [ss_item_sk, ss_customer_sk, ss_ticket_number, ss_quantity, ss_sales_price]
-                           └─ Repartition Exchange
-                              │     Partition by: {sr_item_sk, sr_ticket_number}
-                              └─ Inner Join
-                                 │     Condition: sr_reason_sk == r_reason_sk
-                                 │     Runtime Filters Builder: {r_reason_sk}
-                                 ├─ Filter
-                                 │  │     Condition: Runtime Filters: {sr_reason_sk}
-                                 │  └─ TableScan tpcds1000.store_returns
-                                 │           Where: Runtime Filters: {sr_reason_sk}
-                                 │           Outputs: [sr_item_sk, sr_reason_sk, sr_ticket_number, sr_return_quantity]
-                                 └─ Broadcast Exchange
+                           ├─ Filter
+                           │  │     Condition: Runtime Filters: {ss_ticket_number}
+                           │  └─ TableScan tpcds1000.store_sales
+                           │           Where: Runtime Filters: {ss_ticket_number}
+                           │           Outputs: [ss_item_sk, ss_customer_sk, ss_ticket_number, ss_quantity, ss_sales_price]
+                           └─ Inner Join
+                              │     Condition: sr_reason_sk == r_reason_sk
+                              │     Runtime Filters Builder: {r_reason_sk}
+                              ├─ Filter
+                              │  │     Condition: Runtime Filters: {sr_reason_sk}
+                              │  └─ TableScan tpcds1000.store_returns
+                              │           Where: Runtime Filters: {sr_reason_sk}
+                              │           Outputs: [sr_item_sk, sr_reason_sk, sr_ticket_number, sr_return_quantity]
+                              └─ Broadcast Exchange
+                                 └─ Projection
+                                    │     Expressions: [r_reason_sk]
                                     └─ Filter
                                        │     Condition: r_reason_desc = 'reason 28'
                                        └─ TableScan tpcds1000.reason

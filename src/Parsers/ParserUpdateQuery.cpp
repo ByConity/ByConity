@@ -4,11 +4,16 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ParserSetQuery.h>
+#include <Parsers/ParserTablesInSelectQuery.h>
+#include <Parsers/formatAST.h>
+#include <Poco/Logger.h>
+#include "Parsers/ASTSerDerHelper.h"
 
 
 namespace DB
 {
 
+/// To get more info of the grammar, see ASTUpdateQuery.h .
 bool ParserUpdateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     auto query = std::make_shared<ASTUpdateQuery>();
@@ -29,20 +34,39 @@ bool ParserUpdateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (!s_update.ignore(pos, expected))
         return false;
 
+    auto pos_before = pos;
+    /// extract the target table
     if (!parseDatabaseAndTableName(pos, expected, query->database, query->table))
         return false;
 
-    if (!s_set.ignore(pos, expected))
-        return false;
+    if (s_set.ignore(pos, expected))
+    {
+        /// If the target table is followed by the word 'SET', it means it's a UPDATE SINGLE TABLE query, and all tables are extracted.
+        query->single_table = true;
+    }
+    else
+    {
+        /// For UPDATE JOIN, we already extract the target table and store the info to query->database and query->table.
+        /// To parse the whole `tables` correctly, we need to retrace tokens from the beginning of target table. 
+        query->single_table = false;
+        pos = pos_before;
+
+        /// extract all tables
+        if (!ParserTablesInSelectQuery(dt).parse(pos, query->tables, expected))
+            return false;
+
+        if (!s_set.ignore(pos, expected))
+            return false;
+    }
 
     if (!parser_assignment_list.parse(pos, query->assignment_list, expected))
         return false;
 
-    if (!s_where.ignore(pos, expected))
-        return false;
-
-    if (!exp_list.parse(pos, query->where_condition, expected))
-        return false;
+    if (s_where.ignore(pos, expected))
+    {
+        if (!exp_list.parse(pos, query->where_condition, expected))
+            return false;
+    }
 
     if (s_order_by.ignore(pos, expected))
     {
@@ -77,8 +101,11 @@ bool ParserUpdateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
     }
 
+    if (query->tables)
+        query->children.push_back(query->tables);
     query->children.push_back(query->assignment_list);
-    query->children.push_back(query->where_condition);
+    if (query->where_condition)
+        query->children.push_back(query->where_condition);
     if (query->order_by_expr)
         query->children.push_back(query->order_by_expr);
     if (query->limit_value)

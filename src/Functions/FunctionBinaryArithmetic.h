@@ -809,7 +809,7 @@ private:
 using namespace traits_;
 using namespace impl_;
 
-template <template <typename, typename> class Op, typename Name, bool valid_on_default_arguments = true, bool valid_on_float_arguments = true, bool division_by_nullable = false>
+template <template <typename, typename> class Op, typename Name, bool valid_on_default_arguments = true, bool valid_on_float_arguments = true, bool division_by_nullable = false, bool division_by_zero = false>
 class FunctionBinaryArithmetic : public IFunction
 {
     static constexpr const bool is_plus = IsOperation<Op>::plus;
@@ -821,7 +821,6 @@ class FunctionBinaryArithmetic : public IFunction
     bool check_decimal_overflow = true;
     bool allow_decimal_promote_storage = false;
     bool use_extended_scale_for_decimal_division = false;
-    bool handle_division_by_zero;
 
     template <typename F>
     static bool castType(const IDataType * type, F && f)
@@ -1296,9 +1295,7 @@ public:
     :   context(context_),
         check_decimal_overflow(decimalCheckArithmeticOverflow(context)),
         allow_decimal_promote_storage(decimalArithmeticPromoteStorage(context)),
-        use_extended_scale_for_decimal_division(decimalDivisionUseExtendedScale(context)),
-        handle_division_by_zero(context->getSettingsRef().handle_division_by_zero
-            && (IsOperation<Op>::div_int || IsOperation<Op>::modulo || IsOperation<Op>::div_floating))
+        use_extended_scale_for_decimal_division(decimalDivisionUseExtendedScale(context))
     {}
 
     String getName() const override { return name; }
@@ -1310,7 +1307,7 @@ public:
         /// We shouldn't use default implementation for nulls for the case when operation is divide,
         /// intDiv or modulo and denominator is Nullable(Something), because it may cause division
         /// by zero error (when value is Null we store default value 0 in nested column).
-        return !division_by_nullable && !handle_division_by_zero;
+        return !division_by_nullable && !division_by_zero;
     }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & arguments) const override
@@ -1321,11 +1318,11 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        return getReturnTypeImplStatic(arguments, context, handle_division_by_zero);
+        return getReturnTypeImplStatic(arguments, context);
     }
 
     template <bool allow_decimal_promote_storage>
-    static DataTypePtr getReturnTypeImplStaticTemplate(const DataTypes & arguments, ContextPtr context, bool use_null_division_by_zero)
+    static DataTypePtr getReturnTypeImplStaticTemplate(const DataTypes & arguments, ContextPtr context)
     {
         /// Special case when multiply aggregate function state
         if (isAggregateMultiply(arguments[0], arguments[1]))
@@ -1353,7 +1350,7 @@ public:
                     isIPv4(arguments[1]) ? std::make_shared<DataTypeUInt32>() : arguments[1],
             };
 
-            return getReturnTypeImplStatic(new_arguments, context, false);
+            return getReturnTypeImplStatic(new_arguments, context);
         }
 
         /// Special case when the function is plus or minus, one of arguments is Date/DateTime and another is Interval.
@@ -1467,7 +1464,7 @@ public:
                     else
                         type_res = std::make_shared<ResultDataType>();
 
-                    if (use_null_division_by_zero && type_res->canBeInsideNullable())
+                    if (division_by_zero && type_res->canBeInsideNullable())
                         type_res = makeNullable(type_res);
 
                     return true;
@@ -1486,12 +1483,12 @@ public:
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context, bool use_null_division_by_zero)
+    static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context)
     {
         if (decimalArithmeticPromoteStorage(context))
-            return getReturnTypeImplStaticTemplate<true>(arguments, context, use_null_division_by_zero);
+            return getReturnTypeImplStaticTemplate<true>(arguments, context);
         else
-            return getReturnTypeImplStaticTemplate<false>(arguments, context, use_null_division_by_zero);
+            return getReturnTypeImplStaticTemplate<false>(arguments, context);
     }
 
     ColumnPtr executeFixedString(const ColumnsWithTypeAndName & arguments) const
@@ -1845,7 +1842,7 @@ public:
         const auto & right_argument = arguments[1];
 
         /// Handling division by zero by pass a res null map recursively
-        if (handle_division_by_zero && !res_nullmap)
+        if (division_by_zero && !res_nullmap)
         {
             // An empty null map for the result
             auto null_map_column_ptr = ColumnUInt8::create(input_rows_count, false);
@@ -2010,7 +2007,7 @@ public:
         return result;
     }
 
-    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values) const override
+    llvm::Value * compileImpl(llvm::IRBuilderBase & builder, const DataTypes & types, Values values, JITContext & ) const override
     {
         if (allow_decimal_promote_storage)
             return compileImplTemplate<true>(builder, types, values);
@@ -2023,11 +2020,11 @@ public:
 };
 
 
-template <template <typename, typename> class Op, typename Name, bool valid_on_default_arguments = true, bool valid_on_float_arguments = true, bool division_by_nullable = false>
-class FunctionBinaryArithmeticWithConstants : public FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, division_by_nullable>
+template <template <typename, typename> class Op, typename Name, bool valid_on_default_arguments = true, bool valid_on_float_arguments = true, bool division_by_nullable = false, bool division_by_zero = false>
+class FunctionBinaryArithmeticWithConstants : public FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, division_by_nullable, division_by_zero>
 {
 public:
-    using Base = FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, division_by_nullable>;
+    using Base = FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, division_by_nullable, division_by_zero>;
     using Monotonicity = typename Base::Monotonicity;
 
     static FunctionPtr create(
@@ -2206,8 +2203,8 @@ public:
 
     explicit BinaryArithmeticOverloadResolver(ContextPtr context_)
         : context(context_)
-        , handle_division_by_zero(context->getSettingsRef().handle_division_by_zero
-            && (IsOperation<Op>::div_int || IsOperation<Op>::modulo || IsOperation<Op>::div_floating))
+        , division_by_zero_base(context->getSettingsRef().handle_division_by_zero
+                        && (IsOperation<Op>::div_int || IsOperation<Op>::modulo || IsOperation<Op>::div_floating))
     {
     }
 
@@ -2224,24 +2221,57 @@ public:
             && (IsOperation<Op>::div_int || IsOperation<Op>::modulo || (IsOperation<Op>::div_floating
             && (isDecimalOrNullableDecimal(arguments[0].type) || isDecimalOrNullableDecimal(arguments[1].type))));
 
+        bool division_by_zero = division_by_zero_base && !arguments[0].type->onlyNull() && !arguments[1].type->onlyNull();
         /// More efficient specialization for two numeric arguments.
         if (arguments.size() == 2
             && ((arguments[0].column && isColumnConst(*arguments[0].column))
-                || (arguments[1].column && isColumnConst(*arguments[1].column))))
+            || (arguments[1].column && isColumnConst(*arguments[1].column))))
         {
-            auto function = division_by_nullable
-                ? FunctionBinaryArithmeticWithConstants<Op, Name, valid_on_default_arguments, valid_on_float_arguments, true>::create(
-                    arguments[0], arguments[1], return_type, context)
-                : FunctionBinaryArithmeticWithConstants<Op, Name, valid_on_default_arguments, valid_on_float_arguments, false>::create(
-                    arguments[0], arguments[1], return_type, context);
+            auto function = [&]() {
+                if (division_by_nullable && division_by_zero)
+                {
+                    return FunctionBinaryArithmeticWithConstants<Op, Name, valid_on_default_arguments, valid_on_float_arguments, true, true>::create(
+                        arguments[0], arguments[1], return_type, context);
+                }
+                else if (division_by_nullable)
+                {
+                    return FunctionBinaryArithmeticWithConstants<Op, Name, valid_on_default_arguments, valid_on_float_arguments, true, false>::create(
+                        arguments[0], arguments[1], return_type, context);
+                }
+                else if (division_by_zero)
+                {
+                    return FunctionBinaryArithmeticWithConstants<Op, Name, valid_on_default_arguments, valid_on_float_arguments, false, true>::create(
+                        arguments[0], arguments[1], return_type, context);
+                }
+                else
+                {
+                    return FunctionBinaryArithmeticWithConstants<Op, Name, valid_on_default_arguments, valid_on_float_arguments, false, false>::create(
+                        arguments[0], arguments[1], return_type, context);
+                }
+            }();
 
             return std::make_unique<FunctionToFunctionBaseAdaptor>(
                 function, collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }), return_type);
         }
 
-        auto function = division_by_nullable
-            ? FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, true>::create(context)
-            : FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, false>::create(context);
+        auto function = [&]() {
+            if (division_by_nullable && division_by_zero)
+            {
+                return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, true, true>::create(context);
+            }
+            else if (division_by_nullable)
+            {
+                return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, true, false>::create(context);
+            }
+            else if (division_by_zero)
+            {
+                return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, false, true>::create(context);
+            }
+            else
+            {
+                return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, false, false>::create(context);
+            }
+        }();
 
         return std::make_unique<FunctionToFunctionBaseAdaptor>(
             function, collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }), return_type);
@@ -2254,11 +2284,14 @@ public:
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size()) + ", should be 2",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        bool division_by_zero = division_by_zero_base && !arguments[0]->onlyNull() && !arguments[1]->onlyNull();
+        if (division_by_zero)
+            return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments, false, true>::create(context)->getReturnTypeImpl(arguments);
         return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments>::create(context)->getReturnTypeImpl(arguments);
     }
 
 private:
     ContextPtr context;
-    bool handle_division_by_zero;
+    bool division_by_zero_base;
 };
 }

@@ -1,6 +1,7 @@
 #include <Storages/StorageSnapshot.h>
 #include <Storages/IStorage.h>
 #include <DataTypes/ObjectUtils.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
 #include <Storages/StorageView.h>
 #include <sparsehash/dense_hash_set>
@@ -199,7 +200,7 @@ Block StorageSnapshot::getSampleBlockForColumns(
         {
             if (isBitmap64(column->type) && column->type->isBitEngineEncode() && bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
                 column->name += BITENGINE_COLUMN_EXTENSION;
-            res.insert({column->type->createColumn(), column->type, column_name});
+            res.insert({column->type->createColumn(), column->type, column->name});
         }
         else if (object_column)
         {

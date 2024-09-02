@@ -58,7 +58,9 @@ namespace DB
             CnchBGThreadType::Consumer,
             CnchBGThreadType::Clustering,
             CnchBGThreadType::DedupWorker,
-            CnchBGThreadType::ObjectSchemaAssemble
+            CnchBGThreadType::ObjectSchemaAssemble,
+            CnchBGThreadType::CnchRefreshMaterializedView,
+            CnchBGThreadType::PartMover
         };
 
         std::for_each(types.begin(), types.end(),

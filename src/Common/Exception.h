@@ -258,7 +258,7 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
 class ExceptionHandler
 {
 public:
-    void setException(std::exception_ptr && exception);
+    bool setException(std::exception_ptr && exception);
     void throwIfException();
     bool hasException() const;
 

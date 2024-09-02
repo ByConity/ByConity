@@ -14,6 +14,7 @@ message PartitionMeta {
   required string id = 1;
   required bytes partition_minmax = 2;
   optional uint32 meta_version = 3;
+  optional uint32 gctime = 4; // the timestamp that partition meta marked as deleting; it will be delete from metastore after a while
 }
 
 message TableIdentifier {
@@ -76,6 +77,7 @@ message DataModelTable {
   optional uint64 worker_topology_hash = 12;
   optional string worker_group_name = 13; // worker group name
   optional string server_vw_name = 14;    // server virtual warehouse name
+  optional uint64 latest_version = 15;  // the commit_ts of the latest version; Only has value at runtime
 };
 
 message DataModelPartInfo {
@@ -85,6 +87,21 @@ message DataModelPartInfo {
   required uint32 level = 4;
   required int64 mutation = 5;
   required int64 hint_mutation = 6;
+}
+
+/// Part-level ttl info {min_ttl, max_ttl}, aggregated from:
+/// Table ttl (ROW TTL)
+/// Columns ttls
+/// Row where ttls
+/// Group by ttls
+/// Move ttls ...
+message DataModelPartTTLInfo {
+  required uint64 part_min_ttl = 1;
+  required uint64 part_max_ttl = 2;
+  
+  /// part_finished is true means all max_ttl of all ttl_infos are smaller than current time.
+  /// and it means the part is completely expired.
+  required bool part_finished = 3;
 }
 
 /**
@@ -109,7 +126,7 @@ message DataModelPart {
   optional bytes min_unique_key = 14;
   optional bytes max_unique_key = 15;
   optional int64 bucket_number =
-      16; // bucket_number > 0 if the part is assigned to bucket
+      16; // bucket_number >= 0 if the part is assigned to bucket
   optional uint64 table_definition_hash =
       17; // hash code for key columns like partition by, order by and cluster
           // by
@@ -141,7 +158,22 @@ message DataModelPart {
   // remote disk cache config
   optional string disk_cache_host_port = 37;
   optional string assign_compute_host_port = 38;
+  // Store the actuall modification time of a part (merge actions are not
+  // included). So only merged part will contains this field.
+  optional uint64 last_modification_time = 39;
+
+  /// Aggregated part ttl info. Used for selecting parts to do ttl merge.
+  optional DataModelPartTTLInfo part_ttl_info = 40;
+
+  /// How many rows in the part are marked as existing after DELETE mutation.
+  optional uint64 row_exists_count = 41;
 };
+
+message DataModelVirtualPart
+{
+  required DataModelPart part = 1;
+  repeated uint64 mark_ranges = 2;
+}
 
 message CnchFilePartInfo { required string name = 1; }
 
@@ -186,9 +218,19 @@ message DataModelDeleteBitmap {
   optional uint64 commit_time = 10;
   // commit ts of the txn removing this object
   optional uint64 end_time = 11;
+  optional int64 bucket_number = 12;
 }
 
+message DataModelDeleteBitmapVector {repeated DataModelDeleteBitmap delete_bitmaps = 1;}
+
 message DataModelPartVector { repeated DataModelPart parts = 1; }
+
+// for checkpoint
+message DataModelManifestData
+{
+  repeated DataModelPart parts = 1;
+  repeated DataModelDeleteBitmap delete_bitmaps = 2;
+}
 
 message TopicPartitionModel {
   required string topic = 1;
@@ -267,8 +309,8 @@ message DataModelUndoBuffer {
   optional string placeholder_0 = 2; /// deprecated in post_1.0
   optional UndoResourceType type = 3;
   optional string placeholder_1 = 4; /// deprecated in post_1.0
-  optional uint64 txn_id = 6;
   reserved 5;
+  optional uint64 txn_id = 6;
   // for metadata only undo buffer, `relative_path` is not set
   optional bool metadata_only = 7;
   optional string disk_name = 8;    /// location of the resource
@@ -348,6 +390,12 @@ message SQLBinding {
   required string pattern = 3;
   required string serialized_ast = 4;
   required uint64 timestamp = 5;
+  required string tenant_id = 6;
+}
+
+message PreparedStatementItem {
+  required string name = 1;
+  required string create_statement = 2;
 }
 
 message VirtualWarehouseSettings {
@@ -387,6 +435,33 @@ message VirtualWarehouseSettings {
 
   optional uint32 cooldown_seconds_after_scaleup = 20;
   optional uint32 cooldown_seconds_after_scaledown = 21;
+
+  repeated QueueData queue_datas = 22;
+};
+
+enum QueueAlterType {
+  UNKNOWN = 0;
+  ADD_RULE = 1;
+  DELETE_RULE = 2;
+  MODIFY_RULE = 3;
+};
+
+message QueueRule {
+  optional string rule_name = 1;
+  repeated string databases = 2;
+  repeated string tables = 3;
+  optional string query_id = 4;
+  optional string user = 5;
+  optional string ip = 6;
+  optional string fingerprint = 7;
+};
+
+message QueueData {
+  //  highest = 0;  high = 1;   normal = 2;   low = 3;   lowest = 4;
+  optional string queue_name = 1;
+  optional uint32 max_concurrency = 2;
+  optional uint32 query_queue_size = 3;
+  repeated QueueRule queue_rules = 4;
 };
 
 message VirtualWarehouseAlterSettings {
@@ -413,7 +488,22 @@ message VirtualWarehouseAlterSettings {
   optional uint32 mem_threshold_for_recall = 19;
   optional uint32 cooldown_seconds_after_scaleup = 20;
   optional uint32 cooldown_seconds_after_scaledown = 21;
+  optional QueueAlterType queue_alter_type = 22;
+  optional QueueData queue_data = 23; 
+  optional uint32 max_concurrency = 24;
+  optional uint32 query_queue_size = 25;
+  optional string query_id = 26;
+  optional string user = 27;
+  optional string ip = 28;
+  optional string rule_name = 29;
+  optional bool has_table = 30;
+  repeated string tables = 31;
+  optional bool has_database = 32;
+  repeated string databases = 33;
+  optional string fingerprint = 34;
+  optional string queue_name = 35;
 };
+
 
 message VirtualWarehouseData {
   required string name = 1;
@@ -428,6 +518,8 @@ message VirtualWarehouseData {
 
   optional double cpu_usage_1min = 17;
   optional double memory_usage_1min = 18;
+
+  repeated QueueData queue_datas = 19;
 };
 
 // WorkNodeCatalogData
@@ -578,16 +670,14 @@ enum UdfLanguageType { SQL = 1; PYTHON = 2; }
 
 enum UdfTypeEnum { SCALAR = 1; UDAF = 2; UDTF = 3; WINDOW_UDF = 4; }
 
-message DataModelUDF {
-  optional string database = 1;
-  required string function_name = 2;
-  optional string function_definition = 3; // create query
-  optional string argument_name_and_type = 4;
-  optional string return_data_type = 5;
-  optional UdfLanguageType function_language = 6;
-  optional UdfTypeEnum udf_type = 7; // scalar, UDAF, UDTF, Window UDF.
-  optional int64 udf_flags = 8;      // bitmap of enum UDFFlags
-  optional uint64 version = 9;
+message DataModelUDF
+{
+    optional string prefix_name = 1;
+    required string function_name = 2;
+    optional string function_definition = 3;
+    optional string return_data_type = 4;
+    optional UdfLanguageType function_language = 5;
+    optional UdfTypeEnum udf_type = 6;
 }
 
 message MaterializedMySQLManagerMetadata {
@@ -662,6 +752,7 @@ message PartitionPartsMetricsSnapshot {
   required uint64 is_deleted = 7;
   required uint64 last_update_time = 8;
   required uint64 last_snapshot_time = 9;
+  optional uint64 last_modification_time = 10;
 }
 
 // Key: <prefix><table_uuid>
@@ -682,6 +773,21 @@ message DataModelAccessEntity
     optional UUID uuid = 4;
 }
 
+message DataModelSensitiveDatabase
+{
+    optional string database = 1;
+    repeated DataModelSensitiveTable tables = 2;
+    optional bool is_sensitive = 3; // is the database sensitive
+}
+
+message DataModelSensitiveTable
+{
+    optional string table = 1;
+    repeated string sensitive_columns = 2; // list of columns that are marked sensitive
+    optional bool is_sensitive = 3; // is the table sensitive
+}
+
+
 message DataModelSnapshot {
   optional string name = 1;
   optional uint64 commit_time = 2;
@@ -689,3 +795,31 @@ message DataModelSnapshot {
   // absent if the snapshot binds to all tables in the database
   optional UUID table_uuid = 4;
 };
+
+message LastModificationTimeHint {
+  required bytes partition_id = 1;
+  optional uint64 last_modification_time = 2;
+}
+
+message TransactionMetadata 
+{
+  required DataModelTransactionRecord txn_record = 1;
+  required uint64 commit_time = 2;
+  required UUID main_table = 3;
+  optional string consumer_group = 4;
+  repeated TopicPartitionModel tpl = 5;
+}
+
+message ManifestListModel
+{
+  required uint64 version = 1;
+  repeated uint64 txn_ids = 2;
+  optional bool checkpoint = 3;
+}
+
+message DataModelLargeKVMeta
+{
+  required bytes uuid = 1;  //uuid of the large KV
+  required uint64 subkv_number = 2;
+  optional uint64 value_size = 3;  // record the value size of the large KV
+}

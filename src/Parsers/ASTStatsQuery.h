@@ -47,41 +47,15 @@ public:
     StatsQueryKind kind = StatsQueryKind::ALL_STATS;
     StatisticsCachePolicy cache_policy = StatisticsCachePolicy::Default;
     // whether this query target at a single table or all tables
-    bool target_all = false;
+    bool any_database = false; // use asterisk
+    bool any_table = false; // use asterisk
     std::vector<String> columns;
 
     String getID(char delim) const override
     {
+        // this is not important, simplify it to just title
         std::ostringstream res;
-
         res << StatsQueryInfo::QueryPrefix << delim << formatStatsQueryKind(kind);
-
-        if (!target_all)
-        {
-            if (!database.empty())
-                res << delim << database;
-
-            res << delim << table;
-        }
-
-        if (!columns.empty())
-        {
-            for (auto & col : columns)
-            {
-                res << delim << col;
-            }
-        }
-
-
-        if (cache_policy != StatisticsCachePolicy::Default)
-        {
-            if (cache_policy == StatisticsCachePolicy::Cache)
-                res << delim << "cache";
-            else if (cache_policy == StatisticsCachePolicy::Catalog)
-                res << delim << "catalog";
-        }
-
-
         return res.str();
     }
 
@@ -109,24 +83,43 @@ protected:
     }
 
     // ALL/<db_table_name> AT COLUMNS (<col1>, <col2>)
-    void formatQueryMiddle(const FormatSettings & settings, FormatState &, FormatStateStacked) const
+    void formatQueryMiddle(const FormatSettings & s, FormatState &, FormatStateStacked) const
     {
-        settings.ostr << ' ';
-        if (target_all)
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << "ALL" << (settings.hilite ? hilite_none : "");
+        s.ostr << " ";
+        if (any_database && any_table)
+        {
+            s.ostr << "*.*";
+        }
+        else if (any_table)
+        {
+            assert(!any_database);
+            if (database.empty())
+            {
+                s.ostr << (s.hilite ? hilite_keyword : "") << "ALL" << (s.hilite ? hilite_none : "");
+            }
+            else
+            {
+                s.ostr << (s.hilite ? hilite_identifier : "") << backQuoteIfNeed(database) << (s.hilite ? hilite_none : "");
+                s.ostr << ".*";
+            }
+        }
         else
         {
-            settings.ostr << (settings.hilite ? hilite_identifier : "") << (!database.empty() ? backQuoteIfNeed(database) + "." : "")
-                          << backQuoteIfNeed(table) << (settings.hilite ? hilite_none : "");
+            assert(!any_database);
+            assert(!any_table);
+
+            s.ostr << (s.hilite ? hilite_identifier : "") << (!database.empty() ? backQuoteIfNeed(database) + "." : "")
+                   << backQuoteIfNeed(table) << (s.hilite ? hilite_none : "");
+
             if (!columns.empty())
             {
-                settings.ostr << (settings.hilite ? hilite_keyword : "") << " (" << (settings.hilite ? hilite_none : "");
-                settings.ostr << fmt::format(FMT_STRING("{}"), fmt::join(columns, ", "));
-                settings.ostr << (settings.hilite ? hilite_keyword : "") << ")" << (settings.hilite ? hilite_none : "");
+                s.ostr << (s.hilite ? hilite_keyword : "") << " (" << (s.hilite ? hilite_none : "");
+                s.ostr << fmt::format(FMT_STRING("{}"), fmt::join(columns, ", "));
+                s.ostr << (s.hilite ? hilite_keyword : "") << ")" << (s.hilite ? hilite_none : "");
             }
         }
 
-        formatOnCluster(settings);
+        formatOnCluster(s);
     }
 
     // postfix only for show/drop stats
@@ -197,7 +190,6 @@ public:
     std::optional<double> sample_ratio = std::nullopt;
 
     ASTPtr clone() const override;
-    String getID(char delim) const override;
 
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

@@ -21,8 +21,9 @@
 
 #include <Processors/Sources/SourceWithProgress.h>
 
-#include <Interpreters/ProcessList.h>
 #include <Access/EnabledQuota.h>
+#include <Interpreters/ProcessList.h>
+#include "Processors/Exchange/ExchangeSource.h"
 
 namespace ProfileEvents
 {

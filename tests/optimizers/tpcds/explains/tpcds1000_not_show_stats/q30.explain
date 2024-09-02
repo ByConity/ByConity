@@ -11,7 +11,7 @@ Projection
             │     Limit: 100
             └─ Inner Join
                │     Condition: ca_state_1 == ca_state_3
-               │     Filter: `expr#sum(wr_return_amt)_1` > (`expr#avg(ctr_total_return)` * '1.2')
+               │     Filter: `expr#sum(wr_return_amt)_1` > (`expr#avg(ctr_total_return)_1` * '1.2')
                ├─ Inner Join
                │  │     Condition: wr_returning_customer_sk_1 == c_customer_sk
                │  │     Runtime Filters Builder: {c_customer_sk}
@@ -35,18 +35,20 @@ Projection
                │        │              Outputs: [c_customer_sk, c_customer_id, c_current_addr_sk, c_salutation, c_first_name, c_last_name, c_preferred_cust_flag, c_birth_day, c_birth_month, c_birth_year, c_birth_country, c_login, c_email_address, c_last_review_date_sk]
                │        └─ Repartition Exchange
                │           │     Partition by: {ca_address_sk_1}
-               │           └─ Filter
-               │              │     Condition: ca_state_2 = 'GA'
-               │              └─ TableScan tpcds1000.customer_address
-               │                       Where: ca_state = 'GA'
-               │                       Outputs: ca_address_sk_1:=ca_address_sk, ca_state_2:=ca_state
+               │           └─ Projection
+               │              │     Expressions: [ca_address_sk_1]
+               │              └─ Filter
+               │                 │     Condition: ca_state_2 = 'GA'
+               │                 └─ TableScan tpcds1000.customer_address
+               │                          Where: ca_state = 'GA'
+               │                          Outputs: ca_address_sk_1:=ca_address_sk, ca_state_2:=ca_state
                └─ Broadcast Exchange
                   └─ MergingAggregated
                      └─ Repartition Exchange
                         │     Partition by: {ca_state_3}
                         └─ Aggregating
                            │     Group by: {ca_state_3}
-                           │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(wr_return_amt)_2,build_side_non_null_symbol)
+                           │     Aggregates: expr#avg(ctr_total_return)_1:=AggNull(avgIf)(expr#sum(wr_return_amt)_2,build_side_non_null_symbol)
                            └─ Projection
                               │     Expressions: [ca_state_3, expr#sum(wr_return_amt)_2], build_side_non_null_symbol:=1
                               └─ Buffer
@@ -71,11 +73,13 @@ CTEDef [0]
             │     │           Where: Runtime Filters: {wr_returned_date_sk}
             │     │           Outputs: [wr_returned_date_sk, wr_returning_customer_sk, wr_returning_addr_sk, wr_return_amt]
             │     └─ Broadcast Exchange
-            │        └─ Filter
-            │           │     Condition: d_year = 2002
-            │           └─ TableScan tpcds1000.date_dim
-            │                    Where: d_year = 2002
-            │                    Outputs: [d_date_sk, d_year]
+            │        └─ Projection
+            │           │     Expressions: [d_date_sk]
+            │           └─ Filter
+            │              │     Condition: d_year = 2002
+            │              └─ TableScan tpcds1000.date_dim
+            │                       Where: d_year = 2002
+            │                       Outputs: [d_date_sk, d_year]
             └─ Repartition Exchange
                │     Partition by: {ca_address_sk}
                └─ TableScan tpcds1000.customer_address

@@ -37,6 +37,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int NOT_IMPLEMENTED;
     extern const int CANNOT_WRITE_AFTER_END_OF_BUFFER;
 }
 
@@ -130,6 +131,11 @@ public:
     /// multiple files to finalize. Mainly, for blob storage, finalization has high latency,
     /// and calling preFinalize in a loop may parallelize it.
     virtual void preFinalize() { next(); }
+
+    virtual WriteBuffer * inplaceReconstruct([[maybe_unused]] const String & out_path, [[maybe_unused]] std::unique_ptr<WriteBuffer> nested)
+    {
+        throw Exception("Corresponding write buffer doesn't implement inplaceReconstruct().", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /// Write the last data.
     virtual void finalize()

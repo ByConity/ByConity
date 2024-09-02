@@ -336,4 +336,10 @@
     </storage_configuration>
 
     <hdfs_nnproxy>hdfs://127.0.0.1:9110</hdfs_nnproxy>
+    <cnch_unique_table_log>
+        <database>cnch_system</database>
+        <table>cnch_unique_table_log</table>
+        <flush_interval_milliseconds>30000</flush_interval_milliseconds>
+        <engine>ENGINE = CnchMergeTree PARTITION BY event_date ORDER BY event_time TTL event_date + INTERVAL 31 DAY</engine>
+    </cnch_unique_table_log>
 </yandex>

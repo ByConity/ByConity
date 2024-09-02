@@ -78,13 +78,7 @@ public:
         }
 
     }
-    /// execute query described by plan segment
-    void executeQuery(
-        ::google::protobuf::RpcController * controller,
-        const ::DB::Protos::ExecutePlanSegmentRequest * request,
-        ::DB::Protos::ExecutePlanSegmentResponse * response,
-        ::google::protobuf::Closure * done) override;
-    
+
     /// submit query described by plan segment
     void submitPlanSegment(
         ::google::protobuf::RpcController * controller,
@@ -124,6 +118,13 @@ public:
         const ::DB::Protos::BatchReportProcessorProfileMetricRequest * request,
         ::DB::Protos::ReportProcessorProfileMetricResponse * /*response*/,
         ::google::protobuf::Closure * done) override;
+
+    void sendProgress(
+        ::google::protobuf::RpcController * /*controller*/,
+        const ::DB::Protos::SendProgressRequest * request,
+        ::DB::Protos::SendProgressResponse * response,
+        ::google::protobuf::Closure * done) override;
+
 
 private:
     ContextMutablePtr context;

@@ -71,6 +71,7 @@ public:
     ExtractionResult<T> visitASTFunction(ASTPtr & node, const bool & complement) override;
     ExtractionResult<T> visitNode(ASTPtr & node, const bool & complement) override;
     ExtractionResult<T> visitASTLiteral(ASTPtr & node, const bool & complement) override;
+    ExtractionResult<T> visitASTIdentifier(ASTPtr & node, const bool & complement) override;
     ExtractionResult<T> visitLogicalFunction(ASTPtr & node, const bool & complement, const String & fun_name);
     ExtractionResult<T> visitNotFunction(ASTPtr & node, const bool & complement);
     ExtractionResult<T> visitComparisonFunction(ASTPtr & node, const bool & complement);

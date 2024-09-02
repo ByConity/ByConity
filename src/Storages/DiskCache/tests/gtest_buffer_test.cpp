@@ -214,7 +214,7 @@ TEST(Buffer, PrimaryIndex)
         primary_key2[i] = data_type2->createColumn();
         primary_key2[i]->reserve(row_cnt);
         auto serializer = data_type->getDefaultSerialization();
-        serializer->deserializeBinaryBulk(*primary_key2[i], read_buffer, row_cnt, 0);
+        serializer->deserializeBinaryBulk(*primary_key2[i], read_buffer, row_cnt, 0, false);
     }
 
     // check

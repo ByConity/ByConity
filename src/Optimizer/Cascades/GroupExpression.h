@@ -136,6 +136,11 @@ public:
      */
     void setRuleExplored(RuleType type) { rule_mask.set(static_cast<UInt32>(type), true); }
 
+    bool isCostDerived() const { return cost_derived; }
+    double getCost() const { return cost; }
+
+    void setCost(double cost_) { this->cost = cost_; }
+
     /**
      * Hashes GroupExpression
      * @returns hash code of GroupExpression
@@ -150,8 +155,7 @@ public:
     bool operator==(const GroupExpression & r) const
     {
         // Having an undefined group id is considered equal to any group id
-        return (*step == *r.step) && (child_groups == r.child_groups)
-            && ((group_id == UNDEFINED_GROUP) || (r.group_id == UNDEFINED_GROUP) || (r.group_id == group_id));
+        return (child_groups == r.child_groups) && ((group_id == UNDEFINED_GROUP) || (r.group_id == UNDEFINED_GROUP) || (r.group_id == group_id)) && (*step == *r.step);
     }
 
 private:
@@ -169,6 +173,9 @@ private:
     std::bitset<static_cast<UInt32>(RuleType::NUM_RULES)> rule_mask;
 
     bool deleted = false;
+
+    bool cost_derived = false;
+    double cost;
 
     RuleType produce_rule;
 };
