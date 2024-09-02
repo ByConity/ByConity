@@ -110,7 +110,7 @@ static constexpr std::string_view tables = R"(
         multiIf(any(T.is_temporary), 'LOCAL TEMPORARY',
                 any(T.engine) LIKE '%View',   'VIEW',
                 any(T.engine) LIKE 'System%', 'SYSTEM VIEW',
-                'TABLE'
+                'BASE TABLE'
                 )            AS table_type,
         any(T.engine)        AS engine,
         NULL                 AS version,
