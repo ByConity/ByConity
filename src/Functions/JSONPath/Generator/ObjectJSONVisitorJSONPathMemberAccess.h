@@ -17,7 +17,11 @@ public:
     VisitorStatus apply(ObjectIterator & iterator) override
     {
         const auto * type_tuple = typeid_cast<const DataTypeTuple *>(iterator.getType().get());
+        if (!type_tuple || !type_tuple->haveExplicitNames())
+            return VisitorStatus::Error;
         auto pos = type_tuple->tryGetPositionByName(member_access_ptr->member_name);
+        if (!pos)
+            return VisitorStatus::Error;
         const auto& type = type_tuple->getElement(*pos);
         auto subcolumn = assert_cast<const ColumnTuple &>(*iterator.getColumn()).getColumnPtr(*pos);
         iterator.setType(type);
