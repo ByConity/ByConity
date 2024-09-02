@@ -1,16 +1,16 @@
 Projection Est. 100 rows
 │     Expressions: d_week_seq1:=d_week_seq_5, divide(fri_sales1, fri_sales2):=`expr#divide(fri_sales1, fri_sales2)`, divide(mon_sales1, mon_sales2):=`expr#divide(mon_sales1, mon_sales2)`, divide(sat_sales1, sat_sales2):=`expr#divide(sat_sales1, sat_sales2)`, divide(sun_sales1, sun_sales2):=`expr#divide(sun_sales1, sun_sales2)`, divide(thu_sales1, thu_sales2):=`expr#divide(thu_sales1, thu_sales2)`, divide(tue_sales1, tue_sales2):=`expr#divide(tue_sales1, tue_sales2)`, divide(wed_sales1, wed_sales2):=`expr#divide(wed_sales1, wed_sales2)`, s_store_id1:=s_store_id, s_store_name1:=s_store_name
-└─ Projection Est. 100 rows
-   │     Expressions: [d_week_seq_5, s_store_id, s_store_name], expr#divide(fri_sales1, fri_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL))_4`, expr#divide(mon_sales1, mon_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL))_4`, expr#divide(sat_sales1, sat_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))_4`, expr#divide(sun_sales1, sun_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL))_4`, expr#divide(thu_sales1, thu_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL))_4`, expr#divide(tue_sales1, tue_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL))_4`, expr#divide(wed_sales1, wed_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL))_4`
-   └─ Limit Est. 100 rows
+└─ Limit Est. 100 rows
+   │     Limit: 100
+   └─ Sorting Est. 100 rows
+      │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, d_week_seq_5 ASC NULLS LAST}
       │     Limit: 100
-      └─ Sorting Est. 100 rows
-         │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, d_week_seq_5 ASC NULLS LAST}
-         │     Limit: 100
-         └─ Gather Exchange Est. 8804733 rows
-            └─ Sorting Est. 100 rows
-               │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, d_week_seq_5 ASC NULLS LAST}
-               │     Limit: 100
+      └─ Gather Exchange Est. 8804733 rows
+         └─ Sorting Est. 100 rows
+            │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, d_week_seq_5 ASC NULLS LAST}
+            │     Limit: 100
+            └─ Projection Est. 8804733 rows
+               │     Expressions: [d_week_seq_5, s_store_id, s_store_name], expr#divide(fri_sales1, fri_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL))_4`, expr#divide(mon_sales1, mon_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL))_4`, expr#divide(sat_sales1, sat_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))_4`, expr#divide(sun_sales1, sun_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL))_4`, expr#divide(thu_sales1, thu_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL))_4`, expr#divide(tue_sales1, tue_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL))_4`, expr#divide(wed_sales1, wed_sales2):=`expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL))_3` / `expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL))_4`
                └─ Inner Join Est. 8804733 rows
                   │     Condition: expr#cast(d_week_seq_1, 'Int32') == expr#cast(minus(d_week_seq_3, 52), 'Int32'), s_store_id == s_store_id_1
                   ├─ Repartition Exchange Est. 60539 rows

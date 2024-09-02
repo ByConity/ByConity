@@ -1,16 +1,16 @@
 Projection Est. 100 rows
 │     Expressions: num_customers:=`expr#count()`, segment:=`expr#CAST(divide(revenue, 50), 'int')`, segment_base:=`expr#multiply(segment, 50)`
-└─ Projection Est. 100 rows
-   │     Expressions: [expr#CAST(divide(revenue, 50), 'int'), expr#count()], expr#multiply(segment, 50):=`expr#CAST(divide(revenue, 50), 'int')` * 50
-   └─ Limit Est. 100 rows
+└─ Limit Est. 100 rows
+   │     Limit: 100
+   └─ Sorting Est. 100 rows
+      │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
       │     Limit: 100
-      └─ Sorting Est. 100 rows
-         │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
-         │     Limit: 100
-         └─ Gather Exchange Est. 44256 rows
-            └─ Sorting Est. 100 rows
-               │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
-               │     Limit: 100
+      └─ Gather Exchange Est. 44256 rows
+         └─ Sorting Est. 100 rows
+            │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
+            │     Limit: 100
+            └─ Projection Est. 44256 rows
+               │     Expressions: [expr#CAST(divide(revenue, 50), 'int'), expr#count()], expr#multiply(segment, 50):=`expr#CAST(divide(revenue, 50), 'int')` * 50
                └─ MergingAggregated Est. 44256 rows
                   └─ Repartition Exchange Est. 44256 rows
                      │     Partition by: {expr#CAST(divide(revenue, 50), 'int')}

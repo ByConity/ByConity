@@ -1,16 +1,16 @@
 Projection Est. 100 rows
 │     Expressions: average:=`expr#divide(plus(plus(sr_item_qty, cr_item_qty), wr_item_qty), '3')`, cr_dev:=`expr#multiply(divide(divide(cr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, cr_item_qty:=`expr#sum(cr_return_quantity)`, item_id:=i_item_id_1, sr_dev:=`expr#multiply(divide(divide(sr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, sr_item_qty:=`expr#sum(sr_return_quantity)`, wr_dev:=`expr#multiply(divide(divide(wr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100)`, wr_item_qty:=`expr#sum(wr_return_quantity)`
-└─ Projection Est. 100 rows
-   │     Expressions: [expr#sum(cr_return_quantity), expr#sum(sr_return_quantity), expr#sum(wr_return_quantity), i_item_id_1], expr#divide(plus(plus(sr_item_qty, cr_item_qty), wr_item_qty), '3'):=((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`) / '3', expr#multiply(divide(divide(cr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(cr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(sr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(sr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(wr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(wr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100
-   └─ Limit Est. 100 rows
+└─ Limit Est. 100 rows
+   │     Limit: 100
+   └─ Sorting Est. 100 rows
+      │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
       │     Limit: 100
-      └─ Sorting Est. 100 rows
-         │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
-         │     Limit: 100
-         └─ Gather Exchange Est. 65882 rows
-            └─ Sorting Est. 100 rows
-               │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
-               │     Limit: 100
+      └─ Gather Exchange Est. 65882 rows
+         └─ Sorting Est. 100 rows
+            │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
+            │     Limit: 100
+            └─ Projection Est. 65882 rows
+               │     Expressions: [expr#sum(cr_return_quantity), expr#sum(sr_return_quantity), expr#sum(wr_return_quantity), i_item_id_1], expr#divide(plus(plus(sr_item_qty, cr_item_qty), wr_item_qty), '3'):=((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`) / '3', expr#multiply(divide(divide(cr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(cr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(sr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(sr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100, expr#multiply(divide(divide(wr_item_qty, plus(plus(sr_item_qty, cr_item_qty), wr_item_qty)), '3'), 100):=((`expr#sum(wr_return_quantity)` / ((`expr#sum(sr_return_quantity)` + `expr#sum(cr_return_quantity)`) + `expr#sum(wr_return_quantity)`)) / '3') * 100
                └─ Inner Join Est. 65882 rows
                   │     Condition: i_item_id_1 == i_item_id
                   │     Runtime Filters Builder: {i_item_id}
