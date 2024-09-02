@@ -177,6 +177,9 @@ MergeTreeData::MergeTreeData(
     , replicated_sends_throttler(
           std::make_shared<Throttler>(getSettings()->max_replicated_sends_network_bandwidth, getContext()->getReplicatedSendsThrottler()))
 {
+    setProperties(metadata_, metadata_, false);
+    checkTTLExpressions(metadata_, metadata_);
+
     const auto settings = getSettings();
     enable_metastore = settings->enable_metastore;
 
@@ -2893,7 +2896,8 @@ void MergeTreeData::repairPartition(const ASTPtr & , bool , const String & , Con
 Pipe MergeTreeData::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
-    ContextPtr query_context)
+    ContextPtr query_context,
+    const ASTPtr & /* query */)
 {
     PartitionCommandsResultInfo result;
     for (const PartitionCommand & command : commands)

@@ -29,6 +29,7 @@
 #include <DataStreams/CheckConstraintsFilterBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/LockHoldBlockInputStream.h>
+#include <Processors/Transforms/ProcessorToOutputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/OwningBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
@@ -563,15 +564,32 @@ BlockIO InterpreterInsertQuery::execute()
         res.pipeline.addSimpleTransform(
             [&](const Block & in_header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(in_header, actions); });
 
-        res.pipeline.setSinks([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr {
-            if (type != QueryPipeline::StreamType::Main)
-                return nullptr;
+        if (settings.insert_select_with_profiles)
+        {
+            res.pipeline.addSimpleTransform([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr
+            {
+                if (type != QueryPipeline::StreamType::Main)
+                    return nullptr;
 
-            auto stream = std::move(out_streams.back());
-            out_streams.pop_back();
+                auto stream = std::move(out_streams.back());
+                out_streams.pop_back();
 
-            return std::make_shared<SinkToOutputStream>(std::move(stream));
-        });
+                return std::make_shared<ProcessorToOutputStream>(std::move(stream));
+            });
+        }
+        else
+        {
+            res.pipeline.setSinks([&](const Block &, QueryPipeline::StreamType type) -> ProcessorPtr
+            {
+                if (type != QueryPipeline::StreamType::Main)
+                    return nullptr;
+
+                auto stream = std::move(out_streams.back());
+                out_streams.pop_back();
+
+                return std::make_shared<SinkToOutputStream>(std::move(stream));
+            });
+        }
 
         if (!allow_materialized)
         {

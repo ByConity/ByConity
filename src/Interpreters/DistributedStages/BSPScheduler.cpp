@@ -56,13 +56,13 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
         else
         {
             pending_task_instances.for_nodes[selector_info.worker_nodes[i].address].emplace(task.task_id, i);
-            if (task.is_source)
+            if (task.has_table_scan)
             {
                 source_task_count_on_workers[selector_info.worker_nodes[i].address] += 1;
             }
         }
     }
-    if (task.is_source)
+    if (task.has_table_scan)
     {
         std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_index_on_workers;
         for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
@@ -157,19 +157,6 @@ void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
         auto failed_worker = segment_parallel_locations[segment_id][parallel_index];
         failed_workers[segment_id].insert(failed_worker);
-        auto iter = pending_task_instances.for_nodes[failed_worker].begin();
-        while (iter != pending_task_instances.for_nodes[failed_worker].end())
-        {
-            if (iter->task_id == segment_id)
-            {
-                pending_task_instances.no_prefs.insert({iter->task_id, iter->parallel_index});
-                iter = pending_task_instances.for_nodes[failed_worker].erase(iter);
-            }
-            else
-            {
-                iter++;
-            }
-        }
     }
 }
 
@@ -247,7 +234,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
     }
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        if (dag_graph_ptr->any_tables.contains(segment_id) ||
+        if (dag_graph_ptr->segments_has_table_scan.contains(segment_id) ||
             // for local no repartion and local may no repartition, schedule to original node
             NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
             // in case all workers except servers are occupied, simply retry at last node

@@ -40,6 +40,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/StorageSnapshot.h>
 #include <Transaction/CnchServerTransaction.h>
+#include <Storages/TableDefinitionHash.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
 #include "common/types.h"
@@ -80,6 +81,8 @@ enum class VisibilityLevel
     // all items written before xid, including intermediate uncommitted items
     All
 };
+
+class CatalogBackgroundTask;
 
 class Catalog
 {
@@ -129,7 +132,7 @@ public:
 
     //////////////
 
-    void updateSQLBinding(const SQLBindingItemPtr data);
+    void updateSQLBinding(SQLBindingItemPtr data);
 
     SQLBindings getSQLBindings();
 
@@ -138,6 +141,14 @@ public:
     SQLBindingItemPtr getSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression);
 
     void removeSQLBinding(const String & uuid, const String & tenant_id, const bool & is_re_expression);
+
+    void updatePreparedStatement(const PreparedStatementItemPtr & data);
+
+    PreparedStatements getPreparedStatements();
+
+    PreparedStatementItemPtr getPreparedStatement(const String & name);
+
+    void removePreparedStatement(const String & name);
 
     /////////////////////////////
     /// Database related API
@@ -647,7 +658,7 @@ public:
     std::multimap<String, String> getAllMutations();
     void fillMutationsByStorage(const StorageID & storage_id, std::map<TxnTimestamp, CnchMergeTreeMutationEntry> & out_mutations);
 
-    void setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash);
+    void setTableClusterStatus(const UUID & table_uuid, const bool clustered, const TableDefinitionHash & table_definition_hash);
     void getTableClusterStatus(const UUID & table_uuid, bool & clustered);
     bool isTableClustered(const UUID & table_uuid);
 
@@ -889,6 +900,8 @@ public:
     void commitCheckpointVersion(const UUID & uuid, std::shared_ptr<DB::Protos::ManifestListModel> checkpoint_version);
     void cleanTableVersions(const UUID & uuid, std::vector<std::shared_ptr<DB::Protos::ManifestListModel>> versions_to_clean);
 
+    void shutDown() {bg_task.reset();}
+
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");
     Context & context;
@@ -899,6 +912,8 @@ private:
     std::unordered_map<UUID, std::shared_ptr<std::mutex>> nhut_mutex;
     std::mutex all_storage_nhut_mutex;
     CatalogSettings settings;
+
+    std::shared_ptr<CatalogBackgroundTask> bg_task;
 
     std::shared_ptr<Protos::DataModelDB> tryGetDatabaseFromMetastore(const String & database, const UInt64 & ts);
     std::shared_ptr<Protos::DataModelTable>

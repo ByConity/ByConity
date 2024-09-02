@@ -373,6 +373,8 @@ UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & ent
 // Always get entity from KV to ensure that we have the most updated Entity at all times
 std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & name) const
 {
+    Notifications notifications;
+    SCOPE_EXIT({ notify(notifications); });
     auto entity_model = catalog->tryGetAccessEntity(type, name);
 
     if (!entity_model)
@@ -385,7 +387,7 @@ std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & na
         return std::nullopt;
     }
 
-    return updateCache(type, *entity_model, nullptr);
+    return updateCache(type, *entity_model, &notifications);
 }
 
 

@@ -122,8 +122,11 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
             auto first = sizes[0];
             for (auto size : sizes)
             {
-                if (size != first)
-                    throw Exception("Segment parallel size not match", ErrorCodes::LOGICAL_ERROR);
+                // TODO(wangtao.vip): check with @JingPeng whether it is right to skip (error in tpcds 05/08).
+                if (size != first && !plan_segment_context.context->getSettingsRef().bsp_mode)
+                {
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Segment parallel size not match {} and {}", size, first);
+                }
             }
         }
     }

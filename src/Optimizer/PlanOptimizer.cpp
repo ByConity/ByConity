@@ -42,6 +42,7 @@
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rewriter/UseSortingProperty.h>
 #include <Optimizer/Rule/Rules.h>
+#include <Optimizer/ShortCircuitPlanner.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/Hints/HintsPropagator.h>
 #include <QueryPlan/Hints/ImplementJoinAlgorithmHints.h>
@@ -328,6 +329,18 @@ const Rewriters & PlanOptimizer::getFullRewriters()
     return full_rewrites;
 }
 
+const Rewriters & PlanOptimizer::getShortCircuitRewriters()
+{
+    static Rewriters short_circuit_rewriters = {
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
+        std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
+        std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
+    };
+    return short_circuit_rewriters;
+}
+
 void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
 {
     int i = GraphvizPrinter::PRINT_PLAN_OPTIMIZE_INDEX;
@@ -339,7 +352,13 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     Stopwatch rule_watch, total_watch;
     total_watch.start();
 
-    if (PlanPattern::isSimpleQuery(plan))
+    if (ShortCircuitPlanner::isShortCircuitPlan(plan, context))
+    {
+        plan.setShortCircuit(true);
+        optimize(plan, context, getShortCircuitRewriters());
+        ShortCircuitPlanner::addExchangeIfNeeded(plan, context);
+    }
+    else if (PlanPattern::isSimpleQuery(plan))
     {
         optimize(plan, context, getSimpleRewriters());
     }

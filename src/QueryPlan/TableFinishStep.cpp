@@ -20,18 +20,26 @@ static ITransformingStep::Traits getTraits()
 
 TableFinishStep::TableFinishStep(
     const DataStream & input_stream_, TableWriteStep::TargetPtr target_,
-    String output_affected_row_count_symbol_, ASTPtr query_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits())
+    String output_affected_row_count_symbol_, ASTPtr query_, bool insert_select_with_profiles_)
+    : ITransformingStep(input_stream_, {}, getTraits())
     , target(std::move(target_))
     , output_affected_row_count_symbol(std::move(output_affected_row_count_symbol_))
     , query(query_)
+    , insert_select_with_profiles(insert_select_with_profiles_)
     , log(&Poco::Logger::get("TableFinishStep"))
 {
+    if (insert_select_with_profiles)
+    {
+        Block new_header = {ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), "inserted_rows")};
+        output_stream = DataStream{.header = std::move(new_header)};
+    }
+    else
+        output_stream = {input_stream_.header};
 }
 
 std::shared_ptr<IQueryPlanStep> TableFinishStep::copy(ContextPtr) const
 {
-    return std::make_shared<TableFinishStep>(input_streams[0], target, output_affected_row_count_symbol, query);
+    return std::make_shared<TableFinishStep>(input_streams[0], target, output_affected_row_count_symbol, query, insert_select_with_profiles);
 }
 
 void TableFinishStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)

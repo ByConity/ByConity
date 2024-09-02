@@ -67,20 +67,16 @@ inline void reportStats(Poco::Logger * log, const M & map, const String & name, 
 }
 
 /// explicit instantiation for server part and cnch data part.
-template ServerAssignmentMap assignCnchParts<ServerDataPartsVector>(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, const ContextPtr & query_context);
-template AssignmentMap assignCnchParts<MergeTreeDataPartsCNCHVector>(const WorkerGroupHandle & worker_group, const MergeTreeDataPartsCNCHVector & parts, const ContextPtr & query_context);
-template std::unordered_map<String, DataModelPartWrapperVector> assignCnchParts<DataModelPartWrapperVector>(const WorkerGroupHandle & worker_group, const DataModelPartWrapperVector &, const ContextPtr & query_context);
-template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<DeleteBitmapMetaPtrVector>(const WorkerGroupHandle & worker_group, const DeleteBitmapMetaPtrVector &, const ContextPtr & query_context);
+template ServerAssignmentMap assignCnchParts<ServerDataPartsVector>(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
+template AssignmentMap assignCnchParts<MergeTreeDataPartsCNCHVector>(const WorkerGroupHandle & worker_group, const MergeTreeDataPartsCNCHVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
+template std::unordered_map<String, DataModelPartWrapperVector> assignCnchParts<DataModelPartWrapperVector>(const WorkerGroupHandle & worker_group, const DataModelPartWrapperVector &, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
+template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<DeleteBitmapMetaPtrVector>(const WorkerGroupHandle & worker_group, const DeleteBitmapMetaPtrVector &, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
 
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context)
+std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings)
 {
     static auto * log = &Poco::Logger::get("assignCnchParts");
-    Context::PartAllocator part_allocation_algorithm;
-    if (query_context->getSettingsRef().cnch_part_allocation_algorithm.changed)
-        part_allocation_algorithm = query_context->getPartAllocationAlgo();
-    else
-        part_allocation_algorithm = worker_group->getContext()->getPartAllocationAlgo();
+    Context::PartAllocator part_allocation_algorithm = query_context->getPartAllocationAlgo(settings);
 
     switch (part_allocation_algorithm)
     {
@@ -112,17 +108,17 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
             reportStats(log, ret, "Strict Consistent Hash", worker_group->getRing().size());
             return ret;
         }
-        case Context::PartAllocator::SIMPLE_HASH: //Note: Now just used for test disk cache stealing so not used for online
+        case Context::PartAllocator::DISK_CACHE_STEALING_DEBUG: //Note: Now just used for test disk cache stealing so not used for online
         {
-            auto ret = assignCnchPartsWithSimpleHash(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
-            reportStats(log, ret, "Simple Hash", worker_group->getWorkerIDVec().size());
+            auto ret = assignCnchPartsWithStealingCache(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
+            reportStats(log, ret, "disk cache stealing debug", worker_group->getWorkerIDVec().size());
             return ret;
         }
     }
 }
 
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithSimpleHash(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const DataPartsCnchVector & parts)
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStealingCache(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const DataPartsCnchVector & parts)
 {
     std::unordered_map<String, DataPartsCnchVector> ret;
     /// we don't know the order of workers returned from consul so sort then explicitly now

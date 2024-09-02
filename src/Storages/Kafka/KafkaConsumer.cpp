@@ -30,7 +30,7 @@ namespace ErrorCodes
 
 using namespace cppkafka;
 
-inline bool is_serious_err(cppkafka::Error error)
+bool KafkaConsumer::is_serious_err(cppkafka::Error error) const
 {
     auto && ec = error.get_error();
     return ec == RD_KAFKA_RESP_ERR__TRANSPORT
@@ -50,19 +50,6 @@ inline bool is_serious_err(cppkafka::Error error)
     } catch (const cppkafka::Exception & _e) { \
         throw DB::Exception(std::string(__func__) + "(): " + _e.what(), ErrorCodes::RDKAFKA_EXCEPTION);   \
     }
-
-cppkafka::Message KafkaConsumer::poll(std::chrono::milliseconds timeout)
-{
-    auto message = cppkafka::Consumer::poll(timeout);
-    if (message && message.get_error())
-    {
-        if (is_serious_err(message.get_error()))
-            this->is_destroyed = true;
-
-        throw Exception("poll(): " + message.get_error().to_string(), ErrorCodes::RDKAFKA_EXCEPTION);
-    }
-    return message;
-}
 
 void KafkaConsumer::subscribe(const std::vector<std::string>& topics)
 {

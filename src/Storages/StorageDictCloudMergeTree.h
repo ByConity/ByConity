@@ -24,14 +24,13 @@ class StorageDictCloudMergeTree final : public StorageCloudMergeTree
 {
 public:
 
-    std::string getName() const override { return merging_params.getModeName() + "DictCloudMergeTree"; }
+    std::string getName() const override { return "DictCloud" + merging_params.getModeName() + "MergeTree"; }
     String getQualifiedTableName() const { return getDatabaseName() + "." + getTableName(); }
 
     StorageDictCloudMergeTree(
         const StorageID & table_id_,
         String cnch_database_name_,
         String cnch_table_name_,
-        const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata_,
         ContextMutablePtr context_,
         const String & date_column_name_,

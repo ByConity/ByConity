@@ -45,7 +45,6 @@ namespace ErrorCodes
 
 MergeTreeCloudData::MergeTreeCloudData(
     const StorageID & table_id_,
-    const String & relative_data_path_,
     const StorageInMemoryMetadata & metadata_,
     ContextMutablePtr context_,
     const String & date_column_name_,
@@ -53,7 +52,7 @@ MergeTreeCloudData::MergeTreeCloudData(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeMetaBase(
         table_id_,
-        relative_data_path_,
+        "", // relative_data_path will be set later
         metadata_,
         context_,
         date_column_name_,

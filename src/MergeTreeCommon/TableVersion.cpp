@@ -116,7 +116,10 @@ void TableVersion::fileterDataByWorkerInfo(const MergeTreeMetaBase & storage, st
         {
             // filter parts by bucket number
             Int64 bucket_number = data_ptr->bucketNumber();
-            if (worker_info->index == (bucket_number % worker_info->num_workers))
+            // Drop range and mark delete has uninitialized bucket number. Need to hold them to make visibility calculation correct. 
+            if (bucket_number == -1)
+                worker_hold_data.emplace_back(data_ptr);
+            else if (worker_info->index == (bucket_number % worker_info->num_workers))
                 worker_hold_data.emplace_back(data_ptr);
         }
     }
@@ -128,7 +131,7 @@ void TableVersion::fileterDataByWorkerInfo(const MergeTreeMetaBase & storage, st
         WorkerGroupHandle mock_wg = WorkerGroupHandleImpl::mockWorkerGroupHandle(worker_id_prefix, worker_info->num_workers, getContext());
 
         // Use the same allocation algorithm as preaload. can work with parts as well as delete bitmap.
-        auto allocate_res = assignCnchParts(mock_wg, data_vector, getContext());
+        auto allocate_res = assignCnchParts(mock_wg, data_vector, getContext(), storage.getSettings());
 
         // only get the allocated data which belongs to current worker
         worker_hold_data = std::move(allocate_res[worker_id]);

@@ -67,7 +67,7 @@ public:
 
     bool getTableClusterStatus(const UUID & uuid);
 
-    void setTableClusterStatus(const UUID & uuid, bool clustered);
+    void setTableClusterStatus(const UUID & uuid, bool clustered, const TableDefinitionHash & table_definition_hash);
 
     void setTablePreallocateVW(const UUID & uuid, String vw);
 

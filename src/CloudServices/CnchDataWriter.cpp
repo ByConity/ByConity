@@ -50,9 +50,9 @@
 
 namespace ProfileEvents
 {
-extern const Event CnchWriteDataElapsedMilliseconds;
+    extern const Event CnchWriteDataElapsedMilliseconds;
+    extern const Event PreloadSubmitTotalOps;
 }
-
 namespace DB
 {
 namespace ErrorCodes
@@ -736,10 +736,12 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
 
 void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
 {
-    if (context->tryGetPreloadThrottler())
-        context->tryGetPreloadThrottler()->add(1);
-
     const auto & settings = context->getSettingsRef();
+
+    if (!settings.parts_preload_level || !storage.getSettings()->parts_preload_level || !storage.getSettings()->enable_local_disk_cache
+        || !storage.getSettings()->enable_preload_parts)
+        return;
+
     try
     {
         Stopwatch timer;
@@ -751,8 +753,8 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
 
         if (!preload_parts.empty())
         {
-            auto max_timeout = std::max(30 * 1000L, settings.max_execution_time.totalMilliseconds());
-            server_client->submitPreloadTask(storage, preload_parts, max_timeout);
+            ProfileEvents::increment(ProfileEvents::PreloadSubmitTotalOps, 1, Metrics::MetricType::Rate);
+            server_client->submitPreloadTask(storage, preload_parts, settings.preload_send_rpc_max_ms);
             LOG_DEBUG(
                 storage.getLogger(),
                 "Finish submit preload {} task for {} parts to server {}, elapsed {} ms",
@@ -761,7 +763,6 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
                 server_client->getRPCAddress(),
                 timer.elapsedMilliseconds());
         }
-        // TODO: invalidate deleted part's disk cache
     }
     catch (...)
     {

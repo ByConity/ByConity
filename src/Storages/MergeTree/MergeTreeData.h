@@ -486,7 +486,8 @@ public:
     Pipe alterPartition(
         const StorageMetadataPtr & metadata_snapshot,
         const PartitionCommands & commands,
-        ContextPtr query_context) override;
+        ContextPtr query_context,
+        const ASTPtr & query = nullptr) override;
 
     /// Creates description of columns of data type Object from the range of data parts.
     static ColumnsDescription getConcreteObjectColumns(

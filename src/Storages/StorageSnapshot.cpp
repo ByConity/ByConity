@@ -200,7 +200,7 @@ Block StorageSnapshot::getSampleBlockForColumns(
         {
             if (isBitmap64(column->type) && column->type->isBitEngineEncode() && bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
                 column->name += BITENGINE_COLUMN_EXTENSION;
-            res.insert({column->type->createColumn(), column->type, column_name});
+            res.insert({column->type->createColumn(), column->type, column->name});
         }
         else if (object_column)
         {

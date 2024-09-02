@@ -76,7 +76,7 @@ BasePlanTest::BasePlanTest(const String & database_name_, const std::unordered_m
 
     setting_changes.emplace_back("enable_optimizer", true);
     setting_changes.emplace_back("enable_memory_catalog", true);
-    setting_changes.emplace_back("dialect_type", "ANSI"s);
+    setting_changes.emplace_back("dialect_type", "ANSI");
     setting_changes.emplace_back("data_type_default_nullable", false);
 
     for (const auto & item : session_settings)

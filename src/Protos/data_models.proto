@@ -393,6 +393,11 @@ message SQLBinding {
   required string tenant_id = 6;
 }
 
+message PreparedStatementItem {
+  required string name = 1;
+  required string create_statement = 2;
+}
+
 message VirtualWarehouseSettings {
   /// basic information ///
   // {READ, WRITE, TASK}
@@ -810,4 +815,11 @@ message ManifestListModel
   required uint64 version = 1;
   repeated uint64 txn_ids = 2;
   optional bool checkpoint = 3;
+}
+
+message DataModelLargeKVMeta
+{
+  required bytes uuid = 1;  //uuid of the large KV
+  required uint64 subkv_number = 2;
+  optional uint64 value_size = 3;  // record the value size of the large KV
 }

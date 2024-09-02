@@ -531,11 +531,15 @@ public:
 
     /** ALTER tables with regard to its partitions.
       * Should handle locks for each command on its own.
+      *
+      * Use the last `query` argument to keep the alter query ast since in some case we need to forward the
+      * query to workers
       */
     virtual Pipe alterPartition(
         const StorageMetadataPtr & /* metadata_snapshot */,
         const PartitionCommands & /* commands */,
-        ContextPtr /* context */);
+        ContextPtr /* context */,
+        const ASTPtr & query = nullptr);
 
     /// Checks that partition commands can be applied to storage.
     virtual void checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const;

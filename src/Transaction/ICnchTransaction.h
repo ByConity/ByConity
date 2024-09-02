@@ -122,6 +122,13 @@ public:
     {
         return std::make_shared<TAction>(global_context, txn_record.txnID(), std::forward<Args>(args)...);
     }
+
+    template <typename TAction, typename... Args>
+    ActionPtr createActionWithLocalContext(const ContextPtr & local_context, Args &&... args) const
+    {
+        return std::make_shared<TAction>(local_context, txn_record.txnID(), std::forward<Args>(args)...);
+    }
+
     template <typename... Args>
     IntentLockPtr createIntentLock(const String & lock_prefix, Args &&... args) const
     {

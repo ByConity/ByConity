@@ -34,6 +34,7 @@
 #include <Core/UUID.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/SQLBinding/SQLBinding.h>
+#include <Interpreters/PreparedStatement/PreparedStatementCatalog.h>
 #include <MergeTreeCommon/InsertionLabel.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Protos/RPCHelpers.h>
@@ -113,6 +114,7 @@ namespace DB::Catalog
 #define COLUMN_STATISTICS_PREFIX "CS_"
 #define COLUMN_STATISTICS_TAG_PREFIX "CST_" // deprecated, just remove it
 #define SQL_BINDING_PREFIX "SBI_"
+#define PREPARED_STATEMENT_PREFIX "PSTAT_"
 #define FILESYS_LOCK_PREFIX "FSLK_"
 #define UDF_STORE_PREFIX "UDF_"
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
@@ -131,6 +133,9 @@ namespace DB::Catalog
 #define SENSITIVE_RESOURCE_PREFIX "SR_"
 #define MANIFEST_DATA_PREFIX "MFST_"
 #define MANIFEST_LIST_PREFIX "MFSTS_"
+
+#define LARGE_KV_DATA_PREFIX "LGKV_"
+#define LARGE_KV_REFERENCE "LGKVRF_"
 
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
@@ -742,6 +747,20 @@ public:
         return ss.str();
     }
 
+    static String preparedStatementKey(const String name_space, const String & key)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << PREPARED_STATEMENT_PREFIX << '_' << key;
+        return ss.str();
+    }
+
+    static String preparedStatementPrefix(const String name_space)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << PREPARED_STATEMENT_PREFIX;
+        return ss.str();
+    }
+
     static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
     {
         std::stringstream ss;
@@ -954,6 +973,29 @@ public:
         return manifestListPrefix(name_space, uuid) + toString(table_version);
     }
 
+    static String largeKVDataPrefix(const String & name_space, const String & uuid)
+    {
+        return escapeString(name_space) + '_' +  LARGE_KV_DATA_PREFIX + uuid + '_';
+    }
+
+    static String largeKVDataKey(const String & name_space, const String & uuid, UInt64 index)
+    {
+        // keep records in the kv storage with the same order as index. Support at most 10k sub-kv
+        std::ostringstream oss;
+        oss << std::setw(5) << std::setfill('0') << index;
+        return largeKVDataPrefix(name_space, uuid) + oss.str();
+    }
+
+    static String largeKVReferencePrefix(const String & name_space)
+    {
+        return escapeString(name_space) + '_' + LARGE_KV_REFERENCE;
+    }
+
+    static String largeKVReferenceKey(const String & name_space, const String & uuid)
+    {
+        return largeKVReferencePrefix(name_space) + uuid;
+    }
+
     // parse the first key in format of '{prefix}{escapedString(first_key)}_postfix'
     // note that prefix should contains _, like TCS_
     // return [first_key, postfix]
@@ -1037,7 +1079,7 @@ public:
     void updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data);
     void getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info);
     void clearTableMeta(const String & name_space, const String & database, const String & table, const String & uuid, const Strings & dependencies, const UInt64 & ts = 0);
-    static void prepareRenameTable(const String & name_space, const String & table_uuid, const String & from_db, const String & from_table, const UUID & to_db_uuid, Protos::DataModelTable & to_table, BatchCommitRequest & batch_write);
+    void prepareRenameTable(const String & name_space, const String & table_uuid, const String & from_db, const String & from_table, const UUID & to_db_uuid, Protos::DataModelTable & to_table, BatchCommitRequest & batch_write);
     bool alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add);
     Strings getAllTablesInDB(const String & name_space, const String & database);
     IMetaStore::IteratorPtr getAllTablesMeta(const String & name_space);
@@ -1223,6 +1265,11 @@ public:
     SQLBindings getReSQLBindings(const String & name_space, const bool & is_re_expression);
     SQLBindingItemPtr getSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression);
     void removeSQLBinding(const String & name_space, const String & uuid, const String & tenant_id, const bool & is_re_expression);
+
+    void updatePreparedStatement(const String & name_space, const PreparedStatementItemPtr & data);
+    PreparedStatements getPreparedStatements(const String & name_space);
+    PreparedStatementItemPtr getPreparedStatement(const String & name_space, const String & name);
+    void removePreparedStatement(const String & name_space, const String & name);
 
     void updateTableStatistics(const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
     // new api

@@ -20,7 +20,9 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <Common/Stopwatch.h>
 #include <Common/Configurations.h>
+#include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
@@ -56,6 +58,7 @@
 #include <MergeTreeCommon/GlobalDataManager.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Core/SettingsEnums.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -78,7 +81,8 @@ extern const Event PreloadExecTotalOps;
 
 namespace ProfileEvents
 {
-extern const Event PreloadExecTotalOps;
+    extern const Event QueryCreateTablesMicroseconds;
+    extern const Event QuerySendResourcesMicroseconds;
 }
 
 namespace DB
@@ -617,8 +621,6 @@ void CnchWorkerServiceImpl::preloadDataParts(
     google::protobuf::Closure * done)
 {
     SUBMIT_THREADPOOL({
-        SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::PreloadExecTotalOps, 1, Metrics::MetricType::Rate);});
-
         Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
@@ -640,30 +642,40 @@ void CnchWorkerServiceImpl::preloadDataParts(
             || (!cloud_merge_tree.getSettings()->parts_preload_level && !cloud_merge_tree.getSettings()->enable_preload_parts))
             return;
 
-        std::unique_ptr<ThreadPool> pool;
-        ThreadPool * pool_ptr;
+        auto preload_level = request->preload_level();
+        auto submit_ts = request->submit_ts();
+
         if (request->sync())
         {
-            pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), cloud_merge_tree.getSettings()->cnch_parallel_preloading.value));
-            pool_ptr = pool.get();
+            auto & settings = getContext()->getSettingsRef();
+            auto pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), settings.cnch_parallel_preloading.value));
+            for (const auto & part : data_parts)
+            {
+                pool->scheduleOrThrowOnError([part, preload_level, submit_ts, storage] {
+                    part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;// avoid getCheckum & getIndex re-cache
+                    part->preload(preload_level, submit_ts);
+                });
+            }
+            pool->wait();
+            LOG_DEBUG(
+                log,
+                "Finish preload tasks in {} ms, level: {}, sync: {}, size: {}",
+                watch.elapsedMilliseconds(),
+                preload_level,
+                sync,
+                data_parts.size());
         }
         else
-            pool_ptr = &(IDiskCache::getThreadPool());
-
-        for (const auto & part : data_parts)
         {
-            part->preload(request->preload_level(), *pool_ptr, request->submit_ts());
+            ThreadPool * preload_thread_pool = &(IDiskCache::getPreloadPool());
+            for (const auto & part : data_parts)
+            {
+                preload_thread_pool->scheduleOrThrowOnError([part, preload_level, submit_ts, storage] {
+                    part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;// avoid getCheckum & getIndex re-cache
+                    part->preload(preload_level, submit_ts);
+                });
+            }
         }
-
-        if (request->sync())
-            pool->wait();
-
-        LOG_DEBUG(
-            storage->getLogger(),
-            "Finish preload tasks in {} ms, level: {}, sync: {}",
-            watch.elapsedMilliseconds(),
-            request->preload_level(),
-            request->sync());
     })
 }
 
@@ -735,6 +747,7 @@ void CnchWorkerServiceImpl::sendResources(
 
         /// store cloud tables in cnch_session_resource.
         {
+            Stopwatch create_timer;
             /// create a copy of session_context to avoid modify settings in SessionResource
             auto context_for_create = Context::createCopy(query_context);
             for (int i = 0; i < request->create_queries_size(); i++)
@@ -744,9 +757,24 @@ void CnchWorkerServiceImpl::sendResources(
 
                 worker_resource->executeCreateQuery(context_for_create, create_query, false, ColumnsDescription::parse(object_columns));
             }
-
-
-            LOG_DEBUG(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
+            for (int i = 0; i < request->cacheable_create_queries_size(); i++)
+            {
+                auto & item = request->cacheable_create_queries().at(i);
+                ColumnsDescription object_columns;
+                if (item.has_dynamic_object_column_schema())
+                    object_columns = ColumnsDescription::parse(item.dynamic_object_column_schema());
+                worker_resource->executeCacheableCreateQuery(
+                    context_for_create,
+                    RPCHelpers::createStorageID(item.storage_id()),
+                    item.definition(),
+                    item.local_table_name(),
+                    static_cast<WorkerEngineType>(item.local_engine_type()),
+                    item.local_underlying_dictionary_tables(),
+                    object_columns);
+            }
+            create_timer.stop();
+            LOG_INFO(log, "Prepared {} tables for session {} in {} us", request->create_queries_size() + request->cacheable_create_queries_size(), request->txn_id(), create_timer.elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::QueryCreateTablesMicroseconds, create_timer.elapsedMicroseconds());
         }
 
         for (const auto & data : request->data_parts())
@@ -865,7 +893,9 @@ void CnchWorkerServiceImpl::sendResources(
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
         }
 
-        LOG_TRACE(log, "Received all resource for session: {}, elapsed: {}ms.", request->txn_id(), watch.elapsedMilliseconds());
+        watch.stop();
+        LOG_INFO(log, "Received all resources for session {} in {} us.", request->txn_id(), watch.elapsedMicroseconds());
+        ProfileEvents::increment(ProfileEvents::QuerySendResourcesMicroseconds, watch.elapsedMicroseconds());
     })
 }
 

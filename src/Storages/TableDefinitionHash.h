@@ -17,7 +17,7 @@ public:
         :determin_hash(determin_hash_), v1_hash(v1_hash_), v2_hash(v2_hash_), v1_quoted_hash(v1_quoted_hash_) {}
 
     bool operator==(const TableDefinitionHash & other) const { return this->determin_hash == other.determin_hash; }
-    bool match(UInt64 hash_value)
+    bool match(UInt64 hash_value) const
     {
         return hash_value == determin_hash || hash_value == v1_hash || hash_value == v2_hash || hash_value == v1_quoted_hash; 
     }

@@ -317,6 +317,11 @@
     M(PerfJoinElapsedMicroseconds, "") \
     M(PerfFilterElapsedMicroseconds, "") \
 \
+    M(QueryCreateTablesMicroseconds, "") \
+    M(QuerySendResourcesMicroseconds, "") \
+    M(CloudTableDefinitionCacheHits, "") \
+    M(CloudTableDefinitionCacheMisses, "") \
+\
     M(CreatedHTTPConnections, "Total amount of created HTTP connections (closed or opened).") \
     \
     M(ThreadPoolReaderTaskMicroseconds, "Time spent getting the data in asynchronous reading") \
@@ -521,6 +526,14 @@
     M(GetSQLBindingsSuccess, "") \
     M(RemoveSQLBindingFailed, "") \
     M(RemoveSQLBindingSuccess, "") \
+    M(UpdatePreparedStatementFailed, "") \
+    M(UpdatePreparedStatementSuccess, "") \
+    M(GetPreparedStatementFailed, "") \
+    M(GetPreparedStatementSuccess, "") \
+    M(GetPreparedStatementsFailed, "") \
+    M(GetSPreparedStatementsSuccess, "") \
+    M(RemovePreparedStatementFailed, "") \
+    M(RemovePreparedStatementSuccess, "") \
     M(CreateDatabaseSuccess, "") \
     M(CreateDatabaseFailed, "") \
     M(GetDatabaseSuccess, "") \

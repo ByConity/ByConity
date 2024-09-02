@@ -126,6 +126,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
+#include <Storages/MergeTree/CloudTableDefinitionCache.h>
 #include <Storages/MergeTree/GinIndexStore.h>
 #include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
@@ -359,6 +360,10 @@ struct ContextSharedPart
     mutable IntermediateResultCachePtr intermediate_result_cache; /// part cache of queries' results.
     mutable MMappedFileCachePtr
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
+    mutable OnceFlag cloud_table_definition_cache_initialized;
+    /// Cache of CloudMergeTree objects to speed up table creation during query execution.
+    /// Used when send_cacheable_table_definitions is enabled
+    mutable CloudTableDefinitionCachePtr cloud_table_definition_cache;
     ProcessList process_list; /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
     ExchangeStatusTrackerPtr exchange_data_tracker;
@@ -588,6 +593,8 @@ struct ContextSharedPart
         if (worker_status_manager)
             worker_status_manager->shutdown();
 
+        if (cnch_catalog)
+            cnch_catalog->shutDown();
 
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
@@ -2186,7 +2193,7 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
 
     // NOTE: tenanted users connect to server using tenant id given in connection info.
     // allow only whitelisted settings for tenanted users
-    if (is_tenant_user() && !internal && !isInternalQuery () && getIsRestrictSettingsToWhitelist() && getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && !getCurrentTenantId().empty())
+    if (is_tenant_user() && !internal && !isInternalQuery () && getIsRestrictSettingsToWhitelist() && (getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY || session_context.lock().get() == this) && !getCurrentTenantId().empty())
     {
         for (const auto & change : changes)
         {
@@ -2857,6 +2864,17 @@ void Context::dropMarkCache() const
         shared->mark_cache->reset();
 }
 
+std::shared_ptr<CloudTableDefinitionCache> Context::tryGetCloudTableDefinitionCache() const
+{
+    callOnce(shared->cloud_table_definition_cache_initialized, [&] {
+        const Poco::Util::AbstractConfiguration & config = getConfigRef();
+        auto cache_size = config.getUInt(".cloud_table_definition_cache_size", 50000);
+        if (getServerType() == ServerType::cnch_worker && cache_size)
+            shared->cloud_table_definition_cache = std::make_shared<CloudTableDefinitionCache>(cache_size);
+    });
+    return shared->cloud_table_definition_cache;
+}
+
 void Context::setQueryCache(const Poco::Util::AbstractConfiguration & config)
 {
     auto lock = getLock(); // checked
@@ -3139,14 +3157,6 @@ ThrottlerPtr Context::getDiskCacheThrottler() const
         shared->disk_cache_throttler = std::make_shared<Throttler>(settings.max_bandwidth_for_disk_cache);
     });
     return shared->disk_cache_throttler;
-}
-
-ThrottlerPtr Context::tryGetPreloadThrottler() const
-{
-    callOnce(shared->preload_throttler_initialized, [&] {
-        shared->preload_throttler = settings.parts_preload_throttler == 0 ? nullptr : std::make_shared<Throttler>(settings.parts_preload_throttler);
-    });
-    return shared->preload_throttler;
 }
 
 ThrottlerPtr Context::getReplicatedSendsThrottler() const
@@ -5743,31 +5753,11 @@ std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> Context::getAllWorkerResou
     return shared->named_cnch_sessions->getAllWorkerResources();
 }
 
-Context::PartAllocator Context::getPartAllocationAlgo() const
+Context::PartAllocator Context::getPartAllocationAlgo(MergeTreeSettingsPtr table_settings) const
 {
-    /// we prefer the config setting first
-    if (getConfigRef().has("part_allocation_algorithm"))
-    {
-        LOG_DEBUG(
-            shared->log,
-            "Using part allocation algorithm from config: {}.",
-            getConfigRef().getInt("part_allocation_algorithm"));
-        switch (getConfigRef().getInt("part_allocation_algorithm"))
-        {
-            case 0:
-                return PartAllocator::JUMP_CONSISTENT_HASH;
-            case 1:
-                return PartAllocator::RING_CONSISTENT_HASH;
-            case 2:
-                return PartAllocator::STRICT_RING_CONSISTENT_HASH;
-            case 3:
-                return PartAllocator::SIMPLE_HASH;
-            default:
-                return PartAllocator::JUMP_CONSISTENT_HASH;
-        }
-    }
+    auto algorithm = table_settings->cnch_part_allocation_algorithm >= 0 ? table_settings->cnch_part_allocation_algorithm : settings.cnch_part_allocation_algorithm;
+    LOG_DEBUG(shared->log, "Send query with cnch_part_allocation_algorithm = {}, system setting = {}, table setting = {}", algorithm, settings.cnch_part_allocation_algorithm, table_settings->cnch_part_allocation_algorithm);
 
-    /// if not set, we use the query settings
     switch (settings.cnch_part_allocation_algorithm)
     {
         case 0:
@@ -5777,7 +5767,7 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
         case 2:
             return PartAllocator::STRICT_RING_CONSISTENT_HASH;
         case 3:
-            return PartAllocator::SIMPLE_HASH;
+            return PartAllocator::DISK_CACHE_STEALING_DEBUG;
         default:
             return PartAllocator::JUMP_CONSISTENT_HASH;
     }

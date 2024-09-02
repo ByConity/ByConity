@@ -30,7 +30,7 @@ struct PlanSegmentsStatus
 };
 
 using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
-using Source = std::unordered_set<size_t>;
+using SegmentIds = std::unordered_set<size_t>;
 using WorkerInfoSet = std::unordered_set<HostWithPorts, std::hash<HostWithPorts>, HostWithPorts::IsSameEndpoint>;
 using PlanSegmentId = size_t;
 using StorageUnions = std::vector<std::unordered_set<UUID>>;
@@ -78,9 +78,9 @@ struct DAGGraph
     }
     
     /// all segments containing only table scan
-    Source sources;
-    /// all segments containing at least one table scan
-    Source any_tables;
+    SegmentIds leaf_segments;
+    /// all segments contain at least table scan
+    SegmentIds segments_has_table_scan;
     size_t final = std::numeric_limits<size_t>::max();
     std::set<size_t> scheduled_segments;
     std::unordered_map<size_t, PlanSegment *> id_to_segment;

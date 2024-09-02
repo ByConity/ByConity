@@ -39,7 +39,7 @@ class StorageCloudMergeTree : public shared_ptr_helper<StorageCloudMergeTree>, p
 public:
     virtual ~StorageCloudMergeTree() override;
 
-    std::string getName() const override { return "CloudMergeTree"; }
+    std::string getName() const override { return "Cloud" + merging_params.getModeName() + "MergeTree"; }
 
     bool supportsParallelInsert() const override { return true; }
     bool supportsSampling() const override { return true; }
@@ -91,7 +91,8 @@ public:
     Pipe alterPartition(
         const StorageMetadataPtr & /* metadata_snapshot */,
         const PartitionCommands & /* commands */,
-        ContextPtr /* context */) override;
+        ContextPtr /* context */,
+        const ASTPtr & query = nullptr) override;
 
     Pipe ingestPartition(const StorageMetadataPtr &, const PartitionCommand & command, ContextPtr local_context);
 
@@ -108,7 +109,7 @@ public:
     QueryProcessingStage::Enum getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageSnapshotPtr &, SelectQueryInfo &) const override;
     bool getQueryProcessingStageWithAggregateProjection(ContextPtr query_context, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const;
 
-    void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; } 
+    void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
 
 protected:
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const override;
@@ -117,14 +118,13 @@ protected:
         const StorageID & table_id_,
         String cnch_database_name_,
         String cnch_table_name_,
-        const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata_,
         ContextMutablePtr context_,
         const String & date_column_name_,
         const MergeTreeMetaBase::MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> settings_);
 
-    
+
     std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
 
     const String cnch_database_name;

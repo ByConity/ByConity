@@ -22,6 +22,7 @@
 #include <Core/Types.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/WorkerGroupHandle.h>
+#include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage_fwd.h>
@@ -69,6 +70,17 @@ struct SendLock
     ServerResourceLockManager & manager;
 };
 
+struct TableDefinitionResource
+{
+    /// if cacheable == 0, it's the rewrited table definition for worker;
+    /// otherwise, it's the original definition for cnch table
+    String definition;
+    String local_table_name;
+    bool cacheable = false;
+    WorkerEngineType engine_type = WorkerEngineType::CLOUD;
+    String underlying_dictionary_tables; // local dictionary table names for bitengine
+};
+
 struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
@@ -77,8 +89,7 @@ struct AssignedResource
 
     StoragePtr storage;
     UInt64 table_version{0};  //send table version instead of parts if set
-    String worker_table_name;
-    String create_table_query;
+    TableDefinitionResource table_definition;
     bool sent_create_query{false};
     bool replicated{false};
 
@@ -130,6 +141,12 @@ public:
         const String & create_query,
         const String & worker_table_name,
         bool create_local_table = true);
+
+    void addCacheableCreateQuery(
+        const StoragePtr & storage,
+        const String & worker_table_name,
+        WorkerEngineType engine_type,
+        String underlying_dictionary_tables);
 
     void setTableVersion(const UUID & storage_uuid, const UInt64 table_version);
 

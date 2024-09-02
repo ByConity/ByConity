@@ -47,14 +47,21 @@ void PartMergerImpl::copyPartData(const DiskPtr & from_disk, const String & from
 std::shared_ptr<StorageCloudMergeTree> PartMergerImpl::createStorage(const String & path, const String & create_table_query)
 {
     auto context = getContext();
-    auto storage = createStorageFromQuery(create_table_query, context);
+    auto ast = getASTCreateQueryFromString(create_table_query, context);
+    ASTCreateQuery & create_query = *ast;
+    /// CloudMergeTree checks for non-empty UUID in its constructor,
+    /// let's fake it (not used in part-merger anyway)
+    UUID fake_cnch_uuid = UUIDHelpers::generateV4();
+    modifyOrAddSetting(create_query, "cnch_table_uuid", Field(UUIDHelpers::UUIDToString(fake_cnch_uuid)));
+    auto storage = createStorageFromQuery(create_query, context);
     auto merge_tree = std::dynamic_pointer_cast<StorageCloudMergeTree>(storage);
-    merge_tree->setRelativeDataPath(IStorage::StorageLocation::MAIN, path);
     if (!merge_tree)
     {
         /// Must use part-merger with `ENGINE = CloudMergeTree`.
         throw Exception("Please choose `CloudMergeTree` as the engine.", ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
+    /// IMPORTANT: reset table relative path to the requested value
+    merge_tree->setRelativeDataPath(IStorage::StorageLocation::MAIN, path);
 
     return merge_tree;
 }

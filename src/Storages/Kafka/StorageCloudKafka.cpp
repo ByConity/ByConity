@@ -236,6 +236,12 @@ cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
     conf.set_error_callback([this] (cppkafka::KafkaHandleBase &, int error, const std::string & reason)
     {
         String error_msg;
+        if (error == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN)
+        {
+            error_msg = "All brokers are down and we will destroy the consumer and recreate it: " + reason;
+            consumer_context.error_event = true;
+        }
+
         if (error_msg.empty())
             error_msg = ("[RDKAFKA Exception] error code: " + std::to_string(error) + ", reason: " + reason);
 

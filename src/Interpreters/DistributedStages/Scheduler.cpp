@@ -90,7 +90,7 @@ TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segment
     NodeSelectorResult selector_info;
     {
         std::unique_lock<std::mutex> lock(node_selector_result_mutex);
-        auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.is_source));
+        auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.has_table_scan));
         selector_info = selector_result.first->second;
     }
     prepareTask(plan_segment_ptr, selector_info.worker_nodes.size());
@@ -137,7 +137,7 @@ void Scheduler::schedule()
 {
     Stopwatch sw;
     genTopology();
-    genSourceTasks();
+    genLeafTasks();
 
     /// Leave final segment alone.
     while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
@@ -186,20 +186,20 @@ void Scheduler::schedule()
     LOG_DEBUG(log, "Scheduling takes {} ms", sw.elapsedMilliseconds());
 }
 
-void Scheduler::genSourceTasks()
+void Scheduler::genLeafTasks()
 {
-    LOG_DEBUG(log, "Begin generate source tasks");
+    LOG_DEBUG(log, "Begin generate leaf tasks");
     auto batch_task = std::make_shared<BatchTask>();
-    batch_task->reserve(dag_graph_ptr->sources.size());
-    for (auto source_id : dag_graph_ptr->sources)
+    batch_task->reserve(dag_graph_ptr->leaf_segments.size());
+    for (auto leaf_id : dag_graph_ptr->leaf_segments)
     {
-        LOG_TRACE(log, "Generate task for source segment {}", source_id);
-        if (source_id == dag_graph_ptr->final)
+        LOG_TRACE(log, "Generate task for leaf segment {}", leaf_id);
+        if (leaf_id == dag_graph_ptr->final)
             continue;
 
-        batch_task->emplace_back(source_id, true);
-        plansegment_topology.erase(source_id);
-        LOG_TRACE(log, "Task for source segment {} generated", source_id);
+        batch_task->emplace_back(leaf_id, true);
+        plansegment_topology.erase(leaf_id);
+        LOG_TRACE(log, "Task for leaf segment {} generated", leaf_id);
     }
     addBatchTask(std::move(batch_task));
 }
@@ -266,7 +266,7 @@ void Scheduler::removeDepsAndEnqueueTask(const SegmentTask & task)
             LOG_INFO(log, "Erase dependency {} for segment {}", task_id, id);
         if (dependencies.empty())
         {
-            batch_task->emplace_back(id);
+            batch_task->emplace_back(id, dag_graph_ptr->segments_has_table_scan.contains(id));
         }
     }
     for (const auto & t : *batch_task)

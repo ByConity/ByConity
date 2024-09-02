@@ -63,7 +63,6 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     const StorageID & table_id_,
     String cnch_database_name_,
     String cnch_table_name_,
-    const String & relative_data_path_,
     const StorageInMemoryMetadata & metadata_,
     ContextMutablePtr context_,
     const String & date_column_name_,
@@ -71,7 +70,6 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeCloudData( // NOLINT
         table_id_,
-        relative_data_path_,
         metadata_,
         context_,
         date_column_name_,
@@ -80,20 +78,14 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     , cnch_database_name(std::move(cnch_database_name_))
     , cnch_table_name(std::move(cnch_table_name_))
 {
-    const String & cnch_uuid = getSettings()->cnch_table_uuid.toString();
-    String relative_table_path(cnch_uuid);
-
-    if (relative_table_path.empty())
-        relative_table_path = UUIDHelpers::UUIDToString(table_id_.uuid);
-
-    relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getTableRelativePathOnDisk(relative_table_path);
-
-    if (relative_data_path_.empty() || relative_table_path.empty())
-        MergeTreeMetaBase::setRelativeDataPath(IStorage::StorageLocation::MAIN, relative_table_path);
-
-    relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
-
+    setServerVwName(getSettings()->cnch_server_vw);
+    setInMemoryMetadata(metadata_);
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
+
+    String cnch_uuid = UUIDHelpers::UUIDToString(getCnchStorageUUID());
+    String relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getTableRelativePathOnDisk(cnch_uuid);
+    MergeTreeMetaBase::setRelativeDataPath(IStorage::StorageLocation::MAIN, relative_table_path);
+    relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
 
     if (getInMemoryMetadataPtr()->hasUniqueKey() && getSettings()->cloud_enable_dedup_worker)
         dedup_worker = std::make_unique<CloudMergeTreeDedupWorker>(*this);
@@ -206,7 +198,8 @@ void StorageCloudMergeTree::checkAlterPartitionIsPossible(const PartitionCommand
 Pipe StorageCloudMergeTree::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
-    ContextPtr local_context)
+    ContextPtr local_context,
+    const ASTPtr & /* query */)
 {
     if (commands.size() > 1U)
         throw Exception(

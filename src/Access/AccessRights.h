@@ -68,6 +68,15 @@ public:
     void revoke(const AccessRightsElement & element);
     void revoke(const AccessRightsElements & elements);
 
+    void tryRevoke(const AccessFlags & flags);
+    void tryRevoke(const AccessFlags & flags, const std::string_view & database);
+    void tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table);
+    void tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column);
+    void tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns);
+    void tryRevoke(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns);
+    void tryRevoke(const AccessRightsElement & element);
+    void tryRevoke(const AccessRightsElements & elements);
+
     void revokeGrantOption(const AccessFlags & flags);
     void revokeGrantOption(const AccessFlags & flags, const std::string_view & database);
     void revokeGrantOption(const AccessFlags & flags, const std::string_view & database, const std::string_view & table);
@@ -117,16 +126,16 @@ private:
     template <bool with_grant_option>
     void grantImplHelper(const AccessRightsElement & element);
 
-    template <bool grant_option, typename... Args>
+    template <bool grant_option, bool is_exists, typename... Args>
     void revokeImpl(const AccessFlags & flags, const Args &... args);
 
-    template <bool grant_option>
+    template <bool grant_option, bool is_exists>
     void revokeImpl(const AccessRightsElement & element);
 
-    template <bool grant_option>
+    template <bool grant_option, bool is_exists>
     void revokeImpl(const AccessRightsElements & elements);
 
-    template <bool grant_option>
+    template <bool grant_option, bool is_exists>
     void revokeImplHelper(const AccessRightsElement & element);
 
 

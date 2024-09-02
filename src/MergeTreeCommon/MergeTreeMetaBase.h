@@ -145,7 +145,7 @@ public:
         Graphite::Params graphite_params;
 
         /// Check that needed columns are present and have correct types.
-        void check(const StorageInMemoryMetadata & metadata, bool has_unique_key) const;
+        void check(const StorageInMemoryMetadata & metadata, bool attach) const;
 
         String getModeName() const;
 
@@ -172,7 +172,7 @@ public:
 
     StoragePolicyPtr getStoragePolicy(StorageLocation location) const override;
     virtual const String& getRelativeDataPath(StorageLocation location) const;
-    virtual void setRelativeDataPath(StorageLocation location, const String& rel_path);
+    void setRelativeDataPath(StorageLocation location, const String & rel_path);
 
     bool supportsFinal() const override
     {
@@ -203,6 +203,8 @@ public:
 
     /// If uuid is empty, throw exception
     UUID getCnchStorageUUID() const;
+
+    const MergingParams & getMergingParams() const { return merging_params; }
 
     //// Data parts
     /// Returns a copy of the list so that the caller shouldn't worry about locks.
@@ -461,7 +463,7 @@ public:
     /**
      * @param parts input parts, must be sorted in PartComparator order
      */
-    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas) const;
+    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true) const;
     void getDeleteBitmapMetaForCnchParts(MutableMergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
     void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, DeleteBitmapMetaPtrVector & delete_bitmap_metas, bool force_found = true);
@@ -592,9 +594,6 @@ protected:
     }
 
     void checkProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false) const;
-
-    /// Check version column constrains when create table
-    void checkVersionColumnConstraint();
 
     void setProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false);
 

@@ -319,12 +319,13 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
     auto & insert = *analysis.getInsert();
     auto select_plan = process(insert_query.select);
     select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context));
+    auto insert_select_with_profiles = context->getSettingsRef().insert_select_with_profiles;
 
     auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns, node);
 
     auto insert_node = select_plan.getRoot()->addStep(
         context->nextNodeId(),
-        std::make_shared<TableWriteStep>(select_plan.getRoot()->getCurrentDataStream(), target),
+        std::make_shared<TableWriteStep>(select_plan.getRoot()->getCurrentDataStream(), target, insert_select_with_profiles),
         {select_plan.getRoot()});
 
     auto total_affected_row_count_symbol = context->getSymbolAllocator()->newSymbol("rows");
@@ -335,7 +336,7 @@ RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void 
 
     auto return_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node),
+        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol, node, insert_select_with_profiles),
         {insert_node});
 
     PRINT_PLAN(return_node, plan_insert);

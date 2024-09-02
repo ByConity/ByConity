@@ -55,6 +55,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/isLocalAddress.h>
 #include <common/types.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config.h>
@@ -122,6 +123,7 @@ class ManipulationList;
 class ReplicatedFetchList;
 class Cluster;
 class Compiler;
+class CloudTableDefinitionCache;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
@@ -583,7 +585,6 @@ protected:
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
-
 protected:
     using SampleBlockCache = std::unordered_map<std::string, Block>;
     mutable SampleBlockCache sample_block_cache;
@@ -1225,6 +1226,9 @@ public:
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
 
+    /// result maybe nullptr
+    std::shared_ptr<CloudTableDefinitionCache> tryGetCloudTableDefinitionCache() const;
+
     /// Create a cache of mapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     void setMMappedFileCache(size_t cache_size_in_num_entries);
     std::shared_ptr<MMappedFileCache> getMMappedFileCache() const;
@@ -1272,7 +1276,6 @@ public:
         SchedulePool::Type pool_type, SettingFieldUInt64 pool_size, CurrentMetrics::Metric metric, const char * name) const;
 
     ThrottlerPtr getDiskCacheThrottler() const;
-    ThrottlerPtr tryGetPreloadThrottler() const;
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
 
@@ -1658,10 +1661,10 @@ public:
         JUMP_CONSISTENT_HASH = 0,
         RING_CONSISTENT_HASH = 1,
         STRICT_RING_CONSISTENT_HASH = 2,
-        SIMPLE_HASH = 3,//Note: Now just used for test disk cache stealing so not used for online
+        DISK_CACHE_STEALING_DEBUG = 3,//Note: Now just used for test disk cache stealing so not used for online
     };
 
-    PartAllocator getPartAllocationAlgo() const;
+    PartAllocator getPartAllocationAlgo(MergeTreeSettingsPtr settings) const;
 
     /// Consistent hash algorithm for hybrid part allocation
     enum HybridPartAllocator : int

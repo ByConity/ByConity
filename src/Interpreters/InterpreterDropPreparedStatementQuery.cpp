@@ -32,7 +32,7 @@ BlockIO InterpreterDropPreparedStatementQuery::execute()
     if (!prepared_manager)
         throw Exception("Prepare cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
 
-    prepared_manager->remove(drop->name, !drop->if_exists);
+    prepared_manager->remove(drop->name, !drop->if_exists, current_context);
     return {};
 }
 }

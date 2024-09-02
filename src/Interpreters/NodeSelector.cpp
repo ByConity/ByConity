@@ -160,7 +160,7 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
         {
             sum += current_size;
         }
-        size_t avg = sum / plan_segment_ptr->getParallelSize();
+        size_t avg = sum / plan_segment_ptr->getParallelSize() + 1;
         if (sum < plan_segment_ptr->getParallelSize())
             sum = 0;
         if (sum > 0)
@@ -338,16 +338,16 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
     return result;
 }
 
-NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_source)
+NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool has_table_scan)
 {
     NodeSelectorResult result;
     auto segment_id = plan_segment_ptr->getPlanSegmentId();
-    LOG_TRACE(log, "Begin to select nodes for segment, id: {}, is_source: {}", segment_id, is_source);
+    LOG_TRACE(log, "Begin to select nodes for segment, id: {}, has table scan: {}", segment_id, has_table_scan);
     if (isLocal(plan_segment_ptr))
     {
         result = local_node_selector.select(plan_segment_ptr, query_context);
     }
-    else if (is_source)
+    else if (has_table_scan)
     {
         result = source_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
     }

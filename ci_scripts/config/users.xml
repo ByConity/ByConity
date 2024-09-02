@@ -21,6 +21,7 @@
             <background_schedule_pool_size>6</background_schedule_pool_size>
             <min_insert_block_size_bytes>8589934592</min_insert_block_size_bytes>
             <cnch_max_cached_storage>50000</cnch_max_cached_storage>
+            <max_query_size>0</max_query_size>
         </default>
 
         <!-- Profile that allows only read queries. -->

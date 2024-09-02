@@ -64,8 +64,8 @@ void JNIArrowSource::prepareReader()
         "JNI",
         false, /*import_nested*/
         false, /*allow_missing_columns*/
-        true /*null_as_default*/
-    );
+        true /*null_as_default*/,
+        FormatSettings::DateTimeOverflowBehavior::Saturate);
 }
 
 }

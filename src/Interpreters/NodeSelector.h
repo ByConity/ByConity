@@ -226,7 +226,7 @@ public:
     {
     }
 
-    NodeSelectorResult select(PlanSegment * plan_segment_ptr, bool is_source);
+    NodeSelectorResult select(PlanSegment * plan_segment_ptr, bool has_table_scan);
     void setParallelIndexAndSourceAddrs(PlanSegment * plan_segment_ptr, NodeSelectorResult * result);
     static PlanSegmentInputPtr tryGetLocalInput(PlanSegment * plan_segment_ptr);
 
