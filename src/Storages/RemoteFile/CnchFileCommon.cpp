@@ -44,9 +44,11 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
     if (!headers_from_ast.empty())
         headers.insert(headers.end(), headers_from_ast.begin(), headers_from_ast.end());
 
+    S3::ClientSettings client_settings{uri.is_virtual_hosted_style, isS3ExpressEndpoint(uri.endpoint)};
+
     client = S3::ClientFactory::instance().create(
         client_configuration,
-        uri.is_virtual_hosted_style,
+        client_settings,
         credentials.GetAWSAccessKeyId(),
         credentials.GetAWSSecretKey(),
         auth_settings.server_side_encryption_customer_key_base64,

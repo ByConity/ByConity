@@ -35,6 +35,12 @@ namespace DB
     }
 
     bool isS3URIScheme(const String& scheme);
+
+    inline bool isS3ExpressEndpoint(const std::string & endpoint)
+    {
+        /// On one hand this check isn't 100% reliable, on the other - all it will change is whether we attach checksums to the requests.
+        return endpoint.find("s3express") != std::string::npos;
+    }
 }
 
 namespace DB::S3
@@ -60,6 +66,12 @@ private:
     Aws::S3::S3Errors error_type;
 };
 
+struct ClientSettings
+{
+    bool use_virtual_addressing = false;
+    bool is_s3express_bucket = false;
+};
+
 class ClientFactory
 {
 public:
@@ -69,7 +81,7 @@ public:
 
     std::shared_ptr<Aws::S3::S3Client> create(
         std::shared_ptr<Aws::Client::ClientConfiguration> client_configuration,
-        bool is_virtual_hosted_style,
+        ClientSettings client_settings,
         const String & access_key_id,
         const String & secret_access_key,
         const String & server_side_encryption_customer_key_base64,

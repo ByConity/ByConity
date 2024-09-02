@@ -241,7 +241,7 @@ namespace S3
 
     std::shared_ptr<Aws::S3::S3Client> ClientFactory::create( // NOLINT
         std::shared_ptr<Aws::Client::ClientConfiguration> client_configuration,
-        bool is_virtual_hosted_style,
+        ClientSettings client_settings,
         const String & access_key_id,
         const String & secret_access_key,
         const String & server_side_encryption_customer_key_base64,
@@ -284,8 +284,9 @@ namespace S3
         return std::make_shared<Aws::S3::S3Client>(
             credentials_provider,
             *client_configuration, // Client configuration.
-            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            is_virtual_hosted_style || client_configuration->endpointOverride.empty() // Use virtual addressing only if endpoint is not specified.
+            client_settings.is_s3express_bucket ? Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::RequestDependent
+                                                : Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+            client_settings.use_virtual_addressing || client_configuration->endpointOverride.empty() // Use virtual addressing only if endpoint is not specified.
         );
     }
 
@@ -316,7 +317,7 @@ namespace S3
         /// E.g. (https://bucket-name.s3.Region.amazonaws.com/key)
         /// https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html#virtual-hosted-style-access
 
-        static const RE2 virtual_hosted_style_pattern(R"((.+)\.(s3|cos|tos)([.\-][a-z0-9\-.:]+))");
+        static const RE2 virtual_hosted_style_pattern(R"((.+)\.(s3express[\-a-z0-9]+|s3|cos|obs|oss|eos)([.\-][a-z0-9\-.:]+))");
 
 
         /// Case when bucket name and key represented in path of S3 URL.
@@ -325,10 +326,13 @@ namespace S3
         static const RE2 path_style_pattern("^/([^/]*)/(.*)");
 
         static constexpr auto S3 = "S3";
+        static constexpr auto S3EXPRESS = "S3EXPRESS";
         static constexpr auto COSN = "COSN";
         static constexpr auto COS = "COS";
         static constexpr auto TOS = "TOS";
-
+        static constexpr auto OBS = "OBS";
+        static constexpr auto OSS = "OSS";
+        static constexpr auto EOS = "EOS";
 
         uri = uri_;
         storage_name = S3;
@@ -371,24 +375,17 @@ namespace S3
 
             boost::to_upper(name);
 
-            if (name != S3 && name != COS && name != TOS)
-            {
-                throw Exception("Object storage system name is unrecognized in virtual hosted style S3 URI: "
-                    + quoteString(name) + "(" + uri.toString() + ")",
-                    ErrorCodes::BAD_ARGUMENTS);
-            }
-            if (name == S3)
-            {
-                storage_name = name;
-            }
-            else if (name == TOS)
-            {
-                storage_name = TOS;
-            }
-            else
-            {
+            /// For S3Express it will look like s3express-eun1-az1, i.e. contain region and AZ info
+            if (name != S3 && !name.starts_with(S3EXPRESS) && name != COS && name != OBS && name != OSS && name != EOS)
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "Object storage system name is unrecognized in virtual hosted style S3 URI: {}",
+                    quoteString(name));
+
+            if (name == COS)
                 storage_name = COSN;
-            }
+            else
+                storage_name = name;
         }
         else if (re2::RE2::PartialMatch(uri.getPath(), path_style_pattern, &bucket, &key))
         {
@@ -560,7 +557,9 @@ namespace S3
             }
         }
 
-        return S3::ClientFactory::instance().create(client_cfg, is_virtual_hosted_style,
+        S3::ClientSettings client_settings{is_virtual_hosted_style, isS3ExpressEndpoint(client_cfg->endpointOverride)};
+
+        return S3::ClientFactory::instance().create(client_cfg, client_settings,
                     ak_id, ak_secret, "", {}, credential_config, session_token);
     }
 

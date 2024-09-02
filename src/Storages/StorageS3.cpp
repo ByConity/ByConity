@@ -510,9 +510,11 @@ void StorageS3::updateClientAndAuthSettings(ContextPtr ctx, StorageS3::ClientAut
     client_configuration->endpointOverride = upd.uri.endpoint;
     client_configuration->maxConnections = upd.max_connections;
 
+    S3::ClientSettings client_settings{upd.uri.is_virtual_hosted_style, isS3ExpressEndpoint(upd.uri.endpoint)};
+
     upd.client = S3::ClientFactory::instance().create(
         client_configuration,
-        upd.uri.is_virtual_hosted_style,
+        client_settings,
         credentials.GetAWSAccessKeyId(),
         credentials.GetAWSSecretKey(),
         settings.server_side_encryption_customer_key_base64,
