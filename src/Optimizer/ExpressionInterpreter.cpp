@@ -710,6 +710,16 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
     if (left_arg_result.isAST() && !setting.enable_function_simplify)
         return {getType(rewritten_in_func), rewritten_in_func};
 
+    if (const auto * ast_prepared_param = right_arg->as<ASTPreparedParameter>())
+    {
+        auto riget_arg_result = visitASTPreparedParameter(*ast_prepared_param, right_arg);
+        ColumnsWithTypeAndName columns_with_types;
+        columns_with_types.emplace_back(left_arg_result.value, left_arg_result.type, "");
+        columns_with_types.emplace_back(riget_arg_result.value, riget_arg_result.type, "");
+        auto overload_resolver = FunctionFactory::instance().tryGet(function.name, context);
+        return {overload_resolver->getReturnType(columns_with_types), rewritten_in_func};
+    }
+
     // build set for IN statement(see also ActionsVisitor)
     SetPtr set;
     {
