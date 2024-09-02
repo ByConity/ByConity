@@ -138,6 +138,7 @@ public:
     std::unordered_map<String, HostWithPorts> getIdHostPortsMap() const;
 
     static WorkerGroupHandle mockWorkerGroupHandle(const String & worker_id_prefix_, UInt64 worker_number_, const ContextPtr & context_);
+    void buildRing();
 
 private:
     /// Note: updating mutable fields (like `metrics`) should be guarded with lock.
@@ -157,8 +158,6 @@ private:
 
     /// Hash Map for part allocation
     std::unique_ptr<DB::ConsistentHashRing> ring;
-
-    static std::unique_ptr<DB::ConsistentHashRing> buildRing(const ShardsInfo & shards_info, const ContextPtr global_context);
 };
 
 }

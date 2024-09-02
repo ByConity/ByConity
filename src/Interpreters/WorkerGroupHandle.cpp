@@ -52,17 +52,13 @@ WorkerGroupHandle WorkerGroupHandleImpl::mockWorkerGroupHandle(const String & wo
     return std::make_shared<WorkerGroupHandleImpl>("", WorkerGroupHandleSource::RM, "", hosts_vec, context_);
 }
 
-std::unique_ptr<DB::ConsistentHashRing> WorkerGroupHandleImpl::buildRing(const ShardsInfo & shards_info, const ContextPtr global_context)
+void WorkerGroupHandleImpl::buildRing()
 {
-    UInt32 num_replicas = global_context->getConfigRef().getInt("consistent_hash_ring.num_replicas", 16);
-    UInt32 num_probes = global_context->getConfigRef().getInt("consistent_hash_ring.num_probes", 21);
-    double load_factor = global_context->getConfigRef().getDouble("consistent_hash_ring.load_factor", 1.15);
-    std::unique_ptr<DB::ConsistentHashRing> ret = std::make_unique<DB::ConsistentHashRing>(num_replicas, num_probes, load_factor);
-    std::for_each(shards_info.begin(), shards_info.end(), [&](const ShardInfo & info)
-    {
-        ret->insert(info.worker_id);
-    });
-    return ret;
+    UInt32 num_replicas = getContext()->getConfigRef().getInt("consistent_hash_ring.num_replicas", 16);
+    UInt32 num_probes = getContext()->getConfigRef().getInt("consistent_hash_ring.num_probes", 21);
+    double load_factor = getContext()->getConfigRef().getDouble("consistent_hash_ring.load_factor", 1.15);
+    ring = std::make_unique<DB::ConsistentHashRing>(num_replicas, num_probes, load_factor);
+    std::for_each(shards_info.begin(), shards_info.end(), [&](const ShardInfo & info) { ring->insert(info.worker_id); });
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(
@@ -122,9 +118,8 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
         shards_info.emplace_back(std::move(info));
     }
     
-    ring = buildRing(this->shards_info, current_context);
+    buildRing();
     LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
-
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const ContextPtr & context_)
@@ -147,7 +142,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
         shards_info.emplace_back(from.getShardsInfo().at(index));
     }
 
-    ring = buildRing(this->shards_info, current_context);
+    buildRing();
 
     worker_num = from.workerNum();
 }
