@@ -156,40 +156,47 @@ ConstASTPtr tryGetIdentifier(ConstASTPtr node)
 FilterEstimateResult
 FilterEstimator::estimateFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
-    if (predicate->as<ASTLiteral>())
+    try
     {
-        if (PredicateUtils::isTruePredicate(predicate))
+        if (predicate->as<ASTLiteral>())
+        {
+            if (PredicateUtils::isTruePredicate(predicate))
+            {
+                return {1.0, {}};
+            }
+            if (PredicateUtils::isFalsePredicate(predicate))
+            {
+                return {0.0, {}};
+            }
+            std::optional<Field> result = context.calculateConstantExpression(predicate);
+            if (result.has_value() && result->isNull())
+            {
+                return {0.0, {}};
+            }
+        }
+        if (!predicate->as<const ASTFunction>())
         {
             return {1.0, {}};
         }
-        if (PredicateUtils::isFalsePredicate(predicate))
+        const auto & function = predicate->as<const ASTFunction &>();
+        if (function.name == "and")
         {
-            return {0.0, {}};
+            return estimateAndFilter(stats, predicate, context);
         }
-        std::optional<Field> result = context.calculateConstantExpression(predicate);
-        if (result.has_value() && result->isNull())
+        if (function.name == "or")
         {
-            return {0.0, {}};
+            return estimateOrFilter(stats, predicate, context);
         }
+        if (function.name == "not")
+        {
+            return estimateNotFilter(stats, predicate, context);
+        }
+        return estimateSingleFilter(stats, predicate, context);
     }
-    if (!predicate->as<const ASTFunction>())
+    catch (...)
     {
-        return {1.0, {}};
     }
-    const auto & function = predicate->as<const ASTFunction &>();
-    if (function.name == "and")
-    {
-        return estimateAndFilter(stats, predicate, context);
-    }
-    if (function.name == "or")
-    {
-        return estimateOrFilter(stats, predicate, context);
-    }
-    if (function.name == "not")
-    {
-        return estimateNotFilter(stats, predicate, context);
-    }
-    return estimateSingleFilter(stats, predicate, context);
+    return {std::nullopt, {}};
 }
 
 FilterEstimateResult

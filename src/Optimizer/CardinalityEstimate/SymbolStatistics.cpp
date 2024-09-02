@@ -17,6 +17,7 @@
 
 #include <Statistics/TypeUtils.h>
 #include <Common/FieldVisitorConvertToNumber.h>
+#include <Common/FieldVisitorToString.h>
 
 namespace DB
 {
@@ -97,7 +98,7 @@ double SymbolStatistics::toDouble(const Field & literal)
 
 String SymbolStatistics::toString(const Field & literal)
 {
-    return literal.safeGet<String>();
+    return applyVisitor(FieldVisitorToStringWithoutQuoted(), literal);
 }
 
 bool SymbolStatistics::contains(double value)
