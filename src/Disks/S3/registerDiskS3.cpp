@@ -136,15 +136,18 @@ std::shared_ptr<S3::ProxyConfiguration> getProxyConfiguration(const String & pre
 std::shared_ptr<Aws::S3::S3Client>
 getClient(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context)
 {
+    S3::URI uri(Poco::URI(config.getString(config_prefix + ".endpoint")));
+    if (uri.key.back() != '/')
+        throw Exception("S3 path must ends with '/', but '" + uri.key + "' doesn't.", ErrorCodes::BAD_ARGUMENTS);
+    if (isS3ExpressEndpoint(uri.endpoint) && !config.has(config_prefix + ".region"))
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS, "Region should be explicitly specified for directory buckets ({})", config_prefix);
+
     std::shared_ptr<Aws::Client::ClientConfiguration> client_configuration = S3::ClientFactory::instance().createClientConfiguration(
         config.getString(config_prefix + ".region", ""),
         context->getRemoteHostFilter(), context->getGlobalContext()->getSettingsRef().s3_max_redirects,
         config.getUInt(config_prefix + ".http_keep_alive_timeout_ms", 5000),
         config.getUInt(config_prefix + ".http_connection_pool_size", 1024), false);
-
-    S3::URI uri(Poco::URI(config.getString(config_prefix + ".endpoint")));
-    if (uri.key.back() != '/')
-        throw Exception("S3 path must ends with '/', but '" + uri.key + "' doesn't.", ErrorCodes::BAD_ARGUMENTS);
 
     client_configuration->connectTimeoutMs = config.getUInt(config_prefix + ".connect_timeout_ms", 10000);
     client_configuration->requestTimeoutMs = config.getUInt(config_prefix + ".request_timeout_ms", 5000);
@@ -162,9 +165,11 @@ getClient(const Poco::Util::AbstractConfiguration & config, const String & confi
     client_configuration->retryStrategy
         = std::make_shared<Aws::Client::DefaultRetryStrategy>(config.getUInt(config_prefix + ".retry_attempts", 10));
 
+    S3::ClientSettings client_settings{uri.is_virtual_hosted_style, isS3ExpressEndpoint(uri.endpoint)};
+
     return S3::ClientFactory::instance().create(
         client_configuration,
-        uri.is_virtual_hosted_style,
+        client_settings,
         config.getString(config_prefix + ".access_key_id", ""),
         config.getString(config_prefix + ".secret_access_key", ""),
         config.getString(config_prefix + ".server_side_encryption_customer_key_base64", ""),

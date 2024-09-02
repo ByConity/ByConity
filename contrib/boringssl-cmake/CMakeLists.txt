@@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.0)
 project(BoringSSL LANGUAGES C CXX)
 
 set(BORINGSSL_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/boringssl")
+set(BORINGSSL_CMAKE_DIR "${ClickHouse_SOURCE_DIR}/contrib/boringssl-cmake")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CLANG 1)
@@ -130,7 +131,9 @@ if(BUILD_SHARED_LIBS)
   set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 endif()
 
-include_directories("${BORINGSSL_SOURCE_DIR}/include")
+set(BORINGSSL_INCLUDES "${BORINGSSL_SOURCE_DIR}/include")
+list(APPEND BORINGSSL_INCLUDES "${BORINGSSL_CMAKE_DIR}/include")
+include_directories(BORINGSSL_INCLUDES)
 
 set(
   CRYPTO_ios_aarch64_SOURCES
@@ -655,7 +658,7 @@ if(WIN32)
   target_link_libraries(bssl ws2_32)
 endif()
 
-target_include_directories(crypto SYSTEM PUBLIC "${BORINGSSL_SOURCE_DIR}/include")
-target_include_directories(ssl SYSTEM PUBLIC "${BORINGSSL_SOURCE_DIR}/include")
+target_include_directories(crypto SYSTEM PUBLIC ${BORINGSSL_INCLUDES})
+target_include_directories(ssl SYSTEM PUBLIC ${BORINGSSL_INCLUDES})
 
 target_compile_options(crypto PRIVATE -Wno-gnu-anonymous-struct)
