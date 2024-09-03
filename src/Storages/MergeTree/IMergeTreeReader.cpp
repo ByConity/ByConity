@@ -670,20 +670,19 @@ const NamesAndTypesList & IMergeTreeReader::getBitmapColumns() const
 NameAndTypePair IMergeTreeReader::columnTypeFromPart(const NameAndTypePair & required_column)
 {
     auto name_in_storage = required_column.getNameInStorage();
-
-    decltype(columns_from_part.begin()) it;
     if (alter_conversions.isColumnRenamed(name_in_storage))
-    {
-        String old_name = alter_conversions.getColumnOldName(name_in_storage);
-        it = columns_from_part.find(old_name);
-    }
-    else
-    {
-        it = columns_from_part.find(name_in_storage);
-    }
+        name_in_storage = alter_conversions.getColumnOldName(name_in_storage);
 
+    auto it = columns_from_part.find(name_in_storage);
     if (it == columns_from_part.end())
-        return required_column;
+    {
+        /// Partial parts created by `attach partition` may have empty columns for historical reasons,
+        /// also handle bitengine column name rewrites in such case
+        if (checkBitEngineColumn(required_column))
+            return {name_in_storage + BITENGINE_COLUMN_EXTENSION, required_column.type};
+        else
+            return required_column;
+    }
 
     const auto & type = *it->second;
     if (required_column.isSubcolumn())
