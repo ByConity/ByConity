@@ -1,0 +1,56 @@
+explain
+Projection Est. ? rows
+│     Expressions: [a, b, c]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: (a = 'a') AND (c = 'd')
+      └─ TableScan default.t1 Est. ? rows
+               Where: (a = 'a') AND (c = 'd')
+               Outputs: [a, b, c]
+a	b	c
+a	NULL	d
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: (a > 35) AND (a < 45)
+      └─ TableScan default.t1 Est. ? rows
+               Where: (a > 35) AND (a < 45)
+               Outputs: [a]
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: (a > 35) AND (a < 45)
+      └─ TableScan default.t2 Est. ? rows
+               Where: (a > 35) AND (a < 45)
+               Outputs: [a]
+explain
+Projection Est. ? rows
+│     Expressions: [a, b]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: a = 2
+      └─ TableScan default.t1 Est. ? rows
+               Where: a = 2
+               Outputs: [a, b]
+explain
+Projection Est. ? rows
+│     Expressions: [a, b]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: a = 4
+      └─ TableScan default.t1 Est. ? rows
+               Where: a = 4
+               Outputs: [a, b]
+explain
+Projection Est. ? rows
+│     Expressions: [a, b]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: (a = 2) AND (b < 22)
+      └─ TableScan default.t1 Est. ? rows
+               Where: (a = 2) AND (b < 22)
+               Outputs: [a, b]

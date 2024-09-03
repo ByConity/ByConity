@@ -1,0 +1,16 @@
+min(c)
+0
+explain
+Projection Est. ? rows
+│     Expressions: min(c):=`expr#min(c)`
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: [expr#min(c)]
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {b}
+            └─ Aggregating Est. ? rows
+               │     Group by: {b}
+               │     Aggregates: expr#min(c):=AggNull(min)(c)
+               └─ TableScan default.t1 Est. ? rows
+                        Outputs: [b, c]

@@ -12,7 +12,8 @@ RUN apt install -y /docker-ce-rootless-extras_24.0.7-1~debian.11~bullseye_amd64.
 && apt install -y /containerd.io_1.6.26-1_amd64.deb \
 && apt install -y /docker-ce_24.0.7-1~debian.11~bullseye_amd64.deb \
 && apt install -y /docker-buildx-plugin_0.11.2-1~debian.11~bullseye_amd64.deb \
-&& apt install -y /docker-compose-plugin_2.21.0-1~debian.11~bullseye_amd64.deb
+&& apt install -y /docker-compose-plugin_2.21.0-1~debian.11~bullseye_amd64.deb \
+&& apt install -y libmysqlclient-dev
 
 COPY hadoop-3.3.4.tar.gz / 
 ADD install.sh /data/ci/

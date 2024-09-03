@@ -210,7 +210,7 @@ struct CustomWeekTransformImpl
     static ColumnPtr execute(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr &,
-        size_t input_rows_count,
+        size_t /* input_rows_count */,
         Transform transform = {},
         bool mysql_mode_ = false)
     {
@@ -240,16 +240,7 @@ struct CustomWeekTransformImpl
         size_t timezone_index = 2;
         if (arguments.size() > 1)
         {
-            if (mysql_mode_)
-            {
-                // for mysql implicit type convert - 2nd column is a string of numeric
-                auto col = IFunctionMySql::convertToTypeStatic<DataTypeUInt64>(arguments[1], std::make_shared<DataTypeUInt64>(), input_rows_count);
-                if (col->getUInt(0) == 0)
-                    timezone_index = 1;
-                else
-                    week_mode = col->getUInt(0);
-            }
-            else if (const auto * week_mode_column = checkAndGetColumnConst<ColumnUInt8>(arguments[1].column.get()))
+            if (const auto * week_mode_column = checkAndGetColumnConst<ColumnUInt8>(arguments[1].column.get()))
                 week_mode = week_mode_column->getValue<UInt8>();
             else if (const auto * timezone_column = checkAndGetColumnConst<ColumnString>(arguments[1].column.get()))
                 // for backward compatibility - try to get 2nd column as timezone

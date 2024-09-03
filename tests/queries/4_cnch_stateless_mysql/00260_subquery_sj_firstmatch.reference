@@ -1,0 +1,94 @@
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: expr#1_1 == a_1
+      ├─ Projection Est. ? rows
+      │  │     Expressions: [a], expr#1_1:=cast(1, 'Nullable(Int32)')
+      │  └─ TableScan default.t2 Est. ? rows
+      │           Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Inner Join Est. ? rows
+            │     Condition: 
+            ├─ Filter Est. ? rows
+            │  │     Condition: a_1 = 1
+            │  └─ TableScan default.t1 Est. ? rows
+            │           Where: a = 1
+            │           Outputs: a_1:=a
+            └─ Broadcast Exchange Est. ? rows
+               └─ Filter Est. ? rows
+                  │     Condition: a_2 = 1
+                  └─ TableScan default.t6 Est. ? rows
+                           Where: a = 1
+                           Outputs: a_2:=a
+a
+5
+8
+explain
+Projection Est. ? rows
+│     Expressions: [a, a_1]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: expr#1_1 == a_2
+      ├─ Projection Est. ? rows
+      │  │     Expressions: [a, a_1], expr#1_1:=cast(1, 'Nullable(Int32)')
+      │  └─ Inner Join Est. ? rows
+      │     │     Condition: 
+      │     ├─ TableScan default.t2 Est. ? rows
+      │     │        Outputs: [a]
+      │     └─ Broadcast Exchange Est. ? rows
+      │        └─ TableScan default.t8 Est. ? rows
+      │                 Outputs: a_1:=a
+      └─ Broadcast Exchange Est. ? rows
+         └─ Inner Join Est. ? rows
+            │     Condition: 
+            ├─ Filter Est. ? rows
+            │  │     Condition: a_2 = 1
+            │  └─ TableScan default.t1 Est. ? rows
+            │           Where: a = 1
+            │           Outputs: a_2:=a
+            └─ Broadcast Exchange Est. ? rows
+               └─ Filter Est. ? rows
+                  │     Condition: a_3 = 1
+                  └─ TableScan default.t6 Est. ? rows
+                           Where: a = 1
+                           Outputs: a_3:=a
+a	a_1
+5	1
+5	3
+5	5
+5	7
+5	9
+5	7
+5	3
+5	1
+8	1
+8	3
+8	5
+8	7
+8	9
+8	7
+8	3
+8	1
+explain
+Projection Est. ? rows
+│     Expressions: [a, a_1]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_2
+      ├─ Inner Join Est. ? rows
+      │  │     Condition: 
+      │  ├─ TableScan default.t0 Est. ? rows
+      │  │        Outputs: [a]
+      │  └─ Broadcast Exchange Est. ? rows
+      │     └─ TableScan default.t2 Est. ? rows
+      │              Outputs: a_1:=a
+      └─ Broadcast Exchange Est. ? rows
+         └─ Inner Join Est. ? rows
+            │     Condition: a_2 == a_3
+            ├─ TableScan default.t1 Est. ? rows
+            │        Outputs: a_2:=a
+            └─ Broadcast Exchange Est. ? rows
+               └─ TableScan default.t8 Est. ? rows
+                        Outputs: a_3:=a

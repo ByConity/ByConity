@@ -1,0 +1,6 @@
+plus(1, 1)
+2
+plus(1, 2)
+3
+Variable_name	Value
+thread_handling	0

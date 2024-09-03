@@ -1,0 +1,6 @@
+caseWithExpression('b', 'a', 1, 'b', 2, NULL)
+2
+caseWithExpression('c', 'a', 1, 'b', 2, NULL)
+NULL
+caseWithExpression('c', 'a', 1, 'b', 2, 3)
+3

@@ -31,7 +31,6 @@ namespace MySQLInterpreter
     struct InterpreterCreateAnalyticMySQLImpl
     {
         using TQuery = ASTCreateQueryAnalyticalMySQL;
-
         static void validate(const TQuery & query, ContextPtr context);
 
         static ASTPtr getRewrittenQuery(const TQuery & create_query, ContextPtr context);

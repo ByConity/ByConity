@@ -163,6 +163,16 @@ void tryRewriteHiveCatalogName(ASTPtr & ast_catalog, const Context *context);
 inline String getIdentifierName(const ASTPtr & ast) { return getIdentifierName(ast.get()); }
 inline std::optional<String> tryGetIdentifierName(const ASTPtr & ast) { return tryGetIdentifierName(ast.get()); }
 inline bool tryGetIdentifierNameInto(const ASTPtr & ast, String & name) { return tryGetIdentifierNameInto(ast.get(), name); }
+inline void tryGetIdentifierNameInto(const std::vector<ASTPtr> & ast, std::vector<String> & name)
+{
+    name.reserve(ast.size());
+    for (const auto & i : ast)
+    {
+        auto s = tryGetIdentifierName(i.get());
+        if (s.has_value())
+            name.push_back(*s);
+    }
+}
 
 inline std::shared_ptr<ASTIdentifier> makeASTIdentifier(const String & name) { return std::make_shared<ASTIdentifier>(name); }
 }

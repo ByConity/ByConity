@@ -292,7 +292,6 @@ void MySQLHandler::run()
             SettingsChanges setting_changes;
             setting_changes.emplace_back("dialect_type", String("MYSQL"));
             connection_context->applySettingsChanges(setting_changes);
-
             connection_context->setCurrentQueryId(fmt::format("mysql:{}", connection_id));
 
         }

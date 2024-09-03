@@ -83,6 +83,8 @@ BlockIO InterpreterDropQuery::execute()
         return executeToCatalog(drop);
     else if (drop.is_snapshot)
         return executeToSnapshot(drop);
+    else if (!drop.table.empty() && drop.tables.size() > 1)
+        return executeToTables(drop);
     else if (!drop.table.empty())
         return executeToTable(drop);
     else if (!drop.database.empty())
@@ -144,6 +146,16 @@ BlockIO InterpreterDropQuery::executeToSnapshot(ASTDropQuery & query)
     }
     /// TODO: in the future, need to check whether there're active txns using the snapshot
     database->dropSnapshot(current_context, query.table);
+    return {};
+}
+
+BlockIO InterpreterDropQuery::executeToTables(ASTDropQuery & query)
+{
+    for (auto const & table : query.tables)
+    {
+        query.table = table;
+        executeToTable(query);
+    }
     return {};
 }
 

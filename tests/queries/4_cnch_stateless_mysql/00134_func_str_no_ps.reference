@@ -1,0 +1,4 @@
+lower(trimLeft(FROM_UNIXTIME(0, ' %T ')))
+03:00:00 
+lessOrEquals('', or(less(lower(replaceRegexpOne(12222, concat('^[', regexpQuoteMeta(1), ']*'), '')), '1'), greater(lower(replaceRegexpOne(12222, concat('^[', regexpQuoteMeta(1), ']*'), '')), '2')))
+1

@@ -1,0 +1,124 @@
+a	b	c
+2	2	17
+2	2	20
+2	2	25
+explain
+Projection Est. ? rows
+│     Expressions: [a, b, c]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: (a = 2) AND (b = 2) AND (c IN (13, 25, 28))
+      └─ TableScan default.t1 Est. ? rows
+               Where: (a = 2) AND (b = 2) AND (c IN (13, 25, 28))
+               Outputs: [a, b, c]
+a	b	c
+2	2	25
+a	b	c
+2	2	17
+2	2	20
+2	2	25
+explain
+Projection Est. ? rows
+│     Expressions: [a, b, c]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: (b = 2) AND (a = 2) AND (c > 0) AND (c < 100)
+      └─ TableScan default.t1 Est. ? rows
+               Where: (b = 2) AND (a = 2) AND (c > 0) AND (c < 100)
+               Outputs: [a, b, c]
+explain
+Projection Est. ? rows
+│     Expressions: [a, b, c]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: ((b = 2) OR (a = 2)) AND (c > 0) AND (c < 100)
+      └─ TableScan default.t1 Est. ? rows
+               Where: ((b = 2) OR (a = 2)) AND (c > 0) AND (c < 100)
+               Outputs: [a, b, c]
+a	b	c
+1	2	13
+2	2	17
+2	2	20
+1	2	24
+2	2	25
+2	1	28
+2	1	98
+2	1	98
+2	1	98
+2	1	98
+1	2	99
+1	2	99
+1	2	99
+1	2	99
+a	b	c
+1	2	13
+2	2	17
+2	2	20
+1	2	24
+2	2	25
+2	1	28
+2	1	98
+2	1	98
+2	1	98
+2	1	98
+1	2	99
+1	2	99
+1	2	99
+1	2	99
+explain
+Projection Est. ? rows
+│     Expressions: [a, b, c]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: ((b = 2) OR (a = 2)) AND (c > 0) AND (c < 100)
+      └─ TableScan default.t1 Est. ? rows
+               Where: ((b = 2) OR (a = 2)) AND (c > 0) AND (c < 100)
+               Outputs: [a, b, c]
+explain
+Projection Est. ? rows
+│     Expressions: [a, b, c]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: ((b >= 2) OR (a >= 2)) AND (c > 0) AND (c < 100)
+      └─ TableScan default.t1 Est. ? rows
+               Where: ((b >= 2) OR (a >= 2)) AND (c > 0) AND (c < 100)
+               Outputs: [a, b, c]
+a	b	c
+1	2	13
+2	2	17
+2	2	20
+1	2	24
+2	2	25
+2	1	28
+2	1	98
+2	1	98
+2	1	98
+2	1	98
+1	2	99
+1	2	99
+1	2	99
+1	2	99
+a	b	c
+1	2	13
+2	2	17
+2	2	20
+1	2	24
+2	2	25
+2	1	28
+2	1	98
+2	1	98
+2	1	98
+2	1	98
+1	2	99
+1	2	99
+1	2	99
+1	2	99
+explain
+Projection Est. ? rows
+│     Expressions: [a, b, c]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: ((b >= 2) OR (a >= 2)) AND (c > 0) AND (c < 100)
+      └─ TableScan default.t1 Est. ? rows
+               Where: ((b >= 2) OR (a >= 2)) AND (c > 0) AND (c < 100)
+               Outputs: [a, b, c]

@@ -1,0 +1,76 @@
+n1
+1
+2
+NULL
+uniqExact(n1)
+2
+n2
+11
+12
+13
+NULL
+uniqExact(n2)
+3
+s
+one
+two
+NULL
+uniqExact(s)
+2
+vs
+eleven
+thirteen
+twevle
+NULL
+uniqExact(vs)
+3
+t
+bar
+eleven
+foo
+twelve
+NULL
+uniqExact(t)
+4
+n1	n2
+1	11
+2	12
+2	11
+2	NULL
+2	13
+NULL	13
+uniqExact(n1, n2)
+4
+n1	s
+1	one
+2	two
+2	NULL
+NULL	two
+uniqExact(n1, s)
+2
+s	n1	vs
+one	1	eleven
+two	2	NULL
+NULL	2	thirteen
+two	2	eleven
+two	2	twevle
+two	2	thirteen
+two	NULL	thirteen
+uniqExact(s, n1, vs)
+4
+s	t
+one	eleven
+two	eleven
+two	twelve
+two	foo
+two	bar
+NULL	bar
+two	NULL
+uniqExact(s, t)
+5
+uniqExact(n1)	uniqExact(n2)
+2	3
+uniqExact(n2)	n1
+1	1
+3	2
+1	NULL

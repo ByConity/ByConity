@@ -72,9 +72,10 @@ SerializationPtr DataTypeDecimal<T>::doGetDefaultSerialization() const
 
 static DataTypePtr create(const ASTPtr & arguments)
 {
+    /// Decimal(M, D)
+    /// MySQL compatibility: If D is omitted, the default is 0. If M is omitted, the default is 10.
     if (!arguments || arguments->children.size() != 2)
-        throw Exception("Decimal data type family must have exactly two arguments: precision and scale",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        return createDecimal<DataTypeDecimal>(10, 0);
 
     const auto * precision = arguments->children[0]->as<ASTLiteral>();
     const auto * scale = arguments->children[1]->as<ASTLiteral>();

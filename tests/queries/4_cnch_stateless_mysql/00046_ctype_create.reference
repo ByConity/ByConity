@@ -1,0 +1,16 @@
+Database	Create Database
+mysqltest1	CREATE DATABASE mysqltest1\nENGINE = Cnch
+Database	Create Database
+mysqltest2	CREATE DATABASE mysqltest2\nENGINE = Cnch
+Table	Create Table
+t1	CREATE TABLE mysqltest2.t1 (\n    `a` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+t1	CREATE TABLE mysqltest2.t1 (\n    `a` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+t1	CREATE TABLE mysqltest2.t1 (\n    `a` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+t1	CREATE TABLE mysqltest1.t1 (\n    `a` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+t1	CREATE TABLE mysqltest1.t1 (\n    `a` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+t1	CREATE TABLE mysqltest1.t1 (\n    `a` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192

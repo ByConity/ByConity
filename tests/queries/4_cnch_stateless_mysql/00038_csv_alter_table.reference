@@ -1,0 +1,7 @@
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+a	Int32	false						
+b	String	false						
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+a	Int32	false						
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+a	Int64	false						

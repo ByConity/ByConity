@@ -42,6 +42,7 @@ public:
 
     Kind kind;
     bool if_exists{false};
+    std::vector<String> tables;
 
     /// Useful if we already have a DDL lock
     bool no_ddl_lock{false};

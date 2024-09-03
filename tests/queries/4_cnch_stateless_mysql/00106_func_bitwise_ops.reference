@@ -1,0 +1,40 @@
+hex(bitAnd(vbin1, vbin2))	hex(bitOr(vbin1, vbin2))	hex(bitXor(vbin1, vbin2))	hex(bitNot(vbin1))	hex(bitShiftLeft(vbin1, 3))	hex(bitShiftRight(vbin2, 3))	bitCount(vbin1)
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+hex(bitAnd(vbin1, vbin2))
+0
+hex(bitOr(vbin1, vbin2))
+0
+hex(bitXor(vbin1, vbin2))
+0
+hex(bitShiftLeft(vbin1, 3))	hex(bitShiftLeft(vbin2, 3))
+0	0
+hex(bitShiftRight(vbin1, 3))	hex(bitShiftRight(vbin2, 3))
+0	0
+hex(bitNot(vbin1))	hex(bitNot(vbin2))
+8000000000000000	8000000000000000
+hex(bitAnd(vbin1, vbin2))
+0
+hex(bitOr(vbin1, vbin2))
+0
+hex(bitXor(vbin1, vbin2))
+0
+hex(bitShiftLeft(vbin1, 3))	hex(bitShiftLeft(vbin2, 3))
+0	0
+hex(bitShiftRight(vbin1, 3))	hex(bitShiftRight(vbin2, 3))
+0	0
+hex(bitNot(vbin1))	hex(bitNot(vbin2))
+8000000000000000	8000000000000000
+hex(bitAnd(vbin1, vbin2))	hex(bitOr(vbin1, vbin2))	hex(bitXor(vbin1, vbin2))	hex(bitNot(vbin1))	hex(bitShiftLeft(vbin1, 3))	hex(bitShiftRight(vbin2, 3))	bitCount(vbin1)
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+0	0	0	8000000000000000	0	0	0
+hex(bitAnd(vbin1, vbin2))	hex(bitOr(vbin1, vbin2))	hex(bitXor(vbin1, vbin2))	hex(bitNot(vbin1))	hex(bitShiftLeft(vbin1, 3))	hex(bitShiftRight(vbin2, 3))	bitCount(vbin1)
+0	0	0	8000000000000000	0	0	0

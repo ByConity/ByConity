@@ -1,0 +1,37 @@
+xxx
+this is a test of some long text to see what happens
+explain
+Projection Est. ? rows
+│     Expressions: [xxx]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: rlike(xxx, 'is a test of some long text to')
+      └─ TableScan default.t1 Est. ? rows
+               Where: rlike(xxx, 'is a test of some long text to')
+               Outputs: [xxx]
+xxx
+this is a test of some long text to see what happens
+xxx
+this is a test of some long text to see what happens
+xxx
+this is a test of some long text to see what happens
+xxx
+this is some text: to test - out.reg exp (22/45)
+rlike(1, NULL)
+NULL
+rlike('', CAST(NULL, 'String'))
+NULL
+rlike(NULL, CAST(NULL, 'String'))
+NULL
+rlike('A', CAST(NULL, 'String'))
+NULL
+rlike('ABC', CAST(NULL, 'String'))
+NULL
+rlike(' ', '[[:blank:]]')
+1
+rlike('\t', '[[:blank:]]')
+1
+rlike(' ', '[[:space:]]')
+1
+rlike('\t', '[[:space:]]')
+1

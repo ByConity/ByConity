@@ -1,0 +1,28 @@
+explain
+Projection Est. ? rows
+│     Expressions: [f1, f1_1, f2, f3], f2_1:=f2
+└─ Gather Exchange Est. ? rows
+   └─ Inner Join Est. ? rows
+      │     Condition: f2 == f2_1
+      ├─ TableScan default.t1 Est. ? rows
+      │        Outputs: [f1, f2]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Filter Est. ? rows
+            │     Condition: (f1_1 >= 1) AND (f1_1 <= 3)
+            └─ TableScan default.T1 Est. ? rows
+                     Where: (f1 >= 1) AND (f1 <= 3)
+                     Outputs: [f3], f1_1:=f1, f2_1:=f2
+explain
+Projection Est. ? rows
+│     Expressions: [f1, f1_1, f2, f3], f2_1:=f2
+└─ Gather Exchange Est. ? rows
+   └─ Inner Join Est. ? rows
+      │     Condition: f2 == f2_1
+      ├─ TableScan default.t1 Est. ? rows
+      │        Outputs: [f1, f2]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Filter Est. ? rows
+            │     Condition: (f1_1 >= 1) AND (f1_1 <= 3)
+            └─ TableScan default.T1 Est. ? rows
+                     Where: (f1 >= 1) AND (f1 <= 3)
+                     Outputs: [f3], f1_1:=f1, f2_1:=f2

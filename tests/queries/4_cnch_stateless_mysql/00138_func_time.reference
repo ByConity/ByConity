@@ -1,0 +1,452 @@
+from_days(to_days('19960101'))	minus(to_days(19960201), to_days('19960101'))	minus(to_days(plus(today(), toIntervalDay(1))), to_days(today()))	WEEKDAY('1997-11-29')
+1996-01-01	31	1	5
+period_add('199602', -12)	period_diff(199505, '199404')
+199502	13
+minus(now(), now())	minus(WEEKDAY(today()), WEEKDAY(now()))	minus(toUnixTimestamp(), toUnixTimestamp(now()))
+0	0	0
+FROM_UNIXTIME(toUnixTimestamp('1994-03-02 10:11:12'))	FROM_UNIXTIME(toUnixTimestamp('1994-03-02 10:11:12'), '%Y-%m-%d %h:%i:%s')	plus(FROM_UNIXTIME(toUnixTimestamp('1994-03-02 10:11:12')), 0)
+1994-03-02 10:11:12	1994-03-02 10:11:12	19940302101112
+sec_to_time(9001)	plus(sec_to_time(9001), 0)	time_to_sec('15:12:22')	sec_to_time(divide(time_to_sec('0:30:47'), '6.21'))
+02:30:01.000	23001	54742	00:04:57.423
+sec_to_time(time_to_sec('12:59:59'))
+12:59:59.000
+minus(minus(now(), multiply(today(), 1000000)), CURTIME())
+-0.5420000000012806
+strcmp(now(), concat(today(), ' ', current_time()))
+-1
+strcmp(LOCALTIME(), concat(today(), ' ', current_time()))
+-1
+strcmp(now(), concat(today(), ' ', current_time()))
+-1
+date_format('1997-01-02 03:04:05', '%M %W %D %Y %y %m %d %h %i %s %w')
+January Thursday 01/02/97 1997 97 01 02 03 04 05 4
+date_format('1997-01-02', concat('%M %W %D ', '%Y %y %m %d %h %i %s %w'))
+January Thursday 01/02/97 1997 97 01 02 12 00 00 4
+DAYOFMONTH('1997-01-02')	DAYOFMONTH(19970323)
+2	23
+MONTH('1997-01-02')	YEAR('1998-02-03')	DAYOFYEAR('1997-12-31')
+1	1998	365
+MONTH('2001-02-00')	YEAR('2001-00-00')
+1	1900
+DAYOFYEAR('1997-03-03')	toWeek('1998-03-03')	QUARTER(980303)
+62	9	4
+HOUR('1997-03-03 23:03:22')	MINUTE('23:03:22')	SECOND(230322)
+23	3	0
+toWeek(19980101)	toWeek(19970101)	toWeek(19980101, 1)	toWeek(19970101, 1)
+0	0	1	1
+toWeek(19981231)	toWeek(19971231)	toWeek(19981231, 1)	toWeek(19971231, 1)
+52	52	53	53
+toWeek(19950101)	toWeek(19950101, 1)
+1	0
+toYearWeek('1981-12-31', 1)	toYearWeek('1982-01-01', 1)	toYearWeek('1982-12-31', 1)	toYearWeek('1983-01-01', 1)
+198153	198153	198252	198252
+toYearWeek('1987-01-01', 1)	toYearWeek('1987-01-01')
+198701	198652
+2000	2001	2002	2003	2004	2005	2006
+0	0	0	0	0	0	1
+2000	2001	2002	2003	2004	2005	2006
+1	0	1	1	1	1	1
+2000	2001	2002	2003	2004	2005	2006
+0	1	1	1	1	0	0
+2000	2001	2002	2003	2004	2005	2006
+1	1	1	2	2	1	1
+2000	2001	2002	2003	2004	2005	2006
+199952	200053	200152	200252	200352	200452	200601
+2000	2001	2002	2003	2004	2005	2006
+200001	200053	200201	200301	200401	200501	200601
+2000	2001	2002	2003	2004	2005	2006
+199952	200101	200201	200301	200401	200453	200552
+2000	2001	2002	2003	2004	2005	2006
+200001	200101	200201	200302	200402	200501	200601
+toWeek(19981231, 2)	toWeek(19981231, 3)	toWeek(20000101, 2)	toWeek(20000101, 3)
+52	53	52	52
+toWeek(20001231, 2)	toWeek(20001231, 3)
+53	52
+0	1	2	3	4	5	6	7
+52	53	52	53	52	52	52	52
+0	1	2	3	4	5	6	7
+0	0	52	52	0	0	52	52
+0	1	2	3	4	5	6	7
+1	1	1	1	1	1	1	1
+0	1	2	3	4	5	6	7
+53	52	53	52	53	52	1	52
+0	1	2	3	4	5	6	7
+0	1	53	1	1	1	1	1
+toYearWeek(20001231, 0)	toYearWeek(20001231, 1)	toYearWeek(20001231, 2)	toYearWeek(20001231, 3)	toYearWeek(20001231, 4)	toYearWeek(20001231, 5)	toYearWeek(20001231, 6)	toYearWeek(20001231, 7)
+200053	200052	200053	200052	200101	200052	200101	200052
+toWeek(20001231)	toWeek(20001231, 6)
+53	1
+toWeek(20001231)	toWeek(20001231, 2)	toWeek(20001231, 0)
+53	53	53
+date_format('1998-12-31', '%x-%v')	date_format('1999-01-01', '%x-%v')
+1998-53	1998-53
+date_format('1999-12-31', '%x-%v')	date_format('2000-01-01', '%x-%v')
+1999-52	1999-52
+dayname('1962-03-03')	plus(dayname('1962-03-03'), 0)
+Tuesday	0
+monthName('1972-03-04')	plus(monthName('1972-03-04'), 0)
+March	0
+TIME_FORMAT(19980131000000, '%H|%I|%k|%l|%i|%p|%r|%S|%T')
+00|12|00|12|00|AM|12:00:00 AM|00|00:00:00
+TIME_FORMAT(19980131010203, '%H|%I|%k|%l|%i|%p|%r|%S|%T')
+01|01|01|01|02|AM|01:02:03 AM|03|01:02:03
+TIME_FORMAT(19980131131415, '%H|%I|%k|%l|%i|%p|%r|%S|%T')
+13|01|13|01|14|PM|01:14:15 PM|15|13:14:15
+TIME_FORMAT(19980131010015, '%H|%I|%k|%l|%i|%p|%r|%S|%T')
+01|01|01|01|00|AM|01:00:15 AM|15|01:00:15
+date_format(concat('19980131', 131415), '%H|%I|%k|%l|%i|%p|%r|%S|%T| %M|%W|%D|%Y|%y|%a|%b|%j|%m|%d|%h|%s|%w')
+13|01|13|01|14|PM|01:14:15 PM|15|13:14:15| January|Saturday|01/31/98|1998|98|Sat|Jan|031|01|31|01|15|6
+date_format(19980121, '%H|%I|%k|%l|%i|%p|%r|%S|%T| %M|%W|%D|%Y|%y|%a|%b|%j|%m|%d|%h|%s|%w')
+09|09|09|09|02|AM|09:02:01 AM|01|09:02:01| August|Thursday|08/20/70|1970|70|Thu|Aug|232|08|20|09|01|4
+plus('1997-12-31 23:59:59', toIntervalSecond(1))
+1998-01-01 00:00:00.000000
+plus('1997-12-31 23:59:59', toIntervalMinute(1))
+1998-01-01 00:00:59.000000
+plus('1997-12-31 23:59:59', toIntervalHour(1))
+1998-01-01 00:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalDay(1))
+1998-01-01 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalMonth(1))
+1998-01-31 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalYear(1))
+1998-12-31 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(convertMinuteSecondToSecond('1:1')))
+1998-01-01 00:01:00.000000
+plus('1997-12-31 23:59:59', toIntervalMinute(convertHourMinuteToMinute('1:1')))
+1998-01-01 01:00:59.000000
+plus('1997-12-31 23:59:59', toIntervalHour(convertDayHourToHour('1:1')))
+1998-01-02 00:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalMonth(convertYearMonthToMonth('1 1')))
+1999-01-31 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(convertHourSecondToSecond('1:1:1')))
+1998-01-01 01:01:00.000000
+plus('1997-12-31 23:59:59', toIntervalMinute(convertDayMinuteToMinute('1 1:1')))
+1998-01-02 01:00:59.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(convertDaySecondToSecond('1 1:1:1')))
+1998-01-02 01:01:00.000000
+minus('1998-01-01 00:00:00', toIntervalSecond(1))
+1997-12-31 23:59:59.000000
+minus('1998-01-01 00:00:00', toIntervalMinute(1))
+1997-12-31 23:59:00.000000
+minus('1998-01-01 00:00:00', toIntervalHour(1))
+1997-12-31 23:00:00.000000
+minus('1998-01-01 00:00:00', toIntervalDay(1))
+1997-12-31 00:00:00.000000
+minus('1998-01-01 00:00:00', toIntervalMonth(1))
+1997-12-01 00:00:00.000000
+minus('1998-01-01 00:00:00', toIntervalYear(1))
+1997-01-01 00:00:00.000000
+minus('1998-01-01 00:00:00', toIntervalSecond(convertMinuteSecondToSecond('1:1')))
+1997-12-31 23:58:59.000000
+minus('1998-01-01 00:00:00', toIntervalMinute(convertHourMinuteToMinute('1:1')))
+1997-12-31 22:59:00.000000
+minus('1998-01-01 00:00:00', toIntervalHour(convertDayHourToHour('1:1')))
+1997-12-30 23:00:00.000000
+minus('1998-01-01 00:00:00', toIntervalMonth(convertYearMonthToMonth('1 1')))
+1996-12-01 00:00:00.000000
+minus('1998-01-01 00:00:00', toIntervalSecond(convertHourSecondToSecond('1:1:1')))
+1997-12-31 22:58:59.000000
+minus('1998-01-01 00:00:00', toIntervalMinute(convertDayMinuteToMinute('1 1:1')))
+1997-12-30 22:59:00.000000
+minus('1998-01-01 00:00:00', toIntervalSecond(convertDaySecondToSecond('1 1:1:1')))
+1997-12-30 22:58:59.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(100000))
+1998-01-02 03:46:39.000000
+plus('1997-12-31 23:59:59', toIntervalMinute(-100000))
+1997-10-23 14:19:59.000000
+plus('1997-12-31 23:59:59', toIntervalHour(100000))
+2009-05-29 16:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalDay(-100000))
+2299-12-31 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalMonth(100000))
+2299-12-31 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalYear(-100000))
+1900-01-01 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(convertMinuteSecondToSecond('10000:1')))
+1998-01-07 22:40:00.000000
+plus('1997-12-31 23:59:59', toIntervalMinute(convertHourMinuteToMinute('-10000:1')))
+1996-11-10 07:58:59.000000
+plus('1997-12-31 23:59:59', toIntervalHour(convertDayHourToHour('10000:1')))
+2025-05-19 00:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalMonth(convertYearMonthToMonth('-100 1')))
+1900-01-01 23:59:59.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(convertHourSecondToSecond('10000:99:99')))
+1999-02-21 17:40:38.000000
+plus('1997-12-31 23:59:59', toIntervalMinute(convertDayMinuteToMinute(' -10000 99:99')))
+1970-08-11 19:20:59.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(convertDaySecondToSecond('10000 99:99:99')))
+2025-05-23 04:40:38.000000
+plus('1997-12-31 23:59:59', toIntervalSecond(1))
+1998-01-01 00:00:00.000000
+plus(toIntervalDay(1), '1997-12-31')
+1998-01-01 00:00:00.000000
+minus('1998-01-01 00:00:00', toIntervalSecond(1))
+1997-12-31 23:59:59.000000
+minus('1998-01-02', toIntervalDay(31))
+1997-12-02 00:00:00.000000
+plus('1997-12-31', toIntervalSecond(1))
+1997-12-31 00:00:01.000000
+plus('1997-12-31', toIntervalDay(1))
+1998-01-01 00:00:00.000000
+plus(NULL, toIntervalSecond(100000))
+NULL
+plus('1997-12-31 23:59:59', toIntervalSecond(NULL))
+NULL
+plus('1997-12-31 23:59:59', toIntervalSecond(convertMinuteSecondToSecond(NULL)))
+NULL
+plus('9999-12-31 23:59:59', toIntervalSecond(1))
+2299-12-31 23:00:00.000000
+minus('0000-00-00 00:00:00', toIntervalSecond(1))
+1999-12-31 23:59:59.000000
+plus('1998-01-30', toIntervalMonth(1))
+1998-02-28 00:00:00.000000
+plus('1998-01-30', toIntervalMonth(convertYearMonthToMonth('2:1')))
+2000-02-29 00:00:00.000000
+plus('1996-02-29', toIntervalYear('1'))
+1997-02-28 00:00:00.000000
+toYear('1999-01-02 10:11:12')
+1999
+toYearMonth('1999-01-02')
+199901
+toDayOfMonth('1999-01-02')
+2
+toDayHour('1999-01-02 10:11:12')
+210
+toHour('1999-01-02 10:11:12')
+10
+toMinute('10:11:12')
+11
+toSecond('1999-01-02 10:11:12')
+12
+toMonth('2001-02-00')
+1
+quarter
+1
+quarter
+1
+quarter
+1
+quarter
+2
+quarter
+2
+quarter
+2
+quarter
+3
+quarter
+3
+quarter
+3
+quarter
+4
+quarter
+4
+quarter
+4
+minus(parseDateTimeOrNull('9999-12-31 00:01:00', '%Y-%m-%d %H:%i:%s'), toIntervalMinute(1))
+NULL
+plus(parseDateTimeOrNull('9999-12-30 23:59:00', '%Y-%m-%d %H:%i:%s'), toIntervalMinute(1))
+NULL
+plus('1900-01-01 00:00:00', toIntervalSecond(2147483648))
+1968-01-20 03:43:51.000000
+plus('1900-01-01 00:00:00', toIntervalSecond(bitShiftLeft(1, 38)))
+1900-01-01 00:01:04.000000
+plus('1900-01-01 00:00:00', toIntervalMinute(bitShiftLeft(1, 33)))
+1900-01-01 00:02:00.000000
+plus('1900-01-01 00:00:00', toIntervalHour(bitShiftLeft(1, 30)))
+1900-01-01 00:00:00.000000
+ctime	HOUR(ctime)
+2001-01-12 12:23:40	12
+ctime
+2001-01-12 12:23:40
+monthName(date)
+January
+January
+monthName(date)
+January
+January
+MONTH(updated)
+1
+YEAR(updated)
+1970
+DAYOFYEAR('0000-00-00')	DAYOFYEAR(d)	DAYOFYEAR(dt)	DAYOFYEAR(t)	DAYOFYEAR(c)
+1	1	1	1	1
+DAYOFMONTH('0000-00-00')	DAYOFMONTH(d)	DAYOFMONTH(dt)	DAYOFMONTH(t)	DAYOFMONTH(c)
+1	1	1	1	1
+MONTH('0000-00-00')	MONTH(d)	MONTH(dt)	MONTH(t)	MONTH(c)
+1	1	1	1	1
+QUARTER('0000-00-00')	QUARTER(d)	QUARTER(dt)	QUARTER(t)	QUARTER(c)
+1	1	1	1	1
+toWeek('0000-00-00')	toWeek(d)	toWeek(dt)	toWeek(t)	toWeek(c)
+0	0	0	0	0
+YEAR('0000-00-00')	YEAR(d)	YEAR(dt)	YEAR(t)	YEAR(c)
+1970	1970	1970	1970	1970
+toYearWeek('0000-00-00')	toYearWeek(d)	toYearWeek(dt)	toYearWeek(t)	toYearWeek(c)
+196952	196952	196952	196952	196952
+to_days('0000-00-00')	to_days(d)	to_days(dt)	to_days(t)	to_days(c)
+719528	719528	719528	719528	719528
+toMonth('0000-00-00')	toMonth(d)	toMonth(dt)	toMonth(t)	toMonth(c)
+1	1	1	1	1
+start	ctime1	ctime2
+2002-11-04 00:00:00.000000	2002-10-29 16:51:06	2002-11-05 16:47:31
+FROM_UNIXTIME(1)
+1970-01-01 03:00:01
+toUnixTimestamp(FROM_UNIXTIME(1))
+1
+toUnixTimestamp('1969-12-01 19:00:01')
+4292346497
+FROM_UNIXTIME(-1)
+1970-01-01 03:00:00
+FROM_UNIXTIME(2147483647)
+2038-01-19 06:14:07
+FROM_UNIXTIME(2147483648)
+2038-01-19 06:14:08
+FROM_UNIXTIME(0)
+1970-01-01 03:00:00
+toUnixTimestamp(FROM_UNIXTIME(2147483647))
+2147483647
+toUnixTimestamp(FROM_UNIXTIME(2147483648))
+2147483648
+toUnixTimestamp('2039-01-20 01:00:00')
+2179087200
+toUnixTimestamp('1968-01-20 01:00:00')
+4233443296
+toUnixTimestamp('2038-02-10 01:00:00')
+2149365600
+toUnixTimestamp('1969-11-20 01:00:00')
+4291331296
+toUnixTimestamp('2038-01-20 01:00:00')
+2147551200
+toUnixTimestamp('1969-12-30 01:00:00')
+4294787296
+toUnixTimestamp('2038-01-17 12:00:00')
+2147331600
+toUnixTimestamp('1970-01-01 03:00:01')
+1
+toUnixTimestamp('2038-01-19 07:14:07')
+2147487247
+lower(dayname(19700101))
+sunday
+lower(monthName(19700101))
+january
+datetime	timestamp	date	time
+2001-01-02 03:04:05.000000	2002-01-02 03:04:05.000000	2003-01-02	06:07:08.000
+plus('1997-12-31', toIntervalSecond(1))
+1997-12-31 00:00:01.000000
+plus('1997-12-31', toIntervalMonth(convertYearMonthToMonth('1 1')))
+1999-01-31 00:00:00.000000
+plus(datetime, toIntervalSecond(1))
+2001-01-02 03:04:06.000000
+plus(datetime, toIntervalYear(1))
+2002-01-02 03:04:05.000000
+plus(date, toIntervalSecond(1))
+2003-01-02 00:00:01
+plus(date, toIntervalMinute(1))
+2003-01-02 00:01:00
+plus(date, toIntervalHour(1))
+2003-01-02 01:00:00
+plus(date, toIntervalDay(1))
+2003-01-03
+plus(date, toIntervalMonth(1))
+2003-02-02
+plus(date, toIntervalYear(1))
+2004-01-02
+plus(date, toIntervalSecond(convertMinuteSecondToSecond('1:1')))
+2003-01-02 00:01:01
+plus(date, toIntervalMinute(convertHourMinuteToMinute('1:1')))
+2003-01-02 01:01:00
+plus(date, toIntervalHour(convertDayHourToHour('1:1')))
+2003-01-03 01:00:00
+plus(date, toIntervalMonth(convertYearMonthToMonth('1 1')))
+2004-02-02
+plus(date, toIntervalSecond(convertHourSecondToSecond('1:1:1')))
+2003-01-02 01:01:01
+plus(date, toIntervalMinute(convertDayMinuteToMinute('1 1:1')))
+2003-01-03 01:01:00
+plus(date, toIntervalSecond(convertDaySecondToSecond('1 1:1:1')))
+2003-01-03 01:01:01
+plus(date, toIntervalWeek('1'))
+2003-01-09
+plus(date, toIntervalQuarter('1'))
+2003-04-02
+plus(date, toIntervalMinute(1))
+2003-01-02 00:01:00
+plus(date, toIntervalWeek(1))
+2003-01-09
+plus(date, toIntervalSecond(1))
+2003-01-02 00:00:01
+a
+3
+a
+-1
+a
+-5
+a
+0
+a
+107
+a
+12
+a
+2135
+a
+88
+a
+128099
+a
+7685939
+a1	a2	a3	a4
+28	28	29	29
+timestampdiff('day', '2006-01-10 14:30:28', '2006-01-11 14:30:27')
+0
+timestampdiff('day', '2006-01-10 14:30:28', '2006-01-11 14:30:28')
+1
+timestampdiff('day', '2006-01-10 14:30:28', '2006-01-11 14:30:29')
+1
+timestampdiff('day', '2006-01-10 14:30:28', '2006-01-12 14:30:27')
+1
+timestampdiff('day', '2006-01-10 14:30:28', '2006-01-12 14:30:28')
+2
+timestampdiff('day', '2006-01-10 14:30:28', '2006-01-12 14:30:29')
+2
+timestampdiff('week', '2006-01-10 14:30:28', '2006-01-17 14:30:27')
+0
+timestampdiff('week', '2006-01-10 14:30:28', '2006-01-17 14:30:28')
+1
+timestampdiff('week', '2006-01-10 14:30:28', '2006-01-17 14:30:29')
+1
+timestampdiff('week', '2006-01-10 14:30:28', '2006-01-24 14:30:27')
+1
+timestampdiff('week', '2006-01-10 14:30:28', '2006-01-24 14:30:28')
+2
+timestampdiff('week', '2006-01-10 14:30:28', '2006-01-24 14:30:29')
+2
+timestampdiff('month', '2006-01-10 14:30:28', '2006-02-10 14:30:27')
+0
+timestampdiff('month', '2006-01-10 14:30:28', '2006-02-10 14:30:28')
+1
+timestampdiff('month', '2006-01-10 14:30:28', '2006-02-10 14:30:29')
+1
+timestampdiff('month', '2006-01-10 14:30:28', '2006-03-10 14:30:27')
+1
+timestampdiff('month', '2006-01-10 14:30:28', '2006-03-10 14:30:28')
+2
+timestampdiff('month', '2006-01-10 14:30:28', '2006-03-10 14:30:29')
+2
+timestampdiff('year', '2006-01-10 14:30:28', '2007-01-10 14:30:27')
+0
+timestampdiff('year', '2006-01-10 14:30:28', '2007-01-10 14:30:28')
+1
+timestampdiff('year', '2006-01-10 14:30:28', '2007-01-10 14:30:29')
+1
+timestampdiff('year', '2006-01-10 14:30:28', '2008-01-10 14:30:27')
+1
+timestampdiff('year', '2006-01-10 14:30:28', '2008-01-10 14:30:28')
+2
+timestampdiff('year', '2006-01-10 14:30:28', '2008-01-10 14:30:29')
+2
+plus(time, toIntervalSecond(1))
+06:07:09.000
+f1	f2	f3	f4	f5	toLastDayOfMonth(NULL)	toLastDayOfMonth('2001-02-12')
+2000-02-29	2002-12-31	2003-03-31	2003-04-30	2001-01-31	NULL	2001-02-28

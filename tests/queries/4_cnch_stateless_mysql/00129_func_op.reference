@@ -1,0 +1,34 @@
+plus(1, 1)	minus(1, 1)	plus(1, multiply(1, 2))	divide(8, 5)	modulo(8, 5)	modulo(8, 5)_1	bitOr(modulo(8, 5), 0)	multiply(negate(plus(1, 1)), -2)
+2	0	3	1.6	3	3	3	4
+explain
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: bitOr(modulo(8, 5), 0):=`expr#bitOr(modulo(8, 5), 0)`, divide(8, 5):=`expr#divide(8, 5)`, minus(1, 1):=`expr#minus(1, 1)`, modulo(8, 5):=`expr#modulo(8, 5)`, modulo(8, 5)_1:=`expr#modulo(8, 5)`, multiply(negate(plus(1, 1)), -2):=`expr#multiply(negate(plus(1, 1)), -2)`, plus(1, 1):=`expr#plus(1, 1)`, plus(1, multiply(1, 2)):=`expr#plus(1, multiply(1, 2))`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#bitOr(modulo(8, 5), 0):=bitOr(8 % 5, 0), expr#divide(8, 5):=8 / 5, expr#minus(1, 1):=cast(0, 'Int16'), expr#modulo(8, 5):=8 % 5, expr#multiply(negate(plus(1, 1)), -2):=cast(4, 'Int64'), expr#plus(1, 1):=cast(2, 'UInt16'), expr#plus(1, multiply(1, 2)):=cast(3, 'UInt32')
+   └─ Values Est. 1 rows, cost 7.400000e-02
+bitOr(1, plus(1, 1))	bitAnd(5, 3)	bitCount(7)
+3	1	3
+explain
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: bitAnd(5, 3):=`expr#bitAnd(5, 3)`, bitCount(7):=`expr#bitCount(7)`, bitOr(1, plus(1, 1)):=`expr#bitOr(1, plus(1, 1))`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#bitAnd(5, 3):=1, expr#bitCount(7):=3, expr#bitOr(1, plus(1, 1)):=cast(3, 'UInt16')
+   └─ Values Est. 1 rows, cost 7.400000e-02
+bitShiftLeft(1, 32)	bitShiftLeft(1, 63)	bitShiftLeft(1, 64)	bitShiftRight(4, 2)	bitShiftRight(4, 63)	bitShiftRight(bitShiftLeft(1, 63), 60)
+1	0	1	1	0	0
+bitOr(-1, 0)	bitXor(-1, 0)	bitAnd(-1, 0)
+-1	-1	0
+bitOr(-1, 1)	bitXor(-1, 1)	bitAnd(-1, 1)
+-1	-2	1
+bitOr(1, -1)	bitXor(1, -1)	bitAnd(1, -1)
+-1	-2	1
+bitOr(0, -1)	bitXor(0, -1)	bitAnd(0, -1)
+-1	-1	0
+bitShiftRight(-1, 0)	bitShiftLeft(-1, 0)
+-1	-1
+bitShiftRight(-1, 1)	bitShiftLeft(-1, 1)
+-1	-2
+a	a_1	b	bitCount(t2.b)
+1	1	7	3
+2	NULL	NULL	NULL
+3	3	7	3

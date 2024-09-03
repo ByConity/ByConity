@@ -300,7 +300,7 @@ jobs:
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
           ./clickhouse-test --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
-          mv test_output/test_result.txt /test_output/w_optimizer_test_result.txt
+          mv test_output/test_result.txt /test_output/no_tenant_w_optimizer_test_result.txt
           cd ..
           rm -rf ci_stateless_with_optimizer_no_tenant
       - name: Run ByConity FuntionalStateless no tenant (w optimizer bsp)
@@ -350,6 +350,25 @@ jobs:
           mv test_output/test_result.txt /test_output/ChSQL_tenant_wo_optimizer_test_result.txt
           cd ..
           rm -rf ci_clickhouse_sql
+      - name: Run ByConity MySQL FuntionalStateless no tenant (w optimizer)
+        continue-on-error: true
+        run: |
+          printf '%s\n' "$CNCH_WRITE_WORKER_HOST"
+          mkdir -p ci_mysql_stateless_with_optimizer_no_tenant
+          cd ci_mysql_stateless_with_optimizer_no_tenant
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
+          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
+          mkdir queries
+          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_mysql mysql_queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh mysql_queries/
+          cp $GITHUB_WORKSPACE/tests/queries/skip_list.json mysql_queries/
+          mkdir -p test_output
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
+          ./clickhouse-test --queries "queries_mysql"  --use-skip-list -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --single-server --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/mysql_stateless_no_tenant_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/mysql_w_optimizer_test_result.txt
+          cd ..
+          rm -rf ci_mysql_stateless_with_optimizer_no_tenant
       - name: After test
         if: always()
         continue-on-error: true

@@ -1,0 +1,20 @@
+t1
+ABC
+explain
+Projection Est. ? rows
+│     Expressions: [t1]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: t1 = 'ABC'
+      └─ TableScan default.t1 Est. ? rows
+               Where: t1 = 'ABC'
+               Outputs: [t1]
+explain
+Projection Est. ? rows
+│     Expressions: [t1]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: t1 = 'ABCD'
+      └─ TableScan default.t1 Est. ? rows
+               Where: t1 = 'ABCD'
+               Outputs: [t1]

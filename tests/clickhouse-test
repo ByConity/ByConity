@@ -305,8 +305,10 @@ def configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file):
 
     testcase_args.testcase_start_time = datetime.now()
     testcase_basename = os.path.basename(case_file)
-    testcase_args.testcase_client = f"{testcase_args.client} --log_comment='{testcase_basename}'"
-    testcase_args.testcase_basename = testcase_basename
+    if testcase_args.queries == "queries_mysql":
+        testcase_args.testcase_client = testcase_args.client
+    else:
+        testcase_args.testcase_client = f"{testcase_args.client} --log_comment='{testcase_basename}'"
 
     if testcase_args.database:
         database = testcase_args.database
@@ -383,8 +385,10 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
     pattern = "{test} > {stdout} 2> {stderr}"
 
 
-    if ext == '.sql':
+    if ext == '.sql' and args.queries != "queries_mysql":
         pattern = "{client} --send_logs_level={logs_level} --testmode --multiquery {options} < " + pattern
+    elif args.queries == "queries_mysql":
+        pattern = "{client} < " + pattern
     command = pattern.format(**params).replace("$$", "\\$\\$")
 
     proc = Popen(command, shell=True, env=os.environ)
@@ -636,7 +640,7 @@ def run_tests_array(all_tests_with_params):
                 if os.path.isfile(stdout_file):
                     status += ", result:\n\n"
                     status += '\n'.join(
-                        open(stdout_file).read().split('\n')[:100])
+                        open(stdout_file, 'r', errors='ignore').read().split('\n')[:100])
                     status += '\n'
 
                 status += 'Database: ' + testcase_args.testcase_database if type(testcase_args) is not tuple else 'failed to create'
@@ -789,6 +793,8 @@ def run_tests_array(all_tests_with_params):
                     temp_failures_chain = 0
                     while flag_failed_retry and flag_failed_retry <= MAX_RETRIES:
                         temp_failures,temp_failures_chain,passed_total,status = judge_case_fail(proc, stdout, stderr, total_time, status, testcase_args, stdout_file, stderr_file,reference_file)
+                        if args.queries == "queries_mysql":
+                            break
                         if temp_failures:
                             if flag_failed_retry < MAX_RETRIES:
                                 status = status.replace('[ FAIL ]',f'[ fail_retry:{str(flag_failed_retry)} ]')
@@ -835,7 +841,7 @@ def run_tests_array(all_tests_with_params):
             fail_case_name = "{0:72}".format(name + ": ")
             print("{0} {1} - Test internal error: {2}\n{3}\n{4}".format(fail_case_name, MSG_FAIL, exc_type.__name__,exc_value,"\n".join(traceback.format_tb(tb, 10))))
 
-        if failures_chain >= 30:
+        if failures_chain >= 30 and args.queries != "queries_mysql":
             stop_tests()
             break
 
@@ -1011,6 +1017,20 @@ def do_run_tests(jobs, suite, suite_dir, suite_tmp_dir, all_tests, parallel_test
         num_tests = len(all_tests)
         run_tests_array((all_tests, num_tests, suite, suite_dir, suite_tmp_dir))
         return num_tests
+
+pattern = re.compile(r'((DEFAULT\s+)?CHARACTER\s+SET\s+\w+\s+)?(collate\s+\w+)?|'
+                     r'\s+EXTENDED|AUTO_INCREMENT|zerofill|\s+from dual\s+|'
+                     r'PARTITION\s+BY\s+[\s\S]*?(?=;)|\s+TEMPORARY|\s+SQL_CALC_FOUND_ROWS|\s+UNSIGNED', re.IGNORECASE)
+
+def remove_charset_from_file(case, suite_dir):
+    case_file = os.path.join(suite_dir, case)
+    with open(case_file, 'r', errors='ignore') as file:
+        content = file.read()
+
+    modified_content = pattern.sub('', content)
+
+    with open(case_file, 'w') as file:
+        file.write(modified_content)
 
 
 def main(args):
@@ -1198,7 +1218,11 @@ def main(args):
             parallel_tests = []
             sequential_tests = []
             for test in all_tests:
-                if any(s in test for s in args.sequential):
+                if args.queries == "queries_mysql":
+                    if args.disable_charset:
+                        remove_charset_from_file(test, suite_dir)
+                    sequential_tests.append(test)
+                elif any(s in test for s in args.sequential):
                     sequential_tests.append(test)
                 else:
                     parallel_tests.append(test)
@@ -1393,6 +1417,7 @@ if __name__ == '__main__':
     parser.add_argument('--s3', required=False, action='store_true', help='Only run tests for S3 environment')
     parser.add_argument('--single-server', required=False, action='store_true', help='Add some tests which will fail on multi-server')
     parser.add_argument('--tenant_id', default='', help='set the tenant id for test')
+    parser.add_argument('--disable_charset', default=True, help='disable character set for mysql pipeline')
 
     args = parser.parse_args()
 
@@ -1432,7 +1457,10 @@ if __name__ == '__main__':
 
     if args.tmp is None:
         args.tmp = args.queries
-    if args.client is None:
+    if args.queries == "queries_mysql":
+        args.client = "mysql -u default -h 127.0.0.1 -P9004"
+        print("Using MySQL client as a client program")
+    elif args.client is None:
         if find_binary(args.binary + '-client'):
             args.client = args.binary + '-client'
 

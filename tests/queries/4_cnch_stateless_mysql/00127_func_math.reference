@@ -1,0 +1,42 @@
+floor('5.5')	floor('-5.5')
+5	-6
+explain
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: floor('-5.5'):=`expr#floor('-5.5')`, floor('5.5'):=`expr#floor('5.5')`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#floor('-5.5'):=cast(-6, 'Int64'), expr#floor('5.5'):=cast(5, 'Int64')
+   └─ Values Est. 1 rows, cost 7.400000e-02
+ceil('5.5')	ceil('-5.5')
+6	-5
+explain
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: ceil('-5.5'):=`expr#ceil('-5.5')`, ceil('5.5'):=`expr#ceil('5.5')`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#ceil('-5.5'):=cast(-5, 'Int64'), expr#ceil('5.5'):=cast(6, 'Int64')
+   └─ Values Est. 1 rows, cost 7.400000e-02
+trunc('52.64', 1)	trunc('52.64', 2)	trunc('52.64', -1)	trunc('52.64', -2)	trunc('-52.64', 1)	trunc('-52.64', -1)
+52.6	52.64	50	0	-52.6	-50
+explain
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: trunc('-52.64', -1):=`expr#trunc('-52.64', -1)`, trunc('-52.64', 1):=`expr#trunc('-52.64', 1)`, trunc('52.64', -1):=`expr#trunc('52.64', -1)`, trunc('52.64', -2):=`expr#trunc('52.64', -2)`, trunc('52.64', 1):=`expr#trunc('52.64', 1)`, trunc('52.64', 2):=`expr#trunc('52.64', 2)`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#trunc('-52.64', -1):='-50', expr#trunc('-52.64', 1):='-52.6', expr#trunc('52.64', -1):='50', expr#trunc('52.64', -2):='0', expr#trunc('52.64', 1):='52.6', expr#trunc('52.64', 2):='52.64'
+   └─ Values Est. 1 rows, cost 7.400000e-02
+round('5.5')	round('-5.5')
+6	-6
+explain
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: round('-5.5'):=`expr#round('-5.5')`, round('5.5'):=`expr#round('5.5')`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#round('-5.5'):='-6', expr#round('5.5'):='6'
+   └─ Values Est. 1 rows, cost 7.400000e-02
+round('5.64', 1)	round('5.64', 2)	round('5.64', -1)	round('5.64', -2)
+5.6	5.64	10	0
+abs(-10)	sign(-5)	sign(5)	sign(0)
+10	-1	1	0
+explain
+Projection Est. 1 rows, cost 2.220000e-01
+│     Expressions: abs(-10):=`expr#abs(-10)`, sign(-5):=`expr#sign(-5)`, sign(0):=`expr#sign(0)`, sign(5):=`expr#sign(5)`
+└─ Projection Est. 1 rows, cost 1.480000e-01
+   │     Expressions: expr#abs(-10):=10, expr#sign(-5):=-1, expr#sign(0):=0, expr#sign(5):=1
+   └─ Values Est. 1 rows, cost 7.400000e-02

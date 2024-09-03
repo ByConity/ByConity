@@ -57,8 +57,10 @@ void ASTDropQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
         settings.ostr << "SNAPSHOT ";
     else if (is_view)
         settings.ostr << "VIEW ";
-    else
+    else if (tables.size() <= 1)
         settings.ostr << "TABLE ";
+    else
+        settings.ostr << "TABLES ";
 
     if (if_exists)
         settings.ostr << "IF EXISTS ";
@@ -68,8 +70,14 @@ void ASTDropQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
         settings.ostr << backQuoteIfNeed(catalog);
     else if (table.empty() && !database.empty())
         settings.ostr << backQuoteIfNeed(database);
-    else
+    else if (tables.size() <= 1)
         settings.ostr << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
+    else
+    {
+        settings.ostr << (!database.empty() ? backQuoteIfNeed(database) + "." : "");
+        for (const auto & table : tables)
+            settings.ostr << backQuoteIfNeed(table) << " ";
+    }
 
     formatOnCluster(settings);
 

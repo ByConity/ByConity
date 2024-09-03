@@ -1,0 +1,56 @@
+if(and(NULL, 1), 1, 2)	if(and(1, NULL), 1, 2)
+2	2
+and(NULL, 1)	and(1, NULL)	and(0, NULL)	and(NULL, 0)
+NULL	NULL	0	0
+a
+0
+NULL
+a
+0
+NULL
+a
+0
+a
+0
+a
+0
+a
+0
+a
+1
+a
+NULL
+a
+0
+1
+a
+0
+1
+a	equals(a, 0)	equals(a, 1)
+0	1	0
+1	0	1
+NULL	NULL	NULL
+a	equals(a, not(0))	equals(a, not(1))
+0	0	1
+1	1	0
+NULL	NULL	NULL
+A	B	nA	nB	AB	n(AB)	nAonB	AoB	n(AoB)	nAnB
+N	N	N	N	N	N	N	N	N	N
+0	N	1	N	0	1	1	N	N	N
+1	N	0	N	N	N	N	1	0	0
+N	0	N	1	0	1	1	N	N	N
+N	1	N	0	N	N	N	1	0	0
+0	0	1	1	0	1	1	0	1	1
+0	1	1	0	0	1	1	1	0	0
+1	0	0	1	0	1	1	1	0	0
+1	1	0	0	1	0	0	1	0	0
+A	B	nA	nB	AB	n(AB)	nAonB	AoB	n(AoB)	nAnB
+N	N	N	N	N	N	N	N	N	N
+0	N	1	N	0	1	1	N	N	N
+1	N	0	N	N	N	N	1	0	0
+N	0	N	1	0	1	1	N	N	N
+N	1	N	0	N	N	N	1	0	0
+0	0	1	1	0	1	1	0	1	1
+0	1	1	0	0	1	1	1	0	0
+1	0	0	1	0	1	1	1	0	0
+1	1	0	0	1	0	0	1	0	0

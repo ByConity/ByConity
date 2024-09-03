@@ -1,0 +1,23 @@
+d
+1970-01-01
+1970-01-01
+2149-06-06
+2149-06-06
+NULL
+NULL
+NULL
+NULL
+plus(CAST('2006-09-26', 'DATE'), toIntervalDay(1))
+2006-09-27
+plus(CAST('2006-09-26', 'DATE'), toIntervalMonth(1))
+2006-10-26
+plus(CAST('2006-09-26', 'DATE'), toIntervalYear(1))
+2007-09-26
+plus(CAST('2006-09-26', 'DATE'), toIntervalWeek(1))
+2006-10-03
+plus('2007-01-01', toIntervalDay(a))
+2007-01-02 00:00:00.000000
+2007-01-03 00:00:00.000000
+plus(b, toIntervalDay(a))
+2001-01-02 00:00:00.000000
+2002-02-04 00:00:00.000000

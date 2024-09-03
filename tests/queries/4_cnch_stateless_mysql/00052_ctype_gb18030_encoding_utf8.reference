@@ -1,0 +1,40 @@
+schema_name	hex(schema_name)
+INFORMATION_SCHEMA	494E464F524D4154494F4E5F534348454D41
+cnch_system	636E63685F73797374656D
+default	64656661756C74
+inf%	696E6625
+information_schema	696E666F726D6174696F6E5F736368656D61
+mbase	6D62617365
+mysqltest	6D7973716C74657374
+system	73797374656D
+test	74657374
+test_8jl5pc	746573745F386A6C357063
+test_a31g7y	746573745F613331673779
+default	746573745F6D3961776C6C
+test_mdhqd7	746573745F6D6468716437
+test_otcyr8	746573745F6F7463797238
+test_pioaa8	746573745F70696F616138
+test_vctotv	746573745F7663746F7476
+test_z202p1	746573745F7A3230327031
+中文	E4B8ADE69687
+数据库	E695B0E68DAEE5BA93
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+字段一	String	true						
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+列列列	String	true						
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+列㐄㐅	String	true						
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+㐄㐄㐄	String	true						
+name	type	nullable	flags	default_type	default_expression	comment	codec_expression	ttl_expression
+㐐㐐㐐	String	true						
+Table	Create Table
+表格	CREATE TABLE test.`表格`\n(\n    `字段一` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+模式	CREATE TABLE test.`模式`\n(\n    `列列列` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+隞嗷㐁	CREATE TABLE test.`隞嗷㐁`\n(\n    `列㐄㐅` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+㐅㐅㐅	CREATE TABLE test.`㐅㐅㐅`\n(\n    `㐄㐄㐄` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192
+Table	Create Table
+㐇㐈㐉	CREATE TABLE test.`㐇㐈㐉`\n(\n    `㐐㐐㐐` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY tuple()\nUNIQUE KEY tuple()\nSETTINGS partition_level_unique_keys = 0, storage_policy = 'cnch_default_hdfs', allow_nullable_key = 1, storage_dialect_type = 'MYSQL', index_granularity = 8192

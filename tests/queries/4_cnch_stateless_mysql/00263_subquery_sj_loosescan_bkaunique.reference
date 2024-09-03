@@ -1,0 +1,129 @@
+a
+2
+3
+4
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_1
+      ├─ TableScan test.t2 Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ TableScan test.t1 Est. ? rows
+                  Outputs: a_1:=a
+a
+2
+4
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_1
+      ├─ TableScan test.t2 Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: [a_1]
+            └─ Filter Est. ? rows
+               │     Condition: b != 30
+               └─ TableScan test.t1 Est. ? rows
+                        Where: b != 30
+                        Outputs: [b], a_1:=a
+a
+2
+3
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_1
+      ├─ TableScan test.t2 Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Inner Join Est. ? rows
+            │     Condition: b == a_2
+            ├─ TableScan test.t1 Est. ? rows
+            │        Outputs: [b], a_1:=a
+            └─ Broadcast Exchange Est. ? rows
+               └─ TableScan test.t3 Est. ? rows
+                        Outputs: a_2:=a
+a
+2
+3
+4
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_1
+      ├─ TableScan test.t2 Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ TableScan test.t1 Est. ? rows
+                  Outputs: a_1:=a
+a
+2
+4
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_1
+      ├─ TableScan test.t2 Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: [a_1]
+            └─ Filter Est. ? rows
+               │     Condition: b != 30
+               └─ TableScan test.t1 Est. ? rows
+                        Where: b != 30
+                        Outputs: [b], a_1:=a
+a
+2
+3
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_1
+      ├─ TableScan test.t2 Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Inner Join Est. ? rows
+            │     Condition: b == a_2
+            ├─ TableScan test.t1 Est. ? rows
+            │        Outputs: [b], a_1:=a
+            └─ Broadcast Exchange Est. ? rows
+               └─ TableScan test.t3 Est. ? rows
+                        Outputs: a_2:=a
+a
+2
+3
+4
+a
+2
+4
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: a == a_1
+      ├─ TableScan test.t2 Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: [a_1]
+            └─ Filter Est. ? rows
+               │     Condition: b != 30
+               └─ TableScan test.t1 Est. ? rows
+                        Where: b != 30
+                        Outputs: [b], a_1:=a

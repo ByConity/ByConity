@@ -1,0 +1,12 @@
+collation	Charset	Id	Default	Compiled	Sortlen	Pad_attribute
+utf8mb4_0900_ai_ci	utf8mb4	255	Yes	Yes	0	NO PAD
+a	length(a)	equals(a, '')	equals(a, ' ')	equals(a, '  ')
+	0	1	0	0
+popisek
+2005-01-1
+popisek
+2005-01-1
+id	str
+0	aaaaaaa
+a
+abcdefgh�

@@ -59,8 +59,8 @@ namespace
 
         ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
         {
-            const auto & column1 = arguments[0].column;
-            const auto & column2 = arguments[1].column;
+            const auto & column1 = arguments[0].column->convertToFullColumnIfConst();
+            const auto & column2 = arguments[1].column->convertToFullColumnIfConst();
 
             auto col1_serialized = ColumnString::create();
             auto col2_serialized = ColumnString::create();

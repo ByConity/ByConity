@@ -1,0 +1,32 @@
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {a}
+         └─ Aggregating Est. ? rows
+            │     Group by: {a}
+            └─ Projection Est. ? rows
+               │     Expressions: [a]
+               └─ Filter Est. ? rows
+                  │     Condition: (a, b) IN ((0, 0), (1, 1))
+                  └─ TableScan default.t1 Est. ? rows
+                           Where: (a, b) IN ((0, 0), (1, 1))
+                           Outputs: [a, b]
+explain
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {a}
+         └─ Aggregating Est. ? rows
+            │     Group by: {a}
+            └─ Projection Est. ? rows
+               │     Expressions: [a]
+               └─ Filter Est. ? rows
+                  │     Condition: (a, b) IN ((0, 0), (1, 1))
+                  └─ TableScan default.t1 Est. ? rows
+                           Where: (a, b) IN ((0, 0), (1, 1))
+                           Outputs: [a, b]

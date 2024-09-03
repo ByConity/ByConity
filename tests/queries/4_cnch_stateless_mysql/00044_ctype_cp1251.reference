@@ -1,0 +1,16 @@
+a
+a
+ab
+abc
+a	b
+a	a
+ab	a
+abc	a
+a	b
+abc	a
+ab	a
+a	a
+substring(a, negate(1))
+b
+c
+a

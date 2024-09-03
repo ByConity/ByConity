@@ -39,6 +39,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ASTPtr catalog;
     ASTPtr database;
     ASTPtr table;
+    std::vector<ASTPtr> tables;
     String cluster_str;
     bool if_exists = false;
     bool temporary = false;
@@ -86,8 +87,13 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
         if (s_if_exists.ignore(pos, expected))
             if_exists = true;
 
-        if (!name_p.parse(pos, table, expected))
-            return false;
+        // Parse multiple tables separated by commas
+        do {
+            if (!name_p.parse(pos, table, expected))
+                return false;
+            if (!s_dot.checkWithoutMoving(pos, expected))
+                tables.push_back(table);
+        } while (ParserToken(TokenType::Comma).ignore(pos, expected));
 
         if (s_dot.ignore(pos, expected))
         {
@@ -139,6 +145,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     tryGetIdentifierNameInto(catalog, query->catalog);
     tryGetIdentifierNameInto(database, query->database);
     tryGetIdentifierNameInto(table, query->table);
+    tryGetIdentifierNameInto(tables, query->tables);
 
     query->cluster = cluster_str;
 

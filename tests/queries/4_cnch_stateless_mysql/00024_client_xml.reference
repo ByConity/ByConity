@@ -1,0 +1,10 @@
+a&b	a<b	a>b
+1	2	a&b a<b a>b
+less(1, 2)
+1
+greater(1, 2)
+0
+bitAnd(1, 3)
+1
+NULL
+NULL
