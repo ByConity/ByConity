@@ -39,7 +39,8 @@ static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* 
      {"max_body_size", "671088640"},
      /// Print Controller.ErrorText() when server is about to respond a failed RPC
      {"log_error_text", ""},
-     {"bvar_enable_sampling", "true"}};
+     {"bvar_enable_sampling", "true"},
+     {"latency_scale_factor", "1000"}};
 
 
 static std::unordered_set<std::string> reconfigurable_brpc_gflags /* NOLINT */

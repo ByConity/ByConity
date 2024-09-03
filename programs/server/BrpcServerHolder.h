@@ -14,35 +14,13 @@
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 
-#define SERVER_REGISTER_SERVICE(service_name) \
-{ \
-    service_name##_RegisterService service_register(global_context); \
-    rpc_server->AddService(service_register.service.get(), brpc::SERVER_DOESNT_OWN_SERVICE); \
-    rpc_services.emplace_back(std::move(service_register.service)); \
-}
-
-#define REGISTER_SERVER_SERVICES() \
-{ \
-    SERVER_REGISTER_SERVICE(CnchServerServiceImpl); \
-}
-
-#define REGISTER_WORKER_SERVICES() \
-{ \
-    SERVER_REGISTER_SERVICE(CnchWorkerServiceImpl); \
-}
-
-#define REGISTER_COMPLEX_QUERY_SERVICES() \
-    { \
-        SERVER_REGISTER_SERVICE(BrpcExchangeReceiverRegistryService); \
-        SERVER_REGISTER_SERVICE(RuntimeFilterService); \
-        SERVER_REGISTER_SERVICE(PlanSegmentManagerRpcService); \
-        SERVER_REGISTER_SERVICE(OptimizerStatisticsService); \
-    }
-
-#define REGISTER_REMOTE_DISKCACHE_SERVICES(host_port) \
-{ \
-    LOG_DEBUG(&Poco::Logger::get("BrpcServerHolder"), "Start register RemoteDiskCacheService: {}", host_port); \
-    SERVER_REGISTER_SERVICE(RemoteDiskCacheService); \
+void addService(
+    brpc::Server & rpc_server,
+    std::vector<std::unique_ptr<::google::protobuf::Service>> & rpc_services,
+    std::unique_ptr<google::protobuf::Service> service)
+{
+    rpc_server.AddService(service.get(), brpc::SERVER_DOESNT_OWN_SERVICE);
+    rpc_services.emplace_back(std::move(service));
 }
 
 namespace DB
@@ -62,17 +40,21 @@ public:
 
         if (global_context->getServerType() == ServerType::cnch_server)
         {
-            REGISTER_SERVER_SERVICES()
+            addService(*rpc_server, rpc_services, CnchServerServiceImpl_RegisterService(global_context).service);
         }
         else if (global_context->getServerType() == ServerType::cnch_worker)
         {
-            REGISTER_WORKER_SERVICES()
-            REGISTER_REMOTE_DISKCACHE_SERVICES(host_port)
+            addService(*rpc_server, rpc_services, CnchWorkerServiceImpl_RegisterService(global_context).service);
+            LOG_DEBUG(&Poco::Logger::get("BrpcServerHolder"), "Start register RemoteDiskCacheService: {}", host_port);
+            addService(*rpc_server, rpc_services, RemoteDiskCacheService_RegisterService(global_context).service);
         }
 
         if (global_context->getComplexQueryActive())
         {
-            REGISTER_COMPLEX_QUERY_SERVICES()
+            addService(*rpc_server, rpc_services, BrpcExchangeReceiverRegistryService_RegisterService(global_context).service);
+            addService(*rpc_server, rpc_services, RuntimeFilterService_RegisterService(global_context).service);
+            addService(*rpc_server, rpc_services, PlanSegmentManagerRpcService_RegisterService(global_context).service);
+            addService(*rpc_server, rpc_services, OptimizerStatisticsService_RegisterService(global_context).service);
         }
 
         if (rpc_server->Start(host_port.c_str(), &options) != 0)
