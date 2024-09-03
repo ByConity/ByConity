@@ -144,7 +144,6 @@ public:
     std::unordered_map<String, HostWithPorts> getIdHostPortsMap() const;
 
     static WorkerGroupHandle mockWorkerGroupHandle(const String & worker_id_prefix_, UInt64 worker_number_, const ContextPtr & context_);
-    void buildRing();
 
     void addHostWithPorts(const HostWithPorts & host_with_ports)
     {
@@ -170,6 +169,8 @@ private:
 
     /// Hash Map for part allocation
     std::unique_ptr<DB::ConsistentHashRing> ring;
+
+    void buildRing();
 };
 
 }

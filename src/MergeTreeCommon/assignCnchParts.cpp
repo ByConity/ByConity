@@ -89,26 +89,12 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
         }
         case Context::PartAllocator::RING_CONSISTENT_HASH:
         {
-            if (!worker_group->hasRing())
-            {
-                LOG_WARNING(
-                    log,
-                    "Attempt to use ring-base consistent hash, but ring is empty; build it now");
-                worker_group->buildRing();
-            }
             auto ret = assignCnchPartsWithRingAndBalance(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts);
             reportStats(log, ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
             return ret;
         }
         case Context::PartAllocator::STRICT_RING_CONSISTENT_HASH:
         {
-            if (!worker_group->hasRing())
-            {
-                LOG_WARNING(
-                    log,
-                    "Attempt to use ring-base consistent hash, but ring is empty; build it now");
-                worker_group->buildRing();
-            }
             auto ret = assignCnchPartsWithStrictBoundedHash(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts, true);
             reportStats(log, ret, "Strict Consistent Hash", worker_group->getRing().size());
             return ret;
@@ -767,12 +753,6 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
         part_allocation_algorithm = query_context->getHybridPartAllocationAlgo();
     else
         part_allocation_algorithm = worker_group->getContext()->getHybridPartAllocationAlgo();
-
-    if (part_allocation_algorithm != Context::HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH && !worker_group->hasRing())
-    {
-        LOG_WARNING(log, "Attempt to use ring-base consistent hash, but ring is empty; build it now");
-        worker_group->buildRing();
-    }
 
     switch (part_allocation_algorithm)
     {
