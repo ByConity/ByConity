@@ -43,9 +43,9 @@ NamesAndTypesList StorageSystemBGThreads::getNamesAndTypes()
 
 void StorageSystemBGThreads::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    for (auto i = CnchBGThreadType::ServerMinType; i <= CnchBGThreadType::ServerMaxType; i = CnchBGThreadType(size_t(i) + 1))
+    for (auto i = CnchBGThread::ServerMinType; i <= CnchBGThread::ServerMaxType; ++i)
     {
-        for (auto && [_, t] : context->getCnchBGThreadsMap(i)->getAll())
+        for (auto && [_, t] : context->getCnchBGThreadsMap(static_cast<CnchBGThreadType>(i))->getAll())
         {
             size_t c = 0;
             res_columns[c++]->insert(toString(t->getType()));

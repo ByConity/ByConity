@@ -783,18 +783,8 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
 
             try
             {
-                std::map<StorageID, CnchBGThreadStatus> res;
-
-                auto type = CnchBGThreadType(request->type());
-                if (type >= CnchBGThreadType::ServerMinType && type <= CnchBGThreadType::ServerMaxType)
-                {
-                    auto threads = global_context->getCnchBGThreadsMap(type);
-                    res = threads->getStatusMap();
-                }
-                else
-                {
-                    throw Exception("Not support type " + toString(int(request->type())), ErrorCodes::NOT_IMPLEMENTED);
-                }
+                auto type = toServerBGThreadType(request->type());
+                std::map<StorageID, CnchBGThreadStatus> res = global_context->getCnchBGThreadsMap(type)->getStatusMap();
 
                 for (const auto & [storage_id, status] : res)
                 {
@@ -837,8 +827,9 @@ void CnchServerServiceImpl::controlCnchBGThread(
                 StorageID storage_id = StorageID::createEmpty();
                 if (!request->storage_id().table().empty())
                     storage_id = RPCHelpers::createStorageID(request->storage_id());
-                auto type = CnchBGThreadType(request->type());
-                auto action = CnchBGThreadAction(request->action());
+
+                auto type = toServerBGThreadType(request->type());
+                auto action = toCnchBGThreadAction(request->action());
                 auto & controller = static_cast<brpc::Controller &>(*cntl);
                 LOG_DEBUG(log, "Received controlBGThread for {} type {} action {} from {}",
                     storage_id.empty() ? "empty storage" : storage_id.getNameForLogs(),
