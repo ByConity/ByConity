@@ -1882,6 +1882,7 @@ enum PreloadLevelSettings : UInt64
     MAKE_OBSOLETE(M, UInt64, exchange_local_no_repartition_extra_threads, 32) \
     MAKE_OBSOLETE(M, UInt64, filtered_ratio_to_use_skip_read, 0) \
     MAKE_OBSOLETE(M, Bool, enable_two_stages_prewhere, false) \
+    MAKE_OBSOLETE(M, Bool, funnel_old_rule, false) \
     /** End of OBSOLETE_SETTINGS */ \
 
 #define FORMAT_FACTORY_SETTINGS(M) \
