@@ -98,11 +98,46 @@ BlockIO InterpreterUpdateQuery::execute()
     else
     {
         ASTPtr insert_ast = transformToInterpreterInsertQuery(table);
-        LOG_DEBUG(log, "Convert to INSERT SELECT: {}", DB::serializeAST(*insert_ast));
+        LOG_DEBUG(log, "[Update] Convert to INSERT SELECT: {}", DB::serializeAST(*insert_ast));
 
-        InterpreterInsertQuery interpreter_insert(insert_ast, getContext());
+        InterpreterInsertQuery interpreter_insert(
+            insert_ast,
+            getContext(),
+            /*allow_materialized_*/false,
+            /*no_squash_*/false,
+            /*no_destination_*/false,
+            AccessType::ALTER_UPDATE);
+
         return interpreter_insert.execute();
     }
+}
+
+static ASTTableExpression * getFirstTableExpression(const ASTUpdateQuery & update)
+{
+    if (!update.tables)
+        return {};
+
+    auto & tables_in_update_query = update.tables->as<ASTTablesInSelectQuery &>();
+    if (tables_in_update_query.children.empty())
+        return {};
+
+    auto & tables_element = tables_in_update_query.children[0]->as<ASTTablesInSelectQueryElement &>();
+    if (!tables_element.table_expression)
+        return {};
+
+    return tables_element.table_expression->as<ASTTableExpression>();
+}
+
+static String getTableExpressionAlias(const ASTTableExpression * table_expression)
+{
+    if (table_expression->subquery)
+        return table_expression->subquery->tryGetAlias();
+    else if (table_expression->table_function)
+        return table_expression->table_function->tryGetAlias();
+    else if (table_expression->database_and_table_name)
+        return table_expression->database_and_table_name->tryGetAlias();
+
+    return String();
 }
 
 ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & storage)
@@ -125,20 +160,28 @@ ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & 
 
     /// collect assignments
     std::unordered_map<String, ASTPtr> assignments;
+    String update_table_alias;
     for (const auto & child : ast_update.assignment_list->children)
     {
-        if (const ASTAssignment * assignment = child->as<ASTAssignment>())
-        {
-            if (immutable_columns.count(assignment->column_name))
-                throw Exception("Updating partition/unique keys is not allowed.", ErrorCodes::BAD_ARGUMENTS);
-
-            if (!ordinary_columns.count(assignment->column_name))
-                throw Exception("There is no column named " + assignment->column_name, ErrorCodes::BAD_ARGUMENTS);
-
-            assignments.emplace(assignment->column_name, assignment->expression()->clone());
-        }
-        else
+        const ASTAssignment * assignment = child->as<ASTAssignment>();
+        if (!assignment)
             throw Exception("Syntax error in update statement. " + child->getID(), ErrorCodes::SYNTAX_ERROR);
+
+        if (const auto & t = assignment->table_name; !t.empty())
+        {
+            if (update_table_alias.empty())
+                update_table_alias = t;
+            else if (update_table_alias != t)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "UPDATE multi tables is not supported. Tables: {}, {}", update_table_alias, t);
+        }
+
+        if (immutable_columns.count(assignment->column_name))
+            throw Exception("Updating partition/unique keys is not allowed.", ErrorCodes::BAD_ARGUMENTS);
+
+        if (!ordinary_columns.count(assignment->column_name))
+            throw Exception("There is no column named " + assignment->column_name, ErrorCodes::BAD_ARGUMENTS);
+
+        assignments.emplace(assignment->column_name, assignment->expression()->clone());
     }
 
     auto select_list = std::make_shared<ASTExpressionList>();
@@ -166,6 +209,8 @@ ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & 
 
     if (ast_update.single_table)
     {
+        if (!update_table_alias.empty())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "No table alias found: {}", update_table_alias);
         res->setExpression(ASTSelectQuery::Expression::TABLES, std::make_shared<ASTTablesInSelectQuery>());
         auto tables = res->tables();
         auto tables_elem = std::make_shared<ASTTablesInSelectQueryElement>();
@@ -178,6 +223,23 @@ ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & 
     }
     else
     {
+        const auto & first_table = getFirstTableExpression(ast_update);
+        auto first_table_alias = getTableExpressionAlias(first_table);
+
+        /// Check that only the first table is updated.
+        if (update_table_alias.empty())
+        {
+            /// By default, if update_table is empty, it means the first table is updated.
+        }
+        else
+        {
+            if (first_table_alias.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "SET with table alias but there is no table alias. {}, {}", update_table_alias);
+            else if (first_table_alias != update_table_alias)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "It's only allowed to update the first table `{}`, but `{}` is given.", first_table_alias, update_table_alias);
+        }
+
         res->setExpression(ASTSelectQuery::Expression::TABLES, ast_update.tables->clone());
     }
 
@@ -261,9 +323,16 @@ BlockIO InterpreterUpdateQuery::executePartialUpdate(const StoragePtr & storage)
     else
     {
         ASTPtr insert_ast = prepareInsertQueryForPartialUpdate(storage, name_to_expression_map);
-        LOG_DEBUG(log, "Convert to INSERT SELECT: {}", DB::serializeAST(*insert_ast));
+        LOG_DEBUG(log, "[PartialUpdate] Convert to INSERT SELECT: {}", DB::serializeAST(*insert_ast));
 
-        InterpreterInsertQuery interpreter_insert(insert_ast, getContext());
+        InterpreterInsertQuery interpreter_insert(
+            insert_ast,
+            getContext(),
+            /*allow_materialized_*/false,
+            /*no_squash_*/false,
+            /*no_destination_*/false,
+            AccessType::ALTER_UPDATE);
+
         return interpreter_insert.execute();
     }
 }

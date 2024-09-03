@@ -26,7 +26,7 @@ bool ParserUpdateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_limit("LIMIT");
     ParserKeyword s_settings("SETTINGS");
 
-    ParserList parser_assignment_list(std::make_unique<ParserAssignment>(dt), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserList parser_assignment_list(std::make_unique<ParserAssignmentWithAlias>(dt), std::make_unique<ParserToken>(TokenType::Comma), false);
     ParserExpression exp_list(dt);
     ParserOrderByExpressionList order_list(dt);
     ParserExpressionWithOptionalAlias exp_elem(false, dt);

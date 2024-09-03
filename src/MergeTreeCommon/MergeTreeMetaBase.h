@@ -277,6 +277,12 @@ public:
     /// For ATTACH/DETACH/DROP PARTITION.
     String getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr context) const;
 
+    bool extractNullableForPartitionID() const
+    {
+        const auto & settings = getSettings();
+        return settings->allow_nullable_key && settings->extract_partition_nullable_date;
+    }
+
     MutableDataPartPtr cloneAndLoadDataPartOnSameDisk(const DataPartPtr & src_part, const String & tmp_part_prefix,
                     const MergeTreePartInfo & dst_part_info, const StorageMetadataPtr & metadata_snapshot);
 
@@ -443,7 +449,8 @@ public:
 
     /// partition filters
     /// TODO: make partition_list constant
-    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const;
+    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, time_t query_time) const;
+    bool canFilterPartitionByTTL() const;
 
     Strings selectPartitionsByPredicate(
         const SelectQueryInfo & query_info,

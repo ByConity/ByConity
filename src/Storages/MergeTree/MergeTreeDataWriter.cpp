@@ -381,7 +381,13 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
 
     MergeTreePartition partition(std::move(block_with_partition.partition));
 
-    MergeTreePartInfo new_part_info(partition.getID(metadata_snapshot->getPartitionKey().sample_block), temp_index, temp_index, 0, mutation, hint_mutation);
+    MergeTreePartInfo new_part_info(
+        partition.getID(metadata_snapshot->getPartitionKey().sample_block, data.extractNullableForPartitionID()),
+        /*min_block_*/temp_index,
+        /*max_block_*/temp_index,
+        /*level_*/0,
+        mutation,
+        hint_mutation);
     String part_name;
     if (data.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
     {

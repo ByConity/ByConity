@@ -57,7 +57,8 @@ public:
             for (size_t i = 0; i < size; ++i)
                 arguments[i].column->get(j, row[i]);
             MergeTreePartition partition(std::move(row));
-            result_column->insert(partition.getID(sample_block));
+            /// TODO: (zuochuang.zema) how to get extract_nullable_date_value
+            result_column->insert(partition.getID(sample_block, false));
         }
         return result_column;
     }

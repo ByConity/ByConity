@@ -26,10 +26,11 @@
 namespace DB
 {
 
-/// Part of the ALTER UPDATE statement of the form: column = expr
+/// Part of the ALTER UPDATE statement of the form: column = expr or tbl_alias.col = expr
 class ASTAssignment : public IAST
 {
 public:
+    String table_name;
     String column_name;
 
     ASTPtr expression() const
@@ -37,7 +38,9 @@ public:
         return children.at(0);
     }
 
-    String getID(char delim) const override { return "Assignment" + (delim + column_name); }
+    String tablePrefix() const { return table_name.empty() ? "" : table_name + "."; }
+
+    String getID(char delim) const override { return "Assignment" + (delim + tablePrefix() + column_name); }
 
     ASTType getType() const override { return ASTType::ASTAssignment; }
 
@@ -50,11 +53,13 @@ public:
 
     void toLowerCase() override 
     {
+        boost::to_lower(table_name);
         boost::to_lower(column_name);
     }
 
     void toUpperCase() override 
     {
+        boost::to_upper(table_name);
         boost::to_upper(column_name);
     }
 
@@ -62,6 +67,11 @@ protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override
     {
         settings.ostr << (settings.hilite ? hilite_identifier : "");
+        if (!table_name.empty())
+        {
+            settings.writeIdentifier(table_name);
+            settings.ostr << ".";
+        }
         settings.writeIdentifier(column_name);
         settings.ostr << (settings.hilite ? hilite_none : "");
 

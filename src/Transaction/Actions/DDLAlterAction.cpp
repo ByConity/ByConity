@@ -95,7 +95,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         else
         {
             LOG_DEBUG(log, "Skip change table schema because {}",
-                new_schema.empty() ? "new shema is empty." : ("new shema is the same as old one : " + old_schema));
+                new_schema.empty() ? "new schema is empty." : ("new schema is the same as old one : " + old_schema));
         }
     }
     catch (...)

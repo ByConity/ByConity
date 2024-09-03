@@ -52,7 +52,7 @@ public:
     explicit MergeTreePartition(UInt32 yyyymm) : value(1, yyyymm) {}
 
     String getID(const MergeTreeMetaBase & storage) const;
-    String getID(const Block & partition_key_sample) const;
+    String getID(const Block & partition_key_sample, bool extract_nullable_date_value) const;
 
     void serializeText(const MergeTreeMetaBase & storage, WriteBuffer & out, const FormatSettings & format_settings) const;
 
