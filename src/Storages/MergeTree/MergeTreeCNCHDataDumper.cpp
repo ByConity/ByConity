@@ -19,10 +19,12 @@
 #include <Core/UUID.h>
 #include <DataTypes/Serializations/ISerialization.h>
 #include <Disks/HDFS/DiskHDFS.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <IO/WriteSettings.h>
 #include <IO/copyData.h>
+#include <IO/LimitReadBuffer.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Storages/IStorage.h>
@@ -312,7 +314,9 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         writeDataFileHeader(*data_out, new_part);
 
         const DiskPtr & local_part_disk = local_part->volume->getDisk();
-        LOG_TRACE(log, "Getting local disk {} at {}\n", local_part_disk->getName(), local_part_disk->getPath());
+        bool enable_compact_map_data = local_part->versions->enable_compact_map_data;
+        LOG_TRACE(log, "Getting local disk {} at {}, enable_compact_map_data is {}\n",
+            local_part_disk->getName(), local_part_disk->getPath(), enable_compact_map_data);
 
         if (new_part->checksums_ptr)
         {
@@ -320,21 +324,37 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             {
                 auto & file = *file_ptr;
 
-                String file_rel_path = local_part->getFullRelativePath() + file.first;
-                String file_full_path = local_part->getFullPath() + file.first;
-                if (!local_part_disk->fileExists(file_rel_path))
-                    throw Exception(
-                        "Fail to dump local file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
+                if (enable_compact_map_data && isMapImplicitKey(file.first))
+                {
+                    String file_path = local_part->getFullPath() + "/" + getMapFileNameFromImplicitFileName(file.first);
+                    auto & local_part_checksums_files = local_part->checksums_ptr->files;
+                    UInt64 offset = local_part_checksums_files[file.first].file_offset;
+                    UInt64 file_size = local_part_checksums_files[file.first].file_size;
+                    ReadBufferFromFile from(file_path);
+                    from.seek(offset, SEEK_SET);
+                    LimitReadBuffer in(from, file_size, false);
+                    copyData(in, *data_out);
+                }
+                else
+                {
+                    String file_rel_path = local_part->getFullRelativePath() + file.first;
+                    String file_full_path = local_part->getFullPath() + file.first;
+                    if (!local_part_disk->fileExists(file_rel_path))
+                        throw Exception(
+                            "Fail to dump local file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
-                ReadBufferFromFile from(file_full_path);
-                copyData(from, *data_out);
+                    ReadBufferFromFile from(file_full_path);
+                    copyData(from, *data_out);
+                }
+
+                data_out->next();
+
                 /// TODO: fix getPositionInFile
                 if (file.second.file_offset + file.second.file_size != static_cast<UInt64>(data_out->count()))
                 {
                     throw Exception(
                         file.first + " in data part " + part_name + " check error, checksum offset: "
-                            + std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size)
-                            + "disk size: " + std::to_string(local_part_disk->getFileSize(file_rel_path)),
+                            + std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size),
                         ErrorCodes::BAD_CNCH_DATA_FILE);
                 }
             }

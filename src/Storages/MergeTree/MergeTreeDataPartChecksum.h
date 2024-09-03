@@ -133,6 +133,8 @@ struct MergeTreeDataPartChecksums
     bool readV7(ReadBuffer & in);
 
     void write(WriteBuffer & to) const;
+    /// For rewrite checksum of ClickhouseDumper
+    void writeLocal(WriteBuffer & to) const;
 
     /// Checksum from the set of checksums of .bin files (for deduplication).
     void computeTotalChecksumDataOnly(SipHash & hash) const;
