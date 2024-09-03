@@ -8,13 +8,19 @@ namespace DB
 
 struct ASTAlterDiskCacheQuery : public ASTQueryWithTableAndOutput
 {
-    enum class Type
+    enum class Action
     {
         PRELOAD,
         DROP
     };
 
-    String getID(char delim) const override { return "ALTER DISK CACHE " +  (delim + std::to_string(static_cast<int>(type))); }
+    enum class Type
+    {
+        PARTS,
+        MANIFEST
+    };
+
+    String getID(char delim) const override { return "ALTER DISK CACHE " +  (delim + std::to_string(static_cast<int>(action))); }
 
     ASTType getType() const override { return ASTType::ASTAlterDiskCacheQuery; }
 
@@ -26,8 +32,15 @@ struct ASTAlterDiskCacheQuery : public ASTQueryWithTableAndOutput
         return res;
     }
 
-    Type type;
+    Action action;
+    Type type = Type::PARTS;
+
+    // parts disk cache replated info
     ASTPtr partition;
+
+    // manifest disk cache related info
+    ASTPtr version;
+
     bool sync = true;
 
 protected:
@@ -38,7 +51,7 @@ protected:
         std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
         std::string nl_or_ws = settings.one_line ? " " : "\n";
 
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ALTER DISK CACHE " << (type == ASTAlterDiskCacheQuery::Type::PRELOAD ? "PRELOAD TABLE " : "DROP TABLE ") << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ALTER DISK CACHE " << (action == ASTAlterDiskCacheQuery::Action::PRELOAD ? "PRELOAD TABLE " : "DROP TABLE ") << (settings.hilite ? hilite_none : "");
 
         if (!table.empty())
         {
@@ -50,13 +63,23 @@ protected:
             settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << backQuoteIfNeed(table) << (settings.hilite ? hilite_none : "");
         }
 
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (sync ? " SYNC " : " ASYNC ") << (settings.hilite ? hilite_none : "");
+        if (type == ASTAlterDiskCacheQuery::Type::MANIFEST)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MANIFEST " << (settings.hilite ? hilite_none : "");
+            if (version)
+            {
+                settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "VERSION " << (settings.hilite ? hilite_none : "");
+                version->formatImpl(settings, state, frame);
+            }
+        }
 
         if (partition)
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "PARTITION " << (settings.hilite ? hilite_none : "");
             partition->formatImpl(settings, state, frame);
         }
+
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (sync ? " SYNC " : " ASYNC ") << (settings.hilite ? hilite_none : "");
     }
 };
 

@@ -215,6 +215,12 @@ public:
         Protos::DropPartDiskCacheResp * response,
         google::protobuf::Closure * done) override;
 
+    void dropManifestDiskCache(
+        google::protobuf::RpcController * cntl,
+        const Protos::DropManifestDiskCacheReq * request,
+        Protos::DropManifestDiskCacheResp * response,
+        google::protobuf::Closure * done) override;
+
     void sendOffloading(
         google::protobuf::RpcController * cntl,
         const Protos::SendOffloadingReq * request,

@@ -322,6 +322,30 @@ brpc::CallId CnchWorkerClient::dropPartDiskCache(
     return cntl.call_id();
 }
 
+brpc::CallId CnchWorkerClient::dropManifestDiskCache(
+    const ContextPtr & context,
+    const IStorage & storage,
+    const String & version,
+    const bool sync)
+{
+    brpc::Controller cntl;
+    Protos::DropManifestDiskCacheReq request;
+    Protos::DropManifestDiskCacheResp response;
+
+    cntl.set_timeout_ms(context->getSettingsRef().max_execution_time.value.totalMilliseconds());
+
+    RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_storage_id());
+    if (!version.empty())
+        request.set_version(std::stoull(version));
+    request.set_sync(sync);
+
+    stub->dropManifestDiskCache(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+    return cntl.call_id();
+}
+
 brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
     [[maybe_unused]] const ContextPtr & context,
     [[maybe_unused]] const HostWithPortsVec & read_workers,

@@ -30,6 +30,13 @@ BlockIO InterpreterAlterDiskCacheQuery::execute()
     if (!storage)
         throw Exception("Preload only support CnchMergeTree engine", ErrorCodes::LOGICAL_ERROR);
 
+    if (query.action == ASTAlterDiskCacheQuery::Action::DROP && query.type == ASTAlterDiskCacheQuery::Type::MANIFEST)
+    {
+        String version = query.version ? query.version->as<ASTLiteral>()->value.get<String>() : "";
+        storage->sendDropManifestDiskCacheTasks(getContext(), version, query.sync);
+        return {};
+    }
+
     ServerDataPartsVector parts;
     if (query.partition)
     {
@@ -42,17 +49,17 @@ BlockIO InterpreterAlterDiskCacheQuery::execute()
     }
     parts = CnchPartsHelper::calcVisibleParts(parts, false);
 
-    if (query.type == ASTAlterDiskCacheQuery::Type::PRELOAD)
+    if (query.action == ASTAlterDiskCacheQuery::Action::PRELOAD)
     {
         storage->sendPreloadTasks(getContext(), std::move(parts), query.sync, getContext()->getSettings().parts_preload_level, time(nullptr));
     }
-    else if (query.type == ASTAlterDiskCacheQuery::Type::DROP)
+    else if (query.action == ASTAlterDiskCacheQuery::Action::DROP)
     {
         storage->sendDropDiskCacheTasks(getContext(), std::move(parts), query.sync, getContext()->getSettings().drop_vw_disk_cache);
     }
     else
     {
-        throw Exception("Unknown alter disk cache query type", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Unknown alter action for disk cache query", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     return {};

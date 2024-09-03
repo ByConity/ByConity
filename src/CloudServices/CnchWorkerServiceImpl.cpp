@@ -643,6 +643,40 @@ void CnchWorkerServiceImpl::dropPartDiskCache(
     })
 }
 
+void CnchWorkerServiceImpl::dropManifestDiskCache(
+    google::protobuf::RpcController * cntl,
+    const Protos::DropManifestDiskCacheReq * request,
+    Protos::DropManifestDiskCacheResp * response,
+    google::protobuf::Closure * done)
+{
+    SUBMIT_THREADPOOL({
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        auto table_uuid = RPCHelpers::createUUID(request->storage_id());
+
+        UInt64 version = request->version();
+
+        auto storage_data_manager = rpc_context->getGlobalDataManager()->getStorageDataManager(table_uuid);
+        if (!storage_data_manager)
+            return;
+
+        std::unique_ptr<ThreadPool> pool;
+        ThreadPool * pool_ptr;
+        if (request->sync())
+        {
+            // adjust pool size according to version number
+            pool = std::make_unique<ThreadPool>(version>0 ? 1 : 4);
+            pool_ptr = pool.get();
+        }
+        else
+            pool_ptr = &(IDiskCache::getThreadPool());
+
+        storage_data_manager->dropTableVersion(*pool_ptr, version);
+
+        if (pool)
+            pool->wait();
+    })
+}
+
 void CnchWorkerServiceImpl::sendOffloading(
     google::protobuf::RpcController *,
     const Protos::SendOffloadingReq *,

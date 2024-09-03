@@ -17,6 +17,8 @@ public:
         const WGWorkerInfoPtr & runtime_worker_info,
         ServerDataPartsWithDBM & server_parts);
 
+    StorageDataManagerPtr getStorageDataManager(const UUID & storage_uuid);
+
 private:
 
     StorageDataManagerPtr getStorageDataManager(const UUID & storage_uuid, const WGWorkerInfoPtr & runtime_worker_info);

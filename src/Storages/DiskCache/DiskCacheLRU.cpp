@@ -484,13 +484,24 @@ size_t DiskCacheLRU::drop(const String & part_name)
     SCOPE_EXIT({is_droping = false; });
 
     fs::path meta_path, data_path;
-    if (type == DataType::ALL || type == DataType::META)
-        meta_path = part_name.empty() ? fs::path(latest_disk_cache_dir) / META_DISK_CACHE_DIR_PREFIX : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name, META_DISK_CACHE_DIR_PREFIX);
 
-    if (type == DataType::ALL || type == DataType::DATA)
-        data_path = part_name.empty() ? fs::path(latest_disk_cache_dir) / DATA_DISK_CACHE_DIR_PREFIX : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name, DATA_DISK_CACHE_DIR_PREFIX);
+    if (name == "Manifest")
+    {
+        meta_path = getRelativePath(hash(part_name), part_name).parent_path();
+        data_path = meta_path;
 
-    LOG_TRACE(log, fmt::format("start delete part {} cache {} {}", part_name, meta_path.relative_path().c_str(), data_path.relative_path().c_str()));
+        LOG_TRACE(log, fmt::format("start delete manifest {} cache {} {}", part_name, meta_path.relative_path().c_str(), data_path.relative_path().c_str()));
+    }
+    else
+    {
+        if (type == DataType::ALL || type == DataType::META)
+            meta_path = part_name.empty() ? fs::path(latest_disk_cache_dir) / META_DISK_CACHE_DIR_PREFIX : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name, META_DISK_CACHE_DIR_PREFIX);
+
+        if (type == DataType::ALL || type == DataType::DATA)
+            data_path = part_name.empty() ? fs::path(latest_disk_cache_dir) / DATA_DISK_CACHE_DIR_PREFIX : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name, DATA_DISK_CACHE_DIR_PREFIX);
+
+        LOG_TRACE(log, fmt::format("start delete part {} cache {} {}", part_name, meta_path.relative_path().c_str(), data_path.relative_path().c_str()));
+    }
 
     const Disks & disks = volume->getDisks();
     size_t delete_file_size = 0;

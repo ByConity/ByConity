@@ -115,6 +115,12 @@ public:
         bool sync,
         bool drop_vw_disk_cache);
 
+    brpc::CallId dropManifestDiskCache(
+        const ContextPtr & context,
+        const IStorage & storage,
+        const String & version,
+        const bool sync);
+
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,
         const HostWithPortsVec & read_workers,

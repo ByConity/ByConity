@@ -1552,6 +1552,18 @@ void StorageCnchMergeTree::sendDropDiskCacheTasks(ContextPtr local_context, cons
     server_resource->sendResources(local_context, worker_action);
 }
 
+void StorageCnchMergeTree::sendDropManifestDiskCacheTasks(ContextPtr local_context, String version, bool sync)
+{
+    auto worker_group = getWorkerGroupForTable(*this, local_context);
+    std::vector<brpc::CallId> call_ids;
+
+    for (const auto & worker_client : worker_group->getWorkerClients())
+        call_ids.emplace_back(worker_client->dropManifestDiskCache(local_context, *this, version, sync));
+
+    for (auto & call_id : call_ids)
+        brpc::Join(call_id);
+}
+
 PrunedPartitions StorageCnchMergeTree::getPrunedPartitions(
     const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const
 {

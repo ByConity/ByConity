@@ -31,7 +31,7 @@ public:
     {
         String segment_name = UUIDHelpers::UUIDToString(version_ptr->storage_uuid) + "/Manifests/" +
             (version_ptr->worker_info ? version_ptr->worker_info->worker_id + "/" : "") +
-            toString(version_ptr->version) + (version_ptr->checkpoint_version ? ".checkpoint" : ".manifest");
+            toString(version_ptr->version) + (version_ptr->checkpoint_version ? "/checkpoint" : "/manifest");
 
         return segment_name;
     }
@@ -185,10 +185,11 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
                     loaded_from_manifest = true;
                 }
 
-                LOG_TRACE(&Poco::Logger::get("TableVersion"), "Loaded {} data parts and {} delete bitmaps from manifest disk cache {}.",
+                LOG_TRACE(&Poco::Logger::get("TableVersion"), "Loaded {} data parts and {} delete bitmaps from manifest disk cache {} (relative path: {}).",
                     data_parts.size(),
                     delete_bitmaps.size(),
-                    manifest_seg->getSegmentName());
+                    manifest_seg->getSegmentName(),
+                    segment_path);
                 return;
             }
         }
@@ -251,6 +252,26 @@ void TableVersion::initialize(const Protos::ManifestListModel & version_model)
     checkpoint_version = version_model.checkpoint();
     const auto & txns = version_model.txn_ids();
     txn_list = std::vector<UInt64>{txns.begin(), txns.end()};
+}
+
+void TableVersion::dropDiskCache(ThreadPool & pool)
+{
+    auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::Manifest)->getDataCache();
+    auto manifest_seg = std::make_shared<ManifestDiskCacheSegment>(shared_from_this());
+
+    auto drop_task = [disk_cache, segment_name = manifest_seg->getSegmentName()]()
+    {
+        try
+        {
+            disk_cache->drop(segment_name);
+        }
+        catch(...)
+        {
+            tryLogCurrentException(&Poco::Logger::get("TableVersion"), "Error occurs when drop manifest disk cache : " + segment_name);
+        }
+    };
+
+    pool.scheduleOrThrowOnError(drop_task);
 }
 
 }

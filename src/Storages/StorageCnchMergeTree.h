@@ -203,6 +203,7 @@ public:
 
     void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload = true, UInt64 parts_preload_level = 0, UInt64 ts = {});
     void sendDropDiskCacheTasks(ContextPtr local_context, const ServerDataPartsVector & parts, bool sync = false, bool drop_vw_disk_cache = false);
+    void sendDropManifestDiskCacheTasks(ContextPtr local_context, String version = "", bool sync = false);
 
     PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
