@@ -93,8 +93,8 @@ struct SortColumnDescription
 
     bool operator == (const SortColumnDescription & other) const
     {
-        return column_name == other.column_name && column_number == other.column_number
-            && direction == other.direction && (nulls_direction == other.nulls_direction || nulls_direction == 0 || other.nulls_direction == 0);
+        return column_name == other.column_name && column_number == other.column_number && direction == other.direction
+            && nulls_direction == other.nulls_direction;
     }
 
     bool operator != (const SortColumnDescription & other) const
@@ -131,7 +131,6 @@ class SortDescription : public std::vector<SortColumnDescription>
 {
 public:
     using vector::vector;
-    bool hasPrefix(const SortDescription & prefix) const;
 };
 
 /// Outputs user-readable description into `out`.

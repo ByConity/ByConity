@@ -22,8 +22,9 @@ Projection
                            └─ TopNFiltering
                               │     Order by: {block_number ASC NULLS LAST}
                               │     Size: 10
-                              │     Algorithm: Unspecified
+                              │     Algorithm: Limit
                               └─ TableScan test.block_number_agg_sum_hit_mv_target
+                                       Input Order Info: {block_number ASC ANY}
                                        Outputs: [gas_fee, block_number]
 note: Materialized Views is applied for 1 times: test.mv_block_number_agg_hit.
 Projection

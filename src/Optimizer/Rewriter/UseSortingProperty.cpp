@@ -133,14 +133,14 @@ PlanAndPropConstants SortingOrderedSource::Rewriter::visitTopNFilteringNode(TopN
     auto required_sorting = topn_filtering->getSortDescription();
 
     auto result = VisitorUtil::accept(node.getChildren()[0], *this, required_sorting);
-    auto actual_sorting = result.property.getSorting().toSortDesc();
 
-    if (actual_sorting.hasPrefix(required_sorting))
+    Constants constants = ConstantsDeriver::deriveConstants(node.getStep(), {result.constants}, cte_helper.getCTEInfo(), context);
+    auto prefix_sorting = PropertyMatcher::matchSorting(*context, required_sorting, result.property.getSorting(), {}, constants);
+    if (prefix_sorting.size() == required_sorting.size())
         topn_filtering->setAlgorithm(TopNFilteringAlgorithm::Limit);
 
     Property any_prop;
     Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, any_prop, context);
-    Constants constants = ConstantsDeriver::deriveConstants(node.getStep(), {result.constants}, cte_helper.getCTEInfo(), context);
     return {node.shared_from_this(), prop, constants};
 }
 
@@ -200,6 +200,13 @@ PlanNodePtr PruneSortingInfoRewriter::visitAggregatingNode(AggregatingNode & nod
 PlanNodePtr PruneSortingInfoRewriter::visitWindowNode(WindowNode & node, SortInfo &)
 {
     auto prefix_desc = node.getStep()->getPrefixDescription();
+    SortInfo s{prefix_desc, size_t{0}};
+    return SimplePlanRewriter::visitPlanNode(node, s);
+}
+
+PlanNodePtr PruneSortingInfoRewriter::visitTopNFilteringNode(TopNFilteringNode & node, SortInfo &)
+{
+    auto prefix_desc = node.getStep()->getSortDescription();
     SortInfo s{prefix_desc, size_t{0}};
     return SimplePlanRewriter::visitPlanNode(node, s);
 }

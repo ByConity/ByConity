@@ -71,6 +71,7 @@ public:
     PlanNodePtr visitSortingNode(SortingNode &, SortInfo &) override;
     PlanNodePtr visitAggregatingNode(AggregatingNode &, SortInfo &) override;
     PlanNodePtr visitWindowNode(WindowNode &, SortInfo &) override;
+    PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, SortInfo &) override;
     PlanNodePtr visitProjectionNode(ProjectionNode & node, SortInfo & required) override;
     PlanNodePtr visitTableScanNode(TableScanNode &, SortInfo & required) override;
 };
