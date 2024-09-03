@@ -13,19 +13,20 @@
  * limitations under the License.
  */
 
+#include <Core/SettingsEnums.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context.h>
+#include <Processors/LimitTransform.h>
 #include <Processors/Merges/MergingSortedTransform.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/FinishSortingTransform.h>
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MergeSortingTransform.h>
 #include <Processors/Transforms/PartialSortingTransform.h>
-#include <QueryPlan/SortingStep.h>
 #include <Protos/PreparedStatementHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/SortingStep.h>
 #include <Common/JSONBuilder.h>
-#include "Core/SettingsEnums.h"
-#include "QueryPlan/PlanSerDerHelper.h"
 
 namespace DB
 {
@@ -116,6 +117,12 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
                     return std::make_shared<FinishSortingTransform>(
                         header, prefix_description, result_description, local_settings.max_block_size, getLimitValue());
                 });
+            }
+            else if (getLimitValue() > 0)
+            {
+                auto transform = std::make_shared<LimitTransform>(
+                    pipeline.getHeader(), getLimitValue(), 0, pipeline.getNumStreams(), false, false, result_description);
+                pipeline.addTransform(std::move(transform));
             }
             return;
         }

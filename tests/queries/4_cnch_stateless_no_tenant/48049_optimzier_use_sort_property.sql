@@ -28,3 +28,5 @@ explain select a as e, b, concat(c, d) as f from test order by e, b, f;
 explain select * from test where a = 'x' order by b, c, d;
 
 explain select * from test where a = 'x' and d = 'z' order by d, b, c;
+
+explain pipeline select * from test where a = 'x' order by b, c limit 10;

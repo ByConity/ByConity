@@ -105,3 +105,26 @@ Projection Est. ? rows
                      Input Order Info: {a ASC ANY, b ASC ANY, c ASC ANY}
                      Where: (a = \'x\') AND (d = \'z\')
                      Outputs: [a, b, c, d]
+explain pipeline select * from test where a = 'x' order by b, c limit 10;
+
+Segment[ 1 ] :
+(Sorting)
+Limit
+  (Filter)
+  FilterTransform
+    (TableScan) # 
+    NullSource 0 → 1
+
+------------------------------------------
+
+Segment[ 0 ] :
+(Projection)
+ExpressionTransform
+  (Limit)
+  Limit
+    (Sorting)
+      (RemoteExchangeSource)
+      Source segment_id : [ 1 ]
+      ExchangeSource 0 → 1
+
+------------------------------------------
