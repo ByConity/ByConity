@@ -15,6 +15,7 @@
 
 #pragma once
 #include <QueryPlan/ITransformingStep.h>
+#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -61,6 +62,8 @@ public:
 
     void prepare(const PreparedStatementContext & prepared_context) override;
 
+    static std::pair<ConstASTPtr, ConstASTPtr> splitLargeInValueList(const ConstASTPtr & filter, UInt64 limit);
+    static std::vector<ConstASTPtr> removeLargeInValueList(const std::vector<ConstASTPtr> & filters, UInt64 limit);
 private:
     ActionsDAGPtr actions_dag;
     ConstASTPtr filter;

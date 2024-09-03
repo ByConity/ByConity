@@ -649,7 +649,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_experimental_multiple_joins_emulation, true, "Emulate multiple joins using subselects", 0) \
     M(Bool, allow_experimental_data_skipping_indices, true, "Emulate data skipping indices", 0) \
     M(Bool, enable_predicate_pushdown, false, "Where to push down predicate", 0) \
-    M(Bool, dict_table_full_mode, false, "If encode / decode table is not bucket table, try to dispatch dict to all workers, if false, throw exception instead", 0) \
+    M(UInt64, max_in_value_list_to_pushdown, 10000, "Max size of in value list in filter", 0) \
     M(UInt64, pathgraph_threshold_y, 0, "maximum point number in each level", 0) \
     M(Bool, to_string_extra_arguments, true, "Whether to allow an extra argument in toString Function", 0) \
     \
