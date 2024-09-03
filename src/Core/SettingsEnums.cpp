@@ -190,6 +190,11 @@ IMPLEMENT_SETTING_ENUM(VWQueueMode, ErrorCodes::BAD_ARGUMENTS,
      {"match", VWQueueMode::Match},
      {"force", VWQueueMode::Force}})
 
+IMPLEMENT_SETTING_ENUM(VWLoadBalancing, ErrorCodes::BAD_ARGUMENTS,
+    {{"random",           VWLoadBalancing::RANDOM},
+     {"in_order",         VWLoadBalancing::IN_ORDER},
+     {"reverse_order",    VWLoadBalancing::REVERSE_ORDER}})
+
 IMPLEMENT_SETTING_ENUM(StatisticsCachePolicy, ErrorCodes::BAD_ARGUMENTS,
     {{"default", StatisticsCachePolicy::Default},
      {"cache", StatisticsCachePolicy::Cache},

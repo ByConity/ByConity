@@ -74,13 +74,13 @@ void WorkerGroupManager::loadWorkerGroupsImpl(std::lock_guard<bthread::Mutex> * 
 
     for (auto & data : data_vec)
     {
-        if (data.type != WorkerGroupType::Shared)
+        if (data.type != WorkerGroupType::Shared && data.type != WorkerGroupType::Composite)
             continue;
 
         try
         {
             cells.try_emplace(data.id, createWorkerGroupObject(data, &cells_lock));
-            LOG_DEBUG(log, "Loaded shared worker group {}", data.id);
+            LOG_DEBUG(log, "Loaded shared/composite worker group {}", data.id);
         }
         catch (...)
         {
@@ -110,7 +110,8 @@ WorkerGroupPtr WorkerGroupManager::createWorkerGroupObject(const WorkerGroupData
         case WorkerGroupType::Physical:
             return std::make_shared<PhysicalWorkerGroup>(data.id, data.vw_uuid, data.psm);
 
-        case WorkerGroupType::Shared: {
+        case WorkerGroupType::Shared: 
+        case WorkerGroupType::Composite: {
             std::optional<std::lock_guard<std::mutex>> maybe_lock;
             if (!lock)
             {
@@ -118,7 +119,7 @@ WorkerGroupPtr WorkerGroupManager::createWorkerGroupObject(const WorkerGroupData
                 lock = &maybe_lock.value();
             }
 
-            auto res = std::make_shared<SharedWorkerGroup>(data.id, data.vw_uuid, data.linked_id, data.is_auto_linked);
+            auto res = std::make_shared<SharedWorkerGroup>(data.type, data.id, data.vw_uuid, data.linked_id, data.is_auto_linked, data.priority);
 
             if (auto linked_group = tryGetImpl(data.linked_id, *lock))
                 res->setLinkedGroup(linked_group);
@@ -212,10 +213,10 @@ WorkerGroupPtr WorkerGroupManager::createWorkerGroupImpl(
     auto creator = [&] {
         try
         {
-            if (data.type == WorkerGroupType::Shared)
+            if (data.type == WorkerGroupType::Shared || data.type == WorkerGroupType::Composite)
             {
-                if (const auto & linked = tryGet(data.linked_id);
-                    !linked || linked->getType() == WorkerGroupType::Shared)
+                if (const auto & linked = tryGet(data.linked_id); !linked || linked->getType() == WorkerGroupType::Shared 
+                    || linked->getType() == WorkerGroupType::Composite || linked->getVWName() == vw_name)
                     throw Exception("Create shared worker group with error! linked_id: " + data.linked_id, ErrorCodes::LOGICAL_ERROR);
             }
             catalog->createWorkerGroup(id, data);

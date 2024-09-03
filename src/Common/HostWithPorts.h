@@ -16,6 +16,7 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -194,6 +195,7 @@ public:
     uint16_t exchange_port{0};
     uint16_t exchange_status_port{0};
     PairInt64 topology_version = PairInt64{0, 0};
+    std::optional<String> real_id;
 public:
 
     bool empty() const { return host.empty() || (rpc_port == 0 && tcp_port == 0); }
@@ -204,11 +206,15 @@ public:
     std::string getExchangeAddress() const { return getRPCAddress(); }
     std::string getExchangeStatusAddress() const { return getRPCAddress(); }
 
+    bool operator<(const HostWithPorts & rhs) const { return id < rhs.getId(); }
     const std::string & getHost() const { return host; }
     uint16_t getTCPPort() const { return tcp_port; }
     uint16_t getHTTPPort() const { return http_port; }
     uint16_t getRPCPort() const { return rpc_port; }
     std::string toDebugString() const;
+    void replaceId(const String & id_) { id = id_; } 
+    String getId() const { return id; }
+    void setRealId(const String & id_) { real_id = id_; }
 
     static HostWithPorts fromRPCAddress(const std::string & s);
 

@@ -36,7 +36,7 @@ using VirtualWarehouseType = ResourceManagement::VirtualWarehouseType;
 const static std::string EMPTY_VIRTUAL_WAREHOUSE_NAME;
 
 bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context);
-bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr & context);
+bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr & context, bool use_router = false);
 bool trySetVirtualWarehouseAndWorkerGroup(const std::string & vw_name, ContextMutablePtr & context);
 std::string tryGetVirtualWarehouseName(const ASTPtr & ast, ContextMutablePtr & context);
 

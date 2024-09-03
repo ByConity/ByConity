@@ -53,7 +53,8 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
     context->setCurrentVW(std::move(vw_handle));
 }
 
-static bool trySetVirtualWarehouseFromStorageID(const StorageID table_id, ContextMutablePtr & context, VirtualWarehouseType vw_type = VirtualWarehouseType::Default )
+static bool trySetVirtualWarehouseFromStorageID(
+    const StorageID table_id, ContextMutablePtr & context, VirtualWarehouseType vw_type = VirtualWarehouseType::Default)
 {
     auto & database_catalog = DatabaseCatalog::instance();
     auto storage = database_catalog.tryGetTable(table_id, context);
@@ -62,9 +63,8 @@ static bool trySetVirtualWarehouseFromStorageID(const StorageID table_id, Contex
 
     if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
     {
-        String vw_name = vw_type == VirtualWarehouseType::Write
-                         ? cnch_table->getSettings()->cnch_vw_write
-                         : cnch_table->getSettings()->cnch_vw_default;
+        String vw_name = vw_type == VirtualWarehouseType::Write ? cnch_table->getSettings()->cnch_vw_write
+                                                                : cnch_table->getSettings()->cnch_vw_default;
 
         LOG_DEBUG(
             &Poco::Logger::get("trySetVirtualWarehouse"),
@@ -82,9 +82,7 @@ static bool trySetVirtualWarehouseFromStorageID(const StorageID table_id, Contex
     }
     else if (auto * cnchfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
     {
-        String name = vw_type == VirtualWarehouseType::Write
-                         ? cnchfile->settings.cnch_vw_write
-                         : cnchfile->settings.cnch_vw_default;
+        String name = vw_type == VirtualWarehouseType::Write ? cnchfile->settings.cnch_vw_write : cnchfile->settings.cnch_vw_default;
 
         setVirtualWarehouseByName(name, context);
         return true;
@@ -105,9 +103,8 @@ static bool trySetVirtualWarehouseFromStorageID(const StorageID table_id, Contex
         if (!nested_table)
             return false;
 
-        String nested_vw_name = vw_type == VirtualWarehouseType::Write
-                                ? nested_table->getSettings()->cnch_vw_write
-                                : nested_table->getSettings()->cnch_vw_default;
+        String nested_vw_name = vw_type == VirtualWarehouseType::Write ? nested_table->getSettings()->cnch_vw_write
+                                                                       : nested_table->getSettings()->cnch_vw_default;
 
         LOG_DEBUG(
             &Poco::Logger::get("trySetVirtualWarehouse"),
@@ -226,7 +223,7 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
             if (trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Write))
                 return true;
         }
-        else if (auto * alter = ast->as<ASTAlterQuery>())   /// e.g., ingest partition
+        else if (auto * alter = ast->as<ASTAlterQuery>()) /// e.g., ingest partition
         {
             if (alter->table.empty()) // alter database
                 return false;
@@ -529,7 +526,7 @@ bool trySetVirtualWarehouseAndWorkerGroup(const std::string & vw_name, ContextMu
     return true;
 }
 
-bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr & context)
+bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr & context, bool use_router)
 {
     if (context->tryGetCurrentWorkerGroup())
         return true;
@@ -538,7 +535,7 @@ bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr 
     {
         auto value = context->getSettingsRef().vw_schedule_algo.value;
         auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
-        auto worker_group = context->getCurrentVW()->pickWorkerGroup(algo);
+        auto worker_group = context->getCurrentVW()->pickWorkerGroup(algo, use_router, context->getSettingsRef().vw_load_balancing);
 
         context->setCurrentWorkerGroup(std::move(worker_group));
         return true;

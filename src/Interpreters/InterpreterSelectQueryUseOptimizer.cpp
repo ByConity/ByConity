@@ -16,9 +16,10 @@
 
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/QueryRewriter.h>
-#include <Interpreters/Cache/QueryCache.h>
 #include <Analyzers/SubstituteLiteralToPreparedParams.h>
+#include <DataTypes/ObjectUtils.h>
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
+#include <Interpreters/Cache/QueryCache.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/InDepthNodeVisitor.h>
@@ -48,28 +49,26 @@
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
-#include <Parsers/queryToString.h>
-#include <Interpreters/executeQuery.h>
-#include <common/logger_useful.h>
-#include <DataTypes/ObjectUtils.h>
+#include "common/defines.h"
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
 #include <QueryPlan/FinalSampleStep.h>
+#include "Interpreters/Context_fwd.h"
+#include "QueryPlan/TableScanStep.h"
 
 #include <memory>
 
 namespace ProfileEvents
 {
-    extern const Event QueryRewriterTime;
-    extern const Event QueryAnalyzerTime;
-    extern const Event QueryPlannerTime;
-    extern const Event QueryOptimizerTime;
-    extern const Event PlanSegmentSplitterTime;
+extern const Event QueryRewriterTime;
+extern const Event QueryAnalyzerTime;
+extern const Event QueryPlannerTime;
+extern const Event QueryOptimizerTime;
+extern const Event PlanSegmentSplitterTime;
 }
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int TOO_MANY_PLAN_SEGMENTS;
@@ -213,8 +212,8 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getQueryPlan(bool skip_optimize
             fillContextQueryAccessInfo(context, analysis);
             if (enable_plan_cache && query_hash && query_plan)
             {
-               if (PlanCacheManager::addPlanToCache(query_hash, query_plan, analysis, context))
-                   LOG_INFO(log, "plan cache added");
+                if (PlanCacheManager::addPlanToCache(query_hash, query_plan, analysis, context))
+                    LOG_INFO(log, "plan cache added");
             }
         }
 
@@ -289,7 +288,8 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     {
         segment_profiles = std::make_shared<std::vector<String>>();
         for (auto & node : plan_segment_tree->getNodes())
-            segment_profiles->emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true)->jsonPlanSegmentDescriptionAsString({}));
+            segment_profiles->emplace_back(
+                PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true)->jsonPlanSegmentDescriptionAsString({}));
     }
 
     return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
@@ -515,9 +515,12 @@ BlockIO InterpreterSelectQueryUseOptimizer::readFromQueryCache(ContextPtr local_
         else
             source_update_time_for_query_cache = TxnTimestamp::minTS();
 
-        LOG_DEBUG(log, "max update timestamp {}, txn_id {}", source_update_time_for_query_cache, local_context->getCurrentTransactionID().toUInt64());
-        if ((settings.enable_transactional_query_cache == false)
-            || (source_update_time_for_query_cache.toUInt64() != 0))
+        LOG_DEBUG(
+            log,
+            "max update timestamp {}, txn_id {}",
+            source_update_time_for_query_cache,
+            local_context->getCurrentTransactionID().toUInt64());
+        if ((settings.enable_transactional_query_cache == false) || (source_update_time_for_query_cache.toUInt64() != 0))
         {
             QueryCache::Key key(
                 query,
@@ -624,16 +627,14 @@ void InterpreterSelectQueryUseOptimizer::fillContextQueryAccessInfo(ContextPtr c
                     required_columns.emplace_back(column);
             }
             context->getQueryContext()->addQueryAccessInfo(
-                backQuoteIfNeed(storage_id.getDatabaseName()),
-                storage_id.getFullTableName(),
-                required_columns);
+                backQuoteIfNeed(storage_id.getDatabaseName()), storage_id.getFullTableName(), required_columns);
         }
     }
 }
 
 std::optional<std::set<StorageID>> InterpreterSelectQueryUseOptimizer::getUsedStorageIds()
 {
-    if(plan_segment_tree_ptr)
+    if (plan_segment_tree_ptr)
     {
         throw Exception("Cannot call this getUsedStorageIds twice", ErrorCodes::LOGICAL_ERROR);
     }
@@ -854,11 +855,11 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableWriteNode(TableWr
             .context = cluster_info_context.context,
             .query_plan = cluster_info_context.query_plan,
             .query_id = cluster_info_context.context->getCurrentQueryId(),
-            .shard_number =  worker_group->getShardsInfo().size(),
+            .shard_number = worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
             .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
-            .health_parallel = worker_group_status_ptr ?
-                std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
+            .health_parallel
+            = worker_group_status_ptr ? std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
 
         return plan_segment_context;
     }
@@ -874,12 +875,14 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitCTERefNode(CTERefNode 
 void ExplainAnalyzeVisitor::visitExplainAnalyzeNode(QueryPlan::Node * node, PlanSegmentTree::Nodes & nodes)
 {
     auto * explain = dynamic_cast<ExplainAnalyzeStep *>(node->step.get());
-    if (explain->getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze && explain->getKind() != ASTExplainQuery::ExplainKind::PipelineAnalyze)
+    if (explain->getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze
+        && explain->getKind() != ASTExplainQuery::ExplainKind::PipelineAnalyze)
         return;
     PlanSegmentDescriptions plan_segment_descriptions;
     bool record_plan_detail = explain->getSetting().json && (explain->getKind() != ASTExplainQuery::ExplainKind::PipelineAnalyze);
     for (auto & segment_node : nodes)
-        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(segment_node.plan_segment, record_plan_detail));
+        plan_segment_descriptions.emplace_back(
+            PlanSegmentDescription::getPlanSegmentDescription(segment_node.plan_segment, record_plan_detail));
     explain->setPlanSegmentDescriptions(plan_segment_descriptions);
 }
 

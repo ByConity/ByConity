@@ -105,6 +105,12 @@ public:
         metrics = metrics_;
     }
 
+    auto getPriority() const
+    {
+        std::lock_guard lock(state_mutex);
+        return priority;
+    }
+
     std::vector<CnchWorkerClientPtr> getWorkerClients() const;
     const ShardsInfo & getShardsInfo() const { return shards_info; }
 
@@ -140,6 +146,11 @@ public:
     static WorkerGroupHandle mockWorkerGroupHandle(const String & worker_id_prefix_, UInt64 worker_number_, const ContextPtr & context_);
     void buildRing();
 
+    void addHostWithPorts(const HostWithPorts & host_with_ports)
+    {
+        hosts.push_back(host_with_ports);
+        worker_num++;
+    }
 private:
     /// Note: updating mutable fields (like `metrics`) should be guarded with lock.
     mutable std::mutex state_mutex;
@@ -152,6 +163,7 @@ private:
     WorkerGroupMetrics metrics;
     /// the specified number of workers in current worker group.
     UInt64 worker_num;
+    Int64 priority{0};
 
     /// Description of the cluster shards.
     ShardsInfo shards_info;

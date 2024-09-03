@@ -213,7 +213,7 @@ void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr 
     const auto & backup_vw = context->getSettingsRef().backup_virtual_warehouse.value;
     if (backup_vw.empty())
     {
-        trySetVirtualWarehouseAndWorkerGroup(ast, context);
+        trySetVirtualWarehouseAndWorkerGroup(ast, context, true);
     }
     else
     {
@@ -1014,6 +1014,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     {
         bool use_backup_vw = false;
         trySetVirtualWarehouseWithBackup(context, ast, use_backup_vw);
+        if (const auto wg = context->tryGetCurrentWorkerGroup())
+        {
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "pick worker group {}", wg->getQualifiedName());
+        }
         if (context->getServerType() == ServerType::cnch_server)
         {
             if (use_backup_vw)

@@ -645,6 +645,9 @@ void WorkerGroupData::fillProto(Protos::WorkerGroupData & pb_data, const bool wi
     pb_data.set_is_auto_linked(is_auto_linked);
     if (!linked_vw_name.empty())
         pb_data.set_linked_vw_name(linked_vw_name);
+    for (const auto & worker_source : worker_node_resource_vec)
+        worker_source.fillProto(*pb_data.add_worker_node_resource_vec());
+    pb_data.set_priority(priority);
 }
 
 void WorkerGroupData::parseFromProto(const Protos::WorkerGroupData & pb_data)
@@ -673,6 +676,10 @@ void WorkerGroupData::parseFromProto(const Protos::WorkerGroupData & pb_data)
 
     if (pb_data.has_linked_vw_name())
         linked_vw_name = pb_data.linked_vw_name();
+    for (auto & worker_source_pb : pb_data.worker_node_resource_vec())
+        worker_node_resource_vec.emplace_back(worker_source_pb);
+    if (pb_data.has_priority())
+        priority = pb_data.priority();
 }
 
 void QueryQueueInfo::fillProto(Protos::QueryQueueInfo & pb_data) const

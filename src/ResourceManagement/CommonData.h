@@ -413,6 +413,8 @@ struct WorkerGroupMetrics
     }
 };
 
+
+
 struct WorkerGroupData
 {
     std::string id;
@@ -432,6 +434,7 @@ struct WorkerGroupData
 
     bool is_auto_linked {false};
     std::string linked_vw_name;
+    Int64 priority {0};
 
     std::string serializeAsString() const;
     void parseFromString(const std::string & s);
@@ -484,4 +487,5 @@ using WorkerGroupData = RM::WorkerGroupData;
 using WorkerGroupType = RM::WorkerGroupType;
 using ResourceRequirement = RM::ResourceRequirement;
 using VWScheduleAlgo = RM::VWScheduleAlgo;
+using WorkerMetrics = RM::WorkerMetrics;
 }

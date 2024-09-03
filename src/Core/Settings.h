@@ -313,6 +313,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, optimize_distributed_group_by_sharding_key, false, "Optimize GROUP BY sharding_key queries (by avoiding costly aggregation on the initiator server).", 0) \
     M(UInt64, optimize_skip_unused_shards_limit, 1000, "Limit for number of sharding key values, turns off optimize_skip_unused_shards if the limit is reached", 0) \
     M(Bool, distributed_perfect_shard, false, "Whether to enable aggregation finished in worker side, to avoid merge aggregation states in coordinator", 0) \
+    M(VWLoadBalancing, vw_load_balancing, VWLoadBalancing::RANDOM, "Which worker group to select according to prority of  worker groups(random in_order reverse_order).", 0) \
     M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, optimize_skip_unused_shards, false, "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", 0) \
     M(Bool, optimize_skip_unused_shards_rewrite_in, true, "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", 0) \

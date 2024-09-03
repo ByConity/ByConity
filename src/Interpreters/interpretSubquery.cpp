@@ -136,7 +136,6 @@ std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
         query = subquery->children.at(0);
         subquery_options.removeDuplicates();
     }
-
     trySetVirtualWarehouseAndWorkerGroup(query, subquery_context);
     return std::make_shared<InterpreterSelectWithUnionQuery>(query, subquery_context, subquery_options, required_source_columns);
 }

@@ -27,8 +27,8 @@ namespace WorkerGroupTypeImpl
     {
         Unknown = 0,
         Physical = 1,
-        Shared = 2,
-        Composite = 3,
+        Shared = 2,       // This kind of worker group, which is shared from another Physical worker group, is used to process queries.
+        Composite = 3,    // This kind of worker group, which is shared from another Physical worker group, is used to complete Physical worker group.
     };
 }
 using WorkerGroupType = WorkerGroupTypeImpl::Type;
@@ -59,15 +59,14 @@ constexpr auto toWorkerGroupType(char * type_str)
             c = std::tolower(c);
     }
 
-    if (strcmp(type_str,  "Physical") == 0)
+    if (strcmp(type_str, "Physical") == 0)
         return WorkerGroupType::Physical;
-    else if (strcmp(type_str,  "Shared") == 0)
+    else if (strcmp(type_str, "Shared") == 0)
         return WorkerGroupType::Shared;
-    else if (strcmp(type_str,  "Composite") == 0)
+    else if (strcmp(type_str, "Composite") == 0)
         return WorkerGroupType::Composite;
     else
         return WorkerGroupType::Unknown;
-
 }
 
 }
