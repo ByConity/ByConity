@@ -18,6 +18,7 @@
 #include <Analyzers/QueryRewriter.h>
 #include <Analyzers/SubstituteLiteralToPreparedParams.h>
 #include <DataTypes/ObjectUtils.h>
+#include <Formats/FormatFactory.h>
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Cache/QueryCache.h>
 #include <Interpreters/Context.h>
@@ -39,6 +40,7 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <QueryPlan/FinalSampleStep.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/PlanCache.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
@@ -49,22 +51,22 @@
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
+#include <google/protobuf/util/json_util.h>
+#include <Poco/Logger.h>
 #include "common/defines.h"
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
-#include <QueryPlan/FinalSampleStep.h>
+#include "Interpreters/ClientInfo.h"
 #include "Interpreters/Context_fwd.h"
-#include "QueryPlan/TableScanStep.h"
 
-#include <memory>
 
 namespace ProfileEvents
 {
-extern const Event QueryRewriterTime;
-extern const Event QueryAnalyzerTime;
-extern const Event QueryPlannerTime;
-extern const Event QueryOptimizerTime;
-extern const Event PlanSegmentSplitterTime;
+    extern const Event QueryRewriterTime;
+    extern const Event QueryAnalyzerTime;
+    extern const Event QueryPlannerTime;
+    extern const Event QueryOptimizerTime;
+    extern const Event PlanSegmentSplitterTime;
 }
 
 namespace DB
@@ -606,7 +608,6 @@ void InterpreterSelectQueryUseOptimizer::resetFinalSampleSize(PlanSegmentTreePtr
                     size_t sample_size = (sample->getSampleSize() + 1) / plan_segment.getPlanSegment()->getParallelSize();
                     sample->setSampleSize(sample_size);
                 }
-
             }
         }
     }
@@ -656,6 +657,23 @@ void InterpreterSelectQueryUseOptimizer::setUnsupportedSettings(ContextMutablePt
     context->applySettingsChanges(setting_changes);
 }
 
+void InterpreterSelectQueryUseOptimizer::fillQueryPlan(ContextPtr context, QueryPlan & query_plan)
+{
+    WriteBufferFromOwnString buffer;
+    Protos::QueryPlan plan_pb;
+    query_plan.toProto(plan_pb);
+    String json_msg;
+    google::protobuf::util::JsonPrintOptions pb_options;
+    pb_options.preserve_proto_field_names = true;
+    pb_options.always_print_primitive_fields = true;
+    pb_options.add_whitespace = false;
+
+    google::protobuf::util::MessageToJsonString(plan_pb, &json_msg, pb_options);
+    buffer << json_msg;
+
+    context->getQueryContext()->addQueryPlanInfo(buffer.str());
+}
+
 void InterpreterSelectQueryUseOptimizer::buildQueryPlan(QueryPlanPtr & query_plan, AnalysisPtr & analysis, bool skip_optimize)
 {
     context->createPlanNodeIdAllocator();
@@ -686,6 +704,12 @@ void InterpreterSelectQueryUseOptimizer::buildQueryPlan(QueryPlanPtr & query_pla
     {
         stage_watch.restart();
         PlanOptimizer::optimize(*query_plan, context);
+
+        if (context->getSettingsRef().log_query_plan)
+        {
+            fillQueryPlan(context, *query_plan);
+        }
+
         context->logOptimizerProfile(
             log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
         ProfileEvents::increment(ProfileEvents::QueryOptimizerTime, stage_watch.elapsedMilliseconds());
@@ -724,13 +748,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::executeCreatePreparedStatementQuery(
     CollectPreparedParams prepared_params_collector;
     CollectPreparedParamsVisitor(prepared_params_collector).visit(query_ptr);
     prep_stat_manager->addPlanToCache(
-        name,
-        prepare_ast,
-        settings_changes,
-        query_plan,
-        analysis,
-        std::move(prepared_params_collector.prepared_params),
-        context);
+        name, prepare_ast, settings_changes, query_plan, analysis, std::move(prepared_params_collector.prepared_params), context);
     return {};
 }
 

@@ -80,6 +80,8 @@ public:
 
     static void fillContextQueryAccessInfo(ContextPtr context, AnalysisPtr & analysis);
 
+    static void fillQueryPlan(ContextPtr context, QueryPlan & query_plan);
+
     Block getSampleBlock();
 
     static void setUnsupportedSettings(ContextMutablePtr & context);

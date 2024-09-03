@@ -1445,6 +1445,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     }
                 }
 
+                if (settings.log_query_plan) 
+                {
+                    elem.query_plan = context->getQueryContext()->getQueryPlan();
+                }
+            
                 interpreter->extendQueryLogElem(elem, ast, context, query_database, query_table);
 
                 if (settings.log_query_settings)

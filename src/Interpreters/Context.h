@@ -649,6 +649,8 @@ private:
     /// ContextData mutex
     mutable SharedMutex mutex;
 
+    String query_plan;
+
     Context();
     Context(const Context &);
 
@@ -1187,6 +1189,13 @@ public:
     bool tryCheckClientConnectionToMyKeeperCluster() const;
 
     UInt32 getZooKeeperSessionUptime() const;
+
+    void addQueryPlanInfo(String & query_plan_) 
+    {
+        this->query_plan = query_plan_;
+    }
+
+    String getQueryPlan() {return query_plan;}
 
 #if USE_NURAFT
     std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
