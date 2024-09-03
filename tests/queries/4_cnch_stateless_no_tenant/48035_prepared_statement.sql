@@ -91,3 +91,29 @@ WHERE number < [x: UInt32];
 SHOW PREPARED STATEMENTS;
 DROP PREPARED STATEMENT IF EXISTS prep4;
 SHOW PREPARED STATEMENTS;
+
+CREATE PREPARED STATEMENT OR REPLACE prep1 AS
+SELECT number
+FROM
+(
+    SELECT number
+    FROM system.numbers
+    LIMIT 10
+)
+WHERE (number > [i:UInt64]) AND (number IN ([x:Tuple(UInt64)]));
+
+execute PREPARED STATEMENT prep1 using x=(2,4,6), i=6;
+
+CREATE PREPARED STATEMENT OR REPLACE prep1 AS
+SELECT number
+FROM
+(
+    SELECT number
+    FROM system.numbers
+    LIMIT 10
+)
+WHERE has([x:Array(Nullable(String))], NULL);
+
+execute PREPARED STATEMENT prep1 using x=['1','2',null];
+
+DROP PREPARED STATEMENT IF EXISTS prep1;

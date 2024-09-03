@@ -1,6 +1,6 @@
 set enable_optimizer=1;
 set dialect_type='ANSI';
-set data_type_default_nullable=0;
+
 set create_stats_time_output=0;
 drop table if exists test_date_opt;
 create table test_date_opt(
@@ -12,6 +12,7 @@ create table test_date_opt(
     datetimewotz DateTimeWithoutTz,
     t Time
 ) Engine = CnchMergeTree() order by id;
+
 
 
 insert into test_date_opt values (0, '2022-09-27', '2022-09-27', '2022-09-27 00:00:00', '2022-09-27 00:00:00.010', '2022-09-27 00:00:00.010', '11:22:33');
@@ -38,11 +39,10 @@ explain select * from test_date_opt where t == '11:22:33';
 
 drop stats test_date_opt;
 drop table if exists test_date_opt;
-drop table if exists test_date_opt_local;
 
 set enable_optimizer=1;
 set dialect_type='MYSQL';
-set data_type_default_nullable=0;
+
 set create_stats_time_output=0;
 drop table if exists test_date_opt;
 create table test_date_opt(
@@ -54,6 +54,8 @@ create table test_date_opt(
     datetimewotz DateTimeWithoutTz,
     t Time
 ) Engine = CnchMergeTree() order by id;
+
+
 
 insert into test_date_opt values (0, '2022-09-27', '2022-09-27', '2022-09-27 00:00:00', '2022-09-27 00:00:00.010', '2022-09-27 00:00:00.010', '11:22:33');
 insert into test_date_opt values (1, '2022-09-27', '2022-09-27', '2022-09-27 00:00:00', '2022-09-27 00:00:00.010', '2022-09-27 00:00:00.010', '11:22:33'),
@@ -79,5 +81,4 @@ explain select * from test_date_opt where t == '11:22:33';
 
 drop stats test_date_opt;
 drop table if exists test_date_opt;
-drop table if exists test_date_opt_local;
 

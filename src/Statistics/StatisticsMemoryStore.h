@@ -14,7 +14,7 @@
  */
 
 #pragma once
-#include <mutex>
+#include <bthread/mutex.h>
 #include <shared_mutex>
 
 #include <Statistics/StatisticsBase.h>

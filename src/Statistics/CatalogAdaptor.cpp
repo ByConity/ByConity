@@ -18,14 +18,19 @@
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <boost/regex.hpp>
 #include "DataTypes/MapHelpers.h"
 #include "Parsers/formatTenantDatabaseName.h"
-#include <boost/regex.hpp>
+
+namespace DB::ErrorCodes
+{
+extern const int LOGIGAL_ERROR;
+}
+
 namespace DB::Statistics
 {
 CatalogAdaptorPtr createCatalogAdaptorMemory(ContextPtr context);
 CatalogAdaptorPtr createCatalogAdaptorCnch(ContextPtr context);
-
 CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
 {
     if (context->getSettingsRef().enable_memory_catalog)
@@ -33,44 +38,6 @@ CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
         return createCatalogAdaptorMemory(context);
     }
     return createCatalogAdaptorCnch(context);
-}
-
-ColumnDescVector CatalogAdaptor::filterCollectableColumns(
-    const StatsTableIdentifier & table, const std::vector<String> & target_columns, bool exception_on_unsupported)
-{
-    std::unordered_map<String, DataTypePtr> name_to_type;
-    ColumnDescVector result;
-    std::vector<String> unsupported_columns;
-
-    auto storage = getStorageByTableId(table);
-
-    auto snapshot = storage->getInMemoryMetadataPtr();
-    for (const auto & col_name : target_columns)
-    {
-        auto col_opt = snapshot->getColumns().tryGetColumn(GetColumnsOptions::All, col_name);
-        if (!col_opt)
-        {
-            unsupported_columns.emplace_back(col_name);
-            continue;
-        }
-        const auto & col = col_opt.value();
-        if (Statistics::isCollectableType(col.type))
-        {
-            result.emplace_back(std::move(col));
-        }
-        else
-        {
-            unsupported_columns.emplace_back(col_name);
-        }
-    }
-
-    if (exception_on_unsupported && !unsupported_columns.empty())
-    {
-        auto err_msg = fmt::format(FMT_STRING("columns ({}) is not collectable"), fmt::join(unsupported_columns, ", "));
-        throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    return result;
 }
 
 CatalogAdaptor::TableOptions CatalogAdaptor::getTableOptions(const StatsTableIdentifier & table)
@@ -88,7 +55,7 @@ CatalogAdaptor::TableOptions CatalogAdaptor::getTableOptions(const StatsTableIde
 
     auto options = [&] {
         auto engine = storage->getName();
-        if (dynamic_cast<StorageCnchMergeTree*>(storage.get()))
+        if (dynamic_cast<StorageCnchMergeTree *>(storage.get()))
         {
             return full_supported;
         }
@@ -146,6 +113,44 @@ std::optional<UInt64> CatalogAdaptor::queryRowCount(const StatsTableIdentifier &
     return row_count;
 }
 
+ColumnDescVector CatalogAdaptor::filterCollectableColumns(
+    const StatsTableIdentifier & table, const std::vector<String> & target_columns, bool exception_on_unsupported)
+{
+    std::unordered_map<String, DataTypePtr> name_to_type;
+    ColumnDescVector result;
+    std::vector<String> unsupported_columns;
+
+    auto storage = getStorageByTableId(table);
+
+    auto snapshot = storage->getInMemoryMetadataPtr();
+    for (const auto & col_name : target_columns)
+    {
+        auto col_opt = snapshot->getColumns().tryGetColumn(GetColumnsOptions::All, col_name);
+        if (!col_opt)
+        {
+            unsupported_columns.emplace_back(col_name);
+            continue;
+        }
+        const auto & col = col_opt.value();
+        if (Statistics::isCollectableType(col.type))
+        {
+            result.emplace_back(std::move(col));
+        }
+        else
+        {
+            unsupported_columns.emplace_back(col_name);
+        }
+    }
+
+    if (exception_on_unsupported && !unsupported_columns.empty())
+    {
+        auto err_msg = fmt::format(FMT_STRING("columns ({}) is not collectable"), fmt::join(unsupported_columns, ", "));
+        throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    return result;
+}
+
 ColumnDescVector CatalogAdaptor::getAllCollectableColumns(const StatsTableIdentifier & identifier)
 {
     auto storage = getStorageByTableId(identifier);
@@ -166,4 +171,4 @@ ColumnDescVector CatalogAdaptor::getAllCollectableColumns(const StatsTableIdenti
     auto result = this->filterCollectableColumns(identifier, col_names);
     return result;
 }
-}
+} // namespace DB::Statistics

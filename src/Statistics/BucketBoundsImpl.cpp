@@ -13,11 +13,11 @@
  * limitations under the License.
  */
 
+#include <sstream>
 #include <Optimizer/Dump/ProtoEnumUtils.h>
 #include <Statistics/BucketBoundsImpl.h>
 #include <Statistics/StatsKllSketchImpl.h>
 #include <Poco/JSON/Parser.h>
-#include <sstream>
 
 namespace DB::Statistics
 {
@@ -60,7 +60,7 @@ String BucketBoundsImpl<T>::serializeToJson() const
     if constexpr (!std::is_same_v<T, UInt128> && !std::is_same_v<T, Int128> && !std::is_same_v<T, UInt256> && !std::is_same_v<T, Int256>)
     {
         for (auto ptr : bounds_)
-        {   
+        {
             if constexpr (std::is_same_v<T, UInt8>)
                 array_json.add(static_cast<uint8_t>(ptr));
             else

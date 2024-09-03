@@ -30,6 +30,10 @@ public:
     explicit CatalogAdaptor(ContextPtr context_) : context(context_)
     {
     }
+    ContextPtr getContext()
+    {
+        return context;
+    }
     virtual bool hasStatsData(const StatsTableIdentifier & table) = 0;
     virtual StatsData readStatsData(const StatsTableIdentifier & table) = 0;
     virtual std::vector<String> readStatsColumnsKey(const StatsTableIdentifier & table) = 0;
@@ -38,11 +42,6 @@ public:
 
     virtual void dropStatsColumnData(const StatsTableIdentifier & table, const ColumnDescVector & cols_desc) = 0;
     virtual void dropStatsData(const StatsTableIdentifier & table) = 0;
-
-    virtual void invalidateClusterStatsCache(const StatsTableIdentifier & table) = 0;
-    // const because it should use ConstContext
-    virtual void invalidateServerStatsCache(const StatsTableIdentifier & table) = 0;
-    virtual void invalidateAllServerStatsCache() = 0;
 
     // fast way to query row count
     std::optional<UInt64> queryRowCount(const StatsTableIdentifier & top_storage);

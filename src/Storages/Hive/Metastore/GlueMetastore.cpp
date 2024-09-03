@@ -42,8 +42,8 @@ namespace DB
 {
 namespace GlueModel = Aws::Glue::Model;
 GlueMetastoreClient::GlueMetastoreClient(
-    const Aws::Auth::AWSCredentials & credentials, const Aws::Client::ClientConfiguration & client_config, const GlueClientAuxParams & _aux)
-    : cfg(client_config), aux(_aux), client(credentials, cfg)
+    const Aws::Auth::AWSCredentials & credentials, const std::shared_ptr<Aws::Client::ClientConfiguration> & client_config, const GlueClientAuxParams & _aux)
+    : cfg(client_config), aux(_aux), client(credentials, *client_config)
 {
 }
 
@@ -272,7 +272,7 @@ GlueMetastoreClientPtr GlueMetastoreClientFactory::getOrCreate(const ExternalCat
     auto glue_credential = credential_chain.GetAWSCredentials();
 
     GlueClientAuxParams params{.catalog_id = catalog_id};
-    std::shared_ptr<GlueMetastoreClient> client = std::make_shared<GlueMetastoreClient>(glue_credential, *conf, params);
+    std::shared_ptr<GlueMetastoreClient> client = std::make_shared<GlueMetastoreClient>(glue_credential, conf, params);
     clients.emplace(catalog_id, client);
     return client;
 }

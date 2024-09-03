@@ -43,13 +43,7 @@ public:
     virtual void writeSymbolStatistics(SymbolStatistics & symbol) = 0;
     virtual const BucketBounds & getBucketBounds() const = 0;
 
-    virtual UInt64 getCount(size_t bucket_id) const = 0;
-    virtual double getNdv(size_t bucket_id) const = 0;
-
-    virtual void setCount(size_t bucket_id, UInt64 count) = 0;
-    virtual void setNdv(size_t bucket_id, double ndv) = 0;
     virtual size_t numBuckets() const = 0;
-
 
     static std::shared_ptr<StatsNdvBucketsResult> create(const BucketBounds & bounds, std::vector<UInt64> counts, std::vector<double> ndvs);
 

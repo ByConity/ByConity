@@ -2,60 +2,42 @@ a	1	1
 aa	1	2
 aaa	1	3
 ba	1	1
-a.*		1					
-a.x	UInt8	1	0	1	1	1	1
-aa.*		2					
-aa.x	UInt8	2	0	2	1	2	1
-aaa.*		3					
-aaa.x	UInt8	3	0	3	1	3	1
-ba.*		1					
-ba.x	UInt8	1	0	1	1	1	1
+a.*		1						
+a.x	UInt8	1	0	1	1	1	1	1
+aa.*		2						
+aa.x	UInt8	2	0	2	1	2	1	1
+aaa.*		3						
+aaa.x	UInt8	3	0	3	1	3	1	1
+ba.*		1						
+ba.x	UInt8	1	0	1	1	1	1	1
 Projection Est. ? rows
-│     Expressions: [x]
 └─ Gather Exchange Est. ? rows
    └─ TableScan test_45010.a Est. ? rows
-            Outputs: [x]
 Projection Est. ? rows
-│     Expressions: [x]
 └─ Gather Exchange Est. ? rows
    └─ TableScan test_45010.ba Est. ? rows
-            Outputs: [x]
 Projection Est. ? rows
-│     Expressions: [x]
 └─ Gather Exchange Est. ? rows
    └─ TableScan test_45010.a Est. ? rows
-            Outputs: [x]
 ba	1	1
 Projection Est. ? rows
-│     Expressions: [x]
 └─ Gather Exchange Est. ? rows
    └─ TableScan test_45010.a Est. ? rows
-            Outputs: [x]
 Projection Est. 1 rows, cost 1.134000e+00
-│     Expressions: [x]
 └─ Gather Exchange Est. 1 rows, cost 1.060000e+00
    └─ TableScan test_45010.ba Est. 1 rows, cost 7.400000e-01
-            Outputs: [x]
 Projection Est. ? rows
-│     Expressions: [x]
 └─ Gather Exchange Est. ? rows
    └─ TableScan test_45010.a Est. ? rows
-            Outputs: [x]
 a	1	1
 aa	1	2
 aaa	1	3
 Projection Est. 1 rows, cost 1.134000e+00
-│     Expressions: [x]
 └─ Gather Exchange Est. 1 rows, cost 1.060000e+00
    └─ TableScan test_45010.a Est. 1 rows, cost 7.400000e-01
-            Outputs: [x]
 Projection Est. 1 rows, cost 1.134000e+00
-│     Expressions: [x]
 └─ Gather Exchange Est. 1 rows, cost 1.060000e+00
    └─ TableScan test_45010.ba Est. 1 rows, cost 7.400000e-01
-            Outputs: [x]
 Projection Est. 1 rows, cost 1.134000e+00
-│     Expressions: [x]
 └─ Gather Exchange Est. 1 rows, cost 1.060000e+00
    └─ TableScan test_45010.a Est. 1 rows, cost 7.400000e-01
-            Outputs: [x]

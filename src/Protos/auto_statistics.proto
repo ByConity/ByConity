@@ -21,26 +21,11 @@ enum TaskType {
     Auto = 2;
 }
 
-// Serialization of
-//        struct TaskInfoCore
-//        {
-//                    // fixed fields, no need to lock
-//                UUID task_uuid;
-//                TaskType task_type;
-//                UUID table_uuid;
-//                std::vector<String> columns_name;
-//                String settings_json;
-//                UInt64 stats_row_count;
-//                UInt64 udi_count;
-//                double priority;
-//                UInt64 retry_times;
-//                TaskStatus status;
-//        };
 message TaskInfoCore
 {
     required UUID task_uuid = 1;
     required TaskType task_type = 2;
-    required UUID table_uuid = 3;
+    required StorageID storage_id = 11;
     repeated string columns_name = 4;
     required string settings_json = 5;
     required uint64 stats_row_count = 6;

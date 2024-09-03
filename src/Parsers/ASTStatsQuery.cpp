@@ -63,6 +63,12 @@ void ASTCreateStatsQuery::formatQueryImpl(const FormatSettings & settings, Forma
         partition->formatImpl(settings, state, frame);
     }
 
+    if (sync_mode != SyncMode::Default)
+    {
+        String str = sync_mode == SyncMode::Sync ? " SYNC" : " ASYNC";
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << str << (settings.hilite ? hilite_none : "");
+    }
+
     bool printed = false;
     auto printWithIfNeeded = [&printed, &settings] {
         if (!printed)
@@ -91,6 +97,22 @@ void ASTCreateStatsQuery::formatQueryImpl(const FormatSettings & settings, Forma
         {
             settings.ostr << ' ' << *sample_ratio;
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " RATIO" << (settings.hilite ? hilite_none : "");
+        }
+    }
+
+    if (settings_changes_opt)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " WITH " << (settings.hilite ? hilite_none : "");
+        bool is_first = true;
+        for (auto [k, v] : settings_changes_opt.value())
+        {
+            if (!is_first)
+            {
+                settings.ostr << ", ";
+            }
+            is_first = false;
+
+            settings.ostr << k << "=" << applyVisitor(FieldVisitorToString(), v);
         }
     }
 }

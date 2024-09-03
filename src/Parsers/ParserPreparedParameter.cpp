@@ -7,6 +7,7 @@
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ParserDataType.h>
 #include <Parsers/ParserPreparedParameter.h>
+#include "Parsers/queryToString.h"
 
 namespace DB
 {
@@ -27,14 +28,14 @@ bool ParserPreparedParameter::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     if (!ParserToken(TokenType::Colon).ignore(pos, expected))
         return false;
 
-    if (!name_p.parse(pos, type_node, expected))
-        return false;
+    ParserDataType type_parser(dt);
+    type_parser.parse(pos, type_node, expected);
 
     if (!ParserToken(TokenType::ClosingSquareBracket).ignore(pos, expected))
         return false;
 
     tryGetIdentifierNameInto(identifier, prepared_parameter->name);
-    tryGetIdentifierNameInto(type_node, prepared_parameter->type);
+    prepared_parameter->type = queryToString(type_node);
     node = std::move(prepared_parameter);
     return true;
 }

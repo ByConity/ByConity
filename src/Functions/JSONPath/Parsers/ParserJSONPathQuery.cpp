@@ -4,6 +4,7 @@
 #include <Functions/JSONPath/Parsers/ParserJSONPathMemberAccess.h>
 #include <Functions/JSONPath/Parsers/ParserJSONPathRange.h>
 #include <Functions/JSONPath/Parsers/ParserJSONPathStar.h>
+#include <Functions/JSONPath/Parsers/ParserJSONPathArrayIndex.h>
 
 namespace DB
 
@@ -22,6 +23,7 @@ bool ParserJSONPathQuery::parseImpl(Pos & pos, ASTPtr & query, Expected & expect
     ParserJSONPathRange parser_jsonpath_range;
     ParserJSONPathStar parser_jsonpath_star;
     ParserJSONPathRoot parser_jsonpath_root;
+    ParserJSONPathArrayIndex parser_jsonpath_array_index;
 
     ASTPtr path_root;
     if (!parser_jsonpath_root.parse(pos, path_root, expected))
@@ -33,7 +35,8 @@ bool ParserJSONPathQuery::parseImpl(Pos & pos, ASTPtr & query, Expected & expect
     ASTPtr accessor;
     while (parser_jsonpath_member_access.parse(pos, accessor, expected)
            || parser_jsonpath_range.parse(pos, accessor, expected)
-           || parser_jsonpath_star.parse(pos, accessor, expected))
+           || parser_jsonpath_star.parse(pos, accessor, expected)
+           || parser_jsonpath_array_index.parse(pos, accessor, expected))
     {
         if (accessor)
         {

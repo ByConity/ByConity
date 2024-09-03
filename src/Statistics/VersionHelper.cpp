@@ -1,5 +1,5 @@
 #include <Interpreters/Context.h>
-#include <Statistics/CachedStatsProxy.h>
+#include <Statistics/CatalogAdaptorProxy.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Statistics/StatsTableIdentifier.h>
@@ -15,7 +15,7 @@ std::shared_ptr<StatsTableBasic> getTableStatistics(ContextPtr context, const St
 {
     auto catalog = createCatalogAdaptor(context);
     auto policy = context->getSettingsRef().statistics_cache_policy;
-    auto proxy = createCachedStatsProxy(catalog, policy);
+    auto proxy = createCatalogAdaptorProxy(catalog, policy);
     auto stats = proxy->get(table, true, {});
     auto tag = StatisticsTag::TableBasic;
     if (auto iter = stats.table_stats.find(tag); iter != stats.table_stats.end())

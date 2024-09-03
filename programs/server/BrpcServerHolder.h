@@ -7,6 +7,7 @@
 #include <Storages/DistributedDataService.h>
 #include <Storages/RemoteDiskCacheService.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
+#include <Statistics/OptimizerStatisticsService.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <brpc/server.h>
 #include <bthread/bthread.h>
@@ -35,6 +36,7 @@
         SERVER_REGISTER_SERVICE(BrpcExchangeReceiverRegistryService); \
         SERVER_REGISTER_SERVICE(RuntimeFilterService); \
         SERVER_REGISTER_SERVICE(PlanSegmentManagerRpcService); \
+        SERVER_REGISTER_SERVICE(OptimizerStatisticsService); \
     }
 
 #define REGISTER_REMOTE_DISKCACHE_SERVICES(host_port) \

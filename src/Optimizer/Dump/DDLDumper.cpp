@@ -29,6 +29,7 @@ using namespace DB::DumpUtils;
 
 namespace DB
 {
+using namespace Statistics;
 
 void DDLDumper::addTable(const std::string & database_name, const std::string & table_name, ContextPtr context)
 {
@@ -277,7 +278,7 @@ Poco::JSON::Object::Ptr DDLDumper::getTableStats(const std::string & database_na
 
     try
     {
-        Statistics::StatisticsCollector collector(context, catalog, table_id.value());
+        Statistics::StatisticsCollector collector(context, catalog, table_id.value(), CollectorSettings{});
         collector.readAllFromCatalog();
         auto table_collection = collector.getTableStats().writeToCollection();
         if (table_collection.empty())

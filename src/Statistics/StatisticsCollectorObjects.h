@@ -29,7 +29,6 @@ namespace StatisticsImpl
     public:
         std::shared_ptr<StatsTableBasic> basic;
 
-    public:
         // TODO: use reflection to eliminate this manual code
         StatsCollection writeToCollection() const
         {
@@ -55,7 +54,7 @@ namespace StatisticsImpl
         // basic contains ndv and histogram bounds, a.k.a. hll/kll sketch
         std::shared_ptr<StatsColumnBasic> basic;
 
-    public:
+
         // TODO: use reflection to eliminate this manual code
         StatsCollection writeToCollection() const
         {

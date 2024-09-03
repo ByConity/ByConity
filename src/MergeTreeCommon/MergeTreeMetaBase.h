@@ -78,15 +78,6 @@ public:
 
     using DeleteBitmapGetter = std::function<ImmutableDeleteBitmapPtr(const DataPartPtr &)>;
     using DataPartsDeleteSnapshot = std::map<DataPartPtr, ImmutableDeleteBitmapPtr, LessDataPart>;
-    DataPartsDeleteSnapshot getLatestDeleteSnapshot(const DataPartsVector & parts) const
-    {
-        DataPartsDeleteSnapshot res;
-        auto lock = lockPartsRead();
-        for (auto & part : parts) {
-            res.insert({part, part->getDeleteBitmap()});
-        }
-        return res;
-    }
 
     std::shared_ptr<UniqueKeyIndexCache> unique_key_index_cache;
 

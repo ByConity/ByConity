@@ -23,6 +23,7 @@
 #include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Interpreters/Context.h>
+#include <Storages/MergeTree/FilterWithRowUtils.h>
 
 
 namespace DB
@@ -36,37 +37,31 @@ namespace ErrorCodes
 MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     const MergeTreeMetaBase & storage_,
     const StorageSnapshotPtr & storage_snapshot_,
-    const MergeTreeMetaBase::DataPartPtr & owned_data_part_,
-    ImmutableDeleteBitmapPtr delete_bitmap_,
+    const RangesInDataPart & part_detail_,
+    MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter_,
     Names required_columns_,
-    MarkRanges mark_ranges_,
     const SelectQueryInfo & query_info_,
     bool check_columns_,
     const MergeTreeStreamSettings & stream_settings_,
     const Names & virt_column_names_,
-    size_t part_index_in_query_,
     bool quiet)
     :
     MergeTreeBaseSelectProcessor{
         storage_snapshot_->getSampleBlockForColumns(required_columns_),
         storage_, storage_snapshot_, query_info_, stream_settings_, virt_column_names_},
     required_columns{std::move(required_columns_)},
-    data_part{owned_data_part_},
-    delete_bitmap{std::move(delete_bitmap_)},
-    all_mark_ranges(std::move(mark_ranges_)),
-    part_index_in_query(part_index_in_query_),
+    part_detail{part_detail_},
+    delete_bitmap_getter(std::move(delete_bitmap_getter_)),
     check_columns(check_columns_)
 {
     /// Let's estimate total number of rows for progress bar.
-    for (const auto & range : all_mark_ranges)
-        total_marks_count += range.end - range.begin;
+    total_marks_count = part_detail.getMarksCount();
 
-    size_t total_rows = data_part->index_granularity.getRowsCountInRanges(all_mark_ranges);
-
+    size_t total_rows = part_detail.getRowsCount();
     if (!quiet)
         LOG_DEBUG(log, "Reading {} ranges from part {}, approx. {} rows starting from {}",
-            all_mark_ranges.size(), data_part->name, total_rows,
-            data_part->index_granularity.getMarkStartingRow(all_mark_ranges.front().begin));
+            part_detail.ranges.size(), part_detail.data_part->name, total_rows,
+            part_detail.data_part->index_granularity.getMarkStartingRow(part_detail.ranges.front().begin));
 
     addTotalRowsApprox(total_rows);
     ordered_names = header_without_virtual_columns.getNames();
@@ -85,23 +80,23 @@ try
     is_first_task = false;
 
     task_columns = getReadTaskColumns(
-        storage, storage_snapshot, data_part,
+        storage, storage_snapshot, part_detail.data_part,
         required_columns, prewhere_info, index_context, {}, check_columns);
 
     auto size_predictor = (stream_settings.preferred_block_size_bytes == 0)
         ? nullptr
-        : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
+        : std::make_unique<MergeTreeBlockSizePredictor>(part_detail.data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
 
     /// will be used to distinguish between PREWHERE and WHERE columns when applying filter
     const auto & column_names = task_columns.columns.getNames();
     column_name_set = NameSet{column_names.begin(), column_names.end()};
 
     task = std::make_unique<MergeTreeReadTask>(
-        data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns,
-        prewhere_info && prewhere_info->remove_prewhere_column, task_columns.should_reorder, std::move(size_predictor), all_mark_ranges);
+        part_detail.data_part, getDeleteBitmap(), part_detail.ranges, part_detail.part_index_in_query, ordered_names, column_name_set, task_columns,
+        prewhere_info && prewhere_info->remove_prewhere_column, task_columns.should_reorder, std::move(size_predictor), part_detail.ranges);
 
     if (!reader)
-        initializeReaders(all_mark_ranges);
+        initializeReaders(part_detail.ranges);
 
     return true;
 }
@@ -109,10 +104,19 @@ catch (...)
 {
     /// Suspicion of the broken part. A part is added to the queue for verification.
     if (getCurrentExceptionCode() != ErrorCodes::MEMORY_LIMIT_EXCEEDED)
-        storage.reportBrokenPart(data_part->name);
+        storage.reportBrokenPart(part_detail.data_part->name);
     throw;
 }
 
+ImmutableDeleteBitmapPtr MergeTreeSelectProcessor::getDeleteBitmap()
+{
+    if (delete_bitmap_initialized)
+        return delete_bitmap;
+
+    delete_bitmap = combineFilterBitmap(part_detail, delete_bitmap_getter);
+    delete_bitmap_initialized = true;
+    return delete_bitmap;
+}
 
 void MergeTreeSelectProcessor::finish()
 {
@@ -122,7 +126,7 @@ void MergeTreeSelectProcessor::finish()
     */
     reader.reset();
     pre_reader.reset();
-    data_part.reset();
+    part_detail.data_part.reset();
     index_executor.reset();
     pre_index_executor.reset();
 }

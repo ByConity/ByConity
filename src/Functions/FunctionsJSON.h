@@ -34,6 +34,7 @@
 #include <DataTypes/DataTypeMap.h>
 #include <Interpreters/Context.h>
 #include <common/range.h>
+#include "Core/SettingsEnums.h"
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeObject.h>
 #include <DataTypes/ObjectUtils.h>
@@ -315,6 +316,8 @@ public:
 
         const Element & getElement() const { return element; }
         std::string_view getLastKey() const { return last_key; }
+
+        using JSONParserType = JSONParser;
 
     private:
         Element element;
@@ -616,7 +619,6 @@ public:
         return Executor::template run<ColumnTuple>(arguments, json_return_type, input_rows_count);
     }
 };
-
 
 
 template <typename Name>
@@ -939,7 +941,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator &)
+    static bool insertResultToColumn(IColumn & dest, Iterator &)
     {
         auto & col_vec = assert_cast<ColumnVector<UInt8> &>(dest);
         col_vec.insertValue(1);
@@ -967,7 +969,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName &) { return 0; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator &)
+    static bool insertResultToColumn(IColumn & dest, Iterator &)
     {
         /// This function is called only if JSON is valid.
         /// If JSON isn't valid then `FunctionJSON::Executor::run()` adds default value (=zero) to `dest` without calling this function.
@@ -990,7 +992,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         
@@ -1007,7 +1009,7 @@ public:
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsObjectIterator<Iterator>
     {
         auto & to_vec = assert_cast<ColumnVector<UInt64> &>(dest);
 
@@ -1049,7 +1051,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator)
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator)
     {
         auto last_key = iterator.getLastKey();
         if (last_key.empty())
@@ -1083,7 +1085,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         UInt8 type;
@@ -1111,7 +1113,7 @@ public:
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsObjectIterator<Iterator>
     {
         WhichDataType which(iterator.getType());
         UInt8 type;
@@ -1149,7 +1151,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         NumberType value;
@@ -1188,7 +1190,7 @@ public:
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsObjectIterator<Iterator>
     {
         const auto & from = iterator.getColumn();
         UInt64 row = iterator.getRow();
@@ -1230,7 +1232,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         if (!element.isBool())
@@ -1241,7 +1243,7 @@ public:
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsObjectIterator<Iterator>
     {
         return JSONExtractUInt8Impl<Iterator>::insertResultToColumn(dest, iterator);
     }
@@ -1258,20 +1260,24 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator, DialectType dialect_type = DialectType::CLICKHOUSE) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         auto & col_str = assert_cast<ColumnString &>(dest);
         auto & chars = col_str.getChars();
         WriteBufferFromVector<ColumnString::Chars> buf(chars, AppendModeTag());
-        Traverse::traverse(element, buf);
+        if (dialect_type == DialectType::MYSQL)
+            Traverse::traverse(element, buf, true);
+        else
+            Traverse::traverse(element, buf);
+
         buf.finalize();
         chars.push_back(0);
         col_str.getOffsets().push_back(chars.size());
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, ObjectIterator & iterator, DialectType dialect_type = DialectType::CLICKHOUSE) requires IsObjectIterator<Iterator>
     {
         const auto & type = iterator.getType();
         const auto & column = iterator.getColumn();
@@ -1284,10 +1290,13 @@ public:
 
         WriteBufferFromVector buf(to_chars, AppendModeTag{});
 
+        const auto & format_setting
+            = dialect_type == DialectType::MYSQL ? Traverse::unquote_format_settings() : Traverse::format_settings();
+
         if (isDummyTuple(*type))
             writeString("{}", buf);
         else
-            serialization->serializeTextJSON(*column, row, buf, Traverse::format_settings());
+            serialization->serializeTextJSON(*column, row, buf, format_setting);
 
         writeChar(0, buf);
         buf.finalize();
@@ -1314,7 +1323,7 @@ public:
             col_str.insertData(json_data.data(), json_data.size());
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         auto & col_str = assert_cast<ColumnString &>(dest);
@@ -1322,7 +1331,7 @@ public:
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsObjectIterator<Iterator>
     {
         const auto & type = iterator.getType();
         const auto & column = iterator.getColumn();
@@ -1359,7 +1368,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         if (!element.isString())
@@ -1371,7 +1380,7 @@ public:
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, ObjectIterator & iterator) requires IsObjectIterator<Iterator>
     {
         const auto & column = iterator.getColumn();
         UInt64 row = iterator.getRow();
@@ -1396,14 +1405,14 @@ struct JSONExtractTree
     public:
         Node() = default;
         virtual ~Node() = default;
-        virtual bool insertResultToColumn(IColumn &, const Iterator &) = 0;
+        virtual bool insertResultToColumn(IColumn &, Iterator &) = 0;
     };
 
     template <typename NumberType>
     class NumericNode : public Node
     {
     public:
-       bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+       bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             return JSONExtractNumericImpl<Iterator, NumberType, true>::insertResultToColumn(dest, iterator);
         }
@@ -1417,7 +1426,7 @@ struct JSONExtractTree
         {
         }
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             auto from_col = dictionary_type->createColumn();
             if (impl->insertResultToColumn(*from_col, iterator))
@@ -1436,7 +1445,7 @@ struct JSONExtractTree
     class UUIDNodeString : public Node
     {
     public:
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto & element = iterator.getElement();
             if (!element.isString())
@@ -1451,7 +1460,7 @@ struct JSONExtractTree
     class UUIDNodeObject : public Node
     {
     public:
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             if (!isString(iterator.getType()))
                 return false;
@@ -1473,7 +1482,7 @@ struct JSONExtractTree
     public:
         explicit DecimalNodeString(DataTypePtr data_type_) : data_type(std::move(data_type_)) {}
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto & element = iterator.getElement();
             const auto * type = assert_cast<const DataTypeDecimal<DecimalType> *>(data_type.get());
@@ -1503,7 +1512,7 @@ struct JSONExtractTree
     public:
         explicit DecimalNodeObject(DataTypePtr data_type_) : data_type(std::move(data_type_)) {}
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto * decimal_type = assert_cast<const DataTypeDecimal<DecimalType> *>(data_type.get());
             const auto & from = iterator.getColumn();
@@ -1533,7 +1542,7 @@ struct JSONExtractTree
     class StringNodeString : public Node
     {
     public:
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto & element = iterator.getElement();
             if (element.isString())
@@ -1548,7 +1557,7 @@ struct JSONExtractTree
     class StringNodeObject : public Node
     {
     public:
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             return JSONExtractStringImpl<Iterator>::insertResultToColumn(dest, iterator);
         }
@@ -1559,7 +1568,7 @@ struct JSONExtractTree
     class FixedStringNodeString : public Node
     {
     public:
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto & element = iterator.getElement();
             if (!element.isString())
@@ -1576,7 +1585,7 @@ struct JSONExtractTree
     class FixedStringNodeObject : public Node
     {
     public:
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             if (!isString(iterator.getType()))
                 return false;
@@ -1622,7 +1631,7 @@ struct JSONExtractTree
         {
         }
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto & element = iterator.getElement();
             auto & col_vec = assert_cast<ColumnVector<Type> &>(dest);
@@ -1667,7 +1676,7 @@ struct JSONExtractTree
         {
         }
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             auto & to_vec = assert_cast<ColumnVector<Type> &>(dest);
             const auto & from = iterator.getColumn();
@@ -1711,7 +1720,7 @@ struct JSONExtractTree
     public:
         explicit NullableNode(std::unique_ptr<Node> nested_) : nested(std::move(nested_)) {}
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             auto & col_null = assert_cast<ColumnNullable &>(dest);
             if (!nested->insertResultToColumn(col_null.getNestedColumn(), iterator))
@@ -1729,7 +1738,7 @@ struct JSONExtractTree
     public:
         explicit ArrayNodeString(std::unique_ptr<Node> nested_) : nested(std::move(nested_)) {}
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto & element = iterator.getElement();
             if (!element.isArray())
@@ -1744,7 +1753,8 @@ struct JSONExtractTree
 
             for (auto value : array)
             {
-                if (nested->insertResultToColumn(data, Iterator{value}))
+                auto temp_it = Iterator{value};
+                if (nested->insertResultToColumn(data, temp_it))
                     were_valid_elements = true;
                 else
                     data.insertDefault();
@@ -1769,7 +1779,7 @@ struct JSONExtractTree
     public:
         explicit ArrayNodeObject(std::unique_ptr<Node> nested_) : nested(std::move(nested_)) {}
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto * from_array = typeid_cast<const ColumnArray *>(iterator.getColumn().get());
             if (!from_array)
@@ -1834,7 +1844,7 @@ struct JSONExtractTree
         {
         }
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             ColumnTuple & tuple = assert_cast<ColumnTuple &>(dest);
             size_t old_size = dest.size();
@@ -1865,7 +1875,8 @@ struct JSONExtractTree
 
                 for (size_t index = 0; (index != this->nested.size()) && (it != array.end()); ++index)
                 {
-                    if (this->nested[index]->insertResultToColumn(tuple.getColumn(index), Iterator{*it++}))
+                    auto temp_it = Iterator{*it++};
+                    if (this->nested[index]->insertResultToColumn(tuple.getColumn(index), temp_it))
                         were_valid_elements = true;
                     else
                         tuple.getColumn(index).insertDefault();
@@ -1882,7 +1893,8 @@ struct JSONExtractTree
                     auto it = object.begin();
                     for (size_t index = 0; (index != this->nested.size()) && (it != object.end()); ++index)
                     {
-                        if (this->nested[index]->insertResultToColumn(tuple.getColumn(index), Iterator{(*it++).second}))
+                        auto temp_it = Iterator{(*it++).second};
+                        if (this->nested[index]->insertResultToColumn(tuple.getColumn(index), temp_it))
                             were_valid_elements = true;
                         else
                             tuple.getColumn(index).insertDefault();
@@ -1895,7 +1907,8 @@ struct JSONExtractTree
                         auto index = this->name_to_index_map.find(key);
                         if (index != this->name_to_index_map.end())
                         {
-                            if (this->nested[index->second]->insertResultToColumn(tuple.getColumn(index->second), Iterator{value}))
+                            auto temp_it = Iterator{value};
+                            if (this->nested[index->second]->insertResultToColumn(tuple.getColumn(index->second), temp_it))
                                 were_valid_elements = true;
                         }
                     }
@@ -1916,7 +1929,7 @@ struct JSONExtractTree
         {
         }
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             auto & to_tuple = assert_cast<ColumnTuple &>(dest);
             size_t old_size = dest.size();
@@ -1984,7 +1997,7 @@ struct JSONExtractTree
     public:
         MapNodeString(std::unique_ptr<Node> key_, std::unique_ptr<Node> value_) : MapNodeBase(std::move(key_), std::move(value_)) { }
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto & element = iterator.getElement();
             if (!element.isObject())
@@ -2006,7 +2019,8 @@ struct JSONExtractTree
                 key_col.insertData(pair.first.data(), pair.first.size());
 
                 /// Insert value
-                if (!this->value->insertResultToColumn(value_col, Iterator{pair.second}))
+                auto temp_it = Iterator{pair.second};
+                if (!this->value->insertResultToColumn(value_col, temp_it))
                     value_col.insertDefault();
             }
 
@@ -2020,7 +2034,7 @@ struct JSONExtractTree
     public:
         MapNodeObject(std::unique_ptr<Node> key_, std::unique_ptr<Node> value_) : MapNodeBase(std::move(key_), std::move(value_)) { }
 
-        bool insertResultToColumn(IColumn & dest, const Iterator & iterator) override
+        bool insertResultToColumn(IColumn & dest, Iterator & iterator) override
         {
             const auto * from_tuple_type = typeid_cast<const DataTypeTuple *>(iterator.getType().get());
             if (!from_tuple_type)
@@ -2152,7 +2166,7 @@ public:
         extract_tree = JSONExtractTree<Iterator>::build(function_name, result_type);
     }
 
-    bool insertResultToColumn(IColumn & dest, const Iterator & iterator)
+    bool insertResultToColumn(IColumn & dest, Iterator & iterator)
     {
         return extract_tree->insertResultToColumn(dest, iterator);
     }
@@ -2195,7 +2209,7 @@ public:
         extract_tree = JSONExtractTree<Iterator>::build(function_name, value_type);
     }
 
-    bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         if (!element.isObject())
@@ -2223,7 +2237,7 @@ public:
         return true;
     }
 
-    bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsObjectIterator<Iterator>
     {
         const auto * from_tuple_type = typeid_cast<const DataTypeTuple *>(iterator.getType().get());
         if (!from_tuple_type || !from_tuple_type->haveExplicitNames())
@@ -2273,7 +2287,7 @@ public:
     static size_t getResolveArgumentIndex(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         ColumnString & col_str = assert_cast<ColumnString &>(dest);
@@ -2286,7 +2300,7 @@ public:
         return true;
     }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsObjectIterator<Iterator>
     {
         const auto & type = iterator.getType();
         const auto & column = iterator.getColumn();
@@ -2324,7 +2338,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         if (!element.isArray())
@@ -2384,7 +2398,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         if (!element.isObject())
@@ -2450,7 +2464,7 @@ public:
 
     static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
 
-    static bool insertResultToColumn(IColumn & dest, const Iterator & iterator) requires IsElementIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, Iterator & iterator) requires IsElementIterator<Iterator>
     {
         const auto & element = iterator.getElement();
         if (!element.isObject())
@@ -2470,7 +2484,7 @@ public:
         return true;
     }
 
-    bool insertResultToColumn(IColumn & dest, const ObjectIterator & iterator) requires IsObjectIterator<Iterator>
+    static bool insertResultToColumn(IColumn & dest, ObjectIterator & iterator) requires IsObjectIterator<Iterator>
     {
         const auto * type_tuple = typeid_cast<const DataTypeTuple *>(iterator.getType().get());
         if (!type_tuple || !type_tuple->haveExplicitNames())

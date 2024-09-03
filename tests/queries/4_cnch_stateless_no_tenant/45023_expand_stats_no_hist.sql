@@ -3,7 +3,6 @@ set create_stats_time_output=0;
 set statistics_current_timestamp=1715602800;
 set statistics_collect_histogram=0;
 drop table if exists tb;
-drop table if exists tb_local;
 
 create table tb (
     `id` UInt64,

@@ -40,9 +40,15 @@ inline double scaleNdv(double full_count, double sample_count, double sample_ndv
     auto ratio = sample_count / full_count;
     auto estimate_nonnull = sample_nonnull / ratio;
 
-    if (sample_count > full_count)
+    // to ensure rounding errors has no effect
+    if (sample_count > full_count * 1.0001)
     {
-        throw Exception("ill-formed ndv", ErrorCodes::LOGICAL_ERROR);
+        auto err_msg = fmt::format(FMT_STRING("ill-formed ndv, {} should be smaller than {}"), sample_count, full_count);
+        throw Exception(err_msg, ErrorCodes::INCORRECT_DATA);
+    }
+    else if (sample_count >= full_count)
+    {
+        return sample_ndv;
     }
 
     // Oracle Formula: NDVsample = NDV * (1 - (1 - ratio) ^ (COUNT/NDV))

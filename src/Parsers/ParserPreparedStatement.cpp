@@ -8,6 +8,7 @@
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/formatTenantDatabaseName.h>
+#include <Parsers/ASTLiteral.h>
 
 namespace DB
 {  
@@ -86,6 +87,7 @@ bool ParserExecutePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Ex
 {
     ParserKeyword s_execute("EXECUTE PREPARED STATEMENT");
     ParserKeyword s_using("USING");
+    ParserToken s_comma(TokenType::Comma);
 
     if (!s_execute.ignore(pos, expected))
         return false;
@@ -107,9 +109,36 @@ bool ParserExecutePreparedStatementQuery::parseImpl(Pos & pos, ASTPtr & node, Ex
 
     if (s_using.ignore(pos, expected))
     {
-        ParserSetQuery parser_settings(true);
-        if (!parser_settings.parse(pos, settings, expected))
-            return false;
+        SettingsChanges changes;
+        ParserExecuteValue value_p(ParserSettings::CLICKHOUSE);
+        ParserToken s_eq(TokenType::Equals);
+        while (true)
+        {
+            if (!changes.empty() && !s_comma.ignore(pos))
+                break;
+
+            changes.push_back(SettingChange{});
+            ASTPtr name;
+            ASTPtr value;
+
+            if (!name_p.parse(pos, name, expected))
+                return false;
+
+            if (!s_eq.ignore(pos, expected))
+                return false;
+
+            if (!value_p.parse(pos, value, expected))
+                return false;
+
+            if (!value->as<ASTLiteral>())
+                return false;
+
+            tryGetIdentifierNameInto(name, changes.back().name);
+            changes.back().value = value->as<ASTLiteral &>().value;
+        }
+        auto set_ast = std::make_shared<ASTSetQuery>();
+        settings = set_ast;
+        set_ast->changes = std::move(changes);
     }
     else
     {

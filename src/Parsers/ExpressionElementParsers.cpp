@@ -3152,4 +3152,11 @@ bool ParserEscapeExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     return true;
 }
 
+bool ParserExecuteValue::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    return ParserTupleOfLiterals(dt).parse(pos, node, expected)
+        || ParserArrayOfLiterals(dt).parse(pos, node, expected)
+        || ParserLiteral(dt).parse(pos, node, expected);
+}
+
 }

@@ -6,12 +6,12 @@
 namespace DB::Statistics
 {
 // return row_count
-std::optional<UInt64> collectStatsOnTarget(const ContextPtr & context, const CollectTarget & collect_target)
+std::optional<UInt64> collectStatsOnTarget(ContextPtr context, const CollectTarget & collect_target)
 {
     const auto & settings = collect_target.settings;
     auto catalog = createCatalogAdaptor(context);
 
-    if (settings.if_not_exists && catalog->hasStatsData(collect_target.table_identifier))
+    if (settings.if_not_exists() && catalog->hasStatsData(collect_target.table_identifier))
         return std::nullopt;
 
     StatisticsCollector impl(context, catalog, collect_target.table_identifier, collect_target.settings);
@@ -23,7 +23,7 @@ std::optional<UInt64> collectStatsOnTarget(const ContextPtr & context, const Col
     return row_count;
 }
 
-void CollectTarget::init(const ContextPtr & context, const std::vector<String> & columns_name)
+void CollectTarget::init(ContextPtr context, const std::vector<String> & columns_name)
 {
     auto catalog = createCatalogAdaptor(context);
 

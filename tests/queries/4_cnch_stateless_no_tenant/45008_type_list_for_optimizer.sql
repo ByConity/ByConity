@@ -1,7 +1,6 @@
 drop table if exists optimizer_supported;
 drop table if exists optimizer_unsupported;
 -- data types that are known to be supported by optimizer
-set data_type_default_nullable=0;
 create table optimizer_supported
 (
     data_type String
@@ -24,6 +23,7 @@ insert into optimizer_supported values ('Decimal')('Decimal32')('Decimal64')('De
 insert into optimizer_supported values ('Enum')('Enum8')('Enum16');
 insert into optimizer_supported values ('IPv4')('IPv6');
 insert into optimizer_supported values ('Float32')('Float64');
+insert into optimizer_supported values ('LowCardinality');
 
 -- interval type is designed for calculation, thus not supported
 insert into optimizer_unsupported select name from system.data_type_families where alias_to='' and name like 'Interval%';
@@ -49,6 +49,5 @@ select name from system.data_type_families
                 and name not in optimizer_supported
                 and name not in optimizer_unsupported
             order by name;
-
 drop table if exists optimizer_supported;
 drop table if exists optimizer_unsupported;

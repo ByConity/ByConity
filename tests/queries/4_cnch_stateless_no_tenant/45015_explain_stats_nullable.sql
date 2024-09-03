@@ -1,8 +1,8 @@
 set enable_optimizer=1;
-set create_stats_time_output=0;
-use test;
+set enable_optimizer_fallback=0;
 
-drop table if exists test_explain_stats_n_local;
+set create_stats_time_output=0;
+
 drop table if exists test_explain_stats_n;
 create table test_explain_stats_n (
     id UInt64,
@@ -17,6 +17,7 @@ create table test_explain_stats_n (
     f32 Nullable(Float32),
     f64 Nullable(Float64),
     d Nullable(Date),
+    d32 Nullable(Date32),
     dt Nullable(DateTime),
     dt64 Nullable(DateTime64(3)),
     s Nullable(String),
@@ -26,10 +27,11 @@ create table test_explain_stats_n (
     decimal128 Nullable(Decimal128(20))
 ) ENGINE=CnchMergeTree() order by id;
 
-insert into test_explain_stats_n values (1, 1, 1, 1, 1, 1, 1, 1, 1, 0.1, 0.01, '2020-01-01', '2020-01-01 00:00:00', '2020-01-01 00:00:00.01','1', '1', 0.1, 0.01, 0.001);
-insert into test_explain_stats_n values (1, 1, 1, 1, 1, 1, 1, 1, 1, 0.1, 0.01, '2020-01-01', '2020-01-01 00:00:00', '2020-01-01 00:00:00.01','1', '1', 0.1, 0.01, 0.001);
-insert into test_explain_stats_n values (1, 1, 1, 1, 1, 1, 1, 1, 1, 0.1, 0.01, '2020-01-01', '2020-01-01 00:00:00', '2020-01-01 00:00:00.01','1', '1', 0.1, 0.01, 0.001);
-insert into test_explain_stats_n values (2, 2, 2, 2, 2, 2, 2, 2, 2, 0.2, 0.02, '2020-02-02', '2020-02-02 00:00:00', '2020-02-02 00:00:02.01','2', '2', 0.2, 0.02, 0.002);
+
+insert into test_explain_stats_n values (1, 1, 1, 1, 1, 1, 1, 1, 1, 0.1, 0.01, '2020-01-01', '2020-01-01', '2020-01-01 00:00:00', '2020-01-01 00:00:00.01','1', '1', 0.1, 0.01, 0.001);
+insert into test_explain_stats_n values (1, 1, 1, 1, 1, 1, 1, 1, 1, 0.1, 0.01, '2020-01-01', '2020-01-01', '2020-01-01 00:00:00', '2020-01-01 00:00:00.01','1', '1', 0.1, 0.01, 0.001);
+insert into test_explain_stats_n values (1, 1, 1, 1, 1, 1, 1, 1, 1, 0.1, 0.01, '2020-01-01', '2020-01-01', '2020-01-01 00:00:00', '2020-01-01 00:00:00.01','1', '1', 0.1, 0.01, 0.001);
+insert into test_explain_stats_n values (2, 2, 2, 2, 2, 2, 2, 2, 2, 0.2, 0.02, '2020-02-02', '2020-02-02', '2020-02-02 00:00:00', '2020-02-02 00:00:02.01','2', '2', 0.2, 0.02, 0.002);
 insert into test_explain_stats_n(id) values (3);
 
 set statistics_enable_sample=0;
@@ -45,6 +47,7 @@ union all (select id from test_explain_stats_n where u64 = 1)
 union all (select id from test_explain_stats_n where f32 < 0.10001)
 union all (select id from test_explain_stats_n where f64 < 0.01001)
 union all (select id from test_explain_stats_n where d = '2020-01-01')
+union all (select id from test_explain_stats_n where d32 = '2020-01-01')
 union all (select id from test_explain_stats_n where dt = '2020-01-01 00:00:00')
 union all (select id from test_explain_stats_n where dt64 = '2020-01-01 00:00:00.01')
 union all (select id from test_explain_stats_n where s = '1')
@@ -68,6 +71,7 @@ union all (select id from test_explain_stats_n where u64 = 1)
 union all (select id from test_explain_stats_n where f32 < 0.10001)
 union all (select id from test_explain_stats_n where f64 < 0.01001)
 union all (select id from test_explain_stats_n where d = '2020-01-01')
+union all (select id from test_explain_stats_n where d32 = '2020-01-01')
 union all (select id from test_explain_stats_n where dt = '2020-01-01 00:00:00')
 union all (select id from test_explain_stats_n where dt64 = '2020-01-01 00:00:00.01')
 union all (select id from test_explain_stats_n where s = '1')
@@ -91,6 +95,7 @@ union all (select id from test_explain_stats_n where u64 = 1)
 union all (select id from test_explain_stats_n where f32 < 0.10001)
 union all (select id from test_explain_stats_n where f64 < 0.01001)
 union all (select id from test_explain_stats_n where d = '2020-01-01')
+union all (select id from test_explain_stats_n where d32 = '2020-01-01')
 union all (select id from test_explain_stats_n where dt = '2020-01-01 00:00:00')
 union all (select id from test_explain_stats_n where dt64 = '2020-01-01 00:00:00.01')
 union all (select id from test_explain_stats_n where s = '1')

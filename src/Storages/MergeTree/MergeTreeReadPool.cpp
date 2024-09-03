@@ -178,7 +178,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
         : std::make_unique<MergeTreeBlockSizePredictor>(*per_part_params[part_idx].size_predictor); /// make a copy
 
     return std::make_unique<MergeTreeReadTask>(
-        part.data_part, part.delete_bitmap, ranges_to_get_from_part, part.part_index_in_query, ordered_names,
+        part.part_detail.data_part, part.getDeleteBitmap(), ranges_to_get_from_part, part.part_detail.part_index_in_query, ordered_names,
         per_part_params[part_idx].column_name_set, per_part_params[part_idx].task_columns,
         prewhere_info && prewhere_info->remove_prewhere_column, per_part_params[part_idx].should_reorder, std::move(curr_task_size_predictor), all_mark_ranges);
 }
@@ -252,7 +252,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
         const auto & required_column_names = task_columns.columns.getNames();
         params.column_name_set = NameSet{required_column_names.begin(), required_column_names.end()};
         params.should_reorder = task_columns.should_reorder;
-        parts_with_idx.push_back({ part.data_part, part.part_index_in_query, combineFilterBitmap(part, delete_bitmap_getter)});
+        parts_with_idx.push_back({ part, delete_bitmap_getter});
 
         if (predict_block_size_bytes)
             params.size_predictor = std::make_unique<MergeTreeBlockSizePredictor>(
@@ -381,6 +381,15 @@ void MergeTreeReadPool::fillPerThreadInfo(
     }
 }
 
+ImmutableDeleteBitmapPtr MergeTreeReadPool::Part::getDeleteBitmap()
+{
+    if (delete_bitmap_initialized)
+        return delete_bitmap;
+
+    delete_bitmap = combineFilterBitmap(part_detail, delete_bitmap_getter);
+    delete_bitmap_initialized = true;
+    return delete_bitmap;
+}
 
 void MergeTreeReadPool::updateGranuleStats(const std::unordered_map<String, size_t> & stats)
 {

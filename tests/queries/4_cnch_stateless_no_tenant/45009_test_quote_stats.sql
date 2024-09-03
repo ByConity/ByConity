@@ -2,10 +2,12 @@ set create_stats_time_output=0;
 drop database if exists `1.2.3`;
 
 create database `1.2.3`;
+
 create table `1.2.3`.`4.5.6`(
     id UInt64,
     `7.8.9` UInt64
 ) Engine=CnchMergeTree() order by id;
+
 
 insert into `1.2.3`.`4.5.6` values (1, 2)(3, 4);
 

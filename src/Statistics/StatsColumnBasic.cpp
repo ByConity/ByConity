@@ -24,7 +24,7 @@ String StatsColumnBasic::serialize() const
 }
 void StatsColumnBasic::deserialize(std::string_view blob)
 {
-    proto.ParseFromArray(blob.data(), blob.size());
+    ASSERT_PARSE(proto.ParseFromArray(blob.data(), blob.size()));
 }
 String StatsColumnBasic::serializeToJson() const
 {

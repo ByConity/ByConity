@@ -9,10 +9,11 @@
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/StatisticsCollector.h>
 
-#include <common/logger_useful.h>
-#include <string>
 #include <memory>
+#include <string>
 #include <unordered_set>
+#include <common/logger_useful.h>
+#include "Statistics/CollectorSettings.h"
 
 using namespace DB::Statistics;
 
@@ -60,9 +61,9 @@ std::unordered_set<QualifiedTableName> StatsLoader::loadStats(bool load_all, con
 }
 
 std::shared_ptr<StatisticsCollector> StatsLoader::readStatsFromJson(
-    const std::string & database_name, const std::string & table_name, Poco::JSON::Object::Ptr states_json_)
+    const std::string & database_name, const std::string & table_name, Poco::JSON::Object::Ptr json_ptr)
 {
-    if (!states_json_ || states_json_->size() == 0)
+    if (!json_ptr || json_ptr->size() == 0)
     {
         LOG_WARNING(log, "stats for table {}.{} is empty", database_name, table_name);
         return nullptr;
@@ -75,20 +76,20 @@ std::shared_ptr<StatisticsCollector> StatsLoader::readStatsFromJson(
         return nullptr;
     }
 
-    std::shared_ptr<StatisticsCollector> collector =
-        std::make_shared<StatisticsCollector>(getContext(), stats_catalog, table_id_opt.value());
+    std::shared_ptr<StatisticsCollector> collector
+        = std::make_shared<StatisticsCollector>(getContext(), stats_catalog, table_id_opt.value(), CollectorSettings{});
 
     {
         StatsCollection table_basic_collection;
         StatisticsTag tag = StatisticsTag::TableBasic;
-        auto obj = createStatisticsBaseFromJson(tag, states_json_->getValue<String>("TableBasic"));
+        auto obj = createStatisticsBaseFromJson(tag, json_ptr->getValue<String>("TableBasic"));
         table_basic_collection.emplace(tag, std::move(obj));
         StatisticsCollector::TableStats table_stats;
         table_stats.readFromCollection(table_basic_collection);
         collector->setTableStats(std::move(table_stats));
     }
 
-    auto column_jsons = states_json_->getObject("Columns");
+    auto column_jsons = json_ptr->getObject("Columns");
     for (auto & column : *column_jsons)
     {
         auto column_json = column.second.extract<Poco::JSON::Object::Ptr>();

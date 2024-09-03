@@ -10,6 +10,7 @@ namespace DB::Statistics::AutoStats
 
 struct TaskInfoLog : public TaskInfoCore
 {
+    TaskInfoLog() : TaskInfoCore{.table = StatsTableIdentifier(StorageID::createEmpty())} { }
     DateTime64 event_time;
 };
 

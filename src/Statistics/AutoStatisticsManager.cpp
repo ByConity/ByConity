@@ -93,8 +93,9 @@ void AutoStatisticsManager::prepareNewConfig(const Poco::Util::AbstractConfigura
 {
     // TODO: change this to true after testing
     bool is_enabled = config.getBool(Config::is_enabled, false);
-    InternalConfig new_config(context->getSettingsRef());
+    InternalConfig new_config;
 
+    #if 0
     auto collect_window_text = config.getString(Config::collect_window, "00:00-23:59");
     std::tie(new_config.begin_time, new_config.end_time) = parseTimeWindow(collect_window_text);
 
@@ -115,6 +116,7 @@ void AutoStatisticsManager::prepareNewConfig(const Poco::Util::AbstractConfigura
 
     new_config.task_expire = std::chrono::days(config.getUInt64(Config::task_expire_days, 7));
     new_config.enable_async_tasks = config.getBool(Config::enable_async_tasks, true);
+    #endif
 
     std::unique_lock lck(config_mtx);
     config_is_enabled = is_enabled;
@@ -124,13 +126,13 @@ void AutoStatisticsManager::prepareNewConfig(const Poco::Util::AbstractConfigura
 AutoStatisticsManager::AutoStatisticsManager(ContextPtr context_)
     : context(context_)
     , logger(&Poco::Logger::get("AutoStatisticsManager"))
-    , internal_config(context_->getSettingsRef())
     , task_queue(context_, internal_config)
     , schedule_lease(TimePoint{}) // std::chrono::time_point() is not nothrow at gcc 9.4, make compiler happy
 
 {
-    schedule_lease = nowTimePoint() + internal_config.schedule_period;
-    udi_flush_lease = nowTimePoint() + internal_config.schedule_period;
+    auto schedule_period = std::chrono::seconds(internal_config.schedule_period_seconds());
+    schedule_lease = nowTimePoint() + schedule_period;
+    udi_flush_lease = nowTimePoint() + schedule_period;
 }
 
 static String timeToString(Time time)
@@ -175,16 +177,16 @@ void AutoStatisticsManager::run()
             updateUdiInfo();
 
             auto fetch_log_time_point = updateTaskQueueFromLog(next_min_event_time);
-            next_min_event_time = fetch_log_time_point - internal_config.schedule_period;
+            next_min_event_time = fetch_log_time_point - std::chrono::seconds(internal_config.schedule_period_seconds());
 
             auto is_time_range = isNowValidTimeRange();
 
             auto mode = [&] {
                 using Mode = TaskQueue::Mode;
                 Mode mode_;
-                mode_.enable_async_tasks = internal_config.enable_async_tasks;
+                mode_.enable_async_tasks = internal_config.enable_async_tasks();
                 mode_.enable_normal_auto_stats = auto_stats_enabled && is_time_range;
-                mode_.enable_immediate_auto_stats = auto_stats_enabled && (is_time_range || internal_config.collect_empty_stats_immediately);
+                mode_.enable_immediate_auto_stats = auto_stats_enabled && (is_time_range || internal_config.collect_empty_stats_immediately());
                 return mode_;
             }();
 
@@ -204,7 +206,7 @@ void AutoStatisticsManager::run()
         clearOnException();
     }
 
-    auto schedule_period = internal_config.schedule_period;
+    auto schedule_period = std::chrono::seconds(internal_config.schedule_period_seconds());
     auto info_msg = fmt::format(FMT_STRING("Finish Iteration, schedule after {} seconds"), schedule_period / std::chrono::seconds(1));
     LOG_INFO(logger, info_msg);
     schedule_lease = nowTimePoint() + schedule_period;
@@ -258,7 +260,7 @@ void AutoStatisticsManager::updateUdiInfo()
         return;
     }
 
-    udi_flush_lease = current_time + internal_config.udi_flush_interval;
+    udi_flush_lease = current_time + std::chrono::seconds(internal_config.update_interval_seconds());
 
     auto catalog = createCatalogAdaptor(context);
     auto & record = internal_memory_record;
@@ -304,7 +306,7 @@ bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & cho
 {
     auto catalog = createCatalogAdaptor(context);
 
-    auto uuid = chosen_task->getTableUUID();
+    auto uuid = chosen_task->getTable().getUniqueKey();
     auto table_opt = catalog->getTableIdByUUID(uuid);
 
     if (!table_opt)
@@ -326,13 +328,14 @@ bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & cho
         chosen_task->setStatus(Status::Running);
         writeTaskLog(context, *chosen_task);
 
-        auto settings = internal_config.collector_settings;
+        CreateStatsSettings settings; // TODO
         auto columns_name = chosen_task->getColumnsName();
 
-        if (!chosen_task->getSettingsJson().empty())
-        {
-            settings.fromJsonStr(chosen_task->getSettingsJson());
-        }
+        // TODO: gouguilin
+        // if (!chosen_task->getSettingsJson().empty())
+        // {
+        //     settings.fromJsonStr(chosen_task->getSettingsJson());
+        // }
 
         CollectTarget target(context, table, settings, columns_name);
         auto row_count_opt = collectStatsOnTarget(context, target);
@@ -392,9 +395,9 @@ void AutoStatisticsManager::initializeInfo()
     catalog->checkHealth(true);
     task_queue.clear();
 
-    auto init_min_event_time = nowTimePoint() - internal_config.task_expire;
+    auto init_min_event_time = nowTimePoint() - std::chrono::days(internal_config.task_expire_days());
     auto fetch_log_time_point = updateTaskQueueFromLog(init_min_event_time);
-    next_min_event_time = fetch_log_time_point - internal_config.schedule_period;
+    next_min_event_time = fetch_log_time_point - std::chrono::seconds(internal_config.schedule_period_seconds());
 
     information_is_valid = true;
 }
@@ -436,15 +439,16 @@ bool AutoStatisticsManager::isNowValidTimeRange()
     auto current_time = time(nullptr);
     auto current_time_point = DateLUT::instance().toTime(current_time);
 
-    if (betweenTime(current_time_point, internal_config.begin_time, internal_config.end_time))
+    auto [begin_time, end_time] = parseTimeWindow(internal_config.collect_window());
+    if (betweenTime(current_time_point, begin_time, end_time))
     {
         LOG_DEBUG(
             logger,
             fmt::format(
                 FMT_STRING("time in range, {} is between {} and {}"),
                 timeToString(current_time_point),
-                timeToString(internal_config.begin_time),
-                timeToString(internal_config.end_time)));
+                timeToString(begin_time),
+                timeToString(end_time)));
 
         return true;
     }
@@ -452,8 +456,8 @@ bool AutoStatisticsManager::isNowValidTimeRange()
     auto msg = fmt::format(
         FMT_STRING("skip collection due to time out of range, {} is not between {} and {}"),
         timeToString(current_time_point),
-        timeToString(internal_config.begin_time),
-        timeToString(internal_config.end_time));
+        timeToString(begin_time),
+        timeToString(end_time));
     LOG_INFO(logger, msg);
     return false;
 }
@@ -586,17 +590,16 @@ void AutoStatisticsManager::logTaskIfNeeded(
     else
     {
         // create new table
-        auto lease = convertToTimePoint(timestamp) + internal_config.collect_interval_for_one_table;
+        auto lease = convertToTimePoint(timestamp) + std::chrono::seconds(internal_config.update_interval_seconds());
         // wait for a schedule period, to start the collection
         // make the system happy
-        auto lease2 = nowTimePoint() + internal_config.schedule_period;
+        auto lease2 = nowTimePoint() + std::chrono::seconds(internal_config.schedule_period_seconds());
         lease = std::max(lease, lease2);
 
         auto task_info_core = TaskInfoCore{
             .task_uuid = UUIDHelpers::generateV4(),
             .task_type = TaskType::Auto,
-            .table_uuid = table_uuid,
-            .columns_name = {},
+            .table = table,
             .settings_json = "",
             .stats_row_count = stats_row_count,
             .udi_count = udi_count,

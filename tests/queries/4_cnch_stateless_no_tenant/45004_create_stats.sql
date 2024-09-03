@@ -2,7 +2,7 @@ set create_stats_time_output=0;
 set statistics_enable_sample=0;
 
 -- this flag is ineffective, here to test smart choosing
--- set statistics_collect_in_partitions=1;
+set statistics_collect_in_partitions=1;
 
 create table tb (
                           `id` UInt64,
@@ -33,8 +33,11 @@ create table tb (
                           `fxstrglc` LowCardinality(FixedString(20)),
                           `decimal32` Decimal32(5),
                           `decimal64` Decimal64(10),
-                          `decimal128` Decimal128(20)
-) ENGINE = CnchMergeTree() order by id;
+                          `decimal128` Decimal128(20),
+                          `1.2.3` UInt8,
+                          `hello[world]` UInt8
+) Engine = CnchMergeTree() order by id;
+
 
 create table tbnull (
                               `id` UInt64,
@@ -68,7 +71,8 @@ create table tbnull (
                               `decimal128null` Nullable(Decimal128(20)),
                               `int_params` Map(String, Int64),
                               `str_params` Map(String, String)
-) ENGINE = CnchMergeTree() order by id;
+) Engine = CnchMergeTree() order by id;
+
 
 select '---------create empty stats';
 create stats *;
@@ -77,8 +81,8 @@ select '---------show empty stats';
 show stats *;
 show column_stats *;
 
-insert into tb values (1, -1, -10, -100, -1000, -10000, -100000, 1, 10, 100, 1000, 10000, 100000, '12345678-1234-1234-1234-123456789abc', 0.1, 0.01, '2022-01-01', '2022-01-01', '2022-01-01 00:00:01', '2022-01-01 00:00:01.11', 'str1', 'str1', 'str1', 'str1', 'str1', 'str1', 0.1, 0.01, 0.001);
-insert into tb values (2, -2, -20, -200, -2000, -20000, -200000, 2, 20, 200, 2000, 20000, 200000, '22345678-2234-2234-2234-223456789abc', 0.2, 0.02, '2022-02-02', '2022-02-02','2022-02-02 00:00:02', '2022-02-02 00:00:02.22', 'str2', 'str2', 'str2', 'str2', 'str2', 'str2', 0.2, 0.02, 0.002);
+insert into tb values (1, -1, -10, -100, -1000, -10000, -100000, 1, 10, 100, 1000, 10000, 100000, '12345678-1234-1234-1234-123456789abc', 0.1, 0.01, '2022-01-01', '2022-01-01', '2022-01-01 00:00:01', '2022-01-01 00:00:01.11', 'str1', 'str1', 'str1', 'str1', 'str1', 'str1', 0.1, 0.01, 0.001, 1, 0);
+insert into tb values (2, -2, -20, -200, -2000, -20000, -200000, 2, 20, 200, 2000, 20000, 200000, '22345678-2234-2234-2234-223456789abc', 0.2, 0.02, '2022-02-02', '2022-02-02','2022-02-02 00:00:02', '2022-02-02 00:00:02.22', 'str2', 'str2', 'str2', 'str2', 'str2', 'str2', 0.2, 0.02, 0.002, 0, 1);
 
 insert into tbnull values (1, -1, -10, -100, -1000, -10000, -100000, 1, 10, 100, 1000, 10000, 100000, '12345678-1234-1234-1234-123456789abc', 0.1, 0.01, '2022-01-01', '2022-01-01', '2022-01-01 00:00:01', '2022-01-01 00:00:01.11', 'str1', 'str1', 'str1', 'str1', 'str1', 'str1', 0.1, 0.01, 0.001, {'a': 100}, {'a': 'str1'});
 insert into tbnull values (2, -2, -20, -200, -2000, -20000, -200000, 2, 20, 200, 2000, 20000, 200000, '22345678-2234-2234-2234-223456789abc', 0.2, 0.02, '2022-02-02', '2022-02-02','2022-02-02 00:00:02', '2022-02-02 00:00:02.22', 'str2', 'str2', 'str2', 'str2', 'str2', 'str2', 0.2, 0.02, 0.002, {'a': 200}, {'a': 'str2'});

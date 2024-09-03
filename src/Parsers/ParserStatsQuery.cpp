@@ -14,10 +14,13 @@
  */
 
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserPartition.h>
+#include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserStatsQuery.h>
+#include <Parsers/parseDatabaseAndTableName.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 
 namespace DB
@@ -122,6 +125,7 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & 
     ParserKeyword s_async("ASYNC");
     ParserKeyword s_partition("PARTITION");
     ParserKeyword s_with("WITH");
+    ParserToken s_comma(TokenType::Comma);
     ParserPartition partition_p;
     ParserNothing dummy_p;
 
@@ -149,13 +153,14 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & 
     {
         create_stats_ast.sync_mode = SyncMode::Async;
     }
-
+    bool unfinished_with = false;
     if (s_with.ignore(pos, expected))
     {
+        // old syntax, here just for compactibility
         auto parse_specifier = [&pos, &expected, &create_stats_ast] {
             ParserKeyword s_sample("SAMPLE");
             ParserKeyword s_fullscan("FULLSCAN");
-            ASTPtr literal_node;
+            ASTPtr ast_ptr;
 
             if (s_fullscan.ignore(pos, expected))
             {
@@ -174,17 +179,17 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & 
                 ParserCreateStatsQuerySampleRatioSpecifier ratio_p;
                 while (true)
                 {
-                    if (rows_p.parse(pos, literal_node, expected))
+                    if (rows_p.parse(pos, ast_ptr, expected))
                     {
                         if (create_stats_ast.sample_rows)
                             return false; // duplicate
-                        create_stats_ast.sample_rows = getValueFromUInt64Literal(literal_node);
+                        create_stats_ast.sample_rows = getValueFromUInt64Literal(ast_ptr);
                     }
-                    else if (ratio_p.parse(pos, literal_node, expected))
+                    else if (ratio_p.parse(pos, ast_ptr, expected))
                     {
                         if (create_stats_ast.sample_ratio)
                             return false; // duplicate
-                        create_stats_ast.sample_ratio = getValueFromNumberLiteral(literal_node);
+                        create_stats_ast.sample_ratio = getValueFromNumberLiteral(ast_ptr);
                     }
                     else
                     {
@@ -198,7 +203,22 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & 
         };
 
         if (!ParserList::parseUtil(pos, expected, parse_specifier, dummy_p, false))
-            return false;
+            unfinished_with = true;
+    }
+
+    if (unfinished_with || s_with.ignore(pos, expected))
+    {
+        // new syntax can support any settings in here
+        SettingsChanges changes;
+        while (true)
+        {
+            if (!changes.empty() && !s_comma.ignore(pos))
+                break;
+            changes.push_back(SettingChange{});
+            if (!ParserSetQuery::parseNameValuePair(changes.back(), pos, expected))
+                return false;
+        }
+        create_stats_ast.settings_changes_opt = changes;
     }
 
     return true;

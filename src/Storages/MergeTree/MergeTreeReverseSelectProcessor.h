@@ -43,8 +43,8 @@ public:
         : MergeTreeSelectProcessor{std::forward<Args>(args)...}
     {
 //        LOG_TRACE(log, "Reading {} ranges in reverse order from part {}, approx. {} rows starting from {}",
-//                  all_mark_ranges.size(), data_part->name, total_rows,
-//                  data_part->index_granularity.getMarkStartingRow(all_mark_ranges.front().begin));
+//                  part_detail.ranges.size(), part_detail.data_part->name, total_rows,
+//                  part_detail.data_part->index_granularity.getMarkStartingRow(part_detail.ranges.front().begin));
     }
 
     ~MergeTreeReverseSelectProcessor() override;

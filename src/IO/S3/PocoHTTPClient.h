@@ -122,7 +122,7 @@ private:
         Aws::Utils::RateLimits::RateLimiterInterface * readLimiter,
         Aws::Utils::RateLimits::RateLimiterInterface * writeLimiter) const;
 
-    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration;
+    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration = nullptr;
     ConnectionTimeouts timeouts;
     const RemoteHostFilter & remote_host_filter;
     unsigned int s3_max_redirects;

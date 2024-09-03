@@ -18,11 +18,14 @@
 #include <set>
 #include <tuple>
 #include <vector>
+#include <Core/SettingsEnums.h>
+#include <DataTypes/DataTypeDateTime64.h>
+#include <Functions/now64.h>
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <Optimizer/CardinalityEstimate/SymbolStatistics.h>
 #include <Statistics/Bucket.h>
 #include <Statistics/CacheManager.h>
-#include <Statistics/CachedStatsProxy.h>
+#include <Statistics/CatalogAdaptorProxy.h>
 #include <Statistics/CollectStep.h>
 #include <Statistics/SimplifyHistogram.h>
 #include <Statistics/StatisticsCollector.h>
@@ -39,7 +42,6 @@
 
 namespace DB::Statistics
 {
-
 StorageMetadataPtr getStorageMetaData(ContextPtr context, StoragePtr storage)
 {
     (void) context;
@@ -48,16 +50,41 @@ StorageMetadataPtr getStorageMetaData(ContextPtr context, StoragePtr storage)
     return storage_metadata;
 }
 
+StatisticsCollector::StatisticsCollector(
+    ContextPtr context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_, const CollectorSettings & settings_)
+    : context(context_), catalog(catalog_), table_info(table_info_), settings(settings_)
+{
+    if (settings.empty())
+        settings.set_cache_policy(context->getSettingsRef().statistics_cache_policy);
+    storage = catalog->getStorageByTableId(table_info);
+#if 0
+    auto metadata = getStorageMetaData(context, storage);
+    if (settings.collect_in_partitions() && !metadata->hasPartitionKey())
+    {
+        settings.set_collect_in_partitions(false);
+    }
+#endif
+
+    settings.set_collect_in_partitions(false);
+    if (storage->getName() == "HiveCluster") 
+    {
+        settings.set_enable_sample(false);
+    }
+
+    logger = &Poco::Logger::get("StatisticsLogger" + table_info.getDbTableName());
+}
+
+
 void StatisticsCollector::collect(const ColumnDescVector & cols_desc)
 {
     auto step = [&] {
-        if (settings.enable_sample)
+        if (settings.enable_sample())
         {
-            return createStatisticsCollectorStepSample(*this);
+            return createSampleCollectStep(*this);
         }
         else
         {
-            return createStatisticsCollectorStepFull(*this);
+            return createFullCollectStep(*this);
         }
     }();
 
@@ -84,13 +111,14 @@ void StatisticsCollector::writeToCatalog()
         columns.emplace_back(name);
         data.column_stats[name] = stats.writeToCollection();
     }
-    auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
+    auto proxy = createCatalogAdaptorProxy(catalog, settings.cache_policy());
     auto cols_desc = catalog->filterCollectableColumns(table_info, columns);
     // drop old columns to ensure other data is deleted
     // especially when collecting statistics_collect_histogram=0
     proxy->dropColumns(table_info, cols_desc);
     proxy->put(table_info, std::move(data));
-    catalog->invalidateClusterStatsCache(table_info);
+
+
     // clear udi whenever it is to create/drop stats
     // since after manual drop stats, users just don't want statistics,
     // so we needn't care about udi for auto stats until next insertion
@@ -111,9 +139,8 @@ void StatisticsCollector::readFromCatalog(const std::vector<String> & cols_name)
 
 void StatisticsCollector::readFromCatalogImpl(const ColumnDescVector & cols_desc)
 {
-    auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
+    auto proxy = createCatalogAdaptorProxy(catalog, settings.cache_policy());
     auto data = proxy->get(table_info, true, cols_desc);
-
     if (data.table_stats.empty() && data.column_stats.empty())
     {
         // no stats collected, do nothing
@@ -151,6 +178,23 @@ static bool isInteger(SerdeDataType type)
         default:
             return false;
     }
+}
+
+double getAverageLength(DataTypePtr type, UInt64 total_length, UInt64 nonnull_count)
+{
+    if (type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion())
+    {
+        auto avg_len = type->getSizeOfValueInMemory();
+        return avg_len;
+    }
+
+    if (!total_length || !nonnull_count)
+    {
+        constexpr auto default_length_for_unknown = 8;
+        return default_length_for_unknown;
+    }
+
+    return static_cast<double>(total_length) / nonnull_count;
 }
 
 PlanNodeStatisticsPtr expandToCurrent(ContextPtr context, PlanNodeStatisticsPtr plan_node_stats, time_t stats_time)
@@ -286,7 +330,6 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
 
 
     result->updateRowCount(table_row_count);
-
     // whether to construct single bucket histogram from min/max if there is no histogram
     auto meta = storage->getInMemoryMetadataPtr();
 
@@ -296,11 +339,12 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
 
         if (stats.basic)
         {
-            auto nonnull_count = stats.basic->getProto().nonnull_count();
+            const auto & basic_proto = stats.basic->getProto();
+            auto nonnull_count = basic_proto.nonnull_count();
             symbol->null_counts = table_row_count - nonnull_count;
-            symbol->min = stats.basic->getProto().min_as_double();
-            symbol->max = stats.basic->getProto().max_as_double();
-            symbol->ndv = AdjustNdvWithCount(stats.basic->getProto().ndv_value(), nonnull_count);
+            symbol->min = basic_proto.min_as_double();
+            symbol->max = basic_proto.max_as_double();
+            symbol->ndv = AdjustNdvWithCount(basic_proto.ndv_value(), nonnull_count);
             symbol->unknown = false;
             auto construct_single_bucket_histogram = symbol->ndv == 1;
 
@@ -324,8 +368,10 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
                 symbol->histogram.emplaceBackBucket(std::move(bucket));
             }
 
+            UInt64 total_length = basic_proto.total_length();
             auto type = meta->getColumns().tryGetColumn(GetColumnsOptions::All, col)->type;
             auto decay_type = decayDataType(type);
+            symbol->avg_len = getAverageLength(decay_type, total_length, nonnull_count);
             symbol->type = decay_type;
 
             result->updateSymbolStatistics(col, symbol);

@@ -1,15 +1,15 @@
 #pragma once
 #include <chrono>
-#include <Interpreters/Context.h>
-#include <Protos/auto_statistics.pb.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/CollectorSettings.h>
+#include <Statistics/SettingsMap.h>
+#include <Statistics/StatisticsSettings.h>
 #include <Statistics/StatsTableIdentifier.h>
 #include <Common/DayNum.h>
 
 namespace DB::Statistics::AutoStats
 {
-std::tuple<UInt64, DateTime64> getTableStatsFromCatalog(CatalogAdaptorPtr catalog, const StatsTableIdentifier & table);
+void autoStatisticsCallback(ContextPtr context, const ASTPtr & ast_raw, UInt64 udi_count);
 
 using Time = DateLUTImpl::Time;
 using TimePoint = std::chrono::system_clock::time_point;
@@ -58,7 +58,7 @@ struct TaskInfoCore
     // fixed fields, no need to lock
     UUID task_uuid;
     TaskType task_type;
-    UUID table_uuid;
+    StatsTableIdentifier table = StatsTableIdentifier(StorageID::createEmpty());
     std::vector<String> columns_name;
     String settings_json;
 
@@ -83,32 +83,14 @@ String serializeToText(ExtendedDayNum date);
 TimePoint nowTimePoint();
 
 
-struct InternalConfig
-{
-    std::chrono::seconds schedule_period{};
-
-    // default value is set at AutoStatisticsManager::prepareNewConfig
-    // here just to make sanitizer happy
-    UInt64 max_retry_times = 0;
-    bool collect_empty_stats_immediately = false;
-    double update_ratio_threshold = 0;
-    UInt64 update_row_count_threshold = 0;
-
-    Time begin_time{};
-    Time end_time{};
-    std::chrono::seconds collect_interval_for_one_table{};
-    std::chrono::seconds udi_flush_interval{};
-    std::chrono::days task_expire{};
-    std::chrono::seconds log_flush_interval_seconds;
-
-    bool enable_async_tasks = true;
-
-    // including enable_sample, sample_ratio, sample_row_count
-    CollectorSettings collector_settings;
-
-    explicit InternalConfig(const Settings & settings) : collector_settings(settings) { }
-};
+using InternalConfig = AutoStatsManagerSettings;
 
 std::optional<double> calcPriority(const InternalConfig & cfg, UInt64 total_udi, UInt64 table_row_count);
 
+DataTypePtr enumDataTypeForTaskType();
+DataTypePtr enumDataTypeForStatus();
+
+std::vector<StatisticsScope> getChildrenScope(ContextPtr context, const StatisticsScope & scope);
+std::vector<StatsTableIdentifier> getTablesInScope(ContextPtr context, const StatisticsScope & scope);
+std::tuple<UInt64, DateTime64> getTableStatsFromCatalog(CatalogAdaptorPtr catalog, const StatsTableIdentifier & table);
 }

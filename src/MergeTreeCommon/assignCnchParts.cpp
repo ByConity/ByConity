@@ -13,12 +13,13 @@
  * limitations under the License.
  */
 
+#include <Catalog/Catalog.h>
+#include <Catalog/DataModelPartWrapper.h>
+#include <Interpreters/WorkerGroupHandle.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
-#include <Catalog/Catalog.h>
-#include <Catalog/DataModelPartWrapper.h>
 #include <Storages/Hive/HiveFile/IHiveFile.h>
 #include "Common/HostWithPorts.h"
 #include "common/types.h"
@@ -90,8 +91,10 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
         {
             if (!worker_group->hasRing())
             {
-                LOG_WARNING(log, "Consistent Hash: Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
-                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
+                LOG_WARNING(
+                    log,
+                    "Attempt to use ring-base consistent hash, but ring is empty; build it now");
+                worker_group->buildRing();
             }
             auto ret = assignCnchPartsWithRingAndBalance(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts);
             reportStats(log, ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
@@ -101,8 +104,10 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
         {
             if (!worker_group->hasRing())
             {
-                LOG_WARNING(log, "Strict Consistent Hash: Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
-                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
+                LOG_WARNING(
+                    log,
+                    "Attempt to use ring-base consistent hash, but ring is empty; build it now");
+                worker_group->buildRing();
             }
             auto ret = assignCnchPartsWithStrictBoundedHash(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts, true);
             reportStats(log, ret, "Strict Consistent Hash", worker_group->getRing().size());
@@ -762,6 +767,12 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
         part_allocation_algorithm = query_context->getHybridPartAllocationAlgo();
     else
         part_allocation_algorithm = worker_group->getContext()->getHybridPartAllocationAlgo();
+
+    if (part_allocation_algorithm != Context::HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH && !worker_group->hasRing())
+    {
+        LOG_WARNING(log, "Attempt to use ring-base consistent hash, but ring is empty; build it now");
+        worker_group->buildRing();
+    }
 
     switch (part_allocation_algorithm)
     {

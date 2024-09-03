@@ -114,7 +114,7 @@ void StatsNdvBucketsResultImpl<T>::deserialize(std::string_view raw_blob)
 
         auto blob = raw_blob.substr(sizeof(serde_data_type), raw_blob.size() - sizeof(serde_data_type));
         Protos::StatsNdvBucketsResult pb;
-        pb.ParseFromArray(blob.data(), blob.size());
+        ASSERT_PARSE(pb.ParseFromArray(blob.data(), blob.size()));
         BucketBoundsImpl<T> bounds;
         bounds.deserialize(pb.bounds_blob());
         int64_t num_buckets = bounds.numBuckets();
@@ -134,6 +134,7 @@ void StatsNdvBucketsResultImpl<T>::deserialize(std::string_view raw_blob)
     }();
     checkValid();
 }
+
 template <typename T>
 void StatsNdvBucketsResultImpl<T>::deserializeFromJson(std::string_view raw_blob)
 {

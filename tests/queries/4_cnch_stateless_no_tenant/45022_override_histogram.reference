@@ -1,11 +1,11 @@
 no hist collect
 orht_45022	1	10
-orht_45022.*		10					
-orht_45022.x	UInt64	10	0	10	0	9	0
+orht_45022.*		10						
+orht_45022.x	UInt64	10	0	10	0	9	8	0
 with hist collect
 orht_45022	1	10
-orht_45022.*		10					
-orht_45022.x	UInt64	10	0	10	0	9	1
+orht_45022.*		10						
+orht_45022.x	UInt64	10	0	10	0	9	8	1
 orht_45022.x	0	[0, 0]	1	1	1	1
 orht_45022.x	1	[1, 1]	1	1	2	2
 orht_45022.x	2	[2, 2]	1	1	3	3
@@ -18,6 +18,6 @@ orht_45022.x	8	[8, 8]	1	1	9	9
 orht_45022.x	9	[9, 9]	1	1	10	10
 no hist collect 2, should override
 orht_45022	1	10
-orht_45022.*		10					
-orht_45022.x	UInt64	10	0	10	0	9	0
+orht_45022.*		10						
+orht_45022.x	UInt64	10	0	10	0	9	8	0
 drop

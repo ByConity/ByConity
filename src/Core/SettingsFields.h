@@ -166,6 +166,7 @@ using SettingFieldMilliseconds = SettingFieldTimespan<SettingFieldTimespanUnit::
 struct SettingFieldString
 {
     String value;
+    using Type = String;
     bool changed = false;
 
     explicit SettingFieldString(const std::string_view & str = {}) : value(str) {}
@@ -256,6 +257,7 @@ template <typename EnumT, typename Traits>
 struct SettingFieldEnum
 {
     using EnumType = EnumT;
+    using Type = EnumT; // for reflection
 
     EnumType value;
     bool changed = false;

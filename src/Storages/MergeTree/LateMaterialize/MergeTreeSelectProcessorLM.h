@@ -19,15 +19,13 @@ public:
     MergeTreeSelectProcessorLM(
         const MergeTreeMetaBase & storage_,
         const StorageSnapshotPtr & storage_snapshot_,
-        const MergeTreeData::DataPartPtr & owned_data_part_,
-        ImmutableDeleteBitmapPtr delete_bitmap_,
+        const RangesInDataPart & part_detail_,
+        MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter_,
         Names required_columns_,
-        MarkRanges mark_ranges_,
         const SelectQueryInfo & query_info_,
         bool check_columns_,
         const MergeTreeStreamSettings & stream_settings_,
-        const Names & virt_column_names_ = {},
-        size_t part_index_in_query_ = 0);
+        const Names & virt_column_names_ = {});
 
     ~MergeTreeSelectProcessorLM() override = default;
 
@@ -36,6 +34,8 @@ public:
 protected:
 
     bool getNewTaskImpl() override;
+
+    ImmutableDeleteBitmapPtr getDeleteBitmap();
 
     /// Used by Task
     Names required_columns;
@@ -46,15 +46,14 @@ protected:
     MergeTreeReadTaskColumns task_columns;
 
     /// Data part will not be removed if the pointer owns it
-    MergeTreeData::DataPartPtr data_part;
+    RangesInDataPart part_detail;
+    MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter;
+    /// Lazy init, need to use getDeleteBitmap() interface rather than use delete_bitmap directly
     ImmutableDeleteBitmapPtr delete_bitmap;
+    bool delete_bitmap_initialized = false;
 
-    /// Mark ranges we should read (in ascending order)
-    MarkRanges all_mark_ranges;
     /// Approximate total rows for progress bar
     size_t total_rows;
-    /// Value of _part_index virtual column (used only in SelectExecutor)
-    size_t part_index_in_query = 0;
 
     bool check_columns;
 

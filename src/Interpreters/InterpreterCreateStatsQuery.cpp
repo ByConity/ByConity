@@ -21,6 +21,7 @@
 #include <Interpreters/InterpreterCreateStatsQuery.h>
 #include <Parsers/ASTStatsQuery.h>
 #include <Protos/optimizer_statistics.pb.h>
+#include <Statistics/ASTHelpers.h>
 #include <Statistics/AutoStatsTaskLogHelper.h>
 #include <Statistics/CollectTarget.h>
 #include <Statistics/StatisticsCollector.h>
@@ -29,7 +30,6 @@
 #include <Poco/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Statistics/ASTHelpers.h>
-
 
 namespace DB
 {
@@ -54,7 +54,7 @@ static Block constructInfoBlock(
         tuple.name = header;
         tuple.type = std::make_shared<DataTypeString>();
         auto col = tuple.type->createColumn();
-        if (!only_header) 
+        if (!only_header)
         {
             col->insertData(value.data(), value.size());
         }
@@ -68,7 +68,7 @@ static Block constructInfoBlock(
         tuple.name = header;
         tuple.type = std::make_shared<DataTypeNumber<T>>();
         auto col = ColumnVector<T>::create();
-        if (!only_header) 
+        if (!only_header)
         {
             col->insertValue(value);
         }
@@ -97,9 +97,10 @@ namespace
         {
         }
         String getName() const override { return "Statistics"; }
-        Block getHeader() const override { 
+        Block getHeader() const override
+        {
             auto sample_block = constructInfoBlock(getContext(), "", 0, "", 0, true);
-            return sample_block; 
+            return sample_block;
         }
 
     private:
@@ -134,7 +135,12 @@ namespace
                         continue;
                     auto row_count = row_count_opt.value();
                     auto elapsed_time = watch.elapsedSeconds();
-                    return constructInfoBlock(context, collect_target.table_identifier.getTableName(), collect_target.columns_desc.size(), std::to_string(row_count), elapsed_time);
+                    return constructInfoBlock(
+                        context,
+                        collect_target.table_identifier.getTableName(),
+                        collect_target.columns_desc.size(),
+                        std::to_string(row_count),
+                        elapsed_time);
                 }
                 catch (Poco::Exception & e)
                 {
@@ -176,18 +182,18 @@ namespace
 
 static void submitAsyncTasks(ContextPtr context, const std::vector<CollectTarget> & collect_targets)
 {
-    for (auto & target : collect_targets)
+    for (const auto & target : collect_targets)
     {
-        TaskInfoCore core;
-        core.status = Status::Created;
-        core.priority = 100;
-        core.retry_times = 0;
-        core.stats_row_count = 0;
-        core.udi_count = 0;
-        core.task_type = TaskType::Manual;
-        core.task_uuid = UUIDHelpers::generateV4();
-        core.table_uuid = target.table_identifier.getUUID();
-        core.settings_json = target.settings.toJsonStr();
+        TaskInfoCore core{
+            .task_uuid = UUIDHelpers::generateV4(),
+            .task_type = TaskType::Manual,
+            .table = target.table_identifier,
+            .settings_json = target.settings.toJsonStr(),
+            .stats_row_count = 0,
+            .udi_count = 0,
+            .priority = 100,
+            .retry_times = 0,
+            .status = Status::Created};
         if (target.implicit_all_columns)
             core.columns_name = {};
         else
@@ -203,10 +209,48 @@ static void submitAsyncTasks(ContextPtr context, const std::vector<CollectTarget
     }
 }
 
+
+CollectorSettings analyzeSettings(ContextPtr context, const ASTCreateStatsQuery * query)
+{
+    auto query_settings = context->getSettings();
+    if (query->settings_changes_opt)
+    {
+        auto settings_changes = query->settings_changes_opt.value();
+        applyStatisticsSettingsChanges(query_settings, std::move(settings_changes));
+    }
+
+    CollectorSettings settings;
+    settings.fromContextSettings(query_settings);
+    using SampleType = ASTCreateStatsQuery::SampleType;
+
+    // old style to specify settings, maximun priority
+    if (query->sample_type == SampleType::FullScan)
+    {
+        settings.set_enable_sample(false);
+    }
+    else if (query->sample_type == SampleType::Sample)
+    {
+        settings.set_enable_sample(true);
+
+        if (query->sample_rows)
+        {
+            settings.set_sample_row_count(*query->sample_rows);
+        }
+
+        if (query->sample_ratio)
+        {
+            settings.set_sample_ratio(*query->sample_ratio);
+        }
+    }
+    settings.set_if_not_exists(query->if_not_exists);
+
+    return settings;
+}
+
 BlockIO InterpreterCreateStatsQuery::execute()
 {
     auto context = getContext();
-    auto query = query_ptr->as<const ASTCreateStatsQuery>();
+    const auto * query = query_ptr->as<const ASTCreateStatsQuery>();
     if (!query)
     {
         throw Exception("Create stats query logical error", ErrorCodes::LOGICAL_ERROR);
@@ -215,34 +259,7 @@ BlockIO InterpreterCreateStatsQuery::execute()
     auto catalog = createCatalogAdaptor(context);
     catalog->checkHealth(/*is_write=*/true);
 
-    CollectorSettings settings(context->getSettingsRef());
-    using SampleType = ASTCreateStatsQuery::SampleType;
-
-    if (query->sample_type == SampleType::FullScan)
-    {
-        settings.enable_sample = false;
-    }
-    else if (query->sample_type == SampleType::Sample)
-    {
-        settings.enable_sample = true;
-        if (query->sample_rows)
-        {
-            settings.sample_row_count = *query->sample_rows;
-        }
-
-        if (query->sample_ratio)
-        {
-            settings.sample_ratio = *query->sample_ratio;
-        }
-    }
-    settings.if_not_exists = query->if_not_exists;
-
-    using SyncMode = ASTCreateStatsQuery::SyncMode;
-    bool is_async_mode = query->sync_mode == SyncMode::Default
-        ? context->getSettingsRef().statistics_enable_async // if default, use settings in context
-        : query->sync_mode == SyncMode::Async; // otherwise follow user specified option
-    settings.accurate_sample_ndv = context->getSettingsRef().statistics_accurate_sample_ndv;
-    settings.normalize();
+    CollectorSettings settings = analyzeSettings(context, query);
 
     auto tables = getTablesFromAST(context, query);
     std::vector<CollectTarget> valid_targets;
@@ -250,7 +267,7 @@ BlockIO InterpreterCreateStatsQuery::execute()
     {
         if (catalog->isTableCollectable(table))
         {
-            if (settings.if_not_exists && catalog->hasStatsData(table))
+            if (settings.if_not_exists() && catalog->hasStatsData(table))
             {
                 // skip when if_not_exists is on
                 continue;
@@ -265,7 +282,11 @@ BlockIO InterpreterCreateStatsQuery::execute()
         return {};
     }
 
-    if (is_async_mode)
+    using SyncMode = ASTCreateStatsQuery::SyncMode;
+    auto use_sync_mode
+        = query->sync_mode == SyncMode::Default ? context->getSettingsRef().statistics_enable_async : query->sync_mode == SyncMode::Async;
+
+    if (use_sync_mode)
     {
         submitAsyncTasks(context, std::move(valid_targets));
         return {};
@@ -277,5 +298,4 @@ BlockIO InterpreterCreateStatsQuery::execute()
         return io;
     }
 }
-
 }

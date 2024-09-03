@@ -1,3 +1,4 @@
+#pragma once
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Parsers/ASTStatsQuery.h>

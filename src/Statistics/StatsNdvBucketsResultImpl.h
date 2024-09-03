@@ -41,11 +41,6 @@ public:
     void writeSymbolStatistics(SymbolStatistics & symbol) override;
 
     const BucketBounds & getBucketBounds() const override { return bounds_; }
-    uint64_t getCount(size_t bucket_id) const override { return counts_[bucket_id]; }
-    double getNdv(size_t bucket_id) const override { return ndvs_[bucket_id]; }
-
-    void setCount(size_t bucket_id, UInt64 count) override { counts_[bucket_id] = count; }
-    void setNdv(size_t bucket_id, double ndv) override { ndvs_[bucket_id] = ndv; }
 
     void checkValid() const
     {
