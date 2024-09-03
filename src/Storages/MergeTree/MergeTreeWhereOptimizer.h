@@ -181,6 +181,8 @@ private:
     bool aggresive_pushdown = false;
     Names partition_columns;
     mutable std::vector<ASTPtr> atomic_predicates_expr;
+
+    size_t max_prewhere_or_expression_size {0};
 };
 
 
