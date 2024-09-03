@@ -266,6 +266,7 @@ namespace ErrorCodes
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
     extern const int DATABASE_ACCESS_DENIED;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -2502,6 +2503,9 @@ void Context::killCurrentQuery()
     {
         process_list_elem->cancelQuery(true, false);
     }
+    getSegmentScheduler()->cancelPlanSegmentsFromCoordinator(
+        client_info.initial_query_id, ErrorCodes::QUERY_WAS_CANCELLED, "Cancelled by Client.", shared_from_this());
+    getPlanSegmentProcessList().tryCancelPlanSegmentGroup(client_info.initial_query_id);
 };
 
 String Context::getDefaultFormat() const
