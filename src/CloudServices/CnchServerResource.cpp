@@ -316,8 +316,6 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
 
 void CnchServerResource::resendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
-    auto span = startCommonSpan("CnchServer", "CnchServerResource.sendResource");
-    OpentelemetryScope scope(span);
     Stopwatch watch;
     auto send_lock = getLockForSend("ALL_WORKER");
 

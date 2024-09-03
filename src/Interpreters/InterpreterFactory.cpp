@@ -78,8 +78,6 @@
 #include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/ASTAutoStatsQuery.h>
 
-#include <Interpreters/InterpreterCreateFunctionQuery.h>
-#include <Interpreters/InterpreterDropFunctionQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 

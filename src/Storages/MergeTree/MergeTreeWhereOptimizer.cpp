@@ -452,11 +452,6 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
         if (isArraySetCheck(it->node))
             break;
 
-<<<<<<< HEAD
-=======
-        if (enable_new_ann && containsDistanceFunction(it->node))
-            break;
-
         // check conditon depth
         if (max_prewhere_or_expression_size)
         {
@@ -468,7 +463,6 @@ void MergeTreeWhereOptimizer::optimizePrewhere(Conditions & where_conditions, AS
                 break;
             }
         }
->>>>>>> 5952894f08 (Merge 'dev_or_depth_prewhere' into 'cnch-dev')
         bool moved_enough = false;
         if (total_size_of_queried_columns > 0)
         {

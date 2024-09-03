@@ -10,9 +10,9 @@ namespace DB
 {
 /**
  *
- * @param pos token iterator
- * @param node node of ParserJSONPathArrayIndex
- * @param expected stuff for logging
+ * pos token iterator
+ * node node of ParserJSONPathArrayIndex
+ * expected stuff for logging
  * @return was parse successful
  * '$.a.1' -> is_start_with_dot = true
  * '$.1' -> is_start_with_dot = false
