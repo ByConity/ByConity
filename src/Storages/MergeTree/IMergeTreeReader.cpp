@@ -97,7 +97,7 @@ IMergeTreeReader::IMergeTreeReader(
     }
 
     columns_from_part.set_empty_key(StringRef());
-    
+
     for (const auto & column_from_part : part_columns)
         columns_from_part.emplace(column_from_part.name, &column_from_part.type);
 
@@ -124,7 +124,7 @@ void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_e
     try
     {
         size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
-    
+
         auto mutable_this = const_cast<IMergeTreeReader *>(this);
         DB::fillMissingColumns(res_columns, num_rows, columns, metadata_snapshot, num_bitmap_columns, &(mutable_this->filled_missing_column_types));
         should_evaluate_missing_defaults = std::any_of(
@@ -577,7 +577,7 @@ void IMergeTreeReader::readData(
     {
         return getCompressedIndex(data_part, name_and_type, substream_path);
     };
-    
+
     deserialize_settings.zero_copy_read_from_cache = settings.read_settings.zero_copy_read_from_cache;
 
     const auto & name = name_and_type.name;
@@ -676,12 +676,7 @@ NameAndTypePair IMergeTreeReader::columnTypeFromPart(const NameAndTypePair & req
     auto it = columns_from_part.find(name_in_storage);
     if (it == columns_from_part.end())
     {
-        /// Partial parts created by `attach partition` may have empty columns for historical reasons,
-        /// also handle bitengine column name rewrites in such case
-        if (checkBitEngineColumn(required_column))
-            return {name_in_storage + BITENGINE_COLUMN_EXTENSION, required_column.type};
-        else
-            return required_column;
+        return required_column;
     }
 
     const auto & type = *it->second;

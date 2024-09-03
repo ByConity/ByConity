@@ -899,6 +899,10 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
         {
             LOG_TRACE(&Poco::Logger::get("filterPartsByPrimaryKeyAndSkipIndexes"),"Creating index {} {}\n", index.name, index.type);
             auto index_helper = MergeTreeIndexFactory::instance().get(index);
+            if (!settings.enable_inverted_index && index_helper->isInvertedIndex())
+            {
+                continue;
+            }
             auto condition = index_helper->createIndexCondition(query_info, context);
             if (!condition->alwaysUnknownOrTrue())
                 useful_indices.emplace_back(index_helper, condition);
