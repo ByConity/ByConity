@@ -3,6 +3,7 @@
 #include <memory>
 #include <set>
 #include <string_view>
+#include <unordered_map>
 #include <time.h>
 #include <Client/Connection.h>
 #include <CloudServices/CnchServerResource.h>
@@ -10,7 +11,9 @@
 #include <Interpreters/Cluster.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DAGGraph.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <Interpreters/sendPlanSegment.h>
 #include <Parsers/queryToString.h>
 #include <Protos/plan_segment_manager.pb.h>
@@ -79,6 +82,18 @@ struct ClusterNodes
     HostWithPortsVec all_hosts;
 };
 
+struct NodeSelectorResult;
+void divideSourceTaskByBucket(
+    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    size_t weight_sum,
+    size_t parallel_size,
+    NodeSelectorResult & result);
+void divideSourceTaskByPart(
+    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    size_t weight_sum,
+    size_t parallel_size,
+    NodeSelectorResult & result);
+
 struct NodeSelectorResult
 {
     struct SourceAddressInfo
@@ -101,6 +116,8 @@ struct NodeSelectorResult
 
     WorkerNodes worker_nodes;
     std::vector<size_t> indexes;
+    std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_count_on_workers;
+    std::unordered_map<AddressInfo, std::vector<std::set<Int64>>, AddressInfo::Hash> buckets_on_workers;
 
     //input plansegment id => source address
     std::unordered_map<size_t, SourceAddressInfo> source_addresses;
@@ -109,20 +126,12 @@ struct NodeSelectorResult
     {
         AddressInfos ret;
         ret.reserve(worker_nodes.size());
-        for (auto & address : worker_nodes)
+        for (const auto & address : worker_nodes)
             ret.emplace_back(address.address);
         return ret;
     }
 
-    String toString() const
-    {
-        fmt::memory_buffer buf;
-        for (const auto & node_info : worker_nodes)
-        {
-            fmt::format_to(buf, "Target address : {}\t", node_info.address.toString());
-        }
-        return fmt::to_string(buf);
-    }
+    String toString() const;
 };
 
 ///////////////node selector
@@ -198,6 +207,7 @@ public:
 class SourceNodeSelector : public CommonNodeSelector<SourceNodeSelector>
 {
 public:
+    using Map = std::unordered_map<UUID, std::unordered_map<AddressInfo, SourceTaskPayload, AddressInfo::Hash>>;
     SourceNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };

@@ -354,15 +354,14 @@ ExecutePlan TableScanExecutor::buildExecutePlan(const DistributedPipelineSetting
     PartGroups part_groups;
     {
         auto parts = storage.getDataPartsVector();
-        if (distributed_settings.source_task_index && distributed_settings.source_task_count)
+        if (distributed_settings.source_task_filter.isValid())
         {
             auto size_before_filtering = parts.size();
-            filterParts(parts, distributed_settings.source_task_index.value(), distributed_settings.source_task_count.value());
+            filterParts(parts, distributed_settings.source_task_filter);
             LOG_TRACE(
                 log,
-                "After filtering(index:{}, count:{}) the number of parts of table {} becomes {} from {}",
-                distributed_settings.source_task_index.value(),
-                distributed_settings.source_task_count.value(),
+                "After filtering({}) the number of parts of table {} becomes {} from {}",
+                distributed_settings.source_task_filter.toString(),
                 storage.getTableName(),
                 parts.size(),
                 size_before_filtering);
@@ -1321,11 +1320,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), build_context.context);
         if (auto * cloud_merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
         {
-            if (build_context.distributed_settings.source_task_index)
-            {
-                cloud_merge_tree->source_index = build_context.distributed_settings.source_task_index;
-                cloud_merge_tree->source_count = build_context.distributed_settings.source_task_count;
-            }
+            cloud_merge_tree->source_task_filter = build_context.distributed_settings.source_task_filter;
         }
         // flag = Output
         auto pipe = storage->read(

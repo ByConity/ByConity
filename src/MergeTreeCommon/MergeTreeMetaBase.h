@@ -17,17 +17,15 @@
 
 #include <Disks/StoragePolicy.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
+#include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
-#include <MergeTreeCommon/IMergeTreePartMeta.h>
-#include <Processors/Merges/Algorithms/Graphite.h>
-#include <Common/SimpleIncrement.h>
-#include <Storages/ColumnsDescription.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/extractKeyExpressionList.h>
 #include <Transaction/TxnTimestamp.h>
@@ -44,8 +42,7 @@ public:
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
 
-    std::optional<size_t> source_index;
-    std::optional<size_t> source_count;
+    SourceTaskFilter source_task_filter;
 
     /// Function to call if the part is suspected to contain corrupt data.
     using BrokenPartCallback = std::function<void (const String &)>;

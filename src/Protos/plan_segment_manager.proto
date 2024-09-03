@@ -120,6 +120,12 @@ message QueryCommon {
   optional uint64 query_expiration_timestamp = 14;
 }
 
+message SourceTaskFilter {
+  optional uint32 index = 1;
+  optional uint32 count = 2;
+  repeated int64 buckets = 3;
+}
+
 message SubmitPlanSegmentRequest {
   // major version number
   required uint32 brpc_protocol_major_revision = 1;
@@ -136,9 +142,10 @@ message SubmitPlanSegmentRequest {
   required uint32 plan_segment_id = 5;
   required uint32 parallel_id = 6;
   optional AddressInfo execution_address = 7;
-  optional uint32 source_task_index = 8;
-  optional uint32 source_task_count = 9;
+  optional uint32 source_task_index = 8; // obosolete
+  optional uint32 source_task_count = 9; // obosolete
   optional uint32 retry_id = 10;
+  optional SourceTaskFilter source_task_filter = 11;
 }
 
 message ExecutePlanSegmentResponse {

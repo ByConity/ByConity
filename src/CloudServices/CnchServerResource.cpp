@@ -35,6 +35,7 @@
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 
+#include <Interpreters/DistributedStages/BSPScheduler.h>
 #include <Storages/RemoteFile/StorageCnchHDFS.h>
 #include <Storages/RemoteFile/StorageCnchS3.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -366,7 +367,10 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
 
     if (all_resources.empty())
         return;
-    computeResourceSize(resource_option, all_resources);
+
+    if (resource_option)
+        initSourceTaskPayload(context, all_resources);
+
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
     std::vector<brpc::CallId> call_ids;
     call_ids.reserve(all_resources.size());
@@ -675,37 +679,37 @@ void CnchServerResource::allocateResource(
     }
 }
 
-void CnchServerResource::computeResourceSize(
-    std::optional<ResourceOption> & resource_option, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources)
+void CnchServerResource::initSourceTaskPayload(
+    const ContextPtr & context, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources)
 {
-    if (resource_option)
+    for (const auto & [host_ports, assinged_resource] : all_resources)
     {
-        for (const auto & [host_ports, assinged_resource] : all_resources)
+        for (const auto & r : assinged_resource)
         {
-            std::unordered_map<UUID, size_t> table_size;
-            for (const auto & r : assinged_resource)
+            auto uuid = r.storage->getStorageID().uuid;
+            bool reclustered = r.storage->isTableClustered(context);
+            for (const auto & p : r.server_parts)
             {
-                size_t s = 0;
-                for (const auto & p : r.server_parts)
-                {
-                    s += p->rowsCount();
-                }
-                auto & t_size = table_size[r.storage->getStorageID().uuid];
-                if (t_size)
-                    t_size += s;
-                else
-                    t_size = s;
+                auto bucket_number = getBucketNumberOrInvalid(p->part_model_wrapper->bucketNumber(), reclustered);
+                auto addr = AddressInfo(host_ports.getHost(), host_ports.getTCPPort(), "", "", host_ports.exchange_port);
+                source_task_payload[uuid][addr].part_num += 1;
+                source_task_payload[uuid][addr].rows += p->rowExistsCount();
+                source_task_payload[uuid][addr].buckets.insert(bucket_number);
             }
-            for (const auto & [t, s] : table_size)
+            if (log->trace())
             {
-                assigned_resources_size[t][host_ports] = s;
+                for (const auto & [addr, payload] : source_task_payload[uuid])
+                {
+                    LOG_TRACE(
+                        log,
+                        "Source task payload for {}.{} addr:{} is {}",
+                        r.storage->getDatabaseName(),
+                        r.storage->getTableName(),
+                        addr.toShortString(),
+                        payload.toString());
+                }
             }
         }
     }
-}
-
-std::unordered_map<HostWithPorts, size_t> & CnchServerResource::getResourceSizeMap(UUID & table_id)
-{
-    return assigned_resources_size[table_id];
 }
 }

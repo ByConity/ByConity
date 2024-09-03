@@ -87,13 +87,8 @@ TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segment
 {
     TaskResult res;
     sendResources(plan_segment_ptr);
-    NodeSelectorResult selector_info;
-    {
-        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
-        auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.has_table_scan));
-        selector_info = selector_result.first->second;
-    }
-    prepareTask(plan_segment_ptr, selector_info.worker_nodes.size());
+    NodeSelectorResult selector_info = selectNodes(plan_segment_ptr, task);
+    prepareTask(plan_segment_ptr, selector_info, task);
     dag_graph_ptr->scheduled_segments.emplace(task.task_id);
     dag_graph_ptr->segment_parallel_size_map[task.task_id] = selector_info.worker_nodes.size();
 

@@ -27,10 +27,7 @@ DistributedPipelineSettings DistributedPipelineSettings::fromPlanSegment(PlanSeg
     settings.query_id = plan_segment->getQueryId();
     settings.plan_segment_id = plan_segment->getPlanSegmentId();
     settings.parallel_size = plan_segment->getParallelSize();
-    if (info.source_task_index)
-        settings.source_task_index = info.source_task_index;
-    if (info.source_task_count)
-        settings.source_task_count = info.source_task_count;
+    settings.source_task_filter = info.source_task_filter;
     settings.coordinator_address = plan_segment->getCoordinatorAddress();
     settings.current_address = info.execution_address;
     return settings;

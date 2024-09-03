@@ -46,7 +46,6 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
         selector_info = node_selector_result[task.task_id];
     }
     LOG_INFO(log, "Submit {} tasks for segment {}", selector_info.worker_nodes.size(), task.task_id);
-    std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_count_on_workers;
     for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
@@ -58,24 +57,9 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
         else
         {
             pending_task_instances.for_nodes[selector_info.worker_nodes[i].address].emplace(task.task_id, i);
-            if (task.has_table_scan)
-            {
-                source_task_count_on_workers[selector_info.worker_nodes[i].address] += 1;
-            }
         }
     }
-    if (task.has_table_scan)
-    {
-        std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_index_on_workers;
-        for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
-        {
-            const auto & addr = selector_info.worker_nodes[i].address;
-            source_task_idx.emplace(
-                SegmentTaskInstance{task.task_id, i},
-                std::make_pair(source_task_index_on_workers[addr], source_task_count_on_workers[addr]));
-            source_task_index_on_workers[addr]++;
-        }
-    }
+
     triggerDispatch(cluster_nodes.all_workers);
 }
 
@@ -422,13 +406,39 @@ void BSPScheduler::sendResources(PlanSegment * plan_segment_ptr)
     }
 }
 
-void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
+void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & task)
 {
     // Register exchange for all outputs.
     for (const auto & output : plan_segment_ptr->getPlanSegmentOutputs())
     {
         query_context->getExchangeDataTracker()->registerExchange(
-            query_context->getCurrentQueryId(), output->getExchangeId(), parallel_size);
+            query_context->getCurrentQueryId(), output->getExchangeId(), selector_info.worker_nodes.size());
+    }
+    if (task.has_table_scan)
+    {
+        if (!selector_info.buckets_on_workers.empty())
+        {
+            std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_index_on_workers;
+            for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
+            {
+                const auto & addr = selector_info.worker_nodes[i].address;
+                size_t idx = source_task_index_on_workers[addr];
+                source_task_buckets.emplace(SegmentTaskInstance{task.task_id, i}, selector_info.buckets_on_workers[addr][idx]);
+                source_task_index_on_workers[addr]++;
+            }
+        }
+        else if (!selector_info.source_task_count_on_workers.empty())
+        {
+            std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_index_on_workers;
+            for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
+            {
+                const auto & addr = selector_info.worker_nodes[i].address;
+                source_task_idx.emplace(
+                    SegmentTaskInstance{task.task_id, i},
+                    std::make_pair(source_task_index_on_workers[addr], selector_info.source_task_count_on_workers[addr]));
+                source_task_index_on_workers[addr]++;
+            }
+        }
     }
 }
 
@@ -439,8 +449,12 @@ PlanSegmentExecutionInfo BSPScheduler::generateExecutionInfo(size_t task_id, siz
     SegmentTaskInstance instance{task_id, index};
     if (source_task_idx.contains(instance))
     {
-        execution_info.source_task_index = source_task_idx[instance].first;
-        execution_info.source_task_count = source_task_idx[instance].second;
+        execution_info.source_task_filter.index = source_task_idx[instance].first;
+        execution_info.source_task_filter.count = source_task_idx[instance].second;
+    }
+    else if (source_task_buckets.contains(instance))
+    {
+        execution_info.source_task_filter.buckets = source_task_buckets[instance];
     }
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);

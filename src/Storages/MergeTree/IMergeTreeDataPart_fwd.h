@@ -18,6 +18,7 @@
 #include <memory>
 #include <vector>
 #include <roaring.hh>
+#include <common/types.h>
 
 namespace DB
 {
@@ -42,5 +43,5 @@ using MergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
 using MergeTreeMutableDataPartPtr = std::shared_ptr<IMergeTreeDataPart>;
 using MergeTreeDataPartsVector = std::vector<MergeTreeDataPartPtr>;
 using MergeTreeMutableDataPartsVector = std::vector<MergeTreeMutableDataPartPtr>;
-
+const Int64 kInvalidBucketNumber = -1;
 }

@@ -3,8 +3,12 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <set>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <common/types.h>
+
+
 namespace DB {
 struct PlanSegmentInstanceId
 {
@@ -36,8 +40,7 @@ struct PlanSegmentExecutionInfo
 {
     UInt32 parallel_id = std::numeric_limits<UInt32>::max();
     AddressInfo execution_address;
-    std::optional<size_t> source_task_index;
-    std::optional<size_t> source_task_count;
+    SourceTaskFilter source_task_filter;
     UInt32 retry_id = std::numeric_limits<UInt32>::max();
 };
 

@@ -192,10 +192,8 @@ void executePlanSegmentRemotelyWithPreparedBuf(
     request.set_plan_segment_id(plan_segment.getPlanSegmentId());
     request.set_parallel_id(execution_info.parallel_id);
     request.set_retry_id(execution_info.retry_id);
-    if (execution_info.source_task_index)
-        request.set_source_task_index(execution_info.source_task_index.value());
-    if (execution_info.source_task_count)
-        request.set_source_task_count(execution_info.source_task_count.value());
+    if (execution_info.source_task_filter.isValid())
+        *request.mutable_source_task_filter() = execution_info.source_task_filter.toProto();
 
     execution_info.execution_address.toProto(*request.mutable_execution_address());
 

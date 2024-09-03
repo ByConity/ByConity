@@ -40,12 +40,8 @@ void sendPlanSegmentToAddress(
         execution_info.parallel_id,
         addressinfo.toString(),
         plan_segment_ptr->toString());
-    if (execution_info.source_task_index && execution_info.source_task_count)
-        LOG_TRACE(
-            log,
-            "send additional filter index {} count {}",
-            execution_info.source_task_index.value(),
-            execution_info.source_task_count.value());
+    if (execution_info.source_task_filter.isValid())
+        LOG_TRACE(log, "send additional filter {}", execution_info.source_task_filter.toString());
     execution_info.execution_address = addressinfo;
 
     executePlanSegmentRemotelyWithPreparedBuf(

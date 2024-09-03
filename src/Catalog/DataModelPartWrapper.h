@@ -15,16 +15,16 @@
 
 #pragma once
 
+#include <forward_list>
+#include <vector>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Core/Types.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Protos/data_models.pb.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
-#include <Storages/MergeTree/DeleteBitmapMeta.h>
-#include <Core/Types.h>
-#include <Catalog/DataModelPartWrapper_fwd.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
-#include <vector>
-#include <forward_list>
 
 namespace DB
 {
@@ -69,6 +69,8 @@ public:
     mutable String disk_cache_host_port;
     mutable String assign_compute_host_port;
 };
+
+Int64 getBucketNumberOrInvalid(Int64 bucket_number, bool valid);
 
 class DataPartInterface
 {

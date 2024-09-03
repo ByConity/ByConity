@@ -1,0 +1,99 @@
+bucket table by EXPRESSION
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+bucket table by EXPRESSION after create stats
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+bucket table by EXPRESSION with bsp_force_split_bucket_table_by_part
+0	1
+0	1
+1	1
+1	1
+bucket table by EXPRESSION after alter table
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+bucket table by EXPRESSION with different buckets by same multiplier
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+bucket table by EXPRESSION with different buckets by different multiplier
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+bucket table
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+bucket table after create stats
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+bucket table with bsp_force_split_bucket_table_by_part
+0	1
+0	1
+1	1
+1	1
+bucket table by EXPRESSION after alter table
+0	1
+0	1
+0	1
+0	1
+1	1
+1	1
+1	1
+1	1
+empty table

@@ -6,6 +6,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <Common/HostWithPorts.h>
 
 namespace DB
@@ -81,7 +82,7 @@ private:
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
     void triggerDispatch(const std::vector<WorkerNode> & available_workers);
     void sendResources(PlanSegment * plan_segment_ptr) override;
-    void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size) override;
+    void prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & task) override;
     PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) override;
 
     bool isUnrecoverableStatus(const RuntimeSegmentStatus & status);
@@ -104,6 +105,7 @@ private:
     PendingTaskIntances pending_task_instances;
     // segment task instance -> <index, total> count in this worker
     std::unordered_map<SegmentTaskInstance, std::pair<size_t, size_t>, SegmentTaskInstance::Hash> source_task_idx;
+    std::unordered_map<SegmentTaskInstance, std::set<Int64>, SegmentTaskInstance::Hash> source_task_buckets;
 
     /// Error reasons which can not be recovered by retry. We need quit right now.
     std::unordered_set<int> unrecoverable_reasons{ErrorCodes::LOGICAL_ERROR, ErrorCodes::QUERY_WAS_CANCELLED};

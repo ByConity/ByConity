@@ -789,4 +789,39 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
     }
 }
 
+void filterParts(IMergeTreeDataPartsVector & parts, const SourceTaskFilter & filter)
+{
+    if (filter.index && filter.count)
+    {
+        size_t index = *filter.index, count = *filter.count;
+        if (count == 0 || index >= count)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot filterParts, invalid {}", filter.toString());
+        size_t c = 0;
+        for (auto iter = parts.begin(); iter != parts.end();)
+        {
+            if (c % count != index)
+                iter = parts.erase(iter);
+            else
+                iter++;
+            c++;
+        }
+    }
+    else if (filter.buckets)
+    {
+        const auto & buckets = *filter.buckets;
+        if (buckets.size() == 1 && *buckets.begin() == -1)
+        {
+            parts.clear();
+            return;
+        }
+        for (auto iter = parts.begin(); iter != parts.end();)
+        {
+            const auto & part = *iter;
+            if (!buckets.contains(part->bucket_number))
+                iter = parts.erase(iter);
+            else
+                iter++;
+        }
+    }
+}
 }

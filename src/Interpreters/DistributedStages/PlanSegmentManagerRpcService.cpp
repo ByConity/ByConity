@@ -395,10 +395,15 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
 
         execution_info.parallel_id = request->parallel_id();
         execution_info.execution_address = AddressInfo(request->execution_address());
+        // TODO source_task_index && source_task_count will be removed in future @lianxuechao
         if (request->has_source_task_index() && request->has_source_task_count())
         {
-            execution_info.source_task_index = request->source_task_index();
-            execution_info.source_task_count = request->source_task_count();
+            execution_info.source_task_filter.index = request->source_task_index();
+            execution_info.source_task_filter.count = request->source_task_count();
+        }
+        else if (request->has_source_task_filter())
+        {
+            execution_info.source_task_filter.fromProto(request->source_task_filter());
         }
         if (request->has_retry_id())
             execution_info.retry_id = request->retry_id();

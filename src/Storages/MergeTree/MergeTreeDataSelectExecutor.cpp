@@ -177,15 +177,14 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
 
     auto parts = data.getDataPartsVector();
 
-    if (data.source_index && data.source_count)
+    if (data.source_task_filter.isValid())
     {
         auto size_before_filtering = parts.size();
-        filterParts(parts, data.source_index.value(), data.source_count.value());
+        filterParts(parts, data.source_task_filter);
         LOG_TRACE(
             log,
-            "After filtering(index:{}, count:{}) the number of parts of table {} becomes {} from {}",
-            data.source_index.value(),
-            data.source_count.value(),
+            "After filtering({}) the number of parts of table {} becomes {} from {}",
+            data.source_task_filter.toString(),
             data.getTableName(),
             parts.size(),
             size_before_filtering);

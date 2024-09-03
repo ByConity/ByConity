@@ -18,12 +18,14 @@
 #include <vector>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Storages/DataPart_fwd.h>
+#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Common/ConsistentHashUtils/ConsistentHashRing.h>
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 
 namespace DB
 {
@@ -112,18 +114,6 @@ void splitHybridParts(const ServerDataPartsVector & parts, size_t virtual_part_s
 void mergeConsecutiveRanges(VirtualPartAssignmentMap & virtual_part_assignment);
 
 ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts, std::map<int, std::unique_ptr<MarkRanges>> & parts_entry);
-}
 
-template <class F>
-constexpr void filterParts(std::vector<F> & parts, size_t index, size_t count)
-{
-    size_t c = 0;
-    for (auto iter = parts.begin(); iter != parts.end();)
-    {
-        if (c % count != index)
-            iter = parts.erase(iter);
-        else
-            iter++;
-        c++;
-    }
+void filterParts(Coordination::IMergeTreeDataPartsVector & parts, const SourceTaskFilter & filter);
 }
