@@ -1320,7 +1320,7 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partition for unique key", 0) \
     M(Bool, enable_unique_table_attach_without_dedup, false, "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", 0) \
     M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
-    M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND. THROW mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
+    M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND, IGNORE. THROW mode and IGNORE mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
     M(Seconds, unique_sleep_seconds_after_acquire_lock, 0, "Only for test", 0) \
     M(Seconds, unique_acquire_write_lock_timeout, 0, "It has higher priority than table setting. Only when it's zero, use table setting", 0) \
     M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \

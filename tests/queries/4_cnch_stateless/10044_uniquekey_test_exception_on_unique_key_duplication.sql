@@ -32,6 +32,10 @@ INSERT INTO unique_with_exception_on_unique_key_duplication VALUES ('2020-10-29 
 INSERT INTO unique_with_exception_on_unique_key_duplication Format Values SETTINGS dedup_key_mode = 'throw'
 ('2020-10-29 23:50:00', 10004, 'Beijing', '男装', 3, 300), ('2020-10-29 23:50:00', 10005, 'Beijing', '男装', 2, 200); -- { serverError 117 }
 
+-- block contains duplicate unique keys
+INSERT INTO unique_with_exception_on_unique_key_duplication Format Values SETTINGS dedup_key_mode = 'throw'
+('2020-10-29 23:50:00', 10006, 'Beijing', '男装', 6, 600), ('2020-10-29 23:50:00', 10006, 'Beijing', '男装', 6, 600); -- { serverError 117 }
+
 SELECT * FROM unique_with_exception_on_unique_key_duplication order by event_time, product_id;
 
 DROP TABLE IF EXISTS unique_with_exception_on_unique_key_duplication;

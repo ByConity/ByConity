@@ -228,7 +228,7 @@ IMPLEMENT_SETTING_ENUM(ShortCircuitFunctionEvaluation, ErrorCodes::BAD_ARGUMENTS
 IMPLEMENT_SETTING_ENUM(
     DedupKeyMode,
     ErrorCodes::BAD_ARGUMENTS,
-    {{"replace", DedupKeyMode::REPLACE}, {"append", DedupKeyMode::APPEND}, {"throw", DedupKeyMode::THROW}})
+    {{"replace", DedupKeyMode::REPLACE}, {"append", DedupKeyMode::APPEND}, {"throw", DedupKeyMode::THROW}, {"ignore", DedupKeyMode::IGNORE}})
 
 IMPLEMENT_SETTING_ENUM(
     RefreshViewTaskStatus,
