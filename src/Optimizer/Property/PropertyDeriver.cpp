@@ -734,7 +734,10 @@ Property DeriverVisitor::visitMultiJoinStep(const MultiJoinStep &, DeriverContex
 
 Property DeriverVisitor::visitExpandStep(const ExpandStep &, DeriverContext & context)
 {
-    return context.getInput()[0];
+    auto prop = context.getInput()[0].clearSorting();
+    prop.getNodePartitioningRef().resetIfPartitionHandle();
+    prop.getStreamPartitioningRef().resetIfPartitionHandle();
+    return prop;
 }
 
 }
