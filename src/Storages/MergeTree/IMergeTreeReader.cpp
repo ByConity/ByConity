@@ -516,7 +516,9 @@ void IMergeTreeReader::readMapDataNotKV(
         if (dup_implicit_keys.count(impl_key_name) != 0)
         {
             auto idx = res_col_to_idx[impl_key_name];
-            impl_key_values[kit->second] = std::pair<size_t, const IColumn *>(column_size_before_reading, res_columns[idx].get());
+            /// Duplicated implicit key column may be droped if empty
+            if (res_columns[idx])
+                impl_key_values[kit->second] = std::pair<size_t, const IColumn *>(column_size_before_reading, res_columns[idx].get());
             continue;
         }
 
