@@ -497,7 +497,7 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 }
 
 
-void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context) const
+void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context, bool allow_nullable_key) const
 {
     if (type == ADD_COLUMN)
     {
@@ -811,7 +811,7 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
     }
     else if (type == MODIFY_TTL)
     {
-        metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(ttl, metadata.columns, context, metadata.primary_key);
+        metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(ttl, metadata.columns, context, metadata.primary_key, allow_nullable_key);
     }
     else if (type == REMOVE_TTL)
     {
@@ -1196,9 +1196,18 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
 
     auto metadata_copy = metadata;
 
+    bool allow_nullable_key = false;
+    if (metadata_copy.hasSettingsChanges())
+    {
+        auto settings_changes = metadata_copy.getSettingsChanges()->as<const ASTSetQuery &>().changes;
+        auto * field = settings_changes.tryGet("allow_nullable_key");
+        if (field && field->get<bool>())
+            allow_nullable_key = true;
+    }
+
     for (const AlterCommand & command : *this)
         if (!command.ignore)
-            command.apply(metadata_copy, context);
+            command.apply(metadata_copy, context, allow_nullable_key);
 
     /// Changes in columns may lead to changes in keys expression.
     metadata_copy.sorting_key.recalculateWithNewAST(metadata_copy.sorting_key.definition_ast, metadata_copy.columns, context);
@@ -1262,14 +1271,6 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
         metadata_copy.column_ttls_by_name[name] = new_ttl_entry;
     }
 
-    bool allow_nullable_key = false;
-    if (metadata_copy.hasSettingsChanges())
-    {
-        auto settings_changes = metadata_copy.getSettingsChanges()->as<const ASTSetQuery &>().changes;
-        auto * field = settings_changes.tryGet("allow_nullable_key");
-        if (field && field->get<bool>())
-            allow_nullable_key = true;
-    }
 
     if (metadata_copy.table_ttl.definition_ast != nullptr)
         metadata_copy.table_ttl = TTLTableDescription::getTTLForTableFromAST(

@@ -12,3 +12,10 @@ select * from null_test where name < 'xyz' and age > 0;
 select max(name), max(age) from null_test;
 
 DROP TABLE null_test;
+
+DROP TABLE IF EXISTS null_ttl_key;
+CREATE TABLE null_ttl_key (p Nullable(DateTime), id Int32) ENGINE = CnchMergeTree() ORDER BY id;
+ALTER TABLE null_ttl_key MODIFY TTL p + INTERVAL 30 DAY; -- { serverError 450}
+ALTER TABLE null_ttl_key MODIFY SETTING allow_nullable_key = 1;
+ALTER TABLE null_ttl_key MODIFY TTL p + INTERVAL 30 DAY;
+DROP TABLE null_ttl_key;

@@ -308,6 +308,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             rpc_context->initCnchServerResource(txn_id);
             rpc_context->setSetting("prefer_localhost_replica", false);
             rpc_context->setSetting("prefer_cnch_catalog", true);
+            rpc_context->setSetting("max_execution_time", 3600);
             trySetVirtualWarehouseAndWorkerGroup(data->getSettings()->cnch_vw_default.value, rpc_context);
         }
 

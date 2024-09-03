@@ -654,6 +654,12 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     bool only_realtime_partition = storage_settings->cnch_merge_only_realtime_partition;
 
     auto partitions = partition_selector->selectForMerge(istorage, num_partitions, only_realtime_partition);
+    if (partitions.empty())
+    {
+        LOG_TRACE(log, "Skip empty table");
+        return false;
+    }
+
     metrics.num_partitions = partitions.size();
     partitions = removeLockedPartition(partitions);
     metrics.num_unlock_partitions = partitions.size();

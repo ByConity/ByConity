@@ -3279,6 +3279,16 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
     if (commands.empty())
         return;
 
+    /// Check whether PARTITION (ID) is valid. Will throw exception if partition is an invalid value.
+    for (const auto & c : commands)
+    {
+        if (c.partition)
+        {
+            auto p = getPartitionIDFromQuery(c.partition, query_context);
+            LOG_TRACE(log, "Extract partition id from command: {}", p);
+        }
+    }
+
     auto txn = query_context->getCurrentTransaction();
     auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef(), query_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
