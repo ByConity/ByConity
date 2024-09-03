@@ -39,6 +39,7 @@ public:
     ASTPtr settings_ast;
     ASTPtr compression_method;
     ASTPtr compression_level;
+    bool ignore_format = false;
 
     void formatOutput(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const;
     

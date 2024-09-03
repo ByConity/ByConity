@@ -26,6 +26,7 @@
 #include <QueryPlan/QueryPlan.h>
 #include <Poco/Logger.h>
 #include <Common/Stopwatch.h>
+#include "Parsers/IAST_fwd.h"
 
 namespace Poco
 {
@@ -86,6 +87,8 @@ public:
     std::optional<std::set<StorageID>> getUsedStorageIds();
     BlockIO executeCreatePreparedStatementQuery();
     bool isCreatePreparedStatement();
+
+    ASTPtr & getQuery() { return query_ptr; }
 
 private:
     ASTPtr query_ptr;
