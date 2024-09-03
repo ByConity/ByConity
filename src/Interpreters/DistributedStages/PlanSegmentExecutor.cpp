@@ -67,6 +67,7 @@
 #include <brpc/callback.h>
 #include <fmt/core.h>
 #include <incubator-brpc/src/brpc/controller.h>
+#include <Poco/Logger.h>
 #include <Common/Brpc/BrpcChannelPoolOptions.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
@@ -230,6 +231,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
 
 BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
 {
+    LOG_DEBUG(&Poco::Logger::get("PlanSegmentExecutor"), "lazyExecute: {}", plan_segment->getPlanSegmentId());
     BlockIO res;
     // Will run as master query and already initialized
     if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())

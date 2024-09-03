@@ -45,7 +45,8 @@ std::shared_ptr<IQueryPlanStep> TableFinishStep::copy(ContextPtr) const
 void TableFinishStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
     pipeline.resize(1);
-    pipeline.addTransform(std::make_shared<TableFinishTransform>(getInputStreams()[0].header, target->getStorage(), settings.context, query));
+    pipeline.addTransform(std::make_shared<TableFinishTransform>(
+        getInputStreams()[0].header, target->getStorage(), settings.context, query, insert_select_with_profiles));
 }
 
 void TableFinishStep::toProto(Protos::TableFinishStep & proto, bool) const
