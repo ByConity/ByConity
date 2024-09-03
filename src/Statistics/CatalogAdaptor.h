@@ -44,7 +44,7 @@ public:
     virtual void dropStatsData(const StatsTableIdentifier & table) = 0;
 
     // fast way to query row count
-    std::optional<UInt64> queryRowCount(const StatsTableIdentifier & top_storage);
+    std::optional<UInt64> queryRowCount(const StatsTableIdentifier & table_id);
 
     virtual std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) = 0;
     virtual std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table) = 0;

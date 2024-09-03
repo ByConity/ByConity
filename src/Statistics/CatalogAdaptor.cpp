@@ -97,20 +97,7 @@ std::optional<UInt64> CatalogAdaptor::queryRowCount(const StatsTableIdentifier &
     const auto * cnch_merge_tree = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
     if (!cnch_merge_tree)
         return std::nullopt;
-
-    auto sql = fmt::format(
-        FMT_STRING("select sum(rows) from system.cnch_parts where database='{}' and table = '{}'"),
-        getOriginalDatabaseName(table_id.getDatabaseName()),
-        table_id.getTableName());
-    auto helper = SubqueryHelper::create(context, sql);
-    Block block = getOnlyRowFrom(helper);
-    if (block.columns() != 1)
-    {
-        throw Exception("wrong column", ErrorCodes::LOGICAL_ERROR);
-    }
-    auto col = block.getColumns().at(0);
-    auto row_count = col->getInt(0);
-    return row_count;
+    return cnch_merge_tree->totalRows(context);
 }
 
 ColumnDescVector CatalogAdaptor::filterCollectableColumns(
