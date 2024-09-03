@@ -1105,15 +1105,10 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
         }
     }
 
-    for (NamesAndTypesList::iterator it = source_columns.begin(); it != source_columns.end();)
+    for (NamesAndTypesList::iterator it = source_columns.begin(); it != source_columns.end(); ++it)
     {
         const String & column_name = it->name;
         unknown_required_source_columns.erase(column_name);
-
-        if (!required.count(column_name))
-            source_columns.erase(it++);
-        else
-            ++it;
     }
 
     /// If there are virtual columns among the unknown columns. Remove them from the list of unknown and add
@@ -1127,6 +1122,7 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
             if (column)
             {
                 source_columns.push_back(*column);
+                required.insert(*it);
                 unknown_required_source_columns.erase(it++);
             }
             else
@@ -1139,6 +1135,16 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
         // try rewrite unknown columns
         collectJoinTableAndAlias(context, query);
         rewriteUnknownLeftJoinIdentifier(query, source_column_names, required, unknown_required_source_columns, context->getSettingsRef().check_identifier_begin_valid);
+    }
+
+    for (NamesAndTypesList::iterator it = source_columns.begin(); it != source_columns.end();)
+    {
+        const String & column_name = it->name;
+
+        if (!required.count(column_name))
+            source_columns.erase(it++);
+        else
+            ++it;
     }
 
     if (!unknown_required_source_columns.empty())
@@ -1214,14 +1220,15 @@ NameSet TreeRewriterResult::getArrayJoinSourceNameSet() const
 void TreeRewriterResult::collectJoinTableAndAlias(const ContextPtr & context, const ASTPtr & select)
 {
     const auto * select_query = select->as<ASTSelectQuery>();
-    if(!select_query || !select_query->join())
+    if (!select_query)
         return;
 
     JoinedTables joined_tables(context, *select_query);
     if (!joined_tables.resolveTables())
     {
         auto left_storage = joined_tables.getLeftTableStorage();
-        joined_tables.makeFakeTable(left_storage, left_storage->getInMemoryMetadataPtr(), InterpreterSelectWithUnionQuery::getSampleBlock(select, context));
+        Block source_header{NamesAndTypes{source_columns.begin(), source_columns.end()}};
+        joined_tables.makeFakeTable(left_storage, left_storage->getInMemoryMetadataPtr(), source_header);
     }
 
     auto tables_with_columns = joined_tables.tablesWithColumns();
@@ -1231,28 +1238,36 @@ void TreeRewriterResult::collectJoinTableAndAlias(const ContextPtr & context, co
     {
         join_tables_to_rewrite.insert(join_tables_to_rewrite.end(), tables_with_columns.begin(), tables_with_columns.end());
     }
-
-    auto * tables = select_query->tables()->as<ASTTablesInSelectQuery>();
-
-    for (auto & table_element: tables->children)
+    else if (tables_with_columns.size() == 1)
     {
-        if(auto * table = table_element->as<ASTTablesInSelectQueryElement>())
+        join_tables_to_rewrite.push_back(tables_with_columns.front());
+        join_tables_to_rewrite.push_back(TableWithColumnNamesAndTypes(DatabaseAndTableWithAlias(), NamesAndTypesList()));
+    }
+
+    if (select_query->tables())
+    {
+        auto * tables = select_query->tables()->as<ASTTablesInSelectQuery>();
+
+        for (auto & table_element : tables->children)
         {
-            if (!table->table_expression)
-                continue;
-
-            auto * expression = table->table_expression->as<ASTTableExpression>();
-
-            if (expression->subquery)
+            if (auto * table = table_element->as<ASTTablesInSelectQueryElement>())
             {
-                const auto & union_query = expression->subquery->children[0]->as<ASTSelectWithUnionQuery>();
-                for(auto & sub_query: union_query->list_of_selects->children)
+                if (!table->table_expression)
+                    continue;
+
+                auto * expression = table->table_expression->as<ASTTableExpression>();
+
+                if (expression->subquery)
                 {
-                    if (sub_query->as<ASTSelectQuery>())
-                        collectJoinTableAndAlias(context, sub_query);
+                    const auto & union_query = expression->subquery->children[0]->as<ASTSelectWithUnionQuery>();
+                    for (auto & sub_query : union_query->list_of_selects->children)
+                    {
+                        if (sub_query->as<ASTSelectQuery>())
+                            collectJoinTableAndAlias(context, sub_query);
+                    }
                 }
+                break;
             }
-            break;
         }
     }
 }
