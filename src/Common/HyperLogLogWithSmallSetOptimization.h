@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <boost/noncopyable.hpp>
 
 #include <Common/HyperLogLogCounter.h>
@@ -28,9 +29,10 @@ private:
     using Small = SmallSet<Key, small_set_size>;
     using Large = HyperLogLogCounter<K, Hash, UInt32, DenominatorType>;
     using LargeValueType = typename Large::value_type;
+    using LargePtr = std::shared_ptr<Large>;
 
     Small small;
-    Large * large = nullptr;
+    LargePtr large;
 
     bool isLarge() const
     {
@@ -40,22 +42,18 @@ private:
     void toLarge()
     {
         /// At the time of copying data from `tiny`, setting the value of `large` is still not possible (otherwise it will overwrite some data).
-        Large * tmp_large = new Large;
+        LargePtr tmp_large = std::make_shared<Large>();
 
         for (const auto & x : small)
             tmp_large->insert(static_cast<LargeValueType>(x.getValue()));
 
-        large = tmp_large;
+        large = std::move(tmp_large);
     }
 
 public:
     using value_type = Key;
 
-    ~HyperLogLogWithSmallSetOptimization()
-    {
-        if (isLarge())
-            delete large;
-    }
+    ~HyperLogLogWithSmallSetOptimization() = default;
 
     /// ALWAYS_INLINE is required to have better code layout for uniqHLL12 function
     void ALWAYS_INLINE insert(Key value)
