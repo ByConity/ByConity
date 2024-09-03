@@ -40,7 +40,7 @@ public:
     void addVirtualWarehouse(const String & name, const String & psm, VirtualWarehouseTypes vw_types);
     void removeVirtualWarehouse(const String & name);
 
-    CnchWorkerClientPtr getWorker(const HostWithPorts & host_ports);
+    CnchWorkerClientPtr getWorker(const HostWithPorts & host_ports, bool refresh = false);
 
 private:
     void addVirtualWarehouseImpl(const String & name, const String & psm, VirtualWarehouseTypes vw_types, std::lock_guard<std::mutex> &);

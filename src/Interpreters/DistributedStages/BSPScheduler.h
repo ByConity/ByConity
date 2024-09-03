@@ -15,6 +15,14 @@ namespace ErrorCodes
     extern const int QUERY_WAS_CANCELLED;
 }
 
+// Smaller value means dirtier.
+enum TaintLevel
+{
+    FailedOrRunning = 0,
+    Running = 1,
+    Last
+};
+
 // Only if the dependencies were executed done, the segment would be scheduled.
 //
 // Scheduler::genTopology -> Scheduler::scheduleTask -> BSPScheduler::submitTasks
@@ -56,7 +64,7 @@ public:
     void updateSegmentStatusCounter(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
     /// retry task if possible, returns whether retry is successful or not
     bool retryTaskIfPossible(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
-    void onWorkerRestarted(const WorkerId & id);
+    void onWorkerRestarted(const WorkerId & id, const HostWithPorts & host_ports);
 
     const AddressInfo & getSegmentParallelLocation(PlanSegmentInstanceId instance_id);
 
@@ -77,15 +85,18 @@ private:
     PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) override;
 
     bool isUnrecoverableStatus(const RuntimeSegmentStatus & status);
+    bool isOutdated(const RuntimeSegmentStatus & status);
+    bool isTaintNode(size_t task_id, const AddressInfo & worker, TaintLevel & taint_level);
 
     std::mutex segment_status_counter_mutex;
     std::unordered_map<size_t, std::unordered_set<UInt64>> segment_status_counter;
 
     std::mutex nodes_alloc_mutex;
-    // segment id -> nodes running/runned(failed) its instance
-    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> occupied_workers;
+    // segment id -> nodes running its instance
+    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> running_segment_to_workers;
+    std::unordered_map<AddressInfo, std::unordered_set<PlanSegmentInstanceId>, AddressInfo::Hash> worker_to_running_instances;
     // segment id -> nodes failed its instance
-    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> failed_workers;
+    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> failed_segment_to_workers;
     // segment id -> [segment instance, node]
     std::unordered_map<size_t, std::unordered_map<UInt64, AddressInfo>> segment_parallel_locations;
     std::unordered_map<PlanSegmentInstanceId, size_t> segment_instance_retry_cnt;
@@ -93,7 +104,6 @@ private:
     PendingTaskIntances pending_task_instances;
     // segment task instance -> <index, total> count in this worker
     std::unordered_map<SegmentTaskInstance, std::pair<size_t, size_t>, SegmentTaskInstance::Hash> source_task_idx;
-    std::atomic_size_t retry_count = {0};
 
     /// Error reasons which can not be recovered by retry. We need quit right now.
     std::unordered_set<int> unrecoverable_reasons{ErrorCodes::LOGICAL_ERROR, ErrorCodes::QUERY_WAS_CANCELLED};

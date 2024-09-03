@@ -52,6 +52,23 @@ AssignedResource::AssignedResource(const StoragePtr & storage_) : storage(storag
 {
 }
 
+AssignedResource::AssignedResource(AssignedResource & resource)
+{
+    storage = resource.storage;
+    table_version = resource.table_version;
+    table_definition = resource.table_definition;
+    sent_create_query = resource.sent_create_query;
+    bucket_numbers = resource.bucket_numbers;
+    replicated = resource.replicated;
+
+    server_parts = resource.server_parts;
+    hive_parts = resource.hive_parts;
+    file_parts = resource.file_parts;
+    part_names = resource.part_names; // don't call move here
+
+    object_columns = resource.object_columns;
+}
+
 AssignedResource::AssignedResource(AssignedResource && resource)
 {
     storage = resource.storage;
@@ -122,7 +139,7 @@ void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
     }
 }
 
-void ResourceStageInfo::filterResource(std::optional<ResourceOption> resource_option)
+void ResourceStageInfo::filterResource(std::optional<ResourceOption> & resource_option)
 {
     if (resource_option)
     {
@@ -260,6 +277,7 @@ void CnchServerResource::setTableVersion(const UUID & storage_uuid, const UInt64
     assigned_resource.table_version = table_version;
 }
 
+/// NOTE: Only used when optimizer is disabled.
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
     Stopwatch watch;
@@ -274,6 +292,7 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     std::vector<AssignedResource> resources_to_send;
     {
         auto lock = getLock();
+
         allocateResource(context, lock);
 
         auto it = assigned_worker_resource.find(worker);
@@ -294,6 +313,38 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
 
+void CnchServerResource::resendResource(const ContextPtr & context, const HostWithPorts & worker)
+{
+    auto span = startCommonSpan("CnchServer", "CnchServerResource.sendResource");
+    OpentelemetryScope scope(span);
+    Stopwatch watch;
+    auto send_lock = getLockForSend("ALL_WORKER");
+
+    std::vector<AssignedResource> resources_to_send;
+    {
+        auto lock = getLock();
+            ResourceOption resource_option{.resend = true};
+            allocateResource(context, lock, resource_option);
+
+            std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
+            std::swap(all_resources, assigned_worker_resource);
+            auto it = all_resources.find(worker);
+            if (it == all_resources.end())
+                return;
+
+            resources_to_send = std::move(it->second);
+    }
+
+    auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
+    auto worker_client = worker_group->getWorkerClient(worker);
+    auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
+    auto call_id = worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations);
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
+    brpc::Join(call_id);
+    handler->throwIfException();
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
+}
+
 void CnchServerResource::sendResources(const ContextPtr & context, std::optional<ResourceOption> resource_option)
 {
     Stopwatch watch;
@@ -301,6 +352,7 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
 
     // filter resource for stage send resource
     resource_stage_info.filterResource(resource_option);
+
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
     {
         auto lock = getLock();
@@ -411,15 +463,27 @@ void CnchServerResource::allocateResource(
 {
     std::vector<AssignedResource> resource_to_allocate;
 
-    for (auto & [table_id, resource] : assigned_table_resource)
+    if (resource_option && (*resource_option).resend)
     {
-        if (resource.empty())
-            continue;
+        for (auto & [table_id, resource] : table_resources_saved_for_retry)
+        {
+            resource_to_allocate.emplace_back(resource);
+        }
+    }
+    else
+    {
+        for (auto & [table_id, resource] : assigned_table_resource)
+        {
+            if (resource.empty())
+                continue;
 
-        if (resource_option && !(*resource_option).table_ids.count(table_id))
-            continue;
+            if (resource_option && !(*resource_option).table_ids.count(table_id))
+                continue;
 
-        resource_to_allocate.emplace_back(std::move(resource));
+            if (context->getSettingsRef().bsp_mode)
+                table_resources_saved_for_retry.emplace(table_id, resource);
+            resource_to_allocate.emplace_back(std::move(resource));
+        }
     }
 
     if (resource_to_allocate.empty())

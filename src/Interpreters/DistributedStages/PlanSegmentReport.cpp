@@ -1,5 +1,6 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentReport.h>
 #include <Protos/plan_segment_manager.pb.h>
 
@@ -28,6 +29,7 @@ void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) 
         request.set_query_id(status.query_id);
         request.set_segment_id(status.segment_id);
         request.set_parallel_index(status.parallel_index);
+        request.set_retry_id(status.retry_id);
         request.set_is_succeed(status.is_succeed);
         request.set_is_canceled(status.is_cancelled);
         status.metrics.setProtos(*request.mutable_metrics());
@@ -90,7 +92,7 @@ senderMetricsToProto(const PlanSegmentOutputs & plan_segment_outputs, SenderMetr
 
 PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     ContextPtr query_context,
-    const AddressInfo & execution_address,
+    const PlanSegmentExecutionInfo & execution_info,
     int exception_code,
     const String & exception_message,
     Progress final_progress,
@@ -102,21 +104,22 @@ PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     result.coordinator_address = query_context->getCoordinatorAddress();
     result.runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
     result.runtime_segment_status.segment_id = query_context->getPlanSegmentInstanceId().segment_id;
-    result.runtime_segment_status.parallel_index = query_context->getPlanSegmentInstanceId().parallel_id;
+    result.runtime_segment_status.parallel_index = execution_info.parallel_id;
+    result.runtime_segment_status.retry_id = execution_info.retry_id;
     result.runtime_segment_status.is_succeed = false;
     result.runtime_segment_status.is_cancelled = exception_code == ErrorCodes::QUERY_WAS_CANCELLED;
     result.runtime_segment_status.code = exception_code;
     result.runtime_segment_status.message
-        = "Worker host:" + extractExchangeHostPort(execution_address) + ", exception:" + exception_message;
+        = "Worker host:" + extractExchangeHostPort(execution_info.execution_address) + ", exception:" + exception_message;
     result.runtime_segment_status.metrics.final_progress = final_progress.toProto();
-    result.sender_metrics = senderMetricsToProto(plan_segment_outputs, sender_metrics, execution_address);
+    result.sender_metrics = senderMetricsToProto(plan_segment_outputs, sender_metrics, execution_info.execution_address);
 
     return result;
 }
 
 PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     ContextPtr query_context,
-    const AddressInfo & execution_address,
+    const PlanSegmentExecutionInfo & execution_info,
     Progress & final_progress,
     SenderMetrics & sender_metrics,
     PlanSegmentOutputs & plan_segment_outputs)
@@ -126,13 +129,14 @@ PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     result.coordinator_address = query_context->getCoordinatorAddress();
     result.runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
     result.runtime_segment_status.segment_id = query_context->getPlanSegmentInstanceId().segment_id;
-    result.runtime_segment_status.parallel_index = query_context->getPlanSegmentInstanceId().parallel_id;
+    result.runtime_segment_status.parallel_index = execution_info.parallel_id;
+    result.runtime_segment_status.retry_id = execution_info.retry_id;
     result.runtime_segment_status.is_succeed = true;
     result.runtime_segment_status.is_cancelled = false;
     result.runtime_segment_status.code = 0;
     result.runtime_segment_status.message = "execute success";
     result.runtime_segment_status.metrics.final_progress = final_progress.toProto();
-    result.sender_metrics = senderMetricsToProto(plan_segment_outputs, sender_metrics, execution_address);
+    result.sender_metrics = senderMetricsToProto(plan_segment_outputs, sender_metrics, execution_info.execution_address);
 
     return result;
 }

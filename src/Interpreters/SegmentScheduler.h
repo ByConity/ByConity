@@ -100,7 +100,7 @@ public:
 
     PlanSegmentSet getIOPlanSegmentInstanceIDs(const String & query_id) const;
 
-    void workerRestarted(const WorkerId & id);
+    void workerRestarted(const WorkerId & id, const HostWithPorts & host_ports);
 
 private:
     // Protect `query_map`.

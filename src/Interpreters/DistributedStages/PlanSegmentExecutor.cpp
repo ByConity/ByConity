@@ -174,7 +174,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
         query_log_element->event_time_microseconds = time_in_microseconds(finish_time);
 
         return convertSuccessPlanSegmentStatusToResult(
-            context, plan_segment_instance->info.execution_address, final_progress, sender_metrics, plan_segment_outputs);
+            context, plan_segment_instance->info, final_progress, sender_metrics, plan_segment_outputs);
     }
     catch (...)
     {
@@ -216,7 +216,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
         if (exception_handler && exception_handler->setException(std::current_exception()))
             return convertFailurePlanSegmentStatusToResult(
                 context,
-                plan_segment_instance->info.execution_address,
+                plan_segment_instance->info,
                 exception_code,
                 exception_message,
                 std::move(final_progress),

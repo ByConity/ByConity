@@ -73,6 +73,7 @@ message SendPlanSegmentStatusRequest {
   optional string message = 7;
   optional uint64 parallel_index = 8;
   optional SenderMetrics sender_metrics = 9;
+  optional int32 retry_id = 10;
 }
 
 message SendPlanSegmentStatusResponse {

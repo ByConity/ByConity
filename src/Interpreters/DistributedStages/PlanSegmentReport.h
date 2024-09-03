@@ -16,7 +16,7 @@ void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) 
 
 PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     ContextPtr query_context,
-    const AddressInfo & execution_address,
+    const PlanSegmentExecutionInfo & execution_info,
     int exception_code,
     const String & exception_message,
     Progress final_progress = {},
@@ -25,7 +25,7 @@ PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
 
 PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     ContextPtr query_context,
-    const AddressInfo & execution_address,
+    const PlanSegmentExecutionInfo & execution_info,
     Progress & final_progress,
     SenderMetrics & sender_metrics,
     PlanSegmentOutputs & plan_segment_outputs);

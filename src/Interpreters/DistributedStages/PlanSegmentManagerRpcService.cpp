@@ -112,6 +112,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             request->query_id(),
             request->segment_id(),
             request->parallel_index(),
+            request->retry_id(),
             request->is_succeed(),
             is_cancelled,
             RuntimeSegmentsMetrics(request->metrics()),
@@ -523,8 +524,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     int exception_code = getCurrentExceptionCode();
                     auto exception_message = getCurrentExceptionMessage(false);
 
-                    auto result = convertFailurePlanSegmentStatusToResult(
-                        query_context, execution_info.execution_address, exception_code, exception_message);
+                    auto result = convertFailurePlanSegmentStatusToResult(query_context, execution_info, exception_code, exception_message);
                     reportExecutionResult(result);
                 }
             }

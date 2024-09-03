@@ -83,7 +83,7 @@ size_t RpcChannelPool::checkAndClearExpiredPool(const std::string & client_type)
     return expired_num;
 }
 
-std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, const std::string & client_type)
+std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, const std::string & client_type, bool refresh)
 {
     static thread_local std::unordered_map<ClientType, PoolOptionsPtr> local_options_pool;
 
@@ -118,11 +118,11 @@ std::shared_ptr<RpcClient> RpcChannelPool::getClient(const String & host_port, c
         pool = it.second;
         pool->updateRecentUsedTime();
     });
-    if (!found || !pool->ok())
+    if (!found || !pool->ok() || refresh)
     {
         pool = std::make_shared<Pool>(max_connections);
         auto exists = [&](Container::value_type & v) {
-            if (!v.second->ok())
+            if (!v.second->ok() || refresh)
                 v.second = pool;
             else
             {

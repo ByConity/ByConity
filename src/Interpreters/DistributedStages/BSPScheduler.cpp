@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <CloudServices/CnchServerResource.h>
 
@@ -29,6 +30,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
+    extern const int WORKER_RESTARTED;
 }
 
 const size_t MIN_MAJOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 2;
@@ -121,18 +123,22 @@ void BSPScheduler::onQueryFinished()
 
 void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status)
 {
+    if (isOutdated(status))
+        return;
+    auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index)};
     if (status.is_succeed)
     {
-        AddressInfo available_worker;
+        AddressInfo running_worker;
         {
             std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            available_worker = segment_parallel_locations[segment_id][parallel_index];
-            occupied_workers[segment_id].erase(available_worker);
+            running_worker = segment_parallel_locations[segment_id][parallel_index];
+            running_segment_to_workers[segment_id].erase(running_worker);
+            worker_to_running_instances[running_worker].erase(instance_id);
         }
         {
             /// update finished_address before onSegmentFinished(where new task might be added to queue)
             std::unique_lock<std::mutex> lock(dag_graph_ptr->finished_address_mutex);
-            dag_graph_ptr->finished_address[segment_id][parallel_index] = available_worker;
+            dag_graph_ptr->finished_address[segment_id][parallel_index] = running_worker;
         }
         {
             std::unique_lock<std::mutex> lock(segment_status_counter_mutex);
@@ -149,19 +155,24 @@ void BSPScheduler::updateSegmentStatusCounter(size_t segment_id, UInt64 parallel
             }
         }
 
-        triggerDispatch({WorkerNode{available_worker}});
+        triggerDispatch({WorkerNode{running_worker}});
     }
     else if (!status.is_succeed && !status.is_cancelled)
     {
         /// if a task has failed in a node, we wont schedule this segment to it anymore
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        auto failed_worker = segment_parallel_locations[segment_id][parallel_index];
-        failed_workers[segment_id].insert(failed_worker);
+        auto worker = segment_parallel_locations[segment_id][parallel_index];
+        running_segment_to_workers[segment_id].erase(worker);
+        worker_to_running_instances[worker].erase(instance_id);
+        failed_segment_to_workers[segment_id].insert(worker);
     }
 }
 
 bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status)
 {
+    // If status is outdated, we skip the retry but treat it like success.
+    if (isOutdated(status))
+        return true;
     if (isUnrecoverableStatus(status))
         return false;
     auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index)};
@@ -238,10 +249,9 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
             // for local no repartion and local may no repartition, schedule to original node
             NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
             // in case all workers except servers are occupied, simply retry at last node
-            failed_workers[segment_id].size() == cluster_nodes.all_workers.size())
+            failed_segment_to_workers[segment_id].size() == cluster_nodes.all_workers.size())
         {
             auto available_worker = segment_parallel_locations[segment_id][parallel_index];
-            occupied_workers[segment_id].erase(available_worker);
             pending_task_instances.for_nodes[available_worker].insert({segment_id, parallel_index});
             lk.unlock();
             triggerDispatch({WorkerNode{available_worker}});
@@ -256,35 +266,41 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
     return true;
 }
 
-void BSPScheduler::onWorkerRestarted(const WorkerId & id)
+void BSPScheduler::onWorkerRestarted(const WorkerId & id, const HostWithPorts & host_ports)
 {
-    LOG_WARNING(log, "Worker {} restarted, quit running. In future it should be recovered.", id.ToString());
-    bool contains = false;
-    // TODO(wangtao.vip): it could be more than 1 segment running on this worker.
-    size_t segment_id_on_restarted_worker;
-    // TODO(wangtao.vip): better iteration to find if the worker contains our task.
-    for (auto worker_iter = cluster_nodes.all_workers.begin(); !contains && worker_iter != cluster_nodes.all_workers.end(); worker_iter++)
+    LOG_WARNING(log, "Worker {} restarted, retry all tasks running on it.", id.ToString());
+    query_context->getCnchServerResource()->setSendMutations(true);
+    query_context->getCnchServerResource()->resendResource(query_context, host_ports);
+    for (auto worker_iter = cluster_nodes.all_workers.begin(); worker_iter != cluster_nodes.all_workers.end(); worker_iter++)
     {
         if (worker_iter->id == id.id)
         {
-            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            for (const auto & [segment_id, address_set] : occupied_workers)
+            std::unordered_set<PlanSegmentInstanceId> instances_to_retry;
             {
-                if (address_set.contains(worker_iter->address))
+                std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+                instances_to_retry = worker_to_running_instances[worker_iter->address];
+            }
+            // Status should be failed.
+            RuntimeSegmentStatus status{.is_succeed = false, .is_cancelled = false};
+            for (const auto & instance : instances_to_retry)
+            {
+                status.segment_id = instance.segment_id;
+                status.parallel_index = instance.parallel_id;
+                status.code = ErrorCodes::WORKER_RESTARTED;
                 {
-                    contains = true;
-                    segment_id_on_restarted_worker = segment_id;
-                    break;
+                    std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+                    status.retry_id = segment_instance_retry_cnt[instance];
+                }
+                updateSegmentStatusCounter(instance.segment_id, instance.parallel_id, status);
+                if (!retryTaskIfPossible(instance.segment_id, instance.parallel_id, status))
+                {
+                    stopped.store(true, std::memory_order_relaxed);
+                    error_msg = fmt::format("Worker {} restared, segment instance {} failed", id.ToString(), instance.toString());
+                    // emplace a fake task.
+                    addBatchTask(nullptr);
                 }
             }
         }
-    }
-    if (contains)
-    {
-        stopped.store(true, std::memory_order_relaxed);
-        error_msg = fmt::format("worker {} restarted, segment {} failed", id.ToString(), segment_id_on_restarted_worker);
-        // emplace a fake task.
-        addBatchTask(nullptr);
     }
 }
 
@@ -298,40 +314,49 @@ std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const A
 {
     if (pending_task_instances.for_nodes.contains(worker))
     {
-        for (auto instance = pending_task_instances.for_nodes[worker].begin(); instance != pending_task_instances.for_nodes[worker].end();)
+        // Skip task on worker with more taint.
+        for (int level_iter = TaintLevel::FailedOrRunning; level_iter != TaintLevel::Last; level_iter++)
         {
-            const auto & node_iter = occupied_workers.find(instance->task_id);
-            // If the target node is busy, skip it.
-            if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
+            TaintLevel level = static_cast<TaintLevel>(level_iter);
+            for (auto instance = pending_task_instances.for_nodes[worker].begin();
+                 instance != pending_task_instances.for_nodes[worker].end();)
             {
-                instance++;
-                continue;
-            }
-            else
-            {
-                SegmentTaskInstance ret = *instance;
-                pending_task_instances.for_nodes[worker].erase(instance);
-                return std::make_pair(true, ret);
+                // If the target node does not fit specified taint level, skip it.
+                if (isTaintNode(instance->task_id, worker, level))
+                {
+                    instance++;
+                    continue;
+                }
+                else
+                {
+                    SegmentTaskInstance ret = *instance;
+                    pending_task_instances.for_nodes[worker].erase(instance);
+                    return std::make_pair(true, ret);
+                }
             }
         }
     }
 
     if (worker != local_address)
     {
-        for (auto no_pref = pending_task_instances.no_prefs.begin(); no_pref != pending_task_instances.no_prefs.end();)
+        // Skip task on worker with more taint.
+        for (int level_iter = TaintLevel::FailedOrRunning; level_iter != TaintLevel::Last; level_iter++)
         {
-            const auto & node_iter = occupied_workers.find(no_pref->task_id);
-            // If the target node is busy, skip it.
-            if (node_iter != occupied_workers.end() && node_iter->second.contains(worker))
+            for (auto no_pref = pending_task_instances.no_prefs.begin(); no_pref != pending_task_instances.no_prefs.end();)
             {
-                no_pref++;
-                continue;
-            }
-            else
-            {
-                SegmentTaskInstance ret = *no_pref;
-                pending_task_instances.no_prefs.erase(no_pref);
-                return std::make_pair(true, ret);
+                TaintLevel level = static_cast<TaintLevel>(level_iter);
+                // If the target node does not fit specified taint level, skip it.
+                if (isTaintNode(no_pref->task_id, worker, level))
+                {
+                    no_pref++;
+                    continue;
+                }
+                else
+                {
+                    SegmentTaskInstance ret = *no_pref;
+                    pending_task_instances.no_prefs.erase(no_pref);
+                    return std::make_pair(true, ret);
+                }
             }
         }
     }
@@ -354,20 +379,22 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
             task_instance.emplace(result);
         }
 
-        WorkerNode worker_node;
         {
             std::unique_lock<std::mutex> res_lk(node_selector_result_mutex);
-            node_selector_result[task_instance->task_id].worker_nodes[task_instance->parallel_index] = worker;
-            worker_node = node_selector_result[task_instance->task_id].worker_nodes[task_instance->parallel_index];
+            WorkerNode & worker_node = node_selector_result[task_instance->task_id].worker_nodes[task_instance->parallel_index];
             if (worker_node.address.getHostName().empty())
                 worker_node.address = address;
         }
 
         {
+            // TODO(wangtao.vip): this should be handled with dispatch failure.
             std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            occupied_workers[task_instance->task_id].insert(address);
+            running_segment_to_workers[task_instance->task_id].insert(address);
+            worker_to_running_instances[address].insert(
+                PlanSegmentInstanceId{static_cast<UInt32>(task_instance->task_id), static_cast<UInt32>(task_instance->parallel_index)});
             segment_parallel_locations[task_instance->task_id][task_instance->parallel_index] = address;
-            failed_workers[task_instance->task_id].insert(local_address); /// init with server addr, as we wont schedule to server
+            failed_segment_to_workers[task_instance->task_id].insert(
+                local_address); /// init with server addr, as we wont schedule to server
         }
 
         dispatchTask(
@@ -437,5 +464,44 @@ bool BSPScheduler::isUnrecoverableStatus(const RuntimeSegmentStatus & status)
         return true;
     }
     return false;
+}
+
+bool BSPScheduler::isOutdated(const RuntimeSegmentStatus & status)
+{
+    int32_t current_retry_id = 0;
+    {
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        current_retry_id
+            = (segment_instance_retry_cnt[{static_cast<UInt32>(status.segment_id), static_cast<UInt32>(status.parallel_index)}]);
+    }
+    if (current_retry_id != status.retry_id)
+    {
+        LOG_WARNING(
+            log,
+            "Ignore status of segment {} parallel index {} because it retry id {} does not equal to current retry id {}",
+            status.segment_id,
+            status.parallel_index,
+            status.retry_id,
+            current_retry_id);
+        return true;
+    }
+    return false;
+}
+
+bool BSPScheduler::isTaintNode(size_t task_id, const AddressInfo & worker, TaintLevel & taint_level)
+{
+    const auto & running_node_iter = running_segment_to_workers.find(task_id);
+    switch (taint_level)
+    {
+        case TaintLevel::Running:
+            return running_node_iter != running_segment_to_workers.end() && running_node_iter->second.contains(worker);
+        case TaintLevel::FailedOrRunning: {
+            const auto & failed_node_iter = failed_segment_to_workers.find(task_id);
+            return (running_node_iter != running_segment_to_workers.end() && running_node_iter->second.contains(worker))
+                || (failed_node_iter != failed_segment_to_workers.end() && failed_node_iter->second.contains(worker));
+        }
+        case TaintLevel::Last:
+            throw Exception("Unexpected taint level", ErrorCodes::LOGICAL_ERROR);
+    }
 }
 }

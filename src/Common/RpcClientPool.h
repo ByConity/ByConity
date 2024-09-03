@@ -73,16 +73,19 @@ public:
 
     Ptr get(const String & host, UInt16 port) { return get(addBracketsIfIpv6(host) + ':' + std::to_string(port)); }
 
-    Ptr get(const HostWithPorts & host_ports)
+    Ptr get(const HostWithPorts & host_ports, bool refresh = false)
     {
         std::unique_lock lock(state_mutex);
+        if (refresh)
+            clients_map.erase(host_ports);
         if (auto iter = clients_map.find(host_ports); iter != clients_map.end())
         {
             if (iter->second->ok())
                 return iter->second;
         }
 
-        return clients_map.try_emplace(host_ports, creator(host_ports)).first->second;
+        clients_map[host_ports] = creator(host_ports);
+        return clients_map[host_ports];
     }
 
     Ptr get(const String & host_port)

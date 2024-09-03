@@ -2,9 +2,11 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <CloudServices/CnchWorkerClientPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <Poco/Util/AbstractConfiguration.h>
 namespace CurrentMetrics
@@ -157,7 +159,10 @@ void WorkerStatusManager::updateWorkerNode(const Protos::WorkerNodeResourceData 
             // Worker has restarted. We must put it ahead of status update.
             if (worker_status->register_time > val.worker_status->register_time)
             {
-                getContext()->getSegmentScheduler()->workerRestarted(id);
+                getContext()->getCnchWorkerClientPools().getWorker(worker_status->host_ports, /*refresh=*/true);
+                RpcChannelPool::getInstance().getClient(
+                    worker_status->host_ports.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, /*refresh=*/true);
+                getContext()->getSegmentScheduler()->workerRestarted(id, worker_status->host_ports);
             }
             if (val.worker_status->last_status_create_time < worker_status->last_status_create_time)
             {

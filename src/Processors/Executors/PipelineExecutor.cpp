@@ -166,14 +166,10 @@ void PipelineExecutor::addJob(ExecutingGraph::Node * execution_state)
                     int exception_code = getCurrentExceptionCode();
                     auto exception_message = getCurrentExceptionMessage(false);
 
-                    auto execution_address = AddressInfo(
-                        getHostIPFromEnv(),
-                        query_context->getTCPPort(),
-                        "",
-                        "",
-                        query_context->getExchangePort());
-                    auto result
-                        = convertFailurePlanSegmentStatusToResult(query_context, execution_address, exception_code, exception_message);
+                    PlanSegmentExecutionInfo info{
+                        .execution_address
+                        = AddressInfo(getHostIPFromEnv(), query_context->getTCPPort(), "", "", query_context->getExchangePort())};
+                    auto result = convertFailurePlanSegmentStatusToResult(query_context, info, exception_code, exception_message);
                     reportExecutionResult(result);
                 }
             }

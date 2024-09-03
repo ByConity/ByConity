@@ -16,6 +16,7 @@
 #include <memory>
 #include <set>
 #include <CloudServices/CnchServerResource.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/MPPScheduler.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
@@ -31,7 +32,6 @@
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 #include <common/types.h>
-#include <Interpreters/DistributedStages/AddressInfo.h>
 
 namespace ProfileEvents
 {
@@ -671,7 +671,7 @@ PlanSegmentSet SegmentScheduler::getIOPlanSegmentInstanceIDs(const String & quer
     return res;
 }
 
-void SegmentScheduler::workerRestarted(const WorkerId & id)
+void SegmentScheduler::workerRestarted(const WorkerId & id, const HostWithPorts & host_ports)
 {
     // Is there any better solution than iteration?
     LOG_TRACE(log, "Worker {} restarted, notify schedulers who care.", id.ToString());
@@ -681,7 +681,7 @@ void SegmentScheduler::workerRestarted(const WorkerId & id)
         const auto & [vw_name, wg_name] = iter.second->tryGetWorkerGroupName();
         if (!wg_name.empty() && wg_name == id.wg_name && vw_name == id.vw_name)
         {
-            iter.second->onWorkerRestarted(id);
+            iter.second->onWorkerRestarted(id, host_ports);
         }
     }
 }
