@@ -216,7 +216,7 @@ TEST_F(PlanSignatureTest, testTpcdsAllSignaturesWithoutRuntimeFilter)
     }
     std::sort(
         sorted_by_freq.begin(), sorted_by_freq.end(), [](const auto & left, const auto & right) { return left.size() > right.size(); });
-    EXPECT_EQ(sorted_by_freq.size(), 11);
+    EXPECT_EQ(sorted_by_freq.size(), 12);
     // all binary mappings
     EXPECT_EQ(sorted_by_freq[0].size(), 2);
     // std::unordered_map<size_t, size_t> query_mapping;

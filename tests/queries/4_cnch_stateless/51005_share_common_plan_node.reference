@@ -1,0 +1,29 @@
+Projection Est. ? rows
+│     Expressions: id:=id_5
+└─ Gather Exchange Est. ? rows
+   └─ Union Est. ? rows
+      │     OutputToInputs: id_5 = [id,id_2]
+      ├─ Projection Est. ? rows
+      │  │     Expressions: [id]
+      │  └─ Filter Est. ? rows
+      │     │     Condition: k1 >= 1
+      │     └─ CTERef[1] Est. ? rows
+      └─ Projection Est. ? rows
+         │     Expressions: [id_2]
+         └─ Filter Est. ? rows
+            │     Condition: k1_1 >= 2
+            └─ CTERef[1] Est. ? rows
+CTEDef [1]
+   Left Join Est. ? rows
+   │     Condition: id == id_1
+   │     Filter: k1 > 0
+   ├─ Filter Est. ? rows
+   │  │     Condition: k1 >= 1
+   │  └─ TableScan 1234.default.51005_share_common_plan_node Est. ? rows
+   │           Where: k1 >= 1
+   │           Outputs: [id, k1]
+   └─ Broadcast Exchange Est. ? rows
+      └─ TableScan 1234.default.51005_share_common_plan_node Est. ? rows
+               Outputs: id_1:=id
+note: CTE(Common Table Expression) is applied for 2 times.
+1
