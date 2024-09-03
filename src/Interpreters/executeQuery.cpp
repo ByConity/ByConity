@@ -1844,23 +1844,25 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
 {
     const ASTQueryWithOutput * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
-    if (ast_query_with_output == nullptr || ast_query_with_output->out_file == nullptr
-        || !OutfileTarget::checkOutfileWithTcpOnServer(context))
-    {
+    if (ast_query_with_output == nullptr || ast_query_with_output->out_file == nullptr)
         return;
-    }
 
     try
     {
+        const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
+        // If outfile to remote and is tenant user, set outfile_in_server_with_tcp true
+        if (!Poco::URI(out_path).getScheme().empty() && context->is_tenant_user())
+            context->applySettingChange({"outfile_in_server_with_tcp", true});
+        if (!OutfileTarget::checkOutfileWithTcpOnServer(context))
+            return;
+
         String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
             ? getIdentifierName(ast_query_with_output->format)
             : context->getDefaultFormat();
-
         String compression_method_str;
         UInt64 compression_level = 1;
         OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
 
-        const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
         OutfileTargetPtr outfile_target = std::make_shared<OutfileTarget>(context, out_path, format_name, compression_method_str, compression_level);
         std::shared_ptr<WriteBuffer> out_buf = outfile_target->getOutfileBuffer();
 

@@ -2266,38 +2266,51 @@ private:
 
             /// The query can specify output format or output file.
             /// FIXME: try to prettify this cast using `as<>()`
-            if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get());
-                query_with_output && !isOutfileInOtherPlace(context->getSettingsRef()))
-            {
-                if (query_with_output->format != nullptr)
-                {
-                    if (has_vertical_output_suffix)
-                        throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
-                    current_format = query_with_output->format->as<ASTIdentifier &>().name();
-                }
 
+            if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get()); query_with_output)
+            {
                 if (query_with_output->out_file)
                 {
-                    // const auto & out_file_node = query_with_output->out_file->as<ASTLiteral &>();
-                    // const auto & out_file = out_file_node.value.safeGet<std::string>();
-                    if (context->getSettingsRef().enable_async_execution)
-                    {
-                        throw Exception(
-                            "If you enable async execution on select query, please set outfile_in_server_with_tcp to 1 and make sure the "
-                            "outfile path is not local",
-                            ErrorCodes::BAD_ARGUMENTS);
-                    }
                     out_path.emplace(typeid_cast<const ASTLiteral &>(*query_with_output->out_file).value.safeGet<std::string>());
-                    // We are writing to file, so default format is the same as in non-interactive mode.
-                    if (is_interactive && query_with_output->format == nullptr && is_default_format)
-                        current_format = "TabSeparated";
+                    // If outfile to remote and is tenant user, set outfile_in_server_with_tcp true
+                    if (!Poco::URI(*out_path).getScheme().empty() && context->is_tenant_user())
+                        context->applySettingChange({"outfile_in_server_with_tcp", true});
+                }
 
-                    String compression_method_str;
-                    UInt64 compression_level = 1;
-                    OutfileTarget::setOutfileCompression(query_with_output, compression_method_str, compression_level);
+                if (!isOutfileInOtherPlace(context->getSettingsRef()))
+                {
+                    if (query_with_output->format != nullptr)
+                    {
+                        if (has_vertical_output_suffix)
+                            throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
+                        current_format = query_with_output->format->as<ASTIdentifier &>().name();
+                    }
 
-                    outfile_target = std::make_shared<OutfileTarget>(context, *out_path, current_format, compression_method_str, compression_level);
-                    out_buf = outfile_target->getOutfileBuffer(true).get();
+                    if (query_with_output->out_file)
+                    {
+                        // const auto & out_file_node = query_with_output->out_file->as<ASTLiteral &>();
+                        // const auto & out_file = out_file_node.value.safeGet<std::string>();
+                        if (context->getSettingsRef().enable_async_execution)
+                        {
+                            throw Exception(
+                                "If you enable async execution on select query, please set outfile_in_server_with_tcp to 1 and make sure "
+                                "the "
+                                "outfile path is not local",
+                                ErrorCodes::BAD_ARGUMENTS);
+                        }
+
+                        // We are writing to file, so default format is the same as in non-interactive mode.
+                        if (is_interactive && query_with_output->format == nullptr && is_default_format)
+                            current_format = "TabSeparated";
+
+                        String compression_method_str;
+                        UInt64 compression_level = 1;
+                        OutfileTarget::setOutfileCompression(query_with_output, compression_method_str, compression_level);
+
+                        outfile_target = std::make_shared<OutfileTarget>(
+                            context, *out_path, current_format, compression_method_str, compression_level);
+                        out_buf = outfile_target->getOutfileBuffer(true).get();
+                    }
                 }
             }
 
