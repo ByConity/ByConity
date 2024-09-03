@@ -758,10 +758,12 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
             }
             else
             {
-                auto input = storage->getInMemoryMetadataPtr()->getColumns().getAll();
+                Block header = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context)
+                                   ->getSampleBlockForColumns(getRequiredColumns());
+
                 Names output;
                 output.emplace_back(left_in_operand->getColumnName());
-                auto temp_actions = createExpressionActions(context, input, output, left_in_operand);
+                auto temp_actions = createExpressionActions(context, header.getNamesAndTypesList(), output, left_in_operand);
                 if (temp_actions->tryFindInOutputs(left_in_operand->getColumnName()))
                 {
                     makeExplicitSet(func, *temp_actions, true, context, size_limits_for_set, prepared_sets);
