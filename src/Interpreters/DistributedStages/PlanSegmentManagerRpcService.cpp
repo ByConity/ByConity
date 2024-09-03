@@ -39,6 +39,7 @@ namespace ErrorCodes
     extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
     extern const int QUERY_WAS_CANCELLED;
     extern const int QUERY_WAS_CANCELLED_INTERNAL;
+    extern const int TIMEOUT_EXCEEDED;
 }
 
 WorkerNodeResourceData ResourceMonitorTimer::getResourceData() const {
@@ -359,7 +360,21 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         /// Create session context for worker
         if (context->getServerType() == ServerType::cnch_worker)
         {
-            auto named_session = context->acquireNamedCnchSession(txn_id, {}, query_common->check_session());
+            size_t max_execution_time_ms = 0;
+            if (query_common->has_query_expiration_timestamp())
+            {
+                auto duration_ms = duration_ms_from_now(query_common->query_expiration_timestamp());
+                if (!duration_ms)
+                    throw Exception(
+                        ErrorCodes::TIMEOUT_EXCEEDED,
+                        "Max execution time exceeded before submit plan segment, try increase max_execution_time, current timestamp:{} "
+                        "expires at:{}",
+                        time_in_milliseconds(std::chrono::system_clock::now()),
+                        query_common->query_expiration_timestamp());
+                max_execution_time_ms = duration_ms.value();
+            }
+            auto named_session
+                = context->acquireNamedCnchSession(txn_id, (max_execution_time_ms / 1000) + 1, query_common->check_session());
             query_context = Context::createCopy(named_session->context);
             query_context->setSessionContext(query_context);
             query_context->setTemporaryTransaction(txn_id, primary_txn_id);
