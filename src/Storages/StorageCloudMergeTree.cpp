@@ -44,11 +44,6 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
-namespace ProfileEvents
-{
-    extern const Event PrunedPartitions;
-    extern const Event PreparePartsForReadMilliseconds;
-}
 
 namespace DB
 {
@@ -117,8 +112,10 @@ void StorageCloudMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
+    prepareDataPartsForRead();
+
     // need create IMergeTreeDataPart from loaded server parts when query with table version
-    prepareDataPartsForRead(local_context, query_info, column_names);
+    prepareServerDataPartsForRead(local_context, query_info, column_names);
 
     if (auto plan = MergeTreeDataSelectExecutor(*this).read(
             column_names, storage_snapshot, query_info, local_context, max_block_size, num_streams, processed_stage))
@@ -134,9 +131,6 @@ Pipe StorageCloudMergeTree::read(
     const size_t max_block_size,
     const unsigned num_streams)
 {
-    // need create IMergeTreeDataPart from loaded server parts when query with table version
-    prepareDataPartsForRead(local_context, query_info, column_names);
-
     QueryPlan plan;
     read(plan, column_names, storage_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
@@ -750,36 +744,11 @@ std::unique_ptr<MergeTreeSettings> StorageCloudMergeTree::getDefaultSettings() c
     return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
 }
 
-void StorageCloudMergeTree::prepareDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)
+Pipe StorageCloudMergeTree::preattachPartition(const PartitionCommand & command, [[maybe_unused]] ContextPtr local_context)
 {
-    Stopwatch watch;
-
-    std::lock_guard<std::mutex> lock(server_data_mutex);
-
-    if (!has_server_part_to_load)
-        return;
-
-    auto partition_list = getAllPartitions();
-
-    if (partition_list.empty())
-        return;
-
-    Strings required_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names, local_context);
-
-    SCOPE_EXIT({
-        ProfileEvents::increment(ProfileEvents::PrunedPartitions, required_partitions.size());
-        ProfileEvents::increment(ProfileEvents::PreparePartsForReadMilliseconds, watch.elapsedMilliseconds());
-    });
-
-    size_t loaded_parts_count = loadFromServerPartsInPartition(required_partitions);
-
-    /// data part only need to be loaded once
-    has_server_part_to_load = false;
-
-    LOG_TRACE(log, "Loaded {} data parts in {} partitions elapsed {}ms.",
-        loaded_parts_count,
-        required_partitions.size(),
-        watch.elapsedMilliseconds());
+    BlockInputStreamPtr in = std::make_shared<BitEngineEncodePartitionStream>(*this, command, local_context);
+    return Pipe{std::make_shared<SourceFromInputStream>(std::move(in))};
 }
+
 
 }

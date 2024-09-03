@@ -131,7 +131,6 @@ protected:
     const String cnch_table_name;
 
 private:
-    void prepareDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names);
 
     // Relative path to auxility storage disk root
     String relative_auxility_storage_path;

@@ -620,11 +620,11 @@ protected:
 
     /// track runtime server parts by partition id. Used when query by table version
     MergeTreePartitions data_partitions;
-    // Server dataparts with delete bitmap. should be protected by data part lock
-    ServerDataParts server_data_parts;
 
+    /// guard for loading server_data_parts (in TableVersion mode).
     mutable std::mutex server_data_mutex;
     mutable std::atomic<bool> has_server_part_to_load{false};
+    ServerDataParts server_data_parts;
 
 private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.

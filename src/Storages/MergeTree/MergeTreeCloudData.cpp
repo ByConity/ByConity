@@ -18,6 +18,12 @@
 #include <common/scope_guard_safe.h>
 #include <Protos/DataModelHelpers.h>
 
+namespace ProfileEvents
+{
+    extern const Event PrunedPartitions;
+    extern const Event PreparePartsForReadMilliseconds;
+}
+
 namespace DB
 {
 
@@ -221,7 +227,42 @@ void MergeTreeCloudData::loadDataParts(MutableDataPartsVector & parts, UInt64)
     LOG_DEBUG(log, "Loaded {} data parts in {} ms", data_parts_indexes.size(), stopwatch.elapsedMilliseconds());
 }
 
-void MergeTreeCloudData::loadServerDataPartsWithDBM(ServerDataPartsWithDBM && parts_with_dbm)
+void MergeTreeCloudData::receiveDataParts(MutableDataPartsVector && parts, UInt64)
+{
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    received_data_parts = std::move(parts);
+}
+
+void MergeTreeCloudData::receiveVirtualDataParts(MutableDataPartsVector && parts, UInt64)
+{
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    received_virtual_data_parts = std::move(parts);
+}
+
+void MergeTreeCloudData::prepareDataPartsForRead()
+{
+    Stopwatch watch;
+
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    if (data_parts_loaded)
+        return;
+
+    auto data_parts_size = received_data_parts.size();
+    auto virtual_parts_size = received_virtual_data_parts.size();
+
+    if (data_parts_size)
+        loadDataParts(received_data_parts);
+
+    if (virtual_parts_size)
+        loadDataParts(received_virtual_data_parts);
+
+    data_parts_loaded = true;
+
+    LOG_DEBUG(log, "Loaded {} data_parts, {} virtual_data_parts in {} microseconds",
+        data_parts_size, virtual_parts_size, watch.elapsedMicroseconds());
+}
+
+void MergeTreeCloudData::receiveServerDataPartsWithDBM(ServerDataPartsWithDBM && parts_with_dbm)
 {
     if (parts_with_dbm.first.empty())
         return;
@@ -253,7 +294,41 @@ void MergeTreeCloudData::loadServerDataPartsWithDBM(ServerDataPartsWithDBM && pa
         delete_bitmap_counter++;
     }
 
+    LOG_TRACE(log, "Received {} parts, {} bitmaps", part_counter, delete_bitmap_counter);
+
     has_server_part_to_load = true;
+}
+
+void MergeTreeCloudData::prepareServerDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)
+{
+    Stopwatch watch;
+
+    std::lock_guard<std::mutex> lock(server_data_mutex);
+
+    if (!has_server_part_to_load)
+        return;
+
+    auto partition_list = getAllPartitions();
+
+    if (partition_list.empty())
+        return;
+
+    Strings required_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names, local_context);
+
+    SCOPE_EXIT({
+        ProfileEvents::increment(ProfileEvents::PrunedPartitions, required_partitions.size());
+        ProfileEvents::increment(ProfileEvents::PreparePartsForReadMilliseconds, watch.elapsedMilliseconds());
+    });
+
+    size_t loaded_parts_count = loadFromServerPartsInPartition(required_partitions);
+
+    /// data part only need to be loaded once
+    has_server_part_to_load = false;
+
+    LOG_TRACE(log, "Loaded {} server data parts in {} partitions elapsed {}ms.",
+        loaded_parts_count,
+        required_partitions.size(),
+        watch.elapsedMilliseconds());
 }
 
 size_t MergeTreeCloudData::loadFromServerPartsInPartition(const Strings & required_partitions)
