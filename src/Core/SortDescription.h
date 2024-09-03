@@ -130,6 +130,7 @@ struct SortColumnDescription
 class SortDescription : public std::vector<SortColumnDescription>
 {
 public:
+    using vector::vector;
     bool hasPrefix(const SortDescription & prefix) const;
 };
 

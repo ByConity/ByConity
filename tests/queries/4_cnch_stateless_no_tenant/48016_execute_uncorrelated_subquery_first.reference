@@ -57,10 +57,11 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {a ASC NULLS LAST, b ASC NULLS LAST}
+         │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: a < 5
             └─ TableScan test.uncorrelated Est. ? rows
-                     Input Order Info: {a ASC NULLS LAST}
+                     Input Order Info: {a ASC ANY}
                      Where: a < 5
                      Outputs: [a, b]
 Projection Est. ? rows
@@ -70,10 +71,11 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {a ASC NULLS LAST, b ASC NULLS LAST}
+         │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: a < 10
             └─ TableScan test.uncorrelated Est. ? rows
-                     Input Order Info: {a ASC NULLS LAST}
+                     Input Order Info: {a ASC ANY}
                      Where: a < 10
                      Outputs: [a, b]
 Projection Est. ? rows
@@ -83,10 +85,11 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {a ASC NULLS LAST, b ASC NULLS LAST}
+         │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: a < 11
             └─ TableScan test.uncorrelated Est. ? rows
-                     Input Order Info: {a ASC NULLS LAST}
+                     Input Order Info: {a ASC ANY}
                      Where: a < 11
                      Outputs: [a, b]
 Projection Est. ? rows
@@ -96,8 +99,9 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {a ASC NULLS LAST}
+         │     Prefix Order: {a}
          └─ TableScan test.uncorrelated Est. ? rows
-                  Input Order Info: {a ASC NULLS LAST}
+                  Input Order Info: {a ASC ANY}
                   Outputs: [a]
 Projection Est. 0 rows, cost 0.000000e+00
 │     Expressions: [a]

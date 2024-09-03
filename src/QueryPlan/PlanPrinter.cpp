@@ -914,6 +914,14 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
 
+        if (!sort->getPrefixDescription().empty())
+        {
+            std::vector<String> prefix_sort_columns;
+            for (const auto & desc : sort->getPrefixDescription())
+                prefix_sort_columns.emplace_back(desc.column_name);
+            out << intent.detailIntent() << "Prefix Order: " << join(prefix_sort_columns, ", ", "{", "}");
+        }
+
         std::visit(
             overloaded{
                 [&](size_t x) {
