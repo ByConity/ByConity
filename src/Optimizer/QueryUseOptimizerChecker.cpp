@@ -192,7 +192,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
 
             if (!checkDatabaseAndTable(database, insert_query->table_id.getTableName(), context, {}))
             {
-                reason = "unsupported storage";
+                reason = "unsupported storage, database: " + database + ", table: " + insert_query->table_id.getTableName();
                 support = false;
             }
         }
@@ -247,6 +247,12 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
         return false;
     }
 
+    if (context.disallow_subquery)
+    {
+        reason = "lambda/nullIn/globalNullIn/notNullIn/globalNotNullIn function with subquery not implemented";
+        return false;
+    }
+
     if (select->group_by_with_totals && context.disallow_with_totals)
     {
         reason = "group by with totals only supports with totals at outmost select";
@@ -261,7 +267,7 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
     {
         if (!checkDatabaseAndTable(*table_expression, child_context.context, child_context.ctes))
         {
-            reason = "unsupported storage";
+            reason = "unsupported storage: " + table_expression->formatForErrorMessage();
             return false;
         }
         if (table_expression->table_function)
@@ -297,7 +303,7 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
     auto & fun = node->as<ASTFunction &>();
     if (fun.name == "untuple")
     {
-        reason = "unsupported function";
+        reason = "unsupported untuple function";
         return false;
     }
 
@@ -311,13 +317,17 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
                 table_expression.database_and_table_name = table;
                 if (!checkDatabaseAndTable(table_expression, context.context, context.ctes))
                 {
-                    reason = "unsupported storage";
+                    reason = "unsupported storage: " + table_expression.formatForErrorMessage();
                     return false;
                 }
             }
         }
     }
-    return visitNode(node, context);
+    bool disallow_subquery = context.disallow_subquery;
+    context.disallow_subquery = disallow_subquery || (fun.name == "lambda" || fun.name == "nullIn" || fun.name == "globalNullIn" || fun.name == "notNullIn" || fun.name == "globalNotNullIn");
+    bool support = visitNode(node, context);
+    context.disallow_subquery = disallow_subquery;
+    return support;
 }
 
 bool QueryUseOptimizerVisitor::visitASTQuantifiedComparison(ASTPtr & node, QueryUseOptimizerContext & context)
