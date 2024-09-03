@@ -470,8 +470,8 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                 if (!settings_io_buf->empty())
                 {
                     ReadBufferFromBrpcBuf settings_read_buf(*settings_io_buf);
-                    /// Sets an extra row policy based on `client_info.initial_user`
-                    query_context->setInitialRowPolicy();
+                    /// Sets an extra row policy based on `client_info.initial_user`, problematic for now
+                    // query_context->setInitialRowPolicy();
                     /// apply settings changed
                     const size_t MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS = 4;
                     if (query_common->brpc_protocol_minor_revision() >= MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS)
