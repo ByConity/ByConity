@@ -71,6 +71,11 @@
 #include <Storages/System/StorageSystemResourceGroups.h>
 #include <Storages/System/StorageSystemErrors.h>
 #include <Storages/System/StorageSystemDDLWorkerQueue.h>
+#include <Storages/System/StorageSystemAutoStatsManagerSettings.h>
+#include <Storages/System/StorageSystemAutoStatsManagerStatus.h>
+#include <Storages/System/StorageSystemAutoStatsScopeSettings.h>
+#include <Storages/System/StorageSystemAutoStatsUdiCounter.h>
+#include <Storages/System/StorageSystemStatisticsTableView.h>
 #if USE_RDKAFKA
 #include <Storages/System/StorageSystemKafkaTasks.h>
 #include <Storages/System/StorageSystemKafkaTables.h>
@@ -290,6 +295,11 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");
     attach<StorageSystemLockMap>(system_database, "lock_map");
     attach<StorageSystemHuAllocStats>( system_database, "hualloc_stats");
+    attach<StorageSystemAutoStatsManagerSettings>(system_database, "auto_stats_manager_settings");
+    attach<StorageSystemAutoStatsManagerStatus>(system_database, "auto_stats_manager_status");
+    attach<StorageSystemAutoStatsUdiCounter>(system_database, "memory_auto_stats_udi_counter");
+    attach<StorageSystemAutoStatsScopeSettings>(system_database, "auto_stats_scope_settings");
+    attach<StorageSystemStatisticsTableView>(system_database, "statistics_table_view");
 
     attach<StorageSystemWorkers>(system_database, "workers");
     attach<StorageSystemWorkerGroups>(system_database, "worker_groups");

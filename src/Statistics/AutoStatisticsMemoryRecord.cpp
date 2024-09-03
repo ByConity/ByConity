@@ -41,6 +41,18 @@ void AutoStatisticsMemoryRecord::addUdiCount(const TableKey & table_key, UInt64 
     }
 }
 
+auto AutoStatisticsMemoryRecord::getAll() -> std::map<TableKey, UInt64>
+{
+    std::shared_lock lck(impl->mu);
+    std::map<TableKey, UInt64> result;
+    for (auto & [k, v] : impl->table_udi)
+    {
+        result.emplace(k, v.load());
+    }
+
+    return result;
+}
+
 auto AutoStatisticsMemoryRecord::getAndClearAll() -> std::map<TableKey, UInt64>
 {
     std::unique_lock lck(impl->mu);
@@ -64,14 +76,17 @@ void ModifiedCounter::analyze(const StoragePtr & storage, const MutableMergeTree
         return;
     }
 
-    if (storage->getDatabaseName() == "system")
+
+    if (!storage || storage->is_detached || storage->is_dropped)
     {
         return;
     }
 
-    if (storage->is_detached || storage->is_dropped)
+    auto table_options = CatalogAdaptor::getTableOptionsForStorage(*storage);
+
+    if (!table_options.is_auto_updatable)
     {
-        return;
+        return;        
     }
 
     auto uuid = storage->getStorageUUID();
@@ -88,7 +103,7 @@ void ModifiedCounter::merge(const ModifiedCounter & right)
 
 void AutoStatisticsMemoryRecord::append(const ModifiedCounter & counter)
 {
-    if (!AutoStatisticsManager::configIsEnabled())
+    if (!AutoStatisticsManager::xmlConfigIsEnable())
         return;
 
     for (const auto & [uuid, count] : counter.counter)
@@ -100,7 +115,7 @@ void AutoStatisticsMemoryRecord::append(const ModifiedCounter & counter)
 
 void AutoStatisticsMemoryRecord::append(const std::unordered_map<UUID, UInt64> & counter)
 {
-    if (!AutoStatisticsManager::configIsEnabled())
+    if (!AutoStatisticsManager::xmlConfigIsEnable())
         return;
 
     for (const auto & [uuid, count] : counter)

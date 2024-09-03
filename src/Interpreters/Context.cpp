@@ -3871,6 +3871,16 @@ std::shared_ptr<CnchQueryLog> Context::getCnchQueryLog() const
     return shared->cnch_system_logs->getCnchQueryLog();
 }
 
+std::shared_ptr<CnchAutoStatsTaskLog> Context::getCnchAutoStatsTaskLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getCnchAutoStatsTaskLog();
+}
+
 std::shared_ptr<ViewRefreshTaskLog> Context::getViewRefreshTaskLog() const
 {
     auto lock = getLock(); // checked
@@ -5879,6 +5889,18 @@ void Context::waitReadFromClientFinished() const
     std::unique_lock lk(shared->read_mutex);
     if (!shared->read_cv.wait_for(lk, std::chrono::milliseconds(timeout), [this] { return read_from_client_finished; }))
         throw Exception("Timeout exceeded while reading data from client.", ErrorCodes::TIMEOUT_EXCEEDED);
+}
+
+void Context::setAutoStatisticsManager(std::unique_ptr<Statistics::AutoStats::AutoStatisticsManager> && manager)
+{
+    auto lock = getLock();//ok
+    shared->auto_stats_manager = std::move(manager);
+}
+
+Statistics::AutoStats::AutoStatisticsManager * Context::getAutoStatisticsManager() const
+{
+    auto lock = getLock();//ok
+    return shared->auto_stats_manager.get();
 }
 
 void Context::setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager)

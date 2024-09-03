@@ -1045,7 +1045,7 @@ void CnchServerServiceImpl::queryUdiCounter(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        Statistics::AutoStats::queryUdiCounter(request, response);
+        Statistics::AutoStats::queryUdiCounter(getContext(), request, response);
     }
     catch (...)
     {
@@ -1063,7 +1063,7 @@ void CnchServerServiceImpl::redirectUdiCounter(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        Statistics::AutoStats::redirectUdiCounter(request, response);
+        Statistics::AutoStats::redirectUdiCounter(getContext(), request, response);
     }
     catch (...)
     {
@@ -1083,7 +1083,7 @@ void CnchServerServiceImpl::scheduleDistributeUdiCount(
     try
     {
         (void)request;
-        if (auto auto_stats_manager = AutoStats::AutoStatisticsManager::tryGetInstance())
+        if (auto * auto_stats_manager = getContext()->getAutoStatisticsManager())
             auto_stats_manager->scheduleDistributeUdiCount();
     }
     catch (...)
@@ -1104,7 +1104,8 @@ void CnchServerServiceImpl::scheduleAutoStatsCollect(
     try
     {
         (void)request;
-        if (auto auto_stats_manager = AutoStats::AutoStatisticsManager::tryGetInstance())
+        auto context = getContext();
+        if (auto * auto_stats_manager = context->getAutoStatisticsManager())
             auto_stats_manager->scheduleCollect();
     }
     catch (...)

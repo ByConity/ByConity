@@ -71,6 +71,11 @@ public:
         return getTableOptions(table).is_collectable;
     }
 
+    // fast filter
+    static bool isDatabaseCollectable(const String & database_name);
+    static TableOptions getTableOptionsForStorage(IStorage & storage);
+
+    // normal filter
     TableOptions getTableOptions(const StatsTableIdentifier & table);
 
     bool isTableAutoUpdatable(const StatsTableIdentifier & table)

@@ -73,6 +73,8 @@
 #include <Parsers/ParserUndropQuery.h>
 #include <Parsers/ParserAlterDiskCacheQuery.h>
 #include <Parsers/ParserTransaction.h>
+#include "Parsers/TablePropertiesQueriesASTs.h"
+#include <Parsers/ParserAutoStatsQuery.h>
 
 namespace DB
 {
@@ -116,6 +118,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserRollbackQuery rollback_p;
     ParserExecutePreparedStatementQuery execute_p;
     ParserShowPreparedStatementQuery show_prepared;
+    ParserAutoStatsQuery auto_stats_p;
 
     ASTPtr query;
 
@@ -155,7 +158,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || begin_transaction_p.parse(pos, query, expected)
         || begin_p.parse(pos, query, expected)
         || commit_p.parse(pos, query, expected)
-        || rollback_p.parse(pos, query, expected);
+        || rollback_p.parse(pos, query, expected)
+        || auto_stats_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

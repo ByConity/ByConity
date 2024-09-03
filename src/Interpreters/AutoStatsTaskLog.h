@@ -2,7 +2,9 @@
 
 #include <Interpreters/SystemLog.h>
 #include <Statistics/AutoStatisticsHelper.h>
-
+#include <Core/NamesAndAliases.h>
+#include <Interpreters/SystemLog.h>
+#include <Interpreters/ClientInfo.h>
 
 /// Call this function on AutoStatsTask.
 
@@ -39,6 +41,11 @@ struct AutoStatsTaskLogElement
 class AutoStatsTaskLog : public SystemLog<AutoStatsTaskLogElement>
 {
     using SystemLog<AutoStatsTaskLogElement>::SystemLog;
+};
+
+class CnchAutoStatsTaskLog : public CnchSystemLog<AutoStatsTaskLogElement>
+{
+    using CnchSystemLog<AutoStatsTaskLogElement>::CnchSystemLog;
 };
 
 }

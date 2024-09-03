@@ -518,6 +518,10 @@
     M(RemoveColumnStatisticsFailed, "") \
     M(RemoveAllColumnStatisticsSuccess, "") \
     M(RemoveAllColumnStatisticsFailed, "") \
+    M(UpdateStatisticsSettingsFailed, "") \
+    M(UpdateStatisticsSettingsSuccess, "") \
+    M(GetStatisticsSettingsFailed, "") \
+    M(GetStatisticsSettingsSuccess, "") \
     M(UpdateSQLBindingFailed, "") \
     M(UpdateSQLBindingSuccess, "") \
     M(GetSQLBindingFailed, "") \

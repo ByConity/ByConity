@@ -40,32 +40,52 @@ CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
     return createCatalogAdaptorCnch(context);
 }
 
-CatalogAdaptor::TableOptions CatalogAdaptor::getTableOptions(const StatsTableIdentifier & table)
+
+using TableOptions = CatalogAdaptor::TableOptions;
+
+namespace
 {
+
     const auto unsupported = TableOptions{false, false};
     const auto full_supported = TableOptions{true, true};
     const auto only_manual = TableOptions{true, false};
+}
 
-    if (table.getDatabaseName() == "system" || table.getDatabaseName() == "cnch_system")
+bool CatalogAdaptor::isDatabaseCollectable(const String & database_name)
+{
+    static const std::set<String> reject_dbs = {"system", "cnch_system", "admin"};
+    return !reject_dbs.count(database_name);
+}
+
+TableOptions CatalogAdaptor::getTableOptionsForStorage(IStorage & storage)
+{
+    if (!isDatabaseCollectable(storage.getDatabaseName()))
     {
         return unsupported;
     }
 
-    auto storage = getStorageByTableId(table);
+    auto engine = storage.getName();
+    if (dynamic_cast<StorageCnchMergeTree *>(&storage))
+    {
+        return full_supported;
+    }
+    else if (engine == "Memory")
+        return only_manual;
+    else if (engine == "CnchHive")
+        return only_manual;
+    else
+        return unsupported;
+}
 
-    auto options = [&] {
-        auto engine = storage->getName();
-        if (dynamic_cast<StorageCnchMergeTree *>(storage.get()))
-        {
-            return full_supported;
-        }
-        else if (engine == "Memory")
-            return only_manual;
-        else if (engine == "CnchHive")
-            return only_manual;
-        else
-            return unsupported;
-    }();
+TableOptions CatalogAdaptor::getTableOptions(const StatsTableIdentifier & table)
+{
+    auto storage = getStorageByTableId(table);
+    if (!storage)
+    {
+        return unsupported;
+    }
+
+    auto options = getTableOptionsForStorage(*storage);
 
     if (!options.is_collectable)
         return options;

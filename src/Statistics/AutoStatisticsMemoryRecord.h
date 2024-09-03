@@ -18,6 +18,7 @@ public:
     void append(const std::unordered_map<UUID, UInt64> & counter);
 
     std::map<TableKey, UInt64> getAndClearAll();
+    std::map<TableKey, UInt64> getAll();
 
 
     static AutoStatisticsMemoryRecord & instance();

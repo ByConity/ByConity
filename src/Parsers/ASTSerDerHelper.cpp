@@ -18,6 +18,7 @@
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTAutoStatsQuery.h>
 #include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTClusterByElement.h>

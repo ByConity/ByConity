@@ -49,7 +49,7 @@ std::vector<TaskInfoLog> batchReadTaskLog(ContextPtr context, DateTime64 min_eve
     String table_sql = "system.auto_stats_task_log";
     auto select_sql = fmt::format(
         FMT_STRING(
-            " select event_time, task_uuid, task_type, table_uuid, stats_row_count, udi, priority, retry, status, settings_json, columns"
+            " select event_time, task_uuid, task_type, table_uuid, stats_row_count, udi, priority, retry, status, settings_json, columns, database, table"
             " from ("
             "    select"
             "    *,"

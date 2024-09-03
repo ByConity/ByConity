@@ -4,6 +4,7 @@
 #include <Statistics/StatsTableIdentifier.h>
 #include <Poco/Logger.h>
 #include <Common/SettingsChanges.h>
+#include <Statistics/ASTHelpers.h>
 
 namespace DB::Protos
 {
@@ -36,7 +37,7 @@ struct StatisticsSettings
     {
         std::optional<TableSettings> result = getByScopeImpl(scope);
         if (!result && scope.table)
-            result = getByScopeImpl(StatisticsScope{scope.database, scope.table});
+            result = getByScopeImpl(StatisticsScope{scope.database, std::nullopt});
         if (!result && scope.database)
             result = getByScopeImpl(StatisticsScope{});
         return result;

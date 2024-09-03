@@ -26,9 +26,9 @@ namespace AutoStatsImpl
 class DaemonJobAutoStatistics : public DaemonJob
 {
 public:
-    DaemonJobAutoStatistics(ContextMutablePtr global_context_) : DaemonJob(global_context_, CnchBGThreadType::AutoStatistics) { }
+    explicit DaemonJobAutoStatistics(ContextMutablePtr global_context_) : DaemonJob(global_context_, CnchBGThreadType::AutoStatistics) { }
     bool executeImpl() override;
-    static HostWithPortsVec getServerList(const ContextPtr & context);
+    static HostWithPortsVec getServerList(const ContextPtr & ctx);
 
 private:
     Poco::Logger * logger = &Poco::Logger::get("AutoStatsDaemon");

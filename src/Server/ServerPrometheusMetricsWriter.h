@@ -129,6 +129,10 @@ namespace ProfileEvents
     extern const Event RemoveColumnStatisticsFailed;
     extern const Event RemoveAllColumnStatisticsSuccess;
     extern const Event RemoveAllColumnStatisticsFailed;
+    extern const Event UpdateStatisticsSettingsSuccess;
+    extern const Event UpdateStatisticsSettingsFailed;
+    extern const Event GetStatisticsSettingsSuccess;
+    extern const Event GetStatisticsSettingsFailed;
     // extern const Event UpdateSQLBindingSuccess;
     // extern const Event UpdateSQLBindingFailed;
     // extern const Event GetSQLBindingSuccess;
@@ -736,6 +740,10 @@ private:
         ProfileEvents::RemoveColumnStatisticsFailed,
         ProfileEvents::RemoveAllColumnStatisticsSuccess,
         ProfileEvents::RemoveAllColumnStatisticsFailed,
+        ProfileEvents::UpdateStatisticsSettingsSuccess,
+        ProfileEvents::UpdateStatisticsSettingsFailed,
+        ProfileEvents::GetStatisticsSettingsSuccess,
+        ProfileEvents::GetStatisticsSettingsFailed,
         // ProfileEvents::UpdateSQLBindingSuccess,
         // ProfileEvents::UpdateSQLBindingFailed,
         // ProfileEvents::GetSQLBindingSuccess,

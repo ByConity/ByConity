@@ -22,25 +22,12 @@ public:
         const Protos::RefreshStatisticsCacheRequest * request,
         Protos::RefreshStatisticsCacheResponse * response,
         google::protobuf::Closure * done) override;
-#if 0
+
     void fetchStatisticsSettings(
         google::protobuf::RpcController * cntl,
         const Protos::FetchStatisticsSettingsRequest * request,
         Protos::FetchStatisticsSettingsResponse * response,
         google::protobuf::Closure * done) override;
-
-    void queryUdiCounter(
-        google::protobuf::RpcController * cntl,
-        const Protos::QueryUdiCounterRequest * request,
-        Protos::QueryUdiCounterResponse * response,
-        google::protobuf::Closure * done) override;
-
-    void ResetSQLBindingCache(
-        google::protobuf::RpcController * cntl,
-        const Protos::ResetSQLBindingCacheRequest * request,
-        Protos::ResetSQLBindingCacheResponse * response,
-        google::protobuf::Closure * done) override;
-#endif
 
 private:
     Poco::Logger * log = &Poco::Logger::get("OptimizerStatisticsService");

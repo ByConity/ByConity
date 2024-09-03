@@ -9,25 +9,24 @@
 #include <Statistics/TypeUtils.h>
 #include <fmt/format.h>
 #include <Common/SettingsChanges.h>
+#include "Interpreters/Context_fwd.h"
 
 namespace DB::Statistics
 {
 
 // In Memory Settings and its zookeeper mirror
-class SettingsManager
+class SettingsManager: WithContext
 {
 public:
     using TableSettings = StatisticsSettings::TableSettings;
     // TODO: change it to catalog
-    explicit SettingsManager(ContextPtr context)
+    explicit SettingsManager(ContextPtr context_): WithContext(context_)
     {
-        (void) context;
     }
 
-    void enableAutoStatsTasks(const StatisticsScope & scope, SettingsChanges settings_changes);
-    void disableAutoStatsTasks(const StatisticsScope & scope);
-
-    void alterManagerSettings(const SettingsChanges & settings);
+    // void enableAutoStatsTasks(const StatisticsScope & scope, SettingsChanges settings_changes);
+    // void disableAutoStatsTasks(const StatisticsScope & scope);
+    // void alterManagerSettings(const SettingsChanges & settings);
 
     TableSettings getTableSettings(const StatsTableIdentifier & identifier);
 
@@ -36,20 +35,14 @@ public:
     // only for show auto_stats command, always copy all to avoid data race
     auto getFullStatisticsSettings()
     {
-        initialize();
         std::shared_lock lck(mutex);
         return data;
     }
 
-    void initialize();
+    void loadSettingsFromXml(const Poco::Util::AbstractConfiguration & config);
 
 private:
-    // TODO: make it incremental
-    void flushSettings();
-    void loadSettings();
 
-    std::atomic_bool is_initialized = false;
-    // AutoStats::AutoStatisticsZk & auto_stats_zk;
     StatisticsSettings data;
     mutable std::shared_mutex mutex;
 };

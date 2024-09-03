@@ -4,6 +4,8 @@
 #include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/AutoStatisticsTaskQueue.h>
 #include <Statistics/StatsTableIdentifier.h>
+#include <Statistics/VersionHelper.h>
+#include <Statistics/ASTHelpers.h>
 
 namespace DB::Statistics::AutoStats
 {

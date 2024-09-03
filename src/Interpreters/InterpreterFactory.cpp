@@ -76,6 +76,12 @@
 #include <Parsers/ASTSwitchQuery.h>
 #include <Parsers/ASTUndropQuery.h>
 #include <Parsers/ASTUpdateQuery.h>
+#include <Parsers/ASTAutoStatsQuery.h>
+
+#include <Interpreters/InterpreterCreateFunctionQuery.h>
+#include <Interpreters/InterpreterDropFunctionQuery.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 
 #include <Interpreters/InterpreterAdviseQuery.h>
 #include <Interpreters/InterpreterAlterDiskCacheQuery.h>
@@ -143,6 +149,7 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Parsers/ASTAlterDiskCacheQuery.h>
+#include <Interpreters/InterpreterAutoStatsQuery.h>
 
 #include <Interpreters/MySQL/InterpretersAnalyticalMySQLDDLQuery.h>
 
@@ -469,6 +476,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTCreateStatsQuery>())
     {
         return std::make_unique<InterpreterCreateStatsQuery>(query, context);
+    }
+    else if (query->as<ASTAutoStatsQuery>())
+    {
+        return std::make_unique<InterpreterAutoStatsQuery>(query, context);
     }
     else if (query->as<ASTDropStatsQuery>())
     {

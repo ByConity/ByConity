@@ -44,8 +44,8 @@ void refreshClusterStatsCache(ContextPtr context, const StatsTableIdentifier & t
                 LOG_TRACE(log, "send refresh request to {}", addr_text);
                 // auto rpc_client = RpcChannelPool::getInstance().getClient(addr_text, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
 
-                std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(
-                    addr_text, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
+                std::shared_ptr<RpcClient> rpc_client
+                    = RpcChannelPool::getInstance().getClient(addr_text, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
 
                 auto stub_ptr = std::make_shared<Protos::OptimizerStatisticsService_Stub>(&rpc_client->getChannel());
 
@@ -90,48 +90,41 @@ StatisticsSettings fetchStatisticsSettings(ContextPtr context)
 #endif
 }
 
-std::map<std::pair<String, String>, UInt64> queryUdiCounter(ContextPtr context)
-{
-    (void)context;
-    throw Exception("not implemented", ErrorCodes::NOT_IMPLEMENTED);
-#if 0
-    auto cluster_name = fetchClusterName(context, /*force_error=*/true);
-    auto * log = &Poco::Logger::get("queryUdiCounter");
-    LOG_INFO(log, "query udi counter on {}", cluster_name);
-    auto cluster = context->getCluster(cluster_name)->getClusterWithReplicasAsShards(context->getSettingsRef());
+// std::map<UUID, UInt64> queryUdiCounter(ContextPtr context)
+// {
+//     (void)context;
+//     auto * log = &Poco::Logger::get("queryUdiCounter");
 
-    std::map<std::pair<String, String>, UInt64> result;
-    for (const auto & addrs : cluster->getShardsAddresses())
-    {
-        for (const Cluster::Address & addr : addrs)
-        {
-            auto addr_text = createHostPortString(addr.host_name, addr.exchange_status_port);
-            try
-            {
-                Protos::QueryUdiCounterRequest req;
-                brpc::Controller cntl;
-                auto rpc_client = RpcChannelPool::getInstance().getClient(addr_text, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
-                auto stub_ptr = std::make_shared<Protos::OptimizerStatisticsService_Stub>(&rpc_client->getChannel());
+//     std::map<UUID, UInt64> result;
 
-                Protos::QueryUdiCounterResponse resp;
-                stub_ptr->queryUdiCounter(&cntl, &req, &resp, nullptr);
-                LOG_INFO(log, "send queryUdiCounter request to {}", addr_text);
-                rpc_client->assertController(cntl);
+//     auto servers = DaemonManager::DaemonJobAutoStatistics::getServerList(context);
 
-                for (const auto & record : resp.records())
-                {
-                    auto db_tb = std::make_pair(record.database(), record.table());
-                    result[db_tb] += record.udi_count();
-                }
-            }
-            catch (...)
-            {
-                LOG_WARNING(log, "failed to query udi counter on {}, skipping", addr_text);
-                tryLogCurrentException(log);
-            }
-        }
-    }
-    return result;
-#endif
-}
+//     for (const auto & addr : servers)
+//     {
+//         auto addr_text = addr.getRPCAddress();
+//         try
+//         {
+//             Protos::QueryUdiCounterRequest req;
+//             brpc::Controller cntl;
+//             auto rpc_client = RpcChannelPool::getInstance().getClient(addr_text, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
+//             auto stub_ptr = std::make_shared<Protos::OptimizerStatisticsService_Stub>(&rpc_client->getChannel());
+//             Protos::QueryUdiCounterResponse resp;
+//             stub_ptr->queryUdiCounter(&cntl, &req, &resp, nullptr);
+//             LOG_INFO(log, "send queryUdiCounter request to {}", addr_text);
+//             rpc_client->assertController(cntl);
+
+//             for (const auto & record : resp.records())
+//             {
+//                 auto uuid = RPCHelpers::createUUID(record.uuid());
+//                 result[uuid] += record.udi_count();
+//             }
+//         }
+//         catch (...)
+//         {
+//             LOG_WARNING(log, "failed to query udi counter on {}, skipping", addr_text);
+//             tryLogCurrentException(log);
+//         }
+//     }
+//     return result;
+// }
 }

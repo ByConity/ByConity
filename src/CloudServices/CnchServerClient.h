@@ -26,7 +26,6 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Catalog/CatalogUtils.h>
 #include <Access/IAccessEntity.h>
-#include <Statistics/AutoStatisticsHelper.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <Databases/MySQL/MaterializedMySQLCommon.h>
 

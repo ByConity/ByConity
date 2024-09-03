@@ -1114,7 +1114,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 global_context->updateQueueManagerConfig();
                 global_context->updateAdaptiveSchdulerConfig();
-                if (auto auto_stats_manager = Statistics::AutoStats::AutoStatisticsManager::tryGetInstance())
+                if (auto * auto_stats_manager = global_context->getAutoStatisticsManager())
                 {
                     auto_stats_manager->prepareNewConfig(*config);
                 }
@@ -1911,7 +1911,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                                                                      "distributed_ddl", "DDLWorker", &CurrentMetrics::MaxDDLEntryID));
         }
 
-        if (global_context->getComplexQueryActive())
+        if (global_context->getServerType() == ServerType::cnch_server && global_context->getComplexQueryActive())
         {
             Statistics::CacheManager::initialize(global_context);
             BindingCacheManager::initializeGlobalBinding(global_context);

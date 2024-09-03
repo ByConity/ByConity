@@ -64,9 +64,11 @@ void convertFromProto(TaskInfoCore & core, const Protos::AutoStats::TaskInfoCore
 }
 
 // auto stats
-void queryUdiCounter(const Protos::QueryUdiCounterReq * request, Protos::QueryUdiCounterResp * response)
+void queryUdiCounter(ContextPtr context, const Protos::QueryUdiCounterReq * request, Protos::QueryUdiCounterResp * response)
 {
     (void)request;
+    (void)context;
+    // TODO: move memory record into context
     auto & instance = AutoStatisticsMemoryRecord::instance();
     auto result = instance.getAndClearAll();
 
@@ -78,11 +80,11 @@ void queryUdiCounter(const Protos::QueryUdiCounterReq * request, Protos::QueryUd
 }
 
 // write to internal_memory_record of AutoStatsManager
-void redirectUdiCounter(const Protos::RedirectUdiCounterReq * request, Protos::RedirectUdiCounterResp * response)
+void redirectUdiCounter(ContextPtr context, const Protos::RedirectUdiCounterReq * request, Protos::RedirectUdiCounterResp * response)
 {
     (void)response;
 
-    auto * manager = AutoStatisticsManager::tryGetInstance();
+    auto * manager = context->getAutoStatisticsManager();
     if (!manager)
         return;
 
@@ -144,26 +146,12 @@ void submitAsyncTasks(ContextPtr context, const std::vector<CollectTarget> & col
             }
         }
 
-        auto remote_target_server_opt = getRemoteTargetServerIfHas(context, storage.get());
-        if (!remote_target_server_opt.has_value())
-        {
-            // table should be handled on this server
-            local_tasks.emplace_back(std::move(core));
-            continue;
-        }
-        auto * task_pb = remote_requests[remote_target_server_opt.value()].Add();
-        convertToProto(core, *task_pb);
+        local_tasks.emplace_back(std::move(core));
     }
 
     for (auto & task : local_tasks)
     {
         writeTaskLog(context, task);
-    }
-
-    for (auto & [host_with_ports, tasks] : remote_requests)
-    {
-        auto server_cli = context->getCnchServerClientPool().get(host_with_ports);
-        server_cli->redirectAsyncStatsTasks(std::move(tasks));
     }
 }
 
