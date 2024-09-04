@@ -4,9 +4,9 @@ SELECT toDecimalString(2.123456, 2);  -- rounding
 SELECT toDecimalString(-2, 77);  -- more digits required than exist
 SELECT toDecimalString(-2.123456, 2);  -- rounding
 
-SELECT toDecimalString(2.9876, 60);  -- more digits required than exist (took 60 as it is float by default)
+SELECT toDecimalString(2.9876::Float64, 60);  -- more digits required than exist (took 60 as it is float by default)
 SELECT toDecimalString(2.1456, 2);  -- rounding
-SELECT toDecimalString(-2.9876, 60);  -- more digits required than exist
+SELECT toDecimalString(-2.9876::Float64, 60);  -- more digits required than exist
 SELECT toDecimalString(-2.1456, 2);  -- rounding
 
 -- Float32 and Float64 tests. No sense to test big float precision -- the result will be a mess anyway.

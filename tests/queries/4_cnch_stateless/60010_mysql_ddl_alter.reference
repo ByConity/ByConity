@@ -5,7 +5,7 @@ y	String	true
 z	Float32	true						
 z1	Float32	true						
 z2	String	false						
-z3	Array(Int32 NOT NULL)	true						
+z3	Array(Int32)	true						
 z4	DateTime	true		DEFAULT	\'2024-02-24 17:00:00\'			
 0	0	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
 1	1	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
@@ -17,7 +17,7 @@ y	String	true		DEFAULT	\'hello\'
 z	Float64	true		DEFAULT	\'1.2\'			
 z1	Float32	true						
 z2	String	true						
-z3	Array(Int32 NOT NULL)	true						
+z3	Array(Int32)	true						
 z4	DateTime	true		DEFAULT	\'2024-02-24 17:00:00\'			
 0	0	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00
 1	1	hello	1	\N	world	[1,2,3]	2024-02-24 17:00:00

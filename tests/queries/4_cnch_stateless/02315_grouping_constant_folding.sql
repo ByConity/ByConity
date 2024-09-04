@@ -5,6 +5,8 @@ CREATE TABLE test02315(a UInt64, b UInt64) ENGINE=CnchMergeTree() ORDER BY (a, b
 
 INSERT INTO test02315 SELECT number % 2 as a, number as b FROM numbers(10);
 
+set dialect_type='CLICKHOUSE';
+
 -- { echoOn }
 SELECT count() AS amount, a, b, GROUPING(a, b) FROM test02315 GROUP BY GROUPING SETS ((a, b), (a), ()) ORDER BY (amount, a, b);
 

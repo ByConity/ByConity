@@ -3,6 +3,8 @@ set send_logs_level = 'none';
 
 drop table if exists test_stack;
 
+set parse_literal_as_decimal=0;
+
 create table test_stack(date Date, x Int32) engine = CnchMergeTree partition by date order by x;
 insert into test_stack values ('2019-11-01', 1), ('2019-11-01', 3), ('2019-10-01', 6);
 insert into test_stack values ('2019-11-01', 6), ('2019-11-01', 4), ('2019-10-01', 1);

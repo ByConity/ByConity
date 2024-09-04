@@ -4,8 +4,8 @@ CREATE TABLE versioned_collapsing (
     UserID UInt64,
     PageViews UInt8,
     Duration UInt8,
-    Sign Int8,
-    Version UInt8
+    Sign Int8 NOT NULL,
+    Version UInt8 NOT NULL
 )
 Engine=CnchVersionedCollapsingMergeTree(Sign, Version)
 ORDER BY UserID
@@ -26,7 +26,7 @@ CREATE TABLE collapsing (
     UserID UInt64,
     PageViews UInt8,
     Duration UInt8,
-    Sign Int8
+    Sign Int8 NOT NULL
 )
 Engine=CnchCollapsingMergeTree(Sign)
 ORDER BY UserID
@@ -47,7 +47,7 @@ CREATE TABLE replacing (
     UserID UInt64,
     PageViews UInt8,
     Duration UInt8,
-    Version Int8
+    Version Int8 NOT NULL
 )
 Engine=CnchReplacingMergeTree(Version)
 ORDER BY UserID

@@ -1,6 +1,8 @@
 USE test;
 DROP TABLE if exists test_stack;
 
+set parse_literal_as_decimal=0;
+
 CREATE TABLE test_stack(p_date Date, x Int32) Engine = CnchMergeTree PARTITION BY p_date ORDER BY x;
 INSERT INTO test_stack VALUES ('2019-11-01', 1), ('2019-11-01', 3), ('2019-10-01', 6);
 INSERT INTO test_stack VALUES ('2019-11-01', 6), ('2019-11-01', 4), ('2019-10-01', 1);
