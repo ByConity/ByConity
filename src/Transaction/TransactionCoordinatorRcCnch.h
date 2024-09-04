@@ -188,7 +188,6 @@ private:
     mutable std::mutex min_ts_mutex;
     std::map<TxnTimestamp, std::map<UUID, StorageID>> timestamp_to_tables;
     std::map<UUID, std::set<TxnTimestamp>> table_to_timestamps;
-    uint64_t last_time_clean_timestamps;
 
     // TimestampCacheManagerPtr ts_cache_manager;
     TransactionCleanerPtr txn_cleaner;
