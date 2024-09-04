@@ -315,12 +315,12 @@ struct GinIndexStoreCacheSettings
     size_t lru_max_size {5368709120/*5GB*/};
 
     // Cache mapping bucket size
-    size_t mapping_bucket_size {5000};
+    size_t mapping_bucket_size {1000};
 
     // LRU queue update interval in seconds
     size_t lru_update_interval {60};
 
-    size_t cache_shard_num {8};
+    size_t cache_shard_num {2};
 };
 
 struct GinIndexStoreWeightFunction
@@ -339,6 +339,9 @@ public:
     /// TODO get with data part or segment and batter cache info
     ///Get GinIndexStore by using index name and data part
     GinIndexStorePtr get(const String & name, GinDataPartHelperPtr && storage_info);
+
+    size_t count() const { return stores_lru_cache.count(); }
+    size_t weight() const { return stores_lru_cache.weight(); }
 
     /// GinIndexStores indexed by part file path
     using GinIndexStores = std::unordered_map<std::string, GinIndexStorePtr>;
