@@ -1,5 +1,6 @@
 #include <Statistics/ASTHelpers.h>
 
+#include <Access/ContextAccess.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/StatsTableIdentifier.h>
 #include <Storages/StorageMaterializedView.h>
@@ -10,11 +11,31 @@ std::vector<StatsTableIdentifier> getTablesFromScope(ContextPtr context, const S
 {
     std::vector<StatsTableIdentifier> tables;
     auto catalog = createCatalogAdaptor(context);
+
     if (!scope.database)
     {
-        for (const auto & db : DatabaseCatalog::instance().getDatabases(context))
+        const auto access = context->getAccess();
+        const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_DATABASES);
+        const String tenant_id = context->getTenantId();
+        for (const auto & [database_name, db] : DatabaseCatalog::instance().getDatabases(context))
         {
-            auto new_tables = catalog->getAllTablesID(db.first);
+            String database_strip_tenantid = database_name;
+            if (!tenant_id.empty())
+            {
+                if (startsWith(database_name, tenant_id + "."))
+                    database_strip_tenantid = getOriginalDatabaseName(database_name, tenant_id);
+                // Will skip database of other tenants and default user (without tenantid prefix)
+                else if (database_name.find('.') != std::string::npos || !DatabaseCatalog::isDefaultVisibleSystemDatabase(database_name))
+                    continue;
+            }
+
+            if (check_access_for_databases && !access->isGranted(AccessType::SHOW_DATABASES, database_name))
+                continue;
+
+            if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
+                continue; /// We don't want to show the internal database for temporary tables in system.databases
+
+            auto new_tables = catalog->getAllTablesID(database_name);
             tables.insert(tables.end(), new_tables.begin(), new_tables.end());
         }
     }

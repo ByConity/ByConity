@@ -3,6 +3,7 @@ USE test;
 
 set data_type_default_nullable=1;
 
+drop table if exists 48037_table;
 CREATE TABLE 48037_table
 (
     `int_col_1` UInt64 NOT NULL,

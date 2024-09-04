@@ -8,27 +8,33 @@
 7	8
 8	9
 10	11
-Projection est. ? rows
+Projection Est. ? rows
 │     Expressions: [a, b]
-└─ Sorting est. ? rows
-   │     Order by: {a asc}
-   └─ Gather Exchange est. ? rows
-      └─ Sorting est. ? rows
-         │     Order by: {a asc}
-         └─ Filter est. ? rows
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ Filter Est. ? rows
             │     Condition: multiIf(a = 6, a + a, b + a) > 10
-            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
+            └─ TableScan test.multiIf Est. ? rows
+                     Input Order Info: {a ASC ANY}
+                     Where: multiIf(a = 6, a + a, b + a) > 10
                      Outputs: [a, b]
-Projection est. ? rows
+Projection Est. ? rows
 │     Expressions: [a, b]
-└─ Sorting est. ? rows
-   │     Order by: {a asc}
-   └─ Gather Exchange est. ? rows
-      └─ Sorting est. ? rows
-         │     Order by: {a asc}
-         └─ Filter est. ? rows
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ Filter Est. ? rows
             │     Condition: multiIf(a = 3, b + b, a * a) > 10
-            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
+            └─ TableScan test.multiIf Est. ? rows
+                     Input Order Info: {a ASC ANY}
+                     Where: multiIf(a = 3, b + b, a * a) > 10
                      Outputs: [a, b]
 5	6
 6	7
@@ -38,25 +44,30 @@ Projection est. ? rows
 7	8
 8	9
 10	11
-Projection est. ? rows
+Projection Est. ? rows
 │     Expressions: [a, b]
-└─ Sorting est. ? rows
-   │     Order by: {a asc}
-   └─ Gather Exchange est. ? rows
-      └─ Sorting est. ? rows
-         │     Order by: {a asc}
-         └─ Filter est. ? rows
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ Filter Est. ? rows
             │     Condition: (a + 2) < 10
-            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
+            └─ TableScan test.multiIf Est. ? rows
+                     Input Order Info: {a ASC ANY}
+                     Where: (a + 2) < 10
                      Outputs: [a, b]
-Projection est. ? rows
+Projection Est. ? rows
 │     Expressions: [a, b]
-└─ Sorting est. ? rows
-   │     Order by: {a asc}
-   └─ Gather Exchange est. ? rows
-      └─ Sorting est. ? rows
-         │     Order by: {a asc}
-         └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ TableScan test.multiIf Est. ? rows
+                  Input Order Info: {a ASC ANY}
                   Outputs: [a, b]
 5	6
 5	6
@@ -64,23 +75,28 @@ Projection est. ? rows
 7	8
 8	9
 10	11
-Projection est. ? rows
+Projection Est. ? rows
 │     Expressions: [a, b]
-└─ Sorting est. ? rows
-   │     Order by: {a asc}
-   └─ Gather Exchange est. ? rows
-      └─ Sorting est. ? rows
-         │     Order by: {a asc}
-         └─ Filter est. ? rows
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ Filter Est. ? rows
             │     Condition: (a + 4) < 10
-            └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
+            └─ TableScan test.multiIf Est. ? rows
+                     Input Order Info: {a ASC ANY}
+                     Where: (a + 4) < 10
                      Outputs: [a, b]
-Projection est. ? rows
+Projection Est. ? rows
 │     Expressions: [a, b]
-└─ Sorting est. ? rows
-   │     Order by: {a asc}
-   └─ Gather Exchange est. ? rows
-      └─ Sorting est. ? rows
-         │     Order by: {a asc}
-         └─ TableScan ${TENANT_DB_PREFIX}test.multiIf est. ? rows
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST}
+         │     Prefix Order: {a}
+         └─ TableScan test.multiIf Est. ? rows
+                  Input Order Info: {a ASC ANY}
                   Outputs: [a, b]

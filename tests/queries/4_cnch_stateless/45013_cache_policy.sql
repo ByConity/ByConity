@@ -5,6 +5,7 @@ drop table if exists t3;
 drop table if exists t4;
 set dialect_type='CLICKHOUSE';
 set enable_optimizer=1;
+drop database if exists cache_policy_45013;
 create database cache_policy_45013;
 use cache_policy_45013;
 
