@@ -15,18 +15,20 @@
 
 #pragma once
 
-#include <Common/Exception.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/VirtualWarehouseQueue.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/VWScheduleAlgo.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
+#include <Common/Exception.h>
+#include <Core/SettingsEnums.h>
 
 #include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 #include <vector>
 #include <boost/noncopyable.hpp>
 
@@ -42,6 +44,22 @@ class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
+
+struct ComplementResult
+{
+    explicit ComplementResult(size_t target_index_) : target_index(target_index_) {}
+    size_t target_index {0};
+    std::optional<size_t> source_index;
+    size_t candidate_index {0};
+    HostWithPorts host_ports;
+    WorkerMetrics worker_metrics;
+};
+
+struct WorkerComplement
+{
+    std::vector<bool> candidates;
+    std::vector<ComplementResult> complement_infos;
+};
 
 enum class VirtualWarehouseHandleSource
 {
@@ -106,7 +124,13 @@ public:
     size_t getNumWorkers(UpdateMode mode = NoUpdate);
 
     WorkerGroupHandle getWorkerGroup(const String & worker_group_id, UpdateMode mode = TryUpdate);
-    WorkerGroupHandle pickWorkerGroup(VWScheduleAlgo query_algo, const Requirement & requirement = {}, UpdateMode mode = TryUpdate);
+    WorkerGroupHandle pickWorkerGroup(
+        VWScheduleAlgo query_algo,
+        bool use_router = false,
+        VWLoadBalancing load_balance = VWLoadBalancing::RANDOM,
+        const Requirement & requirement = {},
+        UpdateMode mode = TryUpdate
+        );
     WorkerGroupHandle pickLocally(const VWScheduleAlgo & algo, const Requirement & requirement = {});
     WorkerGroupHandle randomWorkerGroup(UpdateMode mode = TryUpdate);
     std::optional<HostWithPorts> tryPickWorkerFromRM(VWScheduleAlgo algo, const Requirement & requirement = {});
@@ -131,6 +155,10 @@ public:
         return queue_manager.enqueue(queue_info, timeout_ms);
     }
     VirtualWarehouseQueueManager & getQueueManager() { return queue_manager; }
+
+    std::optional<WorkerComplement> complementPhysicalWorkerGroup(WorkerGroupData & common_group, const WorkerGroupData & completion_group);
+
+    void updatePriorityGroups();
 private:
     bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);
 
@@ -162,6 +190,8 @@ private:
 
     mutable std::mutex state_mutex;
     Container worker_groups;
+    using PriorityGroups = std::pair<Int64, std::vector<WorkerGroupHandle>>;
+    std::vector<PriorityGroups> priority_groups;
     std::atomic<size_t> pick_group_sequence = 0; /// round-robin index for pickWorkerGroup.
     VirtualWarehouseQueueManager queue_manager;
 };

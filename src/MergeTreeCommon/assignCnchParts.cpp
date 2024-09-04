@@ -89,26 +89,12 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
         }
         case Context::PartAllocator::RING_CONSISTENT_HASH:
         {
-            if (!worker_group->hasRing())
-            {
-                LOG_WARNING(
-                    log,
-                    "Attempt to use ring-base consistent hash, but ring is empty; build it now");
-                worker_group->buildRing();
-            }
             auto ret = assignCnchPartsWithRingAndBalance(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts);
             reportStats(log, ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
             return ret;
         }
         case Context::PartAllocator::STRICT_RING_CONSISTENT_HASH:
         {
-            if (!worker_group->hasRing())
-            {
-                LOG_WARNING(
-                    log,
-                    "Attempt to use ring-base consistent hash, but ring is empty; build it now");
-                worker_group->buildRing();
-            }
             auto ret = assignCnchPartsWithStrictBoundedHash(log, worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts, true);
             reportStats(log, ret, "Strict Consistent Hash", worker_group->getRing().size());
             return ret;
@@ -768,12 +754,6 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
     else
         part_allocation_algorithm = worker_group->getContext()->getHybridPartAllocationAlgo();
 
-    if (part_allocation_algorithm != Context::HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH && !worker_group->hasRing())
-    {
-        LOG_WARNING(log, "Attempt to use ring-base consistent hash, but ring is empty; build it now");
-        worker_group->buildRing();
-    }
-
     switch (part_allocation_algorithm)
     {
         case Context::HybridPartAllocator::HYBRID_MODULO_CONSISTENT_HASH: {
@@ -809,4 +789,39 @@ std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
     }
 }
 
+void filterParts(IMergeTreeDataPartsVector & parts, const SourceTaskFilter & filter)
+{
+    if (filter.index && filter.count)
+    {
+        size_t index = *filter.index, count = *filter.count;
+        if (count == 0 || index >= count)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot filterParts, invalid {}", filter.toString());
+        size_t c = 0;
+        for (auto iter = parts.begin(); iter != parts.end();)
+        {
+            if (c % count != index)
+                iter = parts.erase(iter);
+            else
+                iter++;
+            c++;
+        }
+    }
+    else if (filter.buckets)
+    {
+        const auto & buckets = *filter.buckets;
+        if (buckets.size() == 1 && *buckets.begin() == -1)
+        {
+            parts.clear();
+            return;
+        }
+        for (auto iter = parts.begin(); iter != parts.end();)
+        {
+            const auto & part = *iter;
+            if (!buckets.contains(part->bucket_number))
+                iter = parts.erase(iter);
+            else
+                iter++;
+        }
+    }
+}
 }

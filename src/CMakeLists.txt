@@ -436,6 +436,7 @@ target_link_libraries(clickhouse_common_io
             ipdb
             maxminddb
             libmetrics2
+            consistent-hashing
             ch_contrib::re2
         PRIVATE
             ${UDNS_LIBRARIES}

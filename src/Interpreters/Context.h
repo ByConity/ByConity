@@ -81,6 +81,10 @@ namespace DB::Statistics
 {
 struct StatisticsMemoryStore;
 }
+namespace DB::Statistics::AutoStats 
+{
+class AutoStatisticsManager;
+}
 namespace zkutil
 {
 class ZooKeeper;
@@ -157,6 +161,7 @@ class ProcessorsProfileLog;
 class RemoteReadLog;
 class ZooKeeperLog;
 class CnchQueryLog;
+class CnchAutoStatsTaskLog;
 class ViewRefreshTaskLog;
 class AutoStatsTaskLog;
 struct ViewRefreshTaskLogElement;
@@ -648,6 +653,8 @@ class Context : public ContextData, public std::enable_shared_from_this<Context>
 private:
     /// ContextData mutex
     mutable SharedMutex mutex;
+
+    String query_plan;
 
     Context();
     Context(const Context &);
@@ -1188,6 +1195,13 @@ public:
 
     UInt32 getZooKeeperSessionUptime() const;
 
+    void addQueryPlanInfo(String & query_plan_) 
+    {
+        this->query_plan = query_plan_;
+    }
+
+    String getQueryPlan() {return query_plan;}
+
 #if USE_NURAFT
     std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
 #endif
@@ -1332,6 +1346,7 @@ public:
     void initializeCnchSystemLogs();
     void insertViewRefreshTaskLog(const ViewRefreshTaskLogElement & element) const;
     std::shared_ptr<CnchQueryLog> getCnchQueryLog() const;
+    std::shared_ptr<CnchAutoStatsTaskLog> getCnchAutoStatsTaskLog() const;
     std::shared_ptr<ViewRefreshTaskLog> getViewRefreshTaskLog() const;
 
     const MergeTreeSettings & getMergeTreeSettings(bool skip_unknown_settings = false) const;
@@ -1697,6 +1712,9 @@ public:
     bool isEnabledWorkerFaultTolerance() const { return enable_worker_fault_tolerance; }
     void enableWorkerFaultTolerance() { enable_worker_fault_tolerance = true; }
     void disableWorkerFaultTolerance() { enable_worker_fault_tolerance = false; }
+
+    void setAutoStatisticsManager(std::unique_ptr<Statistics::AutoStats::AutoStatisticsManager> && manager);
+    Statistics::AutoStats::AutoStatisticsManager * getAutoStatisticsManager() const;
 
     void setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager);
     PlanCacheManager* getPlanCacheManager();

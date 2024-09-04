@@ -1,14 +1,23 @@
+#include <algorithm>
+#include <iterator>
+#include <limits>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <Interpreters/NodeSelector.h>
+#include <QueryPlan/TableScanStep.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <bthread/mutex.h>
 #include <Common/Exception.h>
-#include <common/defines.h>
 #include <Common/HostWithPorts.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 
@@ -118,13 +127,141 @@ NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_con
     return result;
 }
 
+void divideSourceTaskByBucket(
+    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    size_t weight_sum,
+    size_t parallel_size,
+    NodeSelectorResult & result)
+{
+    if (payloads.empty() || parallel_size == 0)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            fmt::format("Invalid argument for divideSourceTaskByBucket payloads.size:{} parallel_size:{}", payloads.size(), parallel_size));
+
+    size_t assigned_instances = 0;
+    while (assigned_instances < parallel_size)
+    {
+        for (const auto & [addr, payload_on_worker] : payloads)
+        {
+            size_t weight = payload_on_worker.rows;
+            size_t to_be_assigned = weight_sum == 0 ? 0 : weight * parallel_size / weight_sum;
+            /// to_be_assigned <= bucket_groups.size, as to avoid empty plan segment instance.
+            to_be_assigned = std::min(to_be_assigned, payload_on_worker.bucket_groups.size());
+            size_t already_assigned = std::min(to_be_assigned, result.buckets_on_workers[addr].size());
+            to_be_assigned = to_be_assigned - already_assigned;
+            ///  make sure there is no infinte loop
+            to_be_assigned = std::max(1UL, to_be_assigned);
+            for (size_t p = 0; p < to_be_assigned && assigned_instances < parallel_size; p++)
+            {
+                result.buckets_on_workers[addr].emplace_back(std::set<Int64>{});
+                result.worker_nodes.emplace_back(WorkerNode(addr, NodeType::Remote, payload_on_worker.worker_id));
+                assigned_instances++;
+            }
+        }
+    }
+
+    for (const auto & [addr, payload_on_worker] : payloads)
+    {
+        auto & buckets_on_worker = result.buckets_on_workers[addr];
+        const auto & bucket_groups = payload_on_worker.bucket_groups;
+        auto step = buckets_on_worker.empty() ? 1 : std::max(1UL, bucket_groups.size() / buckets_on_worker.size());
+        size_t p_id = 0;
+        auto start_iter = bucket_groups.begin();
+        auto end_iter = bucket_groups.begin();
+        size_t last_start = 0, last_end = 0;
+        for (auto & buckets : buckets_on_worker)
+        {
+            auto start = std::min(p_id * step, bucket_groups.size());
+            auto end = std::min((p_id + 1) * step, bucket_groups.size());
+            if (p_id + 1 == buckets_on_worker.size())
+                end = bucket_groups.size();
+            std::advance(start_iter, start - last_start);
+            std::advance(end_iter, end - last_end);
+            last_start = start;
+            last_end = end;
+            for (auto ii = start_iter; ii != end_iter; std::advance(ii, 1))
+            {
+                const auto & bucket_group = ii->second;
+                buckets.insert(bucket_group.begin(), bucket_group.end());
+            }
+            if (start == end)
+                buckets.insert(kInvalidBucketNumber); // insert one invalid bucket number to mark empty set. used by filterParts
+            p_id++;
+        }
+    }
+}
+
+void divideSourceTaskByPart(
+    const std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payloads,
+    size_t weight_sum,
+    size_t parallel_size,
+    NodeSelectorResult & result)
+{
+    if (payloads.empty() || parallel_size == 0)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            fmt::format("Invalid argument for divideSourceTaskByPart payloads.size:{} parallel_size:{}", payloads.size(), parallel_size));
+
+    size_t assigned_instances = 0;
+    while (assigned_instances < parallel_size)
+    {
+        for (auto iter = payloads.begin(); iter != payloads.end() && assigned_instances < parallel_size; iter++)
+        {
+            const auto & addr = iter->first;
+            const auto & payload_on_worker = iter->second;
+            size_t weight = payload_on_worker.rows;
+            size_t to_be_assigned = weight_sum == 0 ? 0 : weight * parallel_size / weight_sum;
+            /// to_be_assigned <= part num, as to avoid empty plan segment instance.
+            to_be_assigned = std::min(to_be_assigned, payload_on_worker.part_num);
+            size_t already_assigned = std::min(to_be_assigned, result.source_task_count_on_workers[addr]);
+            to_be_assigned = to_be_assigned - already_assigned;
+            ///  make sure there is no infinte loop
+            to_be_assigned = std::max(1UL, to_be_assigned);
+            for (size_t p = 0; p < to_be_assigned && assigned_instances < parallel_size; p++)
+            {
+                result.source_task_count_on_workers[addr]++;
+                result.worker_nodes.emplace_back(WorkerNode(addr, NodeType::Remote, iter->second.worker_id));
+                assigned_instances++;
+            }
+        }
+    }
+}
+
+/// get min buckets from storage input if possible, or else return kInvalidBucketNumber
+Int64 getMinNumOfBuckets(const PlanSegmentInputs & inputs)
+{
+    if (inputs.empty())
+        return kInvalidBucketNumber;
+    Int64 min_bucket_number = inputs[0]->getNumOfBuckets();
+    std::vector<Int64> nums_of_buckets;
+    nums_of_buckets.reserve(inputs.size());
+    for (const auto & input : inputs)
+    {
+        Int64 bucket_number = input->getNumOfBuckets();
+        min_bucket_number = std::min(min_bucket_number, bucket_number);
+        if (bucket_number != kInvalidBucketNumber)
+            nums_of_buckets.emplace_back(bucket_number);
+    }
+
+    if (min_bucket_number != kInvalidBucketNumber)
+    {
+        for (auto iter : nums_of_buckets)
+        {
+            if (iter % min_bucket_number != 0)
+                return kInvalidBucketNumber;
+        }
+    }
+
+    return min_bucket_number;
+}
+
 NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
     bool need_stable_schedule = needStableSchedule(plan_segment_ptr);
     NodeSelectorResult result;
     // The one worker excluded is server itself.
-    const auto worker_number = cluster_nodes.all_workers.size() - 1;
+    const auto worker_number = cluster_nodes.all_workers.empty() ? 0 : cluster_nodes.all_workers.size() - 1;
     if (plan_segment_ptr->getParallelSize() > worker_number && (!query_context->getSettingsRef().bsp_mode || need_stable_schedule))
     {
         throw Exception(
@@ -134,40 +271,19 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
             worker_number);
     }
 
-    // If parallelism is greater than the worker number, we split the parts according to the input size.
-    if (plan_segment_ptr->getParallelSize() > worker_number)
-    {
-        std::unordered_map<HostWithPorts, size_t> size_per_worker;
-        for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
-        {
-            auto storage_id = plan_segment_input->getStorageID();
-            if (storage_id && storage_id->hasUUID())
-            {
-                const auto & size_map = query_context->getCnchServerResource()->getResourceSizeMap(storage_id->uuid);
-                for (const auto & [h, s] : size_map)
-                {
-                    auto & size_on_this_worker = size_per_worker[h];
-                    if (size_on_this_worker)
-                        size_on_this_worker += s;
-                    else
-                        size_on_this_worker = s;
-                }
-            }
-        }
-        /// TODO(WangTao): Use more fine grained assigned algorithm.
-        size_t sum = 0;
-        for (const auto & [h, current_size] : size_per_worker)
-        {
-            sum += current_size;
-        }
-        size_t avg = sum / plan_segment_ptr->getParallelSize() + 1;
-        if (sum < plan_segment_ptr->getParallelSize())
-            sum = 0;
-        if (sum > 0)
+    /// will be obsolete in the future
+    auto old_func = [&](std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> & payload_on_workers,
+                        size_t rows_count,
+                        size_t parallel_size) {
+        size_t avg = rows_count / parallel_size + 1;
+        if (rows_count < parallel_size)
+            rows_count = 0;
+        if (rows_count > 0)
         {
             // Assign parallelism accroding to regular average size.
-            for (auto & [h, s] : size_per_worker)
+            for (auto & [addr, payload] : payload_on_workers)
             {
+                size_t s = payload.rows;
                 size_t p = s / avg;
                 if (p > 0)
                 {
@@ -180,37 +296,88 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
                 }
                 for (size_t i = 0; i < p; i++)
                 {
-                    auto worker_address = getRemoteAddress(h, query_context);
-                    result.worker_nodes.emplace_back(worker_address, NodeType::Remote, h.id);
+                    result.worker_nodes.emplace_back(addr, NodeType::Remote, payload.worker_id);
+                    result.source_task_count_on_workers[addr]++;
                 }
             }
         }
         // Assign parallelism according to major part(>0.5) of average size, if needed.
-        if (result.worker_nodes.size() < plan_segment_ptr->getParallelSize())
+        if (result.worker_nodes.size() < parallel_size)
         {
-            for (auto & [h, s] : size_per_worker)
+            for (auto & [addr, payload] : payload_on_workers)
             {
+                size_t s = payload.rows;
                 if (s * 2 > avg)
                 {
-                    auto worker_address = getRemoteAddress(h, query_context);
-                    result.worker_nodes.emplace_back(worker_address, NodeType::Remote, h.id);
+                    result.worker_nodes.emplace_back(addr, NodeType::Remote, payload.worker_id);
+                    result.source_task_count_on_workers[addr]++;
                     s = 0;
                 }
-                if (result.worker_nodes.size() == plan_segment_ptr->getParallelSize())
+                if (result.worker_nodes.size() == parallel_size)
                     break;
             }
         }
         // Assign parallelism to each worker until no one left.
-        while (result.worker_nodes.size() < plan_segment_ptr->getParallelSize())
+        while (result.worker_nodes.size() < parallel_size)
         {
-            for (const auto & [h, _] : size_per_worker)
+            for (const auto & [addr, payload] : payload_on_workers)
             {
-                auto worker_address = getRemoteAddress(h, query_context);
-                result.worker_nodes.emplace_back(worker_address, NodeType::Remote, h.id);
-                if (result.worker_nodes.size() == plan_segment_ptr->getParallelSize())
+                result.worker_nodes.emplace_back(addr, NodeType::Remote, payload.worker_id);
+                result.source_task_count_on_workers[addr]++;
+                if (result.worker_nodes.size() == parallel_size)
                     break;
             }
         }
+    };
+
+    // If parallelism is greater than the worker number, we split the parts according to the input size.
+    if (plan_segment_ptr->getParallelSize() > worker_number)
+    {
+        // initialize payload_per_worker with empty payload, so that empty table will select nodes correcly
+        std::unordered_map<AddressInfo, SourceTaskPayloadOnWorker, AddressInfo::Hash> payload_on_workers;
+        for (const auto & worker : cluster_nodes.all_workers)
+        {
+            if (worker.type == NodeType::Remote)
+                payload_on_workers[worker.address] = {.worker_id = worker.id};
+        }
+        size_t rows_count = 0;
+        bool is_bucket_valid = true;
+        Int64 min_num_of_buckets = getMinNumOfBuckets(plan_segment_ptr->getPlanSegmentInputs());
+        if (min_num_of_buckets == kInvalidBucketNumber)
+            is_bucket_valid = false;
+
+        const auto & source_task_payload_map = query_context->getCnchServerResource()->getSourceTaskPayload();
+        for (const auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+        {
+            auto storage_id = plan_segment_input->getStorageID();
+            if (storage_id && storage_id->hasUUID())
+            {
+                auto iter = source_task_payload_map.find(storage_id->uuid);
+                if (iter != source_task_payload_map.end())
+                {
+                    for (const auto & [addr, p] : iter->second)
+                    {
+                        rows_count += p.rows;
+                        auto & worker_payload = payload_on_workers[addr];
+                        worker_payload.rows += p.rows;
+                        worker_payload.part_num += 1;
+                        if (is_bucket_valid)
+                        {
+                            for (auto bucket : p.buckets)
+                            {
+                                auto key = bucket % min_num_of_buckets;
+                                worker_payload.bucket_groups[key].insert(bucket);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (is_bucket_valid && !query_context->getSettingsRef().bsp_force_split_bucket_table_by_part)
+            divideSourceTaskByBucket(payload_on_workers, rows_count, plan_segment_ptr->getParallelSize(), result);
+        else
+            old_func(payload_on_workers, rows_count, plan_segment_ptr->getParallelSize());
     }
     else
     {
@@ -404,5 +571,28 @@ PlanSegmentInputPtr NodeSelector::tryGetLocalInput(PlanSegment * plan_segment_pt
     return it != inputs.end() ? *it : nullptr;
 }
 
+String NodeSelectorResult::toString() const
+{
+    fmt::memory_buffer buf;
+    fmt::format_to(buf, "Target Address:");
+    for (const auto & node_info : worker_nodes)
+    {
+        fmt::format_to(buf, "{},", node_info.address.toShortString());
+    }
+    for (const auto & [addr, source_task_count] : source_task_count_on_workers)
+        fmt::format_to(buf, "\tSourceTaskCount(addr:{} count:{})", addr.toShortString(), source_task_count);
+    for (const auto & [addr, buckets_on_worker] : buckets_on_workers)
+    {
+        for (const auto & buckets : buckets_on_worker)
+        {
+            fmt::format_to(
+                buf,
+                "\tSourceBuckets(addr:{} buckets:{})",
+                addr.toShortString(),
+                boost::join(buckets | boost::adaptors::transformed([](auto b) { return std::to_string(b); }), ","));
+        }
+    }
+    return fmt::to_string(buf);
+}
 
 } // namespace DB

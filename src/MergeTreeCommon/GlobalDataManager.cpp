@@ -20,6 +20,18 @@ void GlobalDataManager::loadDataPartsWithDBM(
     return storage_manager->loadDataPartsWithDBM(storage, table_version, server_parts);
 }
 
+StorageDataManagerPtr GlobalDataManager::getStorageDataManager(const UUID & storage_uuid)
+{
+    std::lock_guard<std::mutex> lock(data_mutex);
+
+    auto it = storages_data.find(storage_uuid);
+
+    if (it == storages_data.end())
+        return nullptr;
+    else
+        return it->second;
+}
+
 StorageDataManagerPtr GlobalDataManager::getStorageDataManager(const UUID & storage_uuid, const WGWorkerInfoPtr & runtime_worker_info)
 {
     std::lock_guard<std::mutex> lock(data_mutex);

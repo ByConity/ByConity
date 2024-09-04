@@ -127,6 +127,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const
 {
     type = data.type;
     worker_num = data.num_workers;
+    priority = data.priority;
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from, [[maybe_unused]] const std::vector<size_t> & indices)

@@ -62,7 +62,7 @@ public:
         return pool;
     }
 
-    std::shared_ptr<RpcClient> getClient(const String & host_port, const std::string & client_type);
+    std::shared_ptr<RpcClient> getClient(const String & host_port, const std::string & client_type, bool refresh = false);
 
     brpc::ChannelOptions getChannelPoolOptions(const std::string & client_type)
     {

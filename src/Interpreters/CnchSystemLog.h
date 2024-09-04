@@ -21,12 +21,14 @@
 #include <Interpreters/MaterializedMySQLLog.h>
 #include <Interpreters/UniqueTableLog.h>
 #include <Storages/MaterializedView/ViewRefreshTaskLog.h>
+#include "Interpreters/AutoStatsTaskLog.h"
 
 
 namespace DB
 {
 
 class CnchQueryLog;
+class CnchAutoStatsTaskLog;
 
 // Query metrics definitions
 constexpr auto CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME = "cnch_kafka_log";
@@ -34,6 +36,7 @@ constexpr auto CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME = "cnch_query_log";
 constexpr auto CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME = "cnch_materialized_mysql_log";
 constexpr auto CNCH_SYSTEM_LOG_UNIQUE_TABLE_LOG_TABLE_NAME = "cnch_unique_table_log";
 constexpr auto CNCH_SYSTEM_LOG_VIEW_REFRESH_TASK_LOG_TABLE_NAME = "cnch_view_refresh_task_log";
+constexpr auto CNCH_SYSTEM_LOG_AUTO_STATS_TASK_LOG_TABLE_NAME = "cnch_auto_stats_task_log";
 
 /** Modified version of SystemLog that flushes data to a CnchMergeTree table.
   * Altering of schema is also possible for columns that are not part of primary/partition keys.
@@ -75,6 +78,12 @@ public:
         return cnch_view_refresh_task_log;
     }
 
+    std::shared_ptr<CnchAutoStatsTaskLog> getCnchAutoStatsTaskLog() const
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return cnch_auto_stats_task_log;
+    }
+
     void shutdown();
 
 private:
@@ -83,6 +92,7 @@ private:
     std::shared_ptr<CloudUniqueTableLog> cloud_unique_table_log;
     std::shared_ptr<CnchQueryLog> cnch_query_log;
     std::shared_ptr<ViewRefreshTaskLog> cnch_view_refresh_task_log;
+    std::shared_ptr<CnchAutoStatsTaskLog> cnch_auto_stats_task_log;
 
     int init_time_in_worker{};
     int init_time_in_server{};
@@ -116,6 +126,7 @@ constexpr auto CNCH_QUERY_LOG_CONFIG_PREFIX = "cnch_query_log";
 constexpr auto CNCH_MATERIALIZED_MYSQL_LOG_CONFIG_PREFIX = "cnch_materialized_mysql_log";
 constexpr auto CNCH_UNIQUE_TABLE_LOG_CONFIG_PREFIX = "cnch_unique_table_log";
 constexpr auto CNCH_VIEW_REFRESH_TASK_PREFIX = "cnch_view_refresh_task_log";
+constexpr auto CNCH_AUTO_STATS_TASK_LOG_CONFIG_PREFIX = "cnch_auto_stats_task_log";
 
 /// Instead of typedef - to allow forward declaration.
 class CloudKafkaLog : public CnchSystemLog<KafkaLogElement>

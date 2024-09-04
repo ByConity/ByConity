@@ -62,4 +62,29 @@ void OptimizerStatisticsService::refreshStatisticsCache(
         RPCHelpers::handleException(response->mutable_exception());
     }
 }
+
+void OptimizerStatisticsService::fetchStatisticsSettings(
+    google::protobuf::RpcController * cntl,
+    const Protos::FetchStatisticsSettingsRequest * request,
+    Protos::FetchStatisticsSettingsResponse * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    [[maybe_unused]] brpc::Controller * brpc_cntl = static_cast<brpc::Controller *>(cntl);
+    try
+    {
+        auto context = getContext();
+        auto catalog = createCatalogAdaptor(context);
+        (void)request;
+        auto * manager = context->getAutoStatisticsManager();
+
+        auto settings = manager->getSettingsManager().getFullStatisticsSettings();
+        settings.toProto(*response->mutable_statistics_settings());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
 }

@@ -119,17 +119,17 @@ Projection Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {price ASC NULLS LAST}
          └─ Inner Join Est. ? rows
-            │     Condition: expr#cast(sk, \'Nullable(Int64)\') == expr#cast(sk_2, \'Nullable(Int64)\')
+            │     Condition: expr#cast(sk, \'Nullable(Int64)\')_1 == expr#cast(sk_2, \'Nullable(Int64)\')
             ├─ Repartition Exchange Est. ? rows
-            │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
+            │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')_1}
             │  └─ Projection Est. ? rows
-            │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
+            │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\')_1:=cast(sk, \'Nullable(Int64)\')
             │     └─ Left Join Est. ? rows
-            │        │     Condition: expr#cast(sk, \'Int64\') == expr#sum(sk)
+            │        │     Condition: expr#cast(sk, \'Nullable(Int64)\') == expr#sum(sk)
             │        ├─ Repartition Exchange Est. ? rows
-            │        │  │     Partition by: {expr#cast(sk, \'Int64\')}
+            │        │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
             │        │  └─ Projection Est. ? rows
-            │        │     │     Expressions: [sk], expr#cast(sk, \'Int64\'):=cast(sk, \'Int64\')
+            │        │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
             │        │     └─ TableScan test.cust Est. ? rows
             │        │              Outputs: [sk]
             │        └─ Repartition Exchange Est. ? rows
@@ -161,23 +161,25 @@ Projection Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {price ASC NULLS LAST}
          └─ Inner Join Est. ? rows
-            │     Condition: expr#cast(sk, \'Nullable(Int64)\') == expr#cast(sk_1, \'Nullable(Int64)\')
+            │     Condition: expr#cast(sk, \'Nullable(Int64)\')_1 == expr#cast(sk_1, \'Nullable(Int64)\')
             ├─ Repartition Exchange Est. ? rows
-            │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
+            │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')_1}
             │  └─ Projection Est. ? rows
-            │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
+            │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\')_1:=cast(sk, \'Nullable(Int64)\')
             │     └─ Inner Join Est. ? rows
-            │        │     Condition: expr#cast(sk, \'Int64\') == ws_item_sk
+            │        │     Condition: expr#cast(sk, \'Nullable(Int64)\') == expr#cast(ws_item_sk, \'Nullable(Int64)\')
             │        ├─ Repartition Exchange Est. ? rows
-            │        │  │     Partition by: {expr#cast(sk, \'Int64\')}
+            │        │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
             │        │  └─ Projection Est. ? rows
-            │        │     │     Expressions: [sk], expr#cast(sk, \'Int64\'):=cast(sk, \'Int64\')
+            │        │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
             │        │     └─ TableScan test.cust Est. ? rows
             │        │              Outputs: [sk]
             │        └─ Repartition Exchange Est. ? rows
-            │           │     Partition by: {ws_item_sk}
-            │           └─ TableScan test.web Est. ? rows
-            │                    Outputs: [ws_item_sk]
+            │           │     Partition by: {expr#cast(ws_item_sk, \'Nullable(Int64)\')}
+            │           └─ Projection Est. ? rows
+            │              │     Expressions: expr#cast(ws_item_sk, \'Nullable(Int64)\'):=cast(ws_item_sk, \'Nullable(Int64)\')
+            │              └─ TableScan test.web Est. ? rows
+            │                       Outputs: [ws_item_sk]
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
                └─ Projection Est. ? rows

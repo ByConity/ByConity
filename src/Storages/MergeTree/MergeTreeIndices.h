@@ -92,6 +92,8 @@ struct IMergeTreeIndex
     virtual MergeTreeIndexConditionPtr createIndexCondition(
             const SelectQueryInfo & query_info, ContextPtr context) const = 0;
 
+    virtual bool isInvertedIndex() const { return false; }
+
     Names getColumnsRequiredForIndexCalc() const { return index.expression->getRequiredColumns(); }
 
     const IndexDescription & index;

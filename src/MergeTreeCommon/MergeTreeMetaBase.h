@@ -17,17 +17,15 @@
 
 #include <Disks/StoragePolicy.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/SourceTask.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
+#include <Storages/ColumnsDescription.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
-#include <MergeTreeCommon/IMergeTreePartMeta.h>
-#include <Processors/Merges/Algorithms/Graphite.h>
-#include <Common/SimpleIncrement.h>
-#include <Storages/ColumnsDescription.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/extractKeyExpressionList.h>
 #include <Transaction/TxnTimestamp.h>
@@ -44,8 +42,7 @@ public:
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
 
-    std::optional<size_t> source_index;
-    std::optional<size_t> source_count;
+    SourceTaskFilter source_task_filter;
 
     /// Function to call if the part is suspected to contain corrupt data.
     using BrokenPartCallback = std::function<void (const String &)>;
@@ -277,6 +274,12 @@ public:
     /// For ATTACH/DETACH/DROP PARTITION.
     String getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr context) const;
 
+    bool extractNullableForPartitionID() const
+    {
+        const auto & settings = getSettings();
+        return settings->allow_nullable_key && settings->extract_partition_nullable_date;
+    }
+
     MutableDataPartPtr cloneAndLoadDataPartOnSameDisk(const DataPartPtr & src_part, const String & tmp_part_prefix,
                     const MergeTreePartInfo & dst_part_info, const StorageMetadataPtr & metadata_snapshot);
 
@@ -443,7 +446,8 @@ public:
 
     /// partition filters
     /// TODO: make partition_list constant
-    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context) const;
+    void filterPartitionByTTL(std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, time_t query_time) const;
+    bool canFilterPartitionByTTL() const;
 
     Strings selectPartitionsByPredicate(
         const SelectQueryInfo & query_info,
@@ -613,11 +617,11 @@ protected:
 
     /// track runtime server parts by partition id. Used when query by table version
     MergeTreePartitions data_partitions;
-    // Server dataparts with delete bitmap. should be protected by data part lock
-    ServerDataParts server_data_parts;
 
+    /// guard for loading server_data_parts (in TableVersion mode).
     mutable std::mutex server_data_mutex;
     mutable std::atomic<bool> has_server_part_to_load{false};
+    ServerDataParts server_data_parts;
 
 private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.

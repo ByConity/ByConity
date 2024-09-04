@@ -35,6 +35,7 @@
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/ArrayJoinStep.h>
@@ -154,10 +155,14 @@ PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, Predica
 
     auto pushdown_predicate = PredicateUtils::combineConjuncts(inlined_deterministic_conjuncts);
     LOG_DEBUG(
-        &Poco::Logger::get("Debugger"), "node {}, pushdown_predicate : {}", node.getId(), pushdown_predicate->formatForErrorMessage());
+        &Poco::Logger::get("PredicateVisitor"),
+        "project node {}, pushdown_predicate : {}",
+        node.getId(),
+        pushdown_predicate->formatForErrorMessage());
 
     if (!pushdown_predicate->as<ASTLiteral>())
-        pushdown_predicate = ExpressionInterpreter::optimizePredicate(pushdown_predicate, step.getInputStreams()[0].getNamesToTypes(), context);
+        pushdown_predicate
+            = ExpressionInterpreter::optimizePredicate(pushdown_predicate, step.getInputStreams()[0].getNamesToTypes(), context);
     PredicateContext expression_context{
         .predicate = pushdown_predicate,
         .extra_predicate_for_simplify_outer_join
@@ -184,12 +189,29 @@ PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, Predica
 PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContext & predicate_context)
 {
     const auto & step = *node.getStep();
-    auto predicates = std::vector<ConstASTPtr>{step.getFilter(), predicate_context.predicate};
+
+    // handle in function has large value list
+    UInt64 limit = predicate_context.context->getSettingsRef().max_in_value_list_to_pushdown;
+    std::pair<ConstASTPtr, ConstASTPtr> split_in_filter = FilterStep::splitLargeInValueList(step.getFilter(), limit);
+
+    LOG_DEBUG(
+        &Poco::Logger::get("PredicateVisitor"), 
+        "filter node {}, split_in_filter.first : {}, split_in_filter.second : {}", 
+        node.getId(), 
+        split_in_filter.first->formatForErrorMessage(),
+        split_in_filter.second->formatForErrorMessage()
+        );
+
+    auto predicates = std::vector<ConstASTPtr>{split_in_filter.first, predicate_context.predicate};
     ConstASTPtr predicate = PredicateUtils::combineConjuncts(predicates);
+
     if (simplify_common_filter)
     {
         predicate = CommonPredicatesRewriter::rewrite(predicate, context);
     }
+
+    LOG_DEBUG(&Poco::Logger::get("PredicateVisitor"), "filter node {}, pushdown_predicate : {}", node.getId(), predicate->formatForErrorMessage());
+
     PredicateContext filter_context{
         .predicate = predicate,
         .extra_predicate_for_simplify_outer_join = predicate_context.extra_predicate_for_simplify_outer_join,
@@ -198,6 +220,11 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
 
     if (rewritten->getStep()->getType() != IQueryPlanStep::Type::Filter)
     {
+        if (!PredicateUtils::isTruePredicate(split_in_filter.second))
+        {
+            auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), split_in_filter.second);
+            return std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        }
         return rewritten;
     }
 
@@ -205,6 +232,11 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
     {
         if (rewritten->getChildren()[0] != node.getChildren()[0])
         {
+            if (!PredicateUtils::isTruePredicate(split_in_filter.second))
+            {
+                auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), split_in_filter.second);
+                return std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+            }
             return rewritten;
         }
         auto rewritten_step_ptr = rewritten->getStep();
@@ -214,6 +246,11 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
         // see ExpressionEquivalence
         if (step.getFilter() != rewritten_step.getFilter())
         {
+            if (!PredicateUtils::isTruePredicate(split_in_filter.second))
+            {
+                auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), split_in_filter.second);
+                return std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+            }
             return rewritten;
         }
     }
@@ -225,9 +262,13 @@ PlanNodePtr PredicateVisitor::visitAggregatingNode(AggregatingNode & node, Predi
     const auto & step = *node.getStep();
     const auto & keys = step.getKeys();
 
-    // TODO: in case of grouping sets, we should be able to push the filters over grouping keys below the aggregation
-    // and also preserve the filter above the aggregation if it has an empty grouping set
     if (keys.empty())
+    {
+        return visitPlanNode(node, predicate_context);
+    }
+
+    // never push predicate through grouping sets agg
+    if (step.isGroupingSet())
     {
         return visitPlanNode(node, predicate_context);
     }
@@ -325,6 +366,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     PlanNodePtr & right = node.getChildren()[1];
     ConstASTPtr left_effective_predicate = EffectivePredicateExtractor::extract(left, context);
     ConstASTPtr right_effective_predicate = EffectivePredicateExtractor::extract(right, context);
+
     ConstASTPtr join_predicate = PredicateUtils::extractJoinPredicate(node);
 
     std::set<String> left_symbols;
@@ -351,8 +393,8 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
 
     ASTTableJoin::Kind kind = step->getKind();
 
-    LOG_TRACE(
-        logger,
+    LOG_DEBUG(
+        &Poco::Logger::get("PredicateVisitor"),
         "join node {}, inherited_predicate : {}, left effective predicate: {} , right effective predicate: {}, join_predicate : {}",
         node.getId(),
         inherited_predicate->formatForErrorMessage(),
@@ -1598,9 +1640,12 @@ ASTPtr EffectivePredicateVisitor::visitFilterNode(FilterNode & node, ContextMuta
         removed_inconsistent_type_filters.emplace_back(ptr);
     }
 
+    std::vector<ConstASTPtr> removed_large_in_value_list
+        = FilterStep::removeLargeInValueList(removed_inconsistent_type_filters, context->getSettingsRef().max_in_value_list_to_pushdown);
+
     // Adds on underlying_predicate
-    removed_inconsistent_type_filters.emplace_back(underlying_predicate);
-    return PredicateUtils::combineConjuncts(removed_inconsistent_type_filters);
+    removed_large_in_value_list.emplace_back(underlying_predicate);
+    return PredicateUtils::combineConjuncts(removed_large_in_value_list);
 }
 
 ASTPtr EffectivePredicateVisitor::visitAggregatingNode(AggregatingNode & node, ContextMutablePtr & context)

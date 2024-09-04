@@ -634,6 +634,15 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserAssignmentWithAlias : public IParserDialectBase
+{
+protected:
+    const char * getName() const  override{ return "column assignment with alias"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 class ParserEscapeExpression : public IParserDialectBase
 {
     const char * getName() const override { return "ESCAPE clause"; }

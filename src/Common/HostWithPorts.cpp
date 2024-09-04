@@ -48,6 +48,8 @@ std::string HostWithPorts::toDebugString() const
         wb << " exc/" << exchange_port;
     if (exchange_status_port != 0)
         wb << " exs/" << exchange_status_port;
+    if (real_id)
+        wb << " real_id/" << *real_id;
     wb << '}';
 
     return wb.str();

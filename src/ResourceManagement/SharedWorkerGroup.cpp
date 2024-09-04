@@ -69,11 +69,12 @@ WorkerGroupData SharedWorkerGroup::getData(bool with_metrics, bool only_running_
     }
 
     data.id = getID();
-    data.type = WorkerGroupType::Shared;
+    data.type = type;
     data.is_auto_linked = isAutoLinked();
     data.vw_uuid = getVWUUID();
     /// Lock is acquired in `getVWName`.
     data.vw_name = getVWName();
+    data.priority = priority; 
 
     return data;
 }

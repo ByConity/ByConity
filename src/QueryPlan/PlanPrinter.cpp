@@ -34,6 +34,7 @@
 #include <Poco/JSON/Object.h>
 #include <magic_enum.hpp>
 #include <Poco/JSON/Object.h>
+#include "Parsers/ASTCreateQuery.h"
 
 #include <utility>
 #include <vector>
@@ -913,6 +914,14 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         for (const auto & desc : sort->getSortDescription())
             sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
+
+        if (!sort->getPrefixDescription().empty())
+        {
+            std::vector<String> prefix_sort_columns;
+            for (const auto & desc : sort->getPrefixDescription())
+                prefix_sort_columns.emplace_back(desc.column_name);
+            out << intent.detailIntent() << "Prefix Order: " << join(prefix_sort_columns, ", ", "{", "}");
+        }
 
         std::visit(
             overloaded{
@@ -1868,6 +1877,18 @@ String PlanPrinter::jsonMetaData(
     for (const auto & setting : settings_changes)
         query_used_settings->set(setting.name, setting.value.toString());
     metadata_json->set("UsedSettings", query_used_settings);
+
+    Poco::JSON::Array output_descs;
+    ASTPtr & select_ast = query;
+    if (auto * insert_query = query->as<ASTInsertQuery>())
+        select_ast = insert_query->select;
+
+    if (analysis->hasOutputDescription(*select_ast))
+    {
+        for (const auto & desc : analysis->getOutputDescription(*select_ast))
+            output_descs.add(desc.name);
+    }
+    metadata_json->set("OutputDescriptions", output_descs);
 
     // get InsertInfo
     Poco::JSON::Object::Ptr insert_table_info = new Poco::JSON::Object(true);

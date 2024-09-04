@@ -19,6 +19,9 @@ public:
 
     const UUID & getStorageUUID() const { return storage_uuid; }
 
+    // Drop managed table versions and corresponding disk cache. (version == 0) means drop all versions
+    void dropTableVersion(ThreadPool & pool, UInt64 version = 0);
+
 private:
 
     UInt64 getLatestVersion();

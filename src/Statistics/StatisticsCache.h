@@ -1,3 +1,4 @@
+#pragma once
 #include <chrono>
 #include <shared_mutex>
 #include <Statistics/StatsTableIdentifier.h>

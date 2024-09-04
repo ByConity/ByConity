@@ -73,6 +73,8 @@
 #include <Parsers/ParserUndropQuery.h>
 #include <Parsers/ParserAlterDiskCacheQuery.h>
 #include <Parsers/ParserTransaction.h>
+#include "Parsers/TablePropertiesQueriesASTs.h"
+#include <Parsers/ParserAutoStatsQuery.h>
 
 namespace DB
 {
@@ -116,6 +118,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserRollbackQuery rollback_p;
     ParserExecutePreparedStatementQuery execute_p;
     ParserShowPreparedStatementQuery show_prepared;
+    ParserAutoStatsQuery auto_stats_p;
 
     ASTPtr query;
 
@@ -155,7 +158,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || begin_transaction_p.parse(pos, query, expected)
         || begin_p.parse(pos, query, expected)
         || commit_p.parse(pos, query, expected)
-        || rollback_p.parse(pos, query, expected);
+        || rollback_p.parse(pos, query, expected)
+        || auto_stats_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;
@@ -180,12 +184,16 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         if (s_format.ignore(pos, expected))
         {
             ParserIdentifier format_p;
+            ASTPtr format;
 
-            if (!format_p.parse(pos, query_with_output.format, expected))
+            if (!format_p.parse(pos, format, expected))
                 return false;
-            setIdentifierSpecial(query_with_output.format);
-
-            query_with_output.children.push_back(query_with_output.format);
+            if (!query_with_output.ignore_format)
+            {
+                query_with_output.format = format;
+                setIdentifierSpecial(query_with_output.format);
+                query_with_output.children.push_back(query_with_output.format);
+            }
         }
 
         return true;

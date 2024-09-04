@@ -69,7 +69,7 @@ String getFullOutPath(String & format_name, String & path, int serial_no, Compre
     }
 
     if (compression_method != CompressionMethod::None)
-        out_path += "." + toContentEncodingName(compression_method);
+        out_path += "." + getFileSuffix(compression_method);
 
     return out_path;
 }

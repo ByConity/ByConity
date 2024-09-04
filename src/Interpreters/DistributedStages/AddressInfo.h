@@ -50,6 +50,7 @@ namespace Protos
         const String & getPassword() const { return password; }
 
         String toString() const;
+        String toShortString() const;
         inline bool operator == (AddressInfo const& rhs) const
         {
             return (this->host_name == rhs.host_name && this->port == rhs.port);

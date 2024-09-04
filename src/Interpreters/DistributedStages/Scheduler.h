@@ -159,10 +159,11 @@ protected:
     {
         (void)plan_segment_ptr;
     }
-    virtual void prepareTask(PlanSegment * plan_segment_ptr, size_t parallel_size)
+    virtual void prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & task)
     {
         (void)plan_segment_ptr;
-        (void)parallel_size;
+        (void)selector_info;
+        (void)task;
     }
     virtual PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index)
     {
@@ -174,6 +175,12 @@ protected:
     void dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
     void prepareFinalTask();
+    NodeSelectorResult selectNodes(PlanSegment * plan_segment_ptr, const SegmentTask & task)
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.has_table_scan));
+        return selector_result.first->second;
+    }
 
     std::mutex node_selector_result_mutex;
     NodeSelector::SelectorResultMap node_selector_result;

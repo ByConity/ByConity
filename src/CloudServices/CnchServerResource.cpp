@@ -35,6 +35,7 @@
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 
+#include <Interpreters/DistributedStages/BSPScheduler.h>
 #include <Storages/RemoteFile/StorageCnchHDFS.h>
 #include <Storages/RemoteFile/StorageCnchS3.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -50,6 +51,23 @@ namespace DB
 {
 AssignedResource::AssignedResource(const StoragePtr & storage_) : storage(storage_)
 {
+}
+
+AssignedResource::AssignedResource(AssignedResource & resource)
+{
+    storage = resource.storage;
+    table_version = resource.table_version;
+    table_definition = resource.table_definition;
+    sent_create_query = resource.sent_create_query;
+    bucket_numbers = resource.bucket_numbers;
+    replicated = resource.replicated;
+
+    server_parts = resource.server_parts;
+    hive_parts = resource.hive_parts;
+    file_parts = resource.file_parts;
+    part_names = resource.part_names; // don't call move here
+
+    object_columns = resource.object_columns;
 }
 
 AssignedResource::AssignedResource(AssignedResource && resource)
@@ -122,7 +140,7 @@ void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
     }
 }
 
-void ResourceStageInfo::filterResource(std::optional<ResourceOption> resource_option)
+void ResourceStageInfo::filterResource(std::optional<ResourceOption> & resource_option)
 {
     if (resource_option)
     {
@@ -260,6 +278,7 @@ void CnchServerResource::setTableVersion(const UUID & storage_uuid, const UInt64
     assigned_resource.table_version = table_version;
 }
 
+/// NOTE: Only used when optimizer is disabled.
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
     Stopwatch watch;
@@ -274,6 +293,7 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     std::vector<AssignedResource> resources_to_send;
     {
         auto lock = getLock();
+
         allocateResource(context, lock);
 
         auto it = assigned_worker_resource.find(worker);
@@ -294,6 +314,36 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
 
+void CnchServerResource::resendResource(const ContextPtr & context, const HostWithPorts & worker)
+{
+    Stopwatch watch;
+    auto send_lock = getLockForSend("ALL_WORKER");
+
+    std::vector<AssignedResource> resources_to_send;
+    {
+        auto lock = getLock();
+            ResourceOption resource_option{.resend = true};
+            allocateResource(context, lock, resource_option);
+
+            std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
+            std::swap(all_resources, assigned_worker_resource);
+            auto it = all_resources.find(worker);
+            if (it == all_resources.end())
+                return;
+
+            resources_to_send = std::move(it->second);
+    }
+
+    auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
+    auto worker_client = worker_group->getWorkerClient(worker);
+    auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
+    auto call_id = worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations);
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
+    brpc::Join(call_id);
+    handler->throwIfException();
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
+}
+
 void CnchServerResource::sendResources(const ContextPtr & context, std::optional<ResourceOption> resource_option)
 {
     Stopwatch watch;
@@ -301,6 +351,7 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
 
     // filter resource for stage send resource
     resource_stage_info.filterResource(resource_option);
+
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
     {
         auto lock = getLock();
@@ -314,7 +365,10 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
 
     if (all_resources.empty())
         return;
-    computeResourceSize(resource_option, all_resources);
+
+    if (resource_option)
+        initSourceTaskPayload(context, all_resources);
+
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
     std::vector<brpc::CallId> call_ids;
     call_ids.reserve(all_resources.size());
@@ -411,15 +465,27 @@ void CnchServerResource::allocateResource(
 {
     std::vector<AssignedResource> resource_to_allocate;
 
-    for (auto & [table_id, resource] : assigned_table_resource)
+    if (resource_option && (*resource_option).resend)
     {
-        if (resource.empty())
-            continue;
+        for (auto & [table_id, resource] : table_resources_saved_for_retry)
+        {
+            resource_to_allocate.emplace_back(resource);
+        }
+    }
+    else
+    {
+        for (auto & [table_id, resource] : assigned_table_resource)
+        {
+            if (resource.empty())
+                continue;
 
-        if (resource_option && !(*resource_option).table_ids.count(table_id))
-            continue;
+            if (resource_option && !(*resource_option).table_ids.count(table_id))
+                continue;
 
-        resource_to_allocate.emplace_back(std::move(resource));
+            if (context->getSettingsRef().bsp_mode)
+                table_resources_saved_for_retry.emplace(table_id, resource);
+            resource_to_allocate.emplace_back(std::move(resource));
+        }
     }
 
     if (resource_to_allocate.empty())
@@ -611,37 +677,37 @@ void CnchServerResource::allocateResource(
     }
 }
 
-void CnchServerResource::computeResourceSize(
-    std::optional<ResourceOption> & resource_option, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources)
+void CnchServerResource::initSourceTaskPayload(
+    const ContextPtr & context, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources)
 {
-    if (resource_option)
+    for (const auto & [host_ports, assinged_resource] : all_resources)
     {
-        for (const auto & [host_ports, assinged_resource] : all_resources)
+        for (const auto & r : assinged_resource)
         {
-            std::unordered_map<UUID, size_t> table_size;
-            for (const auto & r : assinged_resource)
+            auto uuid = r.storage->getStorageID().uuid;
+            bool reclustered = r.storage->isTableClustered(context);
+            for (const auto & p : r.server_parts)
             {
-                size_t s = 0;
-                for (const auto & p : r.server_parts)
-                {
-                    s += p->rowsCount();
-                }
-                auto & t_size = table_size[r.storage->getStorageID().uuid];
-                if (t_size)
-                    t_size += s;
-                else
-                    t_size = s;
+                auto bucket_number = getBucketNumberOrInvalid(p->part_model_wrapper->bucketNumber(), reclustered);
+                auto addr = AddressInfo(host_ports.getHost(), host_ports.getTCPPort(), "", "", host_ports.exchange_port);
+                source_task_payload[uuid][addr].part_num += 1;
+                source_task_payload[uuid][addr].rows += p->rowExistsCount();
+                source_task_payload[uuid][addr].buckets.insert(bucket_number);
             }
-            for (const auto & [t, s] : table_size)
+            if (log->trace())
             {
-                assigned_resources_size[t][host_ports] = s;
+                for (const auto & [addr, payload] : source_task_payload[uuid])
+                {
+                    LOG_TRACE(
+                        log,
+                        "Source task payload for {}.{} addr:{} is {}",
+                        r.storage->getDatabaseName(),
+                        r.storage->getTableName(),
+                        addr.toShortString(),
+                        payload.toString());
+                }
             }
         }
     }
-}
-
-std::unordered_map<HostWithPorts, size_t> & CnchServerResource::getResourceSizeMap(UUID & table_id)
-{
-    return assigned_resources_size[table_id];
 }
 }

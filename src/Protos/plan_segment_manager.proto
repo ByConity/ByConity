@@ -73,6 +73,7 @@ message SendPlanSegmentStatusRequest {
   optional string message = 7;
   optional uint64 parallel_index = 8;
   optional SenderMetrics sender_metrics = 9;
+  optional int32 retry_id = 10;
 }
 
 message SendPlanSegmentStatusResponse {
@@ -116,6 +117,13 @@ message QueryCommon {
   optional TraceMeta trace_meta = 12;
 
   optional bool check_session = 13;
+  optional uint64 query_expiration_timestamp = 14;
+}
+
+message SourceTaskFilter {
+  optional uint32 index = 1;
+  optional uint32 count = 2;
+  repeated int64 buckets = 3;
 }
 
 message SubmitPlanSegmentRequest {
@@ -134,9 +142,10 @@ message SubmitPlanSegmentRequest {
   required uint32 plan_segment_id = 5;
   required uint32 parallel_id = 6;
   optional AddressInfo execution_address = 7;
-  optional uint32 source_task_index = 8;
-  optional uint32 source_task_count = 9;
+  optional uint32 source_task_index = 8; // obosolete
+  optional uint32 source_task_count = 9; // obosolete
   optional uint32 retry_id = 10;
+  optional SourceTaskFilter source_task_filter = 11;
 }
 
 message ExecutePlanSegmentResponse {

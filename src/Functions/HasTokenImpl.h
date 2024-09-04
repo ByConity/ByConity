@@ -18,7 +18,7 @@ namespace ErrorCodes
 
 /** Token search the string, means that needle must be surrounded by some separator chars, like whitespace or puctuation.
   */
-template <typename Name, typename Searcher, bool negate>
+template <typename Name, typename Searcher, bool negate, bool enable_separator_inside = false>
 struct HasTokenImpl
 {
     using ResultType = UInt8;
@@ -47,7 +47,8 @@ struct HasTokenImpl
         const UInt8 * const end = haystack_data.data() + haystack_data.size();
         const UInt8 * pos = begin;
 
-        if (const auto has_separator = std::any_of(pattern.cbegin(), pattern.cend(), isTokenSeparator); has_separator || pattern.empty())
+        if (const auto has_separator = std::any_of(pattern.cbegin(), pattern.cend(), isTokenSeparator);
+            (has_separator && !enable_separator_inside) || pattern.empty())
         {
             if (res_null)
             {
@@ -74,8 +75,8 @@ struct HasTokenImpl
         while (pos < end && end != (pos = searcher.search(pos, end - pos)))
         {
             /// The found substring is a token
-            if ((pos == begin || isTokenSeparator(pos[-1]))
-                && (pos + pattern_size == end || isTokenSeparator(pos[pattern_size])))
+            if (enable_separator_inside
+                || ((pos == begin || isTokenSeparator(pos[-1])) && (pos + pattern_size == end || isTokenSeparator(pos[pattern_size]))))
             {
                 /// Let's determine which index it refers to.
                 while (begin + haystack_offsets[i] <= pos)

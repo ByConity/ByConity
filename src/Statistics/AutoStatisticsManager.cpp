@@ -1,18 +1,23 @@
+#include <CloudServices/CnchServerClientPool.h>
 #include <DaemonManager/DaemonJobAutoStatistics.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
-#include <CloudServices/CnchServerClientPool.h>
 #include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatsTaskLogHelper.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/CollectTarget.h>
+#include <Statistics/OptimizerStatisticsClient.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMergeTree.h>
 #include <boost/algorithm/string.hpp>
+#include <Poco/Logger.h>
+#include "Common/time.h"
+#include "common/logger_useful.h"
+#include "Core/UUID.h"
 
 #include <memory>
 #include <mutex>
@@ -22,47 +27,27 @@ namespace DB::Statistics::AutoStats
 {
 
 std::atomic_bool AutoStatisticsManager::is_initialized = false;
-std::atomic_bool AutoStatisticsManager::config_is_enabled = false;
-std::unique_ptr<AutoStatisticsManager> AutoStatisticsManager::the_instance;
+std::atomic_bool AutoStatisticsManager::xml_config_is_enable = false;
 
-// refer to https://****
-namespace Config
+namespace XmlConfig
 {
     String prefix = "optimizer.statistics.auto_statistics.";
-    // enable auto statistics, including udi count service
+    // this flag is to control whether AutoStatisticsManager should be running
+    // if set to false, the whole function will be disabled
     String is_enabled = prefix + "enable";
-    String collect_window = prefix + "collect_window";
-    String collect_empty_stats_immediately = prefix + "collect_empty_stats_immediately";
-
-    String enable_sample = prefix + "enable_sample";
-    String sample_ratio = prefix + "sample_ratio";
-    String sample_row_count = prefix + "sample_row_count";
-
-    String task_expire_days = prefix + "task_expire_days";
-
-    String update_ratio_threshold = prefix + "update_ratio_threshold";
-    String update_row_count_threshold = prefix + "update_row_count_threshold";
-    String max_retry_times = prefix + "max_retry_times";
-
-    String schedule_period_seconds = prefix + "schedule_period_seconds";
-    String udi_flush_interval_seconds = prefix + "udi_flush_interval_seconds";
-    String collect_interval_for_one_table_seconds = prefix + "collect_interval_for_one_table_seconds";
-
-    String enable_async_tasks = prefix + "enable_async_tasks";
 }
-
 
 // control if the whole AutoStatistics should be enabled
 // including Manager and MemoryRecord
-bool AutoStatisticsManager::configIsEnabled()
+bool AutoStatisticsManager::xmlConfigIsEnable()
 {
-    return config_is_enabled.load();
+    return xml_config_is_enable.load();
 }
 
 std::pair<Time, Time> parseTimeWindow(const String & text)
 {
     auto throw_error = [&] {
-        auto err_msg = fmt::format(FMT_STRING("option {} has invalid value: '{}'"), Config::collect_window, text);
+        auto err_msg = fmt::format(FMT_STRING("settings collect_window has invalid value: '{}'"), text);
         throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
     };
 
@@ -88,72 +73,56 @@ std::pair<Time, Time> parseTimeWindow(const String & text)
 }
 
 // parse other config for execution
-// refer to https://****
+// refer to https://bytedance.feishu.cn/docx/LO75devznoUyKBxOHLKc4R9WnDb
+
 void AutoStatisticsManager::prepareNewConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    // TODO: change this to true after testing
-    bool is_enabled = config.getBool(Config::is_enabled, false);
-    InternalConfig new_config;
-
-    #if 0
-    auto collect_window_text = config.getString(Config::collect_window, "00:00-23:59");
-    std::tie(new_config.begin_time, new_config.end_time) = parseTimeWindow(collect_window_text);
-
-    new_config.collect_empty_stats_immediately = config.getBool(Config::collect_empty_stats_immediately, false);
-
-    new_config.collector_settings.enable_sample = config.getBool(Config::enable_sample, true);
-    new_config.collector_settings.sample_ratio = config.getDouble(Config::sample_ratio, 0.01);
-    new_config.collector_settings.sample_row_count = config.getUInt64(Config::sample_row_count, 40'000'000);
-
-    new_config.update_ratio_threshold = config.getDouble(Config::update_ratio_threshold, 0.2);
-    new_config.update_row_count_threshold = config.getUInt64(Config::update_row_count_threshold, 1'000'000);
-    new_config.max_retry_times = config.getUInt64(Config::max_retry_times, 3);
-
-    new_config.schedule_period = std::chrono::seconds(config.getUInt64(Config::schedule_period_seconds, 60));
-    new_config.udi_flush_interval = std::chrono::seconds(config.getUInt64(Config::udi_flush_interval_seconds, 60));
-    new_config.collect_interval_for_one_table
-        = std::chrono::seconds(config.getUInt64(Config::collect_interval_for_one_table_seconds, 1200));
-
-    new_config.task_expire = std::chrono::days(config.getUInt64(Config::task_expire_days, 7));
-    new_config.enable_async_tasks = config.getBool(Config::enable_async_tasks, true);
-    #endif
-
-    std::unique_lock lck(config_mtx);
-    config_is_enabled = is_enabled;
-    new_internal_config = std::move(new_config);
+    auto context = getContext();
+    // in xml, optimizer.statistics.auto_statistics.enable will be TRUE
+    // only useful to stop auto stats at all
+    // bool is_enabled = config.getBool(XmlConfig::is_enabled, true);
+    settings_manager.loadSettingsFromXml(config);
+    xml_config_is_enable = settings_manager.getManagerSettings().enable_auto_stats();
 }
 
 AutoStatisticsManager::AutoStatisticsManager(ContextPtr context_)
-    : context(context_)
+    : WithContext(context_)
     , logger(&Poco::Logger::get("AutoStatisticsManager"))
     , task_queue(context_, internal_config)
-    , schedule_lease(TimePoint{}) // std::chrono::time_point() is not nothrow at gcc 9.4, make compiler happy
-
+    , settings_manager(context_)
+    , schedule_lease(TimePoint{}) // just make compiler happy
 {
-    auto schedule_period = std::chrono::seconds(internal_config.schedule_period_seconds());
-    schedule_lease = nowTimePoint() + schedule_period;
-    udi_flush_lease = nowTimePoint() + schedule_period;
+    // do scanning and udi flush the next interval
+    last_time_udi_flush = nowTimePoint();
+    last_time_scan_all_tables = nowTimePoint();
+    schedule_lease = nowTimePoint();
 }
 
 static String timeToString(Time time)
 {
     auto & lut = DateLUT::instance();
-    auto hr = lut.toHour(time);
-    auto min = lut.toMinute(time);
-    return fmt::format("{:02d}:{:02d}", hr, min);
+    auto t = lut.toDateTimeComponents(time).time;
+    return fmt::format("{:02d}:{:02d}", t.hour, t.minute);
 }
 
 void AutoStatisticsManager::run()
 {
+    auto context = getContext();
     auto config_checker = [&] {
         loadNewConfigIfNeeded();
-        if (!configIsEnabled())
+        if (!xmlConfigIsEnable())
         {
-            LOG_INFO(logger, "auto stats is disabled by config, skip iteration");
+            LOG_INFO(logger, "auto stats is disabled by config");
+            return false;
+        }
+        else if (!internal_config.enable_auto_stats())
+        {
+            LOG_INFO(logger, "auto stats is disabled by system.auto_stats_manager_settings");
             return false;
         }
         else
         {
+            LOG_TRACE(logger, "auto stats is enabled");
             return true;
         }
     };
@@ -174,20 +143,29 @@ void AutoStatisticsManager::run()
 
             // even if auto stats is out of time range
             // we should record udi_counter to storage so that restarts won't lose too many data
+            // so just check auto_stats_enabled
+            if (!auto_stats_enabled)
+            {
+                LOG_INFO(logger, "skip iteration");
+                break;
+            }
+
             updateUdiInfo();
 
-            auto fetch_log_time_point = updateTaskQueueFromLog(next_min_event_time);
+            auto init_min_event_time = nowTimePoint() - std::chrono::days(internal_config.task_expire_days());
+            auto fetch_log_time_point = updateTaskQueueFromLog(next_min_event_time.value_or(init_min_event_time));
             next_min_event_time = fetch_log_time_point - std::chrono::seconds(internal_config.schedule_period_seconds());
 
             auto is_time_range = isNowValidTimeRange();
 
             auto mode = [&] {
                 using Mode = TaskQueue::Mode;
-                Mode mode_;
-                mode_.enable_async_tasks = internal_config.enable_async_tasks();
-                mode_.enable_normal_auto_stats = auto_stats_enabled && is_time_range;
-                mode_.enable_immediate_auto_stats = auto_stats_enabled && (is_time_range || internal_config.collect_empty_stats_immediately());
-                return mode_;
+                Mode res;
+                res.enable_async_tasks = internal_config.enable_async_tasks();
+                res.enable_normal_auto_stats = auto_stats_enabled && is_time_range;
+                res.enable_immediate_auto_stats
+                    = auto_stats_enabled && (is_time_range || internal_config.collect_empty_stats_immediately());
+                return res;
             }();
 
 
@@ -198,6 +176,11 @@ void AutoStatisticsManager::run()
                 break;
 
             executeOneTask(chosen_task);
+        }
+
+        if (task_queue.size() == 0)
+        {
+            this->scanAllTables();
         }
     }
     catch (...)
@@ -212,9 +195,130 @@ void AutoStatisticsManager::run()
     schedule_lease = nowTimePoint() + schedule_period;
 }
 
-AutoStatisticsManager::~AutoStatisticsManager()
+void AutoStatisticsManager::scanAllTables()
 {
+    auto context = getContext();
+    if (!internal_config.enable_scan_all_tables())
+    {
+        LOG_TRACE(logger, "scanning all tables is disabled");
+        return;
+    }
+
+    auto scan_all_tables_lease = last_time_scan_all_tables + std::chrono::seconds(internal_config.scan_all_tables_interval_seconds());
+    if (nowTimePoint() < scan_all_tables_lease)
+    {
+        LOG_TRACE(logger, "scanning all tables is cooling down");
+        return;
+    }
+    LOG_INFO(logger, "start scanning all tables");
+    Stopwatch watch;
+    try
+    {
+        // TODO: filter by storage host
+        auto candidates = getTablesInScope(context, StatisticsScope{});
+        markCollectableCandidates(candidates, false);
+        LOG_INFO(logger, "finish scanning all tables in {} seconds", watch.elapsedSeconds());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger);
+        LOG_INFO(logger, "scanning all tables throw exception in {} seconds", watch.elapsedSeconds());
+    }
+    last_time_scan_all_tables = nowTimePoint();
 }
+
+void AutoStatisticsManager::markCollectableCandidates(
+    const std::vector<StatsTableIdentifier> & candidates, bool force_collect_if_failed_to_query_row_count)
+{
+    auto context = getContext();
+    auto catalog = createCatalogAdaptor(context);
+    UInt64 new_table_collecable = 0;
+    UInt64 good_table = 0;
+    for (const auto & identifier : candidates)
+    {
+        auto table_settings = settings_manager.getTableSettings(identifier);
+        // check if identifier is valid
+        if (!table_settings.enable_auto_stats)
+        {
+            continue;
+        }
+
+        // check status in manager, if running, not add
+        auto task = task_queue.tryGetTaskInfo(identifier.getUniqueKey());
+        if (task)
+        {
+            auto status = task->getStatus();
+            if (status == Status::Created || status == Status::Running || status == Status::Pending)
+                continue;
+        }
+
+        // check stats is healthy, if yes, skip adding
+        std::optional<double> priority;
+        UInt64 stats_row_count = 0;
+        UInt64 udi = 0;
+
+        auto table_stats = getTableStatistics(context, identifier);
+        if (!table_stats)
+        {
+            // table has no stats, must collect it
+            priority = 1000;
+        }
+        else
+        {
+            // when table has stats
+            stats_row_count = table_stats->getRowCount();
+            auto real_count = catalog->queryRowCount(identifier);
+            if (!real_count)
+            {
+                // we cannot determined real row count due to Storage limitation (no trivial count)
+                // we just do add it to collect when it's triggered by [create auto stats]
+                if (force_collect_if_failed_to_query_row_count)
+                    priority = 1.0 / stats_row_count; // larger table has lower priority
+                else
+                    priority = std::nullopt;
+            }
+            else
+            {
+                // determined whether to collect it by calcPriority
+                // nullopt means no need to collect
+                udi = std::abs<UInt64>(real_count.value() - stats_row_count);
+                priority = calcPriority(internal_config, udi, stats_row_count);
+            }
+        }
+
+        if (priority.has_value())
+        {
+            LOG_INFO(logger, "table {} is marked as collectable", identifier.getNameForLogs());
+            // add this task to task log
+            TaskInfoCore core{
+                .task_uuid = UUIDHelpers::generateV4(),
+                .task_type = TaskType::Auto,
+                .table = identifier,
+                .stats_row_count = stats_row_count,
+                .udi_count = udi,
+                .priority = priority.value(),
+                .retry_times = 0,
+                .status = Status::Created,
+            };
+            ++new_table_collecable;
+            writeTaskLog(context, core, "create auto stats");
+        }
+        else
+        {
+            ++good_table;
+            LOG_TRACE(logger, "table {} is healthy, skip auto stats", identifier.getNameForLogs());
+        }
+    }
+    LOG_INFO(
+        logger,
+        "{} table(s) are newly collected by recent scan/create_auto_stats_trigger, {} table(s) are skipped",
+        new_table_collecable,
+        good_table);
+    context->getAutoStatsTaskLog()->flush();
+}
+
+
+AutoStatisticsManager::~AutoStatisticsManager() = default;
 
 namespace
 {
@@ -255,13 +359,15 @@ namespace
 void AutoStatisticsManager::updateUdiInfo()
 {
     auto current_time = nowTimePoint();
+    // calculate lease on the fly to make sure settings is effective immediately
+    auto udi_flush_lease = last_time_udi_flush + std::chrono::seconds(internal_config.schedule_period_seconds());
     if (current_time < udi_flush_lease)
     {
         return;
     }
+    last_time_udi_flush = current_time;
 
-    udi_flush_lease = current_time + std::chrono::seconds(internal_config.update_interval_seconds());
-
+    auto context = getContext();
     auto catalog = createCatalogAdaptor(context);
     auto & record = internal_memory_record;
 
@@ -293,51 +399,88 @@ void AutoStatisticsManager::updateUdiInfo()
         LOG_INFO(
             logger,
             fmt::format(
-                FMT_STRING("trying to add new task: uuid={}, rows={}, uid={}"), //
-                UUIDHelpers::UUIDToString(uuid),
+                FMT_STRING("trying to add new task: table={}, rows={}, uid={}"), //
+                table.getNameForLogs(),
                 table_row_count,
                 new_udi));
 
-        logTaskIfNeeded(table, new_udi, table_row_count, timestamp);
+        logTaskIfNeeded(table, new_udi, table_row_count);
     }
+}
+
+std::optional<StatsTableIdentifier> normalizeTable(ContextPtr context, StatsTableIdentifier table)
+{
+    // in cnch, UUID is reliable
+    auto catalog = createCatalogAdaptor(context);
+    return catalog->getTableIdByUUID(table.getUUID());
+}
+
+static ContextMutablePtr createContextWithAuth(ContextPtr global_context)
+{
+    // TODO: create context with auth
+    auto context = Context::createCopy(global_context);
+    auto [user, pass] = global_context->getCnchInterserverCredentials();
+    context->setUser(user, pass, Poco::Net::SocketAddress{});
+    return context;
 }
 
 bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & chosen_task)
 {
+    auto context = createContextWithAuth(getContext());
     auto catalog = createCatalogAdaptor(context);
+    auto unique_key = chosen_task->getTable().getUniqueKey();
 
-    auto uuid = chosen_task->getTable().getUniqueKey();
-    auto table_opt = catalog->getTableIdByUUID(uuid);
-
-    if (!table_opt)
-    {
-        // uuid is invalid, possibly due to table is dropped
-        auto err_msg = fmt::format(FMT_STRING("uuid {} is no longer valid, skip auto stats task"), toString(uuid));
-        LOG_WARNING(logger, err_msg);
-        chosen_task->setStatus(Status::Failed);
-        writeTaskLog(context, *chosen_task, err_msg);
-        task_queue.erase(uuid);
-        return true;
-    }
-
-    StatsTableIdentifier table = table_opt.value();
     try
     {
+        auto table_opt = normalizeTable(context, chosen_task->getTable());
+
+        if (!table_opt)
+        {
+            auto msg = fmt::format(FMT_STRING("Table {} is no longer valid, skip it"), chosen_task->getTable().getNameForLogs());
+            LOG_WARNING(logger, msg);
+            chosen_task->setStatus(Status::Failed);
+            writeTaskLog(context, *chosen_task, msg);
+            task_queue.erase(unique_key);
+            return false;
+        }
+
+        auto table = table_opt.value();
+        auto table_settings = settings_manager.getTableSettings(table);
+
+        if (!table_settings.enable_auto_stats)
+        {
+            auto msg = fmt::format(
+                FMT_STRING("Table {} is disable to auto collect by config, skip it"), chosen_task->getTable().getNameForLogs());
+            LOG_WARNING(logger, msg);
+            chosen_task->setStatus(Status::Cancelled);
+            writeTaskLog(context, *chosen_task, msg);
+            task_queue.erase(unique_key);
+            return true;
+        }
+
         LOG_INFO(logger, fmt::format(FMT_STRING("start auto stats on {}"), table.getNameForLogs()));
 
         chosen_task->setStatus(Status::Running);
         writeTaskLog(context, *chosen_task);
 
-        CreateStatsSettings settings; // TODO
         auto columns_name = chosen_task->getColumnsName();
 
-        // TODO: gouguilin
-        // if (!chosen_task->getSettingsJson().empty())
-        // {
-        //     settings.fromJsonStr(chosen_task->getSettingsJson());
-        // }
+        CreateStatsSettings collector_settings;
+        if (chosen_task->getTaskType() == TaskType::Manual)
+        {
+            if (!chosen_task->getSettingsJson().empty())
+            {
+                collector_settings.fromJsonStr(chosen_task->getSettingsJson());
+            }
+        }
+        else
+        {
+            auto global_settings = context->getSettings();
+            global_settings.applyChanges(table_settings.settings_changes);
+            collector_settings.fromContextSettings(global_settings);
+        }
 
-        CollectTarget target(context, table, settings, columns_name);
+        CollectTarget target(context, table, collector_settings, columns_name);
         auto row_count_opt = collectStatsOnTarget(context, target);
 
         if (row_count_opt.has_value())
@@ -348,7 +491,7 @@ bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & cho
             chosen_task->setStatus(Status::Success);
             chosen_task->setParams(0, row_count, 0);
             writeTaskLog(context, *chosen_task);
-            task_queue.erase(uuid);
+            task_queue.erase(unique_key);
         }
         else
         {
@@ -358,7 +501,7 @@ bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & cho
             chosen_task->setStatus(Status::Success);
             chosen_task->setParams(0, 0, 0);
             writeTaskLog(context, *chosen_task, "skip since stats exists");
-            task_queue.erase(uuid);
+            task_queue.erase(unique_key);
         }
 
         return true;
@@ -368,12 +511,12 @@ bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & cho
         tryLogCurrentException(logger);
 
         auto err_msg = getCurrentExceptionMessage(false);
-        auto err_log = fmt::format(FMT_STRING("auto stats task {} fails, because {}"), table.getNameForLogs(), err_msg);
+        auto err_log = fmt::format(FMT_STRING("auto stats task {} fails, because {}"), chosen_task->getTable().getNameForLogs(), err_msg);
         LOG_ERROR(logger, err_log);
 
         chosen_task->setStatus(Status::Error);
         writeTaskLog(context, *chosen_task, err_msg);
-        task_queue.erase(uuid);
+        task_queue.erase(unique_key);
         return false;
     }
 }
@@ -387,51 +530,53 @@ void AutoStatisticsManager::clearOnException()
 
 void AutoStatisticsManager::initializeInfo()
 {
+    auto context = getContext();
     loadNewConfigIfNeeded();
     LOG_INFO(logger, "init info since server restarts or has exception");
 
     // check health
     auto catalog = createCatalogAdaptor(context);
-    catalog->checkHealth(true);
+    // just check read health, because
+    // write health checker works by inserting into distributed table
+    // all servers inserts into a distributed table will cost O(N^2)
+    catalog->checkHealth(false);
     task_queue.clear();
 
-    auto init_min_event_time = nowTimePoint() - std::chrono::days(internal_config.task_expire_days());
-    auto fetch_log_time_point = updateTaskQueueFromLog(init_min_event_time);
-    next_min_event_time = fetch_log_time_point - std::chrono::seconds(internal_config.schedule_period_seconds());
-
+    next_min_event_time = std::nullopt;
     information_is_valid = true;
 }
 
 // we have to ensure only
-void AutoStatisticsManager::initialize(ContextPtr context_, const Poco::Util::AbstractConfiguration & config)
+void AutoStatisticsManager::initialize(ContextMutablePtr context_, const Poco::Util::AbstractConfiguration & config)
 {
     if (context_->getServerType() != ServerType::cnch_server)
         return;
-    // use flush to create table if not exists
-    context_->getAutoStatsTaskLog()->flush(true);
+
+    if (auto task_log = context_->getAutoStatsTaskLog())
+    {
+        // use flush to create table if not exists
+        task_log->flush(true);
+    }
+    else
+    {
+        LOG_WARNING(&Poco::Logger::get("AutoStatisticsManager::initialize"), "cnch_system.cnch_auto_stats_task_log is not initialized");
+    }
 
     // zk helper will make only one manager runs at the whole cluster
     if (AutoStatisticsManager::is_initialized)
         throw Exception("AutoStatisticsManager should call initialize only once", ErrorCodes::LOGICAL_ERROR);
 
-    the_instance = std::make_unique<AutoStatisticsManager>(context_);
+    {
+        auto the_instance = std::make_unique<AutoStatisticsManager>(context_);
+        context_->setAutoStatisticsManager(std::move(the_instance));
+    }
+    auto * the_instance = context_->getAutoStatisticsManager();
+
     the_instance->prepareNewConfig(config);
 
     LOG_INFO(the_instance->logger, "Create Thread Pool with Setting (1, 0, 1)");
     the_instance->thread_pool = std::make_unique<ThreadPool>(1, 0, 1);
     AutoStatisticsManager::is_initialized = true; // ready for instance
-}
-
-AutoStatisticsManager * AutoStatisticsManager::tryGetInstance()
-{
-    if (AutoStatisticsManager::is_initialized && the_instance.get())
-    {
-        return the_instance.get();
-    }
-    else
-    {
-        return nullptr;
-    }
 }
 
 bool AutoStatisticsManager::isNowValidTimeRange()
@@ -464,15 +609,15 @@ bool AutoStatisticsManager::isNowValidTimeRange()
 
 void AutoStatisticsManager::loadNewConfigIfNeeded()
 {
-    std::unique_lock lck(config_mtx);
-    if (!new_internal_config.has_value())
-        return;
-    internal_config = std::move(new_internal_config.value());
-    new_internal_config = std::nullopt;
+    // TODO: reload settings needs reconsider,
+    // TODO: since it should be placed into DaemonManager
+    // since fetching from settings is cheap, always load
+    internal_config = settings_manager.getManagerSettings();
 }
 
 void AutoStatisticsManager::scheduleDistributeUdiCount()
 {
+    auto context = getContext();
     auto catalog = createCatalogAdaptor(context);
     auto servers = DaemonManager::DaemonJobAutoStatistics::getServerList(context);
     using RecordType = std::unordered_map<UUID, UInt64>;
@@ -549,6 +694,7 @@ void AutoStatisticsManager::writeMemoryRecord(const std::unordered_map<UUID, UIn
 // return max_event_time of current log
 TimePoint AutoStatisticsManager::updateTaskQueueFromLog(TimePoint min_event_time)
 {
+    auto context = getContext();
     context->getAutoStatsTaskLog()->flush(true);
 
     /// record current time before read log
@@ -556,22 +702,24 @@ TimePoint AutoStatisticsManager::updateTaskQueueFromLog(TimePoint min_event_time
     auto current_time = nowTimePoint();
 
     auto task_log_infos = batchReadTaskLog(context, convertToDateTime64(min_event_time));
+    UInt64 log_count = 0;
     for (const auto & task_log_info : task_log_infos)
     {
+        ++log_count;
         task_queue.updateTasksFromLogIfNeeded(task_log_info);
     }
-
+    auto task_count = this->task_queue.size();
+    LOG_INFO(logger, "processed {} new log entry, now {} tasks is in list", log_count, task_count);
     return current_time;
 }
 
-void AutoStatisticsManager::logTaskIfNeeded(
-    const StatsTableIdentifier & table, UInt64 udi_count, UInt64 stats_row_count, DateTime64 timestamp)
+void AutoStatisticsManager::logTaskIfNeeded(const StatsTableIdentifier & table, UInt64 udi_count, UInt64 stats_row_count)
 {
+    auto context = getContext();
     auto priority_opt = calcPriority(internal_config, udi_count, stats_row_count);
     if (!priority_opt)
         return;
     auto priority = priority_opt.value();
-    auto table_uuid = table.getUUID();
     auto info_log = fmt::format(
         FMT_STRING("auto task {} with priority={}, udi={}, stats_row_count={}"),
         table.getNameForLogs(),
@@ -579,7 +727,7 @@ void AutoStatisticsManager::logTaskIfNeeded(
         udi_count,
         stats_row_count);
 
-    auto task = task_queue.tryGetTaskInfo(table_uuid);
+    auto task = task_queue.tryGetTaskInfo(table.getUniqueKey());
     if (task)
     {
         // task exists, just update priority
@@ -589,13 +737,6 @@ void AutoStatisticsManager::logTaskIfNeeded(
     }
     else
     {
-        // create new table
-        auto lease = convertToTimePoint(timestamp) + std::chrono::seconds(internal_config.update_interval_seconds());
-        // wait for a schedule period, to start the collection
-        // make the system happy
-        auto lease2 = nowTimePoint() + std::chrono::seconds(internal_config.schedule_period_seconds());
-        lease = std::max(lease, lease2);
-
         auto task_info_core = TaskInfoCore{
             .task_uuid = UUIDHelpers::generateV4(),
             .task_type = TaskType::Auto,
@@ -608,10 +749,8 @@ void AutoStatisticsManager::logTaskIfNeeded(
             .status = Status::Created,
         };
 
-        auto new_task = std::make_shared<TaskInfo>(task_info_core, lease);
-
         LOG_INFO(logger, fmt::format(FMT_STRING("create: {}"), info_log));
-        writeTaskLog(context, *new_task);
+        writeTaskLog(context, task_info_core);
     }
 }
 

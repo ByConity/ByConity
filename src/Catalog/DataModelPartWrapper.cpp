@@ -30,6 +30,11 @@ namespace ErrorCodes
 
 DataModelPartWrapper::DataModelPartWrapper() = default;
 
+Int64 getBucketNumberOrInvalid(Int64 bucket_number, bool valid)
+{
+    return valid ? bucket_number : kInvalidBucketNumber;
+}
+
 UInt64 ServerDataPart::getCommitTime() const
 {
     if (commit_time)

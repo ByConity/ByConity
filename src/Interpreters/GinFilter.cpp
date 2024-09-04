@@ -200,4 +200,14 @@ bool GinFilter::match(const GinPostingsCache & postings_cache , roaring::Roaring
     return false;
 }
 
+String GinFilter::getTermsInString() const
+{
+    String result;
+    for (const String & term : terms)
+    {
+        result += " " + term;
+    }
+    return result;
+}
+
 }

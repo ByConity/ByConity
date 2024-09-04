@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Storages/System/StorageSystemWorkerGroups.h>
 
 #include <DataTypes/DataTypeUUID.h>
@@ -21,7 +22,6 @@
 #include <Interpreters/Context.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <ResourceManagement/CommonData.h>
-
 
 namespace DB
 {
@@ -41,6 +41,7 @@ NamesAndTypesList StorageSystemWorkerGroups::getNamesAndTypes()
         {"linked_id", std::make_shared<DataTypeString>()},
         {"active_workers", std::make_shared<DataTypeUInt32>()},
         {"is_auto_linked", std::make_shared<DataTypeUInt32>()},
+        {"priority", std::make_shared<DataTypeInt64>()},
     };
 }
 
@@ -71,6 +72,7 @@ void StorageSystemWorkerGroups::fillData(MutableColumns & res_columns, const Con
         res_columns[i++]->insert(data.linked_id);
         res_columns[i++]->insert(data.num_workers);
         res_columns[i++]->insert(static_cast<uint32_t>(data.is_auto_linked));
+        res_columns[i++]->insert(static_cast<int64_t>(data.priority));
     }
 }
 

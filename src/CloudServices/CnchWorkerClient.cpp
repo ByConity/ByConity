@@ -227,26 +227,6 @@ void CnchWorkerClient::sendCreateQueries(
     RPCHelpers::checkResponse(response);
 }
 
-brpc::CallId CnchWorkerClient::sendCnchFileDataParts(
-    const ContextPtr & context,
-    const StoragePtr & storage,
-    const String & local_table_name,
-    const DB::FileDataPartsCNCHVector & parts,
-    const ExceptionHandlerPtr & handler)
-{
-    Protos::SendCnchFileDataPartsReq request;
-    request.set_txn_id(context->getCurrentTransactionID());
-    request.set_database_name(storage->getDatabaseName());
-    request.set_table_name(local_table_name);
-    fillCnchFilePartsModel(parts, *request.mutable_parts());
-
-    auto * cntl = new brpc::Controller;
-    const auto call_id = cntl->call_id();
-    auto * response = new Protos::SendCnchFileDataPartsResp;
-    stub->sendCnchFileDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
-    return call_id;
-}
-
 CheckResults CnchWorkerClient::checkDataParts(
     const ContextPtr & context,
     const IStorage & storage,
@@ -342,47 +322,28 @@ brpc::CallId CnchWorkerClient::dropPartDiskCache(
     return cntl.call_id();
 }
 
-brpc::CallId CnchWorkerClient::sendQueryDataParts(
+brpc::CallId CnchWorkerClient::dropManifestDiskCache(
     const ContextPtr & context,
-    const StoragePtr & storage,
-    const String & local_table_name,
-    const ServerDataPartsVector & data_parts,
-    const std::set<Int64> & required_bucket_numbers,
-    const ExceptionHandlerWithFailedInfoPtr & handler,
-    const WorkerId & worker_id)
+    const IStorage & storage,
+    const String & version,
+    const bool sync)
 {
-    Protos::SendDataPartsReq request;
-    request.set_txn_id(context->getCurrentTransactionID());
-    request.set_database_name(storage->getDatabaseName());
-    request.set_table_name(local_table_name);
-    request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
+    brpc::Controller cntl;
+    Protos::DropManifestDiskCacheReq request;
+    Protos::DropManifestDiskCacheResp response;
 
-    fillBasePartAndDeleteBitmapModels(*storage, data_parts, *request.mutable_parts(), *request.mutable_bitmaps());
-    for (const auto & bucket_num : required_bucket_numbers)
-        *request.mutable_bucket_numbers()->Add() = bucket_num;
+    cntl.set_timeout_ms(context->getSettingsRef().max_execution_time.value.totalMilliseconds());
 
-    // TODO:
-    // auto udf_info = context.getNonSqlUdfVersionMap();
-    // for (const auto & [name, version]: udf_info)
-    // {
-    //     auto & new_info = *request.mutable_udf_infos()->Add();
-    //     new_info.set_function_name(name);
-    //     new_info.set_version(version);
-    // }
+    RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_storage_id());
+    if (!version.empty())
+        request.set_version(std::stoull(version));
+    request.set_sync(sync);
 
+    stub->dropManifestDiskCache(&cntl, &request, &response, nullptr);
 
-    auto * cntl = new brpc::Controller();
-    auto * response = new Protos::SendDataPartsResp();
-    /// adjust the timeout to prevent timeout if there are too many parts to send,
-    const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, settings.brpc_data_parts_timeout_ms.totalMilliseconds());
-    cntl->set_timeout_ms(send_timeout);
-
-    auto call_id = cntl->call_id();
-    stub->sendQueryDataParts(
-        cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
-
-    return call_id;
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+    return cntl.call_id();
 }
 
 brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT

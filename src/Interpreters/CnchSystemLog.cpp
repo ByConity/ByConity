@@ -141,6 +141,26 @@ String prepareEngineClause<KafkaLogElement>(const Poco::Util::AbstractConfigurat
 }
 
 template <>
+String prepareEngineClause<AutoStatsTaskLogElement>(const Poco::Util::AbstractConfiguration & config, const String & config_prefix)
+{
+    String engine = "ENGINE = CnchMergeTree() ";
+    engine += " ORDER BY (event_date, event_time)";
+
+    String partition_by = config.getString(config_prefix + ".partition_by", "event_date");
+    if (!partition_by.empty())
+        engine += " PARTITION BY (" + partition_by + ")";
+
+    /// be consistent with cnch1.4, in which ttl field just configures the duration, e.g., 31 DAY, instead of the full ttl expression
+    String ttl = config.getString(config_prefix + ".ttl", "90 DAY");
+    if (!ttl.empty())
+        engine += " TTL event_date + INTERVAL " + ttl;
+
+    engine += " SETTINGS index_granularity = 8192";
+
+    return engine;
+}
+
+template <>
 String prepareEngineClause<MaterializedMySQLLogElement>(const Poco::Util::AbstractConfiguration & config, const String & config_prefix)
 {
     String engine = "ENGINE = CnchMergeTree() ";
@@ -362,6 +382,8 @@ bool CnchSystemLogs::initInServer(ContextPtr global_context)
     bool query_worker_metrics_ret = true;
     bool cnch_query_log_ret = true;
     bool cnch_view_refresh_task_log_ret = true;
+    bool cnch_auto_stats_task_log_ret = true;
+
 
     if (config.has(CNCH_KAFKA_LOG_CONFIG_PREFIX))
         kafka_ret = initInServerForSingleLog<CloudKafkaLog>(global_context,
@@ -404,8 +426,16 @@ bool CnchSystemLogs::initInServer(ContextPtr global_context)
             config,
             cnch_view_refresh_task_log);
 
+    if (config.has(CNCH_AUTO_STATS_TASK_LOG_CONFIG_PREFIX))
+        cnch_auto_stats_task_log_ret = initInServerForSingleLog<CnchAutoStatsTaskLog>(global_context,
+            CNCH_SYSTEM_LOG_DB_NAME,
+            CNCH_SYSTEM_LOG_AUTO_STATS_TASK_LOG_TABLE_NAME,
+            CNCH_AUTO_STATS_TASK_LOG_CONFIG_PREFIX,
+            config,
+            cnch_auto_stats_task_log);
+
     return (kafka_ret && materialized_mysql_ret && unique_table_ret && query_metrics_ret && query_worker_metrics_ret
-    && cnch_query_log_ret && cnch_view_refresh_task_log_ret);
+    && cnch_query_log_ret && cnch_view_refresh_task_log_ret && cnch_auto_stats_task_log_ret);
 }
 
 template<typename CloudLog>

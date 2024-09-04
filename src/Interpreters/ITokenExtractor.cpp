@@ -240,4 +240,116 @@ bool SplitTokenExtractor::nextInStringLike(const char * data, size_t length, siz
     return !bad_token && !token.empty();
 }
 
+bool StandardTokenExtractor::nextInString(
+    const char * data, size_t length, size_t * __restrict pos, size_t * __restrict token_start, size_t * __restrict token_length) const
+{
+    *token_start = *pos;
+    *token_length = 0;
+
+    while (*pos < length)
+    {
+        if (isASCII(data[*pos]))
+        {
+            if (isAlphaNumericASCII(data[*pos]))
+            {
+                // if is Alpha or Numeric just continue
+                ++*pos;
+                ++*token_length;
+                continue;
+            }
+
+            /// Finish current token if have any
+            if (*token_length > 0)
+            {
+                return true;
+            }
+            else
+            {
+                // skip current and split continue
+                *token_start = ++*pos;
+            }
+        }
+        else // UTF-8 case
+        {
+            // Finish current token if have any
+            if (*token_length > 0)
+                return true;
+
+            // get length and return
+            const size_t sz = UTF8::seqLength(static_cast<UInt8>(data[*pos]));
+            (*pos)+=sz;
+            (*token_length)+=sz;
+            // submit utf-8 token
+            if(*token_length > 0)
+            {
+                return true;
+            }
+            
+        }
+    }
+
+    return *token_length > 0;
+}
+
+bool StandardTokenExtractor::nextInStringLike(
+   const char * data, size_t length, size_t * pos, String & out) const 
+{
+    out.clear();
+    bool bad_token = false; // % or _ before token
+    bool escaped = false;
+
+    while (*pos < length)
+    {
+        if (!escaped && (data[*pos] == '%' || data[*pos] == '_'))
+        {
+            out.clear();
+            bad_token = true;
+            ++*pos;
+        }
+        else if (!escaped && data[*pos] == '\\')
+        {
+            escaped = true;
+            ++*pos;
+        }
+        else if (isASCII(data[*pos]))
+        {
+            if(isAlphaNumericASCII(data[*pos]))
+            {
+                out += data[*pos];
+                ++*pos;
+                escaped = false;
+                continue;
+            }
+
+            if (!bad_token && !out.empty())
+                return true;
+
+            out.clear();
+            bad_token = false;
+            escaped = false;
+            ++*pos;
+        }
+        else
+        {
+            // before cut utf-8 submit token if has any
+            if (!bad_token && !out.empty())
+                return true;
+            
+            out.clear();
+            bad_token = false;
+            escaped = false;
+
+            const size_t sz = UTF8::seqLength(static_cast<UInt8>(data[*pos]));
+
+            out.append((data + *pos), sz);
+            (*pos) += sz;
+
+            // submit token after cut utf-8
+            if (!out.empty())
+                return true;
+        }
+    }
+    return !bad_token && !out.empty();
+}
+
 }

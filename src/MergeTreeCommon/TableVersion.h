@@ -32,6 +32,8 @@ public:
 
     bool isCheckpoint() const { return checkpoint_version; }
 
+    void dropDiskCache(ThreadPool & pool);
+
     friend class ManifestDiskCacheSegment;
 
 private:

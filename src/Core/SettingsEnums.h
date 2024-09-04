@@ -348,6 +348,15 @@ enum class VWQueueMode : uint32_t
 
 DECLARE_SETTING_ENUM(VWQueueMode);
 
+enum class VWLoadBalancing
+{
+    RANDOM = 0,
+    IN_ORDER,
+    REVERSE_ORDER,
+};
+
+DECLARE_SETTING_ENUM(VWLoadBalancing);
+
 enum class SpanHierarchy : int
 {
     TRACE = 0,
@@ -381,6 +390,7 @@ enum class DedupKeyMode
     REPLACE,
     THROW,
     APPEND,
+    IGNORE,
 };
 
 DECLARE_SETTING_ENUM(DedupKeyMode)

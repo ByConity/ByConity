@@ -78,6 +78,9 @@ public:
     void filpWithRange(roaring::Roaring & result) const;
     size_t getAllRangeSize() const;
 
+    // for log trace
+    String getTermsInString() const;
+
 private:
     /// Filter parameters
     [[__maybe_unused__]] const GinFilterParameters & params;

@@ -67,6 +67,7 @@
 #include <brpc/callback.h>
 #include <fmt/core.h>
 #include <incubator-brpc/src/brpc/controller.h>
+#include <Poco/Logger.h>
 #include <Common/Brpc/BrpcChannelPoolOptions.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
@@ -174,7 +175,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
         query_log_element->event_time_microseconds = time_in_microseconds(finish_time);
 
         return convertSuccessPlanSegmentStatusToResult(
-            context, plan_segment_instance->info.execution_address, final_progress, sender_metrics, plan_segment_outputs);
+            context, plan_segment_instance->info, final_progress, sender_metrics, plan_segment_outputs);
     }
     catch (...)
     {
@@ -216,7 +217,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
         if (exception_handler && exception_handler->setException(std::current_exception()))
             return convertFailurePlanSegmentStatusToResult(
                 context,
-                plan_segment_instance->info.execution_address,
+                plan_segment_instance->info,
                 exception_code,
                 exception_message,
                 std::move(final_progress),
@@ -230,6 +231,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
 
 BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
 {
+    LOG_DEBUG(&Poco::Logger::get("PlanSegmentExecutor"), "lazyExecute: {}", plan_segment->getPlanSegmentId());
     BlockIO res;
     // Will run as master query and already initialized
     if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())

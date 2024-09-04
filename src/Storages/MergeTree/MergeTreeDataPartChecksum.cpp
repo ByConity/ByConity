@@ -424,6 +424,35 @@ bool MergeTreeDataPartChecksums::readV7(ReadBuffer & from)
     return true;
 }
 
+void MergeTreeDataPartChecksums::writeLocal(WriteBuffer & to) const
+{
+    writeString("checksums format version: 4\n", to);
+
+    CompressedWriteBuffer out{to, CompressionCodecFactory::instance().getDefaultCodec(), 1 << 16};
+
+    writeVarUInt(files.size(), out);
+
+    for (const auto & it : files)
+    {
+        const String & name = it.first;
+        const Checksum & sum = it.second;
+
+        writeBinary(name, out);
+        if (storage_type != StorageType::Local || versions->enable_compact_map_data)
+            writeVarUInt(sum.file_offset, out);
+        writeVarUInt(sum.file_size, out);
+        writePODBinary(sum.file_hash, out);
+        writeBinary(sum.is_compressed, out);
+
+        if (sum.is_compressed)
+        {
+            writeVarUInt(sum.uncompressed_size, out);
+            writePODBinary(sum.uncompressed_hash, out);
+        }
+    }
+    out.finalize();
+}
+
 void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
 {
     writeString("checksums format version: 6\n", to);
@@ -455,6 +484,7 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
         // writeBinary(sum.is_encrypted, out);
         writeBinary(sum.is_deleted, out);
     }
+    out.finalize();
 }
 
 void MergeTreeDataPartChecksums::addFile(const String & file_name, UInt64 file_size, MergeTreeDataPartChecksum::uint128 file_hash)

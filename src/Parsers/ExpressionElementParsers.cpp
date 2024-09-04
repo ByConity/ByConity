@@ -68,6 +68,7 @@
 #include <Parsers/queryToString.h>
 #include <boost/algorithm/string.hpp>
 #include "ASTColumnsMatcher.h"
+#include "Parsers/parseDatabaseAndTableName.h"
 
 #include <Interpreters/StorageID.h>
 #include <Parsers/formatTenantDatabaseName.h>
@@ -3127,6 +3128,31 @@ bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         return false;
 
     tryGetIdentifierNameInto(column, assignment->column_name);
+    if (expression)
+        assignment->children.push_back(expression);
+
+    return true;
+}
+
+/// a.col = _expression_  or col = _expression_
+/// Reuse `parseDatabaseAndTableName` for extracting table alias and column name.
+bool ParserAssignmentWithAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    auto assignment = std::make_shared<ASTAssignment>();
+    node = assignment;
+
+    ParserToken s_equals(TokenType::Equals);
+    ParserExpression p_expression(dt);
+
+    parseDatabaseAndTableName(pos, expected, assignment->table_name, assignment->column_name);
+
+    if (!s_equals.ignore(pos, expected))
+        return false;
+
+    ASTPtr expression;
+    if (!p_expression.parse(pos, expression, expected))
+        return false;
+
     if (expression)
         assignment->children.push_back(expression);
 

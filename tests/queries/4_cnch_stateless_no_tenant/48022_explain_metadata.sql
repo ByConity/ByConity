@@ -49,3 +49,4 @@ set enable_optimizer=1;
 set enable_optimizer_fallback=0;
 
 explain metadata select getSetting('enable_optimizer'), getSetting('enable_optimizer_fallback');
+explain metadata ignore_format=1 select 1+1 format JSON;

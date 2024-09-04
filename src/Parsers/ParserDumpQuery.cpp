@@ -3,6 +3,7 @@
 #include <Parsers/ParserDumpQuery.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTSetQuery.h>
 
 namespace DB
 {
@@ -48,6 +49,7 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr where_expression;
     ASTPtr dump_path;
     ASTPtr settings;
+    bool ignore_format = false;
 
     /// DUMP
     if (!s_dump.ignore(pos, expected))
@@ -57,6 +59,14 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     auto begin = pos;
     if (!parser_settings.parse(pos, settings, expected))
         pos = begin;
+
+    if (settings)
+    {
+        auto & settings_ast = settings->as<ASTSetQuery &>();
+        auto * ignore_format_setting = settings_ast.changes.tryGet("ignore_format");
+        if (ignore_format_setting && ignore_format_setting->toString() == "1")
+            ignore_format = true;
+    }
 
     /// DDL
     if (s_ddl.ignore(pos, expected))
@@ -149,6 +159,7 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     dump_query->setExpression(ASTDumpQuery::Expression::CLUSTER, std::move(cluster_name));
     dump_query->setExpression(ASTDumpQuery::Expression::DUMP_PATH, std::move(dump_path));
     dump_query->setExpression(ASTDumpQuery::Expression::SETTING, std::move(settings));
+    dump_query->ignore_format = ignore_format;
 
     if (output_client)
     {

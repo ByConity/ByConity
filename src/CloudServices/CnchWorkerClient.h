@@ -88,22 +88,6 @@ public:
     /// send resource to worker async
     void sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries, std::set<String> cnch_table_create_queries = {});
 
-    brpc::CallId sendQueryDataParts(
-        const ContextPtr & context,
-        const StoragePtr & storage,
-        const String & local_table_name,
-        const ServerDataPartsVector & parts,
-        const std::set<Int64> & required_bucket_numbers,
-        const ExceptionHandlerWithFailedInfoPtr & handler,
-        const WorkerId & worker_id = WorkerId{});
-
-    brpc::CallId sendCnchFileDataParts(
-        const ContextPtr & context,
-        const StoragePtr & storage,
-        const String & local_table_name,
-        const FileDataPartsCNCHVector & parts,
-        const ExceptionHandlerPtr & handler);
-
     CheckResults checkDataParts(
         const ContextPtr & context,
         const IStorage & storage,
@@ -130,6 +114,12 @@ public:
         const ServerDataPartsVector & parts,
         bool sync,
         bool drop_vw_disk_cache);
+
+    brpc::CallId dropManifestDiskCache(
+        const ContextPtr & context,
+        const IStorage & storage,
+        const String & version,
+        const bool sync);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,

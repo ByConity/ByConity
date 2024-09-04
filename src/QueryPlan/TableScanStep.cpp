@@ -354,15 +354,14 @@ ExecutePlan TableScanExecutor::buildExecutePlan(const DistributedPipelineSetting
     PartGroups part_groups;
     {
         auto parts = storage.getDataPartsVector();
-        if (distributed_settings.source_task_index && distributed_settings.source_task_count)
+        if (distributed_settings.source_task_filter.isValid())
         {
             auto size_before_filtering = parts.size();
-            filterParts(parts, distributed_settings.source_task_index.value(), distributed_settings.source_task_count.value());
+            filterParts(parts, distributed_settings.source_task_filter);
             LOG_TRACE(
                 log,
-                "After filtering(index:{}, count:{}) the number of parts of table {} becomes {} from {}",
-                distributed_settings.source_task_index.value(),
-                distributed_settings.source_task_count.value(),
+                "After filtering({}) the number of parts of table {} becomes {} from {}",
+                distributed_settings.source_task_filter.toString(),
                 storage.getTableName(),
                 parts.size(),
                 size_before_filtering);
@@ -758,10 +757,12 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
             }
             else
             {
-                auto input = storage->getInMemoryMetadataPtr()->getColumns().getAll();
+                Block header = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context)
+                                   ->getSampleBlockForColumns(getRequiredColumns());
+
                 Names output;
                 output.emplace_back(left_in_operand->getColumnName());
-                auto temp_actions = createExpressionActions(context, input, output, left_in_operand);
+                auto temp_actions = createExpressionActions(context, header.getNamesAndTypesList(), output, left_in_operand);
                 if (temp_actions->tryFindInOutputs(left_in_operand->getColumnName()))
                 {
                     makeExplicitSet(func, *temp_actions, true, context, size_limits_for_set, prepared_sets);
@@ -1319,11 +1320,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), build_context.context);
         if (auto * cloud_merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
         {
-            if (build_context.distributed_settings.source_task_index)
-            {
-                cloud_merge_tree->source_index = build_context.distributed_settings.source_task_index;
-                cloud_merge_tree->source_count = build_context.distributed_settings.source_task_count;
-            }
+            cloud_merge_tree->source_task_filter = build_context.distributed_settings.source_task_filter;
         }
         // flag = Output
         auto pipe = storage->read(
@@ -1917,9 +1914,16 @@ void TableScanStep::setQuotaAndLimits(QueryPipeline & pipeline, const SelectQuer
 void TableScanStep::setReadOrder(SortDescription read_order)
 {
     if (!read_order.empty())
-    {
         query_info.input_order_info = std::make_shared<InputOrderInfo>(read_order, read_order[0].direction);
-    }
+    else
+        query_info.input_order_info = nullptr;
+}
+
+SortDescription TableScanStep::getReadOrder() const
+{
+    if (query_info.input_order_info)
+        return query_info.input_order_info->order_key_prefix_descr;
+    return SortDescription{};
 }
 
 Names TableScanStep::getRequiredColumns(GetFlags flags) const

@@ -7,7 +7,6 @@
 #include <Poco/Logger.h>
 #include "Common/Exception.h"
 
-
 namespace DB::Statistics
 {
 // this can be nullable

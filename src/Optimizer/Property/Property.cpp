@@ -333,6 +333,30 @@ String Partitioning::toString() const
     }
 }
 
+SortOrder SortColumn::toReverseOrder(SortOrder sort_order)
+{
+    switch (sort_order)
+    {
+        case SortOrder::ASC_NULLS_FIRST:
+            return SortOrder::DESC_NULLS_LAST;
+        case SortOrder::ASC_NULLS_LAST:
+            return SortOrder::DESC_NULLS_FIRST;
+        case SortOrder::ASC_ANY:
+            return SortOrder::DESC_ANY;
+        case SortOrder::DESC_NULLS_FIRST:
+            return SortOrder::ASC_NULLS_LAST;
+        case SortOrder::DESC_NULLS_LAST:
+            return SortOrder::ASC_NULLS_FIRST;
+        case SortOrder::DESC_ANY:
+            return SortOrder::ASC_ANY;
+        case SortOrder::ANY:
+            return SortOrder::ANY;
+        case SortOrder::UNKNOWN:
+            return SortOrder::UNKNOWN;
+    }
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "unknown sort order");
+}
+
 size_t SortColumn::hash() const
 {
     size_t hash = MurmurHash3Impl64::apply(name.c_str(), name.size());
@@ -362,6 +386,15 @@ String SortColumn::toString() const
             return name + "unknown";
     }
     return "unknown";
+}
+
+Sorting Sorting::toReverseOrder() const
+{
+    Sorting ret;
+    ret.reserve(size());
+    for (const SortColumn & sort_column : *this)
+        ret.emplace_back(sort_column.toReverseOrder());
+    return ret;
 }
 
 size_t Sorting::hash() const

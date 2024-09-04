@@ -15,6 +15,7 @@
 
 #pragma once
 #include <ResourceManagement/IWorkerGroup.h>
+#include <ResourceManagement/WorkerGroupType.h>
 
 namespace DB::ResourceManagement
 {
@@ -24,10 +25,11 @@ class VirtualWarehouse;
 class SharedWorkerGroup : public IWorkerGroup
 {
 public:
-    SharedWorkerGroup(String id_, UUID vw_uuid_, String linked_id_, bool is_auto_linked_ = false)
-        : IWorkerGroup(WorkerGroupType::Shared, std::move(id_), vw_uuid_)
+    SharedWorkerGroup(WorkerGroupType type_, String id_, UUID vw_uuid_, String linked_id_, bool is_auto_linked_ = false, Int64 priority_ = 0)
+        : IWorkerGroup(type_, std::move(id_), vw_uuid_)
         , linked_id(std::move(linked_id_))
         , is_auto_linked(is_auto_linked_)
+        , priority(priority_)
     {
     }
 
@@ -68,6 +70,8 @@ private:
     WorkerGroupWeakPtr linked_group;
 
     bool is_auto_linked;
+
+    Int64 priority {0};
 };
 
 using SharedWorkerGroupPtr = std::shared_ptr<SharedWorkerGroup>;

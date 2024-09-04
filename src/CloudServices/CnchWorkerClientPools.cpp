@@ -57,12 +57,12 @@ void CnchWorkerClientPools::removeVirtualWarehouse(const String & name)
 }
 
 /// XXX: temporary solution.
-CnchWorkerClientPtr CnchWorkerClientPools::getWorker(const HostWithPorts & host_ports)
+CnchWorkerClientPtr CnchWorkerClientPools::getWorker(const HostWithPorts & host_ports, bool refresh)
 {
     std::lock_guard lock(pools_mutex);
     for (auto & [name, pool]: pools)
     {
-        if (auto client = pool->get(host_ports))
+        if (auto client = pool->get(host_ports, refresh))
             return client;
     }
     throw Exception(ErrorCodes::NO_SUCH_SERVICE, "Can't get CnchWorker by host_ports: {} ", host_ports.toDebugString());

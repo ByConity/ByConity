@@ -743,6 +743,13 @@ void CnchServerServiceImpl::fetchPartitions(
             session_context->setCurrentDatabase(request->database());
             ReadBufferFromString rb(request->predicate());
             ASTPtr query_ptr = deserializeAST(rb);
+            /// We should to add `database` into AST before calling `buildSelectQueryInfoForQuery`.
+            {
+                ASTSelectQuery * select_query = query_ptr->as<ASTSelectQuery>();
+                if (!select_query)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected AST type found in buildSelectQueryInfoForQuery");
+                select_query->replaceDatabaseAndTable(request->database(), request->table());
+            }
             SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
 
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
@@ -783,18 +790,8 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
 
             try
             {
-                std::map<StorageID, CnchBGThreadStatus> res;
-
-                auto type = CnchBGThreadType(request->type());
-                if (type >= CnchBGThreadType::ServerMinType && type <= CnchBGThreadType::ServerMaxType)
-                {
-                    auto threads = global_context->getCnchBGThreadsMap(type);
-                    res = threads->getStatusMap();
-                }
-                else
-                {
-                    throw Exception("Not support type " + toString(int(request->type())), ErrorCodes::NOT_IMPLEMENTED);
-                }
+                auto type = toServerBGThreadType(request->type());
+                std::map<StorageID, CnchBGThreadStatus> res = global_context->getCnchBGThreadsMap(type)->getStatusMap();
 
                 for (const auto & [storage_id, status] : res)
                 {
@@ -837,8 +834,9 @@ void CnchServerServiceImpl::controlCnchBGThread(
                 StorageID storage_id = StorageID::createEmpty();
                 if (!request->storage_id().table().empty())
                     storage_id = RPCHelpers::createStorageID(request->storage_id());
-                auto type = CnchBGThreadType(request->type());
-                auto action = CnchBGThreadAction(request->action());
+
+                auto type = toServerBGThreadType(request->type());
+                auto action = toCnchBGThreadAction(request->action());
                 auto & controller = static_cast<brpc::Controller &>(*cntl);
                 LOG_DEBUG(log, "Received controlBGThread for {} type {} action {} from {}",
                     storage_id.empty() ? "empty storage" : storage_id.getNameForLogs(),
@@ -1047,7 +1045,7 @@ void CnchServerServiceImpl::queryUdiCounter(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        Statistics::AutoStats::queryUdiCounter(request, response);
+        Statistics::AutoStats::queryUdiCounter(getContext(), request, response);
     }
     catch (...)
     {
@@ -1065,7 +1063,7 @@ void CnchServerServiceImpl::redirectUdiCounter(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        Statistics::AutoStats::redirectUdiCounter(request, response);
+        Statistics::AutoStats::redirectUdiCounter(getContext(), request, response);
     }
     catch (...)
     {
@@ -1085,7 +1083,7 @@ void CnchServerServiceImpl::scheduleDistributeUdiCount(
     try
     {
         (void)request;
-        if (auto auto_stats_manager = AutoStats::AutoStatisticsManager::tryGetInstance())
+        if (auto * auto_stats_manager = getContext()->getAutoStatisticsManager())
             auto_stats_manager->scheduleDistributeUdiCount();
     }
     catch (...)
@@ -1106,7 +1104,8 @@ void CnchServerServiceImpl::scheduleAutoStatsCollect(
     try
     {
         (void)request;
-        if (auto auto_stats_manager = AutoStats::AutoStatisticsManager::tryGetInstance())
+        auto context = getContext();
+        if (auto * auto_stats_manager = context->getAutoStatisticsManager())
             auto_stats_manager->scheduleCollect();
     }
     catch (...)

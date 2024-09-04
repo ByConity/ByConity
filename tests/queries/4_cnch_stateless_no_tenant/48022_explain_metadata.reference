@@ -15,3 +15,4 @@
 ['metadata3']	['test']	[['b']]	[]	{}	[]	{}
 ['metadata3']	['test']	[['c']]	[]	{}	[]	{}
 []	[]	[]	['getSetting']	{}	[]	{'getSetting':['enable_optimizer','enable_optimizer_fallback']}
+[]	[]	[]	['plus']	{}	[]	{}

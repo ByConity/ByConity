@@ -313,6 +313,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, optimize_distributed_group_by_sharding_key, false, "Optimize GROUP BY sharding_key queries (by avoiding costly aggregation on the initiator server).", 0) \
     M(UInt64, optimize_skip_unused_shards_limit, 1000, "Limit for number of sharding key values, turns off optimize_skip_unused_shards if the limit is reached", 0) \
     M(Bool, distributed_perfect_shard, false, "Whether to enable aggregation finished in worker side, to avoid merge aggregation states in coordinator", 0) \
+    M(VWLoadBalancing, vw_load_balancing, VWLoadBalancing::RANDOM, "Which worker group to select according to prority of  worker groups(random in_order reverse_order).", 0) \
     M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, optimize_skip_unused_shards, false, "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", 0) \
     M(Bool, optimize_skip_unused_shards_rewrite_in, true, "Rewrite IN in query for remote shards to exclude values that does not belong to the shard (requires optimize_skip_unused_shards)", 0) \
@@ -377,6 +378,7 @@ enum PreloadLevelSettings : UInt64
       0) \
 \
     M(Bool, log_queries, 1, "Log requests and write the log to the system table.", 0) \
+    M(Bool, log_query_plan, 0, "Log json format query plan to the system query_log table.", 0) \
     M(Bool, log_max_io_thread_queries, 1, "Log max io time thread requests and write the log to the system table", 0) \
     M(LogQueriesType, \
       log_queries_min_type, \
@@ -647,7 +649,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_experimental_multiple_joins_emulation, true, "Emulate multiple joins using subselects", 0) \
     M(Bool, allow_experimental_data_skipping_indices, true, "Emulate data skipping indices", 0) \
     M(Bool, enable_predicate_pushdown, false, "Where to push down predicate", 0) \
-    M(Bool, dict_table_full_mode, false, "If encode / decode table is not bucket table, try to dispatch dict to all workers, if false, throw exception instead", 0) \
+    M(UInt64, max_in_value_list_to_pushdown, 10000, "Max size of in value list in filter", 0) \
     M(UInt64, pathgraph_threshold_y, 0, "maximum point number in each level", 0) \
     M(Bool, to_string_extra_arguments, true, "Whether to allow an extra argument in toString Function", 0) \
     \
@@ -1071,6 +1073,7 @@ enum PreloadLevelSettings : UInt64
       0) \
 \
     M(Bool, handle_division_by_zero, false, "If set true, return null for division by zero (MySQL Behavior)", 0) \
+    M(Bool, enable_bucket_for_distribute, true, "If set true, enable distribute by keyword by replacing with distribute", 0) \
     \
     M(Bool, optimize_rewrite_sum_if_to_count_if, true, "Rewrite sumIf() and sum(if()) function countIf() function when logically equivalent", 0) \
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
@@ -1317,7 +1320,7 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partition for unique key", 0) \
     M(Bool, enable_unique_table_attach_without_dedup, false, "Enable directly make attached parts visible without dedup for unique table, for example: override mode of offline loading", 0) \
     M(Bool, enable_unique_table_detach_ignore_delete_bitmap, false, "Enable ignore delete bitmap info when handling detach commands for unique table, for example: delete bitmap has been broken, we can just ignore it via this parameter.", 0) \
-    M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND. THROW mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
+    M(DedupKeyMode, dedup_key_mode, DedupKeyMode::REPLACE, "Handle different deduplication modes, current valid values: REPLACE, THROW, APPEND, IGNORE. THROW mode and IGNORE mode can only be used in non-staging area scenarios. APPEND mode will not execute dedup process, which is suitable for historical non-duplicated data import scenarios", 0) \
     M(Seconds, unique_sleep_seconds_after_acquire_lock, 0, "Only for test", 0) \
     M(Seconds, unique_acquire_write_lock_timeout, 0, "It has higher priority than table setting. Only when it's zero, use table setting", 0) \
     M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \
@@ -1486,6 +1489,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
     M(Bool, enable_remove_remove_unnecessary_buffer, false, "Whether to only add buffer for cte consumer that may cause deadlock", 0) \
     M(Int64, max_buffer_size_for_deadlock_cte, 8000000000, "Inline CTE if buffer is oversized, set 0 to inline all cte, set -1 to buffer data for all cte even no stats", 0) \
+    M(UInt64, max_prewhere_or_expression_size, 0, "Max depth of condition which can push down to prewhere", 0) \
     M(Bool, enable_add_exchange, true, "Whether to enable AddExchange rule", 0) \
     M(Bool, enable_bitmap_index_splitter, true, "Whether to enable BitMapIndexSplitter", 0) \
     M(Bool, enable_column_pruning, true, "Whether to enable ColumnPruning", 0) \
@@ -1836,6 +1840,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_bsp_selector_fallback, false, "If enabled, query will select nodes as mpp mode if anything is wrong. IT WILL BE REMOVED IN FUTURE", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, false, "Whether to compute locality preferences for reduce tasks", 0) \
+    M(Bool, bsp_force_split_bucket_table_by_part, false, "If enabled, bucket table will be split by part instead of by bucket", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
     M(UInt64, bsp_max_retry_num, 3, "max retry number for a task(plan segment instance) in bsp mode, does not include first execution(i.e. normal execution without retry)",0) \
     /*end of bulk synchronous parallel section*/ \
@@ -1846,6 +1851,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
     M(Bool, throw_exception_when_mysql_connection_failed, false, "For mysql database engine, whether throw exception when mysql connection failed. If it is set to true, clickhouse may shutdown during restarting due to mysql connection failure", 0) \
     /** for inverted index*/ \
+    M(Bool, enable_inverted_index, true, "Enable inverted index", 0) \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
     M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
     /** materialized view async refresh related settings */ \
@@ -1876,6 +1882,7 @@ enum PreloadLevelSettings : UInt64
     MAKE_OBSOLETE(M, UInt64, exchange_local_no_repartition_extra_threads, 32) \
     MAKE_OBSOLETE(M, UInt64, filtered_ratio_to_use_skip_read, 0) \
     MAKE_OBSOLETE(M, Bool, enable_two_stages_prewhere, false) \
+    MAKE_OBSOLETE(M, Bool, funnel_old_rule, false) \
     /** End of OBSOLETE_SETTINGS */ \
 
 #define FORMAT_FACTORY_SETTINGS(M) \

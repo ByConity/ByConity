@@ -83,4 +83,30 @@ void StorageDataManager::reloadTableVersions()
     }
 }
 
+/***
+ * NOTE: Drop table version only happens when cached versions are invalid. Becareful that 
+ * the action may cause currently running query return empty result.
+ */
+void StorageDataManager::dropTableVersion(ThreadPool & pool, UInt64 version)
+{
+    std::unique_lock<std::shared_mutex> write_lock(mutex);
+
+    if (version)
+    {
+        auto it = versions.find(version);
+        if (it != versions.end())
+        {
+            it->second->dropDiskCache(pool);
+            versions.erase(it);
+        }
+    }
+    else
+    {
+        for (const auto & [_, table_version] : versions)
+            table_version->dropDiskCache(pool);
+
+        versions.clear();
+    }
+}
+
 }

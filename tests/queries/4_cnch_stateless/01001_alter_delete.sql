@@ -57,9 +57,16 @@ DROP TABLE t_alter_ids;
 
 SELECT '----- DELETE IN INVALID PARTITION -----';
 CREATE TABLE t_alter_d_partition(d Date, k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY (d, k) ORDER BY m;
+SYSTEM START MERGES t_alter_d_partition;
 ALTER TABLE t_alter_d_partition DELETE IN PARTITION '20231010-10' WHERE m = 10; -- { serverError 248}
 
 DROP TABLE t_alter_d_partition;
+
+CREATE TABLE t_alter_bad_partition(p DateTime, k Int32) ENGINE = CnchMergeTree PARTITION BY toYYYYMMDD(p) ORDER BY k;
+SYSTEM START MERGES t_alter_bad_partition;
+ALTER TABLE t_alter_bad_partition ADD INDEX ik(k) TYPE minmax GRANULARITY 1;
+ALTER TABLE t_alter_bad_partition MATERIALIZE INDEX ik IN PARTITION '2024-01-01'; -- { serverError 72 }
+DROP TABLE t_alter_bad_partition;
 
 CREATE TABLE wrong_column_row_exists(k Int32, _row_exists Int32) ENGINE = CnchMergeTree ORDER BY k; -- { serverError 44 }
 

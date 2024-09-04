@@ -142,6 +142,7 @@ class ReadBuffer;
     M(ASTCreateStatsQuery) \
     M(ASTDropStatsQuery) \
     M(ASTShowStatsQuery) \
+    M(ASTAutoStatsQuery) \
     M(ASTCreateBinding) \
     M(ASTShowBindings) \
     M(ASTDropBinding) \

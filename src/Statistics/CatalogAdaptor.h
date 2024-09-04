@@ -44,7 +44,7 @@ public:
     virtual void dropStatsData(const StatsTableIdentifier & table) = 0;
 
     // fast way to query row count
-    std::optional<UInt64> queryRowCount(const StatsTableIdentifier & top_storage);
+    std::optional<UInt64> queryRowCount(const StatsTableIdentifier & table_id);
 
     virtual std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) = 0;
     virtual std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table) = 0;
@@ -71,6 +71,11 @@ public:
         return getTableOptions(table).is_collectable;
     }
 
+    // fast filter
+    static bool isDatabaseCollectable(const String & database_name);
+    static TableOptions getTableOptionsForStorage(IStorage & storage);
+
+    // normal filter
     TableOptions getTableOptions(const StatsTableIdentifier & table);
 
     bool isTableAutoUpdatable(const StatsTableIdentifier & table)

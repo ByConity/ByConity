@@ -175,7 +175,9 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
         server_capabilities |= CLIENT_SSL;
 
     static constexpr const char SHOW_CHARSET[] = "SELECT 'utf8mb4' AS charset, 'UTF-8 Unicode' AS Description, 'utf8mb4_0900_ai_ci' AS `Default collation`, 4 AS Maxlen";
-    static constexpr const char SHOW_COLLATION[] = "SELECT 'utf8mb4_0900_ai_ci' AS collation, 'utf8mb4' AS Charset, '255' AS Id, 'Yes' AS Default, 'Yes' AS Compiled, 0 AS Sortlen, 'NO PAD' AS Pad_attribute";
+    static constexpr const char SHOW_COLLATION[] = "SELECT 'utf8_general_ci' AS collation, 'utf8' AS charset, 33 AS id, 'Yes' AS default, 'Yes' AS Compiled, 1 AS Sortlen, 'NO PAD' AS Pad_attribute "
+                                                   "UNION SELECT 'binary' AS collation, 'binary' AS charset, 63 AS id, 'Yes' AS default, 'Yes' AS Compiled, 1 AS Sortlen, 'NO PAD' AS Pad_attribute "
+                                                   "UNION SELECT 'utf8mb4_0900_ai_ci' AS collation, 'utf8mb4' AS Charset, '255' AS Id, 'Yes' AS Default, 'Yes' AS Compiled, 0 AS Sortlen, 'NO PAD' AS Pad_attribute";
     static constexpr const char SHOW_ENGINES[] = "SELECT name AS Engine, 'Yes' AS Support, concat(name, ' engine') AS Comment, 'NO' AS Transcations,  'NO' AS XA, 'NO' AS Savepoints FROM system.table_engines";
 
     static constexpr const char SHOW_PRIVILEGES[] = "SELECT '' AS Privilege, '' AS Context, '' AS Comment";
@@ -201,6 +203,7 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
     queries_replacements.emplace_back("SHOW GLOBAL VARIABLES", showVariableReplacementQuery);
     queries_replacements.emplace_back("SHOW INDEXES", showIndexReplacementQuery);
     queries_replacements.emplace_back("SHOW INDEX", showIndexReplacementQuery);
+    queries_replacements.emplace_back("SHOW KEYS", showIndexReplacementQuery);
     queries_replacements.emplace_back("SHOW PLUGINS", selectEmptyReplacementQuery);
     queries_replacements.emplace_back("SHOW PRIVILEGES", ReplaceWith<SHOW_PRIVILEGES>::fn);
     queries_replacements.emplace_back("SHOW PROCEDURE STATUS", selectEmptySetQuery);
@@ -559,6 +562,8 @@ void MySQLHandler::comQuery(ReadBuffer & payload, bool binary_protocol)
         query_context->setSetting("mysql_map_fixed_string_to_text_in_show_columns", 1);
         /// TODO(fredwang) change it to a smaller threshold?
         query_context->setSetting("max_execution_time", 18000);
+        /// required by quickbi, otherwise it would fail to get table info
+        query_context->setSetting("allow_mysql_having_name_resolution", 1);
         CurrentThread::QueryScope query_scope{query_context};
 
         std::atomic<size_t> affected_rows {0};

@@ -7,26 +7,31 @@
 #include <Statistics/AutoStatisticsMemoryRecord.h>
 #include <Statistics/AutoStatisticsTaskQueue.h>
 #include <Statistics/CatalogAdaptor.h>
+#include <Statistics/SettingsManager.h>
 
 
 namespace DB::Statistics::AutoStats
 {
 
-class AutoStatisticsManager : boost::noncopyable
+class AutoStatisticsManager : WithContext, boost::noncopyable
 {
 public:
+    friend class AutoStatisticsCommand;
     ~AutoStatisticsManager();
 
     // control if MemoryRecord should be enabled
-    static bool configIsEnabled();
+    static bool xmlConfigIsEnable();
 
     void prepareNewConfig(const Poco::Util::AbstractConfiguration & config);
 
-    static void initialize(ContextPtr context_, const Poco::Util::AbstractConfiguration & config);
-
-    static AutoStatisticsManager * tryGetInstance();
+    static void initialize(ContextMutablePtr context_, const Poco::Util::AbstractConfiguration & config);
 
     explicit AutoStatisticsManager(ContextPtr context_);
+
+    void markCollectableCandidates(const std::vector<StatsTableIdentifier> & candidates, bool force_collect_if_failed_to_query_row_count);
+
+    SettingsManager & getSettingsManager() { return settings_manager; }
+
 
     // gather udi_count from all servers
     // sum them up to <table_uuid, count> map
@@ -37,6 +42,8 @@ public:
     void scheduleCollect();
 
     void writeMemoryRecord(const std::unordered_map<UUID, UInt64> & record);
+
+    std::vector<TaskInfoCore> getAllTasks() { return task_queue.getAllTasks(); }
 
 private:
     void run();
@@ -61,43 +68,41 @@ private:
     // update config with parse config
     void loadNewConfigIfNeeded();
 
-    // this mutex is to protect the whole manager
-    std::mutex manager_mtx;
+    void scanAllTables();
 
-    std::unique_ptr<ThreadPool> thread_pool;
-
-    ContextPtr context;
-    // BackgroundSchedulePoolTaskHolder task_handle;
     // use auto_stats_task_log to implement to update task queue
     TimePoint updateTaskQueueFromLog(TimePoint min_event_time);
 
-    void logTaskIfNeeded(const StatsTableIdentifier & table, UInt64 udi_count, UInt64 stats_row_count, DateTime64 timestamp);
+    void logTaskIfNeeded(const StatsTableIdentifier & table, UInt64 udi_count, UInt64 stats_row_count);
+
+    void createTask(const StatisticsScope & scope);
     Poco::Logger * logger;
 
     // we don't have lock to protect internal_config since it will be accessed only single-threaded
     InternalConfig internal_config;
-    std::mutex config_mtx;
-    // new_internal_config will be protected by config_mtx
-    std::optional<InternalConfig> new_internal_config;
 
     // std::unordered_map<UUID, std::shared_ptr<TaskInfo>> task_infos;
     TaskQueue task_queue;
 
     bool information_is_valid = false;
 
-    // lease to ensure interval of two udi_counter
-    TimePoint udi_flush_lease{};
-    // to access it concurrently, make it atomic
-    std::atomic<TimePoint> schedule_lease;
+    // store last time instead of lease to make sure settings is effective immediately
+    TimePoint last_time_udi_flush{};
+    TimePoint last_time_scan_all_tables{};
 
+    SettingsManager settings_manager;
     AutoStatisticsMemoryRecord internal_memory_record;
 
     // this settings may be accessed multithreading
     static std::atomic_bool is_initialized;
-    static std::atomic_bool config_is_enabled;
-    static std::unique_ptr<AutoStatisticsManager> the_instance;
+    static std::atomic_bool xml_config_is_enable;
 
-    TimePoint next_min_event_time{};
+    std::optional<TimePoint> next_min_event_time;
+
+    std::mutex manager_mtx;
+    std::unique_ptr<ThreadPool> thread_pool;
+    // to access it concurrently, make it atomic
+    std::atomic<TimePoint> schedule_lease;
 };
 
 } // DB::Statistics::AutoStats

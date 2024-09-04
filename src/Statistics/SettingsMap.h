@@ -107,12 +107,6 @@ public:
 };
 #undef GET_SET
 
-struct StatisticsScope
-{
-    std::optional<String> database; // nullopt for all
-    std::optional<String> table; // nullopt for all
-};
-
 // only for statistics
 void applyStatisticsSettingsChanges(Settings & settings, SettingsChanges settings_changes);
 

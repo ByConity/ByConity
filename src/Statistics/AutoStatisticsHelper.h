@@ -5,6 +5,7 @@
 #include <Statistics/SettingsMap.h>
 #include <Statistics/StatisticsSettings.h>
 #include <Statistics/StatsTableIdentifier.h>
+#include <Statistics/ASTHelpers.h>
 #include <Common/DayNum.h>
 
 namespace DB::Statistics::AutoStats
@@ -93,4 +94,12 @@ DataTypePtr enumDataTypeForStatus();
 std::vector<StatisticsScope> getChildrenScope(ContextPtr context, const StatisticsScope & scope);
 std::vector<StatsTableIdentifier> getTablesInScope(ContextPtr context, const StatisticsScope & scope);
 std::tuple<UInt64, DateTime64> getTableStatsFromCatalog(CatalogAdaptorPtr catalog, const StatsTableIdentifier & table);
+
+struct PredicatesHint
+{
+    std::optional<String> database_opt;
+    std::optional<String> table_opt;
+};
+
+PredicatesHint extractPredicates(const IAST & query, ContextPtr context);
 }

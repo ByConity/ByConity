@@ -238,6 +238,18 @@ message DropPartDiskCacheResp
   optional string exception = 1;
 }
 
+message DropManifestDiskCacheReq
+{
+  required UUID storage_id = 1;
+  optional uint64 version = 2;
+  optional bool sync = 3;
+}
+
+message DropManifestDiskCacheResp
+{
+  optional string exception = 1;
+}
+
 message SubmitSyncTaskReq
 {
   required UUID storage_id = 1;
@@ -412,28 +424,6 @@ message SendDataPartsReq
 }
 
 message SendDataPartsResp
-{
-  optional string exception = 1;
-}
-
-message SendCnchHiveDataPartsReq
-{
-
-}
-
-message SendCnchHiveDataPartsResp
-{
-}
-
-message SendCnchFileDataPartsReq
-{
-  required uint64 txn_id = 1;
-  required string database_name = 2;
-  required string table_name = 3;
-  repeated CnchFilePartModel parts = 4;
-}
-
-message SendCnchFileDataPartsResp
 {
   optional string exception = 1;
 }
@@ -640,15 +630,13 @@ service CnchWorkerService
   rpc getDedupWorkerStatus(GetDedupWorkerStatusReq) returns (GetDedupWorkerStatusResp);
 
   rpc sendCreateQuery(SendCreateQueryReq) returns (SendCreateQueryResp);
-  rpc sendQueryDataParts(SendDataPartsReq) returns (SendDataPartsResp);
-  rpc sendCnchHiveDataParts(SendCnchHiveDataPartsReq) returns (SendCnchHiveDataPartsResp);
-  rpc sendCnchFileDataParts(SendCnchFileDataPartsReq) returns (SendCnchFileDataPartsResp);
   rpc checkDataParts(CheckDataPartsReq) returns (CheckDataPartsResp);
   rpc sendOffloading(SendOffloadingReq) returns (SendOffloadingResp);
   rpc sendResources(SendResourcesReq) returns (SendResourcesResp);
   rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
   rpc preloadDataParts(PreloadDataPartsReq) returns (PreloadDataPartsResp);
   rpc dropPartDiskCache(DropPartDiskCacheReq) returns (DropPartDiskCacheResp);
+  rpc dropManifestDiskCache(DropManifestDiskCacheReq) returns (DropManifestDiskCacheResp);
   rpc dropMemoryDictCache(DropMemoryDictCacheReq) returns (DropMemoryDictCacheResp);
 
   rpc executeDedupTask(ExecuteDedupTaskReq) returns (ExecuteDedupTaskResp);

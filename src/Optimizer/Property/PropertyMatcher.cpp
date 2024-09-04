@@ -68,9 +68,9 @@ bool PropertyMatcher::matchStreamPartitioning(
 }
 
 Sorting PropertyMatcher::matchSorting(
-    const Context & context, const Sorting & required, const Sorting & actual, const SymbolEquivalences & equivalences)
+    const Context & context, const Sorting & required, const Sorting & actual, const SymbolEquivalences & equivalences, const Constants & constants)
 {
-    return matchSorting(context, required.toSortDesc(), actual, equivalences);
+    return matchSorting(context, required.toSortDesc(), actual, equivalences, constants);
 }
 
 /// Optimize in case of exact match with order key element
@@ -129,15 +129,10 @@ SortOrder matchSortDescription(const SortColumnDescription & require, const Sort
     return SortOrder::UNKNOWN;
 }
 
-Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & required, const Sorting & actual, const SymbolEquivalences &)
+Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & required, const Sorting & actual, const SymbolEquivalences &, const Constants & constants)
 {
     if (!actual.empty())
     {
-        SortOrder read_direction = SortOrder::UNKNOWN;
-
-        // todo@jingpeng.mt constant
-        // auto fixed_sorting_columns = getFixedSortingColumns(query, sorting_key_columns, context);
-
         SortDescription sort_description_for_merging;
         sort_description_for_merging.reserve(required.size());
 
@@ -147,23 +142,25 @@ Sorting PropertyMatcher::matchSorting(const Context &, const SortDescription & r
         while (desc_pos < required.size() && key_pos < actual.size())
         {
             auto match = matchSortDescription(required[desc_pos], actual[key_pos].toSortColumnDesc());
-            bool is_matched = match != SortOrder::UNKNOWN && (desc_pos == 0 || match == read_direction);
-
+            bool is_matched = match != SortOrder::UNKNOWN;
             if (!is_matched)
             {
                 /// If one of the sorting columns is constant after filtering,
                 /// skip it, because it won't affect order anymore.
-                // if (fixed_sorting_columns.contains(sorting_key_columns[key_pos]))
-                // {
-                //     ++key_pos;
-                //     continue;
-                // }
+                if (constants.contains(actual[key_pos].getName()))
+                {
+                    ++key_pos;
+                    continue;
+                }
+                else if (constants.contains(required[desc_pos].column_name))
+                {
+                    sort_description_for_merging.push_back(required[desc_pos]);
 
+                    ++desc_pos;
+                    continue;
+                }
                 break;
             }
-
-            if (desc_pos == 0)
-                read_direction = match;
 
             sort_description_for_merging.push_back(required[desc_pos]);
 

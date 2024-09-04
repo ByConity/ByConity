@@ -217,7 +217,6 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "deduce_part_eliminate",
         "delay_dequeue_ms",
         "dialect_type",
-        "dict_table_full_mode",
         "direct_forward_query_to_cnch",
         "disable_perfect_shard_auto_merge",
         "disable_remote_stream_log",

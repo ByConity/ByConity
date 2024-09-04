@@ -52,7 +52,7 @@ namespace ErrorCodes
 
 template <typename JSONParser>
 class JSONUtils
-{   
+{
 public:
     using Element = typename JSONParser::Element;
     using Object = typename JSONParser::Object;
@@ -376,7 +376,7 @@ public:
                     return to;
                 }
             }
-            
+
             // Element document;
 
             /// Parse JSON for every row
@@ -817,7 +817,7 @@ class SQLJSONKeysImpl
 {
 public:
 
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) 
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
     {
         return std::make_unique<DataTypeArray>(std::make_shared<DataTypeString>());
     }
@@ -865,7 +865,7 @@ class SQLJSONExtractImpl
 {
 public:
 
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &) 
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
     {
         return std::make_shared<DataTypeString>();
     }
@@ -1064,7 +1064,7 @@ public:
 
 /**
  * Function to test jsonpath member access, will be removed in final PR
- * @tparam JSONParser parser
+ * JSONParser parser
  */
 template <typename Iterator>
 class SQLJSONQueryImpl
@@ -1170,7 +1170,7 @@ public:
             else
                 size = 1;
         }
-        
+
         col.insert(size);
         return true;
     }
@@ -1214,7 +1214,7 @@ public:
             col.insert(size);
             return true;
         }
-    
+
         if (dialect_type == DialectType::MYSQL)
         {
             col.insert(0);
@@ -1233,8 +1233,8 @@ class FunctionSQLJSONContains : public IFunction, WithConstContext
 {
 public:
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionSQLJSONContains>(context_); }
-    explicit FunctionSQLJSONContains(ContextPtr context_) : WithConstContext(context_) 
-    { 
+    explicit FunctionSQLJSONContains(ContextPtr context_) : WithConstContext(context_)
+    {
         func_compare = FunctionFactory::instance().get("equals", getContext());
         func_array_has = FunctionFactory::instance().get("has", getContext());
         func_array_hasSubStr = FunctionFactory::instance().get("hasSubstr", getContext());
@@ -1340,11 +1340,11 @@ public:
         extract_tree->insertResultToColumn(*extract_item, iterator);
 
         ColumnsWithTypeAndName compare_columns{{std::move(extract_item), iterator.getType(), "json_extract_item"}, candidate};
-        
+
         if (isArray(iterator.getType()) && isArray(candidate.type))
         {
             // Handle array type, check whether has candidate sub array in array
-            
+
             auto array_has_substr_result_column = func_array_hasSubStr->build(compare_columns)->execute(compare_columns, std::make_shared<DataTypeUInt8>(), 1);
             col_bool.insertFrom(*array_has_substr_result_column, 0);
         }
@@ -1368,7 +1368,7 @@ public:
         else if (isTuple(iterator.getType()) && isArray(candidate.type))
             return false;
         else if (isTuple(iterator.getType()) && isNumberOrString(candidate.type))
-            return false;    
+            return false;
         else
         {
             // Handle primitive type , compare directly
@@ -1409,7 +1409,7 @@ public:
         const auto * candidate_json_const = typeid_cast<const ColumnConst *>(candidate_json_column.get());
         const auto * candidate_json_string = typeid_cast<const ColumnString *>(
             candidate_json_const ? candidate_json_const->getDataColumnPtr().get() : candidate_json_column.get());
-        
+
         std::string_view json{candidate_json_string ? candidate_json_string->getDataAt(0) : ""};
         SimdJSONParser json_parser;
         using Element = typename SimdJSONParser::Element;
@@ -1544,7 +1544,7 @@ public:
         }
         else
         {
-            const auto * col_json_string 
+            const auto * col_json_string
                 = typeid_cast<const ColumnString *>(col_json_const ? col_json_const->getDataColumnPtr().get() : arg_json.get());
 
             const ColumnString::Chars & chars_json = col_json_string->getChars();
@@ -1703,7 +1703,7 @@ public:
         const ColumnPtr & arg_any_or_all = any_or_all_column.column;
         const auto * arg_any_or_all_const = typeid_cast<const ColumnConst *>(arg_any_or_all.get());
         const auto * arg_any_or_all_string = typeid_cast<const ColumnString *>(arg_any_or_all_const->getDataColumnPtr().get());
-        
+
         bool contains_all = false;
         if (Poco::toLower(arg_any_or_all_string->getDataAt(0).toString()) == "all")
             contains_all = true;
@@ -1711,7 +1711,7 @@ public:
             contains_all = false;
         else
             throw Exception("Second argument (any or all) only can be any or all", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        
+
         ASTs json_path_ast_ptrs;
         for (size_t i = 2; i < arguments.size(); i++)
         {
@@ -1796,7 +1796,7 @@ public:
         }
         else
         {
-            const auto * col_json_string 
+            const auto * col_json_string
                 = typeid_cast<const ColumnString *>(col_json_const ? col_json_const->getDataColumnPtr().get() : arg_json.get());
 
             const ColumnString::Chars & chars_json = col_json_string->getChars();
@@ -1835,7 +1835,7 @@ class FunctionSQLJSONArrayContains : public IFunction, WithConstContext
 {
 public:
     static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionSQLJSONArrayContains>(context_); }
-    explicit FunctionSQLJSONArrayContains(ContextPtr context_) : WithConstContext(context_) 
+    explicit FunctionSQLJSONArrayContains(ContextPtr context_) : WithConstContext(context_)
     {}
 
     static constexpr auto name = Name::name;
@@ -1879,7 +1879,7 @@ public:
         const ColumnString::Offsets & offsets_json = col_json_string->getOffsets();
 
         const auto & target_value_column = arguments[1];
-    
+
         JSONParser json_parser;
         using Element = typename JSONParser::Element;
         Element document;
@@ -1903,7 +1903,7 @@ public:
             if (isBool(target_value_column.type) && json_array_element.isBool())
                 return target_value_column.column->getBool(0) == json_array_element.getBool();
 
-            return false; 
+            return false;
         };
 
         for (const auto i : collections::range(0, input_rows_count))
@@ -1917,7 +1917,7 @@ public:
                 to->insertDefault();
                 continue;
             }
-            
+
             if (document.isArray())
             {
                 const auto & json_array = document.getArray();

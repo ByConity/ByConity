@@ -24,6 +24,11 @@
  ],
  "UsedSettings" : {
  },
+ "OutputDescriptions" : [
+  "a",
+  "b",
+  "2"
+ ],
  "InsertInfo" : {
  },
  "FunctionsInfo" : [
@@ -148,6 +153,10 @@
  ],
  "UsedSettings" : {
  },
+ "OutputDescriptions" : [
+  "a",
+  "t2.b"
+ ],
  "InsertInfo" : {
  },
  "FunctionsInfo" : [
@@ -225,6 +234,10 @@
  ],
  "UsedSettings" : {
  },
+ "OutputDescriptions" : [
+  "a",
+  "t2.b"
+ ],
  "InsertInfo" : {
  },
  "FunctionsInfo" : [
@@ -302,6 +315,10 @@
  ],
  "UsedSettings" : {
  },
+ "OutputDescriptions" : [
+  "a",
+  "t2.b"
+ ],
  "InsertInfo" : {
  },
  "FunctionsInfo" : [
@@ -371,6 +388,10 @@
  ],
  "UsedSettings" : {
  },
+ "OutputDescriptions" : [
+  "c",
+  "a"
+ ],
  "InsertInfo" : {
   "Database" : "test",
   "Table" : "lineage_test",

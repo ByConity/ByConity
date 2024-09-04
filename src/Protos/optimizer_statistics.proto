@@ -191,29 +191,10 @@ message FetchStatisticsSettingsResponse {
   required StatisticsSettings statistics_settings = 2;
 }
 
-message QueryUdiCounterRequest {}
-
-message UdiCounterRecord {
-  required string database = 1;
-  required string table = 2;
-  required uint64 udi_count = 3;
-}
-
-message QueryUdiCounterResponse {
-  optional string exception = 1;
-  repeated UdiCounterRecord records = 2;
-}
-
-message ResetSQLBindingCacheRequest {}
-
-message ResetSQLBindingCacheResponse {
-  optional string exception = 1;
-}
 
 service OptimizerStatisticsService {
   rpc refreshStatisticsCache(RefreshStatisticsCacheRequest)
       returns (RefreshStatisticsCacheResponse);
   rpc fetchStatisticsSettings(FetchStatisticsSettingsRequest)
       returns (FetchStatisticsSettingsResponse);
-  rpc queryUdiCounter(QueryUdiCounterRequest) returns (QueryUdiCounterResponse);
 }

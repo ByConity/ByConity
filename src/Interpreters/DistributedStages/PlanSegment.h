@@ -30,6 +30,7 @@
 #include <Protos/plan_node_utils.pb.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <QueryPlan/QueryPlan.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 
 namespace DB
 {
@@ -175,12 +176,22 @@ public:
     void setStable(bool stable_) { stable = stable_; }
     bool isStable() const { return stable; }
 
+    void setNumOfBuckets(Int64 bucket_number_)
+    {
+        bucket_number = bucket_number_;
+    }
+    Int64 getNumOfBuckets() const
+    {
+        return bucket_number;
+    }
+
 private:
     size_t parallel_index = std::numeric_limits<size_t>::max(); ///  no longer used
     bool keep_order = false;
     AddressInfos source_addresses;
     std::optional<StorageID> storage_id;
     bool stable = false;
+    Int64 bucket_number = kInvalidBucketNumber;
 };
 
 using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;

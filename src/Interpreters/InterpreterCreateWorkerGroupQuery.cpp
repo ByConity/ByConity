@@ -21,7 +21,12 @@
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 
+#include <ResourceManagement/ResourceManager.h>
+#include <ResourceManagement/WorkerGroupType.h>
 #include <Poco/String.h>
+#include <Common/Exception.h>
+#include <common/types.h>
+#include <Core/Field.h>
 
 namespace DB
 {
@@ -32,7 +37,9 @@ namespace ErrorCodes
 }
 
 InterpreterCreateWorkerGroupQuery::InterpreterCreateWorkerGroupQuery(const ASTPtr & query_ptr_, ContextPtr context_)
-    : WithContext(context_), query_ptr(query_ptr_) {}
+    : WithContext(context_), query_ptr(query_ptr_)
+{
+}
 
 BlockIO InterpreterCreateWorkerGroupQuery::execute()
 {
@@ -68,10 +75,14 @@ BlockIO InterpreterCreateWorkerGroupQuery::execute()
                 auto value = change.value.safeGet<std::string>();
                 worker_group_data.linked_id = value;
             }
-            else
+            else if (change.name == "priority")
             {
-                throw Exception("Unknown Worker Group setting " + change.name, ErrorCodes::LOGICAL_ERROR);
+                auto value
+                    = change.value.getType() == Field::Types::UInt64 ? change.value.safeGet<UInt64>() : change.value.safeGet<Int64>();
+                worker_group_data.priority = value;
             }
+            else
+                throw Exception("Unknown Worker Group setting " + change.name, ErrorCodes::LOGICAL_ERROR);
         }
     }
 

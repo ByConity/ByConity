@@ -266,6 +266,7 @@ namespace ErrorCodes
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
     extern const int DATABASE_ACCESS_DENIED;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -1851,11 +1852,15 @@ ASTPtr Context::getRowPolicyCondition(const String & database, const String & ta
 
 void Context::setInitialRowPolicy()
 {
+    String initial_user_copy;
+    {
+        auto lock = getLocalLock();
+        initial_user_copy = client_info.initial_user;
+    }
+    auto initial_user_id = getAccessControlManager().find<User>(initial_user_copy);
+    auto initial_row_policy_local = initial_user_id ? getAccessControlManager().getEnabledRowPolicies(*initial_user_id, {}) : nullptr;
     auto lock = getLocalLock();
-    auto initial_user_id = getAccessControlManager().find<User>(client_info.initial_user);
-    initial_row_policy = nullptr;
-    if (initial_user_id)
-        initial_row_policy = getAccessControlManager().getEnabledRowPolicies(*initial_user_id, {});
+    initial_row_policy = initial_row_policy_local;
 }
 
 
@@ -2498,6 +2503,9 @@ void Context::killCurrentQuery()
     {
         process_list_elem->cancelQuery(true, false);
     }
+    getSegmentScheduler()->cancelPlanSegmentsFromCoordinator(
+        client_info.initial_query_id, ErrorCodes::QUERY_WAS_CANCELLED, "Cancelled by Client.", shared_from_this());
+    getPlanSegmentProcessList().tryCancelPlanSegmentGroup(client_info.initial_query_id);
 };
 
 String Context::getDefaultFormat() const
@@ -3861,6 +3869,16 @@ std::shared_ptr<CnchQueryLog> Context::getCnchQueryLog() const
         return {};
 
     return shared->cnch_system_logs->getCnchQueryLog();
+}
+
+std::shared_ptr<CnchAutoStatsTaskLog> Context::getCnchAutoStatsTaskLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getCnchAutoStatsTaskLog();
 }
 
 std::shared_ptr<ViewRefreshTaskLog> Context::getViewRefreshTaskLog() const
@@ -5871,6 +5889,18 @@ void Context::waitReadFromClientFinished() const
     std::unique_lock lk(shared->read_mutex);
     if (!shared->read_cv.wait_for(lk, std::chrono::milliseconds(timeout), [this] { return read_from_client_finished; }))
         throw Exception("Timeout exceeded while reading data from client.", ErrorCodes::TIMEOUT_EXCEEDED);
+}
+
+void Context::setAutoStatisticsManager(std::unique_ptr<Statistics::AutoStats::AutoStatisticsManager> && manager)
+{
+    auto lock = getLock();//ok
+    shared->auto_stats_manager = std::move(manager);
+}
+
+Statistics::AutoStats::AutoStatisticsManager * Context::getAutoStatisticsManager() const
+{
+    auto lock = getLock();//ok
+    return shared->auto_stats_manager.get();
 }
 
 void Context::setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager)

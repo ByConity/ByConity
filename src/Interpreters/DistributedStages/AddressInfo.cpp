@@ -78,6 +78,10 @@ String AddressInfo::toString() const
     return fmt::format("host_name: {}, port: {}, exchange_port: {} user: {}", host_name, port, exchange_port, user);
 }
 
+String AddressInfo::toShortString() const
+{
+    return fmt::format("{}:{}/{}", host_name, port, exchange_port);
+}
 }
 
 

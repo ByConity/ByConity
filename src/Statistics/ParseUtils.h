@@ -39,7 +39,6 @@ enum class WrapperKind
     UUIDToUInt128 = 5, // apply "toUInt128" in sql
 };
 
-
 struct ColumnCollectConfig
 {
     WrapperKind wrapper_kind = WrapperKind::Invalid;

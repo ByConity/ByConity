@@ -39,6 +39,7 @@ namespace ErrorCodes
     extern const int BRPC_PROTOCOL_VERSION_UNSUPPORT;
     extern const int QUERY_WAS_CANCELLED;
     extern const int QUERY_WAS_CANCELLED_INTERNAL;
+    extern const int TIMEOUT_EXCEEDED;
 }
 
 WorkerNodeResourceData ResourceMonitorTimer::getResourceData() const {
@@ -111,6 +112,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             request->query_id(),
             request->segment_id(),
             request->parallel_index(),
+            request->retry_id(),
             request->is_succeed(),
             is_cancelled,
             RuntimeSegmentsMetrics(request->metrics()),
@@ -359,7 +361,21 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         /// Create session context for worker
         if (context->getServerType() == ServerType::cnch_worker)
         {
-            auto named_session = context->acquireNamedCnchSession(txn_id, {}, query_common->check_session());
+            size_t max_execution_time_ms = 0;
+            if (query_common->has_query_expiration_timestamp())
+            {
+                auto duration_ms = duration_ms_from_now(query_common->query_expiration_timestamp());
+                if (!duration_ms)
+                    throw Exception(
+                        ErrorCodes::TIMEOUT_EXCEEDED,
+                        "Max execution time exceeded before submit plan segment, try increase max_execution_time, current timestamp:{} "
+                        "expires at:{}",
+                        time_in_milliseconds(std::chrono::system_clock::now()),
+                        query_common->query_expiration_timestamp());
+                max_execution_time_ms = duration_ms.value();
+            }
+            auto named_session
+                = context->acquireNamedCnchSession(txn_id, (max_execution_time_ms / 1000) + 1, query_common->check_session());
             query_context = Context::createCopy(named_session->context);
             query_context->setSessionContext(query_context);
             query_context->setTemporaryTransaction(txn_id, primary_txn_id);
@@ -379,10 +395,15 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
 
         execution_info.parallel_id = request->parallel_id();
         execution_info.execution_address = AddressInfo(request->execution_address());
+        // TODO source_task_index && source_task_count will be removed in future @lianxuechao
         if (request->has_source_task_index() && request->has_source_task_count())
         {
-            execution_info.source_task_index = request->source_task_index();
-            execution_info.source_task_count = request->source_task_count();
+            execution_info.source_task_filter.index = request->source_task_index();
+            execution_info.source_task_filter.count = request->source_task_count();
+        }
+        else if (request->has_source_task_filter())
+        {
+            execution_info.source_task_filter.fromProto(request->source_task_filter());
         }
         if (request->has_retry_id())
             execution_info.retry_id = request->retry_id();
@@ -454,8 +475,8 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                 if (!settings_io_buf->empty())
                 {
                     ReadBufferFromBrpcBuf settings_read_buf(*settings_io_buf);
-                    /// Sets an extra row policy based on `client_info.initial_user`
-                    query_context->setInitialRowPolicy();
+                    /// Sets an extra row policy based on `client_info.initial_user`, problematic for now
+                    // query_context->setInitialRowPolicy();
                     /// apply settings changed
                     const size_t MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS = 4;
                     if (query_common->brpc_protocol_minor_revision() >= MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS)
@@ -508,8 +529,7 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     int exception_code = getCurrentExceptionCode();
                     auto exception_message = getCurrentExceptionMessage(false);
 
-                    auto result = convertFailurePlanSegmentStatusToResult(
-                        query_context, execution_info.execution_address, exception_code, exception_message);
+                    auto result = convertFailurePlanSegmentStatusToResult(query_context, execution_info, exception_code, exception_message);
                     reportExecutionResult(result);
                 }
             }

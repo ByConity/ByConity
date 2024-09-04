@@ -44,10 +44,15 @@ struct TaskInfoLog;
 ///              | Success <----------------------------+ Running +----------+
 ///              |         |  Finish collecting stats   |         |
 ///              +---------+                            +---------+
-struct TaskInfo : private TaskInfoCore
+
+// TaskInfo
+struct TaskInfo : public TaskInfoCore
 {
 public:
-    TaskInfo(const TaskInfoCore & core_, TimePoint start_lease_) : TaskInfoCore(core_), start_lease(start_lease_) { }
+    TaskInfo(const TaskInfoCore & core_, TimePoint create_time_, std::optional<TimePoint> stats_time_opt_)
+        : TaskInfoCore(core_), create_time(create_time_), stats_time_opt(stats_time_opt_)
+    {
+    }
 
     UUID getTaskUUID() const { return task_uuid; }
     StatsTableIdentifier getTable() const { return table; }
@@ -62,17 +67,24 @@ public:
         return priority;
     }
 
-    TimePoint getStartLease() const
+    TimePoint getLease(const AutoStatsManagerSettings & settings) const
     {
         std::unique_lock lck(task_mu);
-        return start_lease;
+        auto lease = create_time + std::chrono::seconds(settings.schedule_period_seconds());
+        if (stats_time_opt)
+        {
+            auto lease2 = stats_time_opt.value() + std::chrono::seconds(settings.update_interval_seconds());
+            lease = std::max(lease, lease2);
+        }
+        return lease;
     }
 
-    void setStartLease(TimePoint start_lease_)
-    {
-        std::unique_lock lck(task_mu);
-        start_lease = start_lease_;
-    }
+    // void setTime(TimePoint create_time_, std::optional<DateTime64> stats_time_opt_)
+    // {
+    //     std::unique_lock lck(task_mu);
+    //     create_time = create_time_;
+    //     stats_time_opt = stats_time_opt_;
+    // }
 
     TaskInfoCore getCore() const
     {
@@ -109,22 +121,13 @@ public:
         return status;
     }
 
-    // atomically set these values for retry
-    void resetWith(Status status_, TimePoint start_lease_, UInt64 retry_times_)
-    {
-        std::unique_lock lck(task_mu);
-        status = status_;
-        start_lease = start_lease_;
-        retry_times = retry_times_;
-    }
-
 private:
     mutable std::mutex task_mu;
 
-    // when udi is collected
-    // wait for at least collect_interval_for_one_table before collection
-    // to make sure table has been stable
-    TimePoint start_lease;
+    // use create time instead of lease
+    // to make sure changed settings will be effective immediately
+    TimePoint create_time;
+    std::optional<TimePoint> stats_time_opt;
 };
 
 class TaskQueue : WithContext
@@ -147,12 +150,12 @@ public:
     std::shared_ptr<TaskInfo> tryGetTaskInfo(UUID uuid);
 
     void updateTasksFromLogIfNeeded(const TaskInfoLog & log);
+    std::vector<TaskInfoCore> getAllTasks();
 
     void erase(UUID uuid);
 
     size_t size() const;
     void clear();
-
 
 private:
     mutable std::mutex mtx;

@@ -32,6 +32,7 @@
 #include <Common/FieldVisitorHash.h>
 #include <Common/typeid_cast.h>
 #include <Common/hex.h>
+#include "DataTypes/DataTypeNullable.h"
 #include "IO/ReadSettings.h"
 #include <Core/Block.h>
 
@@ -267,12 +268,12 @@ static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & di
 
 String MergeTreePartition::getID(const MergeTreeMetaBase & storage) const
 {
-    return getID(storage.getInMemoryMetadataPtr()->getPartitionKey().sample_block);
+    return getID(storage.getInMemoryMetadataPtr()->getPartitionKey().sample_block, storage.extractNullableForPartitionID());
 }
 
 /// NOTE: This ID is used to create part names which are then persisted in ZK and as directory names on the file system.
 /// So if you want to change this method, be sure to guarantee compatibility with existing table data.
-String MergeTreePartition::getID(const Block & partition_key_sample) const
+String MergeTreePartition::getID(const Block & partition_key_sample, bool extract_nullable_date_value) const
 {
     if (value.size() != partition_key_sample.columns())
         throw Exception("Invalid partition key size: " + toString(value.size()), ErrorCodes::LOGICAL_ERROR);
@@ -301,8 +302,21 @@ String MergeTreePartition::getID(const Block & partition_key_sample) const
         {
             if (i > 0)
                 result += '-';
+                
+            const auto & col = partition_key_sample.getByPosition(i);
+            auto type = col.type;
+            
+            /// As we already support nullable key, user may create a PARTITION BY with Nullable(Date) column.
+            /// For such scenario, we need to try to format the nested date value if possible. 
+            /// It's disabled by default as it would break the compatibility.
+            /// It's safe and good to enable the feature for new (or empty) tables, by setting allow_nullable_key = 1 and extract_partition_nullable_date = 1.
+            if (extract_nullable_date_value)
+            {
+                if (type->isNullable())
+                    type = static_cast<const DataTypeNullable *>(col.type.get())->getNestedType();
+            }
 
-            if (typeid_cast<const DataTypeDate *>(partition_key_sample.getByPosition(i).type.get()))
+            if (typeid_cast<const DataTypeDate *>(type.get()))
                 result += toString(DateLUT::instance().toNumYYYYMMDD(DayNum(value[i].safeGet<UInt64>())));
             else
                 result += applyVisitor(to_string_visitor, value[i]);

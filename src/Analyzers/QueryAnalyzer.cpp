@@ -869,6 +869,9 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
     NameSet seen_names;
     FieldDescriptions output_fields;
 
+    bool make_nullable_for_left = isRightOrFull(table_join.kind) && context->getSettingsRef().join_use_nulls;
+    bool make_nullable_for_right = isLeftOrFull(table_join.kind) && context->getSettingsRef().join_use_nulls;
+
     if (use_ansi_semantic)
     {
         auto resolve_join_key
@@ -936,18 +939,22 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
         }
 
         /// Step 2. add non join fields
-        auto add_non_join_fields = [&](ScopePtr scope, std::vector<size_t> & join_fields_list) {
+        auto add_non_join_fields = [&](ScopePtr scope, std::vector<size_t> & join_fields_list, bool make_nullable) {
             std::unordered_set<size_t> join_fields{join_fields_list.begin(), join_fields_list.end()};
 
             for (size_t i = 0; i < scope->size(); ++i)
             {
                 if (join_fields.find(i) == join_fields.end())
+                {
                     output_fields.push_back(scope->at(i));
+                    if (make_nullable)
+                        output_fields.back().type = JoinCommon::convertTypeToNullable(output_fields.back().type);
+                }     
             }
         };
 
-        add_non_join_fields(left_scope, left_join_fields);
-        add_non_join_fields(right_scope, right_join_fields);
+        add_non_join_fields(left_scope, left_join_fields, make_nullable_for_left);
+        add_non_join_fields(right_scope, right_join_fields, make_nullable_for_right);
     }
     else
     {
@@ -1042,6 +1049,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
             else
             {
                 output_fields.emplace_back(input_field);
+                if (make_nullable_for_left)
+                    output_fields.back().type = JoinCommon::convertTypeToNullable(output_fields.back().type);
             }
         }
 
@@ -1063,6 +1072,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
             if (!right_join_field_reverse_map.count(i))
             {
                 output_fields.emplace_back(input_field.withNewName(new_name));
+                if (make_nullable_for_right)
+                    output_fields.back().type = JoinCommon::convertTypeToNullable(output_fields.back().type);
             }
             else if (required_columns.count(new_name) && !source_columns.count(new_name))
             {
@@ -1096,18 +1107,35 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
     ScopePtr output_scope;
     {
         FieldDescriptions output_fields;
-
+        bool make_nullable_for_left = isRightOrFull(table_join.kind) && context->getSettingsRef().join_use_nulls;
+        bool make_nullable_for_right = isLeftOrFull(table_join.kind) && context->getSettingsRef().join_use_nulls;
+        auto update_type = [&](DataTypePtr & type, bool make_nullable)
+        {
+            if (make_nullable)
+                return JoinCommon::convertTypeToNullable(type);
+            return type;
+        };
+    
         if (use_ansi_semantic)
         {
             for (const auto & f : left_scope->getFields())
+            {
                 output_fields.emplace_back(f);
+                output_fields.back().type = update_type(output_fields.back().type, make_nullable_for_left);
+            }
             for (const auto & f : right_scope->getFields())
+            {
                 output_fields.emplace_back(f);
+                output_fields.back().type = update_type(output_fields.back().type, make_nullable_for_right);
+            }
         }
         else
         {
             for (const auto & f : left_scope->getFields())
+            {
                 output_fields.emplace_back(f);
+                output_fields.back().type = update_type(output_fields.back().type, make_nullable_for_left);
+            }
 
             auto source_names = collectNames(left_scope);
             bool check_identifier_begin_valid = context->getSettingsRef().check_identifier_begin_valid;
@@ -1116,6 +1144,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
             {
                 auto new_name = qualifyJoinedName(f.name, right_table_qualifier, source_names, check_identifier_begin_valid);
                 output_fields.emplace_back(f.withNewName(new_name));
+                output_fields.back().type = update_type(output_fields.back().type, make_nullable_for_right);
             }
         }
 

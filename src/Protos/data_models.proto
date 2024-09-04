@@ -576,6 +576,7 @@ message WorkerGroupData {
   optional bool is_auto_linked = 10;
   optional string linked_vw_name = 11;
   repeated WorkerNodeResourceData worker_node_resource_vec = 12;
+  optional int64 priority = 13;
 }
 
 message WorkerMetrics {

@@ -1,3 +1,4 @@
+#include <shared_mutex>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
@@ -23,6 +24,7 @@ static bool canExecuteTask(TaskQueue::Mode mode, TaskType task_type, bool is_emp
 std::shared_ptr<TaskInfo> TaskQueue::chooseTask(Mode mode)
 {
     std::unique_lock lck(mtx);
+    auto context = getContext();
 
     if (task_infos.empty())
     {
@@ -35,7 +37,9 @@ std::shared_ptr<TaskInfo> TaskQueue::chooseTask(Mode mode)
     auto now = nowTimePoint();
     for (auto & [unique_key, task_info] : task_infos)
     {
-        if (now < task_info->getStartLease())
+        auto lease = task_info->getLease(internal_config);
+
+        if (now < lease)
         {
             // ++out_of_lease;
             continue;
@@ -84,7 +88,6 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
     std::unique_lock lck(mtx);
     auto context = getContext();
     auto unique_key = log.table.getUniqueKey();
-    auto min_start_lease = nowTimePoint() + std::chrono::seconds(internal_config.schedule_period_seconds());
 
     if (task_infos.count(unique_key))
     {
@@ -145,14 +148,24 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
         }
     }
 
+    auto get_stats_time = [&](const TaskInfoCore & core) -> std::optional<TimePoint> {
+        auto version = getVersion(context, core.table);
+        if (version)
+        {
+            return convertToTimePoint(version.value());
+        }
+        return std::nullopt;
+    };
+
     switch (log.status)
     {
         case Status::Created: {
             // find new task, put it into TaskQueue, and set status=Pending
             auto core = static_cast<TaskInfoCore>(log);
+            auto stats_time = get_stats_time(core);
             core.status = Status::Pending;
             writeTaskLog(context, core);
-            auto new_task = std::make_shared<TaskInfo>(core, min_start_lease);
+            auto new_task = std::make_shared<TaskInfo>(core, nowTimePoint(), stats_time);
             task_infos.emplace(unique_key, new_task);
             return;
         }
@@ -160,7 +173,8 @@ void TaskQueue::updateTasksFromLogIfNeeded(const TaskInfoLog & log)
             // find pending task not in TaskQueue, possibly due to restart
             // just add it into TaskQueue
             auto core = static_cast<TaskInfoCore>(log);
-            auto new_task = std::make_shared<TaskInfo>(core, min_start_lease);
+            auto stats_time = get_stats_time(core);
+            auto new_task = std::make_shared<TaskInfo>(core, nowTimePoint(), stats_time);
             task_infos.emplace(unique_key, new_task);
             return;
         }
@@ -201,6 +215,18 @@ std::shared_ptr<TaskInfo> TaskQueue::tryGetTaskInfo(UUID uuid)
         return task_infos.at(uuid);
     else
         return nullptr;
+}
+
+std::vector<TaskInfoCore> TaskQueue::getAllTasks()
+{
+    std::unique_lock lck(mtx);
+    std::vector<TaskInfoCore> result;
+    result.reserve(task_infos.size());
+    for (auto & [uuid, task_info] : task_infos)
+    {
+        result.emplace_back(*task_info);
+    }
+    return result;
 }
 
 }

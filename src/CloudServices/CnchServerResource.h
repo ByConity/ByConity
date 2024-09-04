@@ -30,6 +30,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Logger.h>
 #include <Common/HostWithPorts.h>
+#include <common/types.h>
 
 
 namespace DB
@@ -85,6 +86,7 @@ struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
 
+    AssignedResource(AssignedResource & resource);
     AssignedResource(AssignedResource && resource);
 
     StoragePtr storage;
@@ -116,12 +118,14 @@ struct AssignedResource
 struct ResourceOption
 {
     std::unordered_set<UUID> table_ids;
+    // resend the resources have been already sent to workers.
+    bool resend = false;
 };
 
 struct ResourceStageInfo
 {
     std::unordered_set<UUID> sent_resource;
-    void filterResource(std::optional<ResourceOption> resource_option);
+    void filterResource(std::optional<ResourceOption> & resource_option);
 };
 class CnchServerResource
 {
@@ -184,7 +188,10 @@ public:
     }
 
     /// Send resource to worker
+    /// NOTE: Only used when optimizer is disabled.
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
+    /// Resend resource to worker, used in bsp retry.
+    void resendResource(const ContextPtr & context, const HostWithPorts & worker);
     /// allocate and send resource to worker_group
     void sendResources(const ContextPtr & context, std::optional<ResourceOption> resource_option = std::nullopt);
 
@@ -204,7 +211,10 @@ public:
 
     void setSendMutations(bool send_mutations_) { send_mutations = send_mutations_; }
 
-    std::unordered_map<HostWithPorts, size_t> & getResourceSizeMap(UUID & table_id);
+    const std::unordered_map<UUID, std::unordered_map<AddressInfo, SourceTaskPayload, AddressInfo::Hash>> & getSourceTaskPayload() const
+    {
+        return source_task_payload;
+    }
 
 private:
     auto getLock() const
@@ -222,8 +232,8 @@ private:
         std::lock_guard<std::mutex> &,
         std::optional<ResourceOption> resource_option = std::nullopt);
 
-    void computeResourceSize(
-        std::optional<ResourceOption> & resource_option, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources);
+    void
+    initSourceTaskPayload(const ContextPtr & context, std::unordered_map<HostWithPorts, std::vector<AssignedResource>> & all_resources);
 
     void sendCreateQueries(const ContextPtr & context);
     void sendDataParts(const ContextPtr & context);
@@ -237,13 +247,12 @@ private:
 
     /// storage_uuid, assigned_resource
     std::unordered_map<UUID, AssignedResource> assigned_table_resource;
+    std::unordered_map<UUID, AssignedResource> table_resources_saved_for_retry;
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
     std::unordered_map<UUID, WorkerInfoSet> assigned_storage_workers;
 
-
+    std::unordered_map<UUID, std::unordered_map<AddressInfo, SourceTaskPayload, AddressInfo::Hash>> source_task_payload;
     ResourceStageInfo resource_stage_info;
-    /// table id -> [worker address -> resources size]
-    std::unordered_map<UUID, std::unordered_map<HostWithPorts, size_t>> assigned_resources_size;
 
     bool skip_clean_worker{false};
     Poco::Logger * log;
