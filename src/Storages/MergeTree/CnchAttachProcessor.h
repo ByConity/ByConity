@@ -236,6 +236,8 @@ private:
     void loadUniqueDeleteMeta(IMergeTreeDataPartPtr & part, const MergeTreePartInfo & info);
     void waitingForDedup(const NameSet & partitions_filter, const NameSet & staged_parts_name);
 
+    void tryPreload(MutableMergeTreeDataPartsCNCHVector & preload_parts);
+
     UInt64 failure_injection_knob;
 
     StorageCnchMergeTree& target_tbl;
