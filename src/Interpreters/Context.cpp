@@ -5792,7 +5792,7 @@ Context::PartAllocator Context::getPartAllocationAlgo(MergeTreeSettingsPtr table
     auto algorithm = table_settings->cnch_part_allocation_algorithm >= 0 ? table_settings->cnch_part_allocation_algorithm : settings.cnch_part_allocation_algorithm;
     LOG_DEBUG(shared->log, "Send query with cnch_part_allocation_algorithm = {}, system setting = {}, table setting = {}", algorithm, settings.cnch_part_allocation_algorithm, table_settings->cnch_part_allocation_algorithm);
 
-    switch (settings.cnch_part_allocation_algorithm)
+    switch (algorithm)
     {
         case 0:
             return PartAllocator::JUMP_CONSISTENT_HASH;
