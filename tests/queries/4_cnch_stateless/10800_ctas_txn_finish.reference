@@ -1,0 +1,12 @@
+test CTAS in non-optimizer
+0
+1
+2
+3
+4
+test CTAS in optimizer
+0
+1
+2
+3
+4

@@ -602,7 +602,7 @@ void CnchServerResource::allocateResource(
                     LOG_TRACE(
                         log,
                         "Send {} virtual data part (hybrid_allocation) to worker {} for table {}",
-                        assigned_parts.size(),
+                        assigned_virtual_parts.size(),
                         host_ports.toDebugString(),
                         storage->getStorageID().getNameForLogs());
                 }

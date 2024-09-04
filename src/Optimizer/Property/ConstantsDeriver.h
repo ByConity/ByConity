@@ -14,6 +14,7 @@ public:
     static Constants deriveConstants(QueryPlanStepPtr step, Constants & input_constants, CTEInfo & cte_info, ContextMutablePtr & context);
     static Constants
     deriveConstants(QueryPlanStepPtr step, ConstantsSet & input_constants, CTEInfo & cte_info, ContextMutablePtr & context);
+    static Constants deriveConstantsFromTree(PlanNodePtr node, CTEInfo & cte_info, ContextMutablePtr & context);
 };
 
 class ConstantsDeriverContext
@@ -60,4 +61,19 @@ public:
     Constants visitCTERefStep(const CTERefStep &, ConstantsDeriverContext & context) override;
 };
 
+struct ConstantsDeriverTreeVisitorContext
+{
+    CTEInfo & cte_info;
+    ContextMutablePtr context;
+};
+
+class ConstantsDeriverTreeVisitor : public PlanNodeVisitor<Constants, ConstantsDeriverTreeVisitorContext>
+{
+public:
+    Constants visitPlanNode(PlanNodeBase & node, ConstantsDeriverTreeVisitorContext &) override;
+    Constants visitCTERefNode(CTERefNode &, ConstantsDeriverTreeVisitorContext &) override
+    {
+        return {};
+    }
+};
 }

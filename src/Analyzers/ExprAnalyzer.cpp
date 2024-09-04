@@ -19,19 +19,18 @@
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/function_utils.h>
+#include <Analyzers/postExprAnalyze.h>
 #include <Analyzers/tryEvaluateConstantExpression.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
-#include <DataTypes/MapHelpers.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
@@ -48,7 +47,6 @@
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/Void.h>
 #include <Poco/String.h>
-#include <Common/FieldVisitorToString.h>
 #include <Common/StringUtils/StringUtils.h>
 
 #include <memory>
@@ -421,95 +419,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
     }
 
     // post analysis for sub column optimization
-    String func_name_lowercase = Poco::toLower(function->name);
-
-    auto check_subcolumn = [](const FieldDescription & field, auto && pred) {
-        if (!field.hasOriginInfo())
-            return false;
-
-        for (const auto & origin_col : field.origin_columns)
-            if (!pred(origin_col))
-                return false;
-
-        return true;
-    };
-
-    auto register_subcolumn = [&](const ASTPtr & ast, const ResolvedField & column_ref, const SubColumnID & sub_column_id) {
-        analysis.setSubColumnReference(ast, SubColumnReference{column_ref, sub_column_id});
-
-        for (const auto & origin_col : column_ref.getFieldDescription().origin_columns)
-            analysis.addReadSubColumn(origin_col.table_ast, origin_col.index_of_scope, sub_column_id);
-    };
-
-    if (startsWith(func_name_lowercase, "mapelement") && function->arguments->children.size() == 2)
-    {
-        if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
-        {
-            const auto & resolved_field = column_reference->getFieldDescription();
-            if (const auto map_type = std::dynamic_pointer_cast<const DataTypeMap>(resolved_field.type))
-            {
-                /// Convert key according to map key type
-                Field key_field = Null();
-                if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
-                {
-                    key_field = tryConvertToMapKeyField(map_type->getKeyType(), key_lit->getColumnName());
-                }
-                else if (processed_arguments.size() > 1 && processed_arguments[1].column)
-                {
-                    auto argument_value = std::make_shared<ASTLiteral>((*processed_arguments[1].column)[0]);
-                    key_field = tryConvertToMapKeyField(map_type->getKeyType(), argument_value->getColumnName());
-                }
-
-                if (!key_field.isNull())
-                {
-                    if (resolved_field.hasOriginInfo() && resolved_field.type->isByteMap()
-                        && check_subcolumn(
-                            resolved_field, [](const auto & origin_col) { return origin_col.storage->supportsMapImplicitColumn(); }))
-                    {
-                        auto key_name = applyVisitor(DB::FieldVisitorToString(), key_field); // convert to correct implicit key name
-                        auto column_id = SubColumnID::mapElement(key_name);
-                        register_subcolumn(function, *column_reference, column_id);
-                    }
-                }
-            }
-        }
-    }
-    if (startsWith(func_name_lowercase, "mapkeys") && function->arguments->children.size() == 1)
-    {
-        if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
-        {
-            const auto & resolved_field = column_reference->getFieldDescription();
-            if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
-                    // TODO(shiyuze): maybe we can remove this check, this rewrite is only for kv map
-                    if (!origin_col.storage->supportsMapImplicitColumn())
-                        return false;
-                    DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
-                    return type->isKVMap();
-                }))
-            {
-                auto column_id = SubColumnID::mapKeys();
-                register_subcolumn(function, *column_reference, column_id);
-            }
-        }
-    }
-    if (startsWith(func_name_lowercase, "mapvalues") && function->arguments->children.size() == 1)
-    {
-        if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
-        {
-            const auto & resolved_field = column_reference->getFieldDescription();
-            if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
-                    if (!origin_col.storage->supportsMapImplicitColumn())
-                        return false;
-
-                    DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
-                    return type->isKVMap();
-                }))
-            {
-                auto column_id = SubColumnID::mapValues();
-                register_subcolumn(function, *column_reference, column_id);
-            }
-        }
-    }
+    postExprAnalyze(function, processed_arguments, analysis, context);
 
     if (!function_base->isDeterministicInScopeOfQuery())
     {

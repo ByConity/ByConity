@@ -29,6 +29,13 @@ ConstantsDeriver::deriveConstants(QueryPlanStepPtr step, ConstantsSet & input_co
     return VisitorUtil::accept(step, visitor, deriver_context);
 }
 
+Constants ConstantsDeriver::deriveConstantsFromTree(PlanNodePtr node, CTEInfo & cte_info, ContextMutablePtr & context)
+{
+    ConstantsDeriverTreeVisitorContext tree_context{cte_info, context};
+    ConstantsDeriverTreeVisitor visitor{};
+    return VisitorUtil::accept(node, visitor, tree_context);
+}
+
 Constants ConstantsDeriverVisitor::visitStep(const IQueryPlanStep &, ConstantsDeriverContext & context)
 {
     return context.getInput()[0];
@@ -174,14 +181,35 @@ Constants ConstantsDeriverVisitor::visitUnionStep(const UnionStep & step, Consta
     return Constants{filter_values};
 }
 
-Constants ConstantsDeriverVisitor::visitTableScanStep(const TableScanStep & /*step*/, ConstantsDeriverContext & /*context*/)
+Constants ConstantsDeriverVisitor::visitTableScanStep(const TableScanStep & step, ConstantsDeriverContext & /*context*/)
 {
-    // NameToNameMap translation;
-    // for (const auto & item : step.getColumnAlias())
-    //     translation.emplace(item.first, item.second);
-    // .translate(translation);
+    std::map<String, FieldWithType> constants;
+    auto storage_snapshot = step.getStorageSnapshot();
+    GetColumnsOptions get_subcolumn_option = GetColumnsOptions::Ordinary;
+    get_subcolumn_option.withExtendedObjects().withSubcolumns();
 
-    return Constants{};
+    for (const auto & [column, symbol] : step.getColumnAlias())
+    {
+        if (!storage_snapshot->tryGetColumn(get_subcolumn_option, column))
+        {
+            auto pos = column.find('.');
+            if (pos != std::string::npos && pos + 1 < column.length())
+            {
+                const auto base_name = column.substr(0, pos);
+                const auto column_in_storage = storage_snapshot->tryGetColumn(GetColumnsOptions::Ordinary, base_name);
+                const auto parent_name = column.substr(0, column.rfind('.'));
+                const auto parent_column = storage_snapshot->tryGetColumn(get_subcolumn_option, parent_name);
+
+                if (column_in_storage && (!parent_column || !!dynamic_cast<const DataTypeTuple *>(parent_column->type.get())))
+                {
+                    // nonexists subcolumn will be always NULL
+                    constants.emplace(symbol, FieldWithType{std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt8>()), Null{}});
+                }
+            }
+        }
+    }
+
+    return Constants{constants};
 }
 
 Constants ConstantsDeriverVisitor::visitReadNothingStep(const ReadNothingStep &, ConstantsDeriverContext &)
@@ -214,4 +242,13 @@ Constants ConstantsDeriverVisitor::visitCTERefStep(const CTERefStep & step, Cons
     return context.getInput()[0].translate(revert_identifies);
 }
 
+Constants ConstantsDeriverTreeVisitor::visitPlanNode(PlanNodeBase & node, ConstantsDeriverTreeVisitorContext & ctx)
+{
+    ConstantsSet input_constants;
+
+    for (const auto & child : node.getChildren())
+        input_constants.emplace_back(VisitorUtil::accept(child, *this, ctx));
+
+    return ConstantsDeriver::deriveConstants(node.getStep(), input_constants, ctx.cte_info, ctx.context);
+}
 }

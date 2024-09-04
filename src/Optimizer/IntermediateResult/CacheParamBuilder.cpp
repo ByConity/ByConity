@@ -162,7 +162,7 @@ size_t CacheParamBuilder::computeTableScanHash(std::shared_ptr<TableScanStep> ta
         new_query->replaceDatabaseAndTable(storage_id);
         new_info.query = new_query;
     }
-    
+
     if (context->getSettingsRef().enable_intermediate_result_cache_ignore_partition_filter)
     {
         new_info.partition_filter.reset();
@@ -172,6 +172,8 @@ size_t CacheParamBuilder::computeTableScanHash(std::shared_ptr<TableScanStep> ta
         table_step->getOutputStream(),
         table_step->getStorage(),
         storage_id,
+        table_step->getMetadataSnapshot(),
+        table_step->getStorageSnapshot(),
         table_step->getOriginalTable(),
         table_step->getColumnNames(),
         table_step->getColumnAlias(),

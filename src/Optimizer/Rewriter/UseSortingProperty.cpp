@@ -13,6 +13,8 @@
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <fmt/core.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -156,6 +158,15 @@ PlanAndPropConstants SortingOrderedSource::Rewriter::visitTableScanNode(TableSca
     return {node.shared_from_this(), prop, constants};
 }
 
+PlanAndPropConstants SortingOrderedSource::Rewriter::visitFilterNode(FilterNode & node, SortDescription & required)
+{
+    auto result = VisitorUtil::accept(node.getChildren()[0], *this, required);
+    Property any_prop;
+    Property prop = PropertyDeriver::deriveProperty(node.getStep(), {result.property}, any_prop, context);
+    Constants constants = ConstantsDeriver::deriveConstants(node.getStep(), {result.constants}, cte_helper.getCTEInfo(), context);
+    return {node.shared_from_this(), prop, constants};
+}
+
 PlanAndPropConstants SortingOrderedSource::Rewriter::visitProjectionNode(ProjectionNode & node, SortDescription & require)
 {
     auto mappings = Utils::computeIdentityTranslations(node.getStep()->getAssignments());
@@ -232,7 +243,23 @@ PlanNodePtr PruneSortingInfoRewriter::visitTableScanNode(TableScanNode & node, S
     });
 
     SortDescription pruned_read_order(read_order.begin(), read_order.begin() + std::distance(it, read_order.rend()));
-    node.getStep()->setReadOrder(pruned_read_order);
+
+    if (!required.sort_desc.empty() && pruned_read_order.empty())
+    {
+        // do nothing if all columns in required don't exist in table
+        if (logger->error())
+        {
+            Names names;
+            for (const auto & desc : required.sort_desc)
+                names.emplace_back(desc.column_name);
+            LOG_WARNING(logger, "unkown required sorting: {}", fmt::format("{}", fmt::join(names, ", ")));
+        }
+    }
+    else
+    {
+        node.getStep()->setReadOrder(pruned_read_order);
+    }
+
     return node.shared_from_this();
 }
 
@@ -250,7 +277,7 @@ PlanNodePtr PruneSortingInfoRewriter::visitProjectionNode(ProjectionNode & node,
     }
 
     SortInfo child_required{push_down_sort_description, Utils::canChangeOutputRows(*node.getStep(), context) ? required.limit : 0ul};
-    return SimplePlanRewriter::visitPlanNode(node, required);
+    return SimplePlanRewriter::visitPlanNode(node, child_required);
 }
 
 }

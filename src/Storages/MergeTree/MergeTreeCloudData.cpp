@@ -14,6 +14,9 @@
  */
 
 #include <Storages/MergeTree/MergeTreeCloudData.h>
+#include <MergeTreeCommon/GlobalDataManager.h>
+#include <CloudServices/CnchPartsHelper.h>
+#include <Common/Trace/TracerCommon.h>
 #include "Processors/QueryPipeline.h"
 #include <common/scope_guard_safe.h>
 #include <Protos/DataModelHelpers.h>
@@ -22,6 +25,7 @@ namespace ProfileEvents
 {
     extern const Event PrunedPartitions;
     extern const Event PreparePartsForReadMilliseconds;
+    extern const Event LoadServerPartsMilliseconds;
 }
 
 namespace DB
@@ -262,83 +266,74 @@ void MergeTreeCloudData::prepareDataPartsForRead()
         data_parts_size, virtual_parts_size, watch.elapsedMicroseconds());
 }
 
-void MergeTreeCloudData::receiveServerDataPartsWithDBM(ServerDataPartsWithDBM && parts_with_dbm)
+void MergeTreeCloudData::setDataDescription(WGWorkerInfoPtr && worker_info_, UInt64 data_version_)
 {
-    if (parts_with_dbm.first.empty())
-        return;
-
-    size_t part_counter=0, delete_bitmap_counter=0;
-    auto lock = lockParts();
-    for (auto & server_part : parts_with_dbm.first)
+    // resuse load parts lock
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    if (data_version == 0)
     {
-        const String & partition_id = server_part->info().partition_id;
-        auto it = server_data_parts.find(partition_id);
-        if (it == server_data_parts.end())
-        {
-            // add to partition list
-            data_partitions.emplace_back(server_part->part_model_wrapper->partition);
-            // add new server parts vector for this partition
-            server_data_parts.emplace(partition_id, std::make_pair(ServerDataPartsVector{}, DeleteBitmapMetaPtrVector{}));
-        }
-        server_data_parts[partition_id].first.emplace_back(std::move(server_part));
-        part_counter++;
+        worker_info = std::move(worker_info_);
+        data_version = data_version_;
     }
-
-    for (auto & delete_bitmap : parts_with_dbm.second)
-    {
-        const String & partition_id = delete_bitmap->getModel()->partition_id();
-        if (server_data_parts.find(partition_id) == server_data_parts.end())
-            throw Exception("Load delete bitmap mismatch server data part. Its a logic error. ", ErrorCodes::LOGICAL_ERROR);
-
-        server_data_parts[partition_id].second.emplace_back(std::move(delete_bitmap));
-        delete_bitmap_counter++;
-    }
-
-    LOG_TRACE(log, "Received {} parts, {} bitmaps", part_counter, delete_bitmap_counter);
-
-    has_server_part_to_load = true;
 }
 
-void MergeTreeCloudData::prepareServerDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)
+void MergeTreeCloudData::prepareVersionedPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names)
 {
     Stopwatch watch;
 
-    std::lock_guard<std::mutex> lock(server_data_mutex);
-
-    if (!has_server_part_to_load)
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    if (data_parts_loaded)
         return;
 
-    auto partition_list = getAllPartitions();
+    SCOPE_EXIT_SAFE(data_parts_loaded=true);
 
-    if (partition_list.empty())
+    std::unordered_map<String, ServerDataPartsWithDBM> server_parts_by_partition;
+    std::vector<std::shared_ptr<MergeTreePartition>> partition_list;
+    //load server parts by data version
+    local_context->getGlobalDataManager()->loadDataPartsWithDBM(*this, getStorageUUID(), data_version, worker_info, server_parts_by_partition, partition_list);
+    ProfileEvents::increment(ProfileEvents::LoadServerPartsMilliseconds, watch.elapsedMilliseconds());
+
+    if (server_parts_by_partition.empty())
         return;
 
+    watch.restart();
+
+    // load data parts for read
     Strings required_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names, local_context);
 
-    SCOPE_EXIT({
-        ProfileEvents::increment(ProfileEvents::PrunedPartitions, required_partitions.size());
-        ProfileEvents::increment(ProfileEvents::PreparePartsForReadMilliseconds, watch.elapsedMilliseconds());
-    });
+    size_t loaded_parts_count = loadFromServerPartsInPartition(required_partitions, server_parts_by_partition);
 
-    size_t loaded_parts_count = loadFromServerPartsInPartition(required_partitions);
-
-    /// data part only need to be loaded once
-    has_server_part_to_load = false;
-
-    LOG_TRACE(log, "Loaded {} server data parts in {} partitions elapsed {}ms.",
+    LOG_DEBUG(log, "Loaded {} server data parts in {} partitions, elapsed: {}ms.",
         loaded_parts_count,
         required_partitions.size(),
         watch.elapsedMilliseconds());
+
+    ProfileEvents::increment(ProfileEvents::PrunedPartitions, required_partitions.size());
+    ProfileEvents::increment(ProfileEvents::PreparePartsForReadMilliseconds, watch.elapsedMilliseconds());
 }
 
-size_t MergeTreeCloudData::loadFromServerPartsInPartition(const Strings & required_partitions)
+size_t MergeTreeCloudData::loadFromServerPartsInPartition(const Strings & required_partitions, std::unordered_map<String, ServerDataPartsWithDBM> & server_parts_by_partition)
 {
     if (required_partitions.empty())
         return 0;
 
-    ServerDataPartsVector visible_server_parts = getServerDataPartsInPartitions(required_partitions);
-    MergeTreeMutableDataPartsVector data_parts;
+    ServerDataPartsVector server_parts;
+    DeleteBitmapMetaPtrVector delete_bitmaps;
+    {
+        for (const String & partition_id : required_partitions)
+        {
+            const auto & parts_with_dbm = server_parts_by_partition[partition_id];
+            server_parts.insert(server_parts.end(), parts_with_dbm.first.begin(), parts_with_dbm.first.end());
+            delete_bitmaps.insert(delete_bitmaps.end(), parts_with_dbm.second.begin(), parts_with_dbm.second.end());
+        }
+    }
 
+    auto visible_server_parts = CnchPartsHelper::calcVisibleParts(server_parts, false, CnchPartsHelper::LoggingOption::DisableLogging, true);
+
+    if (getInMemoryMetadataPtr()->hasUniqueKey() && !visible_server_parts.empty())
+        getDeleteBitmapMetaForServerParts(visible_server_parts, delete_bitmaps);
+
+    MergeTreeMutableDataPartsVector data_parts;
     for (const auto & server_part : visible_server_parts)
     {
         auto part = createPartFromModelCommon(*this, *(server_part->part_model_wrapper->part_model));

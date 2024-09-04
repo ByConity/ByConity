@@ -1235,7 +1235,8 @@ String StepPrinter::printStep(const IQueryPlanStep & step, bool include_output)
         for (const auto & column : step.getOutputStream().header)
         {
             details << column.name << ":";
-            details << column.type->getName() << "\\n";
+            details << column.type->getName() << " ";
+            details << (column.column ? column.column->getName() : "") << "\\n";
         }
     }
     return details.str();
@@ -1351,7 +1352,8 @@ String StepPrinter::printFilterStep(const FilterStep & step, bool include_output
         for (const auto & column : step.getOutputStream().header)
         {
             details << column.name << ":";
-            details << column.type->getName() << "\\n";
+            details << column.type->getName() << " ";
+            details << (column.column ? column.column->getName() : "") << "\\n";
         }
     }
 
@@ -1483,7 +1485,8 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     for (const auto & item : step.getOutputStream().header)
     {
         details << item.name << ":";
-        details << item.type->getName() << "\\n";
+        details << item.type->getName() << " ";
+        details << (item.column ? item.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1501,7 +1504,8 @@ String StepPrinter::printArrayJoinStep(const ArrayJoinStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1592,7 +1596,8 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
         for (const auto & column : step.getOutputStream().header)
         {
             details << column.name << ":";
-            details << column.type->getName() << "\\n";
+            details << column.type->getName() << " ";
+            details << (column.column ? column.column->getName() : "") << "\\n";
         }
     }
 
@@ -1636,7 +1641,8 @@ String StepPrinter::printMarkDistinctStep(const MarkDistinctStep & step, bool /*
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1742,7 +1748,8 @@ String StepPrinter::printUnionStep(const UnionStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1756,7 +1763,8 @@ String StepPrinter::printIntersectOrExceptStep(const IntersectOrExceptStep & ste
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1772,7 +1780,8 @@ String StepPrinter::printIntersectStep(const IntersectStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1786,7 +1795,8 @@ String StepPrinter::printExceptStep(const ExceptStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1833,7 +1843,8 @@ String StepPrinter::printExchangeStep(const ExchangeStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1860,7 +1871,8 @@ String StepPrinter::printRemoteExchangeSourceStep(const RemoteExchangeSourceStep
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -1903,7 +1915,8 @@ String StepPrinter::printTableFinishStep(const TableFinishStep & step)
     for (auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2049,7 +2062,8 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
 
     return details.str();
@@ -2141,7 +2155,8 @@ String StepPrinter::printLimitStep(const LimitStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     if (step.isPartial())
         details << "|"
@@ -2159,7 +2174,8 @@ String StepPrinter::printOffsetStep(const OffsetStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2177,7 +2193,8 @@ String StepPrinter::printLimitByStep(const LimitByStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2198,7 +2215,8 @@ String StepPrinter::printMergeSortingStep(const MergeSortingStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2239,12 +2257,18 @@ String StepPrinter::printSortingStep(const SortingStep & step)
         details << "|";
         details << "partial";
     }
+    if (step.getStage() == SortingStep::Stage::PARTIAL_NO_MERGE)
+    {
+        details << "|";
+        details << "partial no merge";
+    }
     details << "|";
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2266,7 +2290,8 @@ String StepPrinter::printPartialSortingStep(const PartialSortingStep & step)
     for (auto & column : step_ptr->getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
      */
     return details.str();
@@ -2290,7 +2315,8 @@ String StepPrinter::printMergingSortedStep(const MergingSortedStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2311,7 +2337,8 @@ String StepPrinter::printDistinctStep(const DistinctStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2375,7 +2402,8 @@ String StepPrinter::printApplyStep(const ApplyStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2387,7 +2415,8 @@ String StepPrinter::printEnforceSingleRowStep(const EnforceSingleRowStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2398,7 +2427,8 @@ String StepPrinter::printAssignUniqueIdStep(const AssignUniqueIdStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2417,7 +2447,8 @@ String StepPrinter::printCTERefStep(const CTERefStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
 
     return details.str();
@@ -2450,7 +2481,8 @@ String StepPrinter::printPartitionTopNStep(const PartitionTopNStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2507,7 +2539,8 @@ String StepPrinter::printWindowStep(const WindowStep & step)
     for (auto & column : step_ptr->getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
      */
     return details.str();
@@ -2550,7 +2583,8 @@ String StepPrinter::printExplainAnalyzeStep(const ExplainAnalyzeStep & step)
     for (auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2574,7 +2608,8 @@ String StepPrinter::printTopNFilteringStep(const TopNFilteringStep & step)
     for (auto & column : stepPtr->getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
      */
     return details.str();
@@ -2601,7 +2636,8 @@ String StepPrinter::printFillingStep(const FillingStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2616,7 +2652,8 @@ String StepPrinter::printTotalsHavingStep(const TotalsHavingStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }
@@ -2628,7 +2665,8 @@ String StepPrinter::printExtremesStep(const ExtremesStep & step)
     for (const auto & column : step.getOutputStream().header)
     {
         details << column.name << ":";
-        details << column.type->getName() << "\\n";
+        details << column.type->getName() << " ";
+        details << (column.column ? column.column->getName() : "") << "\\n";
     }
     return details.str();
 }

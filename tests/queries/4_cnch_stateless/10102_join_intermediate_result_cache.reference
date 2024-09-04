@@ -12,10 +12,10 @@ Projection Est. ? rows
                   │     Group by: {c1}
                   └─ Inner Join Est. ? rows
                      │     Condition: 
-                     ├─ TableScan 1234.default.join_cache_table_all Est. ? rows
+                     ├─ TableScan default.join_cache_table_all Est. ? rows
                      │        Outputs: [c1]
                      └─ Broadcast Exchange Est. ? rows
-                        └─ TableScan 1234.default.join_cache_table_all Est. ? rows
+                        └─ TableScan default.join_cache_table_all Est. ? rows
                                  Outputs: c1_1:=c1
 Projection Est. ? rows
 │     Expressions: [c1]
@@ -32,10 +32,10 @@ Projection Est. ? rows
                      │     Group by: {c1}
                      └─ Inner Join Est. ? rows
                         │     Condition: 
-                        ├─ TableScan 1234.default.join_cache_table_all Est. ? rows
+                        ├─ TableScan default.join_cache_table_all Est. ? rows
                         │        Outputs: [c1]
                         └─ Broadcast Exchange Est. ? rows
-                           └─ TableScan 1234.default.join_cache_table_all Est. ? rows
+                           └─ TableScan default.join_cache_table_all Est. ? rows
                                     Outputs: c1_1:=c1
 1
 2

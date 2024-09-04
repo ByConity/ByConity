@@ -55,10 +55,9 @@ public:
     /// Load all (virtual) data parts (build part index and load part checksums from vfs).
     void prepareDataPartsForRead();
 
-    /// Receive server parts from server using TableVersion mode.
-    void receiveServerDataPartsWithDBM(ServerDataPartsWithDBM && parts_with_dbm);
-    /// Load all server parts using TableVersion mode.
-    void prepareServerDataPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names);
+    /// set data description in sendResource stage if query with table version
+    void setDataDescription(WGWorkerInfoPtr && worker_info_, UInt64 data_version_);
+    void prepareVersionedPartsForRead(ContextPtr local_context, SelectQueryInfo & query_info, const Names & column_names);
 
 protected:
     void addPreparedPart(MutableDataPartPtr & part, DataPartsLock &);
@@ -73,7 +72,7 @@ protected:
 
     void deactivateOutdatedParts();
 
-    size_t loadFromServerPartsInPartition(const Strings & required_partitions);
+    size_t loadFromServerPartsInPartition(const Strings & required_partitions, std::unordered_map<String, ServerDataPartsWithDBM> & server_parts_by_partition);
 
     void loadDataPartsInParallel(MutableDataPartsVector & parts);
 
@@ -97,7 +96,9 @@ protected:
     MutableDataPartsVector received_data_parts;
     MutableDataPartsVector received_virtual_data_parts;
 
-
+    // data description for query with table version;
+    WGWorkerInfoPtr worker_info;
+    UInt64 data_version {0};
 };
 
 }

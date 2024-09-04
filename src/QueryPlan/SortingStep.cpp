@@ -52,7 +52,7 @@ SortingStep::SortingStep(
     Stage stage_,
     SortDescription prefix_description_,
     bool enable_adaptive_spill_)
-    : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_, stage_ != Stage::PARTIAL))
+    : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_, stage_ != Stage::PARTIAL && stage_ != Stage::PARTIAL_NO_MERGE))
     , result_description(result_description_)
     , limit(limit_)
     , stage(stage_)
@@ -63,7 +63,7 @@ SortingStep::SortingStep(
     /// TODO: support mannual/auto spill
     output_stream->sort_description = result_description;
     output_stream->sort_mode
-        = (input_stream_.has_single_port || stage_ != Stage::PARTIAL) ? DataStream::SortMode::Stream : DataStream::SortMode::Port;
+        = (input_stream_.has_single_port || (stage_ != Stage::PARTIAL && stage_ != Stage::PARTIAL_NO_MERGE)) ? DataStream::SortMode::Stream : DataStream::SortMode::Port;
 }
 
 void SortingStep::setInputStreams(const DataStreams & input_streams_)
@@ -88,42 +88,52 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
 
     auto desc_copy = result_description;
 
-    if (stage == Stage::FULL || stage == Stage::PARTIAL)
+    if (stage == Stage::FULL || stage == Stage::PARTIAL || stage == Stage::PARTIAL_NO_MERGE)
     {
         // finish sorting
         if (!prefix_description.empty())
         {
             bool need_finish_sorting = (prefix_description.size() < result_description.size());
+
+            if (!need_finish_sorting)
+            {
+                if (pipeline.getNumStreams() > 1 && stage != Stage::PARTIAL_NO_MERGE)
+                {
+                    auto transform = std::make_shared<MergingSortedTransform>(
+                        pipeline.getHeader(), pipeline.getNumStreams(), prefix_description, local_settings.max_block_size, getLimitValue());
+
+                    pipeline.addTransform(std::move(transform));
+                }
+                if (getLimitValue() > 0)
+                {
+                    auto transform = std::make_shared<LimitTransform>(
+                        pipeline.getHeader(), getLimitValue(), 0, pipeline.getNumStreams(), false, false, result_description);
+                    pipeline.addTransform(std::move(transform));
+                }
+                return;
+            }
+
             if (pipeline.getNumStreams() > 1)
             {
-                UInt64 limit_for_merging = (need_finish_sorting ? 0 : getLimitValue());
+                UInt64 limit_for_merging = 0; // need_finish_sorting
                 auto transform = std::make_shared<MergingSortedTransform>(
                     pipeline.getHeader(), pipeline.getNumStreams(), prefix_description, local_settings.max_block_size, limit_for_merging);
 
                 pipeline.addTransform(std::move(transform));
             }
 
-            if (need_finish_sorting)
-            {
-                pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-                    if (stream_type != QueryPipeline::StreamType::Main)
-                        return nullptr;
+            pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
+                if (stream_type != QueryPipeline::StreamType::Main)
+                    return nullptr;
 
-                    return std::make_shared<PartialSortingTransform>(header, result_description, getLimitValue());
-                });
+                return std::make_shared<PartialSortingTransform>(header, result_description, getLimitValue());
+            });
 
-                /// NOTE limits are not applied to the size of temporary sets in FinishSortingTransform
-                pipeline.addSimpleTransform([&](const Block & header) -> ProcessorPtr {
-                    return std::make_shared<FinishSortingTransform>(
-                        header, prefix_description, result_description, local_settings.max_block_size, getLimitValue());
-                });
-            }
-            else if (getLimitValue() > 0)
-            {
-                auto transform = std::make_shared<LimitTransform>(
-                    pipeline.getHeader(), getLimitValue(), 0, pipeline.getNumStreams(), false, false, result_description);
-                pipeline.addTransform(std::move(transform));
-            }
+            /// NOTE limits are not applied to the size of temporary sets in FinishSortingTransform
+            pipeline.addSimpleTransform([&](const Block & header) -> ProcessorPtr {
+                return std::make_shared<FinishSortingTransform>(
+                    header, prefix_description, result_description, local_settings.max_block_size, getLimitValue());
+            });
             return;
         }
 
@@ -162,6 +172,16 @@ void SortingStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPi
                 local_settings.min_free_disk_space_for_temporary_data,
                 local_settings.spill_mode == SpillMode::AUTO);
         });
+
+        /// If there are several streams, then we merge them into one
+        if (pipeline.getNumStreams() > 1 && stage != Stage::PARTIAL_NO_MERGE)
+        {
+            auto transform = std::make_shared<MergingSortedTransform>(
+                pipeline.getHeader(), pipeline.getNumStreams(), desc_copy, local_settings.max_block_size, getLimitValue());
+
+            pipeline.addTransform(std::move(transform));
+        }
+        return;
     }
 
     /// If there are several streams, then we merge them into one

@@ -553,6 +553,8 @@ std::shared_ptr<TableScanStep> SymbolMapper::map(const TableScanStep & scan)
         std::move(mapped_output_stream),
         scan.getStorage(),
         scan.getStorageID(),
+        scan.getMetadataSnapshot(),
+        scan.getStorageSnapshot(),
         scan.getOriginalTable(),
         scan.getColumnNames(),
         std::move(mapped_column_alias),

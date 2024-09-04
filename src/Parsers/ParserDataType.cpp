@@ -203,7 +203,7 @@ bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         }
     }
 
-    if (null_modifier)
+    if (null_modifier && *null_modifier)
         node = std::make_shared<ASTDataType>(function_node, null_modifier.value());
     else
         node = function_node;

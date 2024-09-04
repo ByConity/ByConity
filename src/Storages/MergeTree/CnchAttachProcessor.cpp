@@ -14,6 +14,10 @@
  */
 
 #include <Storages/MergeTree/CnchAttachProcessor.h>
+#include <cmath>
+#include <memory>
+#include <vector>
+#include <numeric>
 #include <filesystem>
 #include <memory>
 #include <numeric>
@@ -336,6 +340,7 @@ void CnchAttachProcessor::exec()
     std::vector<ASTPtr> attached_partitions;
 
     AttachFilter filter;
+    MutableMergeTreeDataPartsCNCHVector preload_parts;
     try
     {
         // Find all parts which matches filter, these parts will retain it's origin
@@ -346,6 +351,7 @@ void CnchAttachProcessor::exec()
 
         // Assign new part name and rename it to target location
         PartsWithHistory prepared_parts = prepareParts(parts_from_sources, attach_ctx);
+        preload_parts = prepared_parts.second;
 
         if (command.replace)
         {
@@ -400,6 +406,8 @@ void CnchAttachProcessor::exec()
     }
 
     attach_ctx.commit();
+
+    tryPreload(preload_parts);
 }
 
 std::vector<MutableMergeTreeDataPartsCNCHVector> CnchAttachProcessor::getDetachedParts(const AttachFilter& filter)
@@ -1760,6 +1768,33 @@ void CnchAttachProcessor::injectFailure(AttachFailurePoint point) const
     if (unlikely(failure_injection_knob & static_cast<int>(point)))
     {
         throw Exception("Injected exception", ErrorCodes::NETWORK_ERROR);
+    }
+}
+
+void CnchAttachProcessor::tryPreload(MutableMergeTreeDataPartsCNCHVector & attached_parts)
+{
+    const auto & settings = query_ctx->getSettingsRef();
+    if (!settings.parts_preload_level || (!target_tbl.getSettings()->parts_preload_level && !target_tbl.getSettings()->enable_preload_parts)
+        || !target_tbl.getSettings()->enable_local_disk_cache)
+        return;
+
+    try
+    {
+        if (!attached_parts.empty())
+        {
+            ServerDataPartsVector preload_parts = createServerPartsFromDataParts(target_tbl, attached_parts);
+            target_tbl.sendPreloadTasks(
+                query_ctx,
+                preload_parts,
+                false,
+                (target_tbl.getSettings()->enable_preload_parts ? PreloadLevelSettings::AllPreload
+                                                                 : target_tbl.getSettings()->parts_preload_level.value),
+                time(nullptr));
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
     }
 }
 

@@ -26,15 +26,15 @@
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/LineageInfo.h>
 #include <QueryPlan/QueryPlan.h>
-#include <Poco/JSON/Object.h>
 #include <magic_enum.hpp>
 #include <Poco/JSON/Object.h>
-#include "Parsers/ASTCreateQuery.h"
 
 #include <utility>
 #include <vector>
@@ -144,13 +144,14 @@ String PlanPrinter::textLogicalPlan(
     auto & optimizer_metrics = context->getOptimizerMetrics();
     if (optimizer_metrics && !optimizer_metrics->getUsedMaterializedViews().empty())
     {
+        auto tenant_id = context->getTenantId();
         output += "note: Materialized Views is applied for " + std::to_string(optimizer_metrics->getUsedMaterializedViews().size())
             + " times: ";
         const auto & views = optimizer_metrics->getUsedMaterializedViews();
         auto it = views.begin();
-        output += it->getDatabaseName() + "." + it->getTableName();
+        output += getOriginalDatabaseName(it->getDatabaseName(), tenant_id) + "." + it->getTableName();
         for (++it; it != views.end(); ++it)
-            output += ", " + it->getDatabaseName() + "." + it->getTableName();
+            output += ", " + getOriginalDatabaseName(it->getDatabaseName() + "." + it->getTableName(), tenant_id);
         output += ".";
     }
 
@@ -836,6 +837,7 @@ String PlanPrinter::TextPrinter::printPrefix(PlanNodeBase & plan)
     return "";
 }
 
+
 String PlanPrinter::TextPrinter::printSuffix(PlanNodeBase & plan)
 {
     std::stringstream out;
@@ -845,8 +847,9 @@ String PlanPrinter::TextPrinter::printSuffix(PlanNodeBase & plan)
 
     if (plan.getStep()->getType() == IQueryPlanStep::Type::TableScan)
     {
+        auto tenant_id = context->getTenantId();
         const auto * table_scan = dynamic_cast<const TableScanStep *>(plan.getStep().get());
-        out << " " << table_scan->getDatabase() << "." << table_scan->getOriginalTable();
+        out << " " << getOriginalDatabaseName(table_scan->getDatabase(), tenant_id) << "." << table_scan->getOriginalTable();
     }
     else if (plan.getStep()->getType() == IQueryPlanStep::Type::Exchange && segment_id != -1)
     {
@@ -1136,7 +1139,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     {
         const auto * table_write = dynamic_cast<const TableWriteStep *>(plan.get());
         if (table_write->getTarget())
-            out << intent.detailIntent() << table_write->getTarget()->toString();
+            out << intent.detailIntent() << table_write->getTarget()->toString(context->getTenantId());
     }
 
     if (plan->getType() == IQueryPlanStep::Type::TotalsHaving)

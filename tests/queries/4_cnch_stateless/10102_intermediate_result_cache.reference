@@ -11,7 +11,7 @@ Projection Est. ? rows
                └─ IntermediateResultCache Est. ? rows
                   └─ Aggregating Est. ? rows
                      │     Group by: {c1}
-                     └─ TableScan 1234.default.cache_table_all Est. ? rows
+                     └─ TableScan default.cache_table_all Est. ? rows
                               Outputs: [c1]
 1
 2
@@ -80,7 +80,7 @@ Projection Est. ? rows
                   └─ Aggregating Est. ? rows
                      │     Group by: {c1}
                      │     Aggregates: expr#count(c2):=AggNull(count)(c2)
-                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                     └─ TableScan default.cache_table_sharding_all Est. ? rows
                               Outputs: [c1, c2]
 1	1
 2	1
@@ -100,7 +100,7 @@ Projection Est. ? rows
                   └─ Aggregating Est. ? rows
                      │     Group by: {c2}
                      │     Aggregates: expr#count(c1):=AggNull(count)(c1)
-                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                     └─ TableScan default.cache_table_sharding_all Est. ? rows
                               Partition filter: c1 = 1
                               Outputs: [c1, c2]
 Projection Est. ? rows
@@ -117,7 +117,7 @@ Projection Est. ? rows
                   └─ Aggregating Est. ? rows
                      │     Group by: {c2}
                      │     Aggregates: expr#count(c1):=AggNull(count)(c1)
-                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                     └─ TableScan default.cache_table_sharding_all Est. ? rows
                               Outputs: [c1, c2]
 Projection Est. ? rows
 │     Expressions: [c2], count(c1):=`expr#count(c1)`
@@ -133,7 +133,7 @@ Projection Est. ? rows
                   └─ Aggregating Est. ? rows
                      │     Group by: {c2}
                      │     Aggregates: expr#count(c1):=AggNull(count)(c1)
-                     └─ TableScan 1234.default.cache_table_sharding_all Est. ? rows
+                     └─ TableScan default.cache_table_sharding_all Est. ? rows
                               Partition filter: c1 >= 1
                               Outputs: [c1, c2]
 a	1

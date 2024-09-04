@@ -19,11 +19,11 @@ CTEDef [1]
    │     Filter: k1 > 0
    ├─ Filter Est. ? rows
    │  │     Condition: k1 >= 1
-   │  └─ TableScan 1234.default.51005_share_common_plan_node Est. ? rows
+   │  └─ TableScan default.51005_share_common_plan_node Est. ? rows
    │           Where: k1 >= 1
    │           Outputs: [id, k1]
    └─ Broadcast Exchange Est. ? rows
-      └─ TableScan 1234.default.51005_share_common_plan_node Est. ? rows
+      └─ TableScan default.51005_share_common_plan_node Est. ? rows
                Outputs: id_1:=id
 note: CTE(Common Table Expression) is applied for 2 times.
 1

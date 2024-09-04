@@ -785,7 +785,7 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
         auto server_client = context->getCnchServerClientPool().get();
         MutableMergeTreeDataPartsCNCHVector preload_parts;
         std::copy_if(dumped_parts.begin(), dumped_parts.end(), std::back_inserter(preload_parts), [](const auto & part) {
-            return !part->deleted && !part->isPartial();
+            return !part->deleted;
         });
 
         if (!preload_parts.empty())

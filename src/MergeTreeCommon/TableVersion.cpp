@@ -10,6 +10,13 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 
+
+namespace ProfileEvents
+{
+    extern const Event LoadManifestPartsCacheHits;
+    extern const Event LoadManifestPartsCacheMisses;
+}
+
 namespace DB
 {
 
@@ -130,8 +137,8 @@ void TableVersion::fileterDataByWorkerInfo(const MergeTreeMetaBase & storage, st
         String worker_id_prefix = worker_id.substr(0, worker_id.find_last_of('-') + 1);
         WorkerGroupHandle mock_wg = WorkerGroupHandleImpl::mockWorkerGroupHandle(worker_id_prefix, worker_info->num_workers, getContext());
 
-        // Use the same allocation algorithm as preaload. can work with parts as well as delete bitmap.
-        auto allocate_res = assignCnchParts(mock_wg, data_vector, getContext(), storage.getSettings());
+        // Use consistent hash to make sure the parts with the same basic name are always allocated to the same worker
+        auto allocate_res = assignCnchParts(mock_wg, data_vector, getContext(), storage.getSettings(), Context::PartAllocator::JUMP_CONSISTENT_HASH);
 
         // only get the allocated data which belongs to current worker
         worker_hold_data = std::move(allocate_res[worker_id]);
@@ -182,16 +189,19 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
                 {
                     data_parts.swap(loaded_parts);
                     delete_bitmaps.swap(loaded_dbm);
-                    loaded_from_manifest = true;
                 }
-
-                LOG_TRACE(&Poco::Logger::get("TableVersion"), "Loaded {} data parts and {} delete bitmaps from manifest disk cache {} (relative path: {}).",
-                    data_parts.size(),
-                    delete_bitmaps.size(),
-                    manifest_seg->getSegmentName(),
-                    segment_path);
-                return;
             }
+
+            // Disk may be empty if no server parts assigned to this worker. Then, nothin will be loaded.
+            LOG_TRACE(log, "Loaded {} data parts and {} delete bitmaps from manifest disk cache {}. Path : {}",
+                data_parts.size(),
+                delete_bitmaps.size(),
+                manifest_seg->getSegmentName(),
+                segment_path);
+
+            loaded_from_manifest = true;
+            ProfileEvents::increment(ProfileEvents::LoadManifestPartsCacheHits);
+            return;
         }
     }
 
@@ -220,6 +230,7 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
             loaded_dbm = catalog->getDeleteBitmapsFromManifest(storage, txn_list);
     }
 
+    ProfileEvents::increment(ProfileEvents::LoadManifestPartsCacheMisses);
     // filter parts by worker info.
     if (worker_info)
     {
@@ -235,7 +246,7 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
         loaded_from_manifest = true;
     }
 
-    LOG_TRACE(&Poco::Logger::get("TableVersion"), "Loaded {} parts and {} delete bitmap in table version {} from {}.",
+    LOG_TRACE(log, "Loaded {} parts and {} delete bitmap in table version {} from {}.",
         data_parts.size(),
         delete_bitmaps.size(),
         version,
