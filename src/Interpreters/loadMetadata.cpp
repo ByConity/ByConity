@@ -246,7 +246,7 @@ void reloadFormatSchema(ContextMutablePtr context, String remote_format_schema_p
         remote_format_schema_path += "/"; // add it by default
         // try download files from remote_format_schema_path to format_schema_path
         Poco::URI remote_uri(remote_format_schema_path);
-        if (remote_uri.getScheme() == "hdfs")
+        if (isHdfsOrCfsScheme(remote_uri.getScheme()))
         {
             HDFSBuilderPtr builder = context->getHdfsConnectionParams().createBuilder(remote_uri);
             HDFSFSPtr fs = createHDFSFS(builder.get());
@@ -289,7 +289,7 @@ void reloadFormatSchema(ContextMutablePtr context, String remote_format_schema_p
         }
         else
         {
-            if(log) {LOG_ERROR(log, "remote_format_schema_path only support hdfs");}
+            if(log) {LOG_ERROR(log, "remote_format_schema_path only support hdfs and cfs");}
         }
     }
 #endif
