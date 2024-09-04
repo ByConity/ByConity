@@ -16,7 +16,6 @@
 #include <Storages/MergeTree/MergeTreeCloudData.h>
 #include <MergeTreeCommon/GlobalDataManager.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <Common/Trace/TracerCommon.h>
 #include "Processors/QueryPipeline.h"
 #include <common/scope_guard_safe.h>
 #include <Protos/DataModelHelpers.h>

@@ -81,7 +81,7 @@ namespace DB::Statistics
 {
 struct StatisticsMemoryStore;
 }
-namespace DB::Statistics::AutoStats 
+namespace DB::Statistics::AutoStats
 {
 class AutoStatisticsManager;
 }
@@ -131,6 +131,7 @@ class CloudTableDefinitionCache;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
+class GinIdxFilterResultCache;
 class PrimaryIndexCache;
 class ProcessList;
 class ProcessListEntry;
@@ -212,7 +213,6 @@ class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
 class CompressedDataIndexCache;
-class GinIdxFilterResultCache;
 class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
@@ -1199,7 +1199,7 @@ public:
 
     UInt32 getZooKeeperSessionUptime() const;
 
-    void addQueryPlanInfo(String & query_plan_) 
+    void addQueryPlanInfo(String & query_plan_)
     {
         this->query_plan = query_plan_;
     }

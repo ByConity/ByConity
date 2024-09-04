@@ -72,6 +72,7 @@ public:
         const PrewhereExprInfo * prewhere_info_,
         ImmutableDeleteBitmapPtr delete_bitmap_,
         bool last_reader_in_chain_,
+        const Names & non_const_virtual_column_names_,
         size_t filtered_ratio_to_use_skip_read_);
 
     MergeTreeRangeReader() = default;
@@ -298,6 +299,8 @@ private:
     size_t filtered_ratio_to_use_skip_read = 0;
     /// used by last reader to track how many marks are selected
     std::optional<size_t> last_selected_mark {std::nullopt};
+
+    Names non_const_virtual_column_names;
 };
 
 }
