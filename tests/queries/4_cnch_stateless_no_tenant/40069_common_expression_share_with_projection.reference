@@ -12,3 +12,4 @@ Projection Est. ? rows
                Group by: {}
                Aggregates: expr#sum(val):=AggNull(sum)(val)
 200
+11	111
