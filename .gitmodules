@@ -355,3 +355,6 @@
 [submodule "contrib/sparse-map"]
 	path = contrib/sparse-map
 	url = https://github.com/Tessil/sparse-map.git
+[submodule "contrib/libevent"]
+	path = contrib/libevent
+	url = https://github.com/ByConity/libevent.git
