@@ -1079,7 +1079,9 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
     M(Bool, ignore_array_join_check_in_join_on_condition, false, "Ignore array-join function check in join on condition", 0) \
     M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
-\
+    \
+    M(Bool, enable_io_uring_for_local_fs_read, false, "Enabel io_uring when reading from local file system", 0) \
+    \
     /** Experimental feature for moving data between shards. */ \
     \
     M(Bool, allow_experimental_nlp_functions, false, "Enable experimental functions for natural language processing.", 0) \

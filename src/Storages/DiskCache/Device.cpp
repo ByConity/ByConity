@@ -21,6 +21,18 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
+#include <folly/File.h>
+#include <folly/Format.h>
+#include <folly/Function.h>
+#include <folly/IntrusiveList.h>
+#include <folly/ThreadLocal.h>
+#include <folly/experimental/io/IoUring.h>
+#include <folly/fibers/TimedMutex.h>
+#include <folly/io/IOBuf.h>
+#include <folly/io/async/EventBase.h>
+#include <folly/io/async/EventBaseManager.h>
+#include <folly/io/async/EventHandler.h>
+
 namespace ProfileEvents
 {
 extern const Event DiskCacheDeviceBytesWritten;
@@ -144,6 +156,9 @@ namespace
         UInt32 num_remaining = 0;
         std::vector<IOOp> ops;
 
+        // Baton is used to wait for the completion of the entire request
+        folly::fibers::Baton baton;
+
         std::chrono::nanoseconds start_time;
         std::chrono::nanoseconds comp_time;
     };
@@ -184,6 +199,84 @@ namespace
         static ssize_t readSync(int fd, UInt64 offset, UInt32 size, void * value);
     };
 
+    // Async IO handler to handle the events happened on poll fd used by AsyncBase
+    // (common for both IoUring and AsyncIO)
+    class CompletionHandler : public folly::EventHandler
+    {
+    public:
+        CompletionHandler(AsyncIoContext & ioContext_, folly::EventBase * evb_, int pollFd_)
+            : folly::EventHandler(evb_, folly::NetworkSocket::fromFd(pollFd_)), io_context(ioContext_)
+        {
+            registerHandler(EventHandler::READ | EventHandler::PERSIST);
+        }
+
+        ~CompletionHandler() override { unregisterHandler(); }
+
+        void handlerReady(uint16_t /*events*/) noexcept override;
+
+    private:
+        AsyncIoContext & io_context;
+    };
+
+    // Per-thread context for AsyncIO like libaio or io_uring
+    class AsyncIoContext : public IoContext
+    {
+    public:
+        AsyncIoContext(
+            std::unique_ptr<folly::AsyncBase> && async_base_, size_t id_, folly::EventBase * evb_, size_t capacity_, bool use_io_uring_);
+
+        ~AsyncIoContext() override = default;
+
+        std::string getName() override { return fmt::format("ctx_{}", id); }
+        // IO is completed sync if compHandler_ is not available
+        bool isAsyncIoCompletion() override { return !!comp_handler; }
+
+        bool submitIo(IOOp & op) override;
+
+        // Invoked by event loop handler whenever AIO signals that one or more
+        // operation have finished
+        void pollCompletion();
+
+    private:
+        void handleCompletion(folly::Range<folly::AsyncBaseOp **> & completed);
+
+        std::unique_ptr<folly::AsyncBaseOp> prepAsyncIo(IOOp & op) const;
+
+        // The maximum number of retries when IO failed with EBUSY.
+        // For now, this could happen only for io_uring when combined with md
+        // devices due to, suspectedly, a different way the partial EAGAINs for
+        // sub-ios are handled in the kernel (see T182829130)
+        // We don't apply any delay in-between retries to avoid additional latencies
+        // and 10000 retries should work for most cases
+        static constexpr size_t kRetryLimit = 10000;
+
+        // Waiter context to enforce the qdepth limit
+        struct Waiter
+        {
+            folly::fibers::Baton baton;
+            folly::SafeIntrusiveListHook hook;
+        };
+
+        using WaiterList = folly::SafeIntrusiveList<Waiter, &Waiter::hook>;
+
+        Poco::Logger * log = &Poco::Logger::get("AsyncIoContext");
+
+        std::unique_ptr<folly::AsyncBase> async_base;
+        // Sequential id assigned to this context
+        const size_t id;
+        const size_t q_depth;
+        // Waiter list for enforcing the qdepth
+        WaiterList wait_list;
+        std::unique_ptr<CompletionHandler> comp_handler;
+        // Use io_uring or libaio
+        bool use_io_uring;
+        size_t retry_limit = kRetryLimit;
+
+        // The IO operations that have been submit but not completed yet.
+        size_t num_outstanding = 0;
+        size_t num_submitted = 0;
+        size_t num_completed = 0;
+    };
 
     class FileDevice : public Device
     {
@@ -213,13 +306,16 @@ namespace
 
         const UInt32 stripe_size;
 
-        std::unique_ptr<SyncIoContext> sync_io_contenxt;
+        std::unique_ptr<SyncIoContext> sync_io_context;
 
         std::atomic<UInt32> incremental_idx{0};
 
         const IoEngine io_engine;
 
         const UInt32 q_depth_per_context;
+
+        // Thread-local context, created on demand
+        folly::ThreadLocalPtr<AsyncIoContext> tl_context;
 
         friend class IoContext;
     };
@@ -369,7 +465,7 @@ namespace
         bool result = (status == size);
         if (!result)
             Device::logger().error(
-                fmt::format("[{}] IO error: {} ret={}", parent.context.getName(), toString(), status, errno, std::strerror(errno)));
+                fmt::format("[{}] IO error: {} ret={}, {}", parent.context.getName(), toString(), status, std::strerror(-status)));
 
         auto cur_time = getSteadyClock();
         auto delay_ms = toMillis(cur_time - start_time).count();
@@ -424,9 +520,9 @@ namespace
 
     bool IOReq::waitCompletion()
     {
+        // Need to wait for Baton only for async io completion
         if (context.isAsyncIoCompletion())
-            // not supported at now()
-            throwFromErrno("not supported", ErrorCodes::NOT_IMPLEMENTED);
+            baton.wait();
 
         auto cur_time = getSteadyClock();
 
@@ -457,7 +553,12 @@ namespace
 
         comp_time = getSteadyClock();
         if (context.isAsyncIoCompletion())
-            throwFromErrno("not supported", ErrorCodes::NOT_IMPLEMENTED);
+            baton.post();
+    }
+
+    void CompletionHandler::handlerReady(uint16_t /*events*/) noexcept
+    {
+        io_context.pollCompletion();
     }
 
     std::shared_ptr<IOReq>
@@ -511,6 +612,147 @@ namespace
         return op.done(status);
     }
 
+    AsyncIoContext::AsyncIoContext(
+        std::unique_ptr<folly::AsyncBase> && async_base_, size_t id_, folly::EventBase * evb_, size_t capacity_, bool use_io_uring_)
+        : async_base(std::move(async_base_)), id(id_), q_depth(capacity_), use_io_uring(use_io_uring_)
+    {
+        if (evb_)
+        {
+            comp_handler = std::make_unique<CompletionHandler>(*this, evb_, async_base->pollFd());
+        }
+        else
+        {
+            // If EventBase is not provided, the completion will be waited
+            // synchronously instead of being notified via epoll
+            chassert(q_depth == 1u);
+            // Retry is not supported without epoll for now
+            retry_limit = 0;
+        }
+
+        LOG_INFO(
+            log,
+            "[{}] Created new async io context with qdepth {}{} io_engine {}",
+            getName(),
+            q_depth,
+            q_depth == 1 ? " (sync wait)" : "",
+            use_io_uring ? "io_uring" : "libaio");
+    }
+
+    void AsyncIoContext::pollCompletion()
+    {
+        auto completed = async_base->pollCompleted();
+        handleCompletion(completed);
+    }
+
+    void AsyncIoContext::handleCompletion(folly::Range<folly::AsyncBaseOp **> & completed)
+    {
+        for (auto op : completed)
+        {
+            // AsyncBaseOp should be freed after completion
+            std::unique_ptr<folly::AsyncBaseOp> aop(op);
+            chassert(aop->state() == folly::AsyncBaseOp::State::COMPLETED);
+
+            auto iop = reinterpret_cast<IOOp *>(aop->getUserData());
+            chassert(iop);
+
+            chassert(num_outstanding >= 0u);
+            num_outstanding--;
+            num_completed++;
+
+            // handle retry
+            if (aop->result() == -EAGAIN && iop->resubmitted < retry_limit)
+            {
+                iop->resubmitted++;
+                LOG_DEBUG(log, "[{}] resubmitting IO {}", getName(), iop->toString());
+                submitIo(*iop);
+                continue;
+            }
+
+            if (iop->resubmitted > 0)
+            {
+                LOG_DEBUG(log, "[{}] resubmitted IO completed ({}) {}", getName(), aop->result(), iop->toString());
+            }
+
+            // Complete the IO and wake up waiter if needed
+            auto len = aop->result();
+            iop->done(len);
+
+            if (!wait_list.empty())
+            {
+                auto & waiter = wait_list.front();
+                wait_list.pop_front();
+                waiter.baton.post();
+            }
+        }
+    }
+
+    bool AsyncIoContext::submitIo(IOOp & op)
+    {
+        op.start_time = getSteadyClock();
+
+        while (num_outstanding >= q_depth)
+        {
+            if (q_depth > 1)
+            {
+                LOG_DEBUG(log, "[{}] the number of outstanding requests {} exceeds the limit {}", getName(), num_outstanding, q_depth);
+            }
+            Waiter waiter;
+            wait_list.push_back(waiter);
+            waiter.baton.wait();
+        }
+
+        std::unique_ptr<folly::AsyncBaseOp> async_op;
+        async_op = prepAsyncIo(op);
+        async_op->setUserData(&op);
+        async_base->submit(async_op.release());
+
+        op.submit_time = getSteadyClock();
+
+        num_outstanding++;
+        num_submitted++;
+
+        if (!comp_handler)
+        {
+            // Wait completion synchronously if completion handler is not available.
+            // i.e., when async io is used with non-epoll mode
+            auto completed = async_base->wait(1 /* minRequests */);
+            handleCompletion(completed);
+        }
+
+        return true;
+    }
+
+    std::unique_ptr<folly::AsyncBaseOp> AsyncIoContext::prepAsyncIo(IOOp & op) const
+    {
+        std::unique_ptr<folly::AsyncBaseOp> async_op;
+        IOReq & req = op.parent;
+        if (use_io_uring)
+        {
+#if USE_LIBURING
+            async_op = std::make_unique<folly::IoUringOp>();
+#else
+            throwFromErrno("iouring not supported", ErrorCodes::NOT_IMPLEMENTED);
+#endif
+        }
+        else
+        {
+            throwFromErrno("libadio not supported", ErrorCodes::NOT_IMPLEMENTED);
+            // asyncOp = std::make_unique<folly::AsyncIOOp>();
+        }
+
+        if (req.op_type == OpType::READ)
+        {
+            async_op->pread(op.fd, op.data, op.size, op.offset);
+        }
+        else
+        {
+            chassert(req.op_type == OpType::WRITE);
+            async_op->pwrite(op.fd, op.data, op.size, op.offset);
+        }
+
+        return async_op;
+    }
+
     FileDevice::FileDevice(
         std::vector<DB::File> && fvec_,
         UInt64 file_size,
@@ -540,15 +782,16 @@ namespace
                     ErrorCodes::BAD_ARGUMENTS);
         }
 
-        if (io_engine == IoEngine::Sync)
-        {
-            chassert(q_depth_per_context == 0u);
-            sync_io_contenxt = std::make_unique<SyncIoContext>();
-        }
-        else
-        {
-            throwFromErrno("not supported", ErrorCodes::NOT_IMPLEMENTED);
-        }
+        // Check qdepth configuration
+        // 1. if io engine is Sync, then qdepth per context must be 0
+        chassert(io_engine != IoEngine::Sync || q_depth_per_context == 0u);
+        // 2. if io engine is Async, then qdepth per context must be greater than 0
+        chassert(io_engine == IoEngine::Sync || q_depth_per_context > 0u);
+
+        // Create sync io context. It will be also used for async io as well
+        // for the path where device IO is called from non-fiber thread
+        // (e.g., recovery path, read random alloc path)
+        sync_io_context = std::make_unique<SyncIoContext>();
 
         Device::logger().information(fmt::format(
             "Created device with num_devices {} size {} block_size {} stripe_size {} max_write_size {} io_engine {} qdepth {}",
@@ -582,9 +825,60 @@ namespace
     IoContext * FileDevice::getIoContext()
     {
         if (io_engine == IoEngine::Sync)
-            return sync_io_contenxt.get();
+            return sync_io_context.get();
 
-        throwFromErrno("not supported", ErrorCodes::NOT_IMPLEMENTED);
+        if (!tl_context)
+        {
+            bool on_fiber = folly::fibers::onFiber();
+            if (!on_fiber && q_depth_per_context != 1)
+            {
+                // This is the case when IO is submitted from non-fiber thread
+                // directly. E.g., recovery path at init, get sample item from
+                // function scheduler. So, fallback to sync IO context instead
+                return sync_io_context.get();
+            }
+
+            // Create new context if on event base thread or useIoUring_ is enabled
+            bool use_io_uring = io_engine == IoEngine::IoUring;
+
+            folly::EventBase * evb = nullptr;
+            auto poll_mode = folly::AsyncBase::POLLABLE;
+            if (on_fiber)
+            {
+                evb = folly::EventBaseManager::get()->getExistingEventBase();
+                chassert(evb);
+            }
+            else
+            {
+                // If we are not on fiber and eventbase, we run in no-epoll mode with
+                // qdepth of 1, i.e., async submission and sync wait
+                chassert(q_depth_per_context == 1u);
+                poll_mode = folly::AsyncBase::NOT_POLLABLE;
+            }
+
+            std::unique_ptr<folly::AsyncBase> async_base;
+            if (use_io_uring)
+            {
+#if USE_LIBURING
+                size_t uring_capacity = std::max(q_depth_per_context, 4u);
+                size_t uring_max_submit = std::max(q_depth_per_context, 4u);
+                async_base = std::make_unique<folly::IoUring>(uring_capacity, poll_mode, uring_max_submit);
+#else
+                throwFromErrno("iouring not supported", ErrorCodes::NOT_IMPLEMENTED);
+#endif
+            }
+            else
+            {
+                chassert(io_engine == IoEngine::LibAio);
+                throwFromErrno("aio not supported", ErrorCodes::NOT_IMPLEMENTED);
+                // asyncBase = std::make_unique<folly::AsyncIO>(q_depth_per_context, pollMode);
+            }
+
+            auto idx = incremental_idx++;
+            tl_context.reset(new AsyncIoContext(std::move(async_base), idx, evb, q_depth_per_context, use_io_uring));
+        }
+
+        return tl_context.get();
     }
 }
 
@@ -605,11 +899,5 @@ std::unique_ptr<Device> createDirectIoFileDevice(
     chassert(isPowerOf2(block_size));
 
     return std::make_unique<FileDevice>(std::move(f_vec), file_size, block_size, stripe_size, max_device_write_size, io_engine, q_depth);
-}
-
-std::unique_ptr<Device>
-createDirectIoFileDevice(std::vector<DB::File> f_vec, UInt64 file_size, UInt32 block_size, UInt32 stripe_size, UInt32 max_device_write_size)
-{
-    return createDirectIoFileDevice(std::move(f_vec), file_size, block_size, stripe_size, max_device_write_size, IoEngine::Sync, 0);
 }
 }

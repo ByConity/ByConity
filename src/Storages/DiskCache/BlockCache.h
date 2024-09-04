@@ -46,9 +46,12 @@ public:
         UInt64 region_size{16 * 1024 * 1024};
         UInt32 read_buffer_size{};
 
+        // no longer needed, can be removed
         JobScheduler * scheduler{};
 
         UInt32 clean_regions_pool{1};
+        UInt32 clean_region_threads{1};
+
         // Number of in-memory buffers where writes ae buffered before flushed.
         UInt32 num_in_mem_buffers{1};
         bool item_destructor_enabled{false};
@@ -106,6 +109,9 @@ public:
     }
 
     std::pair<Status, std::string> getRandomAlloc(Buffer & value) override;
+
+    // Finish all pending jobs in RegionManager
+    void drain();
 
     // the minimum alloc alignment size.
     static constexpr UInt32 kMinAllocAlignSize = 512;

@@ -1,8 +1,6 @@
 #include <Storages/DiskCache/Index.h>
 
 #include <limits>
-#include <mutex>
-#include <shared_mutex>
 
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/util/delimited_message_util.h>
@@ -35,8 +33,8 @@ void Index::setHits(UInt64 key, UInt8 current_hits, UInt8 total_hits)
     auto it = map.find(subkey(key));
     if (it != map.end())
     {
-        it->second.current_hits = current_hits;
-        it->second.total_hits = total_hits;
+        it.value().current_hits = current_hits;
+        it.value().total_hits = total_hits;
     }
 }
 
@@ -51,8 +49,8 @@ Index::LookupResult Index::lookup(UInt64 key)
     {
         result.found = true;
         result.record = it->second;
-        it->second.total_hits = safeInc(result.record.total_hits);
-        it->second.current_hits = safeInc(result.record.current_hits);
+        it.value().total_hits = safeInc(result.record.total_hits);
+        it.value().current_hits = safeInc(result.record.current_hits);
     }
     return result;
 }
@@ -83,13 +81,13 @@ Index::LookupResult Index::insert(UInt64 key, UInt32 address, UInt16 size_hint)
         result.found = true;
         result.record = it->second;
         trackRemove(it->second.total_hits);
-        it->second.address = address;
-        it->second.current_hits = 0;
-        it->second.total_hits = 0;
-        it->second.size_hint = size_hint;
+        it.value().address = address;
+        it.value().current_hits = 0;
+        it.value().total_hits = 0;
+        it.value().size_hint = size_hint;
     }
     else
-        map[key] = ItemRecord{address, size_hint};
+        map.try_emplace(key, address, size_hint);
     return result;
 }
 
@@ -101,8 +99,8 @@ bool Index::replaceIfMatch(UInt64 key, UInt32 new_address, UInt32 old_address)
     auto it = map.find(subkey(key));
     if (it != map.end() && it->second.address == old_address)
     {
-        it->second.address = new_address;
-        it->second.current_hits = 0;
+        it.value().address = new_address;
+        it.value().current_hits = 0;
         return true;
     }
     return false;
@@ -127,7 +125,6 @@ Index::LookupResult Index::remove(UInt64 key)
         result.record = it->second;
 
         trackRemove(it->second.total_hits);
-        map.set_deleted_key(it->first);
         map.erase(it);
     }
     return result;
@@ -142,7 +139,6 @@ bool Index::removeIfMatch(UInt64 key, UInt32 address)
     if (it != map.end() && it->second.address == address)
     {
         trackRemove(it->second.total_hits);
-        map.set_deleted_key(it->first);
         map.erase(it);
         return true;
     }
@@ -193,9 +189,9 @@ void Index::persist(google::protobuf::io::CodedOutputStream * stream) const
 
 void Index::recover(google::protobuf::io::CodedInputStream * stream)
 {
-    Protos::IndexBucket bucket;
     for (UInt32 i = 0; i < kNumBuckets; i++)
     {
+        Protos::IndexBucket bucket;
         google::protobuf::util::ParseDelimitedFromCodedStream(&bucket, stream, nullptr);
         UInt32 id = bucket.bucket_id();
         if (id >= kNumBuckets)
@@ -203,11 +199,12 @@ void Index::recover(google::protobuf::io::CodedInputStream * stream)
 
         for (const auto & entry : bucket.entries())
         {
-            buckets[id][entry.key()] = ItemRecord{
+            buckets[id].try_emplace(
+                entry.key(),
                 entry.address(),
                 static_cast<UInt16>(entry.size_hint()),
                 static_cast<UInt8>(entry.total_hits()),
-                static_cast<UInt8>(entry.current_hits())};
+                static_cast<UInt8>(entry.current_hits()));
         }
     }
 }

@@ -45,14 +45,13 @@ TEST(RegionManager, ReclaimLruAsFifo)
     auto device = createMemoryDevice(k_num_regions * k_region_size);
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
-    MockJobScheduler ms;
     auto rm = std::make_unique<RegionManager>(
         k_num_regions,
         k_region_size,
         0,
         *device,
         1,
-        ms,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::move(policy),
@@ -79,14 +78,13 @@ TEST(RegionManager, ReclaimLru)
     auto device = createMemoryDevice(k_num_regions * k_region_size);
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
-    MockJobScheduler ms;
     auto rm = std::make_unique<RegionManager>(
         k_num_regions,
         k_region_size,
         0,
         *device,
         1,
-        ms,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::move(policy),
@@ -114,14 +112,13 @@ TEST(RegionManager, ReadWrite)
     auto * device_ptr = device.get();
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
-    MockJobScheduler ms;
     auto rm = std::make_unique<RegionManager>(
         k_num_regions,
         k_region_size,
         k_base_offset,
         *device,
         1,
-        ms,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::make_unique<FifoPolicy>(),
@@ -134,13 +131,26 @@ TEST(RegionManager, ReadWrite)
     BufferGen gen;
     RegionId rid;
 
-    rm->startReclaim();
-    ASSERT_TRUE(ms.runFirst());
-    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid));
+    {
+        auto [status, waiter] = rm->getCleanRegion(rid, true);
+        if (status == OpenStatus::Retry && waiter)
+        {
+            waiter->baton.wait();
+            status = rm->getCleanRegion(rid, true).first;
+        }
+        ASSERT_EQ(OpenStatus::Ready, status);
+    }
     ASSERT_EQ(0, rid.index());
-    rm->startReclaim();
-    ASSERT_TRUE(ms.runFirst());
-    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid));
+
+    {
+        auto [status, waiter] = rm->getCleanRegion(rid, true);
+        if (status == OpenStatus::Retry && waiter)
+        {
+            waiter->baton.wait();
+            status = rm->getCleanRegion(rid, true).first;
+        }
+        ASSERT_EQ(OpenStatus::Ready, status);
+    }
     ASSERT_EQ(1, rid.index());
 
     auto & region = rm->getRegion(rid);
@@ -171,7 +181,6 @@ TEST(RegionManager, cleanupRegionFailureSync)
     constexpr UInt16 k_num_in_mem_buffer = 2;
     auto device = std::make_unique<MockDevice>(k_num_regions * k_region_size, 1024);
     auto policy = std::make_unique<LruPolicy>(k_num_regions);
-    MockJobScheduler js;
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
     auto rm = std::make_unique<RegionManager>(
@@ -180,7 +189,7 @@ TEST(RegionManager, cleanupRegionFailureSync)
         0,
         *device,
         1,
-        js,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::move(policy),
@@ -190,9 +199,15 @@ TEST(RegionManager, cleanupRegionFailureSync)
 
     BufferGen generator;
     RegionId rid;
-    rm->startReclaim();
-    ASSERT_TRUE(js.runFirst());
-    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid));
+    {
+        auto [status, waiter] = rm->getCleanRegion(rid, true);
+        if (status == OpenStatus::Retry && waiter)
+        {
+            waiter->baton.wait();
+            status = rm->getCleanRegion(rid, true).first;
+        }
+        ASSERT_EQ(OpenStatus::Ready, status);
+    }
     ASSERT_EQ(0, rid.index());
 
     auto & region = rm->getRegion(rid);
@@ -237,7 +252,6 @@ TEST(RegionManager, cleanupRegionFailureAsync)
     constexpr UInt16 k_num_in_mem_buffer = 2;
     auto device = std::make_unique<MockDevice>(k_num_regions * k_region_size, 1024);
     auto policy = std::make_unique<LruPolicy>(k_num_regions);
-    MockJobScheduler js;
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
     auto rm = std::make_unique<RegionManager>(
@@ -246,7 +260,7 @@ TEST(RegionManager, cleanupRegionFailureAsync)
         0,
         *device,
         1,
-        js,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::move(policy),
@@ -256,10 +270,15 @@ TEST(RegionManager, cleanupRegionFailureAsync)
 
     BufferGen generator;
     RegionId rid;
-    rm->startReclaim();
-
-    ASSERT_TRUE(js.runFirst());
-    ASSERT_EQ(OpenStatus::Ready, rm->getCleanRegion(rid));
+    {
+        auto [status, waiter] = rm->getCleanRegion(rid, true);
+        if (status == OpenStatus::Retry && waiter)
+        {
+            waiter->baton.wait();
+            status = rm->getCleanRegion(rid, true).first;
+        }
+        ASSERT_EQ(OpenStatus::Ready, status);
+    }
     ASSERT_EQ(0, rid.index());
 
     auto & region = rm->getRegion(rid);
@@ -280,12 +299,10 @@ TEST(RegionManager, cleanupRegionFailureAsync)
         region.close(std::move(rdesc));
     });
 
-    std::thread flush_thread([&sp, &device, &rm, &rid, &js] {
+    std::thread flush_thread([&sp, &device, &rm, &rid] {
         EXPECT_CALL(*device, writeImpl(_, _, _)).WillRepeatedly(Return(false));
         sp.wait(0);
         rm->doFlush(rid, true);
-        while (js.getQueueSize() > 0)
-            js.runFirst();
     });
 
     std::thread cthread([&sp] {
@@ -313,14 +330,13 @@ TEST(RegionManager, Recovery)
         expectRegionsTracked(*policy, {0, 1, 2, 3});
         RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
         RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
-        MockJobScheduler js;
         auto rm = std::make_unique<RegionManager>(
             k_num_regions,
             k_region_size,
             0,
             *device,
             1,
-            js,
+            1,
             std::move(evict_cb),
             std::move(cleanup_cb),
             std::move(policy),
@@ -357,14 +373,13 @@ TEST(RegionManager, Recovery)
 
         RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
         RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
-        MockJobScheduler js;
         auto rm = std::make_unique<RegionManager>(
             k_num_regions,
             k_region_size,
             0,
             *device,
             1,
-            js,
+            1,
             std::move(evict_cb),
             std::move(cleanup_cb),
             std::move(policy),
@@ -402,14 +417,13 @@ TEST(RegionManager, RecoveryLRUOrder)
         auto policy = std::make_unique<LruPolicy>(k_num_regions);
         RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
         RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
-        MockJobScheduler ex;
         auto rm = std::make_unique<RegionManager>(
             k_num_regions,
             k_region_size,
             0,
             *device,
             1,
-            ex,
+            1,
             std::move(evict_cb),
             std::move(cleanup_cb),
             std::move(policy),
@@ -437,14 +451,13 @@ TEST(RegionManager, RecoveryLRUOrder)
         auto policy = std::make_unique<LruPolicy>(k_num_regions);
         RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
         RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
-        MockJobScheduler ex;
         auto rm = std::make_unique<RegionManager>(
             k_num_regions,
             k_region_size,
             0,
             *device,
             1,
-            ex,
+            1,
             std::move(evict_cb),
             std::move(cleanup_cb),
             std::move(policy),

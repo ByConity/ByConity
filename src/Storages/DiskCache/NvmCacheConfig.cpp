@@ -188,8 +188,12 @@ namespace
         EnginePairProto & proto)
     {
         auto region_size = block_cache_config.getRegionSize();
+        auto clean_regions = block_cache_config.getCleanRegions();
+        auto clean_region_threads = block_cache_config.getCleanRegionThreads();
         if (region_size != alignUp(region_size, io_align_size))
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "region size: {} is not aligned to io_align_size: {}", region_size, io_align_size);
+        if (clean_region_threads == 0 || clean_region_threads > clean_regions + 1)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "number of clean region threads should be in the range of [1, {}]", clean_regions + 1);
 
         if (uses_raid_files)
         {
@@ -215,7 +219,8 @@ namespace
         else
             block_cache->setFifoEvictionPolicy();
 
-        block_cache->config.clean_regions_pool = block_cache_config.getCleanRegions();
+        block_cache->config.clean_regions_pool = clean_regions;
+        block_cache->config.clean_region_threads = clean_region_threads;
         block_cache->config.reinsertion_config = block_cache_config.getReinsertionConfig();
         block_cache->config.num_in_mem_buffers = block_cache_config.getNumInMemBuffers();
         block_cache->config.item_destructor_enabled = item_destructor_enabled;
@@ -351,7 +356,7 @@ std::unique_ptr<AbstractCache> createNvmCache(
     proto->config.device = std::move(device);
     proto->config.scheduler = createJobScheduler(config);
     proto->config.max_concurrent_inserts = config.getMaxConcurrentInserts();
-    proto->config.max_parcel_memory = config.getMaxParcelMemoryMB();
+    proto->config.max_parcel_memory = config.getMaxParcelMemoryMB() * MiB;
     proto->check_expired = std::move(check_expired);
     proto->destructor_callback = std::move(destructor_callback);
 
@@ -399,5 +404,6 @@ void EnginesConfig::loadFromConfig(const std::string & config_elem, const Poco::
     big_hash_config.setSizePctAndMaxItemSize(
         conf.getUInt(config_elem + ".bh_size_pct", 0), conf.getUInt64(config_elem + ".small_item_max_size", 2048));
     block_cache_config.setSize(conf.getUInt64(config_elem + ".bc_size", 0));
+    block_cache_config.setCleanRegions(conf.getUInt(config_elem + ".bc_regions", 16));
 }
 }

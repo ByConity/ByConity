@@ -145,7 +145,7 @@ BlockCache::BlockCache(Config && config, ValidConfigTag)
           config.cache_base_offset,
           *config.device,
           config.clean_regions_pool,
-          *config.scheduler,
+          config.clean_region_threads,
           bindThis(&BlockCache::onRegionReclaim, *this),
           bindThis(&BlockCache::onRegionCleanup, *this),
           std::move(config.eviction_policy),
@@ -189,7 +189,7 @@ Status BlockCache::insert(HashedKey key, BufferView value)
         return Status::Rejected;
     }
 
-    auto [desc, slot_size, addr] = allocator.allocate(size, kDefaultItemPriority);
+    auto [desc, slot_size, addr] = allocator.allocate(size, kDefaultItemPriority, true);
 
     switch (desc.getStatus())
     {
@@ -523,7 +523,7 @@ BlockCache::ReinsertionRes BlockCache::reinsertOrRemoveItem(HashedKey key, Buffe
     UInt16 priority = num_priorities == 0 ? kDefaultItemPriority : std::min<UInt16>(lr.getCurrentHits(), num_priorities - 1);
 
     UInt32 size = serializedSize(key.key().size, value.size());
-    auto [desc, slot_size, new_addr] = allocator.allocate(size, priority);
+    auto [desc, slot_size, new_addr] = allocator.allocate(size, priority, false);
 
     switch (desc.getStatus())
     {
@@ -700,6 +700,11 @@ bool BlockCache::recover(google::protobuf::io::ZeroCopyInputStream * stream)
     }
     LOG_INFO(log, "Finished block cache recovery");
     return true;
+}
+
+void BlockCache::drain()
+{
+    region_manager.drain();
 }
 
 Protos::BlockCacheConfig BlockCache::serializeConfig(const Config & config)

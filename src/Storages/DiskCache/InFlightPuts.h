@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mutex>
+#include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/Buffer.h>
 #include <common/StringRef.h>
@@ -16,10 +16,12 @@ constexpr std::size_t hardware_constructive_interference_size = 64;
 constexpr std::size_t hardware_destructive_interference_size = 64;
 #endif
 
+using folly::fibers::TimedMutex;
+
 class alignas(hardware_destructive_interference_size) InFlightPuts
 {
-    using LockGuard = std::lock_guard<std::mutex>;
-    using UniqueLock = std::unique_lock<std::mutex>;
+    using LockGuard = std::lock_guard<TimedMutex>;
+    using UniqueLock = std::unique_lock<TimedMutex>;
 
 public:
     class PutToken;
@@ -118,6 +120,6 @@ private:
     }
 
     std::unordered_map<StringRef, bool> keys;
-    std::mutex mutex;
+    TimedMutex mutex;
 };
 }

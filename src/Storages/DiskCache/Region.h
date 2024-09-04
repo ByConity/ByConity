@@ -1,16 +1,21 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
+
+#include <folly/fibers/TimedMutex.h>
 
 #include <Protos/disk_cache.pb.h>
 #include <Storages/DiskCache/Buffer.h>
+#include <Storages/DiskCache/ConditionVariable.h>
 #include <Storages/DiskCache/Types.h>
 #include <common/defines.h>
 #include <common/types.h>
 
 namespace DB::HybridCache
 {
+
+using folly::fibers::TimedMutex;
+
 enum class OpenMode
 {
     // Not opened
@@ -55,7 +60,7 @@ public:
 
     // Immediately block future access to this region. Return true if there are no pending operation
     // to this region, false otherwise.
-    bool readyForReclaim();
+    bool readyForReclaim(bool wait);
 
     // Open this region for write and allocate a slot of size.
     // Fail if there's insufficient space.
@@ -73,35 +78,35 @@ public:
     // Assigns the region a priority.
     void setPriority(UInt16 priority_)
     {
-        std::lock_guard<std::mutex> g{lock};
+        std::lock_guard<TimedMutex> g{lock};
         priority = priority_;
     }
 
     // Gets the proiority this region assigned.
     UInt16 getPriority() const
     {
-        std::lock_guard<std::mutex> g{lock};
+        std::lock_guard<TimedMutex> g{lock};
         return priority;
     }
 
     // Gets the end offset of last slot added to this region.
     UInt32 getLastEntryEndOffset() const
     {
-        std::lock_guard<std::mutex> g{lock};
+        std::lock_guard<TimedMutex> g{lock};
         return last_entry_end_offset;
     }
 
     // Gets the number of items in this region.
     UInt32 getNumItems() const
     {
-        std::lock_guard<std::mutex> g{lock};
+        std::lock_guard<TimedMutex> g{lock};
         return num_items;
     }
 
     // if this region is actively used, then the fragmentation is the bytes at the end of the region that's not used.
     UInt32 getFragmentationSize() const
     {
-        std::lock_guard<std::mutex> g{lock};
+        std::lock_guard<TimedMutex> g{lock};
         if (num_items)
             return region_size - last_entry_end_offset;
         return 0;
@@ -129,19 +134,7 @@ public:
     }
 
     // Detaches the attached buffer and returns it only if there are no active reads, otherwise returns nullptr.
-    std::unique_ptr<Buffer> detachBuffer()
-    {
-        std::lock_guard g{lock};
-        chassert(buffer != nullptr);
-        if (active_in_mem_readers == 0)
-        {
-            chassert(active_writers == 0UL);
-            auto ret_buf = std::move(buffer);
-            buffer = nullptr;
-            return ret_buf;
-        }
-        return nullptr;
-    }
+    std::unique_ptr<Buffer> detachBuffer();
 
     // Flushes the attached buffer by calling the callBack function.
     enum FlushRes
@@ -153,7 +146,7 @@ public:
     FlushRes flushBuffer(std::function<bool(RelAddress, BufferView)> callback);
 
     // Cleans up the attached buffer.
-    bool cleanupBuffer(std::function<void(RegionId, BufferView)> callback);
+    void cleanupBuffer(std::function<void(RegionId, BufferView)> callback);
 
     // Marks the bit to indicate pending flush status.
     void setPendingFlush()
@@ -219,7 +212,8 @@ private:
     UInt32 num_items{0};
     std::unique_ptr<Buffer> buffer{nullptr};
 
-    mutable std::mutex lock;
+    mutable TimedMutex lock{TimedMutex::Options(false)};
+    mutable ConditionVariable cond;
 };
 
 // RegionDescriptor contains status of the open, region id and the open mode.

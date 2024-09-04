@@ -27,21 +27,19 @@ namespace
 
 TEST(Allocator, RegionSyncInMemBuffers)
 {
-    std::vector<UInt32> hits(4);
-    auto policy = std::make_unique<MockPolicy>(&hits);
+    auto policy = std::make_unique<FifoPolicy>();
     constexpr UInt32 k_num_regions = 4;
     constexpr UInt32 k_region_size = 16 * 1024;
     auto device = createMemoryDevice(k_num_regions * k_region_size);
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
-    MockJobScheduler ms;
     auto rm = std::make_unique<RegionManager>(
         k_num_regions,
         k_region_size,
         0,
         *device,
         1,
-        ms,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::move(policy),
@@ -49,7 +47,6 @@ TEST(Allocator, RegionSyncInMemBuffers)
         0,
         kFlushRetryLimit);
     Allocator allocator{*rm, kNumPriorities};
-    EXPECT_EQ(0, ms.getQueueSize());
 
     RelAddress addr;
     UInt32 slot_size = 0;
@@ -58,49 +55,33 @@ TEST(Allocator, RegionSyncInMemBuffers)
         if (i == 0)
         {
             RegionDescriptor desc{OpenStatus::Retry};
-            std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+            std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
             EXPECT_EQ(OpenStatus::Retry, desc.getStatus());
-            EXPECT_TRUE(ms.runFirstIf("reclaim"));
         }
 
-        EXPECT_EQ(0, ms.getQueueSize());
         {
             RegionDescriptor desc{OpenStatus::Retry};
-            std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+            do
+                std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
+            while (OpenStatus::Retry == desc.getStatus());
             EXPECT_TRUE(desc.isReady());
-            if (i > 0)
-            {
-                EXPECT_TRUE(ms.runFirstIf("reclaim"));
-                EXPECT_TRUE(ms.runFirstIf("flush"));
-            }
             EXPECT_EQ(RegionId{i}, addr.rid());
             EXPECT_EQ(0, addr.offset());
             rm->close(std::move(desc));
         }
-        if (i > 0)
-            EXPECT_EQ(0, ms.getQueueSize());
-        else
-            EXPECT_EQ(1, ms.getQueueSize());
 
         for (UInt32 j = 0; j < 15; j++)
         {
             RegionDescriptor desc{OpenStatus::Retry};
-            std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+            do
+                std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
+            while (OpenStatus::Retry == desc.getStatus());
             EXPECT_TRUE(desc.isReady());
             EXPECT_EQ(RegionId{i}, addr.rid());
             EXPECT_EQ(1024 * (j + 1), addr.offset());
             rm->close(std::move(desc));
         }
-        if (i > 0)
-            EXPECT_EQ(0, ms.getQueueSize());
-        else
-            EXPECT_EQ(1, ms.getQueueSize());
-
-        if (i == 0)
-            EXPECT_TRUE(ms.runFirstIf("reclaim"));
-        EXPECT_EQ(0, ms.getQueueSize());
     }
-    EXPECT_EQ(0, ms.getQueueSize());
 
     for (UInt32 i = 0; i < 2; i++)
     {
@@ -110,17 +91,14 @@ TEST(Allocator, RegionSyncInMemBuffers)
     EXPECT_EQ(0, rm->getRegion(RegionId{3}).getNumItems());
     EXPECT_EQ(0, rm->getRegion(RegionId{3}).getLastEntryEndOffset());
 
-    EXPECT_EQ(0, ms.getQueueSize());
     {
         RegionDescriptor desc{OpenStatus::Retry};
-        std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+        do
+            std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
+        while (OpenStatus::Retry == desc.getStatus());
         EXPECT_TRUE(desc.isReady());
         EXPECT_EQ(RegionId{3}, addr.rid());
         EXPECT_EQ(0, addr.offset());
-        EXPECT_EQ(2, ms.getQueueSize());
-        EXPECT_TRUE(ms.runFirstIf("reclaim"));
-        EXPECT_TRUE(ms.runFirstIf("flush"));
-        EXPECT_EQ(0, ms.getQueueSize());
         rm->close(std::move(desc));
     }
 
@@ -130,8 +108,7 @@ TEST(Allocator, RegionSyncInMemBuffers)
 
 TEST(Allocator, TestInMemBufferStates)
 {
-    std::vector<UInt32> hits(4);
-    auto policy = std::make_unique<MockPolicy>(&hits);
+    auto policy = std::make_unique<FifoPolicy>();
     constexpr UInt32 k_num_regions = 4;
     constexpr UInt32 k_region_size = 16 * 1024;
     auto device = createMemoryDevice(k_num_regions * k_region_size);
@@ -139,14 +116,13 @@ TEST(Allocator, TestInMemBufferStates)
     std::vector<UInt32> size_classes{1024};
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
-    MockJobScheduler ms;
     auto rm = std::make_unique<RegionManager>(
         k_num_regions,
         k_region_size,
         0,
         *device,
         1,
-        ms,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::move(policy),
@@ -154,40 +130,45 @@ TEST(Allocator, TestInMemBufferStates)
         0,
         kFlushRetryLimit);
     Allocator allocator{*rm, kNumPriorities};
-    EXPECT_EQ(0, ms.getQueueSize());
 
     RelAddress addr;
     UInt32 slot_size = 0;
     {
         RegionDescriptor desc{OpenStatus::Retry};
-        std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+        std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
         EXPECT_EQ(OpenStatus::Retry, desc.getStatus());
     }
-    EXPECT_TRUE(ms.runFirstIf("reclaim"));
 
     {
         RegionDescriptor rdesc{OpenStatus::Error};
         {
             RegionDescriptor wdesc{OpenStatus::Retry};
-            std::tie(wdesc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+            do
+                std::tie(wdesc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
+            while (OpenStatus::Retry == wdesc.getStatus());
             EXPECT_TRUE(wdesc.isReady());
             EXPECT_EQ(0, wdesc.id().index());
-            EXPECT_TRUE(ms.runFirstIf("reclaim"));
 
-            rdesc = rm->openForRead(RegionId{0}, 2);
+            do
+                rdesc = rm->openForRead(RegionId{0}, 2);
+            while (OpenStatus::Retry == rdesc.getStatus());
             EXPECT_TRUE(rdesc.isReady());
             for (UInt32 j = 0; j < 15; j++)
             {
                 RegionDescriptor desc{OpenStatus::Retry};
-                std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+                do
+                    std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
+                while (OpenStatus::Retry == desc.getStatus());
                 EXPECT_TRUE(desc.isReady());
                 EXPECT_EQ(0, desc.id().index());
                 rm->close(std::move(desc));
             }
-            EXPECT_EQ(0, ms.getQueueSize());
+
             {
                 RegionDescriptor desc{OpenStatus::Retry};
-                std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority);
+                do
+                    std::tie(desc, slot_size, addr) = allocator.allocate(1024, kNoPriority, false);
+                while (OpenStatus::Retry == desc.getStatus());
                 EXPECT_EQ(OpenStatus::Ready, desc.getStatus());
                 EXPECT_EQ(1, desc.id().index());
                 rm->close(std::move(desc));
@@ -195,37 +176,29 @@ TEST(Allocator, TestInMemBufferStates)
             EXPECT_FALSE(rm->getRegion(RegionId{0}).isFlushedLocked());
             rm->close(std::move(wdesc));
         }
-        EXPECT_EQ(2, ms.getQueueSize());
-        EXPECT_TRUE(ms.runFirstIf("reclaim"));
 
-        EXPECT_EQ(1, ms.getQueueSize());
-        EXPECT_FALSE(ms.runFirstIf("flush"));
-        EXPECT_EQ(1, ms.getQueueSize());
+        rm->flushBuffer(RegionId{0});
 
         EXPECT_TRUE(rm->getRegion(RegionId{0}).isFlushedLocked());
         rm->close(std::move(rdesc));
     }
-    EXPECT_EQ(1, ms.getQueueSize());
-    EXPECT_TRUE(ms.runFirstIf("flush"));
 }
 
 TEST(Allocator, UsePriorities)
 {
-    std::vector<UInt32> hits(4);
-    auto policy = std::make_unique<MockPolicy>(&hits);
+    auto policy = std::make_unique<FifoPolicy>();
     constexpr UInt32 k_num_regions = 4;
     constexpr UInt32 k_region_size = 16 * 1024;
     auto device = createMemoryDevice(k_num_regions * k_region_size);
     RegionEvictCallback evict_callback{[](RegionId, BufferView) { return 0; }};
     RegionCleanupCallback cleanup_callback{[](RegionId, BufferView) {}};
-    MockJobScheduler ms;
     auto rm = std::make_unique<RegionManager>(
         k_num_regions,
         k_region_size,
         0,
         *device,
         1,
-        ms,
+        1,
         std::move(evict_callback),
         std::move(cleanup_callback),
         std::move(policy),
@@ -234,21 +207,19 @@ TEST(Allocator, UsePriorities)
         kFlushRetryLimit);
 
     Allocator allocator{*rm, 3};
-    EXPECT_EQ(0, ms.getQueueSize());
 
     for (UInt16 pri = 0; pri < 3; pri++)
     {
-        auto [desc, slot_size, addr] = allocator.allocate(1024, pri);
+        auto [desc, slot_size, addr] = allocator.allocate(1024, pri, false);
         EXPECT_EQ(OpenStatus::Retry, desc.getStatus());
-        EXPECT_TRUE(ms.runFirstIf("reclaim"));
 
-        std::tie(desc, slot_size, addr) = allocator.allocate(1024, pri);
+        do
+            std::tie(desc, slot_size, addr) = allocator.allocate(1024, pri, false);
+        while (OpenStatus::Retry == desc.getStatus());
         EXPECT_TRUE(desc.isReady());
         EXPECT_EQ(RegionId{pri}, addr.rid());
         EXPECT_EQ(pri, rm->getRegion(addr.rid()).getPriority());
         EXPECT_EQ(0, addr.offset());
     }
-
-    EXPECT_TRUE(ms.runFirstIf("reclaim"));
 }
 }

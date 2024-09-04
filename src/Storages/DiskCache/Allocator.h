@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mutex>
+#include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/Region.h>
 #include <Storages/DiskCache/RegionManager.h>
@@ -32,14 +32,14 @@ public:
     UInt16 getPriority() const { return priority; }
 
     // Retruns the mutex lock.
-    std::mutex & getLock() const { return mutex; }
+    folly::fibers::TimedMutex & getLock() const { return mutex; }
 
 private:
     const UInt16 priority{};
 
     RegionId rid;
 
-    mutable std::mutex mutex;
+    mutable folly::fibers::TimedMutex mutex;
 };
 
 // Size class or stack allocator.
@@ -52,7 +52,7 @@ public:
     Allocator & operator=(const Allocator &) = delete;
 
     // Allocates and opens for writing.
-    std::tuple<RegionDescriptor, UInt32, RelAddress> allocate(UInt32 size, UInt16 priority);
+    std::tuple<RegionDescriptor, UInt32, RelAddress> allocate(UInt32 size, UInt16 priority, bool can_wait);
 
     // Closes the region.
     void close(RegionDescriptor && desc);
@@ -66,11 +66,9 @@ public:
 private:
     Poco::Logger * log = &Poco::Logger::get("BlockCacheAllocator");
     
-    using LockGuard = std::lock_guard<std::mutex>;
-
     void flushAndReleaseRegionFromRALocked(RegionAllocator & ra, bool flushAsync);
 
-    std::tuple<RegionDescriptor, UInt32, RelAddress> allocateWith(RegionAllocator & ra, UInt32 size);
+    std::tuple<RegionDescriptor, UInt32, RelAddress> allocateWith(RegionAllocator & ra, UInt32 size, bool can_wait);
 
     RegionManager & region_manager;
 

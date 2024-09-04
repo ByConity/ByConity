@@ -1,4 +1,3 @@
-#include <mutex>
 #include <numeric>
 
 #include <fmt/core.h>
@@ -31,13 +30,13 @@ FifoPolicy::FifoPolicy()
 
 void FifoPolicy::track(const Region & region)
 {
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard<TimedMutex> guard{mutex};
     queue.push_back(detail::Node{region.id(), getSteadyClockSeconds()});
 }
 
 RegionId FifoPolicy::evict()
 {
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard<TimedMutex> guard{mutex};
     if (queue.empty())
         return RegionId{};
     auto rid = queue.front().rid;
@@ -47,7 +46,7 @@ RegionId FifoPolicy::evict()
 
 void FifoPolicy::reset()
 {
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard<TimedMutex> guard{mutex};
     queue.clear();
 }
 
@@ -63,14 +62,14 @@ void SegmentedFifoPolicy::track(const Region & region)
 {
     auto priority = region.getPriority();
     chassert(priority < segments.size());
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<TimedMutex> lock{mutex};
     segments[priority].push_back(detail::Node{region.id(), getSteadyClockSeconds()});
     rebalanceLocked();
 }
 
 RegionId SegmentedFifoPolicy::evict()
 {
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<TimedMutex> lock{mutex};
     auto & lowest_pri = segments.front();
     if (lowest_pri.empty())
     {
@@ -112,7 +111,7 @@ size_t SegmentedFifoPolicy::numElementsLocked()
 
 void SegmentedFifoPolicy::reset()
 {
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<TimedMutex> lock{mutex};
     for (auto & segment : segments)
         segment.clear();
 }
@@ -120,7 +119,7 @@ void SegmentedFifoPolicy::reset()
 size_t SegmentedFifoPolicy::memorySize() const
 {
     size_t mem_size = sizeof(*this);
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<TimedMutex> lock{mutex};
     for (const auto & segment : segments)
         mem_size += sizeof(std::deque<detail::Node>) + sizeof(detail::Node) * segment.size();
     return mem_size;

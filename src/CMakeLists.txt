@@ -586,6 +586,16 @@ if (USE_HDFS)
     dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${HDFS3_INCLUDE_DIR})
 endif()
 
+if (TARGET liburing)
+    dbms_target_link_libraries(PUBLIC liburing)
+    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${LIBURING_COMPAT_INCLUDE_DIR} ${LIBURING_INCLUDE_DIR})
+endif()
+
+dbms_target_link_libraries(PRIVATE folly)
+dbms_target_link_libraries(PRIVATE glog)
+dbms_target_include_directories (SYSTEM BEFORE PUBLIC $<TARGET_PROPERTY:folly,INTERFACE_INCLUDE_DIRECTORIES>)
+dbms_target_include_directories (SYSTEM BEFORE PUBLIC "${ClickHouse_SOURCE_DIR}/contrib/sparse-map/include")
+
 if (USE_LIBDEFLATE)
     dbms_target_link_libraries(PRIVATE ${LIBDEFLATE_LIBRARY})
 endif()
@@ -664,6 +674,7 @@ if (TARGET ch_contrib::ulid)
 endif()
 
 target_link_libraries(clickhouse_aggregate_functions PRIVATE datasketches_lib)
+
 dbms_target_link_libraries(PUBLIC datasketches_lib)
 
 dbms_target_link_libraries(PRIVATE _boost_context)

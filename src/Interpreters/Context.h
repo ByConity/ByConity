@@ -329,6 +329,8 @@ using NvmCachePtr = std::shared_ptr<NvmCache>;
 class IAsynchronousReader;
 using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 
+class IOUringReader;
+
 class GinIndexStoreFactory;
 struct GinIndexStoreCacheSettings;
 
@@ -1724,6 +1726,9 @@ public:
     void setQueryExpirationTimeStamp();
 
     AsynchronousReaderPtr getThreadPoolReader() const;
+#if USE_LIBURING
+    IOUringReader & getIOUringReader() const;
+#endif
 
     void setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager);
     PreparedStatementManager * getPreparedStatementManager();

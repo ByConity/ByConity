@@ -17,3 +17,7 @@ endif()
 if (TARGET hualloc AND ENABLE_HUALLOC)
     set(USE_HUALLOC 1)
 endif()
+
+if (TARGET liburing)
+    set(USE_LIBURING 1)
+endif ()

@@ -57,6 +57,7 @@ const char * auto_config_build[]
     "USE_KRB5", "@USE_KRB5@",
     "USE_BYTEDANCE_RDKAFKA", "@USE_BYTEDANCE_RDKAFKA@",
     "USE_HUALLOC", "@USE_HUALLOC@",
+    "USE_LIBURING", "@USE_LIBURING@",
 
     nullptr, nullptr
 };

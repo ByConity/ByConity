@@ -60,6 +60,8 @@
 #include <Databases/IDatabase.h>
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
 #include <Disks/DiskLocal.h>
+#include <Disks/IO/IOUringReader.h>
+#include <Disks/IO/getIOUringReader.h>
 #include <Formats/FormatFactory.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadBufferFromFile.h>
@@ -509,6 +511,11 @@ struct ContextSharedPart
 
     std::unique_ptr<PreparedStatementManager> prepared_statement_manager;
 
+#if USE_LIBURING
+    mutable std::once_flag io_uring_reader_initialized;
+    mutable std::vector<std::unique_ptr<IOUringReader>> io_uring_reader;
+#endif
+
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
     {
@@ -837,6 +844,13 @@ ReadSettings Context::getReadSettings() const
     res.parquet_decode_threads = settings.max_download_threads;
     res.filtered_ratio_to_use_skip_read = settings.filtered_ratio_to_use_skip_read;
     res.zero_copy_read_from_cache = settings.enable_zero_copy_read;
+    if (settings.enable_io_uring_for_local_fs_read)
+    {
+        if (getIOUringReader().isSupported())
+            res.local_fs_method = LocalFSReadMethod::io_uring;
+        else
+            LOG_WARNING(&Poco::Logger::get("Context"), "IOUring is not supported, use default local_fs_method");
+    }
 
     return res;
 }
@@ -5962,4 +5976,23 @@ AsynchronousReaderPtr Context::getThreadPoolReader() const
     });
     return shared->asynchronous_remote_fs_reader;
 }
+
+#if USE_LIBURING
+IOUringReader & Context::getIOUringReader() const
+{
+    std::call_once(shared->io_uring_reader_initialized, [&] {
+        const Poco::Util::AbstractConfiguration & config = getConfigRef();
+        auto num_iouring_readers = config.getUInt(".iouring_reader_num", 32);
+        auto num_sq_entries = config.getUInt(".iouring_reader_sq_entry_num", 512);
+        shared->io_uring_reader.resize(num_iouring_readers);
+        for (auto &i : shared->io_uring_reader)
+            i = createIOUringReader(num_sq_entries);
+    });
+
+    auto &reader = shared->io_uring_reader[getThreadId() % shared->io_uring_reader.size()];
+    if (!reader)
+        throw Exception("Try to get a null IOUringReader.", ErrorCodes::SYSTEM_ERROR);
+    return *reader;
+}
+#endif
 }
