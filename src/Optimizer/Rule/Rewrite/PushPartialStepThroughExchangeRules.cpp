@@ -412,8 +412,7 @@ static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 
 ConstRefPatternPtr PushPartialLimitThroughExchange::getPattern() const
 {
-    static auto pattern = Patterns::limit().withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
-        [](const ExchangeStep & step) { return step.getExchangeMode() == ExchangeMode::GATHER; })).result();
+    static auto pattern = Patterns::limit().withSingle(Patterns::exchange()).result();
     return pattern;
 }
 
