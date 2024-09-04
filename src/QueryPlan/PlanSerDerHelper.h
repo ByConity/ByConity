@@ -270,5 +270,5 @@ void serializeQueryPlanStepToProto(const QueryPlanStepPtr & step, Protos::QueryP
 QueryPlanStepPtr deserializeQueryPlanStepFromProto(const Protos::QueryPlanStep & proto, ContextPtr context);
 
 bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b);
-UInt64 hashPlanStep(const IQueryPlanStep & step);
+UInt64 hashPlanStep(const IQueryPlanStep & step, bool ignore_output_stream);
 }
