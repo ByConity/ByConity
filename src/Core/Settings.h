@@ -1412,6 +1412,7 @@ enum PreloadLevelSettings : UInt64
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, block_json_query_in_optimizer, true, "Whether block json query in optimizer", 0) \
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
     M(Bool, enable_prune_empty_resource, false, "Whether prune resource sending", 0) \
     M(Bool, enable_prune_compute_plan_segment, false, "Whether prune compute plan segment", 0) \
@@ -1545,6 +1546,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_join_through_union, true, "Whether to enable PushJoinThroughUnion rule", 0) \
     M(Bool, enable_semi_join_push_down, true, "Whether to enable SemiJoinPushDown rule", 0) \
     M(Bool, enable_simplify_predicate_rewrite, true, "Whether to enable SimplifyPredicateRewrite rule", 0) \
+    M(Bool, enable_simplify_expression_by_derived_constant, false, "Whether to use derived constants to simplify expression", 0) \
     M(Bool, enable_simplify_prewhere_rewrite, true, "Whether to enable SimplifyPrewhereRewrite rule", 0) \
     M(Bool, enable_simplify_join_filter_rewrite, true, "Whether to enable SimplifyJoinFilterRewrite rule", 0) \
     M(Bool, enable_simplify_expression_rewrite, true, "Whether to enable SimplifyExpressionRewrite rule", 0) \
@@ -1579,6 +1581,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_ab_test, false, "Whether to open ab test for settings, If true, the settings for some queries are set in the ab_test_profile profile.", 0) \
     M(Float, ab_test_traffic_factor, 0, "Proportion of queries that perform ab test, meaningful between 0 and 1", 0) \
     M(String, ab_test_profile, "default", "Profile name for ab test", 0) \
+    M(Bool, optimize_json_function_to_subcolumn, false, "Whether to optimize json extract functions to subcolumn read", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
     M(Bool, statistics_forward_query, false, "Indicate whether this query is coming from another replica", 0)  \

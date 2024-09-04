@@ -31,11 +31,14 @@ struct SubColumnID
         MAP_KEYS,
 
         // sub-column storing all map values of a Map column, e.g. mapValues(map_col) ==> map_col.value
-        MAP_VALUES
+        MAP_VALUES,
+
+        JSON_FIELD,
     };
 
     Type type;
     String map_element_key;
+    String json_field_name;
 
     String getSubColumnName(const String &) const;
 
@@ -46,19 +49,34 @@ struct SubColumnID
         size_t operator()(const SubColumnID & id) const;
     };
 
+    static inline SubColumnID mapElement(const String & map_element_key)
+    {
+        SubColumnID id;
+        id.type = Type::MAP_ELEMENT;
+        id.map_element_key = map_element_key;
+        return id;
+    }
+
     static inline SubColumnID mapKeys()
     {
-        return SubColumnID {Type::MAP_KEYS, ""};
+        SubColumnID id;
+        id.type = Type::MAP_KEYS;
+        return id;
     }
 
     static inline SubColumnID mapValues()
     {
-        return SubColumnID{Type::MAP_VALUES, ""};
+        SubColumnID id;
+        id.type = Type::MAP_VALUES;
+        return id;
     }
 
-    static inline SubColumnID mapElement(const String & map_element_key)
+    static inline SubColumnID jsonField(const String & json_field_name)
     {
-        return SubColumnID {Type::MAP_ELEMENT, map_element_key};
+        SubColumnID id;
+        id.type = Type::JSON_FIELD;
+        id.json_field_name = json_field_name;
+        return id;
     }
 };
 

@@ -212,4 +212,8 @@ ColumnsDescription getConcreteObjectColumns(
     return res;
 }
 
+/// Create a recursive tuple type for a non-exist JSON subcolumn
+/// name: subcolumn path excluding the first '.', e.g., full path: obj.k3.k0 -> name: k3.k0
+/// return e.g., k3.k0 -> Tuple(k3 Tuple(k0 Nullable(Int8))); k0 -> Tuple(k0 Nullable(Int8))
+DataTypePtr createSubColumnDataType(const String & name);
 }

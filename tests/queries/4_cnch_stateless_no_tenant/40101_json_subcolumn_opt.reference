@@ -1,0 +1,16 @@
+Projection
+│     Expressions: a:=`json.a`, z:=`expr#get_json_object(json, \'$.z\')`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [json.a], expr#get_json_object(json, \'$.z\'):=get_json_object(json, \'$.z\')
+      └─ TableScan default.t40101_json
+               Outputs: [json, json.a]
+1	
+Projection
+│     Expressions: a:=`json.a`, z:=`expr#JSONExtractRaw(json, \'z\')`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [json.a], expr#JSONExtractRaw(json, \'z\'):=JSONExtractRaw(json, \'z\')
+      └─ TableScan default.t40101_json
+               Outputs: [json, json.a]
+1	

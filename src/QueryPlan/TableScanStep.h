@@ -33,6 +33,7 @@ namespace DB
 class TableScanStep : public ISourceStep
 {
 public:
+    // Server
     TableScanStep(
         ContextPtr context,
         StorageID storage_id_,
@@ -44,13 +45,31 @@ public:
         Assignments inline_expressions_ = {},
         std::shared_ptr<AggregatingStep> aggregation_ = nullptr,
         std::shared_ptr<ProjectionStep> projection_ = nullptr,
-        std::shared_ptr<FilterStep> filter_ = nullptr,
-        std::optional<DataStream> output_stream_ = std::nullopt);
+        std::shared_ptr<FilterStep> filter_ = nullptr);
 
+    // Worker
+    TableScanStep(
+        ContextPtr context,
+        DataStream output_stream_,
+        StorageID storage_id_,
+        NamesWithAliases column_alias_,
+        SelectQueryInfo query_info_,
+        size_t max_block_size_,
+        String alias_,
+        PlanHints hints_,
+        Assignments inline_expressions_,
+        std::shared_ptr<AggregatingStep> aggregation_,
+        std::shared_ptr<ProjectionStep> projection_,
+        std::shared_ptr<FilterStep> filter_,
+        DataStream table_output_stream_);
+
+    // Copy
     TableScanStep(
         DataStream output,
         StoragePtr storage_,
         StorageID storage_id_,
+        StorageMetadataPtr metadata_snapshot_,
+        StorageSnapshotPtr storage_snapshot_,
         String original_table_,
         Names column_names_,
         NamesWithAliases column_alias_,
@@ -66,6 +85,8 @@ public:
         : ISourceStep(std::move(output), hints_)
         , storage(storage_)
         , storage_id(storage_id_)
+        , metadata_snapshot(metadata_snapshot_)
+        , storage_snapshot(storage_snapshot_)
         , original_table(std::move(original_table_))
         , column_names(std::move(column_names_))
         , column_alias(std::move(column_alias_))
@@ -76,8 +97,8 @@ public:
         , pushdown_projection(std::move(projection_))
         , pushdown_filter(std::move(filter_))
         , table_output_stream(std::move(table_output_stream_))
-        , log(&Poco::Logger::get("TableScanStep"))
         , alias(alias_)
+        , log(&Poco::Logger::get("TableScanStep"))
     {
         if (storage)
             storage_id.uuid = storage->getStorageUUID();
@@ -147,8 +168,6 @@ public:
     bool hasPrewhere() const;
     ASTPtr getPrewhere() const;
 
-    void optimizeWhereIntoPrewhre(ContextPtr context);
-
     SelectQueryInfo fillQueryInfo(ContextPtr context);
     void fillPrewhereInfo(ContextPtr context);
     void makeSetsForIndex(const ASTPtr & node, ContextPtr context, PreparedSets & prepared_sets) const;
@@ -168,6 +187,8 @@ public:
         return query_info;
     }
     const StorageID & getStorageID() const { return storage_id; }
+    StorageMetadataPtr getMetadataSnapshot() const { return metadata_snapshot; }
+    StorageSnapshotPtr getStorageSnapshot() const { return storage_snapshot; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr context) const override;
 
     enum GetFlags : UInt32
@@ -187,8 +208,10 @@ public:
 private:
     StoragePtr storage;
     StorageID storage_id;
+    StorageMetadataPtr metadata_snapshot;
+    StorageSnapshotPtr storage_snapshot;
     String original_table;
-    Names column_names;
+    Names column_names; // TODO: remove me, use column_alias instead
     NamesWithAliases column_alias;
     // Used for passing some important information to instruct data reading processing, including
     // - query.where(), condition of this storage, used for index pruning
@@ -214,11 +237,12 @@ private:
 
     // just for cascades, in order to distinguish between the same tables.
     Int32 unique_id{0};
-    Poco::Logger * log;
     String alias;
 
     // Only for worker.
     bool is_null_source{false};
+
+    Poco::Logger * log;
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;
@@ -228,6 +252,7 @@ private:
     void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);
 
     bool hasFunctionCanUseBitmapIndex() const;
+    void initMetadataAndStorageSnapshot(ContextPtr context);
 };
 
 }
