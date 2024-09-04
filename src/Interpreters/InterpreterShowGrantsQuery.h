@@ -20,8 +20,8 @@ public:
 
     BlockIO execute() override;
 
-    static ASTs getGrantQueries(const IAccessEntity & user_or_role, const AccessControlManager & access_control);
-    static ASTs getAttachGrantQueries(const IAccessEntity & user_or_role, bool sensitive_mode = false);
+    static ASTs getGrantQueries(const IAccessEntity & user_or_role, const AccessControlManager & access_control, bool sensitive_mode);
+    static ASTs getAttachGrantQueries(const IAccessEntity & user_or_role, bool sensitive_mode);
 
     bool ignoreQuota() const override { return true; }
     bool ignoreLimits() const override { return true; }

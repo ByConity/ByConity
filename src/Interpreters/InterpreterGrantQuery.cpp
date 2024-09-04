@@ -26,7 +26,8 @@ namespace
     void updateFromQueryTemplate(
         T & grantee,
         const ASTGrantQuery & query,
-        const std::vector<UUID> & roles_to_grant_or_revoke)
+        const std::vector<UUID> & roles_to_grant_or_revoke,
+        bool sensitive_tenant)
     {
         if (!query.access_rights_elements.empty())
         {
@@ -34,19 +35,25 @@ namespace
             {
                 if (query.if_exists)
                 {
-                    grantee.access.tryRevoke(query.access_rights_elements);
-                    grantee.sensitive_access.tryRevoke(query.access_rights_elements);
+                    if (!query.is_sensitive)
+                        grantee.access.tryRevoke(query.access_rights_elements);
+                    if (sensitive_tenant)
+                        grantee.sensitive_access.tryRevoke(query.access_rights_elements);
                 }
                 else
                 {
-                    grantee.access.revoke(query.access_rights_elements);
-                    grantee.sensitive_access.revoke(query.access_rights_elements);
+                    if (!query.is_sensitive)
+                        grantee.access.revoke(query.access_rights_elements);
+                    if (sensitive_tenant)
+                        grantee.sensitive_access.revoke(query.access_rights_elements);
                 }
             }
             else
             {
-                grantee.access.grant(query.access_rights_elements);
-                grantee.sensitive_access.grant(query.access_rights_elements);
+                if (!query.is_sensitive)
+                    grantee.access.grant(query.access_rights_elements);
+                if (sensitive_tenant)
+                    grantee.sensitive_access.grant(query.access_rights_elements);
             }
         }
 
@@ -72,12 +79,13 @@ namespace
     void updateFromQueryImpl(
         IAccessEntity & grantee,
         const ASTGrantQuery & query,
-        const std::vector<UUID> & roles_to_grant_or_revoke)
+        const std::vector<UUID> & roles_to_grant_or_revoke,
+        bool sensitive_tenant)
     {
         if (auto * user = typeid_cast<User *>(&grantee))
-            updateFromQueryTemplate(*user, query, roles_to_grant_or_revoke);
+            updateFromQueryTemplate(*user, query, roles_to_grant_or_revoke, sensitive_tenant);
         else if (auto * role = typeid_cast<Role *>(&grantee))
-            updateFromQueryTemplate(*role, query, roles_to_grant_or_revoke);
+            updateFromQueryTemplate(*role, query, roles_to_grant_or_revoke, sensitive_tenant);
     }
 
     void checkGranteeIsAllowed(const ContextAccess & access, const UUID & grantee_id, const IAccessEntity & grantee)
@@ -275,10 +283,11 @@ BlockIO InterpreterGrantQuery::execute()
         checkGrantOption(access_control, *getContext()->getAccess(), query, grantees);
 
     /// Update roles and users listed in `grantees`.
-    auto update_func = [&](const AccessEntityPtr & entity) -> AccessEntityPtr
+    auto update_func = [&, ctx = getContext()](const AccessEntityPtr & entity) -> AccessEntityPtr
     {
         auto clone = entity->clone();
-        updateFromQueryImpl(*clone, query, roles);
+        bool sensitive_tenant = ctx->getAccessControlManager().isSensitiveGrantee(clone->getName());
+        updateFromQueryImpl(*clone, query, roles, sensitive_tenant);
         return clone;
     };
 
@@ -288,21 +297,21 @@ BlockIO InterpreterGrantQuery::execute()
 }
 
 
-void InterpreterGrantQuery::updateUserFromQuery(User & user, const ASTGrantQuery & query)
+void InterpreterGrantQuery::updateUserFromQuery(User & user, const ASTGrantQuery & query, bool sensitive_tenant)
 {
     std::vector<UUID> roles_to_grant_or_revoke;
     if (query.roles)
         roles_to_grant_or_revoke = RolesOrUsersSet{*query.roles}.getMatchingIDs();
-    updateFromQueryImpl(user, query, roles_to_grant_or_revoke);
+    updateFromQueryImpl(user, query, roles_to_grant_or_revoke, sensitive_tenant);
 }
 
 
-void InterpreterGrantQuery::updateRoleFromQuery(Role & role, const ASTGrantQuery & query)
+void InterpreterGrantQuery::updateRoleFromQuery(Role & role, const ASTGrantQuery & query, bool sensitive_tenant)
 {
     std::vector<UUID> roles_to_grant_or_revoke;
     if (query.roles)
         roles_to_grant_or_revoke = RolesOrUsersSet{*query.roles}.getMatchingIDs();
-    updateFromQueryImpl(role, query, roles_to_grant_or_revoke);
+    updateFromQueryImpl(role, query, roles_to_grant_or_revoke, sensitive_tenant);
 }
 
 void InterpreterGrantQuery::extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr & /*ast*/, ContextPtr) const

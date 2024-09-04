@@ -83,7 +83,11 @@ ASTs InterpreterShowAccessQuery::getCreateAndGrantQueries() const
     {
         create_queries.push_back(InterpreterShowCreateAccessEntityQuery::getCreateQuery(*entity, access_control));
         if (entity->isTypeOf(EntityType::USER) || entity->isTypeOf(EntityType::ROLE))
-            boost::range::push_back(grant_queries, InterpreterShowGrantsQuery::getGrantQueries(*entity, access_control));
+        {
+            /* The true/false order must be kept, to be used for detecting sensitive tenant in KVAccessStorage.cpp */
+            boost::range::push_back(grant_queries, InterpreterShowGrantsQuery::getGrantQueries(*entity, access_control, true));
+            boost::range::push_back(grant_queries, InterpreterShowGrantsQuery::getGrantQueries(*entity, access_control, false));
+        }
     }
 
     ASTs result = std::move(create_queries);

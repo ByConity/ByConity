@@ -1620,9 +1620,11 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
             client_info.current_password = basic_credentials->getPassword();
         //#endif
 
+        String tenant = getTenantId();
         params = getAccessControlManager().getContextAccessParams(
             new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "",
+            tenant,
+            has_tenant_id_in_username,
             getServerType() != ServerType::cnch_server);
     }
 
@@ -1737,7 +1739,7 @@ void Context::calculateAccessRightsWithLock(const std::unique_lock<SharedMutex> 
     {
         auto params = getAccessControlManager().getContextAccessParams(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "", false);
+            tenant_id, has_tenant_id_in_username, false);
         access = getAccessControlManager().getContextAccess(params);
     }
 }

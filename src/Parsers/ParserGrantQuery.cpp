@@ -243,6 +243,9 @@ bool ParserGrantQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     // String cluster;
     // parseOnCluster(pos, expected, cluster);
+    bool is_sensitive = false;
+    if (ParserKeyword{"SENSITIVE"}.ignore(pos, expected))
+        is_sensitive = true;
 
     bool if_exists = false;
     bool grant_option = false;
@@ -300,6 +303,7 @@ bool ParserGrantQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     auto query = std::make_shared<ASTGrantQuery>();
     node = query;
 
+    query->is_sensitive = is_sensitive;
     query->if_exists = if_exists;
     query->is_revoke = is_revoke;
     query->attach_mode = attach_mode;

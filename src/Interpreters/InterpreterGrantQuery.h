@@ -19,8 +19,8 @@ public:
 
     BlockIO execute() override;
 
-    static void updateUserFromQuery(User & user, const ASTGrantQuery & query);
-    static void updateRoleFromQuery(Role & role, const ASTGrantQuery & query);
+    static void updateUserFromQuery(User & user, const ASTGrantQuery & query, bool sensitive_tenant);
+    static void updateRoleFromQuery(Role & role, const ASTGrantQuery & query, bool sensitive_tenant);
     void extendQueryLogElemImpl(QueryLogElement &, const ASTPtr &, ContextPtr) const override;
 
 private:
