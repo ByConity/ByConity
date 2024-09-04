@@ -1670,7 +1670,7 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
 
 BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
 {
-    /// If the query is a CREATE SELECT, insert the data into the table.
+    /// If the query is a CREATE SELECT, insert the data into the table via INSERT INTO ... SELECT FROM
     if (create.select && !create.attach && !create.is_ordinary_view && !create.is_live_view
         && (!create.is_materialized_view || create.is_populate))
     {
@@ -1689,22 +1689,27 @@ BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
         }
         else
         {
-            /// Just run it as new INSET INTO ... SELECT FROM
-            /// Cannot directly use InterpreterInsertQuery here, because Cnch requires some resouce initialization (txn, vw, session resource)
-            /// all done in executeQuery now. Directly initialization didn't work.
-            auto insert_context = Context::createCopy(getContext()->getSessionContext());
-            insert_context->makeQueryContext();
-            insert_context->setSettings(getContext()->getSettingsRef());
+            /// reuse the query context for INSERT instead of creating a new context,
+            /// because we want the outermost executeQuery to finish the INSERT txn rather than the DDL txn
+            auto insert_context = getContext()->getQueryContext();
+            auto & coordinator = insert_context->getCnchTransactionCoordinator();
+            if (insert_context->getCurrentTransaction())
+            {
+                /// finish the last txn (for DDL) and create a new one for INSERT
+                insert_context->setCurrentTransaction(coordinator.createTransaction());
+            }
 
+            bool is_internal = true;
             // TODO @wangtao.2077: review this when internal queries are fully supported by optimizer
             if (insert_context->getSettingsRef().enable_optimizer && insert_context->getSettingsRef().enable_optimizer_for_create_select)
             {
+                /// optimizer doesn't support internal query
+                is_internal = false;
+                /// in order to add the insert query to processlist, need to allocate a new query id
                 insert_context->setCurrentQueryId("");
-                CurrentThread::attachQueryContext(insert_context);
-                return executeQuery(insert->formatForErrorMessage(), insert_context, /*internal=*/false);
             }
 
-            return executeQuery(insert->formatForErrorMessage(), insert_context, /*internal=*/true);
+            return executeQuery(insert->formatForErrorMessage(), insert_context, is_internal);
         }
     }
 
