@@ -112,10 +112,10 @@ void StorageCloudMergeTree::read(
     size_t max_block_size,
     unsigned num_streams)
 {
-    prepareDataPartsForRead();
-
-    // need create IMergeTreeDataPart from loaded server parts when query with table version
-    prepareServerDataPartsForRead(local_context, query_info, column_names);
+    if (data_version)
+        prepareVersionedPartsForRead(local_context, query_info, column_names);
+    else
+        prepareDataPartsForRead();
 
     if (auto plan = MergeTreeDataSelectExecutor(*this).read(
             column_names, storage_snapshot, query_info, local_context, max_block_size, num_streams, processed_stage))

@@ -15,7 +15,8 @@ public:
         const UUID & storage_uuid,
         const UInt64 table_version,
         const WGWorkerInfoPtr & runtime_worker_info,
-        ServerDataPartsWithDBM & server_parts);
+        std::unordered_map<String, ServerDataPartsWithDBM> & server_parts,
+        std::vector<std::shared_ptr<MergeTreePartition>> & partitions);
 
     StorageDataManagerPtr getStorageDataManager(const UUID & storage_uuid);
 

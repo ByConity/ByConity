@@ -56,10 +56,10 @@
 #include <Common/Configurations.h>
 #include <Storages/ColumnsDescription.h>
 #include <Common/Exception.h>
-#include <MergeTreeCommon/GlobalDataManager.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Core/SettingsEnums.h>
+#include <MergeTreeCommon/GlobalDataManager.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -746,17 +746,8 @@ void CnchWorkerServiceImpl::sendResources(
                 {
                     WGWorkerInfoPtr worker_info = RPCHelpers::createWorkerInfo(request->worker_info());
                     UInt64 version = data.table_version();
-                    ServerDataPartsWithDBM server_parts_with_dbms;
-                    query_context->getGlobalDataManager()->loadDataPartsWithDBM(*cloud_merge_tree, cloud_merge_tree->getStorageUUID(), version, worker_info, server_parts_with_dbms);
-                    size_t server_part_size = server_parts_with_dbms.first.size();
-                    size_t delete_bitmap_size = server_parts_with_dbms.second.size();
-                    cloud_merge_tree->receiveServerDataPartsWithDBM(std::move(server_parts_with_dbms));
-
-                    LOG_DEBUG(
-                        log,
-                        "Loaded {} server parts and {} delete bitmap for table {} with version {}",
-                        server_part_size,
-                        delete_bitmap_size,
+                    cloud_merge_tree->setDataDescription(std::move(worker_info), version);
+                    LOG_DEBUG(log, "Received table {} with data version {}",
                         cloud_merge_tree->getStorageID().getNameForLogs(),
                         version);
                 }

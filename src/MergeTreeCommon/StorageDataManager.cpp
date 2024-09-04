@@ -2,8 +2,18 @@
 #include <CloudServices/CnchPartsHelper.h>
 
 
+namespace ProfileEvents
+{
+    extern const Event LoadedServerParts;
+}
+
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
 
 StorageDataManager::StorageDataManager(const ContextPtr context_,const UUID & uuid_, const WGWorkerInfoPtr & worker_info_ )
     : WithContext(context_),
@@ -12,20 +22,47 @@ StorageDataManager::StorageDataManager(const ContextPtr context_,const UUID & uu
 {
 }
 
-void StorageDataManager::loadDataPartsWithDBM(const MergeTreeMetaBase & storage, const UInt64 & version, ServerDataPartsWithDBM & server_parts)
+void StorageDataManager::loadDataPartsWithDBM(
+    const MergeTreeMetaBase & storage,
+    const UInt64 & version,
+    std::unordered_map<String, ServerDataPartsWithDBM> & res_server_parts,
+    std::vector<std::shared_ptr<MergeTreePartition>> & res_partitions)
 {
     auto table_versions_ptr = getRequiredTableVersions(version);
 
-    LOG_TRACE(&Poco::Logger::get("StorageDataManager"), "Get required table versions from {} to {}",
+    LOG_TRACE(log, "Get required table versions from {} to {}",
         table_versions_ptr.back()->getVersion(),
         table_versions_ptr.front()->getVersion());
 
+    size_t loaded_parts_count = 0;
     for (auto it=table_versions_ptr.begin(); it<table_versions_ptr.end(); it++)
     {
         ServerDataPartsWithDBM parts_with_dbm = (*it)->getAllPartsWithDBM(storage);
-        server_parts.first.insert(server_parts.first.end(), parts_with_dbm.first.begin(), parts_with_dbm.first.end());
-        server_parts.second.insert(server_parts.second.end(), parts_with_dbm.second.begin(), parts_with_dbm.second.end());
+
+        for (auto & server_part : parts_with_dbm.first)
+        {
+            const String & partition_id = server_part->info().partition_id;
+            auto inner_it = res_server_parts.find(partition_id);
+            if (inner_it == res_server_parts.end())
+            {
+                // add to result partition list
+                res_partitions.emplace_back(server_part->part_model_wrapper->partition);
+            }
+            res_server_parts[partition_id].first.emplace_back(std::move(server_part));
+            loaded_parts_count++;
+        }
+
+        for (auto & delete_bitmap : parts_with_dbm.second)
+        {
+            const String & partition_id = delete_bitmap->getModel()->partition_id();
+            if (res_server_parts.find(partition_id) == res_server_parts.end())
+                throw Exception("Load delete bitmap mismatch server data part. Its a logic error. ", ErrorCodes::LOGICAL_ERROR);
+
+            res_server_parts[partition_id].second.emplace_back(std::move(delete_bitmap));
+        }
     }
+
+    ProfileEvents::increment(ProfileEvents::LoadedServerParts, loaded_parts_count);
 }
 
 UInt64 StorageDataManager::getLatestVersion()
@@ -41,7 +78,7 @@ std::vector<TableVersionPtr> StorageDataManager::getRequiredTableVersions(const 
     UInt64 latest_version = getLatestVersion();
     if (latest_version < required_version)
     {
-        LOG_TRACE(&Poco::Logger::get("StorageDataManager"), "Latest version {} less than required version {}. Will reload table versions.", 
+        LOG_TRACE(log, "Latest version {} less than required version {}. Will reload table versions.", 
             latest_version, required_version);
         reloadTableVersions();
     }

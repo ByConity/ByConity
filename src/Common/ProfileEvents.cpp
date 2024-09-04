@@ -1135,7 +1135,12 @@
     M(IOUringCQEsFailed, "Total number of completed io_uring CQEs with failures") \
     M(IOUringAsynchronousReadWaitMicroseconds, "Time spent in waiting for asynchronous reads in io_uring local read.") \
     M(IOUringSynchronousReadWaitMicroseconds, "Time spent in waiting for synchronous reads in io_uring local read.") \
-    M(IOUringReaderIgnoredBytes, "Number of bytes ignored in IOUringReader")
+    M(IOUringReaderIgnoredBytes, "Number of bytes ignored in IOUringReader") \
+\
+    M(LoadedServerParts, "Total server parts loaded from storage manager by version") \
+    M(LoadServerPartsMilliseconds, "The time spend on loading server parts by version from storage data manager.") \
+    M(LoadManifestPartsCacheHits, "Cache(disk) hit count of loading parts from manifest") \
+    M(LoadManifestPartsCacheMisses, "Cache(disk) miss count of loading parts from manifest")
 
 namespace ProfileEvents
 {

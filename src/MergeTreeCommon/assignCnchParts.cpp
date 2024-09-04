@@ -68,16 +68,16 @@ inline void reportStats(Poco::Logger * log, const M & map, const String & name, 
 }
 
 /// explicit instantiation for server part and cnch data part.
-template ServerAssignmentMap assignCnchParts<ServerDataPartsVector>(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
-template AssignmentMap assignCnchParts<MergeTreeDataPartsCNCHVector>(const WorkerGroupHandle & worker_group, const MergeTreeDataPartsCNCHVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
-template std::unordered_map<String, DataModelPartWrapperVector> assignCnchParts<DataModelPartWrapperVector>(const WorkerGroupHandle & worker_group, const DataModelPartWrapperVector &, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
-template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<DeleteBitmapMetaPtrVector>(const WorkerGroupHandle & worker_group, const DeleteBitmapMetaPtrVector &, const ContextPtr & query_context, MergeTreeSettingsPtr settings);
+template ServerAssignmentMap assignCnchParts<ServerDataPartsVector>(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator = std::nullopt);
+template AssignmentMap assignCnchParts<MergeTreeDataPartsCNCHVector>(const WorkerGroupHandle & worker_group, const MergeTreeDataPartsCNCHVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator = std::nullopt);
+template std::unordered_map<String, DataModelPartWrapperVector> assignCnchParts<DataModelPartWrapperVector>(const WorkerGroupHandle & worker_group, const DataModelPartWrapperVector &, const ContextPtr & query_context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator = std::nullopt);
+template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<DeleteBitmapMetaPtrVector>(const WorkerGroupHandle & worker_group, const DeleteBitmapMetaPtrVector &, const ContextPtr & query_context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator = std::nullopt);
 
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings)
+std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator)
 {
     static auto * log = &Poco::Logger::get("assignCnchParts");
-    Context::PartAllocator part_allocation_algorithm = query_context->getPartAllocationAlgo(settings);
+    Context::PartAllocator part_allocation_algorithm = allocator.value_or(query_context->getPartAllocationAlgo(settings));
 
     switch (part_allocation_algorithm)
     {
