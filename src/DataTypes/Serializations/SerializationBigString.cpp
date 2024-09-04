@@ -1,5 +1,9 @@
+#include <DataTypes/Serializations/SerializationBigString.h>
+#include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <typeinfo>
+#include <vector>
 #include <DataTypes/Serializations/SerializationBigString.h>
 #include <Common/assert_cast.h>
 #include <IO/ReadHelpers.h>
@@ -27,18 +31,32 @@ class DeserializeBinaryBulkStateBigString: public ISerialization::DeserializeBin
 {
 public:
     explicit DeserializeBinaryBulkStateBigString(
-        std::unique_ptr<CompressedDataIndex> idx):
+        std::shared_ptr<CompressedDataIndex> idx):
             compressed_idx(std::move(idx)) {}
 
-    std::unique_ptr<CompressedDataIndex> compressed_idx;
+    std::shared_ptr<CompressedDataIndex> compressed_idx;
 };
 
 namespace
 {
 
-void deserializeOffsets(UInt64 data_offset, ColumnString::Offsets& offsets,
-    ReadBuffer& offset_stream, size_t limit)
+/// Returns
+/// 1. Total processed rows
+/// 2. Total processed bytes
+/// 3. Data ranges to copy from DataStream's current position
+std::tuple<size_t, size_t, std::vector<std::pair<size_t, size_t>>> deserializeOffsets(
+    ColumnString::Offsets& offsets, size_t res_data_offset, ReadBuffer& offset_stream,
+    size_t limit, const UInt8* filter)
 {
+    /// First element is relative offset of DataStream's current position,
+    /// second element is range size
+    std::vector<std::pair<size_t, size_t>> copy_ranges;
+    size_t data_range_offset = 0;
+    size_t data_range_size = 0;
+    size_t data_offset = 0;
+    size_t processed_rows = 0;
+    size_t res_col_offset = res_data_offset;
+
     for (size_t i = 0; i < limit; ++i)
     {
         if (offset_stream.eof())
@@ -46,69 +64,75 @@ void deserializeOffsets(UInt64 data_offset, ColumnString::Offsets& offsets,
             break;
         }
 
+        ++processed_rows;
+
         UInt64 size;
         readVarUInt(size, offset_stream);
+        /// Add one byte for tailing \0
+        ++size;
 
-        data_offset += size + 1;
-        offsets.push_back(data_offset);
+        if (filter == nullptr || *(filter + i) != 0)
+        {
+            if (data_offset == data_range_offset + data_range_size)
+            {
+                data_range_size += size;
+            }
+            else
+            {
+                if (data_range_size != 0)
+                {
+                    copy_ranges.push_back({data_range_offset, data_range_size});
+                }
+                data_range_offset = data_offset;
+                data_range_size = size;
+            }
+
+            res_col_offset += size;
+            offsets.push_back(res_col_offset);
+        }
+
+        data_offset += size;
     }
+    if (data_range_size != 0)
+    {
+        copy_ranges.push_back({data_range_offset, data_range_size});
+    }
+    return {processed_rows, data_offset, copy_ranges};
 }
 
-void deserializeChars(ColumnString::Chars& data, const ColumnString::Offsets& offsets,
-    ReadBuffer& data_stream, size_t start_row, size_t limit)
+void deserializeChars(ColumnString::Chars& chars, ReadBuffer& data_stream,
+    const std::vector<std::pair<size_t, size_t>>& ranges, size_t final_offset,
+    CompressedDataIndex* compressed_idx)
 {
-    if (limit == 0)
+    size_t total_size = 0;
+    std::for_each(ranges.begin(), ranges.end(), [&total_size](const std::pair<size_t, size_t>& range) {
+        total_size += range.second;
+    });
+
+    size_t result_offset = chars.size();
+    chars.resize(chars.size() + total_size);
+
+    IndexedCompressedBufferReader reader(data_stream, compressed_idx);
+
+    size_t source_offset = 0;
+    for (const auto& range : ranges)
     {
-        return;
-    }
-
-    size_t data_start_offset = start_row == 0 ? 0 : offsets[start_row - 1];
-    size_t data_end_offset = offsets[start_row + limit - 1];
-    size_t total_size_to_read = data_end_offset - data_start_offset;
-
-    size_t data_init_size = data.size();
-    data.resize(data_init_size + total_size_to_read);
-
-#ifdef __SSE2__
-    {
-        for (size_t readed = 0; readed < total_size_to_read; )
+        if (size_t offset_to_ignore = range.first - source_offset; offset_to_ignore > 0)
         {
-            if (unlikely(data_stream.eof()))
-            {
-                throw Exception("Attempt to read after eof",
-                    ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF);
-            }
-
-            size_t size_to_copy = std::min(data_stream.available(),
-                total_size_to_read - readed);
-            size_t sse_copy_size = size_to_copy - (size_to_copy % 16);
-            size_t non_sse_copy_size = size_to_copy - sse_copy_size;
-
-            const __m128i* sse_src_pos = reinterpret_cast<const __m128i*>(
-                data_stream.position());
-            const __m128i* sse_src_end = sse_src_pos + sse_copy_size / 16;
-            __m128i* sse_dst_pos = reinterpret_cast<__m128i*>(&data[data_init_size + readed]);
-            while (sse_src_pos < sse_src_end)
-            {
-                _mm_storeu_si128(sse_dst_pos, _mm_loadu_si128(sse_src_pos));
-
-                ++sse_src_pos;
-                ++sse_dst_pos;
-            }
-            data_stream.position() += sse_copy_size;
-            readed += sse_copy_size;
-
-            data_stream.readStrict(reinterpret_cast<char*>(&data[data_init_size + readed]),
-                non_sse_copy_size);
-            readed += non_sse_copy_size;
+            reader.ignore(offset_to_ignore);
         }
+
+        data_stream.readStrict(reinterpret_cast<char*>(chars.data()) + result_offset,
+            range.second);
+
+        result_offset += range.second;
+        source_offset = range.first + range.second;
     }
-#else
+
+    if (size_t offset_to_ignore = final_offset - source_offset; offset_to_ignore > 0)
     {
-        data_stream.readStrict(reinterpret_cast<char*>(&data[data_start_offset]),
-            total_size_to_read);
+        reader.ignore(offset_to_ignore);
     }
-#endif
 }
 
 DeserializeBinaryBulkStateBigString * checkAndGetBigStringDeserializeState(
@@ -131,11 +155,14 @@ DeserializeBinaryBulkStateBigString * checkAndGetBigStringDeserializeState(
 
 }
 
-void SerializationBigString::enumerateStreams(
-    EnumerateStreamsSettings & settings, const StreamCallback & callback, const SubstreamData &  /*data*/) const
+void SerializationBigString::enumerateStreams(EnumerateStreamsSettings & settings, 
+        const StreamCallback & callback, 
+        const SubstreamData & data) const
 {
     settings.path.push_back(Substream::StringElements);
+    settings.path.back().data = data;
     callback(settings.path);
+
     settings.path.back() = Substream::StringOffsets;
     callback(settings.path);
     settings.path.pop_back();
@@ -169,7 +196,7 @@ void SerializationBigString::serializeBinaryBulkWithMultipleStreams(
     }
 
     /// Serialize string's offsets, don't use multiple streams at same time,
-    /// since it may write to same buffer at NativeBlockOutputStream
+    /// since it may write to same buffer at NativeWriter
     IColumn::Offset prev_offset = offset == 0 ? 0 : offsets[offset - 1];
     for (size_t i = offset; i < end; ++i)
     {
@@ -191,7 +218,7 @@ void SerializationBigString::deserializeBinaryBulkStatePrefix(DeserializeBinaryB
         return;
 
     settings.path.push_back(Substream::StringElements);
-    std::unique_ptr<CompressedDataIndex> index = settings.compressed_idx_getter(
+    std::shared_ptr<CompressedDataIndex> index = settings.compressed_idx_getter(
         settings.path);
     settings.path.pop_back();
 
@@ -201,14 +228,20 @@ void SerializationBigString::deserializeBinaryBulkStatePrefix(DeserializeBinaryB
     state = std::make_shared<DeserializeBinaryBulkStateBigString>(std::move(index));
 }
 
-void SerializationBigString::deserializeBinaryBulkWithMultipleStreams(
-    ColumnPtr & column, size_t limit, DeserializeBinaryBulkSettings & settings,
-    DeserializeBinaryBulkStatePtr &, SubstreamsCache *) const
+size_t SerializationBigString::deserializeBinaryBulkWithMultipleStreams(
+    ColumnPtr& column, size_t limit, DeserializeBinaryBulkSettings& settings,
+    DeserializeBinaryBulkStatePtr& state, SubstreamsCache* cache) const
 {
+    /// Although SerializationBigString have multiple streams, but we won't cache
+    /// each substream in substream cache seperately
+    if (auto cache_entry = getFromSubstreamsCache(cache, settings.path); cache_entry.has_value())
+    {
+        column = cache_entry->column;
+        return cache_entry->rows_before_filter;
+    }
+
     auto mutable_column = column->assumeMutable();
     ColumnString& column_string = assert_cast<ColumnString&>(*mutable_column);
-    ColumnString::Chars & data = column_string.getChars();
-    ColumnString::Offsets & offsets = column_string.getOffsets();
 
     settings.path.push_back(Substream::StringOffsets);
     ReadBuffer* offset_stream = settings.getter(settings.path);
@@ -218,129 +251,27 @@ void SerializationBigString::deserializeBinaryBulkWithMultipleStreams(
 
     if (offset_stream == nullptr)
     {
-        return;
-    }
-    if (data_stream == nullptr)
-    {
-        throw Exception("StringOffsets or StringElements substream for String didn't exist",
-            ErrorCodes::LOGICAL_ERROR);
-    }
-
-    size_t init_row_count = offsets.size();
-
-    offsets.reserve(offsets.size() + limit);
-    deserializeOffsets(data.size(), offsets, *offset_stream, limit);
-
-    deserializeChars(data, offsets, *data_stream, init_row_count, std::min(limit, offsets.size() - init_row_count));
-}
-
-size_t SerializationBigString::skipBinaryBulkWithMultipleStreams(
-    const NameAndTypePair & , size_t limit, DeserializeBinaryBulkSettings & settings,
-    DeserializeBinaryBulkStatePtr & state, SubstreamsCache * cache) const
-{
-    auto cached_column = getFromSubstreamsCache(cache, settings.path);
-    if (cached_column)
-    {
-        return cached_column->size();
-    }
-
-    settings.path.push_back(Substream::StringElements);
-    ReadBuffer* data_stream = settings.getter(settings.path);
-    settings.path.back() = Substream::StringOffsets;
-    ReadBuffer* offset_stream = settings.getter(settings.path);
-    settings.path.pop_back();
-
-    if (offset_stream == nullptr)
-    {
         return 0;
     }
     if (data_stream == nullptr)
     {
-        throw Exception("StringOffsets or StringElements substream for String didn't exist",
-            ErrorCodes::LOGICAL_ERROR);
+        throw Exception("StringOffset substream exists while StringElements substream "
+            "didn't", ErrorCodes::LOGICAL_ERROR);
     }
 
-    size_t skipped_rows = 0;
-    UInt64 data_skip_size = 0;
-    for (; skipped_rows < limit; ++skipped_rows)
-    {
-        if (offset_stream->eof())
-        {
-            break;
-        }
+    ColumnString::Chars& chars = column_string.getChars();
+    ColumnString::Offsets& offsets = column_string.getOffsets();
 
-        UInt64 size = 0;
-        readVarUInt(size, *offset_stream);
-        data_skip_size += size;
-    }
+    offsets.reserve(offsets.size() + limit);
 
-    /// TODO: This assume the corresponding buffer is CompressedReadBuffer/CachedCompressedReadBuffer,
-    /// if it's wrapped within something like hashing buffer, this will fail, need a better way to
-    /// to do this
-    CompressedReadBufferFromFile* comp_file_buf =
-        dynamic_cast<CompressedReadBufferFromFile*>(data_stream);
-    CachedCompressedReadBuffer* comp_cache_buf =
-        dynamic_cast<CachedCompressedReadBuffer*>(data_stream);
+    auto [processed_rows, processed_bytes, copy_ranges] = deserializeOffsets(offsets,
+        chars.size(), *offset_stream, limit, settings.filter);
+    deserializeChars(chars, *data_stream, copy_ranges, processed_bytes,
+        state == nullptr ? nullptr : checkAndGetBigStringDeserializeState(state)->compressed_idx.get());
 
-    if ((comp_file_buf != nullptr || comp_cache_buf != nullptr)
-        && state != nullptr)
-    {
-        DeserializeBinaryBulkStateBigString* big_str_state = checkAndGetBigStringDeserializeState(state);
+    addToSubstreamsCache(cache, settings.path, processed_rows, column);
 
-        /// Current offset of compressed block and uncompressed offset within the
-        /// compress block
-        size_t compressed_offset = 0;
-        size_t uncompressed_offset = 0;
-        size_t current_uncompressed_block_size = 0;
-
-        if (comp_file_buf)
-        {
-            std::tie(compressed_offset, uncompressed_offset) = comp_file_buf->position();
-            current_uncompressed_block_size = comp_file_buf->currentBlockUncompressedSize();
-        }
-        else
-        {
-            std::tie(compressed_offset, uncompressed_offset) = comp_cache_buf->position();
-            current_uncompressed_block_size = comp_cache_buf->currentBlockUncompressedSize();
-        }
-
-        size_t block_remain = current_uncompressed_block_size == 0 ? 0
-            : current_uncompressed_block_size - uncompressed_offset;
-        if (data_skip_size < block_remain)
-        {
-            data_stream->ignore(data_skip_size);
-        }
-        else
-        {
-            /// Not in current compressed block, worth a seek
-            UInt64 uncompressed_offset_to_skip = data_skip_size + uncompressed_offset;
-            UInt64 target_compressed_offset = 0;
-            UInt64 target_uncompressed_offset = 0;
-            big_str_state->compressed_idx->searchCompressBlock(compressed_offset,
-                uncompressed_offset_to_skip, &target_compressed_offset,
-                &target_uncompressed_offset);
-
-            if (comp_file_buf != nullptr)
-            {
-                comp_file_buf->seek(target_compressed_offset, target_uncompressed_offset);
-            }
-            else
-            {
-                comp_cache_buf->seek(target_compressed_offset, target_uncompressed_offset);
-            }
-        }
-    }
-    else
-    {
-        data_stream->ignore(data_skip_size);
-    }
-
-    /// Add a mocked column into substream cache to record the size
-    MutableColumnPtr base_col = ColumnString::create();
-    base_col->insert(Field(""));
-    addToSubstreamsCache(cache, settings.path, ColumnConst::create(std::move(base_col), skipped_rows));
-
-    return skipped_rows;
+    return processed_rows;
 }
 
 void SerializationBigString::serializeBinary(const Field & field, WriteBuffer & ostr) const

@@ -1218,6 +1218,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     checksum_cache_settings.lru_update_interval = config().getUInt64("checksum_cache_lru_update_interval", 60); //60 seconds
     global_context->setChecksumsCache(checksum_cache_settings);
 
+    global_context->setCompressedDataIndexCache(config().getUInt64("compressed_data_index_cache", 5368709120));
+
+    global_context->setGinIndexFilterResultCache(config().getUInt64("gin_index_filter_result_cache", 5368709120)); // 5GB
 
     /// A cache for gin index store
     GinIndexStoreCacheSettings ginindex_store_cache_settings;

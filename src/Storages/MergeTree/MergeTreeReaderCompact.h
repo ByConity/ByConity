@@ -51,9 +51,8 @@ public:
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = {},
         clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);
 
-    /// Return the number of rows has been read or zero if there is no columns to read.
-    /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
-    size_t readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row, size_t max_rows_to_read, Columns & res_columns) override;
+    size_t readRows(size_t from_mark, size_t from_row, size_t max_rows_to_read,
+        size_t current_task_last_mark, const UInt8* filter, Columns & res_columns) override;
 
     bool canReadIncompleteGranules() const override { return false; }
 
@@ -95,11 +94,13 @@ private:
     /// Each implicit column of ByteMap columns will use separate reader stream.
     CompactDataReaderPtr data_reader;
 
-    void readCompactData(const NameAndTypePair & name_and_type, ColumnPtr & column, size_t from_mark,
-        size_t column_position, size_t rows_to_read, bool only_offsets);
+    void readCompactData(const NameAndTypePair & name_and_type, ColumnPtr & column,
+        size_t from_mark, size_t column_position, size_t rows_to_read,
+        const UInt8* filter, bool only_offsets);
 
-    size_t resumableReadRows(size_t from_mark, bool continue_reading, size_t current_task_last_mark,
-        size_t max_rows_to_read, Columns & res_columns);
+    size_t resumableReadRows(size_t from_mark, bool continue_reading,
+        size_t current_task_last_mark, size_t max_rows_to_read, const UInt8* filter,
+        Columns & res_columns);
 
     ColumnPosition findColumnForOffsets(const String & column_name) const override;
 

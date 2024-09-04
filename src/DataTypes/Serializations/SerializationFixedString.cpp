@@ -15,6 +15,8 @@
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 
+#include <DataTypes/Serializations/SerializationHelpers.h>
+
 namespace DB
 {
 
@@ -80,20 +82,11 @@ void SerializationFixedString::serializeBinaryBulk(const IColumn & column, Write
 }
 
 
-void SerializationFixedString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/) const
+size_t SerializationFixedString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/, const UInt8* filter) const
 {
     ColumnFixedString::Chars & data = typeid_cast<ColumnFixedString &>(column).getChars();
 
-    size_t initial_size = data.size();
-    size_t max_bytes = limit * n;
-    data.resize(initial_size + max_bytes);
-    size_t read_bytes = istr.readBig(reinterpret_cast<char *>(&data[initial_size]), max_bytes);
-
-    if (read_bytes % n != 0)
-        throw Exception("Cannot read all data of type FixedString. Bytes read:" + toString(read_bytes) + ". String size:" + toString(n) + ".",
-            ErrorCodes::CANNOT_READ_ALL_DATA);
-
-    data.resize(initial_size + read_bytes);
+    return deserializeBinaryBulkForVector<UInt8>(data, istr, limit, filter, n);
 }
 
 

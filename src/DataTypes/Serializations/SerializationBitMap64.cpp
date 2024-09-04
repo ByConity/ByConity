@@ -130,55 +130,68 @@ void SerializationBitMap64::serializeBinaryBulk(const IColumn & column, WriteBuf
 
 
 template <int UNROLL_TIMES>
-static NO_INLINE void deserializeBinarySSE2(ColumnBitMap64::Chars & data, ColumnBitMap64::Offsets & offsets, ReadBuffer & istr, size_t limit)
+static NO_INLINE size_t deserializeBinarySSE2(ColumnBitMap64::Chars & data, ColumnBitMap64::Offsets & offsets, ReadBuffer & istr, size_t limit, const UInt8* filter)
 {
     size_t offset = data.size();
+    size_t processed_rows = 0;
     for (size_t i = 0; i < limit; ++i)
     {
         if (istr.eof())
             break;
 
+        ++processed_rows;
+
         UInt64 size;
         readVarUInt(size, istr);
 
-        offset += size + 1;
-        offsets.push_back(offset);
+        bool keep_element = filter == nullptr || *(filter + i) != 0;
 
-        data.resize(offset);
-
-        if (size)
+        if (keep_element)
         {
+            offset += size + 1;
+            offsets.push_back(offset);
+
+            data.resize(offset);
+
+            if (size)
+            {
 #ifdef __SSE2__
-            /// An optimistic branch in which more efficient copying is possible.
-            if (offset + 16 * UNROLL_TIMES <= data.capacity() && istr.position() + size + 16 * UNROLL_TIMES <= istr.buffer().end())
-            {
-                const __m128i * sse_src_pos = reinterpret_cast<const __m128i *>(istr.position());
-                const __m128i * sse_src_end = sse_src_pos + (size + (16 * UNROLL_TIMES - 1)) / 16 / UNROLL_TIMES * UNROLL_TIMES;
-                __m128i * sse_dst_pos = reinterpret_cast<__m128i *>(&data[offset - size - 1]);
-
-                while (sse_src_pos < sse_src_end)
+                /// An optimistic branch in which more efficient copying is possible.
+                if (offset + 16 * UNROLL_TIMES <= data.capacity() && istr.position() + size + 16 * UNROLL_TIMES <= istr.buffer().end())
                 {
-                    for (size_t j = 0; j < UNROLL_TIMES; ++j)
-                        _mm_storeu_si128(sse_dst_pos + j, _mm_loadu_si128(sse_src_pos + j));
+                    const __m128i * sse_src_pos = reinterpret_cast<const __m128i *>(istr.position());
+                    const __m128i * sse_src_end = sse_src_pos + (size + (16 * UNROLL_TIMES - 1)) / 16 / UNROLL_TIMES * UNROLL_TIMES;
+                    __m128i * sse_dst_pos = reinterpret_cast<__m128i *>(&data[offset - size - 1]);
 
-                    sse_src_pos += UNROLL_TIMES;
-                    sse_dst_pos += UNROLL_TIMES;
+                    while (sse_src_pos < sse_src_end)
+                    {
+                        for (size_t j = 0; j < UNROLL_TIMES; ++j)
+                            _mm_storeu_si128(sse_dst_pos + j, _mm_loadu_si128(sse_src_pos + j));
+
+                        sse_src_pos += UNROLL_TIMES;
+                        sse_dst_pos += UNROLL_TIMES;
+                    }
+
+                    istr.position() += size;
                 }
-
-                istr.position() += size;
-            }
-            else
+                else
 #endif
-            {
-                istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+                {
+                    istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+                }
             }
-        }
 
-        data[offset - 1] = 0;
+            data[offset - 1] = 0;
+        }
+        else
+        {
+            istr.ignore(size);
+        }
     }
+    return processed_rows;
 }
 
-void SerializationBitMap64::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool /*zero_copy_cache_read*/) const
+size_t SerializationBitMap64::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool /*zero_copy_cache_read*/, const UInt8* filter) const
 {
     ColumnBitMap64 & column_bitmap = typeid_cast<ColumnBitMap64 &>(column);
     ColumnBitMap64::Chars & data = column_bitmap.getChars();
@@ -216,13 +229,13 @@ void SerializationBitMap64::deserializeBinaryBulk(IColumn & column, ReadBuffer &
     offsets.reserve(offsets.size() + limit);
 
     if (avg_chars_size >= 64)
-        deserializeBinarySSE2<4>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<4>(data, offsets, istr, limit, filter);
     else if (avg_chars_size >= 48)
-        deserializeBinarySSE2<3>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<3>(data, offsets, istr, limit, filter);
     else if (avg_chars_size >= 32)
-        deserializeBinarySSE2<2>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<2>(data, offsets, istr, limit, filter);
     else
-        deserializeBinarySSE2<1>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<1>(data, offsets, istr, limit, filter);
 }
 
 

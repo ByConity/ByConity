@@ -31,7 +31,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Disks/IDisk.h>
 #include <Storages/MergeTree/GinIndexStore.h>
-
+#include <Poco/JSON/Object.h>
 
 namespace DB
 {
@@ -330,6 +330,13 @@ protected:
 
     GinIndexStoreFactory::GinIndexStores gin_index_stores;
 
+    struct ColumnCompressionSetting
+    {
+        void load(const Poco::JSON::Object::Ptr& json);
+        size_t max_compress_block_size = 0;
+    };
+    std::unordered_map<String, ColumnCompressionSetting> column_compress_settings;
+
 private:
     void initBitmapIndices();
     void initSegmentBitmapIndices();
@@ -337,6 +344,8 @@ private:
     void initPrimaryIndex();
 
     virtual void fillIndexGranularity(size_t index_granularity_for_block, size_t rows_in_block) = 0;
+
+    void loadColumnCompressInfoFromSetting();
 };
 
 }

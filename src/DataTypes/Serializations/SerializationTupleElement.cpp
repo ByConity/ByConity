@@ -53,7 +53,7 @@ void SerializationTupleElement::serializeBinaryBulkWithMultipleStreams(
     settings.path.pop_back();
 }
 
-void SerializationTupleElement::deserializeBinaryBulkWithMultipleStreams(
+size_t SerializationTupleElement::deserializeBinaryBulkWithMultipleStreams(
     ColumnPtr & column,
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
@@ -61,8 +61,9 @@ void SerializationTupleElement::deserializeBinaryBulkWithMultipleStreams(
     SubstreamsCache * cache) const
 {
     addToPath(settings.path);
-    nested_serialization->deserializeBinaryBulkWithMultipleStreams(column, limit, settings, state, cache);
+    size_t processed_rows = nested_serialization->deserializeBinaryBulkWithMultipleStreams(column, limit, settings, state, cache);
     settings.path.pop_back();
+    return processed_rows;
 }
 
 void SerializationTupleElement::addToPath(SubstreamPath & path) const

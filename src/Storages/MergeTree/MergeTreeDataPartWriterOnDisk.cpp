@@ -37,6 +37,8 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Common/FieldVisitorToString.h>
 #include <utility>
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Parser.h>
 
 namespace DB
 {
@@ -199,6 +201,8 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
     initSegmentBitmapIndices();
 
     optimize_map_column_serialization = settings.optimize_map_column_serialization;
+
+    loadColumnCompressInfoFromSetting();
 }
 
 // Implementation is split into static functions for ability
@@ -632,6 +636,12 @@ void MergeTreeDataPartWriterOnDisk::addStreams(
     const NameAndTypePair & column,
     const ASTPtr & effective_codec_desc)
 {
+    size_t max_compress_block_size = settings.max_compress_block_size;
+    if (auto iter = column_compress_settings.find(column.name); iter != column_compress_settings.end() && iter->second.max_compress_block_size != 0)
+    {
+        max_compress_block_size = iter->second.max_compress_block_size;
+    }
+
     IDataType::StreamCallbackWithType callback = [&] (const ISerialization::SubstreamPath & substream_path, const IDataType & substream_type)
     {
         String stream_name = ISerialization::getFileNameForStream(column, substream_path);
@@ -655,7 +665,7 @@ void MergeTreeDataPartWriterOnDisk::addStreams(
             part_path + stream_name, DATA_FILE_EXTENSION,
             part_path + stream_name, marks_file_extension,
             compression_codec,
-            settings.max_compress_block_size,
+            max_compress_block_size,
             /*write_append*/ false,
             /*is_compact_map*/ false,
             write_compressed_index);
@@ -1338,6 +1348,39 @@ void MergeTreeDataPartWriterOnDisk::writeFinalMark(
             offset_columns.insert(stream_name);
         }
     }, path);
+}
+
+void MergeTreeDataPartWriterOnDisk::ColumnCompressionSetting::load(const Poco::JSON::Object::Ptr& json)
+{
+    max_compress_block_size = json->getValue<UInt64>("max_compress_block_size");
+}
+
+void MergeTreeDataPartWriterOnDisk::loadColumnCompressInfoFromSetting()
+{
+    if (MergeTreeSettingsPtr merge_tree_settings = data_part->storage.getSettings(); merge_tree_settings != nullptr)
+    {
+        const String& settings = merge_tree_settings->column_compress_block_settings.toString();
+        if (!settings.empty())
+        {
+            try
+            {
+                Poco::JSON::Parser parser;
+                Poco::JSON::Object::Ptr parsed_obj = parser.parse(settings).extract<Poco::JSON::Object::Ptr>();
+                Strings keys;
+                parsed_obj->getNames(keys);
+                for (const auto& key : keys)
+                {
+                    column_compress_settings[key].load(parsed_obj->getObject(key));
+                }
+            }
+            catch (...)
+            {
+                column_compress_settings.clear();
+                LOG_ERROR(&Poco::Logger::get("MergeTreeDataPartWriterOnDisk"),
+                    "Failed to parse column compress settings from {}", settings);
+            }
+        }
+    }
 }
 
 }

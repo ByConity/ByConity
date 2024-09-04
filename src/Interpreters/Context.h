@@ -211,6 +211,8 @@ class KeeperDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+class CompressedDataIndexCache;
+class GinIdxFilterResultCache;
 class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
@@ -1553,6 +1555,12 @@ public:
 
     void setChecksumsCache(const ChecksumsCacheSettings & settings_);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
+
+    void setCompressedDataIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<CompressedDataIndexCache> getCompressedDataIndexCache() const;
+
+    void setGinIndexFilterResultCache(size_t cache_size_in_bytes);
+    GinIdxFilterResultCache* getGinIndexFilterResultCache() const;
 
     void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_);
     std::shared_ptr<GinIndexStoreFactory> getGinIndexStoreFactory() const;

@@ -15,37 +15,44 @@
 
 #pragma once
 
-#include <cstddef>
-#include <functional>
+#include <list>
+#include <memory>
 #include <mutex>
+#include <concepts>
 #include <optional>
 #include <unordered_map>
-#include <list>
 #include <shared_mutex>
-#include <atomic>
-#include <vector>
-#include <fmt/format.h>
-
+#include <Poco/Logger.h>
 #include <Core/Types.h>
-#include "common/types.h"
-#include <Common/Exception.h>
-#include <Common/ProfileEvents.h>
-#include <IO/WriteHelpers.h>
 #include <common/logger_useful.h>
+#include <Common/Exception.h>
 
 class BucketLRUCacheTest;
 
 namespace DB
 {
 
-namespace ErrorCodes
-{
-    extern const int LOGICAL_ERROR;
-    extern const int BAD_ARGUMENTS;
-}
+template <typename T>
+concept LRUCacheWeightType = requires (T lhs, T rhs) {
+    lhs == rhs;
+    lhs < rhs;
+    lhs += rhs;
+    lhs -= rhs;
+    lhs = rhs;
+};
+
+template <typename T, typename TValue, typename TWeight>
+concept LRUCacheWeighterType = requires (T weighter, TValue value) {
+    { weighter(value) } -> std::same_as<TWeight>;
+};
+
+template <typename T, typename TKey>
+concept LRUCacheKeyHasherType = requires (T hasher, TKey key) {
+    { hasher(key) } -> std::same_as<size_t>;
+};
 
 template <typename T>
-struct BucketLRUCacheTrivialWeightFunction
+struct BucketLRUCacheTrivialWeighter
 {
     size_t operator()(const T &) const
     {
@@ -53,22 +60,121 @@ struct BucketLRUCacheTrivialWeightFunction
     }
 };
 
-// NOTE(wsy): All get operation will return pointer of same object, maybe upper level
-// need to make it immutable
-// NOTE(wsy): Maybe try other data structure like skip list rather than unordered_map
-// BucketLRUCache support customize evict handler, user will pass a processor to lru cache
-// and processing the cache entry which need to evict, lru will modify cache entry base
-// on this evict handler, it could be drop cache entry or update entry without dropping it.
-// If cache entry is updated, the weight of cache entry should become 0, and lru cache will
-// update it's access time and lru order
-template <typename TKey, typename TMapped, typename HashFunction = std::hash<TKey>,
-    typename WeightFunction = BucketLRUCacheTrivialWeightFunction<TMapped>>
-class BucketLRUCache final
+template <size_t DIMENSION>
+struct DimensionBucketLRUWeight
+{
+    DimensionBucketLRUWeight(): weight_container{} {}
+    DimensionBucketLRUWeight(const DimensionBucketLRUWeight& rhs)
+    {
+        operator=(rhs);
+    }
+    DimensionBucketLRUWeight(const std::initializer_list<size_t>& init_list): weight_container{}
+    {
+        if (init_list.size() != DIMENSION)
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Initializer list have {} argument, "
+                "but weight require {}", init_list.size(), DIMENSION);
+        }
+        size_t idx = 0;
+        for (const auto& val : init_list)
+        {
+            weight_container[idx++] = val;
+        }
+    }
+
+    inline bool operator<(const DimensionBucketLRUWeight& rhs) const
+    {
+        for (size_t i = 0; i < DIMENSION; ++i)
+        {
+            if (weight_container[i] > rhs.weight_container[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    inline bool operator==(const DimensionBucketLRUWeight& rhs) const
+    {
+        return weight_container == rhs.weight_container;
+    }
+
+    inline DimensionBucketLRUWeight& operator+=(const DimensionBucketLRUWeight& rhs)
+    {
+        for (size_t i = 0; i < DIMENSION; ++i)
+        {
+            weight_container[i] += rhs.weight_container[i];
+        }
+        return *this;
+    }
+
+    inline DimensionBucketLRUWeight& operator-=(const DimensionBucketLRUWeight& rhs)
+    {
+        for (size_t i = 0; i < DIMENSION; ++i)
+        {
+            weight_container[i] -= rhs.weight_container[i];
+        }
+        return *this;
+    }
+
+    inline DimensionBucketLRUWeight& operator=(const DimensionBucketLRUWeight& rhs)
+    {
+        for (size_t i = 0; i < DIMENSION; ++i)
+        {
+            weight_container[i] = rhs.weight_container[i].load();
+        }
+        return *this;
+    }
+
+    inline std::atomic<size_t>& operator[](size_t idx)
+    {
+        return weight_container[idx];
+    }
+
+    inline const std::atomic<size_t>& operator[](size_t idx) const
+    {
+        return weight_container[idx];
+    }
+
+    inline bool valid() const
+    {
+        for (size_t i = 0; i < DIMENSION; ++i)
+        {
+            if (unlikely(weight_container[i] >= INVALID_THRESHOLD))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static constexpr size_t INVALID_THRESHOLD = 1ull << 63;
+    std::array<std::atomic<size_t>, DIMENSION> weight_container = {};
+};
+
+template <size_t DIMENSION, typename T>
+struct TrivialDimensionBucketLRUWeighter
+{
+    DimensionBucketLRUWeight<DIMENSION> operator()(const T&) const
+    {
+        DimensionBucketLRUWeight<DIMENSION> weight;
+        for (size_t i = 0; i < DIMENSION; ++i)
+        {
+            weight.weight_container[i] = 1;
+        }
+        return weight;
+    }
+};
+
+template <typename TKey, typename TValue, LRUCacheWeightType TWeight = size_t,
+    LRUCacheWeighterType<TValue, TWeight> TWeighter = BucketLRUCacheTrivialWeighter<TValue>,
+    LRUCacheKeyHasherType<TKey> TKeyHasher = std::hash<TKey>>
+class BucketLRUCache
 {
 public:
-    using Key = TKey;
-    using Mapped = TMapped;
-    using MappedPtr = std::shared_ptr<Mapped>;
+    using ValuePtr = std::shared_ptr<TValue>;
+    using WeightType = TWeight;
+    using LRUCacheType = BucketLRUCache<TKey, TValue, TWeight, TWeighter, TKeyHasher>;
 
     struct Options
     {
@@ -77,215 +183,232 @@ public:
         // Bucket size of hash map
         UInt32 mapping_bucket_size = 64;
         // LRU max weight
-        UInt64 max_size = 1;
-        UInt64 max_nums = 1;
+        TWeight max_weight;
 
-        bool enable_customize_evict_handler = false;
-        // Customize evict handler, return a pair, first element indicate
-        // if this element should remove from cache, second element indicate
-        // if this element shouldn't be removed, what's the new value of this
-        // element, if nullptr, leave it unchanged, the new value of entry's
-        // weight must be 0
-        std::function<std::pair<bool, MappedPtr>(const Key&, const MappedPtr&, size_t)> customize_evict_handler =
-            [](const Key&, const MappedPtr&, size_t) { return std::pair<bool, MappedPtr>(true, nullptr); };
+        /// Customize evict handler, return a pair, first element indicate
+        /// if this element should remove from cache, second element indicate
+        /// if this element shouldn't be removed, what's the new value of this
+        /// element, if nullptr, leave it unchanged, the new value of entry's
+        /// weight must be 0
+        std::function<std::pair<bool, ValuePtr>(const TKey&, const TValue&, const TWeight& weight)> evict_handler;
 
+        std::function<void(const TKey&)> insert_callback;
         // Will pass every touched entry to this handler, including dropped
         // updated cache entry, outside lru's lock
-        std::function<void(const std::vector<std::pair<Key, MappedPtr>>&, const std::vector<std::pair<Key, MappedPtr>>&)> customize_post_evict_handler =
-            [](const std::vector<std::pair<Key, MappedPtr>>&, const std::vector<std::pair<Key, MappedPtr>>&) {};
+        std::function<void(const std::vector<std::pair<TKey, ValuePtr>>&,
+            const std::vector<std::pair<TKey, ValuePtr>>&)> post_evict_callback;
     };
 
     explicit BucketLRUCache(const Options& opts_):
-        opts(opts_), evict_processor([this](const Key& key, const Cell& cell) {
-            auto [should_remove, new_val] = opts.customize_evict_handler(
-                key, cell.value, cell.size
-            );
-
-            size_t weight = 0;
-            if (!should_remove)
-            {
-                weight = new_val == nullptr ? cell.size : weight_function(*new_val);
-            }
-
-            if (unlikely(weight != 0))
-            {
-                LOG_ERROR(logger, "After evict handler, object still have positive weight");
-                abort();
-            }
-
-            return std::pair<bool, std::optional<Cell>>(should_remove, new_val == nullptr ? std::nullopt : std::optional<Cell>(
-                Cell(weight, timestamp(), cell.queue_iterator, new_val)
-            ));
-        }), container(opts_.mapping_bucket_size), logger(&Poco::Logger::get("BucketLRUCache"))
+        opts(opts_), logger(&Poco::Logger::get("BucketLRUCache")),
+        weighter(), current_weight(), hits(0), misses(0),
+        container(opts_.mapping_bucket_size)
     {
-        if (opts.mapping_bucket_size <= 0 || opts.max_size <= 0 || opts.max_nums <= 0)
+        if (opts.mapping_bucket_size == 0)
         {
-            throw Exception("Mapping bucket size or lru size or lru nums can't be less 0", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Mapping buckets' size can't "
+                "be 0");
+        }
+
+        if (opts.evict_handler)
+        {
+            evict_processor = [this](const TKey& key, const Cell& cell) {
+                auto [should_remove, new_val] = opts.evict_handler(
+                    key, *cell.value, cell.weight
+                );
+
+                TWeight weight;
+                if (!should_remove)
+                {
+                    weight = new_val == nullptr ? cell.weight : weighter(*new_val);
+                }
+
+                return std::pair<bool, std::optional<Cell>>(should_remove, new_val == nullptr ? std::nullopt : std::optional<Cell>(
+                    Cell(timestamp(), cell.queue_iterator, new_val, weight)
+                ));
+            };
         }
     }
 
-    ~BucketLRUCache() = default;
-
-    // Retrieve object from cache, if not exist, return nullptr
-    MappedPtr get(const Key& key)
+    ValuePtr get(const TKey& key_)
     {
-        auto val_pair = fastGet(key);
-        if (val_pair.first && !val_pair.second)
+        /// Fast path
         {
-            ++hits;
-            return val_pair.first;
+            std::optional<Cell> cell = container.get(key_, false);
+            if (!cell.has_value())
+            {
+                return nullptr;
+            }
+
+            size_t now = timestamp();
+            if (now - cell.value().timestamp < opts.lru_update_interval)
+            {
+                return cell.value().value;
+            }
         }
 
-        if (val_pair.first)
+        /// Slow path, get object from container again to prevent it got evict
+        /// from cache before acquire lock
         {
-            ++hits;
-            std::lock_guard cache_lock(mutex);
-            normalGet(key, cache_lock);
-            return val_pair.first;
-        }
+            std::lock_guard<std::mutex> lock(mutex);
 
-        ++misses;
-        return nullptr;
+            std::optional<Cell> cell_to_update = container.get(key_, true);
+            if (cell_to_update.has_value())
+            {
+                queue.splice(queue.end(), queue, cell_to_update.value().queue_iterator);
+                return cell_to_update.value().value;
+            }
+            return nullptr;
+        }
     }
 
-    template <typename LoadFunc>
-    std::pair<MappedPtr, bool> getOrSet(const Key & key, LoadFunc && load_func)
+    ValuePtr getOrSet(const TKey& key_, const std::function<ValuePtr()>& load_)
     {
-        auto val_pair = fastGet(key);
-        if (val_pair.first && !val_pair.second)
+        /// Fast path for get
         {
-            ++hits;
-            return std::make_pair(val_pair.first, false);
+            std::optional<Cell> cell = container.get(key_, false);
+            if (cell.has_value()
+                && timestamp() - cell.value().timestamp < opts.lru_update_interval)
+            {
+                return cell.value().value;
+            }
         }
-
+        /// Slow path, we either need to change lru order or need load missing cache
+        /// entry
         InsertTokenHolder token_holder;
         {
-            std::lock_guard cache_lock(mutex);
-            if (val_pair.first)
+            std::lock_guard<std::mutex> lock(mutex);
+
+            std::optional<Cell> cell_to_update = container.get(key_, true);
+            if (cell_to_update.has_value())
             {
-                ++hits;
-                normalGet(key, cache_lock);
-                return std::make_pair(val_pair.first, false);
+                queue.splice(queue.end(), queue, cell_to_update.value().queue_iterator);
+                return cell_to_update.value().value;
             }
 
-            auto & token = insert_tokens[key];
-            if (!token)
-                token = std::make_shared<InsertToken>(*this);
-
-            token_holder.acquire(&key, token, cache_lock);
-        }
-
-        InsertToken * token = token_holder.token.get();
-
-        std::lock_guard token_lock(token->mutex);
-
-        token_holder.cleaned_up = token->cleaned_up;
-
-        if (token->value)
-        {
-            /// Another thread already produced the value while we waited for token->mutex.
-            ++hits;
-            return std::make_pair(token->value, false);
-        }
-
-        ++misses;
-        token->value = load_func();
-
-        bool result = false;
-        std::vector<std::pair<Key, MappedPtr>> removed_elements;
-        std::vector<std::pair<Key, MappedPtr>> updated_elements;
-        {
-            std::lock_guard cache_lock(mutex);
-
-            /// Insert the new value only if the token is still in present in insert_tokens.
-            /// (The token may be absent because of a concurrent reset() call).
-            auto token_it = insert_tokens.find(key);
-            if (token_it != insert_tokens.end() && token_it->second.get() == token)
+            /// Cache entry not found, load
+            auto& token = insertion_tokens[key_];
+            if (token == nullptr)
             {
-                setRetEvictWithLock(key, token->value, SetMode::EMPLACE, 
-                    removed_elements, updated_elements, cache_lock);
-                result = true;
+                token = std::make_shared<InsertToken>(*this);
+            }
+            token_holder.acquire(&key_, token, lock);
+        }
+
+        InsertToken* token = token_holder.token.get();
+
+        bool upserted = false;
+        std::vector<std::pair<TKey, ValuePtr>> removed_elements;
+        std::vector<std::pair<TKey, ValuePtr>> updated_elements;
+        {
+            std::lock_guard<std::mutex> token_lock(token->mutex);
+            token_holder.cleaned_up = token->cleaned_up;
+
+            if (token->value != nullptr)
+            {
+                return token->value;
+            }
+            token->value = load_();
+
+            std::lock_guard<std::mutex> cache_lock(mutex);
+
+            /// Insert the new value only if the token is still in present in insertion_tokens.
+            /// (The token may be absent because of a concurrent reset() call).
+            if (auto token_iter = insertion_tokens.find(key_);
+                token_iter != insertion_tokens.end() && token_iter->second.get() == token)
+            {
+                upserted = updateWithoutLock(key_, token->value, UpdateMode::EMPLACE,
+                    cache_lock, &removed_elements, &updated_elements);
             }
 
             if (!token->cleaned_up)
-                token_holder.cleanup(token_lock, cache_lock);
+            {
+                token_holder.release(token_lock, cache_lock);
+            }
         }
-
-        opts.customize_post_evict_handler(removed_elements, updated_elements);
-
-        return std::make_pair(token->value, result);
+        if (upserted && opts.post_evict_callback)
+        {
+            opts.post_evict_callback(removed_elements, updated_elements);
+        }
+        return token->value;
     }
 
-    bool emplace(const Key& key, const MappedPtr& mapped)
+    bool emplace(const TKey& key_, const ValuePtr& value_)
     {
-        return setImpl(key, mapped, SetMode::EMPLACE);
+        return updateAndExecCallback(key_, value_, UpdateMode::EMPLACE);
     }
 
-    void update(const Key& key, const MappedPtr& mapped)
+    void update(const TKey& key_, const ValuePtr& value_)
     {
-        setImpl(key, mapped, SetMode::UPDATE);
+        updateAndExecCallback(key_, value_, UpdateMode::UPDATE);
     }
 
-    bool upsert(const Key& key, const MappedPtr& mapped)
+    void insert(const TKey& key_, const ValuePtr& value_)
     {
-        return setImpl(key, mapped, SetMode::UPSERT);
+        updateAndExecCallback(key_, value_, UpdateMode::INSERT);
     }
 
-    void insert(const Key& key, const MappedPtr& mapped)
+    bool upsert(const TKey& key_, const ValuePtr& value_)
     {
-        setImpl(key, mapped, SetMode::INSERT);
+        return updateAndExecCallback(key_, value_, UpdateMode::UPSERT);
     }
 
-    bool erase(const Key& key)
+    bool erase(const TKey& key_)
     {
         std::lock_guard<std::mutex> lock(mutex);
 
-        std::optional<Cell> cell = container.remove(key);
+        return eraseWithoutLock(key_);
+    }
+
+    void clear()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        container.clear();
+        queue.clear();
+        insertion_tokens.clear();
+
+        current_weight = {};
+    }
+
+    const TWeight& weight() const
+    {
+        return current_weight;
+    }
+
+protected:
+    bool eraseWithoutLock(const TKey& key_)
+    {
+        std::optional<Cell> cell = container.remove(key_);
         if (cell.has_value())
         {
             queue.erase(cell.value().queue_iterator);
-            current_size -= cell.value().size;
-            --current_count;
-
+            current_weight -= cell.value().weight;
             return true;
         }
         return false;
     }
 
-    void getStats(size_t& hit_counts, size_t& miss_counts)
-    {
-        hit_counts = hits;
-        miss_counts = misses;
-    }
-
-    size_t count() const
-    {
-        return current_count;
-    }
-
-    size_t weight() const
-    {
-        return current_size;
-    }
+    std::mutex mutex;
 
 private:
-    using LRUQueue = std::list<Key>;
+    using LRUQueue = std::list<TKey>;
     using LRUQueueIterator = typename LRUQueue::iterator;
 
     friend class ::BucketLRUCacheTest;
 
     struct Cell
     {
-        Cell(): size(0), timestamp(0), value(nullptr) {}
-        Cell(size_t size_, size_t timestamp_, LRUQueueIterator iter_,
-            const MappedPtr& value_):
-                size(size_), timestamp(timestamp_), queue_iterator(iter_),
-                value(value_) {}
+        Cell(): timestamp(0), value(nullptr), weight() {}
+        Cell(size_t timestamp_, LRUQueueIterator iter_, const ValuePtr& value_,
+            const TWeight& weight_):
+                timestamp(timestamp_), queue_iterator(iter_), value(value_),
+                weight(weight_) {}
 
-        size_t size;
         size_t timestamp;
         LRUQueueIterator queue_iterator;
-        MappedPtr value;
+        ValuePtr value;
+        TWeight weight;
     };
 
     struct Bucket
@@ -294,17 +417,17 @@ private:
         Bucket(const Bucket& rhs): cells(rhs.cells) {}
 
         std::shared_mutex mutex;
-        std::unordered_map<Key, Cell, HashFunction> cells;
+        std::unordered_map<TKey, Cell, TKeyHasher> cells;
     };
 
     // A thread safe bucket hash map
     class Container
     {
     public:
-        Container(size_t bucket_num): buckets(bucket_num) {}
+        explicit Container(size_t bucket_num_): bucket_num(bucket_num_), buckets(bucket_num_) {}
 
         // We must already acquire BucketLRUCache's mutex by now
-        void set(const Key& key, Cell&& cell)
+        void set(const TKey& key, Cell&& cell)
         {
             Bucket& bucket = getBucket(key);
             std::lock_guard<std::shared_mutex> lock(bucket.mutex);
@@ -312,7 +435,7 @@ private:
             bucket.cells[key] = cell;
         }
 
-        std::optional<Cell> get(const Key& key, bool update_timestamp)
+        std::optional<Cell> get(const TKey& key, bool update_timestamp)
         {
             Bucket& bucket = getBucket(key);
 
@@ -345,7 +468,7 @@ private:
 
         // Remove object from cells, return origin value, if not exist
         // return nullopt
-        std::optional<Cell> remove(const Key& key)
+        std::optional<Cell> remove(const TKey& key)
         {
             Bucket& bucket = getBucket(key);
             std::lock_guard<std::shared_mutex> lock(bucket.mutex);
@@ -361,6 +484,15 @@ private:
             return cell;
         }
 
+        void clear()
+        {
+            for (Bucket & bucket : buckets)
+            {
+                std::lock_guard<std::shared_mutex> lock(bucket.mutex);
+                bucket.cells.clear();
+            }
+        }
+
         struct UpdateResult
         {
             enum Status
@@ -371,11 +503,12 @@ private:
             };
 
             Status update_status;
+            TWeight new_weight;
             Cell previous_value;
         };
 
-        UpdateResult conditionalUpdate(const Key& key,
-            std::function<std::pair<bool, std::optional<Cell>>(const Key&, const Cell&)>& processor)
+        UpdateResult conditionalUpdate(const TKey& key,
+            std::function<std::pair<bool, std::optional<Cell>>(const TKey&, const Cell&)>& processor)
         {
             Bucket& bucket = getBucket(key);
             std::lock_guard<std::shared_mutex> lock(bucket.mutex);
@@ -383,7 +516,7 @@ private:
             auto iter = bucket.cells.find(key);
             if (iter == bucket.cells.end())
             {
-                LOG_ERROR(&Poco::Logger::get("BucketLRUCache"), "ucketLRUCache become inconsistent, There must be a bug on it");
+                LOG_ERROR(&Poco::Logger::get("BucketLRUCache"), "BucketLRUCache become inconsistent, There must be a bug on it");
                 abort();
             }
 
@@ -392,7 +525,7 @@ private:
             {
                 Cell cell = iter->second;
                 bucket.cells.erase(iter);
-                return {UpdateResult::Status::REMOVED, std::move(cell)};
+                return {UpdateResult::Status::REMOVED, TWeight(), std::move(cell)};
             }
             else
             {
@@ -400,104 +533,125 @@ private:
                 {
                     Cell cell = iter->second;
                     bucket.cells.insert_or_assign(iter, key, new_value.value());
-                    return {UpdateResult::Status::UPDATED, std::move(cell)};
+                    return {UpdateResult::Status::UPDATED,
+                        new_value.value().weight, std::move(cell)};
                 }
                 else
                 {
-                    return {UpdateResult::Status::UNTOUCHED, iter->second};
+                    return {UpdateResult::Status::UNTOUCHED, iter->second.weight,
+                        iter->second};
                 }
             }
         }
 
     private:
-        Bucket& getBucket(const Key& key)
+        inline Bucket& getBucket(const TKey& key_)
         {
-            size_t hash_value = hasher(key);
+            size_t hash_value = hasher(key_);
 
-            return buckets[hash_value % buckets.size()];
+            return buckets[hash_value % bucket_num];
         }
 
-        HashFunction hasher;
+        TKeyHasher hasher;
+        const size_t bucket_num;
         std::vector<Bucket> buckets;
     };
 
-    // return (value, exceed_update_interval) pair
-    std::pair<MappedPtr, bool>  fastGet(const Key& key)
+    /// Represents pending insertion attempt.
+    struct InsertToken
     {
-        std::optional<Cell> cell = container.get(key, false);
-        if (!cell.has_value())
-        {
-            return std::make_pair(nullptr, false);
-        }
+        explicit InsertToken(LRUCacheType& cache_) : cleaned_up(false),
+            value(nullptr), cache(cache_), refcount(0) {}
 
-        size_t now = timestamp();
-        if (now - cell.value().timestamp < opts.lru_update_interval)
-        {
-            return std::make_pair(cell.value().value, false);
-        }
+        std::mutex mutex;
+        bool cleaned_up; /// Protected by the token mutex
+        ValuePtr value; /// Protected by the token mutex
 
-        return std::make_pair(cell.value().value, true);
-    }
+        LRUCacheType& cache;
+        size_t refcount; /// Protected by the cache mutex
+    };
 
-    MappedPtr normalGet(const Key & key, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
+    /// This class is responsible for removing used insert tokens from the insertion_tokens map.
+    /// Among several concurrent threads the first successful one is responsible for removal. But if they all
+    /// fail, then the last one is responsible.
+    struct InsertTokenHolder
     {
-        std::optional<Cell> cell_to_update = container.get(key, true);
-        if (cell_to_update.has_value())
+        InsertTokenHolder(): key(nullptr), token(nullptr), cleaned_up(false) {}
+
+        ~InsertTokenHolder()
         {
-            queue.splice(queue.end(), queue, cell_to_update.value().queue_iterator);
-            return cell_to_update.value().value;
+            if (!token || cleaned_up)
+                return;
+
+            std::lock_guard token_lock(token->mutex);
+
+            if (token->cleaned_up)
+                return;
+
+            std::lock_guard cache_lock(token->cache.mutex);
+
+            --token->refcount;
+            if (token->refcount == 0)
+                release(token_lock, cache_lock);
         }
 
-        return nullptr;
-    }
+        void acquire(const TKey* key_, const std::shared_ptr<InsertToken>& token_,
+            [[maybe_unused]]std::lock_guard<std::mutex>& cache_lock_)
+        {
+            key = key_;
+            token = token_;
+            ++token->refcount;
+        }
 
-    enum class SetMode
+        void release([[maybe_unused]]std::lock_guard<std::mutex>& token_lock_,
+            [[maybe_unused]]std::lock_guard<std::mutex>& cache_lock_)
+        {
+            token->cache.insertion_tokens.erase(*key);
+            token->cleaned_up = true;
+            cleaned_up = true;
+        }
+
+        const TKey* key;
+        std::shared_ptr<InsertToken> token;
+        bool cleaned_up;
+    };
+
+    enum class UpdateMode
     {
         EMPLACE,
         UPDATE,
         INSERT,
-        UPSERT,
+        UPSERT
     };
 
-    // Return if any value has been inserted
-    bool setImpl(const Key& key, const MappedPtr& mapped, SetMode mode)
+    static size_t timestamp()
     {
-        std::vector<std::pair<Key, MappedPtr>> removed_elements;
-        std::vector<std::pair<Key, MappedPtr>> updated_elements;
-
-        auto res = false;
-        {
-            std::lock_guard<std::mutex> guard(mutex);
-            res = setRetEvictWithLock(key, mapped, mode, removed_elements, updated_elements, guard);
-            if (!res)
-                return res;
-        }
-
-        opts.customize_post_evict_handler(removed_elements, updated_elements);
-
-        return res;
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return ts.tv_sec;
     }
 
-    bool setRetEvictWithLock(const Key & key, const MappedPtr & mapped, SetMode mode
-        , std::vector<std::pair<Key, MappedPtr>> & removed_elements
-        , std::vector<std::pair<Key, MappedPtr>> & updated_elements
-        , [[maybe_unused]]std::lock_guard<std::mutex> & guard)
+    /// Return if any insert/update happened
+    bool updateWithoutLock(const TKey& key_, const ValuePtr& value_, UpdateMode mode_,
+        [[maybe_unused]]std::lock_guard<std::mutex>& cache_lock_,
+        std::vector<std::pair<TKey, ValuePtr>>* removed_elements_,
+        std::vector<std::pair<TKey, ValuePtr>>* updated_elements_)
     {
-        std::optional<Cell> cell = container.get(key, false);
+        std::optional<Cell> cell = container.get(key_, false);
         LRUQueueIterator iter;
         if (cell.has_value())
         {
             // Object already in cache, adjust lru list
-            switch(mode)
+            switch(mode_)
             {
-                case SetMode::EMPLACE:
+                case UpdateMode::EMPLACE:
                 {
                     return false;
                 }
-                case SetMode::INSERT:
+                case UpdateMode::INSERT:
                 {
-                    throw Exception(fmt::format("Trying to insert value {} but already in lru",
-                        toString(key)), ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception("Trying to insert value but already in lru",
+                        ErrorCodes::BAD_ARGUMENTS);
                 }
                 default:
                     break;
@@ -507,59 +661,65 @@ private:
 
             iter = cell.value().queue_iterator;
 
-            current_size -= cell.value().size;
+            current_weight -= cell.value().weight;
         }
         else
         {
             // New object, insert into lru list
-            if (mode == SetMode::UPDATE)
+            if (mode_ == UpdateMode::UPDATE)
             {
-                throw Exception(fmt::format("Trying to update value {} but no value found",
-                    toString(key)), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("Trying to update value {} but no value found",
+                    ErrorCodes::BAD_ARGUMENTS);
             }
 
-            iter = queue.insert(queue.end(), key);
+            if (opts.insert_callback)
+            {
+                opts.insert_callback(key_);
+            }
 
-            ++current_count;
+            iter = queue.insert(queue.end(), key_);
         }
 
-        size_t weight = mapped ? weight_function(*mapped) : 0;
-        container.set(key, Cell(weight, timestamp(), iter, mapped));
-        current_size += weight;
+        TWeight weight = weighter(*value_);
+        container.set(key_, Cell(timestamp(), iter, value_, weight));
+        current_weight += weight;
 
-        evictIfNecessary(removed_elements, updated_elements);
+        evictIfNecessary(removed_elements_, updated_elements_);
 
         return true;
     }
 
     // Must acquire mutex before call this function
-    void evictIfNecessary(std::vector<std::pair<Key, MappedPtr>>& removed_elements,
-        std::vector<std::pair<Key, MappedPtr>>& updated_elements)
+    void evictIfNecessary(std::vector<std::pair<TKey, ValuePtr>>* removed_elements_,
+        std::vector<std::pair<TKey, ValuePtr>>* updated_elements_)
     {
         LRUQueue moved_elements;
 
         for (auto iter = queue.begin();
-            iter != queue.end() && (current_size > opts.max_size || current_count > opts.max_nums);)
+            iter != queue.end()
+                && !(current_weight < opts.max_weight || current_weight == opts.max_weight);)
         {
-            const Key& key = *iter;
+            const TKey& key = *iter;
 
-            if (opts.enable_customize_evict_handler)
+            if (evict_processor)
             {
                 typename Container::UpdateResult result = container.conditionalUpdate(key, evict_processor);
-
-                current_size -= result.previous_value.size;
 
                 switch (result.update_status)
                 {
                     case Container::UpdateResult::REMOVED: {
-                        removed_elements.emplace_back(key, result.previous_value.value);
+                        removed_elements_->emplace_back(key, result.previous_value.value);
 
-                        --current_count;
+                        current_weight -= result.previous_value.weight;
+
                         iter = queue.erase(iter);
                         break;
                     }
                     case Container::UpdateResult::UPDATED: {
-                        updated_elements.emplace_back(key, result.previous_value.value);
+                        updated_elements_->emplace_back(key, result.previous_value.value);
+
+                        current_weight += result.new_weight;
+                        current_weight -= result.previous_value.weight;
 
                         [[fallthrough]];
                     }
@@ -582,16 +742,9 @@ private:
                     abort();
                 }
 
-                current_size -= cell.value().size;
-                --current_count;
+                current_weight -= cell.value().weight;
 
                 iter = queue.erase(iter);
-            }
-
-            if (unlikely(current_size > (1ull << 63)))
-            {
-                LOG_ERROR(logger, "LRUCache became inconsistent. There must be a bug in it.");
-                abort();
             }
         }
 
@@ -601,101 +754,45 @@ private:
         }
     }
 
-    static size_t timestamp()
+    bool updateAndExecCallback(const TKey& key_, const ValuePtr& value_,
+        UpdateMode mode_)
     {
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        return ts.tv_sec;
+        std::vector<std::pair<TKey, ValuePtr>> removed_elements;
+        std::vector<std::pair<TKey, ValuePtr>> updated_elements;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            bool upserted = updateWithoutLock(key_, value_, mode_,
+                lock, &removed_elements, &updated_elements);
+            if (!upserted)
+            {
+                return false;
+            }
+        }
+
+        if (opts.post_evict_callback)
+        {
+            opts.post_evict_callback(removed_elements, updated_elements);
+        }
+        return true;
     }
 
-    /// Represents pending insertion attempt.
-    struct InsertToken
-    {
-        explicit InsertToken(BucketLRUCache & cache_) : cache(cache_) {}
-
-        std::mutex mutex;
-        bool cleaned_up = false; /// Protected by the token mutex
-        MappedPtr value; /// Protected by the token mutex
-
-        BucketLRUCache & cache;
-        size_t refcount = 0; /// Protected by the cache mutex
-    };
-
-    using InsertTokenById = std::unordered_map<Key, std::shared_ptr<InsertToken>, HashFunction>;
-
-    /// This class is responsible for removing used insert tokens from the insert_tokens map.
-    /// Among several concurrent threads the first successful one is responsible for removal. But if they all
-    /// fail, then the last one is responsible.
-    struct InsertTokenHolder
-    {
-        const Key * key = nullptr;
-        std::shared_ptr<InsertToken> token;
-        bool cleaned_up = false;
-
-        InsertTokenHolder() = default;
-
-        void acquire(const Key * key_, const std::shared_ptr<InsertToken> & token_, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
-        {
-            key = key_;
-            token = token_;
-            ++token->refcount;
-        }
-
-        void cleanup([[maybe_unused]] std::lock_guard<std::mutex> & token_lock, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
-        {
-            token->cache.insert_tokens.erase(*key);
-            token->cleaned_up = true;
-            cleaned_up = true;
-        }
-
-        ~InsertTokenHolder()
-        {
-            if (!token)
-                return;
-
-            if (cleaned_up)
-                return;
-
-            std::lock_guard token_lock(token->mutex);
-
-            if (token->cleaned_up)
-                return;
-
-            std::lock_guard cache_lock(token->cache.mutex);
-
-            --token->refcount;
-            if (token->refcount == 0)
-                cleanup(token_lock, cache_lock);
-        }
-    };
-
-    friend struct InsertTokenHolder;
-
-    InsertTokenById insert_tokens;
-
     const Options opts;
+    Poco::Logger* logger;
 
-    WeightFunction weight_function;
+    TWeighter weighter;
     // First return value indiecate if the entry should dropped,
     // second return value is the new value of corresponding key, if it's nullopt
     // leave it unchanged
-    std::function<std::pair<bool, std::optional<Cell>>(const Key&, const Cell&)> evict_processor;
+    std::function<std::pair<bool, std::optional<Cell>>(const TKey&, const Cell&)> evict_processor;
 
-    // Statistics
-    std::atomic<size_t> current_size {0};
-    std::atomic<size_t> current_count {0};
-    std::atomic<size_t> hits {0};
-    std::atomic<size_t> misses {0};
+    /// Statistics
+    TWeight current_weight;
+    std::atomic<size_t> hits;
+    std::atomic<size_t> misses;
 
     Container container;
-
-    // Must acquire this lock before update lru list or insert/remove element
-    // from lru cache
-    mutable std::mutex mutex;
-
     LRUQueue queue;
-
-    Poco::Logger* logger;
+    std::unordered_map<TKey, std::shared_ptr<InsertToken>, TKeyHasher> insertion_tokens;
 };
 
 }

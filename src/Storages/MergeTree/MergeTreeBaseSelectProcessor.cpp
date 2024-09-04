@@ -426,7 +426,26 @@ namespace
     };
 }
 
-static void injectVirtualColumnsImpl(
+/// Adds virtual columns that are not const for all rows
+static void injectNonConstVirtualColumns(
+    size_t rows,
+    VirtualColumnsInserter & inserter,
+    const Names & virtual_columns)
+{
+    if (unlikely(rows))
+        throw Exception("Cannot insert non-constant virtual column to non-empty chunk.",
+                        ErrorCodes::LOGICAL_ERROR);
+
+    for (const auto & virtual_column_name : virtual_columns)
+    {
+        if (virtual_column_name == "_part_offset")
+        {
+            inserter.insertUInt64Column(DataTypeUInt64().createColumn(), virtual_column_name);
+        }
+    }
+}
+
+static void injectPartConstVirtualColumns(
     size_t rows,
     VirtualColumnsInserter & inserter,
     MergeTreeReadTask * task,
@@ -651,7 +670,8 @@ void MergeTreeBaseSelectProcessor::injectVirtualColumns(
     Block & block, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns)
 {
     VirtualColumnsInserterIntoBlock inserter{block};
-    injectVirtualColumnsImpl(block.rows(), inserter, task, partition_value_type, virtual_columns);
+    injectNonConstVirtualColumns(block.rows(), inserter, virtual_columns);
+    injectPartConstVirtualColumns(block.rows(), inserter, task, partition_value_type, virtual_columns);
 }
 
 void MergeTreeBaseSelectProcessor::injectVirtualColumns(
@@ -661,7 +681,7 @@ void MergeTreeBaseSelectProcessor::injectVirtualColumns(
     auto columns = chunk.detachColumns();
 
     VirtualColumnsInserterIntoColumns inserter{columns};
-    injectVirtualColumnsImpl(num_rows, inserter, task, partition_value_type, virtual_columns);
+    injectPartConstVirtualColumns(num_rows, inserter, task, partition_value_type, virtual_columns);
 
     chunk.setColumns(columns, num_rows);
 }

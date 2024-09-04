@@ -18,7 +18,8 @@ namespace LateMaterialize
     std::pair<size_t,size_t> GranuledStream::read(Columns & columns)
     {
         size_t num_requested_rows = index_granularity->getMarkRows(current_mark);
-        size_t num_rows = merge_tree_reader->readRows(current_mark, last_mark, 0, num_requested_rows, columns);
+        size_t num_rows = merge_tree_reader->readRows(current_mark, 0, num_requested_rows,
+            last_mark, nullptr, columns);
         /// if (0 < num_rows && num_rows < num_requested_rows) /// Can happen if this is the last mark
         if (0 < num_rows && num_rows < num_requested_rows) /// Can happen if this is the last mark
             num_requested_rows = num_rows;

@@ -48,6 +48,7 @@ using GinDataPartHelperPtr = std::unique_ptr<IGinDataPartHelper>;
 using GinIndexPostingsList = roaring::Roaring;
 using GinIndexPostingsListPtr = std::shared_ptr<GinIndexPostingsList>;
 
+class GinIdxFilterResultCache;
 
 /// Build a postings list for a term
 class GinIndexPostingsBuilder
@@ -203,6 +204,7 @@ public:
 
 private:
     friend class GinIndexStoreDeserializer;
+    friend class GinFilter;
 
     /// Initialize all indexing files for this store
     void initFileStreams();
@@ -301,10 +303,12 @@ private:
 struct PostingsCacheForStore
 {
     /// Which store to retrieve postings lists
-    GinIndexStorePtr store;
+    GinIndexStorePtr store = nullptr;
 
     /// map of <query, postings lists>
     std::unordered_map<String, GinPostingsCachePtr> cache;
+
+    GinIdxFilterResultCache* filter_result_cache = nullptr;
 
     /// Get postings lists for query string, return nullptr if not found
     GinPostingsCachePtr getPostings(const String & query_string) const;
@@ -334,21 +338,20 @@ struct GinIndexStoreWeightFunction
 class GinIndexStoreFactory : private boost::noncopyable
 {
 public:
-    GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings);
+    explicit GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings);
 
     /// TODO get with data part or segment and batter cache info
     ///Get GinIndexStore by using index name and data part
     GinIndexStorePtr get(const String & name, GinDataPartHelperPtr && storage_info);
 
-    size_t count() const { return stores_lru_cache.count(); }
-    size_t weight() const { return stores_lru_cache.weight(); }
+    size_t cacheWeight() const { return stores_lru_cache.weight(); }
 
     /// GinIndexStores indexed by part file path
     using GinIndexStores = std::unordered_map<std::string, GinIndexStorePtr>;
 
 private:
-    ShardCache<String, std::hash<String>, 
-        BucketLRUCache<String, GinIndexStore, std::hash<String>, GinIndexStoreWeightFunction>> stores_lru_cache;
+    using CacheContainer = BucketLRUCache<String, GinIndexStore, size_t, GinIndexStoreWeightFunction>;
+    ShardCache<String, std::hash<String>, CacheContainer> stores_lru_cache;
 };
 
 }

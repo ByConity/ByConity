@@ -352,4 +352,76 @@ bool StandardTokenExtractor::nextInStringLike(
     return !bad_token && !out.empty();
 }
 
+bool CharSeperatorTokenExtractor::nextInString(const char* data, size_t length,
+    size_t* __restrict pos, size_t* __restrict token_start,
+    size_t* __restrict token_length) const
+{
+    *token_start = *pos;
+    *token_length = 0;
+
+    while (*pos < length)
+    {
+        if (isASCII(data[*pos]) && seps.contains(data[*pos]))
+        {
+            if (*token_length > 0)
+            {
+                return true;
+            }
+            *token_start = ++*pos;
+        }
+        else
+        {
+            ++*pos;
+            ++*token_length;
+        }
+    }
+
+    return *token_length > 0;
+
+}
+
+bool CharSeperatorTokenExtractor::nextInStringLike(const char* data, size_t length,
+    size_t* __restrict pos, String& token) const
+{
+    token.clear();
+    bool bad_token = false; // % or _ before token
+    bool escaped = false;
+    while (*pos < length)
+    {
+        if (!escaped && (data[*pos] == '%' || data[*pos] == '_'))
+        {
+            token.clear();
+            bad_token = true;
+            ++*pos;
+        }
+        else if (!escaped && data[*pos] == '\\')
+        {
+            escaped = true;
+            ++*pos;
+        }
+        else if (isASCII(data[*pos]) && seps.contains(data[*pos]))
+        {
+            if (!bad_token && !token.empty())
+                return true;
+
+            token.clear();
+            bad_token = false;
+            escaped = false;
+            ++*pos;
+        }
+        else
+        {
+            const size_t sz = UTF8::seqLength(static_cast<UInt8>(data[*pos]));
+            for (size_t j = 0; j < sz; ++j)
+            {
+                token += data[*pos];
+                ++*pos;
+            }
+            escaped = false;
+        }
+    }
+
+    return !bad_token && !token.empty();
+}
+
 }

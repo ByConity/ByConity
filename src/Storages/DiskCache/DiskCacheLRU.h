@@ -45,15 +45,18 @@ public:
     size_t size;
 };
 
+/// First value is cache size, second value is cache num
+using DiskCacheWeight = DimensionBucketLRUWeight<2>;
+
 struct DiskCacheWeightFunction
 {
-    size_t operator()(const DiskCacheMeta& meta) const
+    DiskCacheWeight operator()(const DiskCacheMeta& meta) const
     {
         if (meta.state == DiskCacheMeta::State::Cached)
         {
-            return meta.size;
+            return DiskCacheWeight({meta.size, 1});
         }
-        return 0;
+        return DiskCacheWeight({0, 1});
     }
 };
 
@@ -80,23 +83,23 @@ public:
     void load() override;
     size_t drop(const String & part_name) override;
 
-    size_t getKeyCount() const override { return containers.count(); }
-    size_t getCachedSize() const override { return containers.weight(); }
+    size_t getKeyCount() const override { return containers.weight()[1]; }
+    size_t getCachedSize() const override { return containers.weight()[0]; }
     std::filesystem::path getRelativePath(const KeyType & key, const String & seg_name, const String & prefix = {}) { return getPath(key, latest_disk_cache_dir, seg_name, prefix);}
 
     static std::filesystem::path getPath(const KeyType & key, const String & path, const String & seg_name, const String & prefix);
 
     /// for test
-    static KeyType hash(const String & seg_name);
+    static KeyType hash(const String & seg_key);
     static String hexKey(const KeyType & key);
     static std::optional<KeyType> unhexKey(const String & hex);
 
 private:
-    size_t writeSegment(const String& seg_name, ReadBuffer& buffer, ReservationPtr& reservation);
+    static std::pair<bool, std::shared_ptr<DiskCacheMeta>> onEvictSegment(const KeyType&,
+        const DiskCacheMeta& meta, const DiskCacheWeight&);
 
-    std::pair<bool, std::shared_ptr<DiskCacheMeta>> onEvictSegment(const KeyType & key,
-        const std::shared_ptr<DiskCacheMeta>& meta, size_t);
-    void afterEvictSegment(const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>>& removed_elements,
+    size_t writeSegment(const String& seg_key, ReadBuffer& buffer, ReservationPtr& reservation);
+    void afterEvictSegment(const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>>&,
         const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>>& updated_elements);
 
     struct DiskIterator : private boost::noncopyable
@@ -107,7 +110,7 @@ private:
 
         virtual void exec(std::filesystem::path entry_path);
         virtual void iterateDirectory(std::filesystem::path rel_path, size_t depth);
-        virtual void iterateFile(std::filesystem::path file_path, size_t file_size) = 0;
+        virtual void iterateFile(std::filesystem::path rel_path, size_t file_size) = 0;
 
         String name;
         // lifecycle shorter than disk cache
@@ -164,7 +167,7 @@ private:
     ThrottlerPtr set_rate_throttler;
     ThrottlerPtr set_throughput_throttler;
     std::atomic<bool> is_droping{false};
-    ShardCache<KeyType, UInt128Hash, BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>> containers;
+    ShardCache<KeyType, UInt128Hash, BucketLRUCache<KeyType, DiskCacheMeta, DiskCacheWeight, DiskCacheWeightFunction>> containers;
 };
 
 }

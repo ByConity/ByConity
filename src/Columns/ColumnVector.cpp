@@ -814,6 +814,19 @@ ColumnPtr ColumnVector<T, has_buf>::compress() const
         });
 }
 
+template <typename T, bool has_buf>
+void ColumnVector<T, has_buf>::shrink(size_t to_size)
+{
+    if constexpr (has_buf) {
+        tryToFlushZeroCopyBufferImpl() ;
+    }
+    if (to_size >= size())
+        return;
+
+    auto it_begin = data.begin() + to_size;
+    data.erase(it_begin, data.end());
+}
+
 /// Explicit template instantiations - to avoid code bloat in headers.
 template class ColumnVector<UInt8>;
 template class ColumnVector<UInt16>;

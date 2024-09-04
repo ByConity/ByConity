@@ -96,7 +96,8 @@ public:
         /// Returns the number of rows added to block.
         /// NOTE: have to return number of rows because block has broken invariant:
         ///       some columns may have different size (for example, default columns may be zero size).
-        size_t read(Columns & columns, size_t from_mark, size_t offset, size_t num_rows);
+        size_t read(Columns & columns, size_t from_mark, size_t offset, size_t num_rows,
+            const UInt8* filter);
 
         /// Skip extra rows to current_offset and perform actual reading
         size_t finalize(Columns & columns);
@@ -111,6 +112,8 @@ public:
         size_t num_delayed_rows = 0;
         /// Last mark from all ranges of current task.
         size_t current_task_last_mark = 0;
+
+        const UInt8* delayed_deserialize_filter = nullptr;
 
         /// Actual reader of data from disk
         IMergeTreeReader * merge_tree_reader = nullptr;
@@ -131,7 +134,8 @@ public:
         Stream(size_t from_mark, size_t to_mark, size_t current_task_last_mark, IMergeTreeReader * merge_tree_reader);
 
         /// Returns the number of rows added to block.
-        size_t read(Columns & columns, size_t num_rows, bool skip_remaining_rows_in_current_granule);
+        size_t read(Columns & columns, size_t num_rows,
+            bool skip_remaining_rows_in_current_granule, const UInt8* filter);
         size_t finalize(Columns & columns);
         void skip(size_t num_rows);
 
@@ -164,7 +168,7 @@ public:
 
         void checkNotFinished() const;
         void checkEnoughSpaceInCurrentGranule(size_t num_rows) const;
-        size_t readRows(Columns & columns, size_t num_rows);
+        size_t readRows(Columns & columns, size_t num_rows, const UInt8* filter);
         void toNextMark();
         size_t ceilRowsToCompleteGranules(size_t rows_num) const;
     };
@@ -223,8 +227,14 @@ public:
         size_t countBytesInResultFilter(const IColumn::Filter & filter);
 
         Columns columns;
+        /// Result rows size, it may smaller than actual processed rows(since some maybe filter out by
+        /// filter)
         size_t num_rows = 0;
+        /// Mark if columns need to filter against filter after reading from
+        /// started ranges
         bool need_filter = false;
+        /// Mark if columns already filter against filter
+        bool columns_filtered = false;
 
         Block block_before_prewhere;
         Block bitmap_block;
@@ -248,6 +258,7 @@ public:
         ColumnPtr filter_holder;
         ColumnPtr filter_holder_original;
         const ColumnUInt8 * filter = nullptr;
+        /// Filter about how to get final result from started ranges
         const ColumnUInt8 * filter_original = nullptr;
 
         void collapseZeroTails(const IColumn::Filter & filter, IColumn::Filter & new_filter);
@@ -263,9 +274,12 @@ public:
 
 private:
 
-    ReadResult startReadingChain(size_t max_rows, MarkRanges & ranges);
+    ReadResult startReadingChain(size_t max_rows, MarkRanges & ranges, bool filter_when_read);
     Columns continueReadingChain(ReadResult & result, size_t & num_rows, bool filter_when_read);
     void executePrewhereActionsAndFilterColumns(ReadResult & result);
+    void fillPartOffsetColumn(ReadResult & result,
+        std::optional<std::pair<UInt64, UInt64>> begin_info,
+        std::optional<size_t> granule_before_start, const UInt8* filter);
     void extractBitmapIndexColumns(Columns & columns, Block & bitmap_block);
 
     IMergeTreeReader * merge_tree_reader = nullptr;

@@ -198,7 +198,15 @@ public:
 
     /// Cache for common substreams of one type, but possible different its subcolumns.
     /// E.g. sizes of arrays of Nested data type.
-    using SubstreamsCache = std::unordered_map<String, ColumnPtr>;
+    struct SubstreamCacheEntry
+    {
+        SubstreamCacheEntry(size_t rows_before_filter_, const ColumnPtr& column_):
+            rows_before_filter(rows_before_filter_), column(column_) {}
+
+        size_t rows_before_filter;
+        ColumnPtr column;
+    };
+    using SubstreamsCache = std::unordered_map<String, SubstreamCacheEntry>;
 
     using StreamCallback = std::function<void(const SubstreamPath &)>;
 
@@ -227,7 +235,7 @@ public:
 
     using OutputStreamGetter = std::function<WriteBuffer*(const SubstreamPath &)>;
     using InputStreamGetter = std::function<ReadBuffer*(const SubstreamPath &)>;
-    using CompressedIndexGetter = std::function<std::unique_ptr<CompressedDataIndex>(const SubstreamPath &)>;
+    using CompressedIndexGetter = std::function<std::shared_ptr<CompressedDataIndex>(const SubstreamPath &)>;
 
     struct SerializeBinaryBulkState
     {
@@ -272,6 +280,10 @@ public:
         double avg_value_size_hint = 0;
 
         bool zero_copy_read_from_cache = false;
+
+        /// If filter is not nullptr, serialization will filter readed data based on filter
+        /// 0 in filter means skip corresponding row
+        const UInt8* filter = nullptr;
     };
 
     /// Call before serializeBinaryBulkWithMultipleStreams chain to write something before first mark.
@@ -304,19 +316,9 @@ public:
         SerializeBinaryBulkSettings & settings,
         SerializeBinaryBulkStatePtr & state) const;
 
-    /// Read no more than limit values and append them into column.
-    virtual void deserializeBinaryBulkWithMultipleStreams(
+    /// Read no more than limit values and append them into column. Return processed rows
+    virtual size_t deserializeBinaryBulkWithMultipleStreams(
         ColumnPtr & column,
-        size_t limit,
-        DeserializeBinaryBulkSettings & settings,
-        DeserializeBinaryBulkStatePtr & state,
-        SubstreamsCache * cache) const;
-
-    /// Returns skipped rows, it will add result to substream cache to avoid
-    /// deserialize same column multiple times, for serialization which support
-    /// skip, it will put a mocked column const into substream cache
-    virtual size_t skipBinaryBulkWithMultipleStreams(
-        const NameAndTypePair & name_and_type,
         size_t limit,
         DeserializeBinaryBulkSettings & settings,
         DeserializeBinaryBulkStatePtr & state,
@@ -325,7 +327,8 @@ public:
     /** Override these methods for data types that require just single stream (most of data types).
       */
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;
-    virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool zero_copy_cache_read) const;
+    virtual size_t deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit,
+        double avg_value_size_hint, bool zero_copy_cache_read, const UInt8* filter) const;
 
     /** Serialization/deserialization of individual values.
       *
@@ -405,8 +408,10 @@ public:
     static String getSubcolumnNameForStream(const SubstreamPath & path);
     static String getSubcolumnNameForStream(const SubstreamPath & path, size_t prefix_len);
 
-    static void addToSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path, ColumnPtr column);
-    static ColumnPtr getFromSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path);
+    static void addToSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path,
+        size_t rows_before_filter, ColumnPtr column);
+    static std::optional<SubstreamCacheEntry> getFromSubstreamsCache(SubstreamsCache * cache,
+        const SubstreamPath & path);
 
     static bool isSpecialCompressionAllowed(const SubstreamPath & path);
 

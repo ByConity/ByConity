@@ -627,7 +627,7 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
 
     size_t deleted_count = 0;
     Columns columns(1);
-    auto read_rows = reader->readRows(0, getMarksCount(), false, rows_count, columns);
+    auto read_rows = reader->readRows(0, 0, rows_count, getMarksCount(), nullptr, columns);
     if (read_rows != rows_count)
     {
         throw Exception(

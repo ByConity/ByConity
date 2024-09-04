@@ -106,33 +106,27 @@ DiskCacheLRU::DiskCacheLRU(
     , set_rate_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_rate_limit))
     , set_throughput_throttler(settings_.cache_set_throughput_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_throughput_limit))
     , containers(
-          settings.cache_shard_num,
-          BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>::Options{
-              .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
-              .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
-              .max_size = std::max(
-                  static_cast<size_t>(1),
-                  type == IDiskCache::DataType::META
-                      ? static_cast<size_t>(settings.lru_max_size * (settings.meta_cache_size_ratio * 1.0 / 100) / settings.cache_shard_num)
-                      : static_cast<size_t>(
-                          settings.lru_max_size * ((100 - settings.meta_cache_size_ratio) * 1.0 / 100) / settings.cache_shard_num)),
-              .max_nums = std::max(
-                  static_cast<size_t>(1),
-                  type == IDiskCache::DataType::META
-                      ? static_cast<size_t>(settings.lru_max_nums * (settings.meta_cache_nums_ratio * 1.0 / 100) / settings.cache_shard_num)
-                      : static_cast<size_t>(
-                          settings.lru_max_nums * ((100 - settings.meta_cache_nums_ratio) * 1.0 / 100) / settings.cache_shard_num)),
-              .enable_customize_evict_handler = true,
-              .customize_evict_handler
-              = [this](
-                    const KeyType & key, const std::shared_ptr<DiskCacheMeta> & meta, size_t sz) { return onEvictSegment(key, meta, sz); },
-              .customize_post_evict_handler =
-                  [this](
-                      const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>> & removed_elements,
-                      const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>> & updated_elements) {
-                      afterEvictSegment(removed_elements, updated_elements);
-                  },
-          })
+        settings.cache_shard_num,
+        BucketLRUCache<KeyType, DiskCacheMeta, DiskCacheWeight, DiskCacheWeightFunction>::Options {
+            .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
+            .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
+            .max_weight = DiskCacheWeight({
+                std::max(static_cast<size_t>(1),
+                    type == IDiskCache::DataType::META ?
+                        static_cast<size_t>(settings.lru_max_size * (settings.meta_cache_size_ratio * 1.0 / 100) / settings.cache_shard_num) :
+                        static_cast<size_t>(settings.lru_max_size * ((100 - settings.meta_cache_size_ratio) * 1.0 / 100) / settings.cache_shard_num)),
+                std::max(static_cast<size_t>(1),
+                    type == IDiskCache::DataType::META ?
+                        static_cast<size_t>(settings.lru_max_nums * (settings.meta_cache_nums_ratio * 1.0 / 100) / settings.cache_shard_num) :
+                        static_cast<size_t>(settings.lru_max_nums * ((100 - settings.meta_cache_nums_ratio) * 1.0 / 100) / settings.cache_shard_num))
+            }),
+            .evict_handler = [](const KeyType& key, const DiskCacheMeta& meta, const DiskCacheWeight& weight) { return onEvictSegment(key, meta, weight); },
+            .post_evict_callback = [this](
+                const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>> & removed_elements,
+                const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>> & updated_elements) {
+                    afterEvictSegment(removed_elements, updated_elements);
+                },
+        })
 {
     if (settings.cache_load_dispatcher_drill_down_level < -1)
     {
@@ -332,19 +326,19 @@ size_t DiskCacheLRU::writeSegment(const String& seg_key, ReadBuffer& buffer, Res
 }
 
 std::pair<bool, std::shared_ptr<DiskCacheMeta>> DiskCacheLRU::onEvictSegment(
-    [[maybe_unused]]const KeyType & key, const std::shared_ptr<DiskCacheMeta>& meta, size_t)
+    const KeyType&, const DiskCacheMeta& meta, const DiskCacheWeight&)
 {
-    if (meta->state != DiskCacheMeta::State::Cached)
+    if (meta.state != DiskCacheMeta::State::Cached)
     {
         return {false, nullptr};
     }
 
     return {false, std::make_shared<DiskCacheMeta>(DiskCacheMeta::State::Deleting,
-        meta->disk, 0)};
+        meta.disk, 0)};
 }
 
 // NOTE(wsy) This is called outside lru's lock, maybe we can remove evict thread pool
-void DiskCacheLRU::afterEvictSegment([[maybe_unused]]const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>>& removed_elements,
+void DiskCacheLRU::afterEvictSegment(const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>>&,
     const std::vector<std::pair<KeyType, std::shared_ptr<DiskCacheMeta>>>& updated_elements)
 {
     if (shutdown_called)

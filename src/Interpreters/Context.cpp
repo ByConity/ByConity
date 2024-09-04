@@ -419,6 +419,10 @@ struct ContextSharedPart
     /// global primary index cache
     mutable PrimaryIndexCachePtr primary_index_cache;
 
+    mutable std::shared_ptr<CompressedDataIndexCache> compressed_data_index_cache;
+
+    mutable std::unique_ptr<GinIdxFilterResultCache> gin_idx_filter_result_cache;
+
     mutable std::shared_ptr<GinIndexStoreFactory> ginindex_store_factory;
 
     mutable ServiceDiscoveryClientPtr sd;
@@ -5016,6 +5020,33 @@ void Context::setChecksumsCache(const ChecksumsCacheSettings & settings_)
 std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
 {
     return shared->checksums_cache;
+}
+
+void Context::setCompressedDataIndexCache(size_t cache_size_in_bytes)
+{
+    if (shared->compressed_data_index_cache)
+        throw Exception("Compressed data index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+    shared->compressed_data_index_cache = std::make_shared<CompressedDataIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<CompressedDataIndexCache> Context::getCompressedDataIndexCache() const
+{
+    return shared->compressed_data_index_cache;
+}
+
+void Context::setGinIndexFilterResultCache(size_t cache_size_in_bytes)
+{
+    if (shared->gin_idx_filter_result_cache)
+        throw Exception("GinIndex postings cache has been already created.",
+            ErrorCodes::LOGICAL_ERROR);
+    if (cache_size_in_bytes != 0)
+        shared->gin_idx_filter_result_cache = std::make_unique<GinIdxFilterResultCache>(
+            cache_size_in_bytes, 8);
+}
+
+GinIdxFilterResultCache* Context::getGinIndexFilterResultCache() const
+{
+    return shared->gin_idx_filter_result_cache.get();
 }
 
 void Context::setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_)

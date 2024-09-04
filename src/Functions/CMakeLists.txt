@@ -149,7 +149,3 @@ else()
     add_library(clickhouse_functions SHARED ${OBJECT_LIBS})
     target_link_libraries(clickhouse_functions PUBLIC ${PUBLIC_LIBS} PRIVATE ${PRIVATE_LIBS})
 endif ()
-
-if (ENABLE_BENCHMARKS)
-    add_subdirectory(benchmarks)
-endif()

@@ -17,9 +17,22 @@ void SerializationNothing::serializeBinaryBulk(const IColumn & column, WriteBuff
         ostr.write('0');
 }
 
-void SerializationNothing::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/) const
+size_t SerializationNothing::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/, const UInt8* filter) const
 {
-    typeid_cast<ColumnNothing &>(column).addSize(istr.tryIgnore(limit));
+    size_t ignored = istr.tryIgnore(limit);
+    size_t added = ignored;
+    if (filter)
+    {
+        for (size_t i = 0; i < ignored; ++i)
+        {
+            if (*(filter + i) == 0)
+            {
+                --added;
+            }
+        }
+    }
+    typeid_cast<ColumnNothing &>(column).addSize(added);
+    return ignored;
 }
 
 }

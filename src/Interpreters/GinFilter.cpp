@@ -2,7 +2,8 @@
 #include <Interpreters/GinFilter.h>
 #include <roaring.hh>
 #include <Poco/Logger.h>
-#include "common/logger_useful.h"
+#include <Storages/MergeTree/GinIndexDataPartHelper.h>
+#include <Storages/MergeTree/GinIdxFilterResultCache.h>
 #include <common/types.h>
 
 namespace DB
@@ -90,20 +91,59 @@ void GinFilter::clear()
     rowid_ranges.clear();
 }
 
-bool GinFilter::contains(const GinFilter & filter, PostingsCacheForStore & cache_store, roaring::Roaring & filter_result) const
+bool GinFilter::contains(const GinFilter & filter, PostingsCacheForStore & cache_store, roaring::Roaring * filter_result) const
 {
     if (filter.getTerms().empty())
-        return true;
-
-    GinPostingsCachePtr postings_cache = cache_store.getPostings(filter.getQueryString());
-    if (postings_cache == nullptr)
     {
-        GinIndexStoreDeserializer reader(cache_store.store);
-        postings_cache = reader.createPostingsCacheFromTerms(filter.getTerms());
-        cache_store.cache[filter.getQueryString()] = postings_cache;
+        if (filter_result != nullptr)
+        {
+            for (const auto& range : rowid_ranges)
+            {
+                filter_result->addRangeClosed(range.range_start, range.range_end);
+            }
+        }
+        return true;
     }
 
-    return match(*postings_cache, filter_result);
+    auto calc_filter_contains = [this](const GinFilter& gin_filter, PostingsCacheForStore& store, roaring::Roaring* result) {
+        GinPostingsCachePtr postings_cache = store.getPostings(gin_filter.getQueryString());
+        if (postings_cache == nullptr)
+        {
+            GinIndexStoreDeserializer reader(store.store);
+            postings_cache = reader.createPostingsCacheFromTerms(gin_filter.getTerms());
+            store.cache[gin_filter.getQueryString()] = postings_cache;
+        }
+        return match(*postings_cache, result);
+    };
+    if (auto* filter_result_cache = cache_store.filter_result_cache; filter_result_cache != nullptr)
+    {
+        WriteBufferFromOwnString range_id_buf;
+        for (const auto& range : rowid_ranges)
+        {
+            writeIntBinary(range.segment_id, range_id_buf);
+            writeIntBinary(range.range_start, range_id_buf);
+            writeIntBinary(range.range_end, range_id_buf);
+        }
+        const String& range_id = range_id_buf.str();
+        std::shared_ptr<GinIdxFilterResult> cached_result = filter_result_cache->getOrSet(
+            cache_store.store->storage_info->getPartUniqueID(), cache_store.store->getName(),
+            filter.getQueryString(), range_id, [&calc_filter_contains, &filter, &cache_store]() {
+                auto result = std::make_shared<GinIdxFilterResult>(false, nullptr);
+                result->filter = std::make_unique<roaring::Roaring>();
+                result->match = calc_filter_contains(filter, cache_store, result->filter.get());
+                return result;
+            }
+        );
+        if (filter_result != nullptr)
+        {
+            *filter_result = *cached_result->filter;
+        }
+        return cached_result->match;
+    }
+    else
+    {
+        return calc_filter_contains(filter, cache_store, filter_result);
+    }
 }
 
 void GinFilter::filpWithRange(roaring::Roaring & result) const
@@ -143,7 +183,7 @@ bool hasEmptyPostingsList(const GinPostingsCache & postings_cache)
 }
 
 /// Helper method to check if the postings list cache has intersection with given row ID range
-bool matchInRange(const GinPostingsCache & postings_cache, UInt32 segment_id, UInt32 range_start, UInt32 range_end, roaring::Roaring & filter_result)
+bool matchInRange(const GinPostingsCache & postings_cache, UInt32 segment_id, UInt32 range_start, UInt32 range_end, roaring::Roaring * filter_result)
 {
     /// Check for each term
     GinIndexPostingsList intersection_result;
@@ -181,23 +221,33 @@ bool matchInRange(const GinPostingsCache & postings_cache, UInt32 segment_id, UI
 
     // we assume there only one term in full text search
     // so we just get filter result here
-    filter_result = std::move(intersection_result);
+    if (filter_result != nullptr)
+    {
+        *filter_result |= intersection_result;
+    }
 
     return true;
 }
 
 }
 
-bool GinFilter::match(const GinPostingsCache & postings_cache , roaring::Roaring & filter_result) const
+bool GinFilter::match(const GinPostingsCache & postings_cache , roaring::Roaring * filter_result) const
 {
     if (hasEmptyPostingsList(postings_cache))
         return false;
 
     /// Check for each row ID ranges
+    bool any_match = false;
     for (const auto & rowid_range: rowid_ranges)
         if (matchInRange(postings_cache, rowid_range.segment_id, rowid_range.range_start, rowid_range.range_end, filter_result))
-            return true;
-    return false;
+        {
+            if (filter_result == nullptr)
+            {
+                return true;
+            }
+            any_match = true;
+        }
+    return any_match;
 }
 
 String GinFilter::getTermsInString() const

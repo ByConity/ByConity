@@ -2,20 +2,21 @@
 
 #include <cstddef>
 #include <memory>
+#include <roaring.hh>
+#include <common/types.h>
+#include <Common/config.h>
+#include <Common/ChineseTokenExtractor.h>
 #include <Interpreters/GinFilter.h>
 #include <Interpreters/ITokenExtractor.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
-
-#include <Common/config.h>
+#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/MergeTreeIndexGranularity.h>
+#include <Storages/MergeTree/MergeTreeIndexReader.h>
 #if USE_TSQUERY
 #include "Common/TextSreachQuery.h"
 #endif 
-
-#include <Common/ChineseTokenExtractor.h>
-#include <roaring.hh>
-#include <common/types.h>
 
 namespace DB
 {
@@ -31,6 +32,10 @@ public:
     void deserializeBinary(ReadBuffer & istr) override;
 
     bool empty() const override { return !has_elems; }
+
+    static void extendGinFilter(const GinFilter& incoming, GinFilter* base);
+    void extend(const MergeTreeIndexGranuleInverted& granule);
+    std::pair<UInt32, UInt32> rowExtreme() const;
 
     String index_name;
     GinFilterParameters params;
@@ -85,13 +90,10 @@ public:
     ~MergeTreeConditionInverted() override = default;
 
     bool alwaysUnknownOrTrue() const override;
-    bool mayBeTrueOnGranule([[maybe_unused]] MergeTreeIndexGranulePtr granule) const override
-    {
-        /// should call mayBeTrueOnGranuleInPart instead
-        assert(false);
-        return false;
-    }
-    bool mayBeTrueOnGranuleInPart(MergeTreeIndexGranulePtr idx_granule, [[maybe_unused]] PostingsCacheForStore & cache_store, [[maybe_unused]]roaring::Roaring & filter_bitmap) const;
+    bool mayBeTrueOnGranule(MergeTreeIndexGranulePtr granule) const override;
+    bool mayBeTrueOnGranuleInPart(MergeTreeIndexGranulePtr idx_granule,
+        PostingsCacheForStore& cache_store, size_t range_start_row,
+        size_t range_end_row, roaring::Roaring* result_filter) const;
 
 private:
     struct KeyTuplePositionMapping
@@ -220,5 +222,11 @@ public:
     // select next token with nlp, now we only have chinese
     std::unique_ptr<ChineseTokenExtractor> nlp_extractor;
 };
+
+MarkRanges filterMarkRangesByInvertedIndex(MergeTreeIndexReader& idx_reader_,
+    const MarkRanges& mark_ranges_, size_t index_granularity_,
+    const MergeTreeIndexGranularity& granularity_, const MergeTreeConditionInverted& condition_,
+    PostingsCacheForStore& cache_store_, roaring::Roaring* result_filter_,
+    size_t* total_granules_, size_t* dropped_granules_);
 
 }

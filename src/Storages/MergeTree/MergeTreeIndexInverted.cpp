@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <string.h>
@@ -18,7 +19,6 @@
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/MergeTree/RPNBuilder.h>
 #include <Interpreters/ITokenExtractor.h>
-#include "common/logger_useful.h"
 #include <Common/config.h>
 
 #if USE_TSQUERY
@@ -30,6 +30,7 @@
 #include <Core/Types.h>
 #include <roaring.hh>
 #include <Poco/Logger.h>
+#include <Poco/JSON/Parser.h>
 
 namespace DB
 {
@@ -38,6 +39,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int INCORRECT_QUERY;
+    extern const int INVALID_CONFIG_PARAMETER;
 }
 
 /// Unified condition for equals, startsWith and endsWith
@@ -119,6 +121,69 @@ void MergeTreeIndexGranuleInverted::deserializeBinary(ReadBuffer & istr)
             reinterpret_cast<char *>(gin_filter.getFilter().data()), filter_size * sizeof(GinSegmentWithRowIdRangeVector::value_type));
     }
     has_elems = true;
+}
+
+void MergeTreeIndexGranuleInverted::extendGinFilter(const GinFilter& incoming,
+    GinFilter *base)
+{
+    assert(base != nullptr);
+
+    GinSegmentWithRowIdRangeVector& base_ranges = base->getFilter();
+    for (const GinSegmentWithRowIdRange& current : incoming.getFilter())
+    {
+        if (!base_ranges.empty())
+        {
+            GinSegmentWithRowIdRange& last = base_ranges.back();
+            if (unlikely(last.segment_id > current.segment_id))
+            {
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Got segment id {} which is "
+                    "smaller than last one in segment ranges {}", current.segment_id,
+                    last.segment_id);
+            }
+            if (unlikely(current.range_start <= last.range_end))
+            {
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "There are range overlapping "
+                    "between incoming range first row {} and last range's end row {}",
+                    current.range_start, last.range_end);
+            }
+            if (last.segment_id == current.segment_id)
+            {
+                last.range_end = current.range_end;
+                continue;
+            }
+        }
+        base_ranges.push_back(current);
+    }
+}
+
+void MergeTreeIndexGranuleInverted::extend(const MergeTreeIndexGranuleInverted& granule)
+{
+    if (gin_filters.size() != granule.gin_filters.size())
+    {
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "GinFilters size mismatch, this {} incoming {}",
+            gin_filters.size(), granule.gin_filters.size());
+    }
+
+    has_elems |= granule.has_elems;
+
+    for (size_t i = 0, sz = gin_filters.size(); i < sz; ++i)
+    {
+        extendGinFilter(granule.gin_filters[i], &gin_filters[i]);
+    }
+}
+
+std::pair<UInt32, UInt32> MergeTreeIndexGranuleInverted::rowExtreme() const
+{
+    if (gin_filters.empty())
+    {
+        return {0, 0};
+    }
+    const auto& ranges = gin_filters[0].getFilter();
+    if (ranges.empty())
+    {
+        return {0, 0};
+    }
+    return {ranges.front().range_start, ranges.back().range_end + 1};
 }
 
 MergeTreeIndexAggregatorInverted::MergeTreeIndexAggregatorInverted(
@@ -293,79 +358,171 @@ bool MergeTreeConditionInverted::alwaysUnknownOrTrue() const
     return rpn_stack[0];
 }
 
-// TODO @caichangheng
-// filter_bitmap without text search query may case wrong with not
-// will ignore filter_bitmap select without text search;
-bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(
-    MergeTreeIndexGranulePtr idx_granule, [[maybe_unused]] PostingsCacheForStore & cache_store, [[maybe_unused]] roaring::Roaring & filter_bitmap) const
+bool MergeTreeConditionInverted::mayBeTrueOnGranule(MergeTreeIndexGranulePtr) const
+{
+    throw Exception("MergeTreeConditionInverted should invoke mayBeTrueOnGranuleInPart",
+        ErrorCodes::LOGICAL_ERROR);
+}
+
+bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(MergeTreeIndexGranulePtr idx_granule,
+    PostingsCacheForStore& cache_store, size_t range_start_row, size_t range_end_row,
+    roaring::Roaring* result_filter) const
 {
     std::shared_ptr<MergeTreeIndexGranuleInverted> granule = std::dynamic_pointer_cast<MergeTreeIndexGranuleInverted>(idx_granule);
     if (!granule)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "GinFilter index condition got a granule with the wrong type.");
-    
-    // filter without text search do not return filter_bitmap
-    roaring::Roaring empty_bitmap;
 
     /// Check like in KeyCondition.
     std::vector<BoolMask> rpn_stack;
+    /// Only deterministic operator will generate filter, otherwise it will put a nullptr
+    /// in stack. If can_be_true is true, then a nullptr means every row need to read. If
+    /// can_be_true is false, then a nullptr means no row is need to read
+    std::vector<std::unique_ptr<roaring::Roaring>> filter_stack;
     for (const auto & element : rpn)
     {
         if (element.function == RPNElement::FUNCTION_UNKNOWN)
         {
             rpn_stack.emplace_back(true, true);
+
+            if (result_filter)
+            {
+                filter_stack.emplace_back(nullptr);
+            }
         }
         else if (element.function == RPNElement::FUNCTION_EQUALS || element.function == RPNElement::FUNCTION_NOT_EQUALS)
         {
-            rpn_stack.emplace_back(granule->gin_filters[element.key_column].contains(*element.gin_filter, cache_store, empty_bitmap), true);
+            std::unique_ptr<roaring::Roaring> operator_filter = result_filter ?
+                std::make_unique<roaring::Roaring>() : nullptr;
+            rpn_stack.emplace_back(
+                granule->gin_filters[element.key_column].contains(*element.gin_filter, cache_store, operator_filter.get()),
+                true);
+            if (result_filter)
+            {
+                filter_stack.emplace_back(std::move(operator_filter));
+            }
 
             if (element.function == RPNElement::FUNCTION_NOT_EQUALS)
+            {
                 rpn_stack.back() = !rpn_stack.back();
+                if (result_filter)
+                {
+                    filter_stack.back()->flip(range_start_row, range_end_row);
+                }
+            }
         }
         else if (element.function == RPNElement::FUNCTION_IN || element.function == RPNElement::FUNCTION_NOT_IN)
         {
-            std::vector<bool> result(element.set_gin_filters.back().size(), true);
-
             if (skip_size < element.set_gin_filters[0].size())
             {
                 rpn_stack.emplace_back(true, true);
+                if (result_filter)
+                {
+                    filter_stack.emplace_back(nullptr);
+                }
             }
             else
             {
+                /// Each element is mark if any row in this granule match this element in set
+                std::vector<bool> result(element.set_gin_filters.back().size(), true);
+                /// Each element is a collection of row ids, which each row may match this element in set
+                std::vector<std::unique_ptr<roaring::Roaring>> elements_filter;
+                if (result_filter)
+                {
+                    elements_filter = std::vector<std::unique_ptr<roaring::Roaring>>(
+                        element.set_gin_filters.back().size());
+                }
                 for (size_t column = 0; column < element.set_key_position.size(); ++column)
                 {
                     const size_t key_idx = element.set_key_position[column];
-
                     const auto & gin_filters = element.set_gin_filters[column];
                     for (size_t row = 0; row < gin_filters.size(); ++row)
-                        result[row] = result[row] && granule->gin_filters[key_idx].contains(gin_filters[row], cache_store, empty_bitmap);
+                    {
+                        std::unique_ptr<roaring::Roaring> step_filter = result_filter ?
+                            std::make_unique<roaring::Roaring>() : nullptr;
+                        result[row] = result[row] && granule->gin_filters[key_idx].contains(gin_filters[row], cache_store, step_filter.get());
+                        if (result_filter)
+                        {
+                            if (elements_filter[row])
+                            {
+                                *elements_filter[row] &= *step_filter;
+                            }
+                            else
+                            {
+                                elements_filter[row] = std::move(step_filter);
+                            }
+                        }
+                    }
                 }
-
                 rpn_stack.emplace_back(std::find(std::cbegin(result), std::cend(result), true) != std::end(result), true);
+                if (result_filter)
+                {
+                    for (size_t i = 1; i < elements_filter.size(); ++i)
+                    {
+                        *elements_filter[0] |= *elements_filter[i];
+                    }
+                    filter_stack.emplace_back(std::move(elements_filter[0]));
+                }
                 if (element.function == RPNElement::FUNCTION_NOT_IN)
+                {
                     rpn_stack.back() = !rpn_stack.back();
+                    filter_stack.back()->flip(range_start_row, range_end_row);
+                }
             }
         }
         else if (element.function == RPNElement::FUNCTION_MULTI_SEARCH)
         {
-            std::vector<bool> result(element.set_gin_filters.back().size(), true);
-
             const auto & gin_filters = element.set_gin_filters[0];
 
             if (skip_size < gin_filters.size())
             {
                 rpn_stack.emplace_back(true, true);
+
+                if (result_filter)
+                {
+                    filter_stack.emplace_back(nullptr);
+                }
             }
             else
             {
+                std::vector<bool> result(element.set_gin_filters.back().size(), true);
+                std::vector<std::unique_ptr<roaring::Roaring>> elements_filter;
+                if (result_filter)
+                {
+                    elements_filter = std::vector<std::unique_ptr<roaring::Roaring>>(
+                        element.set_gin_filters.back().size());
+                }
                 for (size_t row = 0; row < gin_filters.size(); ++row)
-                    result[row] = result[row] && granule->gin_filters[element.key_column].contains(gin_filters[row], cache_store, empty_bitmap);
-
+                {
+                    std::unique_ptr<roaring::Roaring> step_filter = result_filter ?
+                        std::make_unique<roaring::Roaring>() : nullptr;
+                    result[row] = result[row] && granule->gin_filters[element.key_column].contains(gin_filters[row], cache_store, step_filter.get());
+                    if (result_filter)
+                    {
+                        elements_filter[row] = std::move(step_filter);
+                    }
+                }
                 rpn_stack.emplace_back(std::find(std::cbegin(result), std::cend(result), true) != std::end(result), true);
+                if (result_filter)
+                {
+                    for (size_t i = 1; i < elements_filter.size(); ++i)
+                    {
+                        *elements_filter[0] |= *elements_filter[i];
+                    }
+                    filter_stack.emplace_back(std::move(elements_filter[0]));
+                }
             }
         }
         else if (element.function == RPNElement::FUNCTION_NOT)
         {
             rpn_stack.back() = !rpn_stack.back();
+
+            if (result_filter)
+            {
+                if (auto& filter = filter_stack.back(); filter != nullptr)
+                {
+                    filter->flip(range_start_row, range_end_row);
+                }
+            }
         }
         else if (element.function == RPNElement::FUNCTION_AND)
         {
@@ -373,6 +530,32 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(
             rpn_stack.pop_back();
             auto arg2 = rpn_stack.back();
             rpn_stack.back() = arg1 & arg2;
+
+            if (result_filter)
+            {
+                std::unique_ptr<roaring::Roaring> filter1 = std::move(filter_stack.back());
+                filter_stack.pop_back();
+                std::unique_ptr<roaring::Roaring> filter2 = std::move(filter_stack.back());
+                filter_stack.pop_back();
+                if (filter1 != nullptr && filter2 != nullptr)
+                {
+                    *filter2 &= *filter1;
+                    filter_stack.emplace_back(std::move(filter2));
+                }
+                else if (filter1 == nullptr && filter2 == nullptr)
+                {
+                    filter_stack.emplace_back(nullptr);
+                }
+                else
+                {
+                    if (filter1 == nullptr)
+                    {
+                        std::swap(arg1, arg2);
+                        std::swap(filter1, filter2);
+                    }
+                    filter_stack.emplace_back(arg2.can_be_true ? std::move(filter1) : nullptr);
+                }
+            }
         }
         else if (element.function == RPNElement::FUNCTION_OR)
         {
@@ -380,25 +563,67 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(
             rpn_stack.pop_back();
             auto arg2 = rpn_stack.back();
             rpn_stack.back() = arg1 | arg2;
+
+            if (result_filter)
+            {
+                std::unique_ptr<roaring::Roaring> filter1 = std::move(filter_stack.back());
+                filter_stack.pop_back();
+                std::unique_ptr<roaring::Roaring> filter2 = std::move(filter_stack.back());
+                filter_stack.pop_back();
+                if (filter1 != nullptr && filter2 != nullptr)
+                {
+                    *filter2 |= *filter1;
+                    filter_stack.emplace_back(std::move(filter2));
+                }
+                else if (filter1 == nullptr && filter2 == nullptr)
+                {
+                    filter_stack.emplace_back(nullptr);
+                }
+                else
+                {
+                    if (filter1 == nullptr)
+                    {
+                        std::swap(arg1, arg2);
+                        std::swap(filter1, filter2);
+                    }
+                    filter_stack.emplace_back(arg2.can_be_true ? nullptr : std::move(filter1));
+                }
+            }
         }
         else if (element.function == RPNElement::ALWAYS_FALSE)
         {
             rpn_stack.emplace_back(false, true);
+
+            if (result_filter)
+            {
+                filter_stack.emplace_back(nullptr);
+            }
         }
         else if (element.function == RPNElement::ALWAYS_TRUE)
         {
             rpn_stack.emplace_back(true, false);
+
+            if (result_filter)
+            {
+                filter_stack.emplace_back(nullptr);
+            }
         }
         #if USE_TSQUERY
         else if (element.function == RPNElement::FUNCTION_TEXT_SEARCH)
         {
+            std::unique_ptr<roaring::Roaring> operator_filter = std::make_unique<roaring::Roaring>();
             rpn_stack.emplace_back(
                 TextSearchQueryExpression::calculate(
                     element.text_search_filter, 
                     granule->gin_filters[element.key_column], 
                     cache_store, 
-                    filter_bitmap),
+                    *operator_filter),
                     true);
+
+            if (result_filter)
+            {
+                filter_stack.emplace_back(std::move(operator_filter));
+            }
         }
         #endif
         else
@@ -407,6 +632,25 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(
 
     if (rpn_stack.size() != 1)
         throw Exception("Unexpected stack size in GinFilterCondition::mayBeTrueOnGranule", ErrorCodes::LOGICAL_ERROR);
+
+    if (result_filter)
+    {
+        if (filter_stack.size() != 1)
+            throw Exception("Unexpected stack size when check filter stack", ErrorCodes::LOGICAL_ERROR);
+        if (auto& filter = filter_stack[0]; filter != nullptr)
+        {
+            filter->removeRange(0, range_start_row);
+            filter->removeRange(range_end_row, std::numeric_limits<uint64_t>::max());
+            *result_filter = std::move(*filter);
+        }
+        else
+        {
+            if (rpn_stack[0].can_be_true)
+            {
+                result_filter->addRange(range_start_row, range_end_row);
+            }
+        }
+    }
 
     return rpn_stack[0].can_be_true;
 }
@@ -430,12 +674,48 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
     {
         const ASTs & args = typeid_cast<const ASTExpressionList &>(*func->arguments).children;
 
-        if (args.size() != 2)
-            return false;
-
         size_t key_arg_pos; /// Position of argument with key column (non-const argument)
         size_t key_column_num = -1; /// Number of a key column (inside key_column_names array)
         const auto & func_name = func->name;
+
+        if (args.size() == 3 && func_name == "hasTokenBySeperator")
+        {
+            const CharSeperatorTokenExtractor* sep_tokenizer = dynamic_cast<const CharSeperatorTokenExtractor*>(
+                token_extractor);
+            if (sep_tokenizer == nullptr || !getKey(args[0], key_column_num))
+            {
+                LOG_TRACE(&Poco::Logger::get("MergeTreeConditionInverted"),
+                    "Inverted evaluate unknown since query column didn't match index");
+                return false;
+            }
+            /// Check constant field
+            Field seperator_const_value;
+            DataTypePtr seperator_const_type;
+            if (!KeyCondition::getConstant(args[1], block_with_constants, const_value, const_type)
+                || !KeyCondition::getConstant(args[2], block_with_constants, seperator_const_value, seperator_const_type))
+            {
+                LOG_TRACE(&Poco::Logger::get("MergeTreeConditionInverted"),
+                    "Inverted evaluate unknown since didn't find needle and seperator const");
+                return false;
+            }
+            String seperators_str = seperator_const_value.get<String>();
+            std::unordered_set<char> seperator_set(seperators_str.begin(), seperators_str.end());
+            if (seperator_set != sep_tokenizer->seperators())
+            {
+                LOG_TRACE(&Poco::Logger::get("MergeTreeConditionInverted"),
+                    "Inverted evaluate unknown since tokenizer seperators mismatch, "
+                    "query {}, tokenizer {}", seperators_str, String(sep_tokenizer->seperators().begin(),
+                        sep_tokenizer->seperators().end()));
+                return false;
+            }
+            out.key_column = key_column_num;
+            return createFunctionEqualsCondition(out, const_value, params,
+                token_extractor, nlp_extractor);
+        }
+        else if (args.size() != 2)
+        {
+            return false;
+        }
 
         if (functionIsInOrGlobalInOperator(func_name) && tryPrepareSetGinFilter(args, out))
         {
@@ -727,33 +1007,8 @@ bool MergeTreeIndexInverted::mayBenefitFromIndexForIn(const ASTPtr & node) const
         != std::cend(index.column_names);
 }
 
-// just a tmp function to fit ce branch, will pick soon
-bool parseWithNewInvertedIndexArguments(const FieldVector& arguments_)
-{
-    return arguments_.size() == 2 && arguments_[0].getType() == Field::Types::String && arguments_[1].getType() == Field::Types::String;
-}
-
-void checkWithNewInvertedIndexArguments(const FieldVector & arguments_)
-{
-    String config_type = arguments_[0].get<String>();
-    String config_value = arguments_[1].get<String>();
-
-    if (config_type != StandardTokenExtractor::getName() || config_value != "{}")
-    {
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "Unknown config type {} and value should only {{}} now", config_type);
-    }
-}
-
 MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
 {   
-    // just a tmp code to fit ce branch, will pick soon
-    if (parseWithNewInvertedIndexArguments(index.arguments))
-    {
-        GinFilterParameters params(0, 1.0);
-        auto tokenizer = std::make_unique<StandardTokenExtractor>();
-        return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
-    }
-
     if (index.arguments.size() > 2)
     {
         // String type_name = index.arguments[0].get<String>(); use for select nlp
@@ -767,20 +1022,49 @@ MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
     }
     else
     {
-        size_t n = index.arguments.empty() ? 0 : index.arguments[0].get<size_t>();
-        Float64 density = index.arguments.size() < 2 ? 1.0 : index.arguments[1].get<Float64>();
-        GinFilterParameters params(n, density);
-
-        /// Use SplitTokenExtractor when n is 0, otherwise use NgramTokenExtractor
-        if (n > 0)
+        if (index.arguments.size() == 2 && index.arguments[0].getType() == Field::Types::String
+            && index.arguments[1].getType() == Field::Types::String)
         {
-            auto tokenizer = std::make_unique<NgramTokenExtractor>(n);
-            return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
+            String config_type = index.arguments[0].get<String>();
+            String config_value = index.arguments[1].get<String>();
+            Poco::JSON::Parser parser;
+            Poco::JSON::Object::Ptr parsed_obj = parser.parse(config_value).extract<Poco::JSON::Object::Ptr>();
+            if (config_type == "char_sep")
+            {
+                String raw_seperators = parsed_obj->getValue<String>("seperators");
+                std::unordered_set<char> seperators(raw_seperators.begin(), raw_seperators.end());
+                auto tokenizer = std::make_unique<CharSeperatorTokenExtractor>(seperators);
+                return std::make_unique<MergeTreeIndexInverted>(index, GinFilterParameters(0, 1.0),
+                    std::move(tokenizer));
+            }
+            else if (config_type == StandardTokenExtractor::getName())
+            {
+                auto tokenizer = std::make_unique<StandardTokenExtractor>();
+                return std::make_unique<MergeTreeIndexInverted>(index,
+                    GinFilterParameters(0, 1.0), std::move(tokenizer));
+            }
+            else
+            {
+                throw Exception(fmt::format("Unknown config type {} in inverted index defintion", config_type),
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+            }
         }
         else
         {
-            auto tokenizer = std::make_unique<SplitTokenExtractor>();
-            return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
+            size_t n = index.arguments.empty() ? 0 : index.arguments[0].get<size_t>();
+            Float64 density = index.arguments.size() < 2 ? 1.0 : index.arguments[1].get<Float64>();
+            GinFilterParameters params(n, density);
+            /// Use SplitTokenExtractor when n is 0, otherwise use NgramTokenExtractor
+            if (n > 0)
+            {
+                auto tokenizer = std::make_unique<NgramTokenExtractor>(n);
+                return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
+            }
+            else
+            {
+                auto tokenizer = std::make_unique<SplitTokenExtractor>();
+                return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
+            }
         }
     }
 }
@@ -793,12 +1077,6 @@ void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
 
         if (!data_type.isString() && !data_type.isFixedString())
             throw Exception("Inverted index can be used only with `String`, `FixedString`", ErrorCodes::INCORRECT_QUERY);
-    }
-
-    if (parseWithNewInvertedIndexArguments(index.arguments))
-    {
-        checkWithNewInvertedIndexArguments(index.arguments);
-        return;
     }
 
     if (index.arguments.size() > 2) /// NLP tokenizer [type_name , config_name , density]
@@ -825,21 +1103,158 @@ void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
     }
     else /// ngram/token tokenizer
     {
-        if (!index.arguments.empty() && index.arguments[0].getType() != Field::Types::UInt64)
-            throw Exception("The first Inverted index argument must be positive integer.", ErrorCodes::INCORRECT_QUERY);
-
-        if (index.arguments.size() == 2
-            && (index.arguments[1].getType() != Field::Types::Float64 || index.arguments[1].get<Float64>() <= 0
-                || index.arguments[1].get<Float64>() > 1))
-            throw Exception("The second Inverted index argument must be a float between 0 and 1.", ErrorCodes::INCORRECT_QUERY);
-
-
-        /// Just validate
-        size_t ngrams = index.arguments.empty() ? 0 : index.arguments[0].get<size_t>();
-        Float64 density = index.arguments.size() < 2 ? 1.0 : index.arguments[1].get<Float64>();
-        GinFilterParameters params(ngrams, density);
+        if (index.arguments.size() == 2 && index.arguments[0].getType() == Field::Types::String
+            && index.arguments[1].getType() == Field::Types::String)
+        {
+            String config_type = index.arguments[0].get<String>();
+            String config_value = index.arguments[1].get<String>();
+            Poco::JSON::Parser parser;
+            Poco::JSON::Object::Ptr parsed_obj = parser.parse(config_value).extract<Poco::JSON::Object::Ptr>();
+            if (config_type == "char_sep")
+            {
+                if (parsed_obj->get("seperators").isEmpty())
+                {
+                    throw Exception("seperators config is mandatory for char_sep inverted index",
+                        ErrorCodes::INVALID_CONFIG_PARAMETER);
+                }
+            }
+            else if (config_type == StandardTokenExtractor::getName())
+            {
+            }
+            else
+            {
+                throw Exception(fmt::format("Unknown config type {} in inverted index defintion", config_type),
+                    ErrorCodes::INVALID_CONFIG_PARAMETER);
+            }
+        }
+        else
+        {
+            if (!index.arguments.empty() && index.arguments[0].getType() != Field::Types::UInt64)
+                throw Exception("The first Inverted index argument must be positive integer.", ErrorCodes::INCORRECT_QUERY);
+            if (index.arguments.size() == 2
+                && (index.arguments[1].getType() != Field::Types::Float64 || index.arguments[1].get<Float64>() <= 0
+                    || index.arguments[1].get<Float64>() > 1))
+                throw Exception("The second Inverted index argument must be a float between 0 and 1.", ErrorCodes::INCORRECT_QUERY);
+            /// Just validate
+            size_t ngrams = index.arguments.empty() ? 0 : index.arguments[0].get<size_t>();
+            Float64 density = index.arguments.size() < 2 ? 1.0 : index.arguments[1].get<Float64>();
+            GinFilterParameters params(ngrams, density);
+        }
     }
 }
 
+MarkRanges filterMarkRangesByInvertedIndex(MergeTreeIndexReader& idx_reader_,
+    const MarkRanges& mark_ranges_, size_t index_granularity_,
+    const MergeTreeIndexGranularity& granularity_, const MergeTreeConditionInverted& condition_,
+    PostingsCacheForStore& cache_store_, roaring::Roaring* result_filter_,
+    size_t* total_granules_, size_t* dropped_granules_)
+{
+    assert(total_granules_ != nullptr && dropped_granules_ != nullptr);
+
+    /// Sort mark ranges in ascneding order
+    MarkRanges sorted_mark_ranges = mark_ranges_;
+    std::sort(sorted_mark_ranges.begin(), sorted_mark_ranges.end(),
+        [](const MarkRange& lhs, const MarkRange& rhs) {
+            return lhs.begin < rhs.begin || (lhs.begin == rhs.begin && lhs.end < rhs.end);
+        }
+    );
+
+    std::shared_ptr<MergeTreeIndexGranuleInverted> merged_granule = nullptr;
+
+    /// Merge multiple granules into a big granule
+    size_t last_read_granule = std::numeric_limits<size_t>::max() - 1;
+    MergeTreeIndexGranulePtr granule = nullptr;
+    size_t total_granules_in_mark_range = 0;
+    for (const MarkRange& mark_range : sorted_mark_ranges)
+    {
+        size_t index_range_begin = mark_range.begin / index_granularity_;
+        size_t index_range_end = (mark_range.end + index_granularity_ - 1) / index_granularity_;
+
+        total_granules_in_mark_range += index_range_end - index_range_begin;
+
+        if ((last_read_granule + 1 != index_range_begin)
+            && (last_read_granule != index_range_begin))
+        {
+            idx_reader_.seek(index_range_begin);
+        }
+        for (size_t mark = index_range_begin; mark < index_range_end; ++mark)
+        {
+            if (last_read_granule != mark || granule == nullptr)
+            {
+                granule = idx_reader_.read();
+            }
+            last_read_granule = mark;
+
+            MergeTreeIndexGranuleInverted* ivt_granule =
+                dynamic_cast<MergeTreeIndexGranuleInverted*>(granule.get());
+            if (merged_granule == nullptr)
+            {
+                merged_granule = std::make_shared<MergeTreeIndexGranuleInverted>(
+                    *ivt_granule);
+            }
+            else
+            {
+                merged_granule->extend(*ivt_granule);
+            }
+        }
+    }
+    *total_granules_ += total_granules_in_mark_range;
+
+    if (merged_granule != nullptr)
+    {
+        /// Force to get result bitmap
+        roaring::Roaring tmp_filter;
+        if (result_filter_ == nullptr)
+        {
+            result_filter_ = &tmp_filter;
+        }
+        auto [begin_row, end_row] = merged_granule->rowExtreme();
+        condition_.mayBeTrueOnGranuleInPart(merged_granule, cache_store_,
+            begin_row, end_row, result_filter_);
+
+        /// Filter mark ranges based on result filter
+        MarkRanges result_ranges;
+        auto iter = result_filter_->begin();
+        const auto end_iter = result_filter_->end();
+        for (const MarkRange& range : sorted_mark_ranges)
+        {
+            for (size_t mark = range.begin; mark < range.end; ++mark)
+            {
+                size_t granule_begin_row = granularity_.getMarkStartingRow(mark);
+                size_t granule_end_row = granule_begin_row + granularity_.getMarkRows(mark);
+
+                if (iter == end_iter)
+                {
+                    break;
+                }
+                if (*iter < granule_begin_row)
+                {
+                    iter.equalorlarger(granule_begin_row);
+                }
+                if (iter != end_iter && *iter < granule_end_row)
+                {
+                    if (!result_ranges.empty() && result_ranges.back().end == mark)
+                    {
+                        ++(result_ranges.back().end);
+                    }
+                    else
+                    {
+                        result_ranges.push_back({mark, mark + 1});
+                    }
+                }
+            }
+        }
+        size_t result_granules = 0;
+        std::for_each(result_ranges.begin(), result_ranges.end(), [&result_granules](const MarkRange& range) {
+            result_granules += range.end - range.begin;
+        });
+        *dropped_granules_ += (total_granules_in_mark_range - result_granules);
+        return result_ranges;
+    }
+    else
+    {
+        return mark_ranges_;
+    }
+}
 
 }

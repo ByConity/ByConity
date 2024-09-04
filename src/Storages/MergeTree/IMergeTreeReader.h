@@ -22,6 +22,7 @@
 #pragma once
 
 #include <limits>
+#include <unordered_map>
 #include <Core/NamesAndTypes.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
@@ -56,9 +57,10 @@ public:
         const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
         MergeTreeIndexExecutor * index_executor_ = nullptr);
 
-    /// Return the number of rows has been read or zero if there is no columns to read.
-    /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
-    virtual size_t readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row, size_t max_rows_to_read, Columns & res_columns) = 0;
+    /// Return processed rows(before filter), from_row should not greater than
+    /// from_mark's index_granularity to gain better performance
+    virtual size_t readRows(size_t from_mark, size_t from_row, size_t max_rows_to_read,
+        size_t current_task_last_mark, const UInt8* filter, Columns & res_columns) = 0;
 
     virtual bool canReadIncompleteGranules() const = 0;
 
@@ -97,14 +99,17 @@ public:
     using FileStreams = std::map<std::string, std::unique_ptr<IMergeTreeReaderStream>>;
     using Serializations = std::map<std::string, SerializationPtr>;
 protected:
-    void prefetchForAllColumns(Priority priority, NamesAndTypesList & prefetch_columns, size_t from_mark, size_t current_task_last_mark, bool continue_reading);
+    void prefetchForAllColumns(Priority priority, NamesAndTypesList & prefetch_columns, size_t from_mark,
+        size_t current_task_last_mark, bool continue_reading,
+        std::unordered_map<String, ISerialization::SubstreamsCache>& caches);
 
     void prefetchForMapColumn(
         Priority priority,
         const NameAndTypePair & name_and_type,
         size_t from_mark,
         bool continue_reading,
-        size_t current_task_last_mark);
+        size_t current_task_last_mark,
+        std::unordered_map<String, ISerialization::SubstreamsCache>& caches);
     /// Make next readData more simple by calling 'prefetch' of all related ReadBuffers (column streams).
     void prefetchForColumn(
         Priority priority,
@@ -124,23 +129,18 @@ protected:
     void addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
 
-    void readMapDataNotKV(
-        const NameAndTypePair & name_and_type, ColumnPtr & column,
-        size_t from_mark, bool continue_reading, size_t current_task_last_mark, size_t max_rows_to_read,
-        std::unordered_map<String, size_t> & res_col_to_idx, Columns & res_columns);
-
-    size_t skipMapDataNotKV(
-        const NameAndTypePair & name_and_type, size_t from_mark,
-        bool continue_reading, size_t current_task_last_mark, size_t max_rows_to_skip);
-
-    void readData(
+    size_t readMapDataNotKV(
         const NameAndTypePair & name_and_type, ColumnPtr & column,
         size_t from_mark, bool continue_reading, size_t current_task_last_mark,
-        size_t max_rows_to_read, ISerialization::SubstreamsCache & cache);
+        size_t max_rows_to_read, std::unordered_map<String, ISerialization::SubstreamsCache> & caches,
+        std::unordered_map<String, size_t> & res_col_to_idx,
+        const UInt8* filter, Columns & res_columns);
 
-    size_t skipData(
-        const NameAndTypePair & name_and_type, size_t from_mark, bool continue_reading,
-        size_t current_task_last_mark, size_t max_rows_to_skip, ISerialization::SubstreamsCache & cache);
+    /// Return processed_rows
+    size_t readData(
+        const NameAndTypePair & name_and_type, ColumnPtr & column,
+        size_t from_mark, bool continue_reading, size_t current_task_last_mark,
+        size_t max_rows_to_read, const UInt8* filter, ISerialization::SubstreamsCache & cache);
 
     void deserializePrefix(
         const SerializationPtr & serialization,
@@ -155,8 +155,6 @@ protected:
 
     /// Columns that are read.
     NamesAndTypesList columns;
-    // Columns after sort
-    NamesAndTypesList sort_columns;
     NamesAndTypesList part_columns;
 
     /// Map ColumnMap to its keys sub columns
@@ -167,7 +165,7 @@ protected:
     /// Actual column names and types of columns in part,
     /// which may differ from table metadata.
     NamesAndTypes columns_to_read;
-    
+
     UncompressedCache * uncompressed_cache;
     MarkCache * mark_cache;
 
@@ -187,7 +185,6 @@ protected:
 
     MergeTreeIndexExecutor * index_executor = nullptr;
 
-    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
     std::unordered_set<std::string> prefetched_streams;
     /// Row number, update on seek or read, set to size_t max to force a seek
     /// when reader start reading

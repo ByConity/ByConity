@@ -31,6 +31,7 @@ class GinDataLocalPartHelper: public IGinDataPartHelper
 {
 public:
     explicit GinDataLocalPartHelper(const IMergeTreeDataPart& part_);
+    GinDataLocalPartHelper(const DiskPtr& disk_, const String& relative_path_);
 
     std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name) override;
     std::unique_ptr<WriteBufferFromFileBase> writeFile(const String& file_name,

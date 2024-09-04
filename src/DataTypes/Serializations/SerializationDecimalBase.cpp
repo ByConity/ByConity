@@ -30,6 +30,7 @@
 #include <Common/Endian.h>
 #include <Common/assert_cast.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/Serializations/SerializationHelpers.h>
 
 
 namespace DB
@@ -79,13 +80,11 @@ void SerializationDecimalBase<T>::deserializeBinary(IColumn & column, ReadBuffer
 }
 
 template <typename T>
-void SerializationDecimalBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double, bool /*zero_copy_cache_read*/) const
+size_t SerializationDecimalBase<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double, bool /*zero_copy_cache_read*/, const UInt8* filter) const
 {
     typename ColumnType::Container & x = typeid_cast<ColumnType &>(column).getData();
-    size_t initial_size = x.size();
-    x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(FieldType) * limit);
-    x.resize(initial_size + size / sizeof(FieldType));
+
+    return deserializeBinaryBulkForVector(x, istr, limit, filter, 1);
 }
 
 template <class T, bool condition>

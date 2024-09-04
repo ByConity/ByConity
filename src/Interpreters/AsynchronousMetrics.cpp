@@ -725,8 +725,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     {
         if (auto gin_store_cache = getContext()->getGinIndexStoreFactory())
         {
-            new_values["GinStoreCacheCount"] = gin_store_cache->count();
-            new_values["GinStoreCacheWeight"] = gin_store_cache->weight();
+            new_values["GinStoreCacheWeight"] = gin_store_cache->cacheWeight();
         }
     }
 

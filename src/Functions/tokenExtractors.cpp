@@ -1,3 +1,4 @@
+#include <unordered_map>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeArray.h>
@@ -23,7 +24,8 @@ namespace ErrorCodes
 enum TokenExtractorStrategy
 {
     ngrams,
-    tokens
+    tokens,
+    charseperator
 };
 
 template <TokenExtractorStrategy strategy>
@@ -31,7 +33,7 @@ class FunctionTokenExtractor : public IFunction
 {
 public:
 
-    static constexpr auto name = strategy == ngrams ? "ngrams" : "tokens";
+    static constexpr auto name = strategy == ngrams ? "ngrams" : (strategy == tokens ? "tokens" : "charseperator");
 
     static FunctionPtr create(ContextPtr)
     {
@@ -40,9 +42,9 @@ public:
 
     String getName() const override { return name; }
 
-    size_t getNumberOfArguments() const override { return strategy == ngrams ? 2 : 1; }
+    size_t getNumberOfArguments() const override { return strategy == tokens ? 1 : 2; }
     bool isVariadic() const override { return false; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return strategy == ngrams ? ColumnNumbers{1} : ColumnNumbers{}; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return strategy == tokens ? ColumnNumbers{} : ColumnNumbers{1}; }
 
     bool useDefaultImplementationForNulls() const override { return true; }
     bool useDefaultImplementationForConstants() const override { return true; }
@@ -67,6 +69,18 @@ public:
             if (!ngram_argument_type.isNativeUInt() || !ngram_argument_column || !isColumnConst(*ngram_argument_column))
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
                     "Function {} second argument type should be constant UInt. Actual {}",
+                    getName(),
+                    arguments[1].type->getName());
+        }
+        else if constexpr (strategy == charseperator)
+        {
+            const auto & column_with_type = arguments[1];
+            const auto & charsep_argument_column = arguments[1].column;
+            auto charsep_argument_type = WhichDataType(column_with_type.type);
+
+            if (!charsep_argument_type.isStringOrFixedString() || !charsep_argument_column || !isColumnConst(*charsep_argument_column))
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "Function {} second argument type should be constant String. Actual {}",
                     getName(),
                     arguments[1].type->getName());
         }
@@ -97,9 +111,28 @@ public:
 
             return ColumnArray::create(std::move(result_column_string), std::move(column_offsets));
         }
-        else
+        else if (strategy == TokenExtractorStrategy::tokens)
         {
             SplitTokenExtractor extractor;
+
+            auto result_column_string = ColumnString::create();
+
+            auto input_column = arguments[0].column;
+
+            if (const auto * column_string = checkAndGetColumn<ColumnString>(input_column.get()))
+                executeImpl(extractor, *column_string, *result_column_string, *column_offsets);
+            else if (const auto * column_fixed_string = checkAndGetColumn<ColumnFixedString>(input_column.get()))
+                executeImpl(extractor, *column_fixed_string, *result_column_string, *column_offsets);
+
+            return ColumnArray::create(std::move(result_column_string), std::move(column_offsets));
+        }
+        else
+        {
+            Field char_seperator_value;
+            arguments[1].column->get(0, char_seperator_value);
+            auto seperators_str = char_seperator_value.safeGet<String>();
+            std::unordered_set<char> seperators(seperators_str.begin(), seperators_str.end());
+            CharSeperatorTokenExtractor extractor(seperators);
 
             auto result_column_string = ColumnString::create();
 
@@ -152,6 +185,7 @@ REGISTER_FUNCTION(StringTokenExtractor)
 {
     factory.registerFunction<FunctionTokenExtractor<TokenExtractorStrategy::ngrams>>();
     factory.registerFunction<FunctionTokenExtractor<TokenExtractorStrategy::tokens>>();
+    factory.registerFunction<FunctionTokenExtractor<TokenExtractorStrategy::charseperator>>();
 }
 
 }

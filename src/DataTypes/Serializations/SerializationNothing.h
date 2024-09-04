@@ -28,7 +28,7 @@ public:
 
     /// These methods read and write zero bytes just to allow to figure out size of column.
     void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const override;
-    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool zero_copy_cache_read) const override;
+    size_t deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool zero_copy_cache_read, const UInt8* filter) const override;
 };
 
 }

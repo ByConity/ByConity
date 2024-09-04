@@ -570,6 +570,9 @@ enum StealingCacheMode : UInt64
     M(Int64, cnch_part_allocation_algorithm, -1, "Part allocation algorithm, -1: disable table setting and use query setting, 0: jump consistent hashing, 1: bounded hash ring consistent hashing, 2: strict ring consistent hashing.", 0) \
     /** JSON related settings end*/ \
     \
+    M(String, column_compress_block_settings, "", "Column compressed block size for each column, if not specified, use max_compress_block_size.", 0) \
+    M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
+
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)

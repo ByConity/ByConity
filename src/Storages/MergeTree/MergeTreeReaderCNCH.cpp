@@ -15,6 +15,7 @@
 
 #include <Storages/MergeTree/MergeTreeReaderCNCH.h>
 
+#include <unordered_map>
 #include <utility>
 #include <Columns/ColumnArray.h>
 #include <Core/NamesAndTypes.h>
@@ -106,8 +107,9 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
         LOG_TRACE(log, "Created reader {} with {} columns: {}", reader_id, columns.size(), fmt::join(columns.getNames(), ","));
 }
 
-size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_mark,
-    size_t from_row, size_t max_rows_to_read, Columns & res_columns)
+size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t from_row,
+    size_t max_rows_to_read, size_t current_task_last_mark, const UInt8* filter,
+    Columns& res_columns)
 {
     try
     {
@@ -126,7 +128,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_
         // If MAP implicit column and MAP column co-exist in columns, implicit column should
         // only read only once.
         // We sort columns, so that put the result of implicit column into MAP column directly.
-        sort_columns = columns;
+        auto sort_columns = columns;
         if (!dup_implicit_keys.empty())
             sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
 
@@ -143,19 +145,29 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t current_task_last_
             next_row_number_to_read = from_mark_start_row;
         }
 
-        prefetchForAllColumns(Priority{1}, sort_columns, from_mark, current_task_last_mark, adjacent_reading);
+        {
+            std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+            prefetchForAllColumns(Priority{1}, sort_columns, from_mark,
+                current_task_last_mark, adjacent_reading, caches);
+        }
 
-        size_t skipped_rows = skipUnnecessaryRows(num_columns, from_mark, adjacent_reading,
-            current_task_last_mark, rows_to_skip);
-
-        next_row_number_to_read += skipped_rows;
+        size_t skipped_rows = 0;
+        if (rows_to_skip > 0)
+        {
+            Columns tmp_columns(sort_columns.size());
+            skipped_rows = readBatch(sort_columns, num_columns, from_mark,
+                adjacent_reading, rows_to_skip, current_task_last_mark, res_col_to_idx,
+                filter, tmp_columns);
+            next_row_number_to_read += skipped_rows;
+        }
 
         size_t read_rows = 0;
         if (skipped_rows >= rows_to_skip)
         {
             adjacent_reading = rows_to_skip > 0 || init_row_number == starting_row;
-            read_rows = readNecessaryRows(num_columns, from_mark, adjacent_reading,
-                current_task_last_mark, max_rows_to_read, res_col_to_idx, res_columns);
+            read_rows = readBatch(sort_columns, num_columns, from_mark, adjacent_reading,
+                max_rows_to_read, current_task_last_mark, res_col_to_idx, filter,
+                res_columns);
             next_row_number_to_read += read_rows;
         }
 
@@ -413,66 +425,19 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
     serializations.emplace(name_and_type.name, std::move(serialization));
 }
 
-size_t MergeTreeReaderCNCH::skipUnnecessaryRows(size_t num_columns, size_t from_mark,
-    bool continue_reading, size_t current_task_last_mark, size_t rows_to_skip)
+size_t MergeTreeReaderCNCH::readBatch(const NamesAndTypesList& sort_columns, size_t num_columns,
+    size_t from_mark, bool continue_reading, size_t rows_to_read,
+    size_t current_task_last_mark, std::unordered_map<String, size_t>& res_col_to_idx,
+    const UInt8* filter, Columns& res_columns)
 {
-    if (rows_to_skip <= 0)
+    if (rows_to_read <= 0)
         return 0;
 
-    ProfileEventsTimer timer(ProfileEvents::SkipRowsTimeMicro);
-
-    size_t skipped_rows = 0;
-    auto name_and_type = sort_columns.begin();
-    for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
-    {
-        auto column_from_part = getColumnFromPart(*name_and_type);
-        const auto& [name, type] = column_from_part;
-
-        if (name == "_part_row_number")
-        {
-            skipped_rows = std::max(skipped_rows, std::min(rows_to_skip, data_part->rows_count - next_row_number_to_read));
-            continue;
-        }
-
-        try
-        {
-            auto & cache = caches[column_from_part.getNameInStorage()];
-            if (type->isByteMap())
-                skipped_rows = std::max(
-                    skipped_rows,
-                    skipMapDataNotKV(column_from_part, from_mark, continue_reading,
-                        current_task_last_mark, rows_to_skip));
-            else
-                skipped_rows = std::max(
-                    skipped_rows,
-                    skipData(column_from_part, from_mark, continue_reading,
-                        current_task_last_mark, rows_to_skip, cache));
-        }
-        catch (Exception & e)
-        {
-            /// Better diagnostics.
-            e.addMessage("(while reading column " + name + ")");
-            throw;
-        }
-    }
-    caches.clear();
-
-    if (index_executor && index_executor->valid())
-    {
-        Columns tmp_bitmap_columns(getBitmapOutputColumns().size(), nullptr);
-        readIndexColumns(from_mark, continue_reading, rows_to_skip, tmp_bitmap_columns);
-    }
-
-    return skipped_rows;
-}
-
-size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_mark,
-    bool continue_reading, size_t current_task_last_mark, size_t rows_to_read,
-    std::unordered_map<String, size_t>& res_col_to_idx, Columns& res_columns)
-{
     ProfileEventsTimer timer(ProfileEvents::ReadRowsTimeMicro);
 
-    size_t readed_rows = 0;
+    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+
+    size_t processed_rows = 0;
     int row_number_column_pos = -1;
     auto name_and_type = sort_columns.begin();
     for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
@@ -481,7 +446,8 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         const auto& [name, type] = column_from_part;
         size_t pos = res_col_to_idx[name];
 
-        if (!res_columns[pos]) {
+        if (!res_columns[pos])
+        {
             type->enable_zero_cpy_read = this->settings.read_settings.zero_copy_read_from_cache;
             res_columns[pos] = type->createColumn();
         }
@@ -496,19 +462,21 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         auto& column = res_columns[pos];
         try
         {
-            size_t column_size_before_reading = column->size();
             auto & cache = caches[column_from_part.getNameInStorage()];
+            size_t col_processed_rows = 0;
             if (type->isByteMap())
-                readMapDataNotKV(column_from_part, column, from_mark, continue_reading,
-                    current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
+                col_processed_rows = readMapDataNotKV(column_from_part, column,
+                    from_mark, continue_reading, current_task_last_mark, rows_to_read,
+                    caches, res_col_to_idx, filter, res_columns);
             else
-                readData(column_from_part, column, from_mark, continue_reading,
-                    current_task_last_mark, rows_to_read, cache);
+                col_processed_rows = readData(column_from_part, column, from_mark,
+                    continue_reading, current_task_last_mark, rows_to_read, filter,
+                    cache);
 
             /// For elements of Nested, column_size_before_reading may be greater than column size
             ///  if offsets are not empty and were already read, but elements are empty.
             if (!column->empty())
-                readed_rows = std::max(readed_rows, column->size() - column_size_before_reading);
+                processed_rows = std::max(processed_rows, col_processed_rows);
         }
         catch (Exception & e)
         {
@@ -520,7 +488,6 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         if (column->empty())
             res_columns[pos] = nullptr;
     }
-    caches.clear();
 
     /// Populate _part_row_number column if requested
     if (row_number_column_pos >= 0)
@@ -528,15 +495,16 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         /// update `read_rows` if no physical columns are read (only _part_row_number is requested)
         if (columns.size() == 1)
         {
-            readed_rows = std::min(rows_to_read, data_part->rows_count - next_row_number_to_read);
+            processed_rows = std::min(rows_to_read, data_part->rows_count - next_row_number_to_read);
         }
 
-        if (readed_rows)
+        if (processed_rows)
         {
             auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
             ColumnUInt64 & column = typeid_cast<ColumnUInt64 &>(*mutable_column);
-            for (size_t i = 0, row_number = next_row_number_to_read; i < readed_rows; ++i)
-                column.insertValue(row_number++);
+            for (size_t i = 0, row_number = next_row_number_to_read; i < processed_rows; ++i, ++row_number)
+                if (filter == nullptr || *(filter + i) != 0)
+                    column.insertValue(row_number);
             res_columns[row_number_column_pos] = std::move(mutable_column);
         }
         else
@@ -554,19 +522,26 @@ size_t MergeTreeReaderCNCH::readNecessaryRows(size_t num_columns, size_t from_ma
         size_t bitmap_rows_read = readIndexColumns(from_mark, continue_reading,
             rows_to_read, res_bitmap_columns);
 
-        // If there is only bitmap_index columns, rows_read may be zero.
-        if (readed_rows == 0)
-            readed_rows = bitmap_rows_read;
-
-        if (readed_rows != bitmap_rows_read)
+        if (filter != nullptr)
         {
-            throw Exception("Mismatch rows read from index_executor: " + toString(readed_rows) + " : " + toString(bitmap_rows_read), ErrorCodes::LOGICAL_ERROR);
+            PaddedPODArray<UInt8> idx_filter(filter, filter + rows_to_read);
+            for (auto & col : res_bitmap_columns)
+                col = col->filter(idx_filter, col->size());
+        }
+
+        // If there is only bitmap_index columns, rows_read may be zero.
+        if (processed_rows == 0)
+            processed_rows = bitmap_rows_read;
+
+        if (processed_rows != bitmap_rows_read)
+        {
+            throw Exception("Mismatch rows read from index_executor: " + toString(processed_rows) + " : " + toString(bitmap_rows_read), ErrorCodes::LOGICAL_ERROR);
         }
         for (size_t i = num_columns; i < res_columns.size(); ++i)
             res_columns[i] = std::move(res_bitmap_columns[i - num_columns]);
     }
 
-    return readed_rows;
+    return processed_rows;
 }
 
 size_t MergeTreeReaderCNCH::readIndexColumns(size_t from_mark, bool continue_reading,

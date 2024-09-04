@@ -102,6 +102,7 @@ private:
         const Settings & settings,
         Poco::Logger * log);
 
+    /// If filter_bitmap is nullptr, then we won't trying to generate read filter
     static MarkRanges filterMarksUsingIndex(
         MergeTreeIndexPtr index_helper,
         MergeTreeIndexConditionPtr condition,
@@ -111,7 +112,7 @@ private:
         const MergeTreeReaderSettings & reader_settings,
         size_t & total_granules,
         size_t & granules_dropped,
-        roaring::Roaring & filter_bitmap,
+        roaring::Roaring * filter_bitmap,
         Poco::Logger * log,
         IndexTimeWatcher & index_time_watcher);
 

@@ -2110,6 +2110,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
     M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
     \
+    M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 

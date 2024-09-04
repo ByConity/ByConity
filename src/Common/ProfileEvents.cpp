@@ -1140,7 +1140,13 @@
     M(LoadedServerParts, "Total server parts loaded from storage manager by version") \
     M(LoadServerPartsMilliseconds, "The time spend on loading server parts by version from storage data manager.") \
     M(LoadManifestPartsCacheHits, "Cache(disk) hit count of loading parts from manifest") \
-    M(LoadManifestPartsCacheMisses, "Cache(disk) miss count of loading parts from manifest")
+    M(LoadManifestPartsCacheMisses, "Cache(disk) miss count of loading parts from manifest") \
+\
+    M(DeserializeSkippedCompressedBytes, "Total compressed bytes skipped when deserialize") \
+    M(TotalGranulesCount, "The total granules before skipping index needs to read. If there are multiple indexes, the value is the sum value.") \
+    M(TotalSkippedGranules, "The total granules that skipping index dropped. If there are multiple indexes, the value is the sum value.") \
+    M(GinIndexFilterResultCacheHit, "Number of posting list result cache hit") \
+    M(GinIndexFilterResultCacheMiss, "Number of posting list result cache miss") \
 
 namespace ProfileEvents
 {

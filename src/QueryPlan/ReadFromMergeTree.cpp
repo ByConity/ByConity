@@ -56,6 +56,21 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+// Update read settings from merge tree settings and query settings. Query settings
+// have higher priority than merge tree settings
+// QuerySetting\MergeTreeSettings  changed          unchanged
+//                        changed  QuerySetting     QuerySetting
+//                      unchanged MergeTreeSetting  QuerySetting
+#define UNIFY_MERGE_TREE_QUERY_SETTINGS(merge_tree_settings, query_settings, read_settings, setting_name) \
+    do \
+    { \
+        (read_settings).setting_name = \
+            (merge_tree_settings).setting_name.changed \
+                && !(query_settings).setting_name.changed ? \
+                    (merge_tree_settings).setting_name \
+                    : (query_settings).setting_name; \
+    } while(0)
+
 static const char * indexTypeToString(ReadFromMergeTree::IndexType type)
 {
     switch (type)
@@ -77,7 +92,8 @@ static const char * indexTypeToString(ReadFromMergeTree::IndexType type)
     __builtin_unreachable();
 }
 
-static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context, const MergeTreeMetaBase & data)
+static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context,
+    const MergeTreeMetaBase & data)
 {
     MergeTreeReaderSettings settings{
         .read_settings = context->getReadSettings(),
@@ -85,6 +101,8 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & con
         .checksum_on_read = context->getSettingsRef().checksum_on_read,
         .read_source_bitmap = !context->getSettingsRef().use_encoded_bitmap,
     };
+    UNIFY_MERGE_TREE_QUERY_SETTINGS(*data.getSettings(), context->getSettingsRef(),
+        settings.read_settings, filtered_ratio_to_use_skip_read);
 
     settings.setDiskCacheSteaing(data.getSettings()->disk_cache_stealing_mode);
     return settings;

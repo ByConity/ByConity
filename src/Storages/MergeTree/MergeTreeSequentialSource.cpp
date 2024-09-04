@@ -254,8 +254,8 @@ try
 
         const auto & sample = reader->getColumns();
         Columns columns(sample.size());
-        size_t rows_read = reader->readRows(current_mark, data_part->getMarksCount(),
-            current_row - mark_start_row, rows_to_read, columns);
+        size_t rows_read = reader->readRows(current_mark, current_row - mark_start_row,
+            rows_to_read, data_part->getMarksCount(), nullptr, columns);
 
         if (rows_read)
         {

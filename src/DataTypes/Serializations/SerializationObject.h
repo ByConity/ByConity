@@ -50,7 +50,7 @@ public:
         SerializeBinaryBulkSettings & settings,
         SerializeBinaryBulkStatePtr & state) const override;
 
-    void deserializeBinaryBulkWithMultipleStreams(
+    size_t deserializeBinaryBulkWithMultipleStreams(
         ColumnPtr & column,
         size_t limit,
         DeserializeBinaryBulkSettings & settings,
@@ -84,14 +84,14 @@ private:
     struct SerializeStateObject;
     struct DeserializeStateObject;
 
-    void deserializeBinaryBulkFromString(
+    size_t deserializeBinaryBulkFromString(
         ColumnObject & column_object,
         size_t limit,
         DeserializeBinaryBulkSettings & settings,
         DeserializeStateObject & state,
         SubstreamsCache * cache) const;
 
-    void deserializeBinaryBulkFromTuple(
+    size_t deserializeBinaryBulkFromTuple(
         ColumnObject & column_object,
         size_t limit,
         DeserializeBinaryBulkSettings & settings,

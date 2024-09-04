@@ -45,39 +45,6 @@
 namespace DB
 {
 
-size_t SerializationString::skipBinaryBulkWithMultipleStreams(const NameAndTypePair &,
-    size_t limit, DeserializeBinaryBulkSettings & settings, DeserializeBinaryBulkStatePtr &,
-    SubstreamsCache * cache) const
-{
-    auto cached_column = getFromSubstreamsCache(cache, settings.path);
-    if (cached_column)
-    {
-        return cached_column->size();
-    }
-    else if (ReadBuffer * stream = settings.getter(settings.path))
-    {
-        size_t count = 0;
-        UInt64 str_size = 0;
-        for (; count < limit; ++count)
-        {
-            if (stream->eof())
-            {
-                break;
-            }
-
-            readVarUInt(str_size, *stream);
-            stream->ignore(str_size);
-        }
-
-        MutableColumnPtr base_col = ColumnString::create();
-        base_col->insert(Field(""));
-        addToSubstreamsCache(cache, settings.path, ColumnConst::create(std::move(base_col), count));
-
-        return count;
-    }
-    return 0;
-}
-
 void SerializationString::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
     const String & s = get<const String &>(field);
@@ -166,56 +133,59 @@ void SerializationString::serializeBinaryBulk(const IColumn & column, WriteBuffe
 
 
 template <int UNROLL_TIMES>
-static NO_INLINE void deserializeBinarySSE2(ColumnString::Chars & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit)
+static NO_INLINE size_t deserializeBinarySSE2(ColumnString::Chars & data, ColumnString::Offsets & offsets, ReadBuffer & istr, size_t limit, const UInt8* filter)
 {
     size_t offset = data.size();
+    size_t processed_rows = 0;
     for (size_t i = 0; i < limit; ++i)
     {
         if (istr.eof())
             break;
-
+        ++processed_rows;
         UInt64 size;
         readVarUInt(size, istr);
-
-        offset += size + 1;
-        offsets.push_back(offset);
-
-        data.resize(offset);
-
-        if (size)
+        bool keep_element = filter == nullptr || *(filter + i) != 0;
+        if (keep_element)
         {
+            offset += size + 1;
+            offsets.push_back(offset);
+            data.resize(offset);
+            if (size)
+            {
 #ifdef __SSE2__
-            /// An optimistic branch in which more efficient copying is possible.
-            if (offset + 16 * UNROLL_TIMES <= data.capacity() && istr.position() + size + 16 * UNROLL_TIMES <= istr.buffer().end())
-            {
-                const __m128i * sse_src_pos = reinterpret_cast<const __m128i *>(istr.position());
-                const __m128i * sse_src_end = sse_src_pos + (size + (16 * UNROLL_TIMES - 1)) / 16 / UNROLL_TIMES * UNROLL_TIMES;
-                __m128i * sse_dst_pos = reinterpret_cast<__m128i *>(&data[offset - size - 1]);
-
-                while (sse_src_pos < sse_src_end)
+                /// An optimistic branch in which more efficient copying is possible.
+                if (offset + 16 * UNROLL_TIMES <= data.capacity() && istr.position() + size + 16 * UNROLL_TIMES <= istr.buffer().end())
                 {
-                    for (size_t j = 0; j < UNROLL_TIMES; ++j)
-                        _mm_storeu_si128(sse_dst_pos + j, _mm_loadu_si128(sse_src_pos + j));
-
-                    sse_src_pos += UNROLL_TIMES;
-                    sse_dst_pos += UNROLL_TIMES;
+                    const __m128i * sse_src_pos = reinterpret_cast<const __m128i *>(istr.position());
+                    const __m128i * sse_src_end = sse_src_pos + (size + (16 * UNROLL_TIMES - 1)) / 16 / UNROLL_TIMES * UNROLL_TIMES;
+                    __m128i * sse_dst_pos = reinterpret_cast<__m128i *>(&data[offset - size - 1]);
+                    while (sse_src_pos < sse_src_end)
+                    {
+                        for (size_t j = 0; j < UNROLL_TIMES; ++j)
+                            _mm_storeu_si128(sse_dst_pos + j, _mm_loadu_si128(sse_src_pos + j));
+                        sse_src_pos += UNROLL_TIMES;
+                        sse_dst_pos += UNROLL_TIMES;
+                    }
+                    istr.position() += size;
                 }
-
-                istr.position() += size;
-            }
-            else
+                else
 #endif
-            {
-                istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+                {
+                    istr.readStrict(reinterpret_cast<char*>(&data[offset - size - 1]), size);
+                }
             }
+            data[offset - 1] = 0;
         }
-
-        data[offset - 1] = 0;
+        else
+        {
+            istr.ignore(size);
+        }
     }
+    return processed_rows;
 }
 
 
-void SerializationString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool /*zero_copy_cache_read*/) const
+size_t SerializationString::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool /*zero_copy_cache_read*/, const UInt8* filter) const
 {
     ColumnString & column_string = typeid_cast<ColumnString &>(column);
     ColumnString::Chars & data = column_string.getChars();
@@ -253,13 +223,13 @@ void SerializationString::deserializeBinaryBulk(IColumn & column, ReadBuffer & i
     offsets.reserve(offsets.size() + limit);
 
     if (avg_chars_size >= 64)
-        deserializeBinarySSE2<4>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<4>(data, offsets, istr, limit, filter);
     else if (avg_chars_size >= 48)
-        deserializeBinarySSE2<3>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<3>(data, offsets, istr, limit, filter);
     else if (avg_chars_size >= 32)
-        deserializeBinarySSE2<2>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<2>(data, offsets, istr, limit, filter);
     else
-        deserializeBinarySSE2<1>(data, offsets, istr, limit);
+        return deserializeBinarySSE2<1>(data, offsets, istr, limit, filter);
 }
 
 void SerializationString::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const

@@ -189,6 +189,14 @@ public:
         return res;
     }
 
+    virtual void shrink(size_t to_size)
+    {
+        if (to_size >= size())
+            return;
+
+        throw Exception("shrink() is not implemented yet!", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// This function will get row index from selector and append the data to this column.
     /// This function will handle indexes start from input 'selector_start' and will append 'size' times
     /// For example:
