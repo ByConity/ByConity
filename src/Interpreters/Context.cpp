@@ -137,6 +137,7 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/PartCacheManager.h>
+#include <Storages/MergeTree/GinIdxFilterResultCache.h>
 #include <Storages/StorageS3Settings.h>
 #include <Storages/UniqueKeyIndexCache.h>
 #include <TSO/TSOClient.h>
@@ -195,7 +196,6 @@
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
-#include <Storages/StorageS3Settings.h>
 
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>

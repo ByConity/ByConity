@@ -589,6 +589,7 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     const PrewhereExprInfo * prewhere_info_,
     ImmutableDeleteBitmapPtr delete_bitmap_,
     bool last_reader_in_chain_,
+    const Names & non_const_virtual_column_names_,
     size_t filtered_ratio_to_use_skip_read_)
     : merge_tree_reader(merge_tree_reader_)
     , index_granularity(&(merge_tree_reader->data_part->index_granularity))
@@ -598,6 +599,7 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     , last_reader_in_chain(last_reader_in_chain_)
     , is_initialized(true)
     , filtered_ratio_to_use_skip_read(filtered_ratio_to_use_skip_read_)
+    , non_const_virtual_column_names(non_const_virtual_column_names_)
 {
     if (prev_reader)
         sample_block = prev_reader->getSampleBlock();
@@ -610,6 +612,15 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     {
         for (const auto & name_and_type : merge_tree_reader->getBitmapColumns())
             bitmap_block.insert({name_and_type.type->createColumn(), name_and_type.type, name_and_type.name});
+    }
+
+    for (const auto & column_name : non_const_virtual_column_names)
+    {
+        if (sample_block.has(column_name))
+            continue;
+
+        if (column_name == "_part_offset")
+            sample_block.insert(ColumnWithTypeAndName(ColumnUInt64::create(), std::make_shared<DataTypeUInt64>(), column_name));
     }
 
     if (prewhere_info)
@@ -817,6 +828,9 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 
         if (read_result.num_rows)
         {
+            /// Physical columns go first and then some virtual columns follow
+            const size_t physical_columns_count = read_result.columns.size() - non_const_virtual_column_names.size();
+            Columns physical_columns(read_result.columns.begin(), read_result.columns.begin() + physical_columns_count);
             bool should_evaluate_missing_defaults;
             merge_tree_reader->fillMissingColumns(read_result.columns, should_evaluate_missing_defaults,
                                                   read_result.num_rows);
@@ -873,6 +887,11 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
     size_t current_task_last_mark = getLastMark(ranges);
     size_t num_selected_marks = 0;
+    /// The stream could be unfinished by the previous read request because of max_rows limit.
+    /// In this case it will have some rows from the previously started range. We need to save their begin and
+    /// end offsets to properly fill _part_offset column.
+    std::optional<std::pair<UInt64, UInt64>> begin_info = std::nullopt;
+    std::optional<size_t> granule_before_start = std::nullopt;
 
     ColumnUInt8::MutablePtr delete_filter_column;
     bool delete_filter_always_true = true;
@@ -894,6 +913,12 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
                 stream = Stream(ranges.front().begin, ranges.front().end, current_task_last_mark, merge_tree_reader);
                 result.addRange(ranges.front());
                 ranges.pop_front();
+
+                if (begin_info.has_value()
+                    && !granule_before_start.has_value())
+                {
+                    granule_before_start = result.rowsPerGranule().size();
+                }
             }
 
             size_t current_space = space_left;
@@ -1198,7 +1223,7 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
     const auto & header = merge_tree_reader->getColumns();
     size_t num_columns = header.size();
 
-    if (result.columns.size() != num_columns)
+    if (result.columns.size() != (num_columns + non_const_virtual_column_names.size()))
         throw Exception("Invalid number of columns passed to MergeTreeRangeReader. "
                         "Expected " + toString(num_columns) + ", "
                         "got " + toString(result.columns.size()), ErrorCodes::LOGICAL_ERROR);
@@ -1223,6 +1248,15 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
 
         for (auto name_and_type = header.begin(); pos < num_columns; ++pos, ++name_and_type)
             block.insert({result.columns[pos], name_and_type->type, name_and_type->name});
+
+        for (const auto & column_name : non_const_virtual_column_names)
+        {
+            if (column_name == "_part_offset")
+                block.insert({result.columns[pos], std::make_shared<DataTypeUInt64>(), column_name});
+            else
+                throw Exception("Unexpected non-const virtual column: " + column_name, ErrorCodes::LOGICAL_ERROR);
+            ++pos;
+        }
 
         if (prewhere_info->alias_actions)
             prewhere_info->alias_actions->execute(block);

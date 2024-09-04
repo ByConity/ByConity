@@ -81,6 +81,10 @@ namespace DB::Statistics
 {
 struct StatisticsMemoryStore;
 }
+namespace DB::Statistics::AutoStats
+{
+class AutoStatisticsManager;
+}
 namespace zkutil
 {
 class ZooKeeper;
@@ -127,6 +131,7 @@ class CloudTableDefinitionCache;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
+class GinIdxFilterResultCache;
 class PrimaryIndexCache;
 class ProcessList;
 class ProcessListEntry;
@@ -206,6 +211,7 @@ class KeeperDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+class CompressedDataIndexCache;
 class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
