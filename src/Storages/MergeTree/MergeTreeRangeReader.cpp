@@ -832,15 +832,18 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
             const size_t physical_columns_count = read_result.columns.size() - non_const_virtual_column_names.size();
             Columns physical_columns(read_result.columns.begin(), read_result.columns.begin() + physical_columns_count);
             bool should_evaluate_missing_defaults;
-            merge_tree_reader->fillMissingColumns(read_result.columns, should_evaluate_missing_defaults,
+            merge_tree_reader->fillMissingColumns(physical_columns, should_evaluate_missing_defaults,
                                                   read_result.num_rows);
 
             /// If some columns absent in part, then evaluate default values
             if (should_evaluate_missing_defaults)
-                merge_tree_reader->evaluateMissingDefaults({}, read_result.columns);
+                merge_tree_reader->evaluateMissingDefaults({}, physical_columns);
 
             /// If result not empty, then apply on-fly alter conversions if any required
-            merge_tree_reader->performRequiredConversions(read_result.columns);
+            merge_tree_reader->performRequiredConversions(physical_columns);
+
+            for (size_t i = 0; i < physical_columns.size(); ++i)
+                read_result.columns[i] = std::move(physical_columns[i]);
         }
         else
             read_result.columns.clear();
