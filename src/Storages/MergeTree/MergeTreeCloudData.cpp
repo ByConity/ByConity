@@ -230,9 +230,44 @@ void MergeTreeCloudData::loadDataParts(MutableDataPartsVector & parts, UInt64)
     LOG_DEBUG(log, "Loaded {} data parts in {} ms", data_parts_indexes.size(), stopwatch.elapsedMilliseconds());
 }
 
+void MergeTreeCloudData::receiveDataParts(MutableDataPartsVector && parts, UInt64)
+{
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    received_data_parts = std::move(parts);
+}
+
+void MergeTreeCloudData::receiveVirtualDataParts(MutableDataPartsVector && parts, UInt64)
+{
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    received_virtual_data_parts = std::move(parts);
+}
+
+void MergeTreeCloudData::prepareDataPartsForRead()
+{
+    Stopwatch watch;
+
+    std::lock_guard<std::mutex> lock(load_data_parts_mutex);
+    if (data_parts_loaded)
+        return;
+
+    auto data_parts_size = received_data_parts.size();
+    auto virtual_parts_size = received_virtual_data_parts.size();
+
+    if (data_parts_size)
+        loadDataParts(received_data_parts);
+
+    if (virtual_parts_size)
+        loadDataParts(received_virtual_data_parts);
+
+    data_parts_loaded = true;
+
+    LOG_DEBUG(log, "Loaded {} data_parts, {} virtual_data_parts in {} microseconds",
+        data_parts_size, virtual_parts_size, watch.elapsedMicroseconds());
+}
+
 void MergeTreeCloudData::setDataDescription(WGWorkerInfoPtr && worker_info_, UInt64 data_version_)
 {
-    // resuse load parts lock
+    // reuse load parts lock
     std::lock_guard<std::mutex> lock(load_data_parts_mutex);
     if (data_version == 0)
     {
@@ -246,10 +281,10 @@ void MergeTreeCloudData::prepareVersionedPartsForRead(ContextPtr local_context, 
     Stopwatch watch;
 
     std::lock_guard<std::mutex> lock(load_data_parts_mutex);
-    if (data_parts_loaded)
+    if (versioned_data_parts_loaded)
         return;
 
-    SCOPE_EXIT_SAFE(data_parts_loaded=true);
+    SCOPE_EXIT_SAFE(versioned_data_parts_loaded=true);
 
     std::unordered_map<String, ServerDataPartsWithDBM> server_parts_by_partition;
     std::vector<std::shared_ptr<MergeTreePartition>> partition_list;

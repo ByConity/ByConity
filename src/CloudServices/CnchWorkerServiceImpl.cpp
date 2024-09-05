@@ -39,6 +39,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MutationCommands.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Storages/StorageDictCloudMergeTree.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TxnTimestamp.h>
@@ -492,83 +493,6 @@ void CnchWorkerServiceImpl::sendCreateQuery(
     })
 }
 
-void CnchWorkerServiceImpl::sendQueryDataParts(
-    google::protobuf::RpcController *,
-    const Protos::SendDataPartsReq * request,
-    Protos::SendDataPartsResp * response,
-    google::protobuf::Closure * done)
-{
-    SUBMIT_THREADPOOL({
-        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
-        const auto & query_context = session->context;
-
-        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
-        auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
-
-        LOG_DEBUG(
-            log,
-            "Receiving {} parts for table {}(txn_id: {})",
-            request->parts_size(),
-            cloud_merge_tree.getStorageID().getNameForLogs(),
-            request->txn_id());
-
-        MergeTreeMutableDataPartsVector data_parts;
-        if (cloud_merge_tree.getInMemoryMetadataPtr()->hasUniqueKey())
-            data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
-                cloud_merge_tree, request->parts(), request->bitmaps());
-        else
-            data_parts = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts());
-
-        if (request->has_disk_cache_mode())
-        {
-            SettingFieldDiskCacheMode disk_cache_mode;
-            disk_cache_mode.parseFromString(request->disk_cache_mode());
-            if (disk_cache_mode.value != DiskCacheMode::AUTO)
-            {
-                for (auto & part : data_parts)
-                    part->disk_cache_mode = disk_cache_mode;
-            }
-        }
-        cloud_merge_tree.loadDataParts(data_parts);
-
-        LOG_DEBUG(log, "Received and loaded {} server parts.", data_parts.size());
-
-        std::set<Int64> required_bucket_numbers;
-        for (const auto & bucket_number : request->bucket_numbers())
-            required_bucket_numbers.insert(bucket_number);
-
-        cloud_merge_tree.setRequiredBucketNumbers(required_bucket_numbers);
-
-        // std::map<String, UInt64> udf_infos;
-        // for (const auto & udf_info: request->udf_infos())
-        //     udf_infos.emplace(udf_info.function_name(), udf_info.version());
-    })
-}
-
-
-void CnchWorkerServiceImpl::sendCnchFileDataParts(
-    google::protobuf::RpcController *,
-    const Protos::SendCnchFileDataPartsReq * request,
-    Protos::SendCnchFileDataPartsResp * response,
-    google::protobuf::Closure * done)
-{
-    SUBMIT_THREADPOOL({
-        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
-        const auto & query_context = session->context;
-
-        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
-        auto & cnchfile_table = dynamic_cast<IStorageCloudFile &>(*storage);
-
-        LOG_DEBUG(log, "Receiving parts for table {}", cnchfile_table.getStorageID().getNameForLogs());
-
-        auto data_parts = createCnchFileDataParts(getContext(), request->parts());
-
-        cnchfile_table.loadDataParts(data_parts);
-
-        LOG_DEBUG(log, "Received and loaded {} file parts.", data_parts.size());
-    })
-}
-
 void CnchWorkerServiceImpl::checkDataParts(
     google::protobuf::RpcController * cntl,
     const Protos::CheckDataPartsReq * request,
@@ -821,6 +745,8 @@ void CnchWorkerServiceImpl::sendResources(
                         server_parts
                             = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.server_parts());
 
+                    auto server_parts_size = server_parts.size();
+
                     if (request->has_disk_cache_mode())
                     {
                         auto disk_cache_mode = SettingFieldDiskCacheModeTraits::fromString(request->disk_cache_mode());
@@ -831,14 +757,24 @@ void CnchWorkerServiceImpl::sendResources(
                         }
                     }
 
-                    cloud_merge_tree->loadDataParts(server_parts);
+                    /// `loadDataParts` is an expensive action as it may involve remote read.
+                    /// The worker rpc thread pool may be blocked when there are many `sendResources` requests.
+                    /// Here we just pass the server_parts to storage. And it will do `loadDataParts` later (before reading).
+                    /// One exception is StorageDictCloudMergeTree as it use a different read logic rather than StorageCloudMergeTree::read.
+                    bool is_dict = false;
+                    if (auto * cloud_dict = dynamic_cast<StorageDictCloudMergeTree *>(storage.get()))
+                    {
+                        cloud_dict->loadDataParts(server_parts);
+                        is_dict = true;
+                    }
+                    else
+                        cloud_merge_tree->receiveDataParts(std::move(server_parts));
 
                     LOG_DEBUG(
                         log,
-                        "Received and loaded {} parts for table {}(txn_id: {}), disk_cache_mode {}",
-                        data.server_parts_size(),
-                        cloud_merge_tree->getStorageID().getNameForLogs(),
-                        request->txn_id(), request->disk_cache_mode());
+                        "Received {} parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}",
+                        server_parts_size, cloud_merge_tree->getStorageID().getNameForLogs(),
+                        request->txn_id(), request->disk_cache_mode(), is_dict);
                 }
 
                 if (!data.virtual_parts().empty())
@@ -851,6 +787,8 @@ void CnchWorkerServiceImpl::sendResources(
                         virtual_parts
                             = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.virtual_parts());
 
+                    auto virtual_parts_size = virtual_parts.size();
+
                     if (request->has_disk_cache_mode())
                     {
                         auto disk_cache_mode = SettingFieldDiskCacheModeTraits::fromString(request->disk_cache_mode());
@@ -861,13 +799,20 @@ void CnchWorkerServiceImpl::sendResources(
                         }
                     }
 
-                    cloud_merge_tree->loadDataParts(virtual_parts);
+                    bool is_dict = false;
+                    if (auto * cloud_dict = dynamic_cast<StorageDictCloudMergeTree *>(storage.get()))
+                    {
+                        cloud_dict->loadDataParts(virtual_parts);
+                        is_dict = true;
+                    }
+                    else
+                        cloud_merge_tree->receiveVirtualDataParts(std::move(virtual_parts));
 
                     LOG_DEBUG(
                         log,
-                        "Received and loaded {} virtual server parts for table {}",
-                        virtual_parts.size(),
-                        cloud_merge_tree->getStorageID().getNameForLogs());
+                        "Received {} virtual parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}",
+                        virtual_parts_size, cloud_merge_tree->getStorageID().getNameForLogs(),
+                        request->txn_id(), request->disk_cache_mode(), is_dict);
                 }
 
                 std::set<Int64> required_bucket_numbers;

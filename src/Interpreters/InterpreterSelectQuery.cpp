@@ -487,6 +487,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         if (storage && query.where() && !query.prewhere())
         {
+            if (auto * merge_tree_data = dynamic_cast<StorageCloudMergeTree *>(storage.get()))
+            {
+                merge_tree_data->prepareDataPartsForRead();
+            }
+
             /// PREWHERE optimization: transfer some condition from WHERE to PREWHERE if enabled and viable
             if (const auto & column_sizes = storage->getColumnSizes(); !column_sizes.empty())
             {
