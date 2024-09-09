@@ -31,7 +31,8 @@ public:
         Protos::SortingStep::Stage, // proto enum message
         (FULL),
         (MERGE),
-        (PARTIAL)
+        (PARTIAL),
+        (PARTIAL_NO_MERGE)
     );
 
     explicit SortingStep(const DataStream & input_stream, SortDescription description_, SizeOrVariable limit_, Stage stage_, SortDescription prefix_description_ = {}, bool enable_adaptive_spill_ = false);

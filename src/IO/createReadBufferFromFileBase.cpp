@@ -23,6 +23,8 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromEmptyFile.h>
 #include <IO/MMapReadBufferFromFileWithCache.h>
+#include <IO/AsynchronousReadBufferFromFile.h>
+#include <Disks/IO/getIOUringReader.h>
 #include <Common/ProfileEvents.h>
 
 
@@ -114,6 +116,23 @@ std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
                 buffer_alignment,
                 file_size,
                 settings.local_throttler);
+        }
+        else if (settings.local_fs_method == LocalFSReadMethod::io_uring)
+        {
+#if USE_LIBURING
+            auto & reader = getIOUringReaderOrThrow();
+            res = std::make_unique<AsynchronousReadBufferFromFileWithDescriptorsCache>(
+                reader,
+                filename,
+                buffer_size,
+                actual_flags,
+                existing_memory,
+                buffer_alignment,
+                file_size,
+                settings.local_throttler);
+#else
+            throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "Read method io_uring is only supported in Linux");
+#endif
         }
 //         else if (settings.local_fs_method == LocalFSReadMethod::io_uring)
 //         {

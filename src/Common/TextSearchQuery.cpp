@@ -52,7 +52,7 @@ bool TextSearchQueryExpression::calculate(
             //We assume that, there only one term per filter in text search;
             String token = *(node->filter->getTerms().begin());
             node->filter->setQueryString(token.data(), token.size());
-            range_filter.contains(*(node->filter), cache_store, filter_result);
+            range_filter.contains(*(node->filter), cache_store, &filter_result);
 
             // maybe we need add some settings here when not found.
             return !filter_result.isEmpty();

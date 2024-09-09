@@ -4585,7 +4585,17 @@ protected:
         else
         {
             if (keep_nullable && arguments.front().type->isNullable())
+            {
+                if (const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(type.get()))
+                {
+                    const auto & dict_type = low_cardinality_type->getDictionaryType();
+                    if (dict_type->isNullable())
+                        return type;
+                    if (dict_type->canBeInsideNullable())
+                        return std::make_shared<DataTypeLowCardinality>(makeNullable(dict_type));
+                }
                 return makeNullable(type);
+            }
             return type;
         }
     }

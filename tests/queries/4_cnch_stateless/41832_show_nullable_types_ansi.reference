@@ -3,13 +3,13 @@ a	Date	true
 b	Int64	false						
 c	FixedString(100)	true						
 d	Array(Int32 NULL)	false						
-e	Array(Array(Float32 NOT NULL) NULL)	true						
-f	Array(Array(Array(LowCardinality(String NULL) NOT NULL) NULL) NOT NULL)	true						
-g	Tuple(s String NOT NULL, i Int64 NULL, arr Array(UUID NOT NULL) NULL)	false						
+e	Array(Array(Float32) NULL)	true						
+f	Array(Array(Array(LowCardinality(String NULL)) NULL))	true						
+g	Tuple(s String, i Int64 NULL, arr Array(UUID) NULL)	false						
 i.ss	Array(String NULL)	false						
 i.ii	Array(Bool NULL)	false						
-i.aa	Array(Array(Array(Enum8(\'hello\' = 1, \'world\' = 2) NULL) NULL) NOT NULL)	false						
-added1	Array(Array(UInt128 NOT NULL) NULL)	true						
+i.aa	Array(Array(Array(Enum8(\'hello\' = 1, \'world\' = 2) NULL) NULL))	false						
+added1	Array(Array(UInt128) NULL)	true						
 added2	Array(String NULL)	true						
 CREATE TABLE test.t1\n(\n    `a` Nullable(Date),\n    `b` Int64,\n    `c` Nullable(FixedString(100)),\n    `d` Array(Nullable(Int32)),\n    `e` Nullable(Array(Nullable(Array(Float32)))),\n    `f` Nullable(Array(Array(Nullable(Array(LowCardinality(Nullable(String))))))),\n    `g` Tuple(s String, i Nullable(Int64), arr Nullable(Array(UUID))),\n    `i.ss` Array(Nullable(String)),\n    `i.ii` Array(Nullable(Bool)),\n    `i.aa` Array(Array(Nullable(Array(Nullable(Enum8(\'hello\' = 1, \'world\' = 2)))))),\n    `added1` Nullable(Array(Nullable(Array(UInt128)))),\n    `added2` Nullable(Array(Nullable(String)))\n)\nENGINE = CnchMergeTree\nORDER BY (a, b)\nSETTINGS allow_nullable_key = 1, storage_policy = \'cnch_default_hdfs\', storage_dialect_type = \'ANSI\', index_granularity = 8192
 a	Nullable(Date)						
@@ -42,11 +42,11 @@ a	Date	false
 b	Int64	false						
 c	FixedString(100)	false						
 d	Array(Int32 NULL)	false						
-e	Array(Array(Float32 NOT NULL) NULL)	true						
-f	Array(Array(Array(LowCardinality(String NULL) NOT NULL) NULL) NOT NULL)	true						
-g	Tuple(s String NOT NULL, i Int64 NULL, arr Array(UUID NOT NULL) NULL)	false						
+e	Array(Array(Float32) NULL)	true						
+f	Array(Array(Array(LowCardinality(String NULL)) NULL))	true						
+g	Tuple(s String, i Int64 NULL, arr Array(UUID) NULL)	false						
 i.ss	Array(String NULL)	false						
 i.ii	Array(Bool NULL)	false						
-i.aa	Array(Array(Array(Enum8(\'hello\' = 1, \'world\' = 2) NULL) NULL) NOT NULL)	false						
-added1	Array(Array(UInt128 NOT NULL) NULL)	false						
+i.aa	Array(Array(Array(Enum8(\'hello\' = 1, \'world\' = 2) NULL) NULL))	false						
+added1	Array(Array(UInt128) NULL)	false						
 added2	Array(String NULL)	true						

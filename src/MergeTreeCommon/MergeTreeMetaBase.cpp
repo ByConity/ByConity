@@ -684,6 +684,7 @@ NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
         NameAndTypePair("_partition_id", std::make_shared<DataTypeString>()),
         NameAndTypePair("_partition_value", getPartitionValueType()),
         NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
+        NameAndTypePair("_part_offset", std::make_shared<DataTypeUInt64>()),
         NameAndTypePair("_part_row_number", std::make_shared<DataTypeUInt64>()),
         NameAndTypePair("_bucket_number", std::make_shared<DataTypeInt64>()),
         RowExistsColumn::ROW_EXISTS_COLUMN,
@@ -1047,33 +1048,6 @@ MergeTreeMetaBase::getDataPartsVectorInPartition(MergeTreeMetaBase::DataPartStat
     auto lock = lockPartsRead();
     return DataPartsVector(
         data_parts_by_state_and_info.lower_bound(state_with_partition), data_parts_by_state_and_info.upper_bound(state_with_partition));
-}
-
-ServerDataPartsVector MergeTreeMetaBase::getServerDataPartsInPartitions(const Strings & required_partitions)
-{
-    ServerDataPartsVector server_parts;
-    DeleteBitmapMetaPtrVector delete_bitmaps;
-    {
-        auto lock = lockPartsRead();
-        for (const String & partition_id : required_partitions)
-        {
-            const auto & parts_with_dbm = server_data_parts[partition_id];
-            server_parts.insert(server_parts.end(), parts_with_dbm.first.begin(), parts_with_dbm.first.end());
-            delete_bitmaps.insert(delete_bitmaps.end(), parts_with_dbm.second.begin(), parts_with_dbm.second.end());
-        }
-    }
-    auto visible_server_parts = CnchPartsHelper::calcVisibleParts(server_parts, false, CnchPartsHelper::LoggingOption::DisableLogging, true);
-
-    if (getInMemoryMetadataPtr()->hasUniqueKey() && !visible_server_parts.empty())
-        getDeleteBitmapMetaForServerParts(visible_server_parts, delete_bitmaps);
-
-    return visible_server_parts;
-}
-
-MergeTreeMetaBase::MergeTreePartitions MergeTreeMetaBase::getAllPartitions() const
-{
-    auto lock = lockPartsRead();
-    return data_partitions;
 }
 
 MergeTreeMetaBase::DataParts MergeTreeMetaBase::getDataParts() const
@@ -2365,7 +2339,7 @@ void MergeTreeMetaBase::getDeleteBitmapMetaForServerParts(const ServerDataPartsV
                 }
             }
         }
-        
+
     }
 }
 

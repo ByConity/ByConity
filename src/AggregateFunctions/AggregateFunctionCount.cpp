@@ -22,7 +22,7 @@ namespace
 AggregateFunctionPtr createAggregateFunctionCount(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     assertNoParameters(name, parameters);
-    assertArityAtMost<1>(name, argument_types);
+//    assertArityAtMost<1>(name, argument_types);
 
     return std::make_shared<AggregateFunctionCount>(argument_types);
 }

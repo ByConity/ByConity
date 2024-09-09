@@ -3,12 +3,11 @@ DROP TABLE IF EXISTS `test`.`t40049`;
 
 SET dialect_type='CLICKHOUSE';
 SET enable_optimizer=1;
-SET enable_optimizer_fallback=0;
 
 CREATE TABLE `test`.`t40049`(
     `event_time` DateTime,
     `query` Nullable(String)
-) ENGINE = CnchMergeTree()
+) ENGINE = CnchMergeTree
 ORDER BY (`event_time`)
 SETTINGS index_granularity = 8192;
 

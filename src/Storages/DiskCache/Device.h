@@ -81,11 +81,8 @@ std::unique_ptr<Device> createDirectIoFileDevice(
     UInt32 block_size,
     UInt32 stripe_size,
     UInt32 max_device_write_size,
-    IoEngine io_engine,
-    UInt32 q_depth);
-
-std::unique_ptr<Device>
-createDirectIoFileDevice(std::vector<DB::File> f_vec, UInt64 file_size, UInt32 block_size, UInt32 stripe_size, UInt32 max_device_write_size);
+    IoEngine io_engine = IoEngine::Sync,
+    UInt32 q_depth = 0);
 
 inline Poco::Logger & Device::logger()
 {

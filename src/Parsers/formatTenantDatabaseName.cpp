@@ -66,7 +66,7 @@ String formatTenantName(const String & name, char separator)
 {
     auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty() &&
-        (name.find(tenant_id) != 0 || name.size() == tenant_id.size() || name[tenant_id.size()] != separator))
+        (!name.starts_with(tenant_id) || name.size() == tenant_id.size() || name[tenant_id.size()] != separator))
     {
         String result = tenant_id;
         result += separator;
@@ -81,7 +81,7 @@ static String formatTenantDatabaseNameImpl(const String & database_name, char se
 {
     auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty() && !isInternalDatabaseName(database_name) &&
-        (database_name.find(tenant_id) != 0 || database_name.size() == tenant_id.size() || database_name[tenant_id.size()] != separator))
+        (!database_name.starts_with(tenant_id) || database_name.size() == tenant_id.size() || database_name[tenant_id.size()] != separator))
     {
         String result = tenant_id;
         result += separator;
@@ -96,7 +96,7 @@ static String formatTenantUserNameImpl(const String & user_name, char separator 
 {
     auto tenant_id = getCurrentTenantId();
     if (!tenant_id.empty() &&
-        (user_name.find(tenant_id) != 0 || user_name.size() == tenant_id.size() || user_name[tenant_id.size()] != separator))
+        (!user_name.starts_with(tenant_id) || user_name.size() == tenant_id.size() || user_name[tenant_id.size()] != separator))
     {
         String result = tenant_id;
         result += separator;
@@ -130,7 +130,7 @@ String appendTenantIdOnly(const String& name, bool is_datbase_name)
 
 String formatTenantDatabaseNameWithTenantId(const String & database_name, const String & tenant_id, char separator)
 {
-    if (!tenant_id.empty() && !isInternalDatabaseName(database_name) && database_name.find(tenant_id) != 0)
+    if (!tenant_id.empty() && !isInternalDatabaseName(database_name) && !database_name.starts_with(tenant_id))
     {
         String result = tenant_id;
         result += separator;

@@ -49,10 +49,6 @@ static std::string default_config = R"#(<?xml version="1.0"?>
                     <default>local_disk</default>
                     <disk>local_disk</disk>
                 </local>
-                <hdfs>
-                    <default>hdfs_disk</default>
-                    <disk>hdfs_disk</disk>
-                </hdfs>
             </volumes>
         </default>
         <cnch_default_hdfs>

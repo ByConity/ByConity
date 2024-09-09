@@ -21,6 +21,7 @@
 
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
 #include "Common/Exception.h"
+#include "Common/ProfileEvents.h"
 #include "Common/formatIPv6.h"
 #include "common/logger_useful.h"
 #include <common/scope_guard_safe.h>
@@ -84,6 +85,8 @@ namespace ProfileEvents
     extern const Event IndexGranuleSeekTime;
     extern const Event IndexGranuleReadTime;
     extern const Event IndexGranuleCalcTime;
+    extern const Event TotalGranulesCount;
+    extern const Event TotalSkippedGranules;
 }
 
 
@@ -995,10 +998,11 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             IndexTimeWatcher index_time_watcher;
             for (auto & index_and_condition : useful_indices)
             {
-                roaring::Roaring tmp_filter_bitmap;
-
                 if (ranges.ranges.empty())
                     break;
+
+                std::unique_ptr<roaring::Roaring> idx_filter = settings.filtered_ratio_to_use_skip_read == 0 ?
+                    nullptr : std::make_unique<roaring::Roaring>();
 
                 index_and_condition.total_parts.fetch_add(1, std::memory_order_relaxed);
 
@@ -1013,12 +1017,18 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     reader_settings,
                     total_granules,
                     granules_dropped,
-                    tmp_filter_bitmap,
+                    idx_filter.get(),
                     log_,
                     index_time_watcher
                 );
 
-                (*filter_bitmap) |= tmp_filter_bitmap;
+                if (idx_filter != nullptr)
+                {
+                    if (filter_bitmap == nullptr)
+                        filter_bitmap = std::move(idx_filter);
+                    else
+                        *filter_bitmap &= *idx_filter;
+                }
 
                 index_and_condition.total_granules.fetch_add(total_granules, std::memory_order_relaxed);
                 index_and_condition.granules_dropped.fetch_add(granules_dropped, std::memory_order_relaxed);
@@ -1116,6 +1126,9 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             backQuote(index_name),
             index_and_condition.granules_dropped,
             index_and_condition.total_granules);
+
+        ProfileEvents::increment(ProfileEvents::TotalGranulesCount, index_and_condition.total_granules);
+        ProfileEvents::increment(ProfileEvents::TotalSkippedGranules, index_and_condition.granules_dropped);
 
         std::string description
             = index_and_condition.index->index.type + " GRANULARITY " + std::to_string(index_and_condition.index->index.granularity);
@@ -1415,6 +1428,10 @@ static void selectColumnNames(
             virt_column_names.push_back(name);
         }
         else if (name == "_part_uuid")
+        {
+            virt_column_names.push_back(name);
+        }
+        else if (name == "_part_offset")
         {
             virt_column_names.push_back(name);
         }
@@ -1825,7 +1842,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     const MergeTreeReaderSettings & reader_settings,
     size_t & total_granules,
     size_t & granules_dropped,
-    roaring::Roaring & filter_bitmap,
+    roaring::Roaring * filter_bitmap,
     Poco::Logger * log,
     IndexTimeWatcher & index_time_watcher)
 {
@@ -1882,6 +1899,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
             gin_part_helper = std::make_unique<GinDataLocalPartHelper>(*part);
         }
         cache_in_store.store = context->getGinIndexStoreFactory()->get(index_helper->getFileName(), std::move(gin_part_helper));
+        cache_in_store.filter_result_cache = part->storage.getContext()->getGinIndexFilterResultCache();
     }
 
     const auto * gin_filter_condition = dynamic_cast<const MergeTreeConditionInverted *>(&*condition);
@@ -1889,6 +1907,13 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     if (gin_filter_condition != nullptr)
     {
         context->mustEnableAdditionalService(AdditionalService::FullTextSearch, true);
+
+        if (settings.filter_with_inverted_index_segment)
+        {
+            return filterMarkRangesByInvertedIndex(reader, ranges, index_granularity,
+                part->index_granularity, *gin_filter_condition, cache_in_store,
+                filter_bitmap, &total_granules, &granules_dropped);
+        }
     }
 
     for (const auto & range : ranges)
@@ -1917,19 +1942,37 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
 
             bool maybe_true = false;
 
-            if (!gin_filter_condition)
-            {
-                index_time_watcher.watch(IndexTimeWatcher::Type::CLAC, [&](){
+            index_time_watcher.watch(IndexTimeWatcher::Type::CLAC, [&]() {
+                if (!gin_filter_condition)
+                {
                     maybe_true = condition->mayBeTrueOnGranule(granule);
-                });
-            }
-            else
-            {
-                roaring::Roaring filter_result;
-                maybe_true
-                    = cache_in_store.store ? gin_filter_condition->mayBeTrueOnGranuleInPart(granule, cache_in_store, filter_result) : true;
-                filter_bitmap |= filter_result;
-            }
+                }
+                else
+                {
+                    size_t range_start_row = part->index_granularity.getMarkStartingRow(data_range.begin);
+                    size_t range_end_row = part->index_granularity.getMarkStartingRow(data_range.end);
+
+                    if (cache_in_store.store)
+                    {
+                        std::unique_ptr<roaring::Roaring> filter_result =
+                            filter_bitmap == nullptr ? nullptr : std::make_unique<roaring::Roaring>();
+                        maybe_true = gin_filter_condition->mayBeTrueOnGranuleInPart(
+                            granule, cache_in_store, range_start_row, range_end_row, filter_result.get());
+                        if (filter_bitmap != nullptr)
+                        {
+                            *filter_bitmap |= *filter_result;
+                        }
+                    }
+                    else
+                    {
+                        maybe_true = true;
+                        if (filter_bitmap != nullptr)
+                        {
+                            filter_bitmap->addRange(range_start_row, range_end_row);
+                        }
+                    }
+                }
+            });
 
             if (!maybe_true)
             {

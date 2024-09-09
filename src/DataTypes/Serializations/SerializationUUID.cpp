@@ -5,7 +5,7 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <Common/assert_cast.h>
-
+#include <DataTypes/Serializations/SerializationHelpers.h>
 
 namespace DB
 {
@@ -117,13 +117,10 @@ void SerializationUUID::serializeBinaryBulk(const IColumn & column, WriteBuffer 
         ostr.write(reinterpret_cast<const char *>(&x[offset]), sizeof(UUID) * limit);
 }
 
-void SerializationUUID::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/) const
+size_t SerializationUUID::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/, const UInt8* filter) const
 {
     typename ColumnVector<UUID>::Container & x = typeid_cast<ColumnVector<UUID> &>(column).getData();
-    size_t initial_size = x.size();
-    x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(UUID) * limit);
-    x.resize(initial_size + size / sizeof(UUID));
+    return deserializeBinaryBulkForVector(x, istr, limit, filter, 1);
 }
 
 }

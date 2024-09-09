@@ -43,6 +43,8 @@ namespace
             roles_info.enabled_roles_with_admin_option.emplace(role_id);
 
         roles_info.names_of_roles[role_id] = role->getName();
+        if (roles_info.names_of_roles[role_id].ends_with("AccountAdmin") && is_current_role)
+            roles_info.is_admin = true;
         roles_info.access.makeUnion(role->access);
         roles_info.sensitive_access.makeUnion(role->sensitive_access);
         roles_info.settings_from_enabled_roles.merge(role->settings);

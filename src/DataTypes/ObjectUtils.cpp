@@ -1038,4 +1038,20 @@ UInt64 getColumnsCommitTimeForJSONTable(const IStorage & table, const NamesAndTy
     }
     return 0;
 }
+
+DataTypePtr createSubColumnDataType(const String & name)
+{
+    auto pos = name.find('.');
+
+    if (pos == 0 || pos == name.length() - 1)
+        throw Exception(ErrorCodes::SYNTAX_ERROR, "syntax error in the column name {}", name);
+
+    if (pos == std::string::npos)
+        return std::make_shared<DataTypeTuple>(
+            DataTypes{std::make_shared<DataTypeNullable>(std::make_shared<DataTypeInt8>())}, Strings{name});
+
+    String sub_name = name.substr(0, pos);
+    DataTypePtr sub_type = createSubColumnDataType(name.substr(pos + 1, name.length() - pos - 1));
+    return std::make_shared<DataTypeTuple>(DataTypes{sub_type}, Strings{sub_name});
+}
 }

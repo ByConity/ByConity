@@ -31,6 +31,7 @@
 #include <QueryPlan/SymbolMapper.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
+#include <QueryPlan/UnionStep.h>
 
 namespace DB
 {
@@ -295,8 +296,12 @@ TransformResult PushPartialAggThroughUnion::transformImpl(PlanNodePtr node, cons
 
 ConstRefPatternPtr PushPartialSortingThroughExchange::getPattern() const
 {
-    static auto pattern = Patterns::sorting().withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
-        [](const ExchangeStep & step) { return step.getExchangeMode() == ExchangeMode::GATHER; })).result();
+    static auto pattern
+        = Patterns::sorting()
+              .matchingStep<SortingStep>([](const SortingStep & step) { return step.getStage() == SortingStep::Stage::FULL; })
+              .withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
+                  [](const ExchangeStep & step) { return step.getExchangeMode() == ExchangeMode::GATHER; }))
+              .result();
     return pattern;
 }
 
@@ -347,6 +352,58 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
     return final_sort_node;
 }
 
+ConstRefPatternPtr PushPartialSortingThroughUnion::getPattern() const
+{
+    static auto pattern
+        = Patterns::sorting()
+              .matchingStep<SortingStep>([](const SortingStep & step) { return step.getStage() == SortingStep::Stage::PARTIAL; })
+              .withSingle(Patterns::unionn())
+              .result();
+    return pattern;
+}
+
+TransformResult PushPartialSortingThroughUnion::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    const auto * step = dynamic_cast<const SortingStep *>(node->getStep().get());
+    auto union_node = node->getChildren()[0];
+    const auto * union_step = dynamic_cast<const UnionStep *>(union_node->getStep().get());
+
+    PlanNodes union_inputs;
+    for (size_t index = 0; index < union_node->getChildren().size(); index++)
+    {
+        auto exchange_child = union_node->getChildren()[index];
+        if (dynamic_cast<SortingNode *>(exchange_child.get()))
+            return {};
+
+        SortDescription new_sort_desc;
+        for (const auto & desc : step->getSortDescription())
+        {
+            auto new_desc = desc;
+            const auto & out_to_inputs = union_step->getOutToInputs();
+            if (!out_to_inputs.contains(desc.column_name) || out_to_inputs.at(desc.column_name).size() <= index)
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR, "PushPartialSortingThroughUnion: Can not find {} in out_to_inputs.", desc.column_name);
+            new_desc.column_name = union_step->getOutToInputs().at(desc.column_name).at(index);
+            new_sort_desc.emplace_back(new_desc);
+        }
+
+        auto partial_sorting = std::make_unique<SortingStep>(
+            exchange_child->getStep()->getOutputStream(), new_sort_desc, step->getLimit(), SortingStep::Stage::PARTIAL_NO_MERGE, SortDescription{});
+        PlanNodes children{exchange_child};
+        auto before_exchange_sort_node
+            = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(partial_sorting), children, node->getStatistics());
+        union_inputs.emplace_back(before_exchange_sort_node);
+    }
+
+    auto merging_sorted = std::make_unique<SortingStep>(
+        step->getOutputStream(), step->getSortDescription(), step->getLimit(), SortingStep::Stage::MERGE, SortDescription{});
+
+    return PlanNodeBase::createPlanNode(
+        context.context->nextNodeId(),
+        std::move(merging_sorted),
+        {PlanNodeBase::createPlanNode(context.context->nextNodeId(), union_node->getStep(), union_inputs)});
+}
+
 static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 {
     auto range = PlanNodeCardinality::extractCardinality(*node);
@@ -355,8 +412,7 @@ static bool isLimitNeeded(const LimitStep & limit, const PlanNodePtr & node)
 
 ConstRefPatternPtr PushPartialLimitThroughExchange::getPattern() const
 {
-    static auto pattern = Patterns::limit().withSingle(Patterns::exchange().matchingStep<ExchangeStep>(
-        [](const ExchangeStep & step) { return step.getExchangeMode() == ExchangeMode::GATHER; })).result();
+    static auto pattern = Patterns::limit().withSingle(Patterns::exchange()).result();
     return pattern;
 }
 

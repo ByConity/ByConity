@@ -1,10 +1,10 @@
 #pragma once
 
 #include <chrono>
-#include <shared_mutex>
 
+#include <folly/fibers/TimedMutex.h>
 #include <google/protobuf/io/coded_stream.h>
-#include <sparsehash/sparse_hash_map>
+#include <tsl/sparse_map.h>
 #include <Poco/AtomicCounter.h>
 
 #include <Common/BitHelpers.h>
@@ -18,6 +18,8 @@ namespace DB::HybridCache
 class Index
 {
 public:
+    using SharedMutex = folly::fibers::TimedRWMutexWritePriority<folly::fibers::Baton>;
+
     static constexpr std::chrono::seconds kQuantileWindowSize{1};
 
     Index() = default;
@@ -118,19 +120,19 @@ private:
     static constexpr UInt32 kNumBuckets{64 * 1024};
     static constexpr UInt32 kNumMutexes{1024};
 
-    using Map = google::sparse_hash_map<UInt32, ItemRecord>;
+    using Map = tsl::sparse_map<UInt32, ItemRecord>;
 
     static UInt32 bucket(UInt64 hash) { return (hash >> 32) & (kNumBuckets - 1); }
 
     static UInt32 subkey(UInt64 hash) { return hash & 0xffffffffu; }
 
-    std::shared_mutex & getMutexOfBucket(UInt32 bucket) const
+    SharedMutex & getMutexOfBucket(UInt32 bucket) const
     {
         chassert(isPowerOf2(kNumMutexes));
         return mutex[bucket & (kNumMutexes - 1)];
     }
 
-    std::shared_mutex & getMutex(UInt64 hash) const
+    SharedMutex & getMutex(UInt64 hash) const
     {
         auto b = bucket(hash);
         return getMutexOfBucket(b);
@@ -146,7 +148,7 @@ private:
 
     mutable Poco::AtomicCounter unaccessed_items;
 
-    std::unique_ptr<std::shared_mutex[]> mutex{new std::shared_mutex[kNumMutexes]};
+    std::unique_ptr<SharedMutex[]> mutex{new SharedMutex[kNumMutexes]};
     std::unique_ptr<Map[]> buckets{new Map[kNumBuckets]};
 };
 }

@@ -19,6 +19,7 @@
 #include <QueryPlan/ExecutePlanElement.h>
 
 #include <Analyzers/TypeAnalyzer.h>
+#include <DataTypes/ObjectUtils.h>
 #include <Formats/FormatSettings.h>
 #include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -71,6 +72,8 @@ namespace ErrorCodes
     extern const int ILLEGAL_PREWHERE;
     extern const int INVALID_LIMIT_EXPRESSION;
     extern const int PROJECTION_SELECTION_ERROR;
+    extern const int UNKNOWN_IDENTIFIER;
+    extern const int INCOMPATIBLE_COLUMNS;
 }
 
 namespace _scan_execute_impl
@@ -741,7 +744,6 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
     }
 
     const auto * func = node->as<ASTFunction>();
-    auto metadata_snapshot = storage->getInMemoryMetadataPtr();
     if (func && functionIsInOrGlobalInOperator(func->name))
     {
         const IAST & args = *func->arguments;
@@ -757,8 +759,7 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
             }
             else
             {
-                Block header = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context)
-                                   ->getSampleBlockForColumns(getRequiredColumns());
+                Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
 
                 Names output;
                 output.emplace_back(left_in_operand->getColumnName());
@@ -772,6 +773,7 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
     }
 }
 
+// Server
 TableScanStep::TableScanStep(
     ContextPtr context,
     StorageID storage_id_,
@@ -783,8 +785,7 @@ TableScanStep::TableScanStep(
     Assignments inline_expressions_,
     std::shared_ptr<AggregatingStep> aggregation_,
     std::shared_ptr<ProjectionStep> projection_,
-    std::shared_ptr<FilterStep> filter_,
-    std::optional<DataStream> output_stream_)
+    std::shared_ptr<FilterStep> filter_)
     : ISourceStep(DataStream{}, hints_)
     , storage_id(storage_id_)
     , column_alias(column_alias_)
@@ -794,43 +795,30 @@ TableScanStep::TableScanStep(
     , pushdown_aggregation(std::move(aggregation_))
     , pushdown_projection(std::move(projection_))
     , pushdown_filter(std::move(filter_))
-    , log(&Poco::Logger::get("TableScanStep"))
     , alias(alias_)
+    , log(&Poco::Logger::get("TableScanStep"))
 {
-    bool need_create_output_stream = true;
     const auto & table_expression = getTableExpression(*query_info.getSelectQuery(), 0);
     if (table_expression && table_expression->table_function)
         storage = context->getQueryContext()->executeTableFunction(table_expression->table_function);
     else
     {
-        if (storage_id.empty() && context->getSettingsRef().enable_prune_empty_resource)
-        {
-            LOG_DEBUG(log, "Create tableScanStep without storage");
-            need_create_output_stream = false;
-            output_stream = output_stream_;
-            is_null_source = true;
-        }
-        else
-        {
-            storage = DatabaseCatalog::instance().getTable(storage_id, context);
-            storage_id.uuid = storage->getStorageUUID();
-        }
+        storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        storage_id.uuid = storage->getStorageUUID();
     }
-    if (need_create_output_stream)
-        formatOutputStream(context);
+    initMetadataAndStorageSnapshot(context);
+    formatOutputStream(context);
 }
 
 void TableScanStep::formatOutputStream(ContextPtr context)
 {
     column_names.clear();
-    table_output_stream.header.clear();
     for (auto & item : column_alias)
     {
         column_names.emplace_back(item.first);
     }
 
-   // TODO: in long term, we should use different constructor for server/worker
-    Block header = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context)->getSampleBlockForColumns(getRequiredColumns());
+    Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
 
     NameToNameMap name_to_name_map;
     for (auto & item : column_alias)
@@ -838,6 +826,7 @@ void TableScanStep::formatOutputStream(ContextPtr context)
         name_to_name_map[item.first] = item.second;
     }
 
+    table_output_stream.header.clear();
     const auto select_expression_list = query_info.query->as<ASTSelectQuery>()->select();
     select_expression_list->children.clear();
 
@@ -878,21 +867,49 @@ void TableScanStep::formatOutputStream(ContextPtr context)
     }
 }
 
-void TableScanStep::optimizeWhereIntoPrewhre(ContextPtr context)
+// Worker
+TableScanStep::TableScanStep(
+    ContextPtr context,
+    DataStream output_stream_,
+    StorageID storage_id_,
+    NamesWithAliases column_alias_,
+    SelectQueryInfo query_info_,
+    size_t max_block_size_,
+    String alias_,
+    PlanHints hints_,
+    Assignments inline_expressions_,
+    std::shared_ptr<AggregatingStep> aggregation_,
+    std::shared_ptr<ProjectionStep> projection_,
+    std::shared_ptr<FilterStep> filter_,
+    DataStream table_output_stream_)
+    : ISourceStep(std::move(output_stream_), hints_)
+    , storage_id(std::move(storage_id_))
+    , column_alias(std::move(column_alias_))
+    , query_info(std::move(query_info_))
+    , max_block_size(max_block_size_)
+    , inline_expressions(std::move(inline_expressions_))
+    , pushdown_aggregation(std::move(aggregation_))
+    , pushdown_projection(std::move(projection_))
+    , pushdown_filter(std::move(filter_))
+    , table_output_stream(std::move(table_output_stream_))
+    , alias(alias_)
+    , log(&Poco::Logger::get("TableScanStep"))
 {
-    auto & query = *query_info.query->as<ASTSelectQuery>();
-    if (storage && query.where() && !query.prewhere())
+    column_names.clear();
+    for (auto & item : column_alias)
     {
-        /// PREWHERE optimization: transfer some condition from WHERE to PREWHERE if enabled and viable
-        if (const auto & column_sizes = storage->getColumnSizes(); !column_sizes.empty())
-        {
-            /// Extract column compressed sizes.
-            std::unordered_map<std::string, UInt64> column_compressed_sizes;
-            for (const auto & [name, sizes] : column_sizes)
-                column_compressed_sizes[name] = sizes.data_compressed;
-            MergeTreeWhereOptimizer{
-                query_info, context, std::move(column_compressed_sizes), storage->getInMemoryMetadataPtr(), column_names, log};
-        }
+        column_names.emplace_back(item.first);
+    }
+
+    if (storage_id.empty() && context->getSettingsRef().enable_prune_empty_resource)
+    {
+        LOG_DEBUG(log, "Create tableScanStep without storage");
+        is_null_source = true;
+    }
+    else
+    {
+        storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        // metadata_snapshot & storage_snapshot will be initialized in initializePipeline
     }
 }
 
@@ -926,7 +943,6 @@ void TableScanStep::rewriteInForBucketTable(ContextPtr context) const
     if (!storage->isBucketTable() || !context->getSettingsRef().optimize_skip_unused_shards)
         return;
 
-    auto metadata_snapshot = cloud_merge_tree->getInMemoryMetadataPtr();
     const bool need_optimise
         = metadata_snapshot->getColumnsForClusterByKey().size() == 1 && !cloud_merge_tree->getRequiredBucketNumbers().empty();
     if (!need_optimise)
@@ -1194,6 +1210,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     total_watch.start();
     stage_watch.start();
     storage = DatabaseCatalog::instance().getTable(storage_id, build_context.context);
+    // TODO: can we remove this call
+    initMetadataAndStorageSnapshot(build_context.context);
 
     auto * merge_tree_storage = dynamic_cast<MergeTreeMetaBase *>(storage.get());
     bool is_merge_tree = merge_tree_storage != nullptr;
@@ -1259,7 +1277,6 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     if (use_projection_index)
     {
-        auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), build_context.context);
         auto input_columns_block = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
         auto input_columns = input_columns_block.getNamesAndTypesList();
         auto required_columns_block = storage_snapshot->getSampleBlockForColumns(getRequiredColumns(OutputAndPrewhere));
@@ -1295,7 +1312,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 .prepared_sets = query_info.sets,
                 .outputs = column_alias /* no meaning */};
 
-        query_info.index_context = MergeTreeIndexContext::buildFromProjection(inline_expressions, index_building_context, storage_snapshot->metadata);
+        query_info.index_context = MergeTreeIndexContext::buildFromProjection(inline_expressions, index_building_context, metadata_snapshot);
     }
 
     ExecutePlan execute_plan;
@@ -1317,7 +1334,6 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     if (execute_plan.empty())
     {
-        auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), build_context.context);
         if (auto * cloud_merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
         {
             cloud_merge_tree->source_task_filter = build_context.distributed_settings.source_task_filter;
@@ -1366,9 +1382,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     }
 
     MergeTreeDataSelectExecutor merge_tree_reader{*merge_tree_storage};
-    auto metadata_snapshot = storage->getInMemoryMetadataPtr();
     auto context = build_context.context;
-    auto storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, context);
     Pipes pipes;
 
     // num of pipes may be smaller than num of plan elements since MergeTreeDataSelectExecutor
@@ -1387,6 +1401,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         if (plan_element.read_analysis->marks() == 0)
             continue;
 
+        auto plan_element_storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, context);
         if (use_projection)
         {
             SelectQueryInfo projection_query_info = query_info;
@@ -1396,15 +1411,12 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 projection_query_info.prewhere_info->prewhere_actions = plan_element.prewhere_actions;
             }
             MergeTreeData::DeleteBitmapGetter null_getter = [](auto & /*part*/) { return nullptr; };
-            auto proj_snapshot = std::make_shared<StorageSnapshot>(
-                storage_snapshot->storage, storage_snapshot->metadata, storage_snapshot->object_columns);
-            proj_snapshot->addProjection(plan_element.projection_desc);
-
+            plan_element_storage_snapshot->addProjection(plan_element.projection_desc);
             auto read_plan = merge_tree_reader.readFromParts(
                 {},
                 null_getter,
                 plan_element.projection_required_columns,
-                proj_snapshot,
+                plan_element_storage_snapshot,
                 projection_query_info,
                 context,
                 max_block_size,
@@ -1432,7 +1444,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 {},
                 delete_bitmap_getter,
                 getRequiredColumns(),
-                storage_snapshot,
+                plan_element_storage_snapshot,
                 query_info_for_index,
                 context,
                 max_block_size,
@@ -1638,6 +1650,7 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
     {
         output_stream->toProto(*proto.mutable_output_stream());
     }
+    table_output_stream.toProto(*proto.mutable_table_output_stream());
 }
 
 std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
@@ -1660,6 +1673,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
     std::shared_ptr<ProjectionStep> pushdown_projection;
     std::shared_ptr<FilterStep> pushdown_filter;
     std::optional<DataStream> output_stream;
+    DataStream table_output_stream;
     if (proto.has_pushdown_aggregation())
         pushdown_aggregation = AggregatingStep::fromProto(proto.pushdown_aggregation(), context);
 
@@ -1672,8 +1686,14 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         output_stream = std::make_optional<DataStream>();
         output_stream->fillFromProto(proto.output_stream());
     }
+    if (proto.has_table_output_stream())
+    {
+        table_output_stream.fillFromProto(proto.table_output_stream());
+    }
+
     auto step = std::make_shared<TableScanStep>(
         context,
+        *output_stream,
         storage_id,
         column_alias,
         query_info,
@@ -1684,7 +1704,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         pushdown_aggregation,
         pushdown_projection,
         pushdown_filter,
-        output_stream);
+        std::move(table_output_stream));
 
     return step;
 }
@@ -1701,6 +1721,8 @@ std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr) const
         output_stream.value(),
         storage,
         storage_id,
+        metadata_snapshot,
+        storage_snapshot,
         original_table,
         column_names,
         column_alias,
@@ -1734,7 +1756,6 @@ void TableScanStep::allocate(ContextPtr context)
     // init query_info.syntax_analyzer
     if (!query_info.syntax_analyzer_result)
     {
-        auto storage_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
         Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
 
         auto tree_rewriter_result
@@ -1821,16 +1842,16 @@ size_t TableScanStep::getMaxBlockSize() const
 void TableScanStep::aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context, const String & pipeline_name)
 {
     const auto & cur_header = pipeline.getHeader();
-    const auto & header_for_alias = table_output_stream.header;
-    LOG_DEBUG(
+    const auto & output_header = table_output_stream.header;
+    LOG_TRACE(
         log,
         fmt::format(
             "aliasColumns({}), current header: {}, desired header: {}",
             pipeline_name,
             cur_header.dumpStructure(),
-            header_for_alias.dumpStructure()));
+            output_header.dumpStructure()));
 
-    if (!blocksHaveEqualStructure(cur_header, header_for_alias))
+    if (!blocksHaveEqualStructure(cur_header, output_header))
     {
         NamesWithAliases aliases;
         ASTPtr select = std::make_shared<ASTExpressionList>();
@@ -1852,7 +1873,26 @@ void TableScanStep::aliasColumns(QueryPipeline & pipeline, const BuildQueryPipel
         }
 
         auto actions = createExpressionActions(build_context.context, cur_header.getNamesAndTypesList(), aliases, select, true);
-        LOG_DEBUG(log, fmt::format("aliasColumns({}), actions: {}", pipeline_name, actions->dumpDAG()));
+        // handle type mismatch
+        auto header_after_alias = actions->updateHeader(cur_header);
+        LOG_TRACE(
+            log,
+            fmt::format(
+                "aliasColumns({}), alias actions: {}, header after alias: {}",
+                pipeline_name,
+                actions->dumpDAG(),
+                header_after_alias.dumpStructure()));
+        if (!blocksHaveEqualStructure(header_after_alias, output_header))
+        {
+            auto convert_actions = ActionsDAG::makeConvertingActions(
+                header_after_alias.getColumnsWithTypeAndName(),
+                output_header.getColumnsWithTypeAndName(),
+                ActionsDAG::MatchColumnsMode::Name);
+
+            LOG_TRACE(log, fmt::format("aliasColumns({}), convert actions: {}", pipeline_name, convert_actions->dumpDAG()));
+            actions = ActionsDAG::merge(std::move(*actions), std::move(*convert_actions));
+        }
+        LOG_TRACE(log, fmt::format("aliasColumns({}), actions: {}", pipeline_name, actions->dumpDAG()));
         auto expression = std::make_shared<ExpressionActions>(actions, build_context.getActionsSettings());
         pipeline.addSimpleTransform(
             [&](const Block & header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(header, expression); });
@@ -2008,11 +2048,10 @@ void TableScanStep::fillQueryInfoV2(ContextPtr context)
 {
     assert(storage);
     auto required_columns = getRequiredColumns();
-    auto metadata_snapshot = storage->getStorageSnapshot(storage->getInMemoryMetadataPtr(), context);
-    auto block = metadata_snapshot->getSampleBlockForColumns(required_columns);
+    auto block = storage_snapshot->getSampleBlockForColumns(required_columns);
 
     /// 1. build tree rewriter result
-    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(block.getNamesAndTypesList(), storage, metadata_snapshot);
+    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(block.getNamesAndTypesList(), storage, storage_snapshot);
     syntax_analyzer_result->analyzed_join = std::make_shared<TableJoin>();
     query_info.syntax_analyzer_result = syntax_analyzer_result;
 
@@ -2034,5 +2073,58 @@ void TableScanStep::fillQueryInfoV2(ContextPtr context)
 
     /// 4. build index context
     query_info.index_context = std::make_shared<MergeTreeIndexContext>();
+}
+
+void TableScanStep::initMetadataAndStorageSnapshot(ContextPtr context)
+{
+    metadata_snapshot = storage->getInMemoryMetadataPtr();
+    storage_snapshot = storage->getStorageSnapshot(metadata_snapshot, context);
+    /*
+    if (context->getSettingsRef().allow_nonexist_object_subcolumns)
+    {
+        for (const auto & [name, _] : column_alias)
+        {
+            if (storage_snapshot->tryGetColumn(GetColumnsOptions(GetColumnsOptions::Ordinary).withExtendedObjects().withSubcolumns(), name))
+                continue;
+
+            auto pos = name.find('.');
+            if (pos != std::string::npos && pos + 1 < name.length())
+            {
+                const auto base_name = name.substr(0, pos);
+                const auto column_in_storage = storage_snapshot->tryGetColumn(GetColumnsOptions::Ordinary, base_name);
+                const auto parent_name = name.substr(0, name.rfind('.'));
+                const auto parent_column = storage_snapshot->tryGetColumn(
+                    GetColumnsOptions(GetColumnsOptions::Ordinary).withExtendedObjects().withSubcolumns(), parent_name);
+                if (!column_in_storage)
+                {
+                    throw Exception(
+                        ErrorCodes::UNKNOWN_IDENTIFIER,
+                        "Column {} does not exist. Cannot create a fake subcolumn {}.",
+                        base_name,
+                        parent_name,
+                        name);
+                }
+                else
+                {
+                    if (parent_column)
+                    {
+                        if (!dynamic_cast<const DataTypeTuple *>(parent_column->type.get()))
+                            throw Exception(
+                                ErrorCodes::INCOMPATIBLE_COLUMNS,
+                                "Can't add a non-exist subcolumn {} as the parent type ({}) is not a tuple.",
+                                name,
+                                parent_column->type->getName());
+                    }
+
+                    const auto sub_column_type = createSubColumnDataType(name.substr(pos + 1, name.length() - pos - 1));
+                    updateObjectColumns(
+                        storage_snapshot->object_columns,
+                        storage_snapshot->metadata->columns,
+                        {NameAndTypePair(base_name, sub_column_type)});
+                }
+            }
+        }
+    }
+    */
 }
 }

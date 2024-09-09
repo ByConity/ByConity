@@ -101,9 +101,9 @@ try
 
             const auto & sample = reader->getColumns();
             Columns columns(sample.size());
-            size_t rows_read = reader->readRows(current_mark, data_part->getMarksCount(),
+            size_t rows_read = reader->readRows(current_mark,
                 current_row - data_part->index_granularity.getMarkStartingRow(current_mark),
-                rows_to_read, columns);
+                rows_to_read, data_part->getMarksCount(), nullptr, columns);
 
             if (rows_read != rows_to_read)
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Expect {} rows read from mark {} in part {}, got {}",

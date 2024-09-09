@@ -35,6 +35,7 @@ extern const Event RegionManagerEvictionCount;
 extern const Event RegionManagerNumInMemBufFlushRetries;
 extern const Event RegionManagerNumInMemBufFlushFailures;
 extern const Event RegionManagerNumInMemBufCleanupRetries;
+extern const Event RegionManagerCleanRegionRetries;
 }
 
 namespace CurrentMetrics
@@ -57,7 +58,7 @@ RegionManager::RegionManager(
     UInt64 base_offset_,
     Device & device_,
     UInt32 num_clean_regions_,
-    JobScheduler & scheduler_,
+    UInt32 num_workers_,
     RegionEvictCallback evict_callback_,
     RegionCleanupCallback cleanup_callback_,
     std::unique_ptr<EvictionPolicy> policy_,
@@ -73,7 +74,6 @@ RegionManager::RegionManager(
     , policy{std::move(policy_)}
     , regions{std::make_unique<std::unique_ptr<Region>[]>(num_regions_)}
     , num_clean_regions{num_clean_regions_}
-    , scheduler{scheduler_}
     , evict_callback{evict_callback_}
     , cleanup_callback{cleanup_callback_}
     , num_in_mem_buffers(num_in_mem_buffers_)
@@ -86,6 +86,13 @@ RegionManager::RegionManager(
 
     for (UInt32 i = 0; i < num_in_mem_buffers; i++)
         buffers.push_back(std::make_unique<Buffer>(device.makeIOBuffer(region_size)));
+
+    for (uint32_t i = 0; i < num_workers_; i++)
+    {
+        auto name = fmt::format("fiber_region_manager_{}", i);
+        workers.emplace_back(std::make_unique<FiberThread>(name));
+        worker_set.insert(workers.back().get());
+    }
 
     resetEvictionPolicy();
 }
@@ -120,9 +127,11 @@ void RegionManager::reset()
     for (UInt32 i = 0; i < num_regions; i++)
         regions[i]->reset();
     {
-        LockGuard guard{clean_regions_mutex};
+        std::lock_guard<TimedMutex> guard{clean_regions_mutex};
         chassert(reclaim_scheduled == 0u);
         clean_regions.clear();
+        if (clean_regions_cond.numWaiters() > 0)
+            clean_regions_cond.notifyAll();
     }
     seq_number.store(0, std::memory_order_release);
 
@@ -132,8 +141,10 @@ void RegionManager::reset()
 Region::FlushRes RegionManager::flushBuffer(const RegionId & rid)
 {
     auto & region = getRegion(rid);
-    auto callback = [this](RelAddress addr, BufferView buf) {
-        if (!deviceWrite(addr, buf))
+    auto callback = [this](RelAddress addr, BufferView view) {
+        auto write_buffer = device.makeIOBuffer(view.size());
+        write_buffer.copyFrom(0, view);
+        if (!deviceWrite(addr, std::move(write_buffer)))
             return false;
         CurrentMetrics::sub(CurrentMetrics::RegionManagerNumInMemBufWaitingFlush);
         return true;
@@ -142,17 +153,15 @@ Region::FlushRes RegionManager::flushBuffer(const RegionId & rid)
     return region.flushBuffer(std::move(callback));
 }
 
-bool RegionManager::detachBuffer(const RegionId & rid)
+void RegionManager::detachBuffer(const RegionId & rid)
 {
     auto & region = getRegion(rid);
     auto buf = region.detachBuffer();
-    if (!buf)
-        return false;
+    chassert(!!buf);
     returnBufferToPool(std::move(buf));
-    return true;
 }
 
-bool RegionManager::cleanupBufferOnFlushFailure(const RegionId & rid)
+void RegionManager::cleanupBufferOnFlushFailure(const RegionId & rid)
 {
     auto & region = getRegion(rid);
     auto callback = [this](RegionId regionId, BufferView buf) {
@@ -161,10 +170,8 @@ bool RegionManager::cleanupBufferOnFlushFailure(const RegionId & rid)
         ProfileEvents::increment(ProfileEvents::RegionManagerNumInMemBufFlushFailures);
     };
 
-    if (!region.cleanupBuffer(std::move(callback)))
-        return false;
-
-    return detachBuffer(rid);
+    region.cleanupBuffer(std::move(callback));
+    detachBuffer(rid);
 }
 
 void RegionManager::releaseCleanedupRegion(RegionId rid)
@@ -176,51 +183,65 @@ void RegionManager::releaseCleanedupRegion(RegionId rid)
 
     region.reset();
     {
-        LockGuard guard{clean_regions_mutex};
+        std::lock_guard<TimedMutex> guard{clean_regions_mutex};
         clean_regions.push_back(rid);
+        if (clean_regions_cond.numWaiters() > 0)
+            clean_regions_cond.notifyAll();
     }
 }
 
-OpenStatus RegionManager::assignBufferToRegion(RegionId rid)
+std::pair<OpenStatus, std::unique_ptr<CondWaiter>> RegionManager::assignBufferToRegion(RegionId rid, bool add_waiter)
 {
     chassert(rid.valid());
-    auto buf = claimBufferFromPool();
+    auto [buf, waiter] = claimBufferFromPool(add_waiter);
     if (!buf)
-        return OpenStatus::Retry;
+        return {OpenStatus::Retry, std::move(waiter)};
+
     auto & region = getRegion(rid);
     region.attachBuffer(std::move(buf));
-    return OpenStatus::Ready;
+    return {OpenStatus::Ready, std::move(waiter)};
 }
 
-std::unique_ptr<Buffer> RegionManager::claimBufferFromPool()
+std::pair<std::unique_ptr<Buffer>, std::unique_ptr<CondWaiter>> RegionManager::claimBufferFromPool(bool add_waiter)
 {
     std::unique_ptr<Buffer> buf;
     {
-        LockGuard guard{buffer_mutex};
+        std::lock_guard<TimedMutex> guard{buffer_mutex};
         if (buffers.empty())
-            return nullptr;
+        {
+            std::unique_ptr<CondWaiter> waiter;
+            if (add_waiter)
+            {
+                waiter = std::make_unique<CondWaiter>();
+                buffer_cond.addWaiter(waiter.get());
+            }
+            return {nullptr, std::move(waiter)};
+        }
         buf = std::move(buffers.back());
         buffers.pop_back();
     }
     CurrentMetrics::add(CurrentMetrics::RegionManagerNumInMemBufActive);
-    return buf;
+    return {std::move(buf), nullptr};
 }
 
 void RegionManager::returnBufferToPool(std::unique_ptr<Buffer> buf)
 {
     {
-        std::lock_guard<std::mutex> guard{buffer_mutex};
+        std::lock_guard<TimedMutex> guard{buffer_mutex};
         buffers.push_back(std::move(buf));
+        if (buffer_cond.numWaiters() > 0)
+            buffer_cond.notifyAll();
     }
     CurrentMetrics::sub(CurrentMetrics::RegionManagerNumInMemBufActive);
 }
 
-OpenStatus RegionManager::getCleanRegion(RegionId & rid)
+std::pair<OpenStatus, std::unique_ptr<CondWaiter>> RegionManager::getCleanRegion(RegionId & rid, bool add_waiter)
 {
     auto status = OpenStatus::Retry;
+    std::unique_ptr<CondWaiter> waiter;
     UInt32 new_shced = 0;
     {
-        LockGuard guard{clean_regions_mutex};
+        std::lock_guard<TimedMutex> guard{clean_regions_mutex};
         if (!clean_regions.empty())
         {
             rid = clean_regions.back();
@@ -228,7 +249,14 @@ OpenStatus RegionManager::getCleanRegion(RegionId & rid)
             status = OpenStatus::Ready;
         }
         else
+        {
+            if (add_waiter)
+            {
+                waiter = std::make_unique<CondWaiter>();
+                clean_regions_cond.addWaiter(waiter.get());
+            }
             status = OpenStatus::Retry;
+        }
 
         auto planned_clean = clean_regions.size() + reclaim_scheduled;
         if (planned_clean < num_clean_regions)
@@ -242,14 +270,34 @@ OpenStatus RegionManager::getCleanRegion(RegionId & rid)
 
     if (status == OpenStatus::Ready)
     {
-        status = assignBufferToRegion(rid);
+        chassert(!waiter);
+        std::tie(status, waiter) = assignBufferToRegion(rid, add_waiter);
         if (status != OpenStatus::Ready)
         {
-            LockGuard guard{clean_regions_mutex};
+            std::lock_guard<TimedMutex> guard{clean_regions_mutex};
             clean_regions.push_back(rid);
+            if (clean_regions_cond.numWaiters() > 0)
+                clean_regions_cond.notifyAll();
         }
     }
-    return status;
+    else
+    {
+        if (status == OpenStatus::Retry)
+            ProfileEvents::increment(ProfileEvents::RegionManagerCleanRegionRetries);
+    }
+    return {status, std::move(waiter)};
+}
+
+
+bool RegionManager::isOnWorker()
+{
+    auto * thread = getCurrentFiberThread();
+    if (!thread)
+    {
+        return false;
+    }
+
+    return worker_set.count(thread) > 0;
 }
 
 void RegionManager::doFlush(RegionId rid, bool async)
@@ -260,91 +308,95 @@ void RegionManager::doFlush(RegionId rid, bool async)
     region.setPendingFlush();
     CurrentMetrics::add(CurrentMetrics::RegionManagerNumInMemBufWaitingFlush);
 
-    Job flush_job = [this, rid, retry_attempts = 0, flushed = false]() mutable {
-        if (!flushed)
-        {
-            if (retry_attempts >= in_mem_buf_flush_retry_limit)
-            {
-                if (cleanupBufferOnFlushFailure(rid))
-                {
-                    releaseCleanedupRegion(rid);
-                    return JobExitCode::Done;
-                }
-                ProfileEvents::increment(ProfileEvents::RegionManagerNumInMemBufCleanupRetries);
-                return JobExitCode::Reschedule;
-            }
-            auto res = flushBuffer(rid);
-            if (res == Region::FlushRes::kSuccess)
-                flushed = true;
-            else
-            {
-                if (res == Region::FlushRes::kRetryDeviceFailure)
-                {
-                    retry_attempts++;
-                    ProfileEvents::increment(ProfileEvents::RegionManagerNumInMemBufFlushRetries);
-                }
-                return JobExitCode::Reschedule;
-            }
-        }
-        if (flushed)
-        {
-            if (detachBuffer(rid))
-            {
-                track(rid);
-                return JobExitCode::Done;
-            }
-        }
-        return JobExitCode::Reschedule;
-    };
-
-    if (async)
-        scheduler.enqueue(std::move(flush_job), "flush", JobType::Flush);
+    if (!async || isOnWorker())
+        doFlushInternal(rid);
     else
-        while (flush_job() == JobExitCode::Reschedule)
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        getNextWorker().addTaskRemote([this, rid]() { doFlushInternal(rid); });
+}
+
+void RegionManager::doFlushInternal(RegionId rid)
+{
+    int retry_attempts = 0;
+    while (retry_attempts < in_mem_buf_flush_retry_limit)
+    {
+        auto res = flushBuffer(rid);
+        if (res == Region::FlushRes::kSuccess)
+        {
+            break;
+        }
+        else if (res == Region::FlushRes::kRetryDeviceFailure)
+        {
+            // We have a limited retry limit for flush errors due to device
+            retry_attempts++;
+            ProfileEvents::increment(ProfileEvents::RegionManagerNumInMemBufCleanupRetries);
+        }
+
+        // Device write failed; retry after 100ms
+        folly::fibers::Baton b;
+        b.try_wait_for(std::chrono::milliseconds(100));
+    }
+
+    if (retry_attempts >= in_mem_buf_flush_retry_limit)
+    {
+        // Flush failure reaches retry limit, stop flushing and start to
+        // clean up the buffer.
+        cleanupBufferOnFlushFailure(rid);
+        releaseCleanedupRegion(rid);
+        return;
+    }
+
+    detachBuffer(rid);
+
+    // Flush completed, track the region
+    track(rid);
 }
 
 void RegionManager::startReclaim()
 {
-    scheduler.enqueue(
-        [this, rid = RegionId()]() mutable {
-            if (!rid.valid())
-            {
-                rid = evict();
-                if (!rid.valid())
-                    return JobExitCode::Reschedule;
-            }
+    getNextWorker().addTaskRemote([&]() { doReclaim(); });
+}
 
-            const auto start_time = getSteadyClock();
-            auto & region = getRegion(rid);
-            if (!region.readyForReclaim())
-                return JobExitCode::Reschedule;
+void RegionManager::doReclaim()
+{
+    RegionId rid;
+    while (true)
+    {
+        rid = evict();
+        // evict() can fail to find a victim, where it needs to be retried
+        if (rid.valid())
+        {
+            break;
+        }
+        // This should never happen
+        chassert(false);
+    }
 
-            if (region.getNumItems() != 0)
-            {
-                chassert(!region.hasBuffer());
-                auto desc = RegionDescriptor::makeReadDescriptor(OpenStatus::Ready, RegionId{rid}, true);
-                auto size_to_read = region.getLastEntryEndOffset();
-                auto buffer = read(desc, RelAddress{rid, 0}, size_to_read);
-                if (buffer.size() != size_to_read)
-                {
-                    LOG_ERROR(
-                        log,
-                        fmt::format(
-                            "Failed to read region {} during reclaim. Region size to read: {}, Actually read: {}",
-                            rid.index(),
-                            size_to_read,
-                            buffer.size()));
-                    ProfileEvents::increment(ProfileEvents::RegionManagerReclaimRegionErrorCount);
-                }
-                else
-                    doEviction(rid, buffer.view());
-            }
-            releaseEvictedRegion(rid, start_time);
-            return JobExitCode::Done;
-        },
-        "reclaim",
-        JobType::Reclaim);
+    const auto start_time = getSteadyClock();
+    auto & region = getRegion(rid);
+    bool status = region.readyForReclaim(true);
+    chassert(status);
+
+    if (region.getNumItems() != 0)
+    {
+        chassert(!region.hasBuffer());
+        auto desc = RegionDescriptor::makeReadDescriptor(OpenStatus::Ready, RegionId{rid}, true);
+        auto size_to_read = region.getLastEntryEndOffset();
+        auto buffer = read(desc, RelAddress{rid, 0}, size_to_read);
+        if (buffer.size() != size_to_read)
+        {
+            LOG_ERROR(
+                log,
+                fmt::format(
+                    "Failed to read region {} during reclaim. Region size to read: {}, Actually read: {}",
+                    rid.index(),
+                    size_to_read,
+                    buffer.size()));
+            ProfileEvents::increment(ProfileEvents::RegionManagerReclaimRegionErrorCount);
+        }
+        else
+            doEviction(rid, buffer.view());
+    }
+    releaseEvictedRegion(rid, start_time);
 }
 
 RegionDescriptor RegionManager::openForRead(RegionId rid, UInt64 seq_number_)
@@ -378,9 +430,11 @@ void RegionManager::releaseEvictedRegion(RegionId rid, std::chrono::nanoseconds 
 
     region.reset();
     {
-        LockGuard guard{clean_regions_mutex};
+        std::lock_guard<TimedMutex> guard{clean_regions_mutex};
         reclaim_scheduled--;
         clean_regions.push_back(rid);
+        if (clean_regions_cond.numWaiters() > 0)
+            clean_regions_cond.notifyAll();
     }
     ProfileEvents::increment(ProfileEvents::RegionManagerReclaimTimeCount, toMicros(getSteadyClock() - start_time).count());
     ProfileEvents::increment(ProfileEvents::RegionManagerReclaimCount);
@@ -463,6 +517,17 @@ bool RegionManager::isValidIORange(UInt32 offset, UInt32 size) const
     return static_cast<UInt64>(offset) + size <= region_size;
 }
 
+bool RegionManager::deviceWrite(RelAddress addr, Buffer buf)
+{
+    const auto buf_size = buf.size();
+    chassert(isValidIORange(addr.offset(), buf_size));
+    auto phys_offset = physicalOffset(addr);
+    if (!device.write(phys_offset, std::move(buf)))
+        return false;
+    ProfileEvents::increment(ProfileEvents::RegionManagerPhysicalWrittenCount, buf_size);
+    return true;
+}
+
 bool RegionManager::deviceWrite(RelAddress addr, BufferView buf)
 {
     const auto buf_size = buf.size();
@@ -498,8 +563,17 @@ Buffer RegionManager::read(const RegionDescriptor & desc, RelAddress addr, size_
     return device.read(physicalOffset(addr), size);
 }
 
+void RegionManager::drain()
+{
+    for (auto & worker : workers)
+    {
+        worker->drain();
+    }
+}
+
 void RegionManager::flush()
 {
+    drain();
     device.flush();
 }
 }

@@ -557,7 +557,7 @@ include (cmake/find/nuraft.cmake)
 include (cmake/find/yaml-cpp.cmake)
 include (cmake/find/json-c.cmake)
 include (cmake/find/phmap.cmake)
-include (cmake/find/libdeflate.cmake) 
+include (cmake/find/libdeflate.cmake)
 
 if(NOT USE_INTERNAL_PARQUET_LIBRARY)
     set (ENABLE_ORC OFF CACHE INTERNAL "")

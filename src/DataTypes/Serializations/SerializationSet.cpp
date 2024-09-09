@@ -58,9 +58,18 @@ void SerializationSet::serializeBinaryBulk(const IColumn & column, WriteBuffer &
     serializeBinary(column, 0, ostr);
 }
 
-void SerializationSet::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t, double, bool) const
+size_t SerializationSet::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t, double, bool, const UInt8* filter) const
 {
+    if (unlikely(filter != nullptr))
+    {
+        throw Exception("SerializationSet didn't support deserialize filter", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    size_t init_col_size = column.size();
+
     deserializeBinary(column, istr);
+
+    return column.size() - init_col_size;
 }
 
 void SerializationSet::serializeText(const IColumn & , size_t , WriteBuffer & , const FormatSettings &) const

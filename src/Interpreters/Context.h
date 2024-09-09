@@ -81,7 +81,7 @@ namespace DB::Statistics
 {
 struct StatisticsMemoryStore;
 }
-namespace DB::Statistics::AutoStats 
+namespace DB::Statistics::AutoStats
 {
 class AutoStatisticsManager;
 }
@@ -131,6 +131,7 @@ class CloudTableDefinitionCache;
 class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
+class GinIdxFilterResultCache;
 class PrimaryIndexCache;
 class ProcessList;
 class ProcessListEntry;
@@ -211,6 +212,7 @@ class KeeperDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+class CompressedDataIndexCache;
 class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
@@ -328,6 +330,8 @@ using NvmCachePtr = std::shared_ptr<NvmCache>;
 
 class IAsynchronousReader;
 using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
+
+class IOUringReader;
 
 class GinIndexStoreFactory;
 struct GinIndexStoreCacheSettings;
@@ -1195,7 +1199,7 @@ public:
 
     UInt32 getZooKeeperSessionUptime() const;
 
-    void addQueryPlanInfo(String & query_plan_) 
+    void addQueryPlanInfo(String & query_plan_)
     {
         this->query_plan = query_plan_;
     }
@@ -1552,6 +1556,12 @@ public:
     void setChecksumsCache(const ChecksumsCacheSettings & settings_);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
 
+    void setCompressedDataIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<CompressedDataIndexCache> getCompressedDataIndexCache() const;
+
+    void setGinIndexFilterResultCache(size_t cache_size_in_bytes);
+    GinIdxFilterResultCache* getGinIndexFilterResultCache() const;
+
     void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_);
     std::shared_ptr<GinIndexStoreFactory> getGinIndexStoreFactory() const;
 
@@ -1724,6 +1734,9 @@ public:
     void setQueryExpirationTimeStamp();
 
     AsynchronousReaderPtr getThreadPoolReader() const;
+#if USE_LIBURING
+    IOUringReader & getIOUringReader() const;
+#endif
 
     void setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager);
     PreparedStatementManager * getPreparedStatementManager();

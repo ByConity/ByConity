@@ -24,6 +24,7 @@
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Core/Field.h>
 #include <DataTypes/Serializations/SerializationNumber.h>
+#include <DataTypes/Serializations/SerializationHelpers.h>
 #include <Formats/FormatSettings.h>
 #include <Formats/ProtobufReader.h>
 #include <Formats/ProtobufWriter.h>
@@ -207,23 +208,21 @@ void SerializationNumber<T>::serializeBinaryBulk(const IColumn & column, WriteBu
 
 
 template <typename T>
-void classicDeserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit)
+size_t classicDeserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, const UInt8* filter)
 {
     typename ColumnVector<T>::Container & x = typeid_cast<ColumnVector<T> &>(column).getData();
-    size_t initial_size = x.size();
-    x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(typename ColumnVector<T>::ValueType) * limit);
-    x.resize(initial_size + size / sizeof(typename ColumnVector<T>::ValueType));
+    return deserializeBinaryBulkForVector<T>(x, istr, limit, filter, 1);
 }
 
 template <typename T>
-void SerializationNumber<T>::deserializeBinaryBulk(
-    IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool zero_copy_cache_read) const
+size_t SerializationNumber<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit,
+    double /*avg_value_size_hint*/, bool zero_copy_cache_read, const UInt8* filter) const
 {
     ColumnVector<T> & vec_col = typeid_cast<ColumnVector<T> &>(column, false);
 
-    if (zero_copy_cache_read && vec_col.has_zero_buf)
+    if (zero_copy_cache_read && vec_col.has_zero_buf && !filter)
     {
+        size_t init_col_size = column.size();
         if (auto * merged_segment_istr = typeid_cast<MergedReadBufferWithSegmentCache *>(&istr); merged_segment_istr->isInternalCachedCompressedReadBuffer())
         {
             bool incomplete_read = false;
@@ -231,17 +230,18 @@ void SerializationNumber<T>::deserializeBinaryBulk(
 
             if (incomplete_read)
             {
-                classicDeserializeBinaryBulk<T>(column, *merged_segment_istr, limit - size / sizeof(typename ColumnVector<T>::ValueType));
+                classicDeserializeBinaryBulk<T>(column, *merged_segment_istr, limit - size / sizeof(typename ColumnVector<T>::ValueType), nullptr);
             }
         }
         else
         {
-            classicDeserializeBinaryBulk<T>(column, istr, limit);
+            classicDeserializeBinaryBulk<T>(column, istr, limit, nullptr);
         }
+        return column.size() - init_col_size;
     }
     else
     {
-        classicDeserializeBinaryBulk<T>(column, istr, limit);
+        return classicDeserializeBinaryBulk<T>(column, istr, limit, filter);
     }
 }
 

@@ -4,6 +4,7 @@
 #include <IO/WriteHelpers.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/Types.h>
+#include <DataTypes/Serializations/SerializationHelpers.h>
 
 namespace DB
 {
@@ -112,13 +113,10 @@ public:
         if (limit)
             ostr.write(reinterpret_cast<const char *>(&x[offset]), sizeof(IPv) * limit);
     }
-    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/) const override
+    size_t deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/, const UInt8* filter) const override
     {
         typename ColumnVector<IPv>::Container & x = typeid_cast<ColumnVector<IPv> &>(column).getData();
-        size_t initial_size = x.size();
-        x.resize(initial_size + limit);
-        size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(IPv) * limit);
-        x.resize(initial_size + size / sizeof(IPv));
+        return deserializeBinaryBulkForVector<IPv>(x, istr, limit, filter, 1);
     }
 };
 

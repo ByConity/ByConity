@@ -3,13 +3,14 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
-#include <mutex>
 #include <utility>
 #include <vector>
 
 #include <Storages/DiskCache/Buffer.h>
+#include <Storages/DiskCache/ConditionVariable.h>
 #include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/EvictionPolicy.h>
+#include <Storages/DiskCache/FiberThread.h>
 #include <Storages/DiskCache/JobScheduler.h>
 #include <Storages/DiskCache/Region.h>
 #include <Storages/DiskCache/Types.h>
@@ -18,6 +19,10 @@
 
 namespace DB::HybridCache
 {
+
+using folly::fibers::TimedMutex;
+using CondWaiter = ConditionVariable::Waiter;
+
 // Callback that is used to clear index.
 using RegionEvictCallback = std::function<UInt32(RegionId rid, BufferView buffer)>;
 
@@ -34,7 +39,7 @@ public:
         UInt64 base_offset_,
         Device & device_,
         UInt32 num_clean_regions_,
-        JobScheduler & scheduler_,
+        UInt32 num_workers_,
         RegionEvictCallback evict_callback_,
         RegionCleanupCallback cleanup_callback_,
         std::unique_ptr<EvictionPolicy> policy_,
@@ -43,6 +48,9 @@ public:
         UInt16 in_mem_buf_flush_retry_limit_);
     RegionManager(const RegionManager &) = delete;
     RegionManager & operator=(const RegionManager &) = delete;
+
+    // Destroy the worker thread for safety first
+    ~RegionManager() { workers.clear(); }
 
     // Returns the size of usable space.
     UInt64 getSize() const { return static_cast<UInt64>(num_regions) * region_size; }
@@ -94,8 +102,8 @@ public:
         return RelAddress{RegionId(addr.offset() / region_size), static_cast<UInt32>(addr.offset() % region_size)};
     }
 
-    // Assigns a buffer from buffer pool;
-    std::unique_ptr<Buffer> claimBufferFromPool();
+    // Assigns a buffer from buffer pool.
+    std::pair<std::unique_ptr<Buffer>, std::unique_ptr<CondWaiter>> claimBufferFromPool(bool add_waiter);
 
     // Returns the buffer to the pool.
     void returnBufferToPool(std::unique_ptr<Buffer> buf);
@@ -113,10 +121,10 @@ public:
     Region::FlushRes flushBuffer(const RegionId & rid);
 
     // Detaches the buffer from the region and returns the buffer to pool.
-    bool detachBuffer(const RegionId & rid);
+    void detachBuffer(const RegionId & rid);
 
     // Cleans up the in memory buffer when flushing failure reach the retry limit.
-    bool cleanupBufferOnFlushFailure(const RegionId & rid);
+    void cleanupBufferOnFlushFailure(const RegionId & rid);
 
     // Releases a region taht was cleaned up due to in-mem buffer flushing failure.
     void releaseCleanedupRegion(RegionId rid);
@@ -131,8 +139,15 @@ public:
     // Closes the region and consume the region descriptor.
     void close(RegionDescriptor && desc);
 
-    // Fetches a clean region from the list and schedules reclaim jobs to refill the list.
-    OpenStatus getCleanRegion(RegionId & rid);
+    // Fetches a clean region from the list and schedules reclaim
+    // jobs to refill the list. If in-mem buffer mode is enabled, a buffer will be
+    // attached to the fetched clean region.
+    // Returns OpenStatus::Ready if all the operations are successful;
+    // OpenStatus::Retry otherwise.
+    std::pair<OpenStatus, std::unique_ptr<CondWaiter>> getCleanRegion(RegionId & rid, bool add_waiter);
+
+    // Finish all pending jobs
+    void drain();
 
     // Tries to get a free region first, otherwise evicts one and schedules region cleanup job.
     void startReclaim();
@@ -145,18 +160,27 @@ public:
 
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("RegionManager");
+    using LockGuard = std::lock_guard<TimedMutex>;
 
-    using LockGuard = std::lock_guard<std::mutex>;
     UInt64 physicalOffset(RelAddress addr) const { return base_offset + toAbsolute(addr).offset(); }
 
+    FiberThread & getNextWorker() { return *(workers[total_reclaim_scheduled.fetch_add(1, std::memory_order_relaxed) % workers.size()]); }
+
+    bool isOnWorker();
+
+    void doReclaim();
+    void doFlushInternal(RegionId rid);
+
     bool deviceWrite(RelAddress addr, BufferView buf);
+    bool deviceWrite(RelAddress addr, Buffer buf);
 
     bool isValidIORange(UInt32 offset, UInt32 size) const;
-    OpenStatus assignBufferToRegion(RegionId rid);
+    std::pair<OpenStatus, std::unique_ptr<CondWaiter>> assignBufferToRegion(RegionId rid, bool add_waiter);
 
     // Initializes the eviction policy.
     void resetEvictionPolicy();
+
+    Poco::Logger * log = &Poco::Logger::get("RegionManager");
 
     const UInt16 num_priorities{};
     const UInt16 in_mem_buf_flush_retry_limit{};
@@ -167,21 +191,27 @@ private:
     const std::unique_ptr<EvictionPolicy> policy;
     std::unique_ptr<std::unique_ptr<Region>[]> regions;
 
-    mutable std::mutex clean_regions_mutex;
+    mutable TimedMutex clean_regions_mutex;
+    mutable ConditionVariable clean_regions_cond;
     std::vector<RegionId> clean_regions;
     const UInt32 num_clean_regions{};
 
     std::atomic<UInt64> seq_number{0};
 
     UInt32 reclaim_scheduled{0};
-    JobScheduler & scheduler;
+    // The thread that runs the flush and reclaim. For Navy-async thread mode, the
+    // async flushes will be run in-line on fiber by the async FiberThread itself
+    std::vector<std::unique_ptr<FiberThread>> workers;
+    std::unordered_set<FiberThread *> worker_set;
+    mutable std::atomic<uint64_t> total_reclaim_scheduled{0};
 
     const RegionEvictCallback evict_callback;
     const RegionCleanupCallback cleanup_callback;
 
     const UInt32 num_in_mem_buffers{0};
 
-    mutable std::mutex buffer_mutex;
+    mutable TimedMutex buffer_mutex;
+    mutable ConditionVariable buffer_cond;
     std::vector<std::unique_ptr<Buffer>> buffers;
 };
 }

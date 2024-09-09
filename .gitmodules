@@ -26,7 +26,7 @@
 	url = https://github.com/google/double-conversion.git
 [submodule "contrib/re2"]
 	path = contrib/re2
-    url = https://github.com/google/re2
+  url = https://github.com/google/re2
 [submodule "contrib/llvm"]
 	path = contrib/llvm
 	url = https://github.com/ClickHouse-Extras/llvm
@@ -171,7 +171,7 @@
 [submodule "contrib/msgpack-c"]
 	path = contrib/msgpack-c
 	url = https://github.com/msgpack/msgpack-c
-    branch = cpp_master
+  branch = cpp_master
 [submodule "contrib/libcpuid"]
 	path = contrib/libcpuid
 	url = https://github.com/ClickHouse-Extras/libcpuid.git
@@ -180,7 +180,7 @@
 	url = https://github.com/ClickHouse-Extras/openldap.git
 [submodule "contrib/AMQP-CPP"]
 	path = contrib/AMQP-CPP
-	url = https://github.com/ClickHouse-Extras/AMQP-CPP.git
+	url = https://github.cockHouse/AMQP-CPP.git
 [submodule "contrib/libuv"]
 	path = contrib/libuv
 	url = https://github.com/ClickHouse-Extras/libuv.git
@@ -213,6 +213,14 @@
 [submodule "contrib/xz"]
 	path = contrib/xz
 	url = https://github.com/xz-mirror/xz
+[submodule "contrib/folly"]
+	path = contrib/folly
+	url = https://github.com/ByConity/folly.git
+	branch = cnch-master
+[submodule "contrib/glog"]
+	path = contrib/glog
+	url = https://github.com/ByConity/glob.git
+	branch = cnch-master
 [submodule "contrib/abseil-cpp"]
 	path = contrib/abseil-cpp
 	url = https://github.com/ClickHouse-Extras/abseil-cpp.git
@@ -325,19 +333,28 @@
 	url = https://github.com/corrosion-rs/corrosion.git
 [submodule "contrib/libstemmer_c"]
 	path = contrib/libstemmer_c
-    url = https://github.com/ClickHouse/libstemmer_c.git
+  url = https://github.com/ClickHouse/libstemmer_c.git
 [submodule "contrib/wordnet-blast"]
 	path = contrib/wordnet-blast
-    url = https://github.com/ClickHouse/wordnet-blast
+  url = https://github.com/ClickHouse/wordnet-blast
 [submodule "contrib/lemmagen-c"]
 	path = contrib/lemmagen-c
-    url = https://github.com/ClickHouse/lemmagen-c
+  url = https://github.com/ClickHouse/lemmagen-c
 [submodule "contrib/cld2"]
 	path = contrib/cld2
-    url = https://github.com/ClickHouse/cld2
+  url = https://github.com/ClickHouse/cld2
 [submodule "contrib/nlp-data"]
 	path = contrib/nlp-data
-    url = https://github.com/ClickHouse/nlp-data
+  url = https://github.com/ClickHouse/nlp-data
 [submodule "contrib/libdeflate"]
 	path = contrib/libdeflate
 	url = https://github.com/ByConity/libdeflate.git
+[submodule "contrib/liburing"]
+	path = contrib/liburing
+	url = https://github.com/axboe/liburing.git
+[submodule "contrib/sparse-map"]
+	path = contrib/sparse-map
+	url = https://github.com/Tessil/sparse-map.git
+[submodule "contrib/libevent"]
+	path = contrib/libevent
+	url = https://github.com/ByConity/libevent.git

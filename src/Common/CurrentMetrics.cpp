@@ -213,8 +213,10 @@
     M(RegionManagerNumInMemBufWaitingFlush, "RegionManager number of in-memory waiting flush buffer") \
 \
     M(IOSchUserRequests, "UserRequests in io scheduler") \
-    M(IOSchRawRequests, "RawRequests in deadline scheduler")
-
+    M(IOSchRawRequests, "RawRequests in deadline scheduler") \
+\
+    M(IOUringPendingEvents, "Number of io_uring SQEs waiting to be submitted") \
+    M(IOUringInFlightEvents, "Number of io_uring SQEs in flight")
 
 namespace CurrentMetrics
 {

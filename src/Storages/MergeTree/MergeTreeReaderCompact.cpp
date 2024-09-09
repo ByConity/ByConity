@@ -256,8 +256,9 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
     }
 }
 
-size_t MergeTreeReaderCompact::readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row,
-    size_t max_rows_to_read, Columns& res_columns)
+size_t MergeTreeReaderCompact::readRows(size_t from_mark, size_t from_row,
+    size_t max_rows_to_read, size_t current_task_last_mark, const UInt8* filter,
+    Columns & res_columns)
 {
     size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(
         from_mark);
@@ -281,11 +282,13 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, size_t current_task_la
 
     adjacent_reading = rows_to_skip > 0 || starting_row == next_row_number_to_read;
 
-    return resumableReadRows(from_mark, adjacent_reading, current_task_last_mark, max_rows_to_read, res_columns);
+    return resumableReadRows(from_mark, adjacent_reading, current_task_last_mark,
+        max_rows_to_read, filter, res_columns);
 }
 
-size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue_reading, size_t current_task_last_mark,
-    size_t max_rows_to_read, Columns & res_columns)
+size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue_reading,
+    size_t current_task_last_mark, size_t max_rows_to_read, const UInt8* filter,
+    Columns & res_columns)
 {
     if (continue_reading)
         from_mark = next_mark;
@@ -312,7 +315,7 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
         }
     }
 
-    sort_columns = columns;
+    auto sort_columns = columns;
     if (!dup_implicit_keys.empty())
         sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
 
@@ -320,6 +323,7 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(from_mark);
 
+        std::unordered_map<String, ISerialization::SubstreamsCache> caches;
         int row_number_column_pos = -1;
         auto name_and_type = sort_columns.begin();
         for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
@@ -347,16 +351,19 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
                 auto & cache = caches[column_from_part.getNameInStorage()];
 
                 if (type->isByteMap())
-                    readMapDataNotKV(
-                        column_from_part, column, from_mark, continue_reading, current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
+                    readMapDataNotKV(column_from_part, column, from_mark, continue_reading,
+                        current_task_last_mark, rows_to_read, caches, res_col_to_idx, filter,
+                        res_columns);
                 else if (isMapImplicitKey(name))
-                    readData(column_from_part, column, from_mark, continue_reading, current_task_last_mark, rows_to_read, cache);
+                    readData(column_from_part, column, from_mark, continue_reading,
+                        current_task_last_mark, rows_to_read, filter, cache);
                 else
                 {
                     if (!data_reader)
                         throw Exception("Compact data reader is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
 
-                    readCompactData(column_from_part, column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
+                    readCompactData(column_from_part, column, from_mark, *column_positions[pos],
+                        rows_to_read, filter, read_only_offsets[pos]);
                 }
 
                 if (column->empty())
@@ -402,7 +409,8 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
             ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
             size_t row_number = data_part->index_granularity.getMarkStartingRow(from_mark);
             for (size_t i = 0; i < rows_to_read; ++i)
-                column.insertValue(row_number++);
+                if (filter == nullptr || *(filter + i) != 0)
+                    column.insertValue(row_number++);
             res_columns[row_number_column_pos] = std::move(mutable_column);
         }
 
@@ -418,7 +426,8 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
 
 void MergeTreeReaderCompact::readCompactData(
     const NameAndTypePair & name_and_type, ColumnPtr & column,
-    size_t from_mark, size_t column_position, size_t rows_to_read, bool only_offsets)
+    size_t from_mark, size_t column_position, size_t rows_to_read,
+    const UInt8* filter, bool only_offsets)
 {
     const auto & [name, type] = name_and_type;
 
@@ -437,6 +446,7 @@ void MergeTreeReaderCompact::readCompactData(
     ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
     deserialize_settings.getter = buffer_getter;
     deserialize_settings.avg_value_size_hint = avg_value_size_hints[name];
+    deserialize_settings.filter = filter;
 
     if (name_and_type.isSubcolumn())
     {

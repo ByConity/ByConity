@@ -82,7 +82,6 @@
 #include <Storages/System/StorageSystemCnchKafkaTables.h>
 #endif
 #include <Storages/System/StorageSystemVirtualWarehouseQueryQueue.h>
-#include <Storages/System/StorageSystemCnchTransactions.h>
 #include <Storages/System/StorageSystemCnchFilesystemLock.h>
 #include "Storages/System/StorageSystemExternalTables.h"
 
@@ -131,6 +130,7 @@
 #include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
 #include <Storages/System/StorageSystemCnchSnapshots.h>
+#include <Storages/System/StorageSystemCnchTransactions.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemCnchParts.h>
 #include <Storages/System/StorageSystemCnchPartsColumns.h>
@@ -140,6 +140,7 @@
 #include <Storages/System/StorageSystemCnchTrashItemsInfoLocal.h>
 #include <Storages/System/StorageSystemCnchTableHost.h>
 #include <Storages/System/StorageSystemCnchTableInfo.h>
+#include <Storages/System/StorageSystemCnchTableTransactions.h>
 #include <Storages/System/StorageSystemCnchTables.h>
 #include <Storages/System/StorageSystemCnchViewTables.h>
 #include <Storages/System/StorageSystemCnchTablesHistory.h>
@@ -279,6 +280,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchTrashItemsInfoLocal>(system_database, "cnch_trash_items_info_local");
     attach<StorageSystemCnchTrashItemsInfo>(system_database, "cnch_trash_items_info");
     attach<StorageSystemCnchTableInfo>(system_database, "cnch_table_info");
+    attach<StorageSystemCnchTableTransactions>(system_database, "cnch_table_transactions");
     attach<StorageSystemCnchTablesHistory>(system_database, "cnch_tables_history");
     attach<StorageSystemCnchDatabases>(system_database, "cnch_databases");
     attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");

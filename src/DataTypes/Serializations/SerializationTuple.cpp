@@ -428,7 +428,7 @@ void SerializationTuple::serializeBinaryBulkWithMultipleStreams(
     }
 }
 
-void SerializationTuple::deserializeBinaryBulkWithMultipleStreams(
+size_t SerializationTuple::deserializeBinaryBulkWithMultipleStreams(
     ColumnPtr & column,
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
@@ -441,8 +441,10 @@ void SerializationTuple::deserializeBinaryBulkWithMultipleStreams(
     auto & column_tuple = assert_cast<ColumnTuple &>(*mutable_column);
 
     settings.avg_value_size_hint = 0;
+    size_t init_col_size = column_tuple.size();
     for (const auto i : collections::range(0, elems.size()))
         elems[i]->deserializeBinaryBulkWithMultipleStreams(column_tuple.getColumnPtr(i), limit, settings, tuple_state->states[i], cache);
+    return column_tuple.size() - init_col_size;
 }
 
 size_t SerializationTuple::getPositionByName(const String & name) const

@@ -304,7 +304,7 @@ void SerializationObject<Parser>::serializeBinaryBulkWithMultipleStreams(
 }
 
 template <typename Parser>
-void SerializationObject<Parser>::deserializeBinaryBulkWithMultipleStreams(
+size_t SerializationObject<Parser>::deserializeBinaryBulkWithMultipleStreams(
     ColumnPtr & column,
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
@@ -320,20 +320,24 @@ void SerializationObject<Parser>::deserializeBinaryBulkWithMultipleStreams(
     auto & column_object = assert_cast<ColumnObject &>(*mutable_column);
     auto * state_object = checkAndGetState<DeserializeStateObject>(state);
 
+    size_t processed_rows = 0;
+
     settings.path.push_back(Substream::ObjectData);
     if (state_object->kind == BinarySerializationKind::STRING)
-        deserializeBinaryBulkFromString(column_object, limit, settings, *state_object, cache);
+        processed_rows = deserializeBinaryBulkFromString(column_object, limit, settings, *state_object, cache);
     else
-        deserializeBinaryBulkFromTuple(column_object, limit, settings, *state_object, cache);
+        processed_rows = deserializeBinaryBulkFromTuple(column_object, limit, settings, *state_object, cache);
 
     settings.path.pop_back();
     column_object.checkConsistency();
     column_object.finalize();
     column = std::move(mutable_column);
+
+    return processed_rows;
 }
 
 template <typename Parser>
-void SerializationObject<Parser>::deserializeBinaryBulkFromString(
+size_t SerializationObject<Parser>::deserializeBinaryBulkFromString(
     ColumnObject & column_object,
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
@@ -341,14 +345,16 @@ void SerializationObject<Parser>::deserializeBinaryBulkFromString(
     SubstreamsCache * cache) const
 {
     ColumnPtr column_string = state.nested_type->createColumn();
-    state.nested_serialization->deserializeBinaryBulkWithMultipleStreams(
+    size_t processed_rows = state.nested_serialization->deserializeBinaryBulkWithMultipleStreams(
         column_string, limit, settings, state.nested_state, cache);
 
     ConvertImplGenericFromString<ColumnString>::executeImpl(*column_string, column_object, *this, column_string->size());
+
+    return processed_rows;
 }
 
 template <typename Parser>
-void SerializationObject<Parser>::deserializeBinaryBulkFromTuple(
+size_t SerializationObject<Parser>::deserializeBinaryBulkFromTuple(
     ColumnObject & column_object,
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
@@ -356,7 +362,7 @@ void SerializationObject<Parser>::deserializeBinaryBulkFromTuple(
     SubstreamsCache * cache) const
 {
     ColumnPtr column_tuple = state.nested_type->createColumn();
-    state.nested_serialization->deserializeBinaryBulkWithMultipleStreams(
+    size_t processed_rows = state.nested_serialization->deserializeBinaryBulkWithMultipleStreams(
         column_tuple, limit, settings, state.nested_state, cache);
 
     auto [tuple_paths, tuple_types] = flattenTuple(state.nested_type);
@@ -373,6 +379,8 @@ void SerializationObject<Parser>::deserializeBinaryBulkFromTuple(
 
     for (size_t i = 0; i < num_subcolumns; ++i)
         column_object.addSubcolumn(tuple_paths[i], tuple_columns[i]->assumeMutable());
+
+    return processed_rows;
 }
 
 template <typename Parser>

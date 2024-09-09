@@ -37,14 +37,13 @@
 #include <boost/algorithm/string/join.hpp>
 #include <common/logger_useful.h>
 #include "Storages/ColumnsDescription.h"
-#include <DataTypes/DataTypeDateTime64.h>
-#include <Functions/now64.h>
+#include <boost/range/adaptor/reversed.hpp>
 
 namespace DB::Statistics
 {
 StorageMetadataPtr getStorageMetaData(ContextPtr context, StoragePtr storage)
 {
-    (void) context;
+    (void)context;
     StorageMetadataPtr storage_metadata = storage->getInMemoryMetadataPtr();
     // for Cnch, no need to workaround Distribtued
     return storage_metadata;
@@ -66,7 +65,7 @@ StatisticsCollector::StatisticsCollector(
 #endif
 
     settings.set_collect_in_partitions(false);
-    if (storage->getName() == "HiveCluster") 
+    if (storage->getName() == "HiveCluster")
     {
         settings.set_enable_sample(false);
     }
@@ -231,7 +230,7 @@ PlanNodeStatisticsPtr expandToCurrent(ContextPtr context, PlanNodeStatisticsPtr 
     auto date_helper = TypeHelper{.now = datetime_helper.now / (24 * 3600), .skip = datetime_helper.skip / (24 * 3600)};
 
     std::set<String> modified_cols;
-    auto all_scale_factor = 0.0;
+    UInt64 all_delta_count = 0;
     for (auto & [col_name, symbol] : plan_node_stats->getSymbolStatistics())
     {
         auto type = symbol->getType();
@@ -244,9 +243,8 @@ PlanNodeStatisticsPtr expandToCurrent(ContextPtr context, PlanNodeStatisticsPtr 
         {
             auto helper = is_date ? date_helper : datetime_helper;
 
-            auto stats_min = symbol_stats->getMin();
             auto stats_max = symbol_stats->getMax();
-            if (std::isnan(stats_min) || std::isnan(stats_max))
+            if (std::isnan(stats_max))
             {
                 continue;
             }
@@ -263,27 +261,58 @@ PlanNodeStatisticsPtr expandToCurrent(ContextPtr context, PlanNodeStatisticsPtr 
                 continue;
             }
 
-            // +1 to avoid inf
-            auto scale_factor = (helper.now - stats_min + 1) / (stats_max - stats_min + 1);
-
-            // we hard code scale_factor limit to 2, to avoid unexpected situations
-            // like some column stores a fixed old date_time
-            scale_factor = std::min(scale_factor, 2.0);
-
-            // we just set max here, scale it in next step
-            symbol_stats->setMax(helper.now);
             auto & histogram = symbol_stats->getHistogram();
-            if (!histogram.empty())
+            UInt64 delta_count = 0;
+            if (histogram.empty())
             {
-                auto count = (scale_factor - 1) * (full_count - symbol_stats->getNullsCount());
-                auto ndv = (scale_factor - 1) * symbol_stats->getNdv();
-                auto new_bucket = Bucket(stats_max, helper.now, ndv, count, false, true);
-                histogram.emplaceBackBucket(new_bucket);
+                auto stats_min = symbol_stats->getMin();
+                if (isnan(stats_min))
+                    continue;
+                // +1 to avoid inf
+                auto expand_factor = (helper.now - stats_max) / (stats_max - stats_min + 1);
+
+                // we hard code expand_factor limit to 1, to avoid unexpected situations
+                // like some column stores a fixed old date_time
+                expand_factor = std::min(expand_factor, 1.0);
+
+                // we just set max here, scale it in next step
+                symbol_stats->setNdv(symbol_stats->getNdv() * (1 + expand_factor));
+                symbol_stats->setMax(helper.now);
+                delta_count = expand_factor * full_count;
             }
-            symbol_stats->setNdv(symbol_stats->getNdv() * scale_factor);
+            else
+            {
+                double hist_ratio = context->getSettingsRef().statistics_expand_to_current_histogram_ratio;
+                UInt64 bucket_id = static_cast<UInt64>(histogram.getBucketSize() * (1 - hist_ratio));
+
+                if (bucket_id == histogram.getBucketSize())
+                {
+                    --bucket_id;
+                }
+
+                auto stats_min = histogram.getBucket(bucket_id)->getLowerBound();
+                UInt64 tail_hist_count = 0;
+                UInt64 tail_hist_ndv = 0;
+                for(auto i = bucket_id; i < histogram.getBucketSize(); ++i)
+                {
+                    auto bucket = histogram.getBuckets()[i];
+                    tail_hist_count += bucket.getCount();
+                    tail_hist_ndv += bucket.getNumDistinct();
+                }
+                auto local_expand_factor = 1.0 * (helper.now - stats_max) / (stats_max - stats_min + 1);
+                local_expand_factor = std::min(1.0 * full_count / tail_hist_count, local_expand_factor);
+                auto local_count = local_expand_factor * tail_hist_count;
+                auto local_ndv =  local_expand_factor * tail_hist_ndv;
+                auto new_bucket = Bucket(stats_max, helper.now, local_ndv, local_count, false, true);
+                histogram.emplaceBackBucket(std::move(new_bucket));
+
+                delta_count = local_count;
+                symbol_stats->setMax(helper.now);
+                symbol_stats->setNdv(symbol_stats->getNdv() + local_ndv);
+            }
             modified_cols.insert(col_name);
 
-            all_scale_factor = std::max(all_scale_factor, scale_factor);
+            all_delta_count = std::max(all_delta_count, delta_count);
         }
     }
 
@@ -292,14 +321,14 @@ PlanNodeStatisticsPtr expandToCurrent(ContextPtr context, PlanNodeStatisticsPtr 
         return plan_node_stats;
     }
 
-    if (all_scale_factor == 0.0)
+    if (all_delta_count == 0)
     {
         return plan_node_stats;
     }
 
-    auto old_count = plan_node_stats->getRowCount();
-    plan_node_stats->updateRowCount(old_count * all_scale_factor);
+    plan_node_stats->updateRowCount(full_count + all_delta_count);
 
+    auto scale_factor = 1.0 * (full_count + all_delta_count) / full_count;
     for (auto & [col, symbol] : plan_node_stats->getSymbolStatistics())
     {
         if (modified_cols.count(col))
@@ -309,7 +338,7 @@ PlanNodeStatisticsPtr expandToCurrent(ContextPtr context, PlanNodeStatisticsPtr 
 
         // NOTE: we have made sure selectivity can be larger than 1 using this API
         // NOTE: future improvement should consider this scenario
-        symbol = symbol->applySelectivity(all_scale_factor, 1);
+        symbol = symbol->applySelectivity(scale_factor, 1);
     }
 
     return plan_node_stats;

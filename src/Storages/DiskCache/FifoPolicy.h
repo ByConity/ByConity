@@ -1,9 +1,9 @@
 #pragma once
 
 #include <chrono>
-#include <mutex>
 
 #include <Poco/Logger.h>
+#include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/EvictionPolicy.h>
 #include <Storages/DiskCache/Types.h>
@@ -11,6 +11,9 @@
 
 namespace DB::HybridCache
 {
+
+using folly::fibers::TimedMutex;
+
 namespace detail
 {
     struct Node
@@ -40,7 +43,7 @@ public:
 
     size_t memorySize() const override
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         return sizeof(*this) + sizeof(detail::Node) * queue.size();
     }
 
@@ -48,7 +51,7 @@ private:
     Poco::Logger * log = &Poco::Logger::get("FifoPolicy");
 
     std::deque<detail::Node> queue;
-    mutable std::mutex mutex;
+    mutable TimedMutex mutex;
 };
 
 class SegmentedFifoPolicy final : public EvictionPolicy
@@ -77,6 +80,6 @@ private:
     const unsigned int total_ratio_weight;
 
     std::vector<std::deque<detail::Node>> segments;
-    mutable std::mutex mutex;
+    mutable TimedMutex mutex;
 };
 }

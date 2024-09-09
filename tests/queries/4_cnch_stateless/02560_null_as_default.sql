@@ -9,7 +9,7 @@ create table test (x LowCardinality(String) default 'Hello') engine=CnchMergeTre
 insert into test select (number % 2 ? NULL : 'World')::LowCardinality(Nullable(String)) from numbers(2);
 select * from test order by x;
 drop table test;
-
+select NULL::LowCardinality(Nullable(String));
 drop table if exists source_table;
 drop table if exists target_table;
 

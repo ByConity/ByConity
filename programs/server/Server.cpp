@@ -1218,12 +1218,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     checksum_cache_settings.lru_update_interval = config().getUInt64("checksum_cache_lru_update_interval", 60); //60 seconds
     global_context->setChecksumsCache(checksum_cache_settings);
 
+    global_context->setCompressedDataIndexCache(config().getUInt64("compressed_data_index_cache", 5368709120));
+
+    global_context->setGinIndexFilterResultCache(config().getUInt64("gin_index_filter_result_cache", 5368709120)); // 5GB
 
     /// A cache for gin index store
     GinIndexStoreCacheSettings ginindex_store_cache_settings;
     ginindex_store_cache_settings.lru_max_size = config().getUInt64("ginindex_store_cache_size", 5368709120); //5GB
-    ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 5000); //5000
-    ginindex_store_cache_settings.cache_shard_num = config().getUInt64("ginindex_store_cache_shard", 8); //8
+    ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 1000); //1000
+    ginindex_store_cache_settings.cache_shard_num = config().getUInt64("ginindex_store_cache_shard", 2); //2
     ginindex_store_cache_settings.lru_update_interval = config().getUInt64("ginindex_store_cache_lru_update_interval", 60); //60 seconds
     global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
 

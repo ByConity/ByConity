@@ -627,7 +627,7 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
 
     size_t deleted_count = 0;
     Columns columns(1);
-    auto read_rows = reader->readRows(0, getMarksCount(), false, rows_count, columns);
+    auto read_rows = reader->readRows(0, 0, rows_count, getMarksCount(), nullptr, columns);
     if (read_rows != rows_count)
     {
         throw Exception(
@@ -1233,11 +1233,6 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
 {
     Stopwatch watch;
     String full_path = getFullPath();
-    if (isPartial())
-    {
-        LOG_WARNING(storage.log, "Preload partial parts in invalid: {}", full_path);
-        return;
-    }
 
     String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
     if (!volume->getDisk()->fileExists(part_path))

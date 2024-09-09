@@ -264,11 +264,6 @@ void MySQLHandler::run()
         if (!(client_capabilities & CLIENT_PROTOCOL_41))
             throw Exception("Required capability: CLIENT_PROTOCOL_41.", ErrorCodes::MYSQL_CLIENT_INSUFFICIENT_CAPABILITIES);
 
-        handshake_response.username = connection_context->formatUserName(handshake_response.username);
-        authenticate(handshake_response.username, handshake_response.auth_plugin_name, handshake_response.auth_response);
-
-        connection_context->getClientInfo().initial_user = handshake_response.username;
-
         try
         {
             auto &default_database = handshake_response.database;
@@ -304,6 +299,11 @@ void MySQLHandler::run()
             log->log(exc);
             packet_endpoint->sendPacket(ERRPacket(exc.code(), "HY000", exc.message()), true);
         }
+
+        handshake_response.username = connection_context->formatUserName(handshake_response.username);
+        authenticate(handshake_response.username, handshake_response.auth_plugin_name, handshake_response.auth_response);
+
+        connection_context->getClientInfo().initial_user = handshake_response.username;
 
         OKPacket ok_packet(0, handshake_response.capability_flags, 0, 0, 0);
         packet_endpoint->sendPacket(ok_packet, true);

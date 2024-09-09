@@ -1,4 +1,3 @@
-#include <mutex>
 #include <unistd.h>
 
 #include <Storages/DiskCache/LruPolicy.h>
@@ -18,7 +17,7 @@ void LruPolicy::touch(RegionId rid)
 {
     chassert(rid.valid());
     auto i = rid.index();
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard<TimedMutex> guard{mutex};
     if (i >= array.size())
         array.resize(i + 1);
 
@@ -36,7 +35,7 @@ void LruPolicy::track(const Region & region)
     auto rid = region.id();
     chassert(rid.valid());
     auto i = rid.index();
-    std::lock_guard<std::mutex> guard{mutex};
+    std::lock_guard<TimedMutex> guard{mutex};
     if (i >= array.size())
         array.resize(i + 1);
 
@@ -52,7 +51,7 @@ RegionId LruPolicy::evict()
     UInt32 ret_region{kInvalidIndex};
 
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         if (tail == kInvalidIndex)
             return RegionId{};
         ret_region = tail;
@@ -64,7 +63,7 @@ RegionId LruPolicy::evict()
 
 void LruPolicy::reset()
 {
-    std::lock_guard<std::mutex> lock{mutex};
+    std::lock_guard<TimedMutex> lock{mutex};
     array.clear();
     head = kInvalidIndex;
     tail = kInvalidIndex;

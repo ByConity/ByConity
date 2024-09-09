@@ -52,7 +52,7 @@ public:
 
     /// Check if the filter (built from query string) contains any rows in given filter by using
     /// given postings list cache
-    bool contains(const GinFilter & filter, PostingsCacheForStore & cache_store, roaring::Roaring & filter_result) const;
+    bool contains(const GinFilter & filter, PostingsCacheForStore & cache_store, roaring::Roaring * filter_result) const;
 
     /// Set the query string of the filter
     void setQueryString(const char * data, size_t len)
@@ -81,6 +81,8 @@ public:
     // for log trace
     String getTermsInString() const;
 
+    const GinFilterParameters& getParams() const { return params; }
+
 private:
     /// Filter parameters
     [[__maybe_unused__]] const GinFilterParameters & params;
@@ -95,7 +97,7 @@ private:
     GinSegmentWithRowIdRangeVector rowid_ranges;
 
     /// Check if the given postings list cache has matched rows by using the filter
-    bool match(const GinPostingsCache & postings_cache, roaring::Roaring & filter_result) const;
+    bool match(const GinPostingsCache & postings_cache, roaring::Roaring * filter_result) const;
 };
 
 using GinFilters = std::vector<GinFilter>;

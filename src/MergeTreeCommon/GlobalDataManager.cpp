@@ -13,11 +13,11 @@ void GlobalDataManager::loadDataPartsWithDBM(
     const UUID & storage_uuid,
     const UInt64 table_version,
     const WGWorkerInfoPtr & runtime_worker_info,
-    ServerDataPartsWithDBM & server_parts)
+    std::unordered_map<String, ServerDataPartsWithDBM> & server_parts,
+    std::vector<std::shared_ptr<MergeTreePartition>> & partitions)
 {
     auto storage_manager = getStorageDataManager(storage_uuid, runtime_worker_info);
-
-    return storage_manager->loadDataPartsWithDBM(storage, table_version, server_parts);
+    return storage_manager->loadDataPartsWithDBM(storage, table_version, server_parts, partitions);
 }
 
 StorageDataManagerPtr GlobalDataManager::getStorageDataManager(const UUID & storage_uuid)

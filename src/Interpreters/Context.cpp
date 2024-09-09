@@ -60,6 +60,8 @@
 #include <Databases/IDatabase.h>
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
 #include <Disks/DiskLocal.h>
+#include <Disks/IO/IOUringReader.h>
+#include <Disks/IO/getIOUringReader.h>
 #include <Formats/FormatFactory.h>
 #include <IO/MMappedFileCache.h>
 #include <IO/ReadBufferFromFile.h>
@@ -137,6 +139,7 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/PartCacheManager.h>
+#include <Storages/MergeTree/GinIdxFilterResultCache.h>
 #include <Storages/StorageS3Settings.h>
 #include <Storages/UniqueKeyIndexCache.h>
 #include <TSO/TSOClient.h>
@@ -195,7 +198,6 @@
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
-#include <Storages/StorageS3Settings.h>
 
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>
@@ -417,6 +419,10 @@ struct ContextSharedPart
     /// global primary index cache
     mutable PrimaryIndexCachePtr primary_index_cache;
 
+    mutable std::shared_ptr<CompressedDataIndexCache> compressed_data_index_cache;
+
+    mutable std::unique_ptr<GinIdxFilterResultCache> gin_idx_filter_result_cache;
+
     mutable std::shared_ptr<GinIndexStoreFactory> ginindex_store_factory;
 
     mutable ServiceDiscoveryClientPtr sd;
@@ -508,6 +514,11 @@ struct ContextSharedPart
     std::unique_ptr<PlanCacheManager> plan_cache_manager;
 
     std::unique_ptr<PreparedStatementManager> prepared_statement_manager;
+
+#if USE_LIBURING
+    mutable std::once_flag io_uring_reader_initialized;
+    mutable std::vector<std::unique_ptr<IOUringReader>> io_uring_reader;
+#endif
 
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
@@ -837,6 +848,13 @@ ReadSettings Context::getReadSettings() const
     res.parquet_decode_threads = settings.max_download_threads;
     res.filtered_ratio_to_use_skip_read = settings.filtered_ratio_to_use_skip_read;
     res.zero_copy_read_from_cache = settings.enable_zero_copy_read;
+    if (settings.enable_io_uring_for_local_fs_read)
+    {
+        if (getIOUringReader().isSupported())
+            res.local_fs_method = LocalFSReadMethod::io_uring;
+        else
+            LOG_WARNING(&Poco::Logger::get("Context"), "IOUring is not supported, use default local_fs_method");
+    }
 
     return res;
 }
@@ -1620,9 +1638,11 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
             client_info.current_password = basic_credentials->getPassword();
         //#endif
 
+        String tenant = getTenantId();
         params = getAccessControlManager().getContextAccessParams(
             new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "",
+            tenant,
+            has_tenant_id_in_username,
             getServerType() != ServerType::cnch_server);
     }
 
@@ -1737,7 +1757,7 @@ void Context::calculateAccessRightsWithLock(const std::unique_lock<SharedMutex> 
     {
         auto params = getAccessControlManager().getContextAccessParams(
             *user_id, current_roles, use_default_roles, settings, current_database, client_info,
-            has_tenant_id_in_username ? tenant_id : "", false);
+            tenant_id, has_tenant_id_in_username, false);
         access = getAccessControlManager().getContextAccess(params);
     }
 }
@@ -5002,6 +5022,33 @@ std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
     return shared->checksums_cache;
 }
 
+void Context::setCompressedDataIndexCache(size_t cache_size_in_bytes)
+{
+    if (shared->compressed_data_index_cache)
+        throw Exception("Compressed data index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+    shared->compressed_data_index_cache = std::make_shared<CompressedDataIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<CompressedDataIndexCache> Context::getCompressedDataIndexCache() const
+{
+    return shared->compressed_data_index_cache;
+}
+
+void Context::setGinIndexFilterResultCache(size_t cache_size_in_bytes)
+{
+    if (shared->gin_idx_filter_result_cache)
+        throw Exception("GinIndex postings cache has been already created.",
+            ErrorCodes::LOGICAL_ERROR);
+    if (cache_size_in_bytes != 0)
+        shared->gin_idx_filter_result_cache = std::make_unique<GinIdxFilterResultCache>(
+            cache_size_in_bytes, 8);
+}
+
+GinIdxFilterResultCache* Context::getGinIndexFilterResultCache() const
+{
+    return shared->gin_idx_filter_result_cache.get();
+}
+
 void Context::setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_)
 {
     if (shared->ginindex_store_factory)
@@ -5776,7 +5823,7 @@ Context::PartAllocator Context::getPartAllocationAlgo(MergeTreeSettingsPtr table
     auto algorithm = table_settings->cnch_part_allocation_algorithm >= 0 ? table_settings->cnch_part_allocation_algorithm : settings.cnch_part_allocation_algorithm;
     LOG_DEBUG(shared->log, "Send query with cnch_part_allocation_algorithm = {}, system setting = {}, table setting = {}", algorithm, settings.cnch_part_allocation_algorithm, table_settings->cnch_part_allocation_algorithm);
 
-    switch (settings.cnch_part_allocation_algorithm)
+    switch (algorithm)
     {
         case 0:
             return PartAllocator::JUMP_CONSISTENT_HASH;
@@ -5960,4 +6007,23 @@ AsynchronousReaderPtr Context::getThreadPoolReader() const
     });
     return shared->asynchronous_remote_fs_reader;
 }
+
+#if USE_LIBURING
+IOUringReader & Context::getIOUringReader() const
+{
+    std::call_once(shared->io_uring_reader_initialized, [&] {
+        const Poco::Util::AbstractConfiguration & config = getConfigRef();
+        auto num_iouring_readers = config.getUInt(".iouring_reader_num", 32);
+        auto num_sq_entries = config.getUInt(".iouring_reader_sq_entry_num", 512);
+        shared->io_uring_reader.resize(num_iouring_readers);
+        for (auto &i : shared->io_uring_reader)
+            i = createIOUringReader(num_sq_entries);
+    });
+
+    auto &reader = shared->io_uring_reader[getThreadId() % shared->io_uring_reader.size()];
+    if (!reader)
+        throw Exception("Try to get a null IOUringReader.", ErrorCodes::SYSTEM_ERROR);
+    return *reader;
+}
+#endif
 }

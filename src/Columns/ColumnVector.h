@@ -230,6 +230,8 @@ public:
         data.resize_assume_reserved(data.size() - n);
     }
 
+    void shrink(size_t to_size) override;
+
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
 
     const char * deserializeAndInsertFromArena(const char * pos) override;

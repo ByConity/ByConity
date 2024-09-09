@@ -48,10 +48,8 @@ public:
         const ProgressCallback & internal_progress_cb_ = {},
         clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);
 
-    /// Return the number of rows has been read or zero if there is no columns to read.
-    /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
-    size_t readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row, size_t max_rows_to_read,
-        Columns & res_columns) override;
+    size_t readRows(size_t from_mark, size_t from_row, size_t max_rows_to_read,
+        size_t current_task_last_mark, const UInt8* filter, Columns& res_columns) override;
 
     bool canReadIncompleteGranules() const override { return true; }
 
@@ -73,12 +71,10 @@ private:
         const ProgressCallback & internal_progress_cb,
         clockid_t clock_type, FileStreamBuilders* stream_builders);
 
-    size_t skipUnnecessaryRows(size_t num_columns, size_t from_mark,
-        bool continue_reading, size_t current_task_last_mark, size_t rows_to_skip);
-
-    size_t readNecessaryRows(size_t num_columns, size_t from_mark,
-        bool continue_reading, size_t current_task_last_mark, size_t rows_to_read,
-        std::unordered_map<String, size_t>& res_col_to_idx, Columns& res_columns);
+    size_t readBatch(const NamesAndTypesList& sort_columns, size_t num_columns,
+        size_t from_mark, bool continue_reading, size_t rows_to_read,
+        size_t current_task_last_mark, std::unordered_map<String, size_t>& res_col_to_idx,
+        const UInt8* filter, Columns& res_columns);
 
     size_t readIndexColumns(size_t from_mark, bool continue_reading, size_t max_rows,
         Columns& res_bitmap_columns);

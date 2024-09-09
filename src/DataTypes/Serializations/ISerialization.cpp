@@ -128,7 +128,7 @@ void ISerialization::serializeBinaryBulk(const IColumn & column, WriteBuffer &, 
     throw Exception(ErrorCodes::MULTIPLE_STREAMS_REQUIRED, "Column {} must be serialized with multiple streams", column.getName());
 }
 
-void ISerialization::deserializeBinaryBulk(IColumn & column, ReadBuffer &, size_t, double, bool) const
+size_t ISerialization::deserializeBinaryBulk(IColumn & column, ReadBuffer &, size_t, double, bool, const UInt8*) const
 {
     throw Exception(ErrorCodes::MULTIPLE_STREAMS_REQUIRED, "Column {} must be deserialized with multiple streams", column.getName());
 }
@@ -144,40 +144,31 @@ void ISerialization::serializeBinaryBulkWithMultipleStreams(
         serializeBinaryBulk(column, *stream, offset, limit);
 }
 
-void ISerialization::deserializeBinaryBulkWithMultipleStreams(
+size_t ISerialization::deserializeBinaryBulkWithMultipleStreams(
     ColumnPtr & column,
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
     DeserializeBinaryBulkStatePtr & /* state */,
     SubstreamsCache * cache) const
 {
-    auto cached_column = getFromSubstreamsCache(cache, settings.path);
-    if (cached_column)
+    if (auto cache_entry = getFromSubstreamsCache(cache, settings.path); cache_entry.has_value())
     {
-        column = cached_column;
+        column = cache_entry->column;
+        return cache_entry->rows_before_filter;
     }
-    else if (ReadBuffer * stream = settings.getter(settings.path))
+    else if (ReadBuffer* stream = settings.getter(settings.path))
     {
         auto mutable_column = column->assumeMutable();
-        deserializeBinaryBulk(*mutable_column, *stream, limit, settings.avg_value_size_hint, settings.zero_copy_read_from_cache);
+        size_t processed_rows = deserializeBinaryBulk(*mutable_column, *stream, limit,
+            settings.avg_value_size_hint, settings.zero_copy_read_from_cache, settings.filter);
         column = std::move(mutable_column);
-        addToSubstreamsCache(cache, settings.path, column);
+        addToSubstreamsCache(cache, settings.path, processed_rows, column);
+        return processed_rows;
     }
+    return 0;
 }
 
 using SubstreamIterator = ISerialization::SubstreamPath::const_iterator;
-
-size_t ISerialization::skipBinaryBulkWithMultipleStreams(
-    const NameAndTypePair & name_and_type,
-    size_t limit,
-    DeserializeBinaryBulkSettings & settings,
-    DeserializeBinaryBulkStatePtr & state,
-    SubstreamsCache * cache) const
-{
-    ColumnPtr tmp_column = name_and_type.type->createColumn();
-    deserializeBinaryBulkWithMultipleStreams(tmp_column, limit, settings, state, cache);
-    return tmp_column->size();
-}
 
 static String getNameForSubstreamPath(
     String stream_name,
@@ -253,22 +244,22 @@ String ISerialization::getSubcolumnNameForStream(const SubstreamPath & path, siz
     return subcolumn_name;
 }
 
-void ISerialization::addToSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path, ColumnPtr column)
-{
-    if (cache && !path.empty())
-        cache->emplace(getSubcolumnNameForStream(path), column);
-}
-
-ColumnPtr ISerialization::getFromSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path)
+void ISerialization::addToSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path,
+    size_t rows_before_filter, ColumnPtr column)
 {
     if (!cache || path.empty())
-        return nullptr;
+        return;
+
+    cache->emplace(getSubcolumnNameForStream(path), SubstreamCacheEntry(rows_before_filter, column));
+}
+
+std::optional<ISerialization::SubstreamCacheEntry> ISerialization::getFromSubstreamsCache(SubstreamsCache * cache, const SubstreamPath & path)
+{
+    if (!cache || path.empty())
+        return std::nullopt;
 
     auto it = cache->find(getSubcolumnNameForStream(path));
-    if (it == cache->end())
-        return nullptr;
-
-    return it->second;
+    return it == cache->end() ? std::nullopt : std::make_optional(it->second);
 }
 
 bool ISerialization::isSpecialCompressionAllowed(const SubstreamPath & path)

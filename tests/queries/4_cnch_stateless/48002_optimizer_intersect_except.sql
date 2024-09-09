@@ -1,5 +1,5 @@
-create database if not exists test;
-use test;
+create database if not exists test_oie_48002;
+use test_oie_48002;
 set enable_optimizer=1;
 set dialect_type='ANSI';
 drop table if exists t1;

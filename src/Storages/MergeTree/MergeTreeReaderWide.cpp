@@ -138,8 +138,9 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     }
 }
 
-size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row,
-    size_t max_rows_to_read, Columns& res_columns)
+size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t from_row,
+    size_t max_rows_to_read, size_t current_task_last_mark, const UInt8* filter,
+    Columns& res_columns)
 {
     try
     {
@@ -154,7 +155,7 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t current_task_last_
             res_col_to_idx[name] = i;
         }
 
-        sort_columns = columns;
+        auto sort_columns = columns;
         if (!dup_implicit_keys.empty())
             sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
 
@@ -172,16 +173,23 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t current_task_last_
             next_row_number_to_read = from_mark_start_row;
         }
 
-        size_t skipped_rows = skipUnnecessaryRows(num_columns, from_mark, adjacent_reading,
-            current_task_last_mark, rows_to_skip);
-        next_row_number_to_read += skipped_rows;
+        size_t skipped_rows = 0;
+        if (rows_to_skip > 0)
+        {
+            Columns tmp_columns(sort_columns.size());
+            skipped_rows = readBatch(sort_columns, num_columns, from_mark,
+                adjacent_reading, rows_to_skip, current_task_last_mark,
+                res_col_to_idx, nullptr, tmp_columns);
+            next_row_number_to_read += skipped_rows;
+        }
 
         size_t read_rows = 0;
         if (skipped_rows >= rows_to_skip)
         {
             adjacent_reading = rows_to_skip > 0 || init_row_number == starting_row;
-            read_rows = readNecessaryRows(num_columns, from_mark, adjacent_reading,
-                current_task_last_mark, max_rows_to_read, res_col_to_idx, res_columns);
+            read_rows = readBatch(sort_columns, num_columns, from_mark, adjacent_reading,
+                max_rows_to_read, current_task_last_mark, res_col_to_idx, filter,
+                res_columns);
             next_row_number_to_read += read_rows;
         }
 
@@ -206,61 +214,19 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t current_task_last_
     }
 }
 
-size_t MergeTreeReaderWide::skipUnnecessaryRows(size_t num_columns, size_t from_mark, bool continue_reading,
-    size_t current_task_last_mark, size_t rows_to_skip)
-{
-    if (rows_to_skip <= 0)
-        return 0;
-
-    ProfileEventsTimer timer(ProfileEvents::SkipRowsTimeMicro);
-
-    size_t skipped_rows = 0;
-    auto name_and_type = sort_columns.begin();
-    for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
-    {
-        auto column_from_part = getColumnFromPart(*name_and_type);
-        const auto& [name, type] = column_from_part;
-        
-        if (name == "_part_row_number")
-        {
-            skipped_rows = std::max(skipped_rows, std::min(rows_to_skip, data_part->rows_count - next_row_number_to_read));
-            continue;
-        }
-
-        try
-        {
-            auto& cache = caches[column_from_part.getNameInStorage()];
-            if (type->isByteMap())
-                skipped_rows = std::max(skipped_rows,
-                    skipMapDataNotKV(column_from_part, from_mark, continue_reading,
-                        current_task_last_mark, rows_to_skip));
-            else
-                skipped_rows = std::max(skipped_rows,
-                    skipData(column_from_part, from_mark, continue_reading,
-                        current_task_last_mark, rows_to_skip, cache));
-        }
-        catch (Exception& e)
-        {
-            /// Better diagnostics.
-            e.addMessage("(while reading column " + name + ")");
-            throw;
-        }
-    }
-    caches.clear();
-
-    return skipped_rows;
-}
-
-size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_mark, bool continue_reading,
-    size_t current_task_last_mark, size_t rows_to_read,
-    std::unordered_map<String, size_t>& res_col_to_idx, Columns& res_columns)
+size_t MergeTreeReaderWide::readBatch(const NamesAndTypesList& sort_columns,
+    size_t num_columns, size_t from_mark, bool continue_reading, size_t rows_to_read,
+    size_t current_task_last_mark, std::unordered_map<String, size_t>& res_col_to_idx,
+    const UInt8* filter, Columns& res_columns)
 {
     if (rows_to_read <= 0)
         return 0;
 
     ProfileEventsTimer timer(ProfileEvents::ReadRowsTimeMicro);
 
-    size_t read_rows = 0;
+    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+
+    size_t processed_rows = 0;
     int row_number_column_pos = -1;
     auto name_and_type = sort_columns.begin();
     for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
@@ -269,7 +235,8 @@ size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_ma
         const auto& [name, type] = column_from_part;
         size_t pos = res_col_to_idx[name];
 
-        if (!res_columns[pos]) {
+        if (!res_columns[pos])
+        {
             type->enable_zero_cpy_read = this->settings.read_settings.zero_copy_read_from_cache;
             res_columns[pos] = type->createColumn();
         }
@@ -284,19 +251,21 @@ size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_ma
         auto& column = res_columns[pos];
         try
         {
-            size_t column_size_before_reading = column->size();
             auto& cache = caches[column_from_part.getNameInStorage()];
+            size_t col_processed_rows = 0;
             if (type->isByteMap())
-                readMapDataNotKV(column_from_part, column, from_mark, continue_reading,
-                    current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
+                col_processed_rows = readMapDataNotKV(column_from_part, column,
+                    from_mark, continue_reading, current_task_last_mark, rows_to_read,
+                    caches, res_col_to_idx, filter, res_columns);
             else
-                readData(column_from_part, column, from_mark, continue_reading,
-                   current_task_last_mark, rows_to_read, cache);
+                col_processed_rows = readData(column_from_part, column, from_mark,
+                    continue_reading, current_task_last_mark, rows_to_read, filter,
+                    cache);
 
             /// For elements of Nested, column_size_before_reading may be greater than column size
             ///  if offsets are not empty and were already read, but elements are empty.
             if (!column->empty())
-                read_rows = std::max(read_rows, column->size() - column_size_before_reading);
+                processed_rows = std::max(processed_rows, col_processed_rows);
         }
         catch (Exception& e)
         {
@@ -308,7 +277,6 @@ size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_ma
         if (column->empty())
             res_columns[pos] = nullptr;
     }
-    caches.clear();
 
     /// Populate _part_row_number column if requested
     if (row_number_column_pos >= 0)
@@ -316,15 +284,16 @@ size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_ma
         /// update `read_rows` if no physical columns are read (only _part_row_number is requested)
         if (columns.size() == 1)
         {
-            read_rows = std::min(rows_to_read, data_part->rows_count - next_row_number_to_read);
+            processed_rows = std::min(rows_to_read, data_part->rows_count - next_row_number_to_read);
         }
 
-        if (read_rows)
+        if (processed_rows)
         {
             auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
             ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
-            for (size_t i = 0, row_number = next_row_number_to_read; i < read_rows; ++i)
-                column.insertValue(row_number++);
+            for (size_t i = 0, row_number = next_row_number_to_read; i < processed_rows; ++i, ++row_number)
+                if (filter == nullptr || *(filter + i) != 0)
+                    column.insertValue(row_number);
             res_columns[row_number_column_pos] = std::move(mutable_column);
         }
         else
@@ -333,7 +302,7 @@ size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_ma
         }
     }
 
-    return read_rows;
+    return processed_rows;
 }
 
 void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,

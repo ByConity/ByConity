@@ -206,6 +206,11 @@ TEST_P(DeviceParamTest, RAID0IOAlignment)
     ASSERT_THROW(createFileDevice(std::move(fvec), size, io_align_size, stripe_size, 0), DB::ErrnoException);
 }
 
-INSTANTIATE_TEST_SUITE_P(DeviceParamTestSuite, DeviceParamTest, testing::Values(std::make_tuple(IoEngine::Sync, 0)));
+INSTANTIATE_TEST_SUITE_P(DeviceParamTestSuite_Sync, DeviceParamTest, testing::Values(std::make_tuple(IoEngine::Sync, 0)));
+// INSTANTIATE_TEST_SUITE_P(DeviceParamTestSuite_Uring_1, DeviceParamTest, testing::Values(std::make_tuple(IoEngine::IoUring, 1)));
+// INSTANTIATE_TEST_SUITE_P(DeviceParamTestSuite_Uring_32, DeviceParamTest, testing::Values(std::make_tuple(IoEngine::IoUring, 32)));
+// INSTANTIATE_TEST_SUITE_P(DeviceParamTestSuite_Hybrid, DeviceParamTest, testing::Values(std::make_tuple(IoEngine::Sync, 0),
+//                                                                                         std::make_tuple(IoEngine::IoUring, 1),
+//                                                                                         std::make_tuple(IoEngine::IoUring, 32)));
 
 }

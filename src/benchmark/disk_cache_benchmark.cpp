@@ -51,7 +51,7 @@ class BigHashBenchmark : public benchmark::Fixture
 public:
     void SetUp(const benchmark::State &) final
     {
-        key_permutation.reserve(num_keys);
+        key_permutation.resize(num_keys);
         for (UInt32 i = 0; i < num_keys; i++)
             key_permutation[i] = i;
         std::shuffle(key_permutation.begin(), key_permutation.end(), generator);
@@ -94,14 +94,14 @@ class NvmCacheBenchmark : public benchmark::Fixture
 public:
     void SetUp(const benchmark::State &) final
     {
-        key_permutation.reserve(num_keys);
+        key_permutation.resize(num_keys);
         for (UInt32 i = 0; i < num_keys; i++)
             key_permutation[i] = i;
         std::shuffle(key_permutation.begin(), key_permutation.end(), generator);
 
         HybridCache::BufferGen buffer_generator;
         for (UInt32 i = 0; i < 100; i++)
-            buffer_permutation.emplace_back(buffer_generator.gen(100, 4 * 1024 * 1024)); // 1M ~ 4M
+            buffer_permutation.emplace_back(buffer_generator.gen(100, 2000)); // 1M ~ 4M
 
         file_path = "./Benchmark-Test";
 
@@ -112,15 +112,164 @@ public:
 
     void TearDown(const benchmark::State &) final { fs::remove_all(fs::path{file_path}); }
 
+    void simpleInsertBase(
+        benchmark::State & state,
+        std::function<std::unique_ptr<HybridCache::Device>(std::vector<File> &, const UInt64)> create_device,
+        std::function<std::unique_ptr<HybridCache::JobScheduler>()> create_scheduler)
+    {
+        HybridCache::WorkerPool pool(BenchmarkConfig::num_threads, {});
+        pool.startup();
+
+        for (auto _ : state)
+        {
+            std::vector<File> f_vec;
+            f_vec.emplace_back(File(file_path, O_RDWR | O_CREAT | O_DIRECT, S_IRWXU));
+            fs::resize_file(fs::path{file_path}, cache_size);
+            auto config = NvmCache::Config();
+            config.device = create_device(f_vec, cache_size);
+            config.scheduler = create_scheduler();
+            config.max_concurrent_inserts = 1'000'000;
+            config.max_parcel_memory = 1'000 * GiB;
+
+            auto bh_config = BigHash::Config();
+            bh_config.cache_size = 5 * GiB;
+            bh_config.cache_start_offset = 45 * GiB;
+            bh_config.device = config.device.get();
+
+            auto bc_config = BlockCache::Config();
+            bc_config.cache_size = 45 * GiB;
+            bc_config.num_in_mem_buffers = 2;
+            bc_config.device = config.device.get();
+            bc_config.scheduler = config.scheduler.get();
+            bc_config.eviction_policy = std::make_unique<HybridCache::LruPolicy>(bc_config.getNumberRegions());
+
+            NvmCache::Pair pair{nullptr, nullptr, 2048};
+            pair.small_item_cache = std::make_unique<BigHash>(std::move(bh_config));
+            pair.large_item_cache = std::make_unique<BlockCache>(std::move(bc_config));
+            config.pairs.push_back(std::move(pair));
+
+            auto * nvm_cache = new NvmCache(std::move(config));
+
+            auto workload = [&](UInt32 id) {
+                UInt32 start_key = num_keys / BenchmarkConfig::num_threads * id;
+                UInt32 end_key = start_key + num_keys / BenchmarkConfig::num_threads;
+
+                for (UInt32 i = start_key; i < end_key; i++)
+                    nvm_cache->insertAsync(
+                        HybridCache::makeHashKey(&key_permutation[i], sizeof(Int64)),
+                        buffer_permutation[i % 100].view(),
+                        [](HybridCache::Status status, HybridCache::HashedKey) {
+                            if (status != HybridCache::Status::Ok)
+                                printf("insert failed %d\n", status);
+                        },
+                        HybridCache::EngineTag::MarkCache);
+            };
+
+            Stopwatch watch;
+            HybridCache::MultithreadTestUtil::runThreadUntilFinish(&pool, BenchmarkConfig::num_threads, workload);
+            nvm_cache->flush();
+            state.SetIterationTime(watch.elapsedSeconds());
+            delete nvm_cache;
+        }
+        state.SetItemsProcessed(state.iterations() * num_keys);
+    }
+
+    void simpleLookupBase(
+        benchmark::State & state,
+        std::function<std::unique_ptr<HybridCache::Device>(std::vector<File> &, const UInt64)> create_device,
+        std::function<std::unique_ptr<HybridCache::JobScheduler>()> create_scheduler)
+    {
+        HybridCache::WorkerPool pool(BenchmarkConfig::num_threads, {});
+        pool.startup();
+
+        for (auto _ : state)
+        {
+            std::vector<File> f_vec;
+            f_vec.emplace_back(File(file_path, O_RDWR | O_CREAT | O_DIRECT, S_IRWXU));
+            fs::resize_file(fs::path{file_path}, cache_size);
+            auto config = NvmCache::Config();
+            config.device = create_device(f_vec, cache_size);
+            config.scheduler = create_scheduler();
+            config.max_concurrent_inserts = 1'000'000;
+            config.max_parcel_memory = 1'000 * GiB;
+
+            auto bh_config = BigHash::Config();
+            bh_config.cache_size = 5 * GiB;
+            bh_config.cache_start_offset = 45 * GiB;
+            bh_config.device = config.device.get();
+
+            auto bc_config = BlockCache::Config();
+            bc_config.cache_size = 45 * GiB;
+            bc_config.num_in_mem_buffers = 2;
+            bc_config.device = config.device.get();
+            bc_config.scheduler = config.scheduler.get();
+            bc_config.eviction_policy = std::make_unique<HybridCache::LruPolicy>(bc_config.getNumberRegions());
+
+            NvmCache::Pair pair{nullptr, nullptr, 2048};
+            pair.small_item_cache = std::make_unique<BigHash>(std::move(bh_config));
+            pair.large_item_cache = std::make_unique<BlockCache>(std::move(bc_config));
+            config.pairs.push_back(std::move(pair));
+
+            auto * nvm_cache = new NvmCache(std::move(config));
+
+            auto insert_workload = [&](UInt32 id) {
+                UInt32 start_key = num_keys / BenchmarkConfig::num_threads * id;
+                UInt32 end_key = start_key + num_keys / BenchmarkConfig::num_threads;
+
+                for (UInt32 i = start_key; i < end_key; i++)
+                    nvm_cache->insertAsync(
+                        HybridCache::makeHashKey(&key_permutation[i], sizeof(Int64)),
+                        buffer_permutation[i % 100].view(),
+                        [](HybridCache::Status status, HybridCache::HashedKey) {
+                            if (status != HybridCache::Status::Ok)
+                                printf("insert faield %d\n", status);
+                        },
+                        HybridCache::EngineTag::MarkCache);
+            };
+
+            auto lookup_workload = [&](UInt32 id) {
+                UInt32 start_key = num_keys / BenchmarkConfig::num_threads * id;
+                UInt32 end_key = start_key + num_keys / BenchmarkConfig::num_threads;
+
+                for (UInt32 i = start_key; i < end_key; i++)
+                    nvm_cache->lookupAsync(
+                        HybridCache::makeHashKey(&key_permutation[i], sizeof(Int64)),
+                        [](HybridCache::Status status, HybridCache::HashedKey, HybridCache::Buffer) {
+                            if (status != HybridCache::Status::Ok)
+                                printf("lookup failed %d\n", status);
+                        },
+                        HybridCache::EngineTag::MarkCache);
+            };
+
+            HybridCache::MultithreadTestUtil::runThreadUntilFinish(&pool, BenchmarkConfig::num_threads, insert_workload);
+            nvm_cache->flush();
+
+            Stopwatch watch;
+            HybridCache::MultithreadTestUtil::runThreadUntilFinish(&pool, BenchmarkConfig::num_threads, lookup_workload);
+            nvm_cache->flush();
+            state.SetIterationTime(watch.elapsedSeconds());
+            delete nvm_cache;
+        }
+        state.SetItemsProcessed(state.iterations() * num_keys);
+    }
+
     const UInt32 num_keys = 1'000'000;
 
     std::string file_path;
 
-    const UInt64 cache_size = 10 * GiB;
+    const UInt64 cache_size = 50 * GiB;
 
     std::default_random_engine generator;
     std::vector<Int64> key_permutation;
     std::vector<Buffer> buffer_permutation;
+};
+
+class NvmCacheBenchmarkPsync : public NvmCacheBenchmark
+{
+};
+
+class NvmCacheBenchmarkIoUring : public NvmCacheBenchmark
+{
 };
 
 class DiskCacheLRUBenchmark : public benchmark::Fixture
@@ -128,7 +277,7 @@ class DiskCacheLRUBenchmark : public benchmark::Fixture
 public:
     void SetUp(const benchmark::State &) final
     {
-        key_permutation.reserve(num_keys);
+        key_permutation.resize(num_keys);
         for (UInt32 i = 0; i < num_keys; i++)
             key_permutation[i] = i;
         std::shuffle(key_permutation.begin(), key_permutation.end(), generator);
@@ -162,58 +311,47 @@ public:
 };
 
 // NOLINTNEXTLINE
-BENCHMARK_DEFINE_F(NvmCacheBenchmark, SimpleInsert)(benchmark::State & state)
+BENCHMARK_DEFINE_F(NvmCacheBenchmarkPsync, SimpleInsert)(benchmark::State & state)
 {
-    HybridCache::WorkerPool pool(BenchmarkConfig::num_threads, {});
-    pool.startup();
+    auto create_device = [](std::vector<File> & f_vec, const UInt64 cache_size) {
+        return HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0);
+    };
+    auto create_scheduler = [] { return HybridCache::createOrderedThreadPoolJobScheduler(1, 1, 10); };
 
-    for (auto _ : state)
-    {
-        std::vector<File> f_vec;
-        f_vec.emplace_back(File(file_path, O_RDWR | O_CREAT, S_IRWXU));
-        fs::resize_file(fs::path{file_path}, cache_size);
-        auto config = NvmCache::Config();
-        config.device = HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0);
-        config.scheduler = HybridCache::createOrderedThreadPoolJobScheduler(1, 1, 10);
+    simpleInsertBase(state, create_device, create_scheduler);
+}
 
-        auto bh_config = BigHash::Config();
-        bh_config.cache_size = 1 * GiB;
-        bh_config.cache_start_offset = 9 * GiB;
-        bh_config.device = config.device.get();
+// NOLINTNEXTLINE
+BENCHMARK_DEFINE_F(NvmCacheBenchmarkIoUring, SimpleInsert)(benchmark::State & state)
+{
+    auto create_device = [](std::vector<File> & f_vec, const UInt64 cache_size) {
+        return HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0, HybridCache::IoEngine::IoUring, 256);
+    };
+    auto create_scheduler = [] { return HybridCache::createNavyRequestScheduler(1, 1, 256, 256, 0, 10); };
 
-        auto bc_config = BlockCache::Config();
-        bc_config.cache_size = 9 * GiB;
-        bc_config.num_in_mem_buffers = 2;
-        bc_config.device = config.device.get();
-        bc_config.scheduler = config.scheduler.get();
-        bc_config.eviction_policy = std::make_unique<HybridCache::LruPolicy>(bc_config.getNumberRegions());
+    simpleInsertBase(state, create_device, create_scheduler);
+}
 
-        NvmCache::Pair pair{nullptr, nullptr, 2048};
-        pair.small_item_cache = std::make_unique<BigHash>(std::move(bh_config));
-        pair.large_item_cache = std::make_unique<BlockCache>(std::move(bc_config));
-        config.pairs.push_back(std::move(pair));
+// NOLINTNEXTLINE
+BENCHMARK_DEFINE_F(NvmCacheBenchmarkPsync, SimpleLookup)(benchmark::State & state)
+{
+    auto create_device = [](std::vector<File> & f_vec, const UInt64 cache_size) {
+        return HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0);
+    };
+    auto create_scheduler = [] { return HybridCache::createOrderedThreadPoolJobScheduler(1, 1, 10); };
 
-        auto * nvm_cache = new NvmCache(std::move(config));
+    simpleLookupBase(state, create_device, create_scheduler);
+}
 
-        auto workload = [&](UInt32 id) {
-            UInt32 start_key = num_keys / BenchmarkConfig::num_threads * id;
-            UInt32 end_key = start_key + num_keys / BenchmarkConfig::num_threads;
+// NOLINTNEXTLINE
+BENCHMARK_DEFINE_F(NvmCacheBenchmarkIoUring, SimpleLookup)(benchmark::State & state)
+{
+    auto create_device = [](std::vector<File> & f_vec, const UInt64 cache_size) {
+        return HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0, HybridCache::IoEngine::IoUring, 256);
+    };
+    auto create_scheduler = [] { return HybridCache::createNavyRequestScheduler(1, 1, 256, 256, 0, 10); };
 
-            for (UInt32 i = start_key; i < end_key; i++)
-                nvm_cache->insertAsync(
-                    HybridCache::makeHashKey(&key_permutation[i], sizeof(Int64)),
-                    buffer_permutation[i % 100].view(),
-                    nullptr,
-                    HybridCache::EngineTag::MarkCache);
-        };
-
-        Stopwatch watch;
-        HybridCache::MultithreadTestUtil::runThreadUntilFinish(&pool, BenchmarkConfig::num_threads, workload);
-        nvm_cache->flush();
-        state.SetIterationTime(watch.elapsedSeconds());
-        delete nvm_cache;
-    }
-    state.SetItemsProcessed(state.iterations() * num_keys);
+    simpleLookupBase(state, create_device, create_scheduler);
 }
 
 // NOLINTNEXTLINE
@@ -301,12 +439,27 @@ BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state
 // BENCHMARK REGISTRATION
 // ----------------------------------------------------------------------------
 // clang-format off
-BENCHMARK_REGISTER_F(BigHashBenchmark, SimpleInsert)
+BENCHMARK_REGISTER_F(NvmCacheBenchmarkPsync, SimpleInsert)
     ->Unit(benchmark::kMillisecond)
     ->UseManualTime()
     ->MinTime(3);
 
-BENCHMARK_REGISTER_F(NvmCacheBenchmark, SimpleInsert)
+BENCHMARK_REGISTER_F(NvmCacheBenchmarkIoUring, SimpleInsert)
+    ->Unit(benchmark::kMillisecond)
+    ->UseManualTime()
+    ->MinTime(3);
+
+BENCHMARK_REGISTER_F(NvmCacheBenchmarkPsync, SimpleLookup)
+    ->Unit(benchmark::kMillisecond)
+    ->UseManualTime()
+    ->MinTime(3);
+
+BENCHMARK_REGISTER_F(NvmCacheBenchmarkIoUring, SimpleLookup)
+    ->Unit(benchmark::kMillisecond)
+    ->UseManualTime()
+    ->MinTime(3);
+
+BENCHMARK_REGISTER_F(BigHashBenchmark, SimpleInsert)
     ->Unit(benchmark::kMillisecond)
     ->UseManualTime()
     ->MinTime(3);

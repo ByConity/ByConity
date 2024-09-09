@@ -212,6 +212,8 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         mapped_table_output_stream,
         step.getStorage(),
         step.getStorageID(),
+        step.getMetadataSnapshot(),
+        step.getStorageSnapshot(),
         step.getOriginalTable(),
         std::move(column_names_sorted),
         std::move(column_alias_sorted),

@@ -139,7 +139,7 @@ void SerializationNullable::serializeBinaryBulkWithMultipleStreams(
 }
 
 
-void SerializationNullable::deserializeBinaryBulkWithMultipleStreams(
+size_t SerializationNullable::deserializeBinaryBulkWithMultipleStreams(
     ColumnPtr & column,
     size_t limit,
     DeserializeBinaryBulkSettings & settings,
@@ -149,20 +149,32 @@ void SerializationNullable::deserializeBinaryBulkWithMultipleStreams(
     auto mutable_column = column->assumeMutable();
     ColumnNullable & col = assert_cast<ColumnNullable &>(*mutable_column);
 
+    /// NOTE: nullmap_processed_rows may smaller than column's nullmap size
     settings.path.push_back(Substream::NullMap);
-    if (auto cached_column = getFromSubstreamsCache(cache, settings.path))
+    size_t nullmap_processed_rows = 0;
+    if (auto cache_entry = getFromSubstreamsCache(cache, settings.path); cache_entry.has_value())
     {
-        col.getNullMapColumnPtr() = cached_column;
+        col.getNullMapColumnPtr() = cache_entry->column;
+        nullmap_processed_rows = cache_entry->rows_before_filter;
     }
     else if (auto * stream = settings.getter(settings.path))
     {
-        SerializationNumber<UInt8>().deserializeBinaryBulk(col.getNullMapColumn(), *stream, limit, 0, settings.zero_copy_read_from_cache);
-        addToSubstreamsCache(cache, settings.path, col.getNullMapColumnPtr());
+        nullmap_processed_rows = SerializationNumber<UInt8>().deserializeBinaryBulk(
+            col.getNullMapColumn(), *stream, limit, 0, settings.zero_copy_read_from_cache,
+            settings.filter);
+        addToSubstreamsCache(cache, settings.path, nullmap_processed_rows, col.getNullMapColumnPtr());
     }
 
     settings.path.back() = Substream::NullableElements;
-    nested->deserializeBinaryBulkWithMultipleStreams(col.getNestedColumnPtr(), limit, settings, state, cache);
+    size_t element_processed_rows = nested->deserializeBinaryBulkWithMultipleStreams(
+        col.getNestedColumnPtr(), limit, settings, state, cache);
     settings.path.pop_back();
+    if (nullmap_processed_rows != element_processed_rows)
+    {
+        throw Exception(fmt::format("Nullmap processed rows {} differs from value processed rows {}",
+            nullmap_processed_rows, element_processed_rows), ErrorCodes::LOGICAL_ERROR);
+    }
+    return element_processed_rows;
 }
 
 

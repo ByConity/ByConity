@@ -1,12 +1,13 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <new>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/AbstractCache.h>
 #include <Storages/DiskCache/BigHash.h>
@@ -28,6 +29,7 @@ namespace DB
 {
 using EncodeCallback = std::function<HybridCache::BufferView(void *)>;
 using DecodeCallback = std::function<void(std::shared_ptr<void>, HybridCache::Buffer)>;
+using folly::fibers::TimedMutex;
 
 class NvmCache final : public HybridCache::AbstractCache
 {
@@ -150,9 +152,9 @@ private:
 
     FillMap & getFillMap(HybridCache::HashedKey key) { return getFillMapForShard(getShardForKey(key)); }
 
-    std::unique_lock<std::mutex> getFillLockForShard(size_t shard) { return std::unique_lock<std::mutex>(fill_locks[shard].fill_lock); }
+    std::unique_lock<TimedMutex> getFillLockForShard(size_t shard) { return std::unique_lock<TimedMutex>(fill_locks[shard].fill_lock); }
 
-    std::unique_lock<std::mutex> getFillLock(HybridCache::HashedKey key) { return getFillLockForShard(getShardForKey(key)); }
+    std::unique_lock<TimedMutex> getFillLock(HybridCache::HashedKey key) { return getFillLockForShard(getShardForKey(key)); }
 
     void onGetComplete(
         GetCtx & ctx,
@@ -171,7 +173,7 @@ private:
 
     struct
     {
-        alignas(hardware_destructive_interference_size) std::mutex fill_lock;
+        alignas(hardware_destructive_interference_size) TimedMutex fill_lock;
     } fill_locks[kShards];
 
     std::array<PutContexts, kShards> put_contexts;

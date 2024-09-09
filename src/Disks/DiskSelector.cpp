@@ -189,6 +189,8 @@ DiskPtr DiskSelector::getByID(const UInt64 & disk_id) const
 
 void DiskSelector::flushDiskInfo() const
 {
+    if (!fs::exists(disks_path))
+        return;
     auto tmp_path = disks_path / (String(ALL_DISK_INFO_FILE) + ".tmp");
     fs::remove(tmp_path);
     {

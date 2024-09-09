@@ -19,12 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <cstdint>
 #include <Common/ProfileEvents.h>
 #include <Common/CurrentThread.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <Common/typeid_cast.h>
-#include <Columns/ColumnArray.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 
@@ -1087,6 +1083,7 @@
     M(RegionManagerNumInMemBufFlushRetries, "RegionManager number of in-memory buffer flush retries") \
     M(RegionManagerNumInMemBufFlushFailures, "RegionManager number of in-memory buffer flush failures") \
     M(RegionManagerNumInMemBufCleanupRetries, "RegionManager number of in-memory buffer cleanup retries") \
+    M(RegionManagerCleanRegionRetries, "RegionManager number of clean region retries") \
 \
     M(TSORequest, "Number requests sent to TSO") \
     M(TSORequestMicroseconds, "Total time spent in get timestamp from TSO") \
@@ -1130,7 +1127,26 @@
     M(OrcIOSharedBytes, "") \
     M(OrcIODirectCount, "") \
     M(OrcIODirectBytes, "") \
-    M(PreparePartsForReadMilliseconds, "The time spend on loading CNCH part from ServerPart on worker when query with table version")
+    M(PreparePartsForReadMilliseconds, "The time spend on loading CNCH part from ServerPart on worker when query with table version") \
+\
+    M(IOUringSQEsSubmitted, "Total number of io_uring SQEs submitted") \
+    M(IOUringSQEsResubmits, "Total number of io_uring SQE resubmits performed") \
+    M(IOUringCQEsCompleted, "Total number of successfully completed io_uring CQEs") \
+    M(IOUringCQEsFailed, "Total number of completed io_uring CQEs with failures") \
+    M(IOUringAsynchronousReadWaitMicroseconds, "Time spent in waiting for asynchronous reads in io_uring local read.") \
+    M(IOUringSynchronousReadWaitMicroseconds, "Time spent in waiting for synchronous reads in io_uring local read.") \
+    M(IOUringReaderIgnoredBytes, "Number of bytes ignored in IOUringReader") \
+\
+    M(LoadedServerParts, "Total server parts loaded from storage manager by version") \
+    M(LoadServerPartsMilliseconds, "The time spend on loading server parts by version from storage data manager.") \
+    M(LoadManifestPartsCacheHits, "Cache(disk) hit count of loading parts from manifest") \
+    M(LoadManifestPartsCacheMisses, "Cache(disk) miss count of loading parts from manifest") \
+\
+    M(DeserializeSkippedCompressedBytes, "Total compressed bytes skipped when deserialize") \
+    M(TotalGranulesCount, "The total granules before skipping index needs to read. If there are multiple indexes, the value is the sum value.") \
+    M(TotalSkippedGranules, "The total granules that skipping index dropped. If there are multiple indexes, the value is the sum value.") \
+    M(GinIndexFilterResultCacheHit, "Number of posting list result cache hit") \
+    M(GinIndexFilterResultCacheMiss, "Number of posting list result cache miss") \
 
 namespace ProfileEvents
 {

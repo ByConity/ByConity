@@ -35,17 +35,13 @@ private:
     static constexpr char enc_pad = 0x00;
 
 public:
-    size_t skipBinaryBulkWithMultipleStreams(const NameAndTypePair & name_and_type,
-        size_t limit, DeserializeBinaryBulkSettings & settings, DeserializeBinaryBulkStatePtr & state,
-        SubstreamsCache * cache) const override;
-
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override;
     void deserializeBinary(Field & field, ReadBuffer & istr) const override;
     void serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeBinary(IColumn & column, ReadBuffer & istr) const override;
 
     void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const override;
-    void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool zero_copy_cache_read) const override;
+    size_t deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint, bool zero_copy_cache_read, const UInt8* filter) const override;
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const override;
     void deserializeWholeText(IColumn & column, ReadBuffer & istr, const FormatSettings &) const override;

@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include <Poco/Logger.h>
+#include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/EvictionPolicy.h>
 #include <Storages/DiskCache/Types.h>
@@ -10,6 +11,9 @@
 
 namespace DB::HybridCache
 {
+    
+using folly::fibers::TimedMutex;
+
 class LruPolicy final : public EvictionPolicy
 {
 public:
@@ -59,6 +63,6 @@ private:
     std::vector<ListNode> array;
     UInt32 head{kInvalidIndex};
     UInt32 tail{kInvalidIndex};
-    mutable std::mutex mutex;
+    mutable TimedMutex mutex;
 };
 }

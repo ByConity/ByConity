@@ -3,7 +3,7 @@ SELECT hex(0);
 SELECT hex(42);
 select hex(18446744073709551615); -- 2^64 - 1
 select hex(9223372036854775808); -- 2^63
-SELECT hex(42.42);
+SELECT hex(42.42::Float64);
 SELECT hex('mooncake');
 SELECT hex(toDate('2020-08-20'));
 SELECT hex(toDateTime('2021-08-20 07:35:16'));

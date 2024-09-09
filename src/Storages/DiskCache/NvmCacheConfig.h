@@ -124,6 +124,7 @@ public:
     {
         clean_regions = clean_resions_;
         num_in_mem_buffers = 2 * clean_resions_;
+        clean_region_threads = clean_resions_;
         return *this;
     }
 
@@ -157,6 +158,8 @@ public:
 
     UInt32 getCleanRegions() const { return clean_regions; }
 
+    UInt32 getCleanRegionThreads() const { return clean_region_threads; }
+
     UInt32 getNumInMemBuffers() const { return num_in_mem_buffers; }
 
     UInt32 getRegionSize() const { return region_size; }
@@ -175,6 +178,7 @@ private:
     std::vector<unsigned int> fifo_segment_ratio;
     BlockCacheReinsertionConfig reinsertion_config;
     UInt32 clean_regions{1};
+    UInt32 clean_region_threads{1};
     UInt32 num_in_mem_buffers{2};
     UInt32 region_size{16 * MiB};
     bool data_checksum{false};

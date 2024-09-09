@@ -29,18 +29,18 @@ Allocator::Allocator(RegionManager & region_manager_, UInt16 num_priorities) : r
         allocators.emplace_back(i);
 }
 
-std::tuple<RegionDescriptor, UInt32, RelAddress> Allocator::allocate(UInt32 size, UInt16 priority)
+std::tuple<RegionDescriptor, UInt32, RelAddress> Allocator::allocate(UInt32 size, UInt16 priority, bool can_wait)
 {
     chassert(priority < allocators.size());
     RegionAllocator * ra = &allocators[priority];
     if (size == 0 || size > region_manager.regionSize())
         return std::make_tuple(RegionDescriptor{OpenStatus::Error}, size, RelAddress{});
-    return allocateWith(*ra, size);
+    return allocateWith(*ra, size, can_wait);
 }
 
-std::tuple<RegionDescriptor, UInt32, RelAddress> Allocator::allocateWith(RegionAllocator & ra, UInt32 size)
+std::tuple<RegionDescriptor, UInt32, RelAddress> Allocator::allocateWith(RegionAllocator & ra, UInt32 size, bool can_wait)
 {
-    LockGuard guard{ra.getLock()};
+    std::unique_lock<folly::fibers::TimedMutex> lock{ra.getLock()};
     RegionId rid = ra.getAllocationRegion();
     if (rid.valid())
     {
@@ -55,9 +55,25 @@ std::tuple<RegionDescriptor, UInt32, RelAddress> Allocator::allocateWith(RegionA
     }
 
     chassert(!rid.valid());
-    auto status = region_manager.getCleanRegion(rid);
-    if (status != OpenStatus::Ready)
+
+    if (can_wait && !getCurrentFiberThread())
+    {
+        // Waiting on main thread could cause indefinite blocking, so do not wait
+        can_wait = false;
+    }
+
+    auto [status, waiter] = region_manager.getCleanRegion(rid, can_wait);
+    if (status == OpenStatus::Retry)
+    {
+        lock.unlock();
+        if (waiter)
+        {
+            waiter->baton.wait();
+        }
         return std::make_tuple(RegionDescriptor{status}, size, RelAddress{});
+    }
+    chassert(status == OpenStatus::Ready);
+    chassert(!waiter);
 
     auto & region = region_manager.getRegion(rid);
     region.setPriority(ra.getPriority());
@@ -87,7 +103,7 @@ void Allocator::flush()
 {
     for (auto & ra : allocators)
     {
-        LockGuard guard{ra.getLock()};
+        std::unique_lock<folly::fibers::TimedMutex> lock{ra.getLock()};
         flushAndReleaseRegionFromRALocked(ra, false);
     }
 }
@@ -97,7 +113,7 @@ void Allocator::reset()
     region_manager.reset();
     for (auto & ra : allocators)
     {
-        LockGuard guard{ra.getLock()};
+        std::unique_lock<folly::fibers::TimedMutex> lock{ra.getLock()};
         ra.reset();
     }
 }

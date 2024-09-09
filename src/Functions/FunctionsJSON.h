@@ -108,11 +108,13 @@ public:
                 throw Exception{"Function " + String(Name::name) + " requires at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
             const auto & first_column = arguments[0];
-            if (!isString(first_column.type))
+            auto first_type_base = removeNullable(removeLowCardinality(first_column.type));
+
+            if (!isString(first_type_base))
                 throw Exception{"The first argument of function " + String(Name::name) + " should be a string containing JSON, illegal type: " + first_column.type->getName(),
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-
-            const ColumnPtr & arg_json = first_column.column;
+            
+            const ColumnPtr & arg_json = recursiveAssumeNotNullable(first_column.column);
             const auto * col_json_const = typeid_cast<const ColumnConst *>(arg_json.get());
             const auto * col_json_string
                 = typeid_cast<const ColumnString *>(col_json_const ? col_json_const->getDataColumnPtr().get() : arg_json.get());

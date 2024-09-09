@@ -265,7 +265,8 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     stage_watch.restart();
     std::set<StorageID> used_storage_ids = plan.allocateLocalTable(context);
 
-    blockQueryJSONUseOptimizer(used_storage_ids, context);
+    if (context->getSettingsRef().block_json_query_in_optimizer)
+        blockQueryJSONUseOptimizer(used_storage_ids, context);
     // select health worker before split
     if (context->getSettingsRef().enable_adaptive_scheduler && context->tryGetCurrentWorkerGroup())
     {

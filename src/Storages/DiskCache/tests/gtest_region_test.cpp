@@ -14,11 +14,10 @@ TEST(Region, ReadAndBlock)
     auto desc = r.openForRead();
     EXPECT_EQ(desc.getStatus(), OpenStatus::Ready);
 
-    EXPECT_FALSE(r.readyForReclaim());
-
+    EXPECT_FALSE(r.readyForReclaim(false));
     EXPECT_EQ(r.openForRead().getStatus(), OpenStatus::Retry);
     r.close(std::move(desc));
-    EXPECT_TRUE(r.readyForReclaim());
+    EXPECT_TRUE(r.readyForReclaim(false));
 
     r.reset();
     EXPECT_EQ(r.openForRead().getStatus(), OpenStatus::Ready);
@@ -26,16 +25,16 @@ TEST(Region, ReadAndBlock)
 
 TEST(Region, WriteAndBlock)
 {
-    Region r{RegionId{0}, 1024};
+    Region r{RegionId(0), 1024};
 
     auto [desc1, addr1] = r.openAndAllocate(1025);
     EXPECT_EQ(desc1.getStatus(), OpenStatus::Error);
 
     auto [desc2, addr2] = r.openAndAllocate(100);
     EXPECT_EQ(desc2.getStatus(), OpenStatus::Ready);
-    EXPECT_FALSE(r.readyForReclaim());
+    EXPECT_FALSE(r.readyForReclaim(false));
     r.close(std::move(desc2));
-    EXPECT_TRUE(r.readyForReclaim());
+    EXPECT_TRUE(r.readyForReclaim(false));
 
     r.reset();
     auto [desc3, addr3] = r.openAndAllocate(1024);

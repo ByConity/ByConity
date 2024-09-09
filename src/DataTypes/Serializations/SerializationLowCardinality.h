@@ -63,7 +63,7 @@ public:
             SerializeBinaryBulkSettings & settings,
             SerializeBinaryBulkStatePtr & state) const override;
 
-    void deserializeBinaryBulkWithMultipleStreams(
+    size_t deserializeBinaryBulkWithMultipleStreams(
             ColumnPtr & column,
             size_t limit,
             DeserializeBinaryBulkSettings & settings,
@@ -133,7 +133,7 @@ public:
             SerializeBinaryBulkSettings & settings,
             SerializeBinaryBulkStatePtr & state) const override;
 
-    void deserializeBinaryBulkWithMultipleStreams(
+    size_t deserializeBinaryBulkWithMultipleStreams(
             ColumnPtr & column,
             size_t limit,
             DeserializeBinaryBulkSettings & settings,

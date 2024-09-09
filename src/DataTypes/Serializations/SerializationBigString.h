@@ -17,11 +17,8 @@ public:
         size_t limit, SerializeBinaryBulkSettings & settings, SerializeBinaryBulkStatePtr & state) const override;
     void deserializeBinaryBulkStatePrefix(DeserializeBinaryBulkSettings & settings,
         DeserializeBinaryBulkStatePtr & state) const override;
-    void deserializeBinaryBulkWithMultipleStreams(ColumnPtr & column, size_t limit,
+    size_t deserializeBinaryBulkWithMultipleStreams(ColumnPtr & column, size_t limit,
         DeserializeBinaryBulkSettings & settings, DeserializeBinaryBulkStatePtr & state,
-        SubstreamsCache * cache) const override;
-    size_t skipBinaryBulkWithMultipleStreams(const NameAndTypePair & name_and_type,
-        size_t limit, DeserializeBinaryBulkSettings & settings, DeserializeBinaryBulkStatePtr & state,
         SubstreamsCache * cache) const override;
 
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override;

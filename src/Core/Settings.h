@@ -1079,7 +1079,9 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, insert_shard_id, 0, "If non zero, when insert into a distributed table, the data will be inserted into the shard `insert_shard_id` synchronously. Possible values range from 1 to `shards_number` of corresponding distributed table", 0) \
     M(Bool, ignore_array_join_check_in_join_on_condition, false, "Ignore array-join function check in join on condition", 0) \
     M(Bool, check_identifier_begin_valid, true, "Whether to check identifier", 0) \
-\
+    \
+    M(Bool, enable_io_uring_for_local_fs_read, false, "Enabel io_uring when reading from local file system", 0) \
+    \
     /** Experimental feature for moving data between shards. */ \
     \
     M(Bool, allow_experimental_nlp_functions, false, "Enable experimental functions for natural language processing.", 0) \
@@ -1410,6 +1412,7 @@ enum PreloadLevelSettings : UInt64
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, block_json_query_in_optimizer, true, "Whether block json query in optimizer", 0) \
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
     M(Bool, enable_prune_empty_resource, false, "Whether prune resource sending", 0) \
     M(Bool, enable_prune_compute_plan_segment, false, "Whether prune compute plan segment", 0) \
@@ -1543,6 +1546,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_join_through_union, true, "Whether to enable PushJoinThroughUnion rule", 0) \
     M(Bool, enable_semi_join_push_down, true, "Whether to enable SemiJoinPushDown rule", 0) \
     M(Bool, enable_simplify_predicate_rewrite, true, "Whether to enable SimplifyPredicateRewrite rule", 0) \
+    M(Bool, enable_simplify_expression_by_derived_constant, false, "Whether to use derived constants to simplify expression", 0) \
     M(Bool, enable_simplify_prewhere_rewrite, true, "Whether to enable SimplifyPrewhereRewrite rule", 0) \
     M(Bool, enable_simplify_join_filter_rewrite, true, "Whether to enable SimplifyJoinFilterRewrite rule", 0) \
     M(Bool, enable_simplify_expression_rewrite, true, "Whether to enable SimplifyExpressionRewrite rule", 0) \
@@ -1554,6 +1558,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_agg_through_exchange, true, "Whether to enable PushPartialAggThroughExchange rules", 0) \
     M(Bool, enable_push_partial_agg_through_union, true, "Whether to enable PushPartialAggThroughUnion rules", 0) \
     M(Bool, enable_push_partial_sorting_through_exchange, true, "Whether to enable PushPartialSortingThroughExchange rules", 0) \
+    M(Bool, enable_push_partial_sorting_through_union, true, "Whether to enable PushPartialSortingThroughUnion rules", 0) \
     M(Bool, enable_push_partial_limit_through_exchange, true, "Whether to enable PushPartialLimitThroughExchange rules", 0) \
     M(Bool, enable_push_partial_distinct_through_exchange, true, "Whether to enable PushPartialDistinctThroughExchange rules", 0) \
     M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
@@ -1576,6 +1581,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_ab_test, false, "Whether to open ab test for settings, If true, the settings for some queries are set in the ab_test_profile profile.", 0) \
     M(Float, ab_test_traffic_factor, 0, "Proportion of queries that perform ab test, meaningful between 0 and 1", 0) \
     M(String, ab_test_profile, "default", "Profile name for ab test", 0) \
+    M(Bool, optimize_json_function_to_subcolumn, false, "Whether to optimize json extract functions to subcolumn read", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
     M(Bool, statistics_forward_query, false, "Indicate whether this query is coming from another replica", 0)  \
@@ -1597,9 +1603,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
-    M(Bool, statistics_expand_to_current, false, "Expand Date/Date32/DateTime/DateTime64 columns stats to current timestamp", 0) \
+    M(Bool, statistics_expand_to_current, true, "Expand Date/Date32/DateTime/DateTime64 columns stats to current timestamp", 0) \
     M(UInt64, statistics_current_timestamp, 0, "Timestamp used for statistics_expand_to_current, 0 to use now(), for testing purpose", 0) \
     M(UInt64, statistics_expand_to_current_threshold_days, 31, "If abs(stats_timestamp - stats_column_max) is within this threshold, we will expand this column", 0) \
+    M(Float, statistics_expand_to_current_histogram_ratio, 0.10, "For histogram, only expand last buckets containing rows with this ratio", 0) \
     M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
     M(Bool, statistics_return_row_count_if_empty, false, "Deprecated settings", 0) \
     M(Bool, statistics_use_hive_metastore, false, "Deprecated Settings", 0) \
@@ -2103,6 +2110,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
     M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
     \
+    M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 

@@ -192,6 +192,7 @@ namespace
     };
 
 
+    /* must be synced with the Level definition in ContextAccess.cpp */
     enum Level
     {
         GLOBAL_LEVEL,
@@ -376,58 +377,59 @@ public:
         return true;
     }
 
-    bool isGranted(const std::unordered_set<std::string_view> &, const AccessFlags & flags_) const requires Permission<IsSensitive>
+    bool isGranted(int sensitive_level, const AccessFlags & flags_) const requires Permission<IsSensitive>
     {
+        /* sensitive resource is not granted */
+        if (level < sensitive_level)
+            return false;
+
         return isGranted(flags_);
     }
 
     template <typename... Args>
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags_, const std::string_view & name, const Args &... subnames) const requires Permission<IsSensitive>
+    bool isGranted(int sensitive_level, const AccessFlags & flags_, const std::string_view & name, const Args &... subnames) const requires Permission<IsSensitive>
     {
         AccessFlags flags_to_check = flags_ - min_flags_with_children;
+        if (!max_flags_with_children.contains(flags_to_check))
+            return false;
 
-        const Node * child = tryGetChild(name); // to reject, this should fail
+        const Node * child = tryGetChild(name);
         if (child)
-        {
-            return child->isGranted(sensitive_columns, flags_to_check, subnames...);
-        }
-        else
-        {
-            auto current_node_name = node_name ? *node_name : "NULL";
-            return name == current_node_name && flags.contains(flags_to_check);
-        }
+            return child->isGranted(sensitive_level, flags_to_check, subnames...);
+
+        /* sensitive resource is not granted */
+        if (level < sensitive_level)
+            return false;
+
+        return flags.contains(flags_to_check);
     }
 
     template <typename StringT>
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags_, const std::vector<StringT> & names) const requires Permission<IsSensitive>
+    bool isGranted(int sensitive_level, const AccessFlags & flags_, const std::unordered_set<StringT> & names) const requires Permission<IsSensitive>
     {
         AccessFlags flags_to_check = flags_ - min_flags_with_children;
+        if (!max_flags_with_children.contains(flags_to_check))
+            return false;
 
         for (const auto & name : names)
         {
             const Node * child = tryGetChild(name);
             if (child)
             {
-                if (sensitive_columns.contains(name))
-                {
-                    if (!child->isGranted(sensitive_columns, flags_to_check, name) || !flags.contains(flags_to_check)) // For sensitive column, must have permissions granted for both table and the column
-                        return false;
-                }
-                else if (!child->isGranted(sensitive_columns, flags_to_check, name))
+                if (!child->isGranted(sensitive_level, flags_to_check, name))
                     return false;
             }
             else
             {
-                if (sensitive_columns.contains(name))
-                {
-                    auto current_node_name = node_name ? *node_name : "NULL";
-                    if (name != current_node_name || !flags.contains(flags_to_check))
-                        return false;
-                }
+                /* sensitive resource is not granted */
+                if (level < sensitive_level)
+                    return false;
+
                 if (!flags.contains(flags_to_check))
                     return false;
             }
         }
+
         return true;
     }
 
@@ -633,8 +635,8 @@ private:
         auto flags_go = node_go ? node_go->flags : parent_fl_go;
         auto revokes = parent_fl - flags;
         auto revokes_go = parent_fl_go - flags_go - revokes;
-        auto grants_go = flags_go - parent_fl_go;
-        auto grants = flags - parent_fl - grants_go;
+        auto grants_go = IsSensitive ? flags_go : flags_go - parent_fl_go;
+        auto grants = IsSensitive ? flags - grants_go : flags - parent_fl - grants_go;
 
         if (revokes)
             res.push_back(ProtoElement{revokes, full_name, false, true});
@@ -739,7 +741,7 @@ private:
             for (auto & [lhs_childname, lhs_child] : *children)
             {
                 if (!rhs.tryGetChild(lhs_childname))
-                    lhs_child.flags |= rhs.flags & lhs_child.getAllGrantableFlags();
+                    lhs_child.addGrantsRec(rhs.flags, COLUMN_LEVEL);
             }
         }
     }
@@ -757,7 +759,7 @@ private:
             for (auto & [lhs_childname, lhs_child] : *children)
             {
                 if (!rhs.tryGetChild(lhs_childname))
-                    lhs_child.flags &= rhs.flags;
+                    lhs_child.removeGrantsRec(~rhs.flags);
             }
         }
     }
@@ -1198,17 +1200,15 @@ void AccessRightsBase<IsSensitive>::makeIntersection(const AccessRightsBase<IsSe
     auto helper = [](std::unique_ptr<Node> & root_node, const std::unique_ptr<Node> & other_root_node)
     {
         if (!root_node)
+            return;
+        if (!other_root_node)
         {
-            if (other_root_node)
-                root_node = std::make_unique<Node>(*other_root_node);
+            root_node = nullptr;
             return;
         }
-        if (other_root_node)
-        {
-            root_node->makeIntersection(*other_root_node);
-            if (!root_node->flags && !root_node->children)
-                root_node = nullptr;
-        }
+        root_node->makeIntersection(*other_root_node);
+        if (!root_node->flags && !root_node->children)
+            root_node = nullptr;
     };
     helper(root, other.root);
     helper(root_with_grant_option, other.root_with_grant_option);
@@ -1262,14 +1262,14 @@ void AccessRightsBase<IsSensitive>::logTree() const
 }
 
 template <bool grant_option, typename... Args>
-bool SensitiveAccessRights::isGrantedImpl(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const Args &... args) const
+bool SensitiveAccessRights::isGrantedImpl(int sensitive_level, const AccessFlags & flags, const Args &... args) const
 {
     auto helper = [&](const std::unique_ptr<Node> & root_node) -> bool
     {
         if (!root_node)
             return flags.isEmpty();
 
-        return root_node->isGranted(sensitive_columns, flags, args...);
+        return root_node->isGranted(sensitive_level, flags, args...);
     };
     if constexpr (grant_option)
         return helper(root_with_grant_option);
@@ -1278,52 +1278,51 @@ bool SensitiveAccessRights::isGrantedImpl(const std::unordered_set<std::string_v
 }
 
 template <bool grant_option>
-bool SensitiveAccessRights::isGrantedImplHelper(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const
+bool SensitiveAccessRights::isGrantedImplHelper(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const
 {
     assert(!element.grant_option || grant_option);
     if (element.any_database)
-        return isGrantedImpl<grant_option>(sensitive_columns, element.access_flags);
+        return isGrantedImpl<grant_option>(sensitive_level, element.access_flags);
     else if (element.any_table)
-        return isGrantedImpl<grant_option>(sensitive_columns, element.access_flags, element.database);
+        return isGrantedImpl<grant_option>(sensitive_level, element.access_flags, element.database);
     else if (element.any_column)
-        return isGrantedImpl<grant_option>(sensitive_columns, element.access_flags, element.database, element.table);
+        return isGrantedImpl<grant_option>(sensitive_level, element.access_flags, element.database, element.table);
     else
-        return isGrantedImpl<grant_option>(sensitive_columns, element.access_flags, element.database, element.table, element.columns);
+        return isGrantedImpl<grant_option>(sensitive_level, element.access_flags, element.database, element.table, sensitive_columns);
 }
 
 template <bool grant_option>
-bool SensitiveAccessRights::isGrantedImpl(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const
+bool SensitiveAccessRights::isGrantedImpl(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const
 {
     if constexpr (grant_option)
     {
-        return isGrantedImplHelper<true>(sensitive_columns, element);
+        return isGrantedImplHelper<true>(sensitive_level, sensitive_columns, element);
     }
     else
     {
         if (element.grant_option)
-            return isGrantedImplHelper<true>(sensitive_columns, element);
+            return isGrantedImplHelper<true>(sensitive_level, sensitive_columns, element);
         else
-            return isGrantedImplHelper<false>(sensitive_columns, element);
+            return isGrantedImplHelper<false>(sensitive_level, sensitive_columns, element);
     }
 }
 
 template <bool grant_option>
-bool SensitiveAccessRights::isGrantedImpl(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const
+bool SensitiveAccessRights::isGrantedImpl(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const
 {
     for (const auto & element : elements)
-        if (!isGrantedImpl<grant_option>(sensitive_columns, element))
+        if (!isGrantedImpl<grant_option>(sensitive_level, sensitive_columns, element))
             return false;
     return true;
 }
-
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags) const { return isGrantedImpl<false>(sensitive_columns, flags); }
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database) const { return isGrantedImpl<false>(sensitive_columns, flags, database); }
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table) const { return isGrantedImpl<false>(sensitive_columns, flags, database, table); }
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const { return isGrantedImpl<false>(sensitive_columns, flags, database, table, column); }
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const { return isGrantedImpl<false>(sensitive_columns, flags, database, table, columns); }
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const { return isGrantedImpl<false>(sensitive_columns, flags, database, table, columns); }
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const { return isGrantedImpl<false>(sensitive_columns, element); }
-bool SensitiveAccessRights::isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const { return isGrantedImpl<false>(sensitive_columns, elements); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> &, const AccessFlags & flags) const { return isGrantedImpl<false>(sensitive_level, flags); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> &, const AccessFlags & flags, const std::string_view & database) const { return isGrantedImpl<false>(sensitive_level, flags, database); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> &, const AccessFlags & flags, const std::string_view & database, const std::string_view & table) const { return isGrantedImpl<false>(sensitive_level, flags, database, table); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> &, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const { return isGrantedImpl<false>(sensitive_level, flags, database, table, column); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> &) const { return isGrantedImpl<false>(sensitive_level, flags, database, table, sensitive_columns); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings &) const { return isGrantedImpl<false>(sensitive_level, flags, database, table, sensitive_columns); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const { return isGrantedImpl<false>(sensitive_level, sensitive_columns, element); }
+bool SensitiveAccessRights::isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const { return isGrantedImpl<false>(sensitive_level, sensitive_columns, elements); }
 
 template class AccessRightsBase<true>;
 template class AccessRightsBase<false>;

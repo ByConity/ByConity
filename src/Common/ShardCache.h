@@ -36,16 +36,6 @@ public:
         {
             containers.push_back(std::make_unique<CacheType>(opts));
         }
-
-        LOG_DEBUG(
-            &Poco::Logger::get("ShardCache"),
-            "BucketLRUCache max_nums {} * {} = {}, max_size {} * {} = {}",
-            opts.max_nums,
-            shard_num,
-            opts.max_nums * shard_num,
-            opts.max_size,
-            shard_num,
-            opts.max_size * shard_num);
     }
 
     inline CacheType& shard(const Key& key)
@@ -55,24 +45,22 @@ public:
         return *(containers[shard_id % shard_num]);
     }
 
-    size_t count() const
+    typename CacheType::WeightType weight() const
     {
-        size_t total_count = 0;
-        for (const std::unique_ptr<CacheType>& container : containers)
-        {
-            total_count += container->count();
-        }
-        return total_count;
-    }
-
-    size_t weight() const
-    {
-        size_t total_weight = 0;
+        typename CacheType::WeightType total_weight = {};
         for (const std::unique_ptr<CacheType>& container : containers)
         {
             total_weight += container->weight();
         }
         return total_weight;
+    }
+
+    inline void clear()
+    {
+        for (const std::unique_ptr<CacheType>& container : containers)
+        {
+            container->clear();
+        }
     }
 
 private:

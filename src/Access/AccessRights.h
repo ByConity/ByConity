@@ -191,26 +191,27 @@ class SensitiveAccessRights : public AccessRightsBase<true>
 public:
     using Base = AccessRightsBase<true>;
     using Base::Base;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags) const;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database) const;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table) const;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const;
-    bool isGranted(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const;
+
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags) const;
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database) const;
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table) const;
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const;
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const;
+    bool isGranted(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const;
 
 private:
     template <bool grant_option, typename... Args>
-    bool isGrantedImpl(const std::unordered_set<std::string_view> & sensitive_columns, const AccessFlags & flags, const Args &... args) const;
+    bool isGrantedImpl(int sensitive_level, const AccessFlags & flags, const Args &... args) const;
 
     template <bool grant_option>
-    bool isGrantedImpl(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const;
+    bool isGrantedImpl(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const;
 
     template <bool grant_option>
-    bool isGrantedImpl(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const;
+    bool isGrantedImpl(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElements & elements) const;
 
     template <bool grant_option>
-    bool isGrantedImplHelper(const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const;
+    bool isGrantedImplHelper(int sensitive_level, const std::unordered_set<std::string_view> & sensitive_columns, const AccessRightsElement & element) const;
 };
 }

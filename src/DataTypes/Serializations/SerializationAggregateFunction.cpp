@@ -74,7 +74,7 @@ void SerializationAggregateFunction::serializeBinaryBulk(const IColumn & column,
         function->serialize(*it, ostr);
 }
 
-void SerializationAggregateFunction::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/) const
+size_t SerializationAggregateFunction::deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double /*avg_value_size_hint*/, bool /*zero_copy_cache_read*/, const UInt8* filter) const
 {
     ColumnAggregateFunction & real_column = typeid_cast<ColumnAggregateFunction &>(column);
     ColumnAggregateFunction::Container & vec = real_column.getData();
@@ -86,6 +86,7 @@ void SerializationAggregateFunction::deserializeBinaryBulk(IColumn & column, Rea
     size_t size_of_state = function->sizeOfData();
     size_t align_of_state = function->alignOfData();
 
+    size_t processed_rows = 0;
     for (size_t i = 0; i < limit; ++i)
     {
         if (istr.eof())
@@ -105,8 +106,11 @@ void SerializationAggregateFunction::deserializeBinaryBulk(IColumn & column, Rea
             throw;
         }
 
-        vec.push_back(place);
+        ++processed_rows;
+        if (filter == nullptr || *(filter + i) != 0)
+            vec.push_back(place);
     }
+    return processed_rows;
 }
 
 static String serializeToString(const AggregateFunctionPtr & function, const IColumn & column, size_t row_num)

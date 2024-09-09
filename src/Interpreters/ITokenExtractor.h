@@ -65,8 +65,6 @@ struct ITokenExtractor
         size_t cur = 0;
         String token;
 
-        gin_filter.setQueryString(data, length);
-
         while (cur < length && token_extractor->nextInStringLike(data, length, &cur, token))
             gin_filter.addTerm(token.c_str(), token.size());
     }
@@ -114,8 +112,23 @@ public:
     bool nextInStringLike(const char * data, size_t length, size_t * pos, String & out) const override;
 };
 
+class CharSeperatorTokenExtractor final: public ITokenExtractor
+{
+public:
+    explicit CharSeperatorTokenExtractor(const std::unordered_set<char>& seperators_):
+        seps(seperators_.begin(), seperators_.end()) {}
+
+    static const char* getName() { return "char_seperator_v1"; }
+
+    bool nextInString(const char * data, size_t length, size_t * __restrict pos, size_t * __restrict token_start, size_t * __restrict token_length) const override;
+
+    bool nextInStringLike(const char * data, size_t length, size_t * __restrict pos, String & token) const override;
+
+    const std::unordered_set<char>& seperators() const {return seps;}
+
+private:
+    /// TODO: Change to unordered_set<String> and support non ascii seperator?
+    std::unordered_set<char> seps;
+};
+
 }
-
-
-
-

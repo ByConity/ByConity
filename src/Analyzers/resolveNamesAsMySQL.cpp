@@ -1,5 +1,6 @@
 #include <Analyzers/resolveNamesAsMySQL.h>
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -55,6 +56,11 @@ namespace
         {
         }
         void rewriteName(ASTPtr & ast, const ASTPtr & root_expression);
+        void rewriteChildren(ASTPtr & ast, const ASTPtr & root_expression)
+        {
+            for (auto & child : ast->children)
+                rewriteName(child, root_expression);
+        }
 
     private:
         std::vector<NamedExpressions> levels;
@@ -73,11 +79,12 @@ namespace
                         break;
             }
         }
-        else if ((ast->as<ASTFunction>() && ast->as<ASTFunction>()->name != "lambda") || ast->as<ASTExpressionList>())
-        {
-            for (auto & child : ast->children)
-                rewriteName(child, root_expression);
-        }
+        else if (const auto * func = ast->as<ASTFunction>(); func
+                 && !AggregateUtils::isAggregateFunction(*func) /* prefer source column under aggregate function */
+                 && func->name != "lambda")
+            rewriteChildren(ast, root_expression);
+        else if (ast->as<ASTExpressionList>())
+            rewriteChildren(ast, root_expression);
     }
 
     void collectNamedExpressions(const ASTPtr & expression, NamedExpressions & named_expressions)

@@ -35,6 +35,8 @@ String SubColumnID::getSubColumnName(const String & primary_column) const
             return primary_column + ".key";
         case Type::MAP_VALUES:
             return primary_column + ".value";
+        case Type::JSON_FIELD:
+            return primary_column + "." + json_field_name;
     }
     throw Exception("Not implemented for this type.", ErrorCodes::NOT_IMPLEMENTED);
 }
@@ -49,6 +51,11 @@ bool SubColumnID::operator==(const SubColumnID & other) const
         return map_element_key == other.map_element_key;
     }
 
+    if (type == Type::JSON_FIELD)
+    {
+        return json_field_name == other.json_field_name;
+    }
+
     return true;
 }
 
@@ -60,6 +67,11 @@ size_t SubColumnID::Hash::operator()(const SubColumnID & id) const
     if (id.type == Type::MAP_ELEMENT)
     {
         hash_for_other_members = std::hash<String>()(id.map_element_key);
+    }
+
+    if (id.type == Type::JSON_FIELD)
+    {
+        hash_for_other_members = std::hash<String>()(id.json_field_name);
     }
 
     return hash_for_type | ((hash_for_other_members >> 8) << 8);

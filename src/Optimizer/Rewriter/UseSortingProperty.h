@@ -10,6 +10,7 @@
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 #include <QueryPlan/SimplePlanVisitor.h>
+#include <Poco/Logger.h>
 
 namespace DB
 {
@@ -47,6 +48,7 @@ public:
 
     PlanAndPropConstants visitCTERefNode(CTERefNode & node, SortDescription & required) override;
     PlanAndPropConstants visitProjectionNode(ProjectionNode & node, SortDescription & required) override;
+    PlanAndPropConstants visitFilterNode(FilterNode & node, SortDescription & required) override;
     PlanAndPropConstants visitTableScanNode(TableScanNode & node, SortDescription & required) override;
 
 private:
@@ -63,7 +65,8 @@ struct SortInfo
 class PruneSortingInfoRewriter : public SimplePlanRewriter<SortInfo>
 {
 public:
-    PruneSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_)
+    PruneSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_)
+        : SimplePlanRewriter(context_, cte_info_), logger(&Poco::Logger::get("PruneSortingInfoRewriter"))
     {
     }
 
@@ -74,6 +77,9 @@ public:
     PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, SortInfo &) override;
     PlanNodePtr visitProjectionNode(ProjectionNode & node, SortInfo & required) override;
     PlanNodePtr visitTableScanNode(TableScanNode &, SortInfo & required) override;
+
+private:
+    Poco::Logger * logger;
 };
 
 }

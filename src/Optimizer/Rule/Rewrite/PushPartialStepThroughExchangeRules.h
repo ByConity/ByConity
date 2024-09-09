@@ -62,6 +62,20 @@ public:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+class PushPartialSortingThroughUnion : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_PARTIAL_SORTING_THROUGH_UNION; }
+    String getName() const override { return "PUSH_PARTIAL_SORTING_THROUGH_UNION"; }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_push_partial_sorting_through_union;
+    }
+    ConstRefPatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
 class PushPartialLimitThroughExchange : public Rule
 {
 public:

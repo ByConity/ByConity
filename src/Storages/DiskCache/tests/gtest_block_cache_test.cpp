@@ -110,6 +110,14 @@ public:
     {
     }
 
+    ~Driver()
+    {
+        drain();
+        cache.reset();
+        scheduler.reset();
+        device.reset();
+    }
+
     void persist()
     {
         auto stream = createMetadataOutputStream(*device, metadata_size);
@@ -132,6 +140,12 @@ public:
     {
         scheduler->finish();
         cache->flush();
+    }
+
+    void drain()
+    {
+        scheduler->finish();
+        cache->drain();
     }
 
     Status insertAsync(const HashedKey & key, const BufferView & value, InsertCallback cb = nullptr)
@@ -352,6 +366,53 @@ TEST(BlockCache, Remove)
     EXPECT_EQ(Status::Ok, driver->remove(makeHashKey("cat")));
     EXPECT_EQ(Status::NotFound, driver->lookup(log[0].getKey(), value));
     EXPECT_EQ(Status::NotFound, driver->lookup(log[1].getKey(), value));
+}
+
+TEST(BlockCache, RemoveAndInsert)
+{
+    std::vector<CacheEntry> log;
+
+    std::vector<UInt32> hits(4);
+    auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
+    auto device = createMemoryDevice(kDeviceSize);
+    auto ex = makeJobScheduler();
+    auto config = makeConfig(*ex, std::move(policy), *device);
+    auto cache = makeCache(std::move(config));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
+    BufferGen bg;
+    {
+        CacheEntry e{strzBuffer("cat"), bg.gen(800)};
+        EXPECT_EQ(Status::Ok, driver->insertAsync(e.getKey(), e.getValue()));
+        log.push_back(std::move(e));
+    }
+    {
+        CacheEntry e{strzBuffer("dog"), bg.gen(800)};
+        EXPECT_EQ(Status::Ok, driver->insertAsync(e.getKey(), e.getValue()));
+        log.push_back(std::move(e));
+    }
+    driver->flush();
+
+    Buffer value;
+    EXPECT_EQ(Status::Ok, driver->lookup(log[0].getKey(), value));
+    EXPECT_EQ(log[0].getValue(), value.view());
+    EXPECT_EQ(Status::Ok, driver->lookup(log[1].getKey(), value));
+    EXPECT_EQ(log[1].getValue(), value.view());
+    EXPECT_EQ(Status::Ok, driver->remove(makeHashKey("cat")));
+    EXPECT_EQ(Status::NotFound, driver->lookup(log[0].getKey(), value));
+    EXPECT_EQ(Status::Ok, driver->lookup(log[1].getKey(), value));
+    EXPECT_EQ(log[1].getValue(), value.view());
+
+    {
+        CacheEntry e{strzBuffer("cat"), bg.gen(800)};
+        EXPECT_EQ(Status::Ok, driver->insertAsync(e.getKey(), e.getValue()));
+        log.push_back(std::move(e));
+    }
+    driver->flush();
+
+    EXPECT_EQ(Status::Ok, driver->lookup(log[1].getKey(), value));
+    EXPECT_EQ(log[1].getValue(), value.view());
+    EXPECT_EQ(Status::Ok, driver->lookup(log[2].getKey(), value));
+    EXPECT_EQ(log[2].getValue(), value.view());
 }
 
 TEST(BlockCache, SimpleReclaim)
@@ -718,8 +779,6 @@ TEST(BlockCache, ReadRegionDuringEviction)
     EXPECT_EQ(Status::Ok, driver->lookup(log[2].getKey(), value));
     EXPECT_EQ(log[2].getValue(), value.view());
 
-    EXPECT_FALSE(ex_ptr->runFirstIf("reclaim"));
-
     std::thread lookup_thread2([&driver, &log] {
         Buffer value2;
         EXPECT_EQ(Status::NotFound, driver->lookup(log[2].getKey(), value2));
@@ -727,11 +786,11 @@ TEST(BlockCache, ReadRegionDuringEviction)
 
     EXPECT_EQ(Status::Ok, driver->remove(log[2].getKey()));
 
-    EXPECT_FALSE(ex_ptr->runFirstIf("reclaim"));
-
     sp.reached(1);
 
     finishAllJobs(*ex_ptr);
+    driver->drain();
+
     EXPECT_EQ(Status::NotFound, driver->remove(log[1].getKey()));
     EXPECT_EQ(Status::NotFound, driver->remove(log[2].getKey()));
 
@@ -1021,7 +1080,7 @@ TEST(BlockCache, HitsReinsertionPolicy)
         EXPECT_EQ(Status::Ok, driver->insertAsync(e.getKey(), e.getValue()));
         log.push_back(std::move(e));
     }
-    driver->flush();
+    driver->drain();
 
     {
         Buffer value;
@@ -1082,6 +1141,7 @@ TEST(BlockCache, UsePriorities)
             log.push_back(std::move(e));
         }
         driver->flush();
+        driver->drain();
         if (i == 0)
         {
             Buffer value;
@@ -1133,6 +1193,7 @@ TEST(BlockCache, UsePrioritiesSizeClass)
             log.push_back(std::move(e));
         }
         driver->flush();
+        driver->drain();
         for (size_t j = 0; j < 8; j++)
         {
             CacheEntry e{bg.gen(8), bg.gen(1800)};
@@ -1140,6 +1201,7 @@ TEST(BlockCache, UsePrioritiesSizeClass)
             log.push_back(std::move(e));
         }
         driver->flush();
+        driver->drain();
         if (i == 0)
         {
             Buffer value;

@@ -1,14 +1,21 @@
+#include <Storages/DiskCache/FiberThread.h>
 #include <Storages/DiskCache/Region.h>
 
 #include <tuple>
 
 namespace DB::HybridCache
 {
-bool Region::readyForReclaim()
+bool Region::readyForReclaim(bool wait)
 {
-    std::lock_guard<std::mutex> g{lock};
+    std::unique_lock<TimedMutex> l{lock};
     flags |= kBlockAccess;
-    return activeOpenLocked() == 0;
+    bool ready = false;
+    while (!(ready = (activeOpenLocked() == 0UL)) && wait)
+    {
+        cond.wait(l);
+    }
+
+    return ready;
 }
 
 UInt32 Region::activeOpenLocked() const
@@ -28,9 +35,13 @@ std::tuple<RegionDescriptor, RelAddress> Region::openAndAllocate(UInt32 size)
 
 RegionDescriptor Region::openForRead()
 {
-    std::lock_guard<std::mutex> g{lock};
+    std::unique_lock<TimedMutex> l{lock};
     if (flags & kBlockAccess)
+    {
+        if (getCurrentFiberThread())
+            cond.wait(l);
         return RegionDescriptor{OpenStatus::Retry};
+    }
     bool phys_read_mode = false;
     if (isFlushedLocked() || !buffer)
     {
@@ -42,11 +53,26 @@ RegionDescriptor Region::openForRead()
     return RegionDescriptor::makeReadDescriptor(OpenStatus::Ready, region_id, phys_read_mode);
 }
 
+std::unique_ptr<Buffer> Region::detachBuffer()
+{
+    std::unique_lock<TimedMutex> l{lock};
+    chassert(buffer != nullptr);
+    while (active_in_mem_readers != 0)
+    {
+        cond.wait(l);
+    }
+
+    chassert(active_writers == 0UL);
+    auto ret_buf = std::move(buffer);
+    buffer = nullptr;
+    return ret_buf;
+}
+
 // Flushes the attached buffer if threre are no active writes by calling the callback function that is expected to write the
 // buffer to underlying device.
 Region::FlushRes Region::flushBuffer(std::function<bool(RelAddress, BufferView)> callback)
 {
-    std::unique_lock<std::mutex> ulock{lock};
+    std::unique_lock<TimedMutex> ulock{lock};
     if (active_writers != 0)
         return FlushRes::kRetryPendingWrites;
     if (!isFlushedLocked())
@@ -63,11 +89,13 @@ Region::FlushRes Region::flushBuffer(std::function<bool(RelAddress, BufferView)>
     return FlushRes::kSuccess;
 }
 
-bool Region::cleanupBuffer(std::function<void(RegionId, BufferView)> callback)
+void Region::cleanupBuffer(std::function<void(RegionId, BufferView)> callback)
 {
-    std::unique_lock<std::mutex> ulock{lock};
-    if (active_writers != 0)
-        return false;
+    std::unique_lock<TimedMutex> l{lock};
+    while (active_writers != 0)
+    {
+        cond.wait(l);
+    }
     if (!isCleanedupLocked())
     {
         lock.unlock();
@@ -75,12 +103,11 @@ bool Region::cleanupBuffer(std::function<void(RegionId, BufferView)> callback)
         lock.lock();
         flags |= kCleanedup;
     }
-    return true;
 }
 
 void Region::reset()
 {
-    std::lock_guard<std::mutex> g{lock};
+    std::lock_guard<TimedMutex> l{lock};
     chassert(activeOpenLocked() == 0U);
     priority = 0;
     flags = 0;
@@ -89,21 +116,32 @@ void Region::reset()
     active_in_mem_readers = 0;
     last_entry_end_offset = 0;
     num_items = 0;
+    cond.notifyAll();
 }
 
 void Region::close(RegionDescriptor && desc)
 {
-    std::lock_guard<std::mutex> g{lock};
+    std::lock_guard<TimedMutex> l{lock};
     switch (desc.getMode())
     {
         case OpenMode::Write:
-            active_writers--;
+            chassert(active_writers > 0u);
+            if (--active_writers == 0)
+                cond.notifyAll();
             break;
         case OpenMode::Read:
             if (desc.isPhysReadMode())
-                active_phys_readers--;
+            {
+                chassert(active_phys_readers > 0u);
+                if (--active_phys_readers == 0)
+                    cond.notifyAll();
+            }
             else
-                active_in_mem_readers--;
+            {
+                chassert(active_in_mem_readers > 0u);
+                if (--active_in_mem_readers == 0)
+                    cond.notifyAll();
+            }
             break;
         default:
             chassert(false);

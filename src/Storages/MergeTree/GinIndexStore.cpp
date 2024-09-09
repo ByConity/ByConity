@@ -688,15 +688,12 @@ GinPostingsCachePtr PostingsCacheForStore::getPostings(const String & query_stri
 GinIndexStoreFactory::GinIndexStoreFactory(const GinIndexStoreCacheSettings & settings)
     : stores_lru_cache(
         settings.cache_shard_num,
-        BucketLRUCache<String, GinIndexStore, std::hash<String>, GinIndexStoreWeightFunction>::Options{
+        BucketLRUCache<String, GinIndexStore, size_t, GinIndexStoreWeightFunction>::Options{
             .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
             .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
-            .max_size = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / settings.cache_shard_num)),
-            .max_nums = std::numeric_limits<size_t>::max(),
-            .enable_customize_evict_handler = false
+            .max_weight = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / settings.cache_shard_num)),
         })
 {
-
 }
 
 GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelperPtr && storage_info)
@@ -709,7 +706,7 @@ GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelpe
     if (cache_result)
         return cache_result;
 
-    auto result = shard.getOrSet(key, [&]() -> GinIndexStorePtr {
+    return shard.getOrSet(key, [&]() -> GinIndexStorePtr {
         GinIndexStorePtr store = std::make_shared<GinIndexStore>(name, std::move(storage_info));
         if (!store->exists())
             return nullptr;
@@ -719,8 +716,6 @@ GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelpe
         deserializer.readSegmentDictionaries();
         return store;
     });
-
-    return result.first;
 }
 
 }

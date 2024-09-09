@@ -474,6 +474,42 @@ void HTTPHandler::processQuery(
     using namespace Poco::Net;
 
     LOG_TRACE(log, "Request URI: {}", request.getURI());
+    std::string tenant_id = params.getParsed<std::string>("tenant_id", "");
+    std::string database = request.get("X-ClickHouse-Database", "");
+    if (database.empty())
+        database = params.getParsed<std::string>("database", "");
+
+    if (auto pos = database.find('`'); pos != String::npos)
+    {
+        //CNCH multi-tenant default database pattern from gateway client: {tenant_id}`{default_database}
+        //Even this is a GET request or with "readonly=1" setting, we force to apply the tenant_id setting change.
+        auto tenant_id_from_db = String(database.c_str(), pos);
+        if (tenant_id.empty())
+            tenant_id = tenant_id_from_db;
+        else if (tenant_id != tenant_id_from_db && !tenant_id_from_db.empty())
+            throw Exception("tenant id " + tenant_id + " from setting doesn't match tenant id from database " + tenant_id_from_db, ErrorCodes::UNKNOWN_USER);
+
+        ///multi-tenant default database storage pattern: {tenant_id}.{database}
+        if (pos + 1 != database.size())
+        {
+            auto sub_str = database.substr(pos + 1);
+            if (sub_str == "default" || sub_str == "system")
+                database = std::move(sub_str);
+            else
+                database[pos] = '.';
+        }
+        else                                     /// {tenant_id}`
+            database.clear();
+    }
+
+    if (!database.empty())
+        context->setCurrentDatabase(database);
+
+    if (!tenant_id.empty())
+    {
+        context->setSetting("tenant_id", tenant_id);
+        context->setTenantId(tenant_id);
+    }
 
     if (!authenticateUser(context, request, params, response))
         return; // '401 Unauthorized' response with 'Negotiate' has been sent at this point.
@@ -702,28 +738,20 @@ void HTTPHandler::processQuery(
         reserved_param_suffixes.emplace_back("_structure");
     }
 
-    std::string database = request.get("X-ClickHouse-Database", "");
     std::string default_format = request.get("X-ClickHouse-Format", "");
 
     SettingsChanges settings_changes;
     for (const auto & [key, value] : params)
     {
         if (key == "database")
-        {
-            if (database.empty())
-                database = value;
-        }
+            continue;
         else if (key == "default_format")
         {
             if (default_format.empty())
                 default_format = value;
         }
         else if (key == "tenant_id")
-        {
-            //Even this is a GET request or with "readonly=1" setting, we force to apply the tenant_id setting change.
-            context->setSetting("tenant_id", value);
-            context->setTenantId(value);
-        }
+            continue;
         else if (param_could_be_skipped(key))
         {
         }
@@ -733,31 +761,6 @@ void HTTPHandler::processQuery(
             if (!customizeQueryParam(context, key, value))
                 settings_changes.push_back({key, value});
         }
-    }
-
-    if (!database.empty())
-    {
-        auto &default_database = database;
-        auto &connection_context = context;
-        //CNCH multi-tenant default database pattern from gateway client: {tenant_id}`{default_database}
-        if (auto pos = default_database.find('`'); pos != String::npos)
-        {
-            //Even this is a GET request or with "readonly=1" setting, we force to apply the tenant_id setting change.
-            connection_context->setSetting("tenant_id", String(default_database.c_str(), pos));
-            connection_context->setTenantId(String(default_database.c_str(), pos));
-            if (pos + 1 != default_database.size())  ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
-            {
-                auto sub_str = default_database.substr(pos + 1);
-                if (sub_str == "default" || sub_str == "system")
-                    default_database = std::move(sub_str);
-                else
-                    default_database[pos] = '.';
-            }
-            else                                     /// {tenant_id}`
-                default_database.clear();
-        }
-        if (!default_database.empty())
-            connection_context->setCurrentDatabase(default_database);
     }
 
     if (!default_format.empty())

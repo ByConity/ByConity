@@ -15,17 +15,18 @@
 
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 
+#include <Interpreters/join_common.h>
 #include <Optimizer/ExpressionInterpreter.h>
+#include <Optimizer/LiteralEncoder.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Property/ConstantsDeriver.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/SimplifyExpressions.h>
 #include <Optimizer/UnwrapCastInComparison.h>
-#include <Optimizer/LiteralEncoder.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/JoinStep.h>
-#include <Interpreters/join_common.h>
 
 namespace DB
 {
@@ -152,7 +153,15 @@ TransformResult SimplifyPredicateRewriteRule::transformImpl(PlanNodePtr node, co
     const auto & step = *old_filter_node->getStep();
     auto predicate = step.getFilter();
 
-    ConstASTPtr rewritten = ExpressionInterpreter::optimizePredicate(predicate, step.getOutputStream().header.getNamesToTypes(), context);
+    ExpressionInterpreter::IdentifierValues constants;
+    if (context->getSettingsRef().enable_simplify_expression_by_derived_constant)
+    {
+        auto derived_constants = ConstantsDeriver::deriveConstantsFromTree(node->getChildren().at(0), rule_context.cte_info, context);
+        for (const auto & [name, field_with_type] : derived_constants.getValues())
+            constants.emplace(name, field_with_type.value);
+    }
+    ConstASTPtr rewritten
+        = ExpressionInterpreter::optimizePredicate(predicate, step.getOutputStream().header.getNamesToTypes(), context, constants);
 
     if (PredicateUtils::isTruePredicate(rewritten))
         return node->getChildren()[0];

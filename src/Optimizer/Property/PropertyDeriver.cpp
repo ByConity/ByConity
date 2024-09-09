@@ -119,7 +119,7 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, cons
     UInt64 buckets = 0;
 
     auto normalize_ast = [&](ASTPtr sharding_key) -> std::pair<Names, ASTPtr> {
-        static SymbolVisitor visitor;
+        SymbolVisitor visitor;
         Names partition_keys;
         SymbolVisitorContext symbol_context;
         ASTVisitorUtil::accept(sharding_key, visitor, symbol_context);

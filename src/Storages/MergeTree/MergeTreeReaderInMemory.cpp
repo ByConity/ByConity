@@ -72,8 +72,8 @@ MergeTreeReaderInMemory::MergeTreeReaderInMemory(
     }
 }
 
-size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row,
-    size_t max_rows_to_read, Columns& res_columns)
+size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t from_row,
+    size_t max_rows_to_read, size_t, const UInt8* filter, Columns & res_columns)
 {
     size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(
         from_mark);
@@ -100,8 +100,8 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t current_task_l
             tmp_columns[i] = type->createColumn();
         }
 
-        skipped_rows = resumableReadRows(from_mark, adjacent_reading, current_task_last_mark,
-            rows_to_skip, tmp_columns);
+        skipped_rows = resumableReadRows(from_mark, adjacent_reading, rows_to_skip,
+            nullptr, tmp_columns);
     }
 
     next_row_number_to_read += skipped_rows;
@@ -113,15 +113,22 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t current_task_l
 
         adjacent_reading = rows_to_skip > 0 || starting_row == next_row_number_to_read;
 
-        read_rows = resumableReadRows(from_mark, adjacent_reading, current_task_last_mark,
-            max_rows_to_read, res_columns);
+        read_rows = resumableReadRows(from_mark, adjacent_reading, max_rows_to_read,
+            filter + skipped_rows, res_columns);
     }
     return read_rows;
 }
 
 size_t MergeTreeReaderInMemory::resumableReadRows(size_t from_mark, bool continue_reading,
-    size_t /**current_task_last_mark**/, size_t max_rows_to_read, Columns & res_columns)
+    size_t max_rows_to_read, const UInt8* filter, Columns & res_columns)
 {
+    if (filter != nullptr)
+    {
+        /// NOTE: MergeTreeReaderInMemory is already removed in community's code
+        throw Exception("MergeTreeReaderInMemory didn't support read filter yet",
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     if (!continue_reading)
     {
         total_rows_read = 0;

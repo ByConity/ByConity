@@ -118,13 +118,13 @@ public:
     void checkGrantOption(const AccessRightsElement & element) const;
     void checkGrantOption(const AccessRightsElements & elements) const;
 
-    bool isSensitiveImpl(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
-    bool isSensitive(std::unordered_set<std::string_view> & cols) const;
-    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database) const;
-    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table) const;
-    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::string_view & column) const;
-    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
-    bool isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
+    int isSensitiveImpl(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
+    static int isSensitive(std::unordered_set<std::string_view> & cols);
+    int isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database) const;
+    int isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table) const;
+    int isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::string_view & column) const;
+    int isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const std::vector<std::string_view> & columns) const;
+    int isSensitive(std::unordered_set<std::string_view> & cols, const std::string_view & database, const std::string_view & table, const Strings & columns) const;
 
     /// Checks if a specified access is granted, and returns false if not.
     /// Empty database means the current database.
@@ -219,9 +219,6 @@ private:
 
     template <bool throw_if_denied, typename Container, typename GetNameFunction>
     bool checkAdminOptionImplHelper(const Container & role_ids, const GetNameFunction & get_name_function) const;
-
-    template <typename... Args>
-    bool checkSensitivePermissions(std::unordered_set<std::string_view> & cols, const Args &... args) const;
 
     const AccessControlManager * manager = nullptr;
     const Params params;

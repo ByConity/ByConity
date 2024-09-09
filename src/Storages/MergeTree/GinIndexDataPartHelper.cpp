@@ -28,6 +28,10 @@ GinDataLocalPartHelper::GinDataLocalPartHelper(const IMergeTreeDataPart& part_):
     }
 }
 
+GinDataLocalPartHelper::GinDataLocalPartHelper(const DiskPtr& disk_,
+    const String& relative_path_):
+        disk(disk_), relative_path(relative_path_) {}
+
 std::unique_ptr<SeekableReadBuffer> GinDataLocalPartHelper::readFile(
     const String& file_name)
 {
