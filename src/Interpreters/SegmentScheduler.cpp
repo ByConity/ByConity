@@ -189,13 +189,18 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
 {
     String coordinator_addr = query_context->getHostWithPorts().getExchangeAddress();
     std::vector<brpc::CallId> call_ids;
-    call_ids.reserve(dag_ptr->plan_send_addresses.size());
+    std::set<AddressInfo> plan_send_addresses;
+    {
+        std::unique_lock<bthread::Mutex> lock(dag_ptr->status_mutex);
+        plan_send_addresses = dag_ptr->plan_send_addresses;
+    }
+    call_ids.reserve(plan_send_addresses.size());
     auto handler = std::make_shared<ExceptionHandler>();
     Protos::CancelQueryRequest request;
     request.set_query_id(query_id);
     request.set_coordinator_address(coordinator_addr);
 
-    for (const auto & addr : dag_ptr->plan_send_addresses)
+    for (const auto & addr : plan_send_addresses)
     {
         auto address = extractExchangeHostPort(addr);
         std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
