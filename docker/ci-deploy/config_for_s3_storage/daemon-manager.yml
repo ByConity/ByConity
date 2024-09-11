@@ -35,6 +35,10 @@ daemon_manager:
       name: DEDUP_WORKER
       interval: 3000
       disable: 0
+    - 
+      name: TXN_GC
+      interval: 3000
+      disable: 0
 
 storage_configuration:
   disks:
