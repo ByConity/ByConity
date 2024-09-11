@@ -743,6 +743,7 @@ public:
     const Poco::Util::AbstractConfiguration & getConfigRefWithLock(const std::unique_lock<std::recursive_mutex> &) const;
 
     void initRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
+    void updateRootConfig(std::function<void (RootConfiguration &)> update_callback);
     const RootConfiguration & getRootConfig() const;
     void reloadRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
 

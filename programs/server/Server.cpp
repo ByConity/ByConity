@@ -542,6 +542,62 @@ void huallocLogPrint(std::string s)
     LOG_INFO(logger, s);
 }
 
+void limitMemoryCacheDefaultMaxRatio(RootConfiguration & root_config, const UInt64 memory_amount)
+{
+#define APPLY_FOR_ALL_CACHE_SIZE_DEFAULT_MAX_RATIO(M) \
+    M(bitengine_memory_cache_size) \
+    M(checksum_cache_size) \
+    M(cnch_primary_index_cache_size) \
+    M(compiled_expression_cache_size) \
+    M(compressed_data_index_cache) \
+    M(delete_bitmap_cache_size) \
+    M(footer_cache_size) \
+    M(gin_index_filter_result_cache) \
+    M(ginindex_store_cache_size) \
+    M(intermediate_result_cache_size) \
+    M(mark_cache_size) \
+    M(unique_key_index_data_cache_size) \
+    M(unique_key_index_meta_cache_size)
+
+    Float32 total_ratio = 0.0f;
+
+#define ADD_TO_TOTAL_RATIO(CONFIG_NAME) \
+    total_ratio += static_cast<Float32>(root_config.CONFIG_NAME ## _default_max_ratio.value);
+
+    /// Accumulate all default max ratios for each memory cache
+    APPLY_FOR_ALL_CACHE_SIZE_DEFAULT_MAX_RATIO(ADD_TO_TOTAL_RATIO)
+#undef ADD_TO_TOTAL_RATIO
+
+    Float32 max_total_ratio = root_config.cache_size_to_ram_max_ratio.value;
+    Float32 lowered_ratio = (total_ratio > max_total_ratio ? max_total_ratio / total_ratio : 1.0f);
+    Poco::Logger * logger = &Poco::Logger::get("MemoryCacheDefaultRatioLimit");
+
+    LOG_INFO(logger, "Total memory {}, max ratio for memory cache is {}{}",
+        formatReadableSizeWithBinarySuffix(memory_amount), max_total_ratio,
+        (lowered_ratio < 1.0f ? fmt::format(", will lower all memory cache default ratio by {}", lowered_ratio) : ""));
+
+#define LOWER_DEFAULT_SIZE(CONFIG_NAME) \
+    { \
+        UInt64 current_value = root_config.CONFIG_NAME.value; \
+        Float32 default_max_ratio = root_config.CONFIG_NAME ## _default_max_ratio.value; \
+        UInt64 lowered_value = static_cast<UInt64>(memory_amount * default_max_ratio * lowered_ratio); \
+        /* Only limit default values */ \
+        if (!root_config.CONFIG_NAME.existed && lowered_value < current_value) \
+        { \
+            LOG_INFO(logger, #CONFIG_NAME " with default value {} will be lowered by default max ratio setting " \
+                #CONFIG_NAME "_default_max_ratio ({} * {}) to {}", formatReadableSizeWithBinarySuffix(current_value), \
+                default_max_ratio, lowered_ratio, formatReadableSizeWithBinarySuffix(lowered_value)); \
+            root_config.CONFIG_NAME.setValue(lowered_value); \
+        } \
+    }
+
+    /// Lower default cache size by max ratio
+    APPLY_FOR_ALL_CACHE_SIZE_DEFAULT_MAX_RATIO(LOWER_DEFAULT_SIZE)
+#undef LOWER_DEFAULT_SIZE
+
+#undef APPLY_FOR_ALL_CACHE_SIZE_DEFAULT_MAX_RATIO
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Poco::Logger * log = &logger();
@@ -593,8 +649,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     global_context->initCnchConfig(config());
+    const UInt64 memory_amount = getMemoryAmount();
+
     global_context->setBlockPrivilegedOp(config().getBool("restrict_tenanted_users_to_privileged_operations", false));
     global_context->initRootConfig(config());
+    global_context->updateRootConfig(std::bind(limitMemoryCacheDefaultMaxRatio, std::placeholders::_1, memory_amount));
     const auto & root_config = global_context->getRootConfig();
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
@@ -697,8 +756,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     Settings::checkNoSettingNamesAtTopLevel(config(), config_path);
-
-    const auto memory_amount = getMemoryAmount();
 
 #if defined(OS_LINUX)
     std::string executable_path = getExecutablePath();
@@ -1172,31 +1229,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Lower cache size on low-memory systems.
     size_t max_cache_size = memory_amount * root_config.cache_size_to_ram_max_ratio;
 
-    /// Size of cache for uncompressed blocks. Zero means disabled.
-    size_t uncompressed_cache_size = root_config.uncompressed_cache_size;
-    if (uncompressed_cache_size > max_cache_size)
+    size_t footer_cache_size = root_config.footer_cache_size;
+    if (footer_cache_size > max_cache_size)
     {
-        uncompressed_cache_size = max_cache_size;
-        LOG_INFO(log, "Uncompressed cache size was lowered to {} because the system has low amount of memory",
-            formatReadableSizeWithBinarySuffix(uncompressed_cache_size));
+        footer_cache_size = max_cache_size;
+        LOG_INFO(log, "Footer cache size was lowered to {} because the system has low amount of memory",
+            formatReadableSizeWithBinarySuffix(footer_cache_size));
     }
-    global_context->setUncompressedCache(uncompressed_cache_size);
-
-    size_t footer_cache_size = config().getUInt64("footer_cache_size", 3221225472);
-    global_context->setFooterCache(footer_cache_size);
-
-    /// Load global settings from default_profile and system_profile.
-    if (global_context->getServerType() == ServerType::cnch_server)
-    {
-        auto vw_customized_settings_ptr = std::make_shared<VWCustomizedSettings>(config());
-        if (!vw_customized_settings_ptr->isEmpty())
-        {
-            global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
-        }
-    }
-
-    global_context->setDefaultProfiles(config());
-    const Settings & settings = global_context->getSettingsRef();
+    global_context->setFooterCache(root_config.footer_cache_size);
 
     /// Size of cache for marks (index of MergeTree family of tables). It is mandatory.
     size_t mark_cache_size = root_config.mark_cache_size;
@@ -1210,25 +1250,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setMarkCache(mark_cache_size);
 
-    /// A cache for part checksums
-    ChecksumsCacheSettings checksum_cache_settings;
-    checksum_cache_settings.lru_max_size = config().getUInt64("checksum_cache_size", 5368709120); //5GB
-    checksum_cache_settings.mapping_bucket_size = config().getUInt64("checksum_cache_bucket", 5000); //5000
-    checksum_cache_settings.cache_shard_num = config().getUInt64("checksum_cache_shard", 8); //8
-    checksum_cache_settings.lru_update_interval = config().getUInt64("checksum_cache_lru_update_interval", 60); //60 seconds
-    global_context->setChecksumsCache(checksum_cache_settings);
-
-    global_context->setCompressedDataIndexCache(config().getUInt64("compressed_data_index_cache", 5368709120));
-
-    global_context->setGinIndexFilterResultCache(config().getUInt64("gin_index_filter_result_cache", 5368709120)); // 5GB
-
-    /// A cache for gin index store
-    GinIndexStoreCacheSettings ginindex_store_cache_settings;
-    ginindex_store_cache_settings.lru_max_size = config().getUInt64("ginindex_store_cache_size", 5368709120); //5GB
-    ginindex_store_cache_settings.mapping_bucket_size = config().getUInt64("ginindex_store_cache_bucket", 1000); //1000
-    ginindex_store_cache_settings.cache_shard_num = config().getUInt64("ginindex_store_cache_shard", 2); //2
-    ginindex_store_cache_settings.lru_update_interval = config().getUInt64("ginindex_store_cache_lru_update_interval", 60); //60 seconds
-    global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
+    /// A cache for mmapped files.
+    size_t mmap_cache_size = root_config.mmap_cache_size;   /// The choice of default is arbitrary.
+    if (mmap_cache_size)
+        global_context->setMMappedFileCache(mmap_cache_size);
 
     /// A cache for part's primary index
     size_t primary_index_cache_size = root_config.cnch_primary_index_cache_size;
@@ -1241,31 +1266,82 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (primary_index_cache_size)
         global_context->setPrimaryIndexCache(primary_index_cache_size);
 
+    /// Size of cache for uncompressed blocks. Zero means disabled.
+    size_t uncompressed_cache_size = root_config.uncompressed_cache_size;
+    if (uncompressed_cache_size > max_cache_size)
+    {
+        uncompressed_cache_size = max_cache_size;
+        LOG_INFO(log, "Uncompressed cache size was lowered to {} because the system has low amount of memory",
+            formatReadableSizeWithBinarySuffix(uncompressed_cache_size));
+    }
+    global_context->setUncompressedCache(uncompressed_cache_size);
 
-    /// A cache for mmapped files.
-    size_t mmap_cache_size = config().getUInt64("mmap_cache_size", 1000);   /// The choice of default is arbitrary.
-    if (mmap_cache_size)
-        global_context->setMMappedFileCache(mmap_cache_size);
+
+    /// Bitengine memory cache
+    size_t cnch_bitengine_memory_dict_size = root_config.bitengine_memory_cache_size;
+    global_context->setMemoryDictCache(cnch_bitengine_memory_dict_size);
+
+#if USE_EMBEDDED_COMPILER
+    /// Compiled expression cache
+    CompiledExpressionCacheFactory::instance().init(root_config.compiled_expression_cache_size);
+#endif
+
+    /// Size of delete bitmap for HaMergeTree engine to be cached in memory; default is 1GB
+    size_t delete_bitmap_cache_size = root_config.delete_bitmap_cache_size;
+    global_context->setDeleteBitmapCache(delete_bitmap_cache_size);
+
+    /// Size of cache for intermediate_result. It is not necessary.
+    size_t intermediate_result_cache_size = root_config.intermediate_result_cache_size;
+    if (intermediate_result_cache_size)
+        global_context->setIntermediateResultCache(intermediate_result_cache_size);
+
+    /// Unique key index data cache is used for the data blocks, it's ok to have a lower hit cache than meta cache
+    size_t uki_data_cache_size = root_config.unique_key_index_data_cache_size;
+    global_context->setUniqueKeyIndexBlockCache(uki_data_cache_size);
+
+    /// Unique key index meta cache is used for the index and bloom blocks, it should be set to a large number to keep hit rate near 100%.
+    size_t uki_meta_cache_size = root_config.unique_key_index_meta_cache_size;
+    global_context->setUniqueKeyIndexCache(uki_meta_cache_size);
+
+    /// A cache for part checksums
+    ChecksumsCacheSettings checksum_cache_settings;
+    checksum_cache_settings.lru_max_size = root_config.checksum_cache_size;
+    checksum_cache_settings.mapping_bucket_size = root_config.checksum_cache_bucket;
+    checksum_cache_settings.cache_shard_num = root_config.checksum_cache_shard;
+    checksum_cache_settings.lru_update_interval = root_config.checksum_cache_lru_update_interval;
+    global_context->setChecksumsCache(checksum_cache_settings);
+
+    /// A cache for gin index store
+    GinIndexStoreCacheSettings ginindex_store_cache_settings;
+    ginindex_store_cache_settings.lru_max_size = root_config.ginindex_store_cache_size;
+    ginindex_store_cache_settings.mapping_bucket_size = root_config.ginindex_store_cache_bucket;
+    ginindex_store_cache_settings.cache_shard_num = root_config.ginindex_store_cache_shard;
+    ginindex_store_cache_settings.lru_update_interval = root_config.ginindex_store_cache_lru_update_interval;
+    global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
+
+    size_t compressed_data_index_cache_size = root_config.compressed_data_index_cache;
+    global_context->setCompressedDataIndexCache(compressed_data_index_cache_size);
+
+    size_t gin_index_filter_result_cache_size = root_config.gin_index_filter_result_cache;
+    global_context->setGinIndexFilterResultCache(gin_index_filter_result_cache_size);
 
     /// A cache for query results.
     if (global_context->getServerType() == ServerType::cnch_server)
         global_context->setQueryCache(config());
 
-    /// Size of cache for intermediate_result. It is not necessary.
-    size_t intermediate_result_cache_size = config().getUInt64("intermediate_result_cache_size", 1000000000);
-    if (intermediate_result_cache_size)
-        global_context->setIntermediateResultCache(intermediate_result_cache_size);
 
-    /// Size of delete bitmap for HaMergeTree engine to be cached in memory; default is 1GB
-    size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);
-    global_context->setDeleteBitmapCache(delete_bitmap_cache_size);
+    /// Load global settings from default_profile and system_profile.
+    if (global_context->getServerType() == ServerType::cnch_server)
+    {
+        auto vw_customized_settings_ptr = std::make_shared<VWCustomizedSettings>(config());
+        if (!vw_customized_settings_ptr->isEmpty())
+        {
+            global_context->setVWCustomizedSettings(vw_customized_settings_ptr);
+        }
+    }
 
-    /// Meta cache is used for the index and bloom blocks, it should be set to a large number to keep hit rate near 100%.
-    /// Data cache is used for the data blocks, it's ok to have a lower hit cache than meta cache
-    size_t uki_meta_cache_size = config().getUInt64("unique_key_index_meta_cache_size", 1073741824); /// 1GB
-    size_t uki_data_cache_size = config().getUInt64("unique_key_index_data_cache_size", 1073741824); /// 1GB
-    global_context->setUniqueKeyIndexCache(uki_meta_cache_size);
-    global_context->setUniqueKeyIndexBlockCache(uki_data_cache_size);
+    global_context->setDefaultProfiles(config());
+    const Settings & settings = global_context->getSettingsRef();
 
 #if USE_HDFS
     /// Init hdfs user
@@ -1380,12 +1456,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
 
     global_context->setNvmCache(config());
-
-#if USE_EMBEDDED_COMPILER
-    constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;
-    size_t compiled_expression_cache_size = config().getUInt64("compiled_expression_cache_size", compiled_expression_cache_size_default);
-    CompiledExpressionCacheFactory::instance().init(compiled_expression_cache_size);
-#endif
 
     /// Set path for format schema files
     fs::path format_schema_path(config().getString("format_schema_path", fs::path(path) / "format_schemas/"));
