@@ -58,6 +58,9 @@ public:
     // todo @caoliu impl this seconds
     UInt64 getLastModifiedTimestamp() { return 0; }
 
+    void setBucketId(size_t bucket_num) { bucket_id = bucket_num; }
+    std::optional<size_t> getBucketId() const { return bucket_id; }
+
     struct ReadParams
     {
         size_t max_block_size;
@@ -75,6 +78,8 @@ public:
 
     DiskPtr disk;
     HivePartitionPtr partition;
+
+    std::optional<size_t> bucket_id;
 
 protected:
     IHiveFile() = default;

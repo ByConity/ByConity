@@ -51,6 +51,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+    extern const int BAD_ARGUMENTS;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_FORMAT;
     extern const int SUPPORT_IS_DISABLED;
@@ -148,11 +149,6 @@ void StorageCnchHive::startup()
     {
         std::rethrow_exception(hive_exception);
     }
-}
-
-bool StorageCnchHive::isBucketTable() const
-{
-    return getInMemoryMetadata().hasClusterByKey();
 }
 
 QueryProcessingStage::Enum StorageCnchHive::getQueryProcessingStage(
@@ -275,12 +271,20 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     if (isBucketTable() && settings.use_hive_cluster_key_filter)
     {
         auto required_bucket = getSelectedBucketNumber(local_context, query_info, metadata_snapshot);
-        /// prune files with required bucket number
+
+        /// set bucket id for hive files
+        std::for_each(hive_files.begin(), hive_files.end(), [] (auto & hive_file) {
+            auto hash_index = get_file_hash_index(hive_file->file_path);
+            if (!hash_index)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "failed to parse hash index from hive file path {}", hive_file->file_path);
+            hive_file->setBucketId(*hash_index);
+        });
+
+        /// prune files with bucket id
         auto end = std::remove_if(hive_files.begin(), hive_files.end(), [&] (auto & file) {
             if (!required_bucket)
                 return false;
-            auto hash_index = get_file_hash_index(file->file_path);
-            return hash_index && hash_index != *required_bucket;
+            return *file->getBucketId() != *required_bucket;
         });
         hive_files.erase(end, hive_files.end());
     }
