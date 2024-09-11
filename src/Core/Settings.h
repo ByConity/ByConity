@@ -1439,6 +1439,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
     /** */ \
     M(Bool, late_materialize_aggressive_push_down, false, "When table use early materialize strategy, this setting enable aggressively moving predicates to read chain w/o considering other factor like columns size or number of columns in the query", 0) \
+    M(Bool, convert_to_right_type_for_in_subquery, true, "For IN subquery, whether convert arguments to the right type", 0) \
     /** Optimizer relative settings, Plan build and RBO */ \
     M(Bool, enable_auto_prepared_statement, false, "Whether to enable automatic prepared statement", 0) \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
