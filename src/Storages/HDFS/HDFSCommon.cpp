@@ -320,6 +320,7 @@ std::optional<HDFSConnectionParams> hdfsParamsFromUrl(const Poco::URI & uri)
         user_info = "clickhouse";
     return HDFSConnectionParams(HDFSConnectionParams::HDFSConnectionType::CONN_HDFS, user_info, {{uri.getHost(), uri.getPort()}});
 }
+
 }
 
 #endif
