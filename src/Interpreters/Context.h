@@ -461,6 +461,7 @@ protected:
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
+    std::function<void()> send_tcp_progress{nullptr};
 
     using FileProgressCallback = std::function<void(const FileProgress & progress)>;
     FileProgressCallback file_progress_callback; /// Callback for tracking progress of file loading.
@@ -1112,6 +1113,9 @@ public:
     void setProgressCallback(ProgressCallback callback);
     /// Used in InterpreterSelectQuery to pass it to the IBlockInputStream.
     ProgressCallback getProgressCallback() const;
+    void setSendTCPProgress(std::function<void()> callback);
+    /// Used in InterpreterSelectQuery to pass it to the IBlockInputStream.
+    std::function<void()> getSendTCPProgress() const;
 
     void setFileProgressCallback(FileProgressCallback && callback) { file_progress_callback = callback; }
     FileProgressCallback getFileProgressCallback() const { return file_progress_callback; }
