@@ -98,7 +98,7 @@ service_discovery:
     psm: data.cnch.server
     node:
       - host: server-0
-        hostname: server
+        hostname: server-0
         ports:
           port:
             - name: PORT2
