@@ -1860,6 +1860,7 @@ enum PreloadLevelSettings : UInt64
     /** for inverted index*/ \
     M(Bool, enable_inverted_index, true, "Enable inverted index", 0) \
     M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
+    M(Bool, enable_read_in_order_partition_filter, false, "enable parition in read in order scenaio", 0) \
     M(Bool, disable_str_to_array_cast, false, "disable String to Array(XXX) CAST", 0) \
     /** materialized view async refresh related settings */ \
     M(Bool, enable_mv_async_insert_overwrite, true, "whether async refresh use insert overwrite instead of drop partition and insert select mode", 0) \

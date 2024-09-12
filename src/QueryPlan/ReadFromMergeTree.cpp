@@ -32,6 +32,8 @@
 #include <DataTypes/MapHelpers.h>
 #include <common/logger_useful.h>
 #include <Common/JSONBuilder.h>
+#include <Common/FieldVisitors.h>
+#include <Common/FieldVisitorsAccurateComparison.h>
 #include <Common/escapeForFileName.h>
 #include "Storages/MergeTree/MergeTreeIOSettings.h"
 #include <Parsers/queryToString.h>
@@ -512,12 +514,116 @@ static ActionsDAGPtr createProjection(const Block & header)
     return projection;
 }
 
+Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
+    RangesInDataParts && parts_with_ranges,
+    const Names & column_names,
+    const ActionsDAGPtr & sorting_key_prefix_expr,
+    ActionsDAGPtr & out_projection,
+    const InputOrderInfoPtr & input_order_info,
+    const IFunctionBase::Monotonicity & monotonicity)
+{
+    if ((input_order_info->direction == 1 && monotonicity.is_positive) 
+        || (input_order_info->direction == -1 && !monotonicity.is_positive))
+    {
+        std::sort(parts_with_ranges.begin(), parts_with_ranges.end(), [](const RangesInDataPart & left, const RangesInDataPart & right){
+            return  applyVisitor(
+                        FieldVisitorAccurateLess(),
+                        *(left.data_part->partition.value.begin()),
+                        *(right.data_part->partition.value.begin())
+                    );
+        });
+    }
+    else
+    {
+        std::sort(parts_with_ranges.begin(), parts_with_ranges.end(), [](const RangesInDataPart & left, const RangesInDataPart & right){
+            return  applyVisitor(
+                        FieldVisitorAccurateLess(),
+                        *(right.data_part->partition.value.begin()),
+                        *(left.data_part->partition.value.begin())
+                    );
+        });
+    }
+
+    std::vector<std::pair<Field, RangesInDataParts>> partition_ranges;
+    for (size_t i = 0; i < parts_with_ranges.size(); i++)
+    {
+        if (!partition_ranges.empty() 
+            && applyVisitor(
+                FieldVisitorAccurateEquals(), 
+                partition_ranges.back().first, 
+                *(parts_with_ranges[i].data_part->partition.value.begin())
+                )
+        )
+        {
+            partition_ranges.back().second.emplace_back(parts_with_ranges[i]);
+        }
+        else
+        {
+            partition_ranges.emplace_back(
+                std::make_pair(
+                    *(parts_with_ranges[i].data_part->partition.value.begin()), 
+                    RangesInDataParts{parts_with_ranges[i]}
+                )
+            );
+        }
+    }
+
+    SortDescription sort_description;
+    for (size_t j = 0; j < input_order_info->order_key_prefix_descr.size(); ++j)
+        sort_description.emplace_back(storage_snapshot->metadata->getSortingKey().column_names[j],
+                                        input_order_info->direction, 1);
+
+    sort_description.emplace_back(storage_snapshot->metadata->getSortingKey().column_names[j],
+
+    Pipes pipes;
+    for (auto & partition: partition_ranges)
+    {
+        bool has_do_preliminary_merge = false;
+        auto pipe = spreadMarkRangesAmongStreamsWithOrder(
+            std::move(partition.second),
+            column_names,
+            sorting_key_prefix_expr,
+            out_projection,
+            input_order_info,
+            &has_do_preliminary_merge
+        );
+        if (!has_do_preliminary_merge)
+        {
+            /// Drop temporary columns, added by 'sorting_key_prefix_expr'
+            out_projection = createProjection(pipe.getHeader());
+
+            pipe.addSimpleTransform([sorting_key_expr](const Block & header)
+            {
+                return std::make_shared<ExpressionTransform>(header, sorting_key_expr);
+            });
+        }
+        if (pipe.numOutputPorts() > 1)
+        {
+            auto transform = std::make_shared<MergingSortedTransform>(
+                    pipe.getHeader(),
+                    pipe.numOutputPorts(),
+                    sort_description,
+                    max_block_size);
+
+            pipe.addTransform(std::move(transform));
+        }
+        pipes.emplace_back(std::move(pipe));
+    }
+
+    auto res = Pipe::unitePipes(std::move(pipes));
+    if (res.numOutputPorts() > 1)
+        res.addTransform(std::make_shared<ConcatProcessor>(res.getHeader(), res.numOutputPorts()));
+
+    return res;
+}
+
 Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
     RangesInDataParts && parts_with_ranges,
     const Names & column_names,
     const ActionsDAGPtr & sorting_key_prefix_expr,
     ActionsDAGPtr & out_projection,
-    const InputOrderInfoPtr & input_order_info)
+    const InputOrderInfoPtr & input_order_info,
+    bool * has_do_preliminary_merge)
 {
     const auto & settings = context->getSettingsRef();
     const auto data_settings = data.getSettings();
@@ -652,6 +758,9 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
 
     if (need_preliminary_merge)
     {
+        if (has_do_preliminary_merge)
+            *has_do_preliminary_merge = true;
+
         SortDescription sort_description;
         for (size_t j = 0; j < input_order_info->order_key_prefix_descr.size(); ++j)
             sort_description.emplace_back(storage_snapshot->metadata->getSortingKey().column_names[j],
@@ -1294,13 +1403,28 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
 
         auto syntax_result = TreeRewriter(context).analyze(order_key_prefix_ast, metadata_for_reading->getColumns().getAllPhysical());
         auto sorting_key_prefix_expr = ExpressionAnalyzer(order_key_prefix_ast, syntax_result, context).getActionsDAG(false);
-
-        pipe = spreadMarkRangesAmongStreamsWithOrder(
-            std::move(result.parts_with_ranges),
-            column_names_to_read,
-            sorting_key_prefix_expr,
-            result_projection,
-            input_order_info);
+        
+        IFunctionBase::Monotonicity  monotonicity;
+        if (settings.enable_read_in_order_partition_filter 
+            && canEnableReadInOrderPartitionFilter(query_info, input_order_info, monotonicity))
+        {
+            pipe = spreadMarkRangesAmongStreamsWithPartitionOrder(
+                std::move(result.parts_with_ranges),
+                column_names_to_read,
+                sorting_key_prefix_expr,
+                result_projection,
+                input_order_info,
+                monotonicity);
+        }
+        else
+        {
+            pipe = spreadMarkRangesAmongStreamsWithOrder(
+                std::move(result.parts_with_ranges),
+                column_names_to_read,
+                sorting_key_prefix_expr,
+                result_projection,
+                input_order_info);
+        }
     }
     else
     {
@@ -1401,6 +1525,268 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         pipe.addQueryIdHolder(std::move(query_id_holder));
 
     pipeline.init(std::move(pipe));
+}
+
+bool ReadFromMergeTree::canEnableReadInOrderPartitionFilter(
+    const SelectQueryInfo & query_info_,
+    const InputOrderInfoPtr & input_order_info_,
+    IFunctionBase::Monotonicity & monotonicity_
+) const
+{
+    //1. has limit
+    const ASTSelectQuery & select = query_info_.query->as<ASTSelectQuery &>();
+    if (!select.limitLength())
+    {
+        return false;
+    }
+
+    //2. parition key has only one column && column in sorting key
+    const auto & partition_key = metadata_for_reading->getPartitionKey();
+    Names sorting_key_columns = metadata_for_reading->getSortingKeyColumns();
+    sorting_key_columns.resize(input_order_info_->order_key_prefix_descr.size());
+
+    Names partition_names{};
+    if (!partition_key.column_names.empty())
+        partition_names = partition_key.expression->getRequiredColumns();
+    if (partition_key.column_names.size() != 1 || partition_names.size() != 1)
+    {
+        return false;
+    }
+    
+    for (size_t i = 0; i < sorting_key_columns.size(); i++)
+    {
+        if (sorting_key_columns[i] != input_order_info_->order_key_prefix_descr[i].column_name)
+        {
+            return false;
+        }
+    }
+
+    int partition_key_idx = -1;
+    for (size_t i = 0; i < sorting_key_columns.size(); i++)
+    {
+        if (sorting_key_columns[i] == partition_names[0])
+        {
+            partition_key_idx = i;
+            break;
+        }
+    }
+    if (partition_key_idx == -1)
+    {
+        return false;
+    }
+
+    //3. partition key is the first range filter
+    ASTPtr ast;
+    if (select.where() && select.prewhere())
+    {
+        ast = makeASTFunction("and", select.prewhere()->clone(), select.where()->clone());
+    }
+    else if (select.where())
+    {
+        ast = select.where()->clone();
+    }
+    else
+    {
+        ast = select.prewhere()->clone();
+    }
+
+    std::map<String, std::vector<std::pair<String, Field>>> predicates;
+    std::set<String> func_names{"equals"};
+    predicates = collectWhereANDPredicate(ast, func_names);
+
+    bool variable_before_partition_key_are_all_equals = true;
+    for (int i = 0; i < partition_key_idx; i++)
+    {
+        if (predicates.find(sorting_key_columns[i]) == predicates.end())
+        {
+            variable_before_partition_key_are_all_equals = false;
+            break;
+        }
+    }
+    if (!variable_before_partition_key_are_all_equals)
+    {
+        return false;
+    }
+
+    //4. partition key is monotonic
+    auto query_clone = query_info.query->clone();
+    auto get_block_with_constants = [](const ASTPtr & query_, const TreeRewriterResultPtr & syntax_analyzer_result_, ContextPtr context_) {
+        Block result
+        {
+            { DataTypeUInt8().createColumnConstWithDefaultValue(1), std::make_shared<DataTypeUInt8>(), "_dummy" }
+        };
+
+        const auto expr_for_constant_folding = ExpressionAnalyzer(query_, syntax_analyzer_result_, context_).getConstActions();
+        expr_for_constant_folding->execute(result);
+
+        return result;
+    };
+
+    auto block_with_constants = get_block_with_constants(partition_key.expression_list_ast, query_info.syntax_analyzer_result, context);
+    int monotonic_ret = getPartitionMonotonicity(partition_key, block_with_constants, partition_names[0], monotonicity_);
+    if (monotonic_ret != 0)
+    {
+        return false;
+    }
+
+    return monotonicity_.is_monotonic;
+}
+
+int ReadFromMergeTree::getPartitionMonotonicity(
+    const KeyDescription & partition_key_,
+    Block & block_with_constants_,
+    String & partition_column_,
+    IFunctionBase::Monotonicity & monotonicity_
+) const
+{
+    const auto & actions = partition_key_.expression->getActions();
+
+    auto is_const_node = [](Block & block_with_constants, const ActionsDAG::Node * node){
+        auto column_name = node->result_name;
+        if (block_with_constants.has(column_name) && isColumnConst(*block_with_constants.getByName(column_name).column))
+            return true;
+
+        return false;
+    };
+
+    const std::unordered_map<String, int/*key_arg_pos for monotoinic*/> two_args_func = {
+        {"toStartOfInterval", 0}
+    };
+
+    bool found_function = false;
+
+    for (const auto & action : actions)
+    {
+        if (action.node->type != ActionsDAG::ActionType::FUNCTION)
+        {
+            continue;
+        }
+
+        if (is_const_node(block_with_constants_, action.node))
+        {
+            continue;
+        }
+
+        if (found_function)
+            return -1;
+
+        found_function = true;
+
+        const auto & func = *action.node->function_base;
+        if (!func.hasInformationAboutMonotonicity())
+        {
+            return -2;
+        }
+
+        int key_arg_pos = 0;
+        if (action.node->children.size() == 1)
+        {
+            if (action.node->children.at(0)->result_name != partition_column_)
+                return -3;
+            key_arg_pos = 0;
+        }
+        else if (action.node->children.size() == 2)
+        {
+            auto iter = two_args_func.find(func.getName());
+            if (iter == two_args_func.end())
+                return -4;
+
+            key_arg_pos = iter->second;
+            if (action.node->children.at(key_arg_pos)->result_name != partition_column_
+                || !is_const_node(block_with_constants_, action.node->children.at(key_arg_pos == 0 ? 1 : 0)))
+            {
+                return -5;
+            }
+        }
+        else
+        {
+            return -6;
+        }
+
+        monotonicity_ = func.getMonotonicityForRange(*func.getArgumentTypes().at(key_arg_pos), {}, {});
+    }
+
+    if (!found_function)
+        return -7;
+
+    return 0;
+}
+
+std::map<String, std::vector<std::pair<String, Field>>> ReadFromMergeTree::collectWhereANDPredicate(
+    const ASTPtr & ast_, 
+    const std::set<String> & func_names_
+) const
+{
+    std::map<String, std::vector<std::pair<String, Field>>> res;
+
+    if (!ast_)
+        return res;
+
+    ASTFunction * func = ast_->as<ASTFunction>();
+    if (!func)
+    {
+        return res;
+    }
+    else if ((func->name == "and") && func->arguments)
+    {
+        const auto children = func->arguments->children;
+        std::for_each(children.begin(), children.end(), [&] (const auto & child) {
+            auto p = this->collectWhereANDPredicate(child, func_names_);
+            if (!p.empty())
+            {
+                for (const auto & first: p)
+                {
+                    for (const auto & second: first.second)
+                    {
+                        res[first.first].push_back(second);
+                    }
+                }
+            }
+        });
+    }
+    else if (func_names_.find(func->name) != func_names_.end())
+    {
+        auto p = collectEqualClause(ast_, func_names_);
+        if (!p.first.empty())
+        {
+            res[p.first].push_back(p.second);
+        }
+    }
+
+    return res;
+}
+
+std::pair<String, std::pair<String, Field>> ReadFromMergeTree::collectEqualClause(
+    const ASTPtr & ast_, 
+    const std::set<String> & func_names_) const
+{
+    std::pair<String, std::pair<String, Field>> res;
+    if (!ast_)
+        return res;
+
+    ASTFunction * func = ast_->as<ASTFunction>();
+    if (!func)
+        return res;
+
+    if (func_names_.find(func->name) == func_names_.end())
+        return res;
+
+    auto * left_arg = func->arguments->children.front().get();
+    auto * right_arg = func->arguments->children.back().get();
+    if (!left_arg->as<ASTIdentifier>() && right_arg->as<ASTIdentifier>())
+        std::swap(left_arg, right_arg);
+
+    if (const auto * left_identifier = left_arg->as<ASTIdentifier>())
+    {
+        const auto & column_name = left_identifier->name();
+        if (const auto * literal = right_arg->as<ASTLiteral>())
+        {
+            const auto & field = literal->value;
+            return std::make_pair(column_name, std::make_pair(func->name, field));
+        }
+    }
+
+    return res;
 }
 
 static const char * readTypeToString(ReadFromMergeTree::ReadType type)

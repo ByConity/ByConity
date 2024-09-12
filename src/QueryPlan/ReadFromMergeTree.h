@@ -209,12 +209,44 @@ private:
         const Names & column_names,
         const ActionsDAGPtr & sorting_key_prefix_expr,
         ActionsDAGPtr & out_projection,
-        const InputOrderInfoPtr & input_order_info);
+        const InputOrderInfoPtr & input_order_info,
+        bool * has_do_preliminary_merge = nullptr);
+
+    Pipe spreadMarkRangesAmongStreamsWithPartitionOrder(
+        RangesInDataParts && parts_with_ranges,
+        const Names & column_names,
+        const ActionsDAGPtr & sorting_key_prefix_expr,
+        ActionsDAGPtr & out_projection,
+        const InputOrderInfoPtr & input_order_info,
+        const IFunctionBase::Monotonicity & monotonicity);
 
     Pipe spreadMarkRangesAmongStreamsFinal(
         RangesInDataParts && parts,
         const Names & column_names,
         ActionsDAGPtr & out_projection);
+
+    bool canEnableReadInOrderPartitionFilter(
+        const SelectQueryInfo & query_info_,
+        const InputOrderInfoPtr & input_order_info_,
+        IFunctionBase::Monotonicity & monotonicity_
+    ) const;
+
+    std::map<String, std::vector<std::pair<String, Field>>> collectWhereANDPredicate(
+        const ASTPtr & ast_, 
+        const std::set<String> & func_names_
+    ) const;
+
+    std::pair<String, std::pair<String, Field>> collectEqualClause(
+        const ASTPtr & ast_, 
+        const std::set<String> & func_names_
+    ) const;
+
+    int getPartitionMonotonicity(
+        const KeyDescription & partition_key_,
+        Block & block_with_constants_,
+        String & partition_column_,
+        IFunctionBase::Monotonicity & monotonicity_
+    ) const;
 
     MergeTreeDataSelectAnalysisResultPtr selectRangesToRead(MergeTreeData::DataPartsVector parts) const;
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr;
