@@ -1,0 +1,35 @@
+version: "3"
+
+services:
+  hdfs-namenode:
+    image: hub.byted.org/bytehouse/hdfs:3.3
+    command: bash /etc/hadoop/conf/init_users_cross.sh
+    entrypoint: /entrypoint.sh
+    environment:
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
+    ports:
+      - "127.0.0.1:9881:9870"
+      - "9999:9000"
+    volumes:
+      - ./hdfs:/etc/hadoop/conf:ro
+      - /var/log/hadoop
+      - /data1
+      - /data2
+  hdfs-datanode:
+    # depends_on:
+    #   - hdfs-namenode
+    image: hub.byted.org/bytehouse/hdfs:3.3
+    command: datanode
+    environment:
+      - HADOOP_CONF_DIR=/etc/hadoop/conf
+    volumes:
+      - ./hdfs:/etc/hadoop/conf:ro
+      - /var/log/hadoop
+      - /data1
+      - /data2
+
+volumes:
+  hdfs-namenode:
+    external: false
+  hdfs-datanode:
+    external: false

@@ -191,7 +191,8 @@ void registerDiskHDFS(DiskFactory & factory)
     auto creator = [](const String & name,
                       const Poco::Util::AbstractConfiguration & config,
                       const String & config_prefix,
-                      ContextPtr context_) -> DiskPtr
+                      ContextPtr context_,
+                      const DisksMap & /* disk_map */) -> DiskPtr
     {
         fs::path disk = fs::path(context_->getPath()) / "disks" / name;
         fs::create_directories(disk);

@@ -419,7 +419,7 @@ Strings getTableMetaFileNameFromBackupDisk(const DiskPtr & backup_disk, const St
     Strings table_metadata_filenames;
     backup_disk->listFiles(backup_dir + "metadata/" + escapeForFileName(database_name) + "/", table_metadata_filenames);
 
-    if (backup_disk->getType() == DiskType::Type::ByteS3)
+    if (backup_disk->getInnerType() == DiskType::Type::ByteS3)
         for (String & table_metadata_filename : table_metadata_filenames)
             table_metadata_filename = fs::path(table_metadata_filename).filename();
 

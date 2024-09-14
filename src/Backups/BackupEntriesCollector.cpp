@@ -152,7 +152,7 @@ void BackupEntriesCollector::collectTableEntries(
 
                     // Calculate relative path to disk
                     String relative_path;
-                    switch (remote_disk->getType())
+                    switch (remote_disk->getInnerType())
                     {
                         case DiskType::Type::ByteS3: {
                             UUID part_id = RPCHelpers::createUUID(part_model.part_id());

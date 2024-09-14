@@ -38,7 +38,8 @@ struct DiskType
         S3 = 2,
         HDFS = 3,
         ByteHDFS = 4,
-        ByteS3 = 5
+        ByteS3 = 5,
+        CLOUDFS = 6,
     };
     static String toString(Type disk_type)
     {
@@ -56,6 +57,8 @@ struct DiskType
                 return "bytehdfs";
             case Type::ByteS3:
                 return "bytes3";
+            case Type::CLOUDFS:
+                return "cloudfs";
         }
         __builtin_unreachable();
     }

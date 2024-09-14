@@ -65,7 +65,7 @@ void sendCopyTasksToWorker(BackupTaskPtr & backup_task, const BackupCopyTasks & 
         DiskPtr source_disk = context->getDisk(copy_task.source_disk());
         DiskPtr destination_disk = context->getDisk(copy_task.destination_disk());
 
-        if (source_disk->getType() == DiskType::Type::ByteS3 && destination_disk->getType() == DiskType::Type::ByteS3)
+        if (source_disk->getInnerType() == DiskType::Type::ByteS3 && destination_disk->getInnerType() == DiskType::Type::ByteS3)
             s3_tasks.push_back(std::move(copy_task));
         else
             hdfs_tasks.push_back(std::move(copy_task));

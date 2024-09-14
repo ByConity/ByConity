@@ -103,7 +103,7 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
         // configuration->setString(config_prefix + ".skip_access_check",false);
         configuration->setBool(config_prefix + ".skip_access_check", true);
         configuration->setBool(config_prefix + ".is_virtual_hosted_style", context->getSettingsRef().s3_use_virtual_hosted_style || settings.s3_use_virtual_hosted_style);
-        return DiskFactory::instance().create("hive_s3_disk", *configuration, config_prefix, context);
+        return DiskFactory::instance().create("hive_s3_disk", *configuration, config_prefix, context, {});
     }
 #endif
 

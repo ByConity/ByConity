@@ -474,4 +474,13 @@ StoragePolicyPtr StoragePolicySelector::get(const String & name) const
     return it->second;
 }
 
+StoragePolicyPtr StoragePolicySelector::tryGet(const String & name) const
+{
+    auto it = policies.find(name);
+    if (it == policies.end())
+        return nullptr;
+
+    return it->second;
+}
+
 }

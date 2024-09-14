@@ -32,8 +32,10 @@ class DiskByteHDFSReservation;
 class DiskByteHDFS final : public IDisk
 {
 public:
-    DiskByteHDFS(const String& disk_name_, const String& hdfs_base_path_,
-        const HDFSConnectionParams& hdfs_params_);
+    DiskByteHDFS(
+        const String & disk_name_,
+        const String & hdfs_base_path_,
+        const HDFSConnectionParams & hdfs_params_);
 
     virtual const String& getName() const override;
 

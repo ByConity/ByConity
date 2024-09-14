@@ -478,7 +478,8 @@ void registerDiskMemory(DiskFactory & factory)
     auto creator = [](const String & name,
                       const Poco::Util::AbstractConfiguration & /*config*/,
                       const String & /*config_prefix*/,
-                      ContextPtr /*context*/) -> DiskPtr { return std::make_shared<DiskMemory>(name); };
+                      ContextPtr /*context*/,
+                      const DisksMap & /* disk_map */) -> DiskPtr { return std::make_shared<DiskMemory>(name); };
     factory.registerDiskType("memory", creator);
 }
 

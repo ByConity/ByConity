@@ -112,7 +112,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(IStorage::StorageLocation::MAIN), path_id);
     auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);
     UUID part_id = UUIDHelpers::Nil;
-    switch(remote_disk->getType())
+    switch(remote_disk->getInnerType())
     {
         case DiskType::Type::ByteS3:
         {
@@ -129,7 +129,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
         }
         default:
             throw Exception(fmt::format("Unsupported disk type {} in createPartFromModelCommon",
-                DiskType::toString(remote_disk->getType())), ErrorCodes::LOGICAL_ERROR);
+                DiskType::toString(remote_disk->getInnerType())), ErrorCodes::LOGICAL_ERROR);
     }
     auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info,
         mock_volume, relative_path, nullptr, part_id);
@@ -137,7 +137,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     if (part_model.has_staging_txn_id())
     {
         part->staging_txn_id = part_model.staging_txn_id();
-        if (remote_disk->getType() == DiskType::Type::ByteHDFS)
+        if (remote_disk->getInnerType() == DiskType::Type::ByteHDFS)
         {
             /// this part shares the same relative path with the corresponding staged part
             MergeTreePartInfo staged_part_info = part->info;

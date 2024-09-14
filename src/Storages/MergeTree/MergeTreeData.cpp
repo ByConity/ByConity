@@ -521,7 +521,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             for (const auto & [disk_name, disk] : getContext()->getDisksMap())
             {
                 // Skip disk for byconity remote storage
-                if (disk->getType() != DiskType::Type::ByteHDFS && disk->getType() != DiskType::Type::ByteS3
+                if (disk->getInnerType() != DiskType::Type::ByteHDFS && disk->getInnerType() != DiskType::Type::ByteS3
                     && defined_disk_names.count(disk_name) == 0 && disk->exists(getRelativeDataPath(IStorage::StorageLocation::MAIN)))
                 {
                     for (const auto it = disk->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN)); it->isValid(); it->next())
@@ -2555,9 +2555,9 @@ void MergeTreeData::swapActivePart(MergeTreeData::DataPartPtr part_copy)
 
             original_active_part->force_keep_shared_data = false;
 
-            if (original_active_part->volume->getDisk()->getType() == DiskType::Type::S3)
+            if (original_active_part->volume->getDisk()->getInnerType() == DiskType::Type::S3)
             {
-                if (part_copy->volume->getDisk()->getType() == DiskType::Type::S3
+                if (part_copy->volume->getDisk()->getInnerType() == DiskType::Type::S3
                         && original_active_part->getUniqueId() == part_copy->getUniqueId())
                 {
                     /// May be when several volumes use the same S3 storage

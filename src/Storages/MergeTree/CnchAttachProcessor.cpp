@@ -260,7 +260,7 @@ void CnchAttachProcessor::exec()
             for (const auto & part : prepared_parts.second)
                 partitions_filter.emplace(part->info.partition_id);
 
-            DiskType::Type disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+            DiskType::Type disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getInnerType();
             // For attach/replace partition from src_table in copy and S3, just use commitParts treating parts as new insert ones
             if(disk_type ==  DiskType::Type::ByteS3 && (!enable_copy_for_partition_operation || command.from_table.empty()))
                 commitPartsFromS3(prepared_parts, staged_part_names);
@@ -480,7 +480,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTable
 {
     LOG_DEBUG(logger, fmt::format("Collect parts from table {} with filter {}", tbl.getLogName(), filter.toString()));
 
-    DiskType::Type remote_disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+    DiskType::Type remote_disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getInnerType();
     switch (remote_disk_type)
     {
         case DiskType::Type::ByteHDFS:
@@ -548,7 +548,7 @@ CnchAttachProcessor::collectPartsFromPath(const String & path, const AttachFilte
 {
     LOG_DEBUG(logger, fmt::format("Collect parts from path {} with filter {}", path, filter.toString()));
 
-    DiskType::Type remote_disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+    DiskType::Type remote_disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getInnerType();
     switch (remote_disk_type)
     {
         case DiskType::Type::ByteHDFS:
@@ -1292,7 +1292,7 @@ CnchAttachProcessor::prepareParts(const PartsFromSources & parts_from_sources, A
 
     /// remote_disk is only used for copy
     auto target_disk = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-    DiskType::Type target_disk_type = target_disk->getType();
+    DiskType::Type target_disk_type = target_disk->getInnerType();
 
     TxnTimestamp txn_id = query_ctx->getCurrentTransaction()->getTransactionID();
     switch (target_disk_type)
@@ -1572,7 +1572,7 @@ void CnchAttachProcessor::genPartsDeleteMark(PartsWithHistory & parts_to_write)
         }
 
         auto txn_id = query_ctx->getCurrentTransactionID();
-        DiskType::Type disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+        DiskType::Type disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getInnerType();
         S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION, txn_id.toString());
         MergeTreeCNCHDataDumper dumper(target_tbl, part_generator_id);
         for (auto && temp_part : target_tbl.createDropRangesFromParts(query_ctx, parts_to_drop, query_ctx->getCurrentTransaction()))

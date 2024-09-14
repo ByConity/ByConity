@@ -43,6 +43,9 @@ void registerDiskHDFS(DiskFactory & factory);
 void registerDiskByteHDFS(DiskFactory & factory);
 #endif
 
+#if USE_CLOUDFS
+void registerDiskCloudFS(DiskFactory & factory);
+#endif
 
 void registerDisks()
 {
@@ -59,6 +62,10 @@ void registerDisks()
 #if USE_HDFS
     registerDiskHDFS(factory);
     registerDiskByteHDFS(factory);
+#endif
+
+#if USE_CLOUDFS
+    registerDiskCloudFS(factory);
 #endif
 }
 

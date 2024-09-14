@@ -32,7 +32,7 @@ String getDiskNameForPathId(const VolumePtr& volume, UInt32 path_id)
     {
         return volume->getDefaultDisk()->getName();
     }
-    switch (volume->getDisk()->getType())
+    switch (volume->getDisk()->getInnerType())
     {   
         case DiskType::Type::ByteHDFS: return "HDFS/" + std::to_string(path_id);
         case DiskType::Type::ByteS3: return "S3/" + std::to_string(path_id);

@@ -289,6 +289,10 @@ public:
     /// Return disk type - "local", "s3", etc.
     virtual DiskType::Type getType() const = 0;
 
+    /// Return disk type of ufs disk, which matters for CloudFS
+    /// XXX: maybe need a more generic way to get real disk type
+    virtual DiskType::Type getInnerType() const { return getType(); }
+
     /// Invoked when Global Context is shutdown.
     virtual void shutdown() {}
 
