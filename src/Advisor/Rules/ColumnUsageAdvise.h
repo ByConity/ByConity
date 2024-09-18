@@ -3,22 +3,20 @@
 #include <Advisor/AdvisorContext.h>
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Analyzers/QualifiedColumnName.h>
-#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Poco/Logger.h>
 
 namespace DB
 {
 
-class ClusterKeyAdvisor : public IWorkloadAdvisor
+class ColumnUsageAdvisor : public IWorkloadAdvisor
 {
 public:
-    String getName() const override { return "ClusterKeyAdvisor"; }
+    String getName() const override { return "ColumnUsageAdvisor"; }
     WorkloadAdvises analyze(AdvisorContext & context) const override;
-
+    
 private:
-    bool isValidColumn(const QualifiedColumnName & column, AdvisorContext & context) const;
-    LoggerPtr log = getLogger("ClusterKeyAdvisor");
+    // Poco::Logger * log = getLogger("OrderByKeyAdvisor");
 };
 
 }

@@ -3,10 +3,12 @@
 #include <Advisor/WorkloadQuery.h>
 #include <Analyzers/QualifiedColumnName.h>
 #include <Core/Types.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include <Functions/FunctionsComparison.h>
 #include <Interpreters/StorageID.h>
 #include <Optimizer/CostModel/CostCalculator.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -52,13 +54,23 @@ namespace
         return function.name == "in" && function.arguments && function.arguments->children.size() == 2;
     }
 
-    std::optional<std::pair<std::string, ColumnUsageType>> extractPredicateUsage(ConstASTPtr expression)
+    ASTPtr unwarpMonotonicFunction(ASTPtr expr)
     {
-        auto fun = dynamic_pointer_cast<const ASTFunction>(expression);
+        if (auto * function = expr->as<ASTFunction>())
+        {
+            if (function->arguments->children.size() == 1) 
+                return unwarpMonotonicFunction(function->arguments->children[0]);
+        }
+        return expr;
+    };
+
+    std::optional<std::pair<std::string, ColumnUsageType>> extractPredicateUsage(ConstASTPtr predicate)
+    {
+        auto fun = dynamic_pointer_cast<const ASTFunction>(predicate);
         if (!fun || !fun->arguments || fun->arguments->children.size() != 2)
             return std::nullopt;
-        auto identifier = dynamic_pointer_cast<const ASTIdentifier>(fun->arguments->children[0]);
-        if (!identifier)
+        auto left = unwarpMonotonicFunction(fun->arguments->children[0]);
+        auto identifier = dynamic_pointer_cast<const ASTIdentifier>(left);        if (!identifier)
             return std::nullopt;
         const std::string & symbol = identifier->name();
 
@@ -119,6 +131,9 @@ protected:
     void visitAggregatingNode(AggregatingNode & node, ColumnUsages & column_usages) override;
     void visitCTERefNode(CTERefNode & node, ColumnUsages & column_usages) override;
 
+    void extractFilterUsages(ConstASTPtr expr, PlanNodePtr, ColumnUsages & column_usages);
+    void extractArraySetFunctions(ConstASTPtr expression, const PlanNodePtr & node, ColumnUsages & column_usages);
+
 private:
     std::unordered_map<std::string, ColumnNameWithSourceTableFlag> symbol_to_table_column_map;
     std::unordered_set<CTEId> visited_ctes;
@@ -152,6 +167,19 @@ size_t ColumnUsageInfo::getFrequency(ColumnUsageType type, bool only_source_tabl
     if (!only_source_table)
         freq += usages_non_source_table.count(type);
     return freq;
+}
+
+std::unordered_map<ColumnUsageType, size_t> ColumnUsageInfo::getFrequencies(bool only_source_table) const {
+    std::unordered_map<ColumnUsageType, size_t> res;
+    for (const auto & item : usages_only_source_table) {
+        res[item.first] += 1;
+    }
+    if (!only_source_table) {
+            for (const auto & item : usages_non_source_table) {
+        res[item.first] += 1;
+    }
+    }
+    return res;
 }
 
 std::vector<ColumnUsage> ColumnUsageInfo::getUsages(ColumnUsageType type, bool only_source_table) const
@@ -195,11 +223,34 @@ void ColumnUsageVisitor::visitTableScanNode(TableScanNode & node, ColumnUsages &
     auto table_step = dynamic_pointer_cast<TableScanStep>(node.getStep());
     const StorageID & storage_id = table_step->getStorageID();
 
+    std::unordered_map<std::string, ColumnNameWithSourceTableFlag> table_columns;
+
+    for (const auto & column_name : table_step->getRequiredColumns())
+    {
+        QualifiedColumnName column{storage_id.getDatabaseName(), storage_id.getTableName(), column_name};
+        table_columns.insert_or_assign(column_name, ColumnNameWithSourceTableFlag{column, true});
+    }
+    
+    // extract usages
+    symbol_to_table_column_map.swap(table_columns);
+    for (const auto & column_name : table_step->getRequiredColumns())
+        addUsage(column_usages, column_name, ColumnUsageType::SCANNED, node.shared_from_this());
+    
+    if (table_step->getPrewhere())
+        extractFilterUsages(table_step->getPrewhere(), node.shared_from_this(), column_usages);
+
+    // for (auto [output, expr] : table_step->getIndexExpressions())
+        // extractFilterUsages(expr, node.shared_from_this(), column_usages);
+
+    for (auto [output, expr] : table_step->getInlineExpressions())
+        extractFilterUsages(expr, node.shared_from_this(), column_usages);
+
+    symbol_to_table_column_map.swap(table_columns);
+
     for (const auto & [column_name, alias] : table_step->getColumnAlias())
     {
         QualifiedColumnName column{storage_id.getDatabaseName(), storage_id.getTableName(), column_name};
-        symbol_to_table_column_map.emplace(alias, ColumnNameWithSourceTableFlag{column, true});
-        addUsage(column_usages, alias, ColumnUsageType::SCANNED, node.shared_from_this());
+        symbol_to_table_column_map.insert_or_assign(alias, ColumnNameWithSourceTableFlag{column, true});
     }
 }
 
@@ -207,12 +258,44 @@ void ColumnUsageVisitor::visitFilterNode(FilterNode & node, ColumnUsages & colum
 {
     processChildren(node, column_usages);
     auto filter_step = dynamic_pointer_cast<FilterStep>(node.getStep());
-    for (const ConstASTPtr & expression : PredicateUtils::extractConjuncts(filter_step->getFilter()))
+    extractFilterUsages(filter_step->getFilter(), node.shared_from_this(), column_usages);
+}
+
+void ColumnUsageVisitor::extractFilterUsages(ConstASTPtr expr, PlanNodePtr node, ColumnUsages & column_usages)
+{
+    for (const auto & expression : PredicateUtils::extractConjuncts(expr))
     {
         auto usage_opt = extractPredicateUsage(expression);
         if (usage_opt.has_value())
-            addUsage(column_usages, usage_opt.value().first, usage_opt.value().second, node.shared_from_this(), expression);
+            addUsage(column_usages, usage_opt.value().first, usage_opt.value().second, node, expression);
+        else
+        {
+            auto names = SymbolsExtractor::extract(expression);
+            for (const auto & name : names)
+            {
+                addUsage(column_usages, name, ColumnUsageType::OTHER_PREDICATE, node, expression);
+            }
+        }
     }
+    extractArraySetFunctions(expr, node, column_usages);
+}
+
+void ColumnUsageVisitor::extractArraySetFunctions(ConstASTPtr expression, const PlanNodePtr & node, ColumnUsages & column_usages)
+{
+    auto function = dynamic_pointer_cast<const ASTFunction>(expression);
+    if (const auto * func = expression->as<ASTFunction>())
+    {
+        if (!func->arguments || func->arguments->children.empty()) return;
+        auto * ident = func->arguments->children[0]->as<ASTIdentifier>();
+        if (ident && BitmapIndexHelper::isArraySetFunctions(func->name))
+        {
+            addUsage(column_usages, ident->name(), ColumnUsageType::ARRAY_SET_FUNCTION, node, expression);
+            return;
+        }
+    }
+
+    for (const auto & child : expression->children)
+        extractArraySetFunctions(child, node, column_usages);
 }
 
 void ColumnUsageVisitor::visitJoinNode(JoinNode & node, ColumnUsages & column_usages)
@@ -256,8 +339,10 @@ void ColumnUsageVisitor::visitProjectionNode(ProjectionNode & node, ColumnUsages
         {
             auto it = symbol_to_table_column_map.find(identifier->name());
             if (it != symbol_to_table_column_map.end())
-                symbol_to_table_column_map.emplace(out_symbol, it->second);
+                symbol_to_table_column_map.insert_or_assign(out_symbol, it->second);
         }
+
+        extractArraySetFunctions(in_ast, node.shared_from_this(), column_usages);
     }
 }
 
@@ -286,4 +371,27 @@ void ColumnUsageVisitor::visitCTERefNode(CTERefNode & node, ColumnUsages & colum
     VisitorUtil::accept(cte_info.getCTEs().at(cte_id), *this, column_usages);
 }
 
+String toString(ColumnUsageType type)
+{
+    switch (type) {
+        case ColumnUsageType::SCANNED:
+            return "Scanned";
+        case ColumnUsageType::EQUI_JOIN:
+            return "EquiJoin";
+        case ColumnUsageType::NON_EQUI_JOIN:
+            return "NonEquiJoin";
+        case ColumnUsageType::GROUP_BY:
+            return "GroupBy";
+        case ColumnUsageType::EQUALITY_PREDICATE:
+            return "EqualityPredicate";
+        case ColumnUsageType::IN_PREDICATE:
+            return "InPredicate";
+        case ColumnUsageType::RANGE_PREDICATE:
+            return "RangePredicate";
+        case ColumnUsageType::ARRAY_SET_FUNCTION:
+            return "ArraySetFunction";
+        case ColumnUsageType::OTHER_PREDICATE:
+            return "OtherPredicate";
+    }
+}
 }

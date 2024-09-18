@@ -78,7 +78,11 @@ public:
     virtual String getOriginalValue() = 0;
     virtual String getOptimizedValue() = 0;
     virtual double getBenefit() { return 0.0; }
-    virtual std::vector<String> getRelatedQueries() { return {}; }
+    virtual std::vector<std::pair<String, double>> getCandidates() { return {}; }
+    virtual std::vector<String> getRelatedQueries()
+    {
+        return {};
+    }
 };
 
 }

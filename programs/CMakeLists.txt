@@ -61,6 +61,7 @@ option (ENABLE_CLICKHOUSE_DUMPER "Enable clickhouse-dumper" ${ENABLE_CLICKHOUSE_
 option (ENABLE_CLICKHOUSE_RESOURCE_MANAGER "Service that manage worker resources" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_META_INSPECTOR "Enable meta-inspector in CNCH" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_STORAGE_TOOLS "Enable storage-tools in CNCH" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_SCHEMA_ADVISOR "Data schema advisor" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
@@ -187,6 +188,12 @@ else()
     message(STATUS "ClickHouse tso-server mode: OFF")
 endif()
 
+if (ENABLE_CLICKHOUSE_SCHEMA_ADVISOR)
+    message(STATUS "ClickHouse schema-advisor mode: ON")
+else()
+    message(STATUS "ClickHouse schema-advisor mode: OFF")
+endif()
+
 if(NOT (MAKE_STATIC_LIBRARIES OR SPLIT_SHARED_LIBRARIES))
     set(CLICKHOUSE_ONE_SHARED ON)
 endif()
@@ -281,6 +288,10 @@ if (ENABLE_CLICKHOUSE_LIBRARY_BRIDGE)
     add_subdirectory (library-bridge)
 endif ()
 
+if (ENABLE_CLICKHOUSE_SCHEMA_ADVISOR)
+    add_subdirectory (schema-advisor)
+endif()
+
 set (JAVA_EXTENSIONS_JVM_SEARCH_PATH "/usr/lib/jvm/default-java/lib:/usr/lib/jvm/default-java/lib/server:/usr/lib/jvm/default-java/jre/lib/amd64:/usr/lib/jvm/default-java/jre/lib/amd64/server:/usr/lib/jvm/java-8-byteopenjdk-amd64/jre/lib/amd64:/usr/lib/jvm/java-8-byteopenjdk-amd64/jre/lib/amd64/server" CACHE STRING "Runtime search path for libjvm.so")
 
 if (CLICKHOUSE_ONE_SHARED)
@@ -298,7 +309,8 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_ODBC_BRIDGE_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
     ${CLICKHOUSE_PART_TOOLKIT_SOURCES}
-    ${CLICKHOUSE_META_INSPECTOR_SOURCES})
+    ${CLICKHOUSE_META_INSPECTOR_SOURCES}
+    ${CLICKHOUSE_SCHEMA_ADVISOR_SOURCES})
 
     target_link_libraries(clickhouse-lib
       ${CLICKHOUSE_SERVER_LINK}
@@ -315,7 +327,8 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_KEEPER_LINK}
       ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
       ${CLICKHOUSE_PART_TOOLKIT_LINK}
-      ${CLICKHOUSE_META_INSPECTOR_LINK})
+      ${CLICKHOUSE_META_INSPECTOR_LINK}
+      ${CLICKHOUSE_SCHEMA_ADVISOR_LINK})
 
     target_include_directories(clickhouse-lib
       ${CLICKHOUSE_SERVER_INCLUDE}
@@ -352,6 +365,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
         clickhouse-dumper
         clickhouse-meta-inspector
         clickhouse-storage-tools
+        clickhouse-schema-advisor
     )
 
     if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
@@ -368,6 +382,10 @@ if (CLICKHOUSE_SPLIT_BINARY)
 
     if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
         list (APPEND CLICKHOUSE_ALL_TARGETS clickhouse-keeper-converter)
+    endif ()
+
+    if (ENABLE_CLICKHOUSE_SCHEMA_ADVISOR)
+        list (APPEND CLICKHOUSE_ALL_TARGETS clickhouse-schema-advisor)
     endif ()
 
     set_target_properties(${CLICKHOUSE_ALL_TARGETS} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ..)
@@ -450,6 +468,9 @@ else ()
     if (ENABLE_CLICKHOUSE_STORAGE_TOOLS)
         clickhouse_target_link_split_lib(clickhouse storage-tools)
     endif()
+    if (ENABLE_CLICKHOUSE_SCHEMA_ADVISOR)
+        clickhouse_target_link_split_lib(clickhouse schema-advisor)
+    endif ()
 
     set (CLICKHOUSE_BUNDLE)
     if (ENABLE_CLICKHOUSE_SERVER)
@@ -565,6 +586,11 @@ else ()
         add_custom_target (clickhouse-storage_tools ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-storage_tools DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-storage_tools" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-storage_tools)
+    endif ()
+    if (ENABLE_CLICKHOUSE_SCHEMA_ADVISOR)
+        add_custom_target (clickhouse-schema-advisor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-schema-advisor DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-schema-advisor" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-schema-advisor)
     endif ()
 
     install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)

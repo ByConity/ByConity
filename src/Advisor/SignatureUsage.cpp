@@ -17,7 +17,7 @@ SignatureUsages buildSignatureUsages(const WorkloadQueries & queries, ContextPtr
     SignatureUsages signature_usages;
     for (const auto & query : queries)
     {
-        const auto & plan = query->getPlan();
+        const auto & plan = query->getPlanBeforeCascades();
         PlanSignatureProvider provider(plan->getCTEInfo(), context);
         auto plan_signatures = provider.computeSignatures(plan->getPlanNode());
         for (const auto & [plan_node, signature] : plan_signatures)

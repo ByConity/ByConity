@@ -92,11 +92,22 @@ WorkloadQueryPtr WorkloadQuery::build(const std::string & query_id, const std::s
     context->applySettingsChanges(
         {DB::SettingChange("enable_sharding_optimize", "true"), // for colocated join
          DB::SettingChange("enable_runtime_filter", "false"), // for calculating signature
-         DB::SettingChange("enable_optimzier", "true")});
+         DB::SettingChange("enable_optimzier", "true"),
+         DB::SettingChange("cte_mode", "INLINED")}); // for materialized view
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
     context->makeQueryContext();
+
+    if (context->getSettingsRef().print_graphviz)
+    {
+        std::stringstream path;
+        path << context->getSettingsRef().graphviz_path.toString();
+        path << "/" << query_id << ".sql";
+        std::ofstream out(path.str());
+        out << query;
+        out.close();
+    }
 
     // parse and plan
     const char * begin = query.data();
@@ -120,6 +131,7 @@ WorkloadQueryPtr WorkloadQuery::build(const std::string & query_id, const std::s
 
     CardinalityEstimator::estimate(*query_plan, context);
     PlanCostMap costs = calculateCost(*query_plan, *context);
+    
     return std::make_unique<WorkloadQuery>(
         context, query_id, query, std::move(query_plan), std::move(plan_before_cascades), std::move(query_tables), std::move(costs));
 }
@@ -140,11 +152,10 @@ WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, c
             {
                 WorkloadQueryPtr workload_query = build("q" + std::to_string(i), query, from_context);
                 res[i] = std::move(workload_query);
-            } catch (Exception & e)
+            } catch (...)
             {
-                LOG_WARNING(getLogger("WorkloadQuery"),
-                          "failed to build query, reason: {}, sql: {}",
-                          e.message(), query);
+                LOG_WARNING(getLogger("WorkloadQuery"),"failed to build query, reason: {}, sql: {}",
+                    getCurrentExceptionMessage(true), query);
             }
         });
     }
@@ -156,7 +167,7 @@ WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, c
 
 double WorkloadQuery::getOptimalCost(const TableLayout & table_layout)
 {
-if (!root_group)
+    if (!root_group)
     {
         cascades_context = std::make_shared<CascadesContext>(
             query_context,
@@ -180,6 +191,7 @@ if (!root_group)
     GroupId root_group_id = root_group->getGroupId();
     CascadesOptimizer::optimize(root_group_id, *cascades_context, required_property);
     auto res = cascades_context->getMemo().getGroupById(root_group_id)->getBestExpression(required_property)->getCost();
+
     GraphvizPrinter::printMemo(cascades_context->getMemo(), root_group_id, query_context, "CascadesOptimizer-Memo-Graph");
     return res;
 }

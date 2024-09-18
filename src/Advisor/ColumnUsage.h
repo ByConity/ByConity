@@ -23,8 +23,11 @@ enum class ColumnUsageType
     EQUALITY_PREDICATE, // columns in "= literal" filters
     IN_PREDICATE, // columns in "in list" filters
     RANGE_PREDICATE, // columns in "> literal" or "< literal" filters
+    ARRAY_SET_FUNCTION, // columns in "has" or "arraySetCheck"
     OTHER_PREDICATE, // columns in "column ???" filters
 };
+
+String toString(ColumnUsageType type);
 
 struct ColumnUsage
 {
@@ -42,6 +45,7 @@ public:
     void update(ColumnUsage usage, bool is_source_table);
 
     size_t getFrequency(ColumnUsageType type, bool only_source_table = false) const;
+    std::unordered_map<ColumnUsageType, size_t> getFrequencies(bool only_source_table = false) const;
     std::vector<ColumnUsage> getUsages(ColumnUsageType type, bool only_source_table = false) const;
 
 private:

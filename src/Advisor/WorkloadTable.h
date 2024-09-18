@@ -48,6 +48,8 @@ public:
     {
     }
 
+    StoragePtr getTablePtr() const { return storage; }
+
     ASTPtr getDDL() const { return create_table_ddl; }
     bool isOptimized() const { return optimized; }
 

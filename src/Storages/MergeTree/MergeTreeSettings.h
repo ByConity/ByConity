@@ -551,6 +551,8 @@ enum StealingCacheMode : UInt64
     \
     M(String, column_compress_block_settings, "", "Column compressed block size for each column, if not specified, use max_compress_block_size.", 0) \
     M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
+    M(UInt64, low_cardinality_ndv_threshold, 100000, "Threshold for fallback to none encoded column from low cardinality column, 0 disable", 0) \
+    M(Bool, low_cardinality_force_fallback, true, "Force fallback if low cardinality column has cardinality greater than low_cardinality_ndv_threshold", 0) \
 
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \

@@ -1,4 +1,4 @@
-#include <Advisor/Rules/ClusterKeyAdvise.h>
+#include <Advisor/Rules/OrderByKeyAdvise.h>
 
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/WorkloadQuery.h>
@@ -11,7 +11,7 @@
 
 using namespace DB;
 
-class ClusterKeyTest : public ::testing::Test
+class OrderByKeyTest : public ::testing::Test
 {
 public:
     static void SetUpTestSuite()
@@ -23,24 +23,24 @@ public:
                              "  name Nullable(String),"
                              "  salary Nullable(Float64),"
                              "  commission Nullable(UInt32)"
-                             ") ENGINE=CnchMergeTree() order by empid;");
+                             ") ENGINE=Memory();");
         tester->execute("CREATE TABLE IF NOT EXISTS depts("
                              "  deptno UInt32 not null,"
                              "  name Nullable(String)"
-                             ") ENGINE=CnchMergeTree() order by deptno;");
+                             ") ENGINE=Memory();");
     }
 
     static void TearDownTestCase()
     {
         tester.reset();
     }
-    
+
     static std::shared_ptr<BaseWorkloadTest> tester;
 };
 
-std::shared_ptr<BaseWorkloadTest> ClusterKeyTest::tester;
+std::shared_ptr<BaseWorkloadTest> OrderByKeyTest::tester;
 
-TEST_F(ClusterKeyTest, testSimple)
+TEST_F(OrderByKeyTest, testSimple)
 {
     auto context = tester->createQueryContext();
     std::vector<std::string> sqls(
@@ -49,17 +49,17 @@ TEST_F(ClusterKeyTest, testSimple)
     WorkloadQueries queries = WorkloadQuery::build(sqls, context, query_thread_pool);
     WorkloadTables tables(context);
     AdvisorContext advisor_context = AdvisorContext::buildFrom(context, tables, queries, query_thread_pool);
-    auto advise = ClusterKeyAdvisor().analyze(advisor_context);
+    auto advise = OrderByKeyAdvisor().analyze(advisor_context);
     EXPECT_EQ(advise.size(), 1);
     QualifiedTableName emps{tester->getDatabaseName(), "emps"};
     EXPECT_EQ(advise[0]->getTable(), emps);
     EXPECT_EQ(advise[0]->getOptimizedValue(), "empid");
 }
 
-TEST_F(ClusterKeyTest, testUpdateOrderBy)
+TEST_F(OrderByKeyTest, testUpdateOrderBy)
 {
     std::string database = tester->getDatabaseName();
-    std::string create_table_ddl = "CREATE TABLE IF NOT EXISTS " + database
+    std::string table_ddl = "CREATE TABLE IF NOT EXISTS " + database
         + ".emps("
           "  empid UInt32 not null,"
           "  deptno UInt32 not null,"
@@ -70,13 +70,14 @@ TEST_F(ClusterKeyTest, testUpdateOrderBy)
           "order by deptno;";
 
     auto query_context = tester->createQueryContext();
-    auto create_ast = tester->parse(create_table_ddl, query_context);
+    query_context->applySettingsChanges({DB::SettingChange("dialect_type", "CLICKHOUSE")});
+    auto create_ast = tester->parse(table_ddl, query_context);
     WorkloadTable table(nullptr, create_ast, WorkloadTableStats::build(query_context, tester->getDatabaseName(), "emps"));
     table.updateOrderBy(std::make_shared<ASTIdentifier>("empid"));
 
-    std::string optimal_ddl = serializeAST(*table.getDDL());
-    std::cout << optimal_ddl << std::endl;
-    EXPECT_TRUE(optimal_ddl.find("ORDER BY deptno") == std::string::npos);
-    EXPECT_TRUE(optimal_ddl.find("ORDER BY empid") != std::string::npos);
+    std::string local_ddl = serializeAST(*table.getDDL());
+    std::cout << local_ddl << std::endl;
+    EXPECT_TRUE(local_ddl.find("ORDER BY deptno") == std::string::npos);
+    EXPECT_TRUE(local_ddl.find("ORDER BY empid") != std::string::npos);
 }
 
