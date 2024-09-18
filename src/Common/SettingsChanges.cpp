@@ -274,6 +274,7 @@ std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
         "enable_sync_build_bitmap",
         "enable_sync_fetch",
         "enable_sync_from_ha",
+        "enable_table_scan_build_pipeline_optimization",
         "enable_testlog_to_console",
         "enable_unaligned_array_join",
         "enable_variadic_arraySetCheck",

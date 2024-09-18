@@ -1429,6 +1429,8 @@ public:
     bool getIsRestrictSettingsToWhitelist() const;
     void setIsRestrictSettingsToWhitelist(bool is_restrict);
     void addRestrictSettingsToWhitelist(const std::vector<String>& name) const;
+    void setExtraRestrictSettingsToWhitelist(std::unordered_set<String>&& settings);
+    bool isExtraRestrictSettingsToWhitelist(const String & name) const;
 
     bool getBlockPrivilegedOp() const;
     void setBlockPrivilegedOp(bool is_restrict);
