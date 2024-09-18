@@ -58,6 +58,12 @@
 #include <common/logger_useful.h>
 #include "Interpreters/ClientInfo.h"
 #include "Interpreters/Context_fwd.h"
+#include "Interpreters/DatabaseCatalog.h"
+#include "Interpreters/StorageID.h"
+#include "MergeTreeCommon/MergeTreeMetaBase.h"
+#include "Parsers/ASTLiteral.h"
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <Interpreters/VirtualWarehousePool.h>
 
 
 namespace ProfileEvents
@@ -814,6 +820,38 @@ PlanSegmentContext ClusterInfoFinder::find(QueryPlan & plan, ClusterInfoContext 
         return result.value();
     }
 
+    if (!cluster_info_context.possible_bitengine_storage_id.first.empty())
+    {
+        LOG_DEBUG(getLogger("BitEngineConstantExecutor"), "target_table={}.{}", cluster_info_context.possible_bitengine_storage_id.first, cluster_info_context.possible_bitengine_storage_id.second);
+        auto storage = DatabaseCatalog::instance().tryGetTable(StorageID{cluster_info_context.possible_bitengine_storage_id.first, cluster_info_context.possible_bitengine_storage_id.second}, cluster_info_context.context);
+        if (storage)
+        {
+            WorkerGroupHandle current_worker_group = getWorkerGroupForTable(static_cast<const MergeTreeMetaBase &>(*storage), cluster_info_context.context);
+            // auto worker_group_status_ptr = cluster_info_context.context->getWorkerStatusManager()->getWorkerGroupStatus(cluster_info_context.context.get(),
+            //     current_worker_group->getHostWithPortsVec(), current_worker_group->getVWName(),  current_worker_group->getID(),
+            //     [](const String & vw, const String & wg, const HostWithPorts & host_ports){
+            //         return WorkerStatusManager::getWorkerId(vw, wg, host_ports.id);
+            //     });
+
+            {
+                auto vw_handle = cluster_info_context.context->getVirtualWarehousePool().get(current_worker_group->getVWName());
+                // cluster_info_context.context->setCurrentVW(std::move(vw_handle));
+                cluster_info_context.context->setCurrentWorkerGroup(current_worker_group);
+            }
+
+            // if query is a constant query, like, select 1, schedule to server (coordinator)
+            PlanSegmentContext plan_segment_context{
+                .context = cluster_info_context.context,
+                .query_plan = cluster_info_context.query_plan,
+                .query_id = cluster_info_context.context->getCurrentQueryId(),
+                .shard_number = current_worker_group->getShardsInfo().size(),
+                .cluster_name = current_worker_group->getID(),
+                .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
+                .health_parallel = std::nullopt};
+            return plan_segment_context;
+        }
+    }
+
     // if query is a constant query, like, select 1, schedule to server (coordinator)
     PlanSegmentContext plan_segment_context{
         .context = cluster_info_context.context,
@@ -834,6 +872,38 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitPlanNode(PlanNodeBase 
             return result;
     }
     return std::nullopt;
+}
+
+
+std::optional<PlanSegmentContext> ClusterInfoFinder::visitProjectionNode(ProjectionNode & node, ClusterInfoContext & cluster_info_context)
+{
+    auto child_res = ClusterInfoFinder::visitPlanNode(node, cluster_info_context);
+    
+    if (!child_res.has_value() && cluster_info_context.possible_bitengine_storage_id.first.empty())
+    {
+        const auto * proj = dynamic_cast<const ProjectionStep *>(node.getStep().get());
+        for (const auto & [_, ast] : proj->getAssignments())
+        {
+            auto names_and_funcs = CollectIncludeFunction::collect(ast, BitEngineHelper::BITENGINE_ENCODE_DECODE_FUNCTIONS, cluster_info_context.context);
+            for (const auto & [name, nn] : names_and_funcs)
+            {
+                const auto * func = nn->as<ASTFunction>();
+                if (cluster_info_context.possible_bitengine_storage_id.first.empty() && func->arguments->children.size() > 3)
+                {
+                    const auto * db = func->arguments->children[1]->as<ASTLiteral>();
+                    const auto * tb = func->arguments->children[2]->as<ASTLiteral>();
+                    if (db->value.getType() == Field::Types::String && tb->value.getType() == Field::Types::String)
+                    {
+                        String cloud_table_name = tb->value.safeGet<String>();
+                        cloud_table_name.erase(cloud_table_name.find_last_of("_"));
+                        cluster_info_context.possible_bitengine_storage_id = {db->value.safeGet<String>(), cloud_table_name};
+                    }
+                }
+            }
+        }
+    }
+
+    return child_res;
 }
 
 std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableScanNode & node, ClusterInfoContext & cluster_info_context)

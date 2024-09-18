@@ -80,7 +80,8 @@ QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
     Partitioning partitioning = required.getNodePartitioning();
 
     // if the stream is ordered, we need keep order when exchange data.
-    bool keep_order = context.getSettingsRef().enable_shuffle_with_order;
+    bool keep_order = context.getSettingsRef().enable_shuffle_with_order || 
+        (required.getNodePartitioning().getComponent() == Partitioning::Component::COORDINATOR && actual.getNodePartitioning().getComponent() == Partitioning::Component::WORKER);
 
     switch (partitioning.getHandle())
     {
