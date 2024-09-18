@@ -1,0 +1,18 @@
+Projection
+│     Expressions: d1:=device_id, d2:=device_id, time1:=`expr#toDateTime(current_time_ms)`
+└─ Limit
+   │     Limit: 10
+   └─ Distinct
+      └─ Sorting
+         │     Order by: {current_time_ms DESC NULLS LAST}
+         └─ Gather Exchange
+            └─ Limit
+               │     Limit: 10
+               └─ Distinct
+                  └─ Sorting
+                     │     Order by: {current_time_ms DESC NULLS LAST}
+                     └─ Distinct
+                        └─ Projection
+                           │     Expressions: [current_time_ms, device_id], expr#toDateTime(current_time_ms):=toDateTime(current_time_ms)
+                           └─ TableScan test.dwm_cprf_jarvis_anr_bg_task_hi
+                                    Outputs: [current_time_ms, device_id]

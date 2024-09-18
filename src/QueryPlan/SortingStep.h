@@ -19,6 +19,7 @@
 #include <Disks/IVolume.h>
 #include <Interpreters/prepared_statement.h>
 #include <QueryPlan/ITransformingStep.h>
+#include "common/types.h"
 
 namespace DB
 {
@@ -54,7 +55,7 @@ public:
     {
         return std::get<UInt64>(limit);
     }
-
+    void setLimit(UInt64 limit_) { limit = limit_; }
     bool hasPreparedParam() const
     {
         return std::holds_alternative<String>(limit);
