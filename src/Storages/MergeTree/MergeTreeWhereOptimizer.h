@@ -46,6 +46,12 @@ class MergeTreeData;
 struct StorageInMemoryMetadata;
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
+/// extract expressions from bitmapCount like aggregate functions and put them
+/// into where to reduce data read
+void optimizeBitMapParametersToWhere(ASTPtr & query, const StorageMetadataPtr & metadata_snapshot);
+Names getBitMapParameterValues(String expression);
+std::pair<ASTPtr, size_t> createInFunctionForBitMapParameter(const String & index_arg, const std::set<Field> & parameter_values);
+
 /// Push down where partition predicate to query info partition_filter
 void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context);
 Names getBitMapParameterValues(String expression);

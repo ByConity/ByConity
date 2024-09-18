@@ -1,0 +1,28 @@
+today_and_tomorrow	2021-07-01	0
+today_and_tomorrow	2021-07-02	1
+today_and_tomorrow	2021-07-03	1
+today_and_tomorrow	2021-07-04	1
+today_and_tomorrow	2021-07-05	1
+both	2021-07-01	{5}	{}
+both	2021-07-02	{4}	{12}
+both	2021-07-03	{3}	{13}
+both	2021-07-04	{2}	{14}
+both	2021-07-05	{}	{15}
+today_and_2_days_later	2021-07-01	{4,5}
+today_and_2_days_later	2021-07-02	{3,4}
+today_and_2_days_later	2021-07-03	{2,3}
+today_and_2_days_later	2021-07-04	{}
+today_and_2_days_later	2021-07-05	{}
+both_group_by	a	2021-07-01	{5}	{}
+both_group_by	a	2021-07-02	{4}	{12}
+both_group_by	a	2021-07-03	{3}	{13}
+both_group_by	a	2021-07-04	{2}	{14}
+both_group_by	a	2021-07-05	{}	{15}
+both_group_by	b	2021-07-01	{5}	{}
+both_group_by	b	2021-07-02	{4}	{12}
+both_group_by	b	2021-07-03	{}	{13}
+both	2021-07-01	{5}	{}
+both	2021-07-02	{4}	{12}
+both	2021-07-03	{3}	{13}
+both	2021-07-04	{2}	{14}
+both	2021-07-05	{}	{15}

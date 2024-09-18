@@ -45,7 +45,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int LOGICAL_ERROR;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
@@ -62,34 +61,34 @@ enum LogicOperationType
 
 struct LogicOperation
 {
-    LogicOperation() : logicOp(LogicOperationType::NONE) {}
-    LogicOperation(String operation)
+    LogicOperation() : logic_op(LogicOperationType::NONE) {}
+    explicit LogicOperation(String operation)
     {
         std::transform(operation.begin(), operation.end(), operation.begin(), ::toupper);
         if (operation == "NONE" || operation.empty())
-            logicOp = LogicOperationType::NONE;
+            logic_op = LogicOperationType::NONE;
         else if (operation == "AND")
-            logicOp = LogicOperationType::AND;
+            logic_op = LogicOperationType::AND;
         else if (operation == "OR")
-            logicOp = LogicOperationType::OR;
+            logic_op = LogicOperationType::OR;
         else if (operation == "XOR")
-            logicOp = LogicOperationType::XOR;
+            logic_op = LogicOperationType::XOR;
         else if (operation == "ANDNOT")
-            logicOp = LogicOperationType::ANDNOT;
+            logic_op = LogicOperationType::ANDNOT;
         else if (operation == "RANDNOT" || operation == "REVERSEANDNOT")
-            logicOp = LogicOperationType::REVERSEANDNOT;
+            logic_op = LogicOperationType::REVERSEANDNOT;
         else
-            logicOp = LogicOperationType::UNDEFINED;
+            logic_op = LogicOperationType::UNDEFINED;
     }
 
     LogicOperation(const LogicOperation & rhs)
     {
-        this->logicOp = rhs.logicOp;
+        this->logic_op = rhs.logic_op;
     }
 
-    bool isValid() { return logicOp < LogicOperationType::UNDEFINED; }
+    bool isValid() const { return logic_op < LogicOperationType::UNDEFINED; }
 
-    LogicOperationType logicOp;
+    LogicOperationType logic_op;
 };
 
 enum JoinType
@@ -101,37 +100,39 @@ enum JoinType
 
 struct JoinOperation
 {
-    JoinOperation() : joinOp(JoinType::INNER) {}
-    JoinOperation(String operation)
+    JoinOperation() : join_op(JoinType::INNER) {}
+    explicit JoinOperation(String operation)
     {
         std::transform(operation.begin(), operation.end(), operation.begin(), ::toupper);
         if (operation.empty() || operation == "INNER")
-            joinOp = JoinType::INNER;
+            join_op = JoinType::INNER;
         else if (operation == "LEFT")
-            joinOp = JoinType::LEFT;
+            join_op = JoinType::LEFT;
         else
-            joinOp = JoinType::INVALID;
+            join_op = JoinType::INVALID;
     }
 
-    bool isValid() { return joinOp < JoinType::INVALID; }
+    bool isValid() const { return join_op < JoinType::INVALID; }
 
-    JoinType joinOp;
+    JoinType join_op;
 };
 
 using JoinKeys = Strings;
 using GroupByKeys = Strings;
 using Position = UInt8;
 using BitMapPtr = std::shared_ptr<BitMap64>;
-using JoinTuple = std::tuple<JoinKeys, GroupByKeys, BitMapPtr>;
+using JoinKeysPtr = std::shared_ptr<JoinKeys>;
+using GroupByKeysPtr = std::shared_ptr<GroupByKeys>;
+using JoinTuple = std::tuple<JoinKeysPtr, GroupByKeysPtr, BitMapPtr>;
 using JoinTuplePtr = std::shared_ptr<JoinTuple>;
 using JoinTuplePtrs = std::vector<JoinTuplePtr>;
 using PositionIndexPair = std::pair<UInt64, UInt64>;
 
-void writeStrings(const Strings & data, WriteBuffer & buf)
+void writeStrings(const std::shared_ptr<Strings> & data, WriteBuffer & buf)
 {
-    size_t size = data.size();
+    size_t size = data->size();
     writeVarUInt(size, buf);
-    for (auto & key : data)
+    for (auto & key : *data)
         writeString(key.data(), key.size(), buf);
 }
 
@@ -151,21 +152,24 @@ void readStrings(Strings & data, ReadBuffer & buf)
 // The key used to hash the join keys or group by keys
 struct StringsMapKey
 {
-    Strings keys;
+    std::shared_ptr<Strings> keys;
 
     StringsMapKey() = default;
-    StringsMapKey(String & key_) : keys{key_} {}
-    StringsMapKey(Strings && keys_) : keys(std::move(keys_)) {}
-    StringsMapKey(const Strings && keys_) : keys(std::move(keys_)) {}
+    explicit StringsMapKey(String & key_)
+    {
+        Strings strs{ key_ };
+        keys = std::make_shared<Strings>(std::move(strs));
+    }
+    explicit StringsMapKey(std::shared_ptr<Strings> && keyPtr) : keys(std::move(keyPtr)) {}
 
     bool operator==(const StringsMapKey & rhs) const
     {
-        if (keys.size() != rhs.keys.size())
+        if (keys->size() != rhs.keys->size())
             return false;
 
-        for (size_t i = 0; i < keys.size(); ++i)
+        for (size_t i = 0; i < keys->size(); ++i)
         {
-            if (keys.at(i) != rhs.keys.at(i))
+            if (keys->at(i) != rhs.keys->at(i))
                 return false;
         }
         return true;
@@ -176,12 +180,12 @@ struct HashStringsMapKey
 {
     size_t operator()(const StringsMapKey & one) const
     {
-        if (one.keys.empty())
+        if (one.keys->empty())
             return std::hash<String>()("");
 
-        size_t res = std::hash<String>()(one.keys.at(0));
-        for (size_t i = 1; i < one.keys.size(); ++i)
-            res ^= std::hash<String>()(one.keys.at(i)) >> i;
+        size_t res = std::hash<String>()(one.keys->at(0));
+        for (size_t i = 1; i < one.keys->size(); ++i)
+            res ^= std::hash<String>()(one.keys->at(i)) >> i;
 
         return res;
     }
@@ -225,14 +229,14 @@ public:
     // Here is no lock, we just do this in a single thread
     void getAllKeyValueByResultType(ColumnTuple & tuple_in_array, size_t result_type)
     {
-        for (auto it = m_map.begin(); it != m_map.end(); ++it)
+        for (auto & it : m_map)
         {
-            BitMapPtr bitmap_ptr = std::get<2>(*(it->second.at(0)));
-            size_t key_size = it->first.keys.size();
+            BitMapPtr bitmap_ptr = std::get<2>(*(it.second.at(0)));
+            size_t key_size = it.first.keys->size();
             for (size_t i = 0; i < key_size; ++i)
             {
                 auto & column_group_by = static_cast<ColumnString &>(tuple_in_array.getColumn(i));
-                column_group_by.insert(it->first.keys.at(i));
+                column_group_by.insert(it.first.keys->at(i));
             }
             if (result_type == 0)
             {
@@ -256,42 +260,47 @@ private:
 class KVSharded
 {
 public:
-    KVSharded(size_t num_shard) : m_mask(num_shard - 1), m_shards(num_shard)
+    explicit KVSharded(size_t num_shard) : m_mask(num_shard - 1), m_shards(num_shard)
     {
         if ((num_shard & m_mask) != 0)
-            throw Exception("num_shard should be a power of two", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("num_shard should be a power of two", ErrorCodes::BAD_ARGUMENTS);
     }
 
     KVSharded(KVSharded && rhs) : m_mask(std::move(rhs.m_mask)), m_shards(std::move(rhs.m_shards)) {}
-    void operator=(KVSharded && rhs)
+    KVSharded& operator=(KVSharded && rhs)
     {
-        m_shards = std::move(rhs.m_shards);
+        if (this != &rhs) // Optional: Check for self-assignment
+        {
+            m_mask = std::move(rhs.m_mask);
+            m_shards = std::move(rhs.m_shards);
+        }
+        return *this;
     }
 
     void put(const StringsMapKey & key, const JoinTuplePtrs & value)
     {
-        get_shard(key).emplaceKVOrAddValue(std::move(key), std::move(value));
+        getShard(key).emplaceKVOrAddValue(std::move(key), std::move(value));
     }
 
     std::optional<JoinTuplePtrs> get(const StringsMapKey & key)
     {
-        return get_shard(key).get(key);
+        return getShard(key).get(key);
     }
 
     /// It's used in insertIntoResult function, by a single thread
     void writeResultOfKeyAndValue(ColumnTuple & tuple_in_array, size_t result_type)
     {
-        for (auto it = m_shards.begin(); it != m_shards.end(); ++it)
+        for (auto & m_shard : m_shards)
         {
-            it->getAllKeyValueByResultType(tuple_in_array, result_type);
+            m_shard.getAllKeyValueByResultType(tuple_in_array, result_type);
         }
     }
 
 private:
-    const size_t m_mask;
+    size_t m_mask;
     std::vector<KVBigLock> m_shards;
 
-    KVBigLock & get_shard(const StringsMapKey & key)
+    KVBigLock & getShard(const StringsMapKey & key)
     {
         HashStringsMapKey hash_fn;
         size_t h = hash_fn(key);
@@ -300,31 +309,37 @@ private:
 };
 
 /// It's used to accommodate user input data, and data is grouped by join keys
-struct PositionTuples
+struct JoinPositionTuples
 {
     Position position;
     HashedStringsKeyTuples tuples;   // The key used here is join key
 
-    PositionTuples() = default;
-    PositionTuples(Position pos) : position(pos) {}
-    PositionTuples(const PositionTuples & rhs) : position(rhs.position), tuples(rhs.tuples) {}
-    PositionTuples(PositionTuples && rhs) : position(rhs.position), tuples(std::move(rhs.tuples)) {}
-    PositionTuples(Position && pos, StringsMapKey && join_keys, JoinTuplePtr && val)
+    JoinPositionTuples() = default;
+    explicit JoinPositionTuples(Position pos) : position(pos) {}
+    JoinPositionTuples(const JoinPositionTuples & rhs) = default;
+    JoinPositionTuples(JoinPositionTuples && rhs) : position(rhs.position), tuples(std::move(rhs.tuples)) {}
+    JoinPositionTuples(Position && pos, StringsMapKey && join_keys, JoinTuplePtr && val)
         : position(std::move(pos)), tuples{{std::move(join_keys), JoinTuplePtrs{val}}} {}
 
-    void operator=(const PositionTuples & rhs)
+    JoinPositionTuples& operator=(const JoinPositionTuples & rhs)
     {
-        this->position = rhs.position;
-        this->tuples = rhs.tuples;
+        if (this != &rhs) { // Check for self-assignment
+            this->position = rhs.position;
+            this->tuples = rhs.tuples;
+        }
+        return *this;
     }
 
-    void operator=(const PositionTuples && rhs)
+    JoinPositionTuples& operator=(JoinPositionTuples && rhs)
     {
-        this->position = std::move(rhs.position);
-        this->tuples = std::move(rhs.tuples);
+        if (this != &rhs) { // Check for self-assignment
+            this->position = std::move(rhs.position);
+            this->tuples = std::move(rhs.tuples);
+        }
+        return *this;
     }
 
-    void emplace_back(StringsMapKey && join_key, JoinTuplePtrs && value)
+    void emplaceBack(StringsMapKey && join_key, JoinTuplePtrs && value)
     {
         auto it = this->tuples.find(join_key);
         if (it == this->tuples.end())
@@ -337,16 +352,16 @@ struct PositionTuples
                               std::make_move_iterator(value.end()));
     }
 
-    void emplace_back(StringsMapKey && join_key, JoinTuplePtr && value)
+    void emplaceBack(StringsMapKey && join_key, JoinTuplePtr && value)
     {
-        this->emplace_back(std::move(join_key), JoinTuplePtrs{value});
+        this->emplaceBack(std::move(join_key), JoinTuplePtrs{value});
     }
 
-    void insert(PositionTuples && rhs)
+    void insert(JoinPositionTuples && rhs)
     {
-        for (auto rt = rhs.tuples.begin(); rt != rhs.tuples.end(); ++rt)
+        for (auto & tuple : rhs.tuples)
         {
-            this->emplace_back(std::move(const_cast<StringsMapKey &>(rt->first)), std::move(rt->second));
+            this->emplaceBack(std::move(const_cast<StringsMapKey &>(tuple.first)), std::move(tuple.second));
         }
     }
 
@@ -355,22 +370,21 @@ struct PositionTuples
         writeVarUInt(position, buf);
         size_t map_size = tuples.size();
         writeVarUInt(map_size, buf);
-
-        for (auto it = tuples.begin(); it != tuples.end(); ++it)
+        for (const auto & tuple : tuples)
         {
-            writeStrings(it->first.keys, buf);
+            writeStrings(tuple.first.keys, buf);
 
-            size_t tuples_num = it->second.size();
+            size_t tuples_num = tuple.second.size();
             writeVarUInt(tuples_num, buf);
-            for (auto jt = it->second.begin(); jt != it->second.end(); ++jt)
+            for (const auto & jt : tuple.second)
             {
-                JoinKeys join_key;
-                GroupByKeys group_by;
+                JoinKeysPtr join_key_ptr;
+                GroupByKeysPtr group_by_ptr;
                 BitMapPtr bitmap_ptr;
-                std::tie(join_key, group_by, bitmap_ptr) = *(*jt);
+                std::tie(join_key_ptr, group_by_ptr, bitmap_ptr) = *jt;
 
-                writeStrings(join_key, buf);
-                writeStrings(group_by, buf);
+                writeStrings(const_cast<const JoinKeysPtr&>(join_key_ptr), buf);
+                writeStrings(const_cast<const GroupByKeysPtr&>(group_by_ptr), buf);
 
                 size_t bytes_size = (*bitmap_ptr).getSizeInBytes();
                 writeVarUInt(bytes_size, buf);
@@ -415,14 +429,18 @@ struct PositionTuples
                 buf.readStrict(buffer.data(), bytes_size);
                 BitMap64 bitmap = BitMap64::readSafe(buffer.data(), bytes_size);
 
-                tmp_tuple = std::make_tuple(std::move(join_key),
-                                                      std::move(group_by),
-                                                      std::make_shared<BitMap64>(bitmap));
+                JoinKeysPtr join_key_ptr = make_shared<JoinKeys>(join_key);
+                GroupByKeysPtr group_by_ptr = make_shared<GroupByKeys>(group_by);
+
+                tmp_tuple = std::make_tuple(std::move(join_key_ptr),
+                                            std::move(group_by_ptr),
+                                            std::make_shared<BitMap64>(bitmap));
 
                 tuples_ptrs.emplace_back(std::make_shared<JoinTuple>(tmp_tuple));
             }
 
-            this->emplace_back(StringsMapKey(std::move(key)), std::move(tuples_ptrs));
+            std::shared_ptr<Strings> key_ptr = std::make_shared<Strings>(std::move(key));
+            this->emplaceBack(StringsMapKey(std::move(key_ptr)), std::move(tuples_ptrs));
         }
     }
 };
@@ -431,22 +449,23 @@ struct AggregateFunctionBitMapJoinData
 {
     AggregateFunctionBitMapJoinData() = default;
 
-    std::vector<PositionTuples> join_tuples_by_position;
+    std::vector<JoinPositionTuples> join_tuples_by_position;
 
-    void add(const Position & pos, const BitMapPtr bitmap_ptr, const JoinKeys & join_keys, GroupByKeys & group_bys, size_t union_num)
+    void add(const Position & pos, const BitMapPtr bitmap_ptr, JoinKeysPtr & join_keys, GroupByKeysPtr & group_bys, size_t union_num)
     {
         if (pos > union_num+1)
             throw Exception("AggregateFunction BitMapJoin: Wrong position value. Position starts from 1 and ends with join_num+1 ",
-                            DB::ErrorCodes::LOGICAL_ERROR);
+                            DB::ErrorCodes::BAD_ARGUMENTS);
 
-        StringsMapKey key(std::move(join_keys));
+        JoinKeysPtr cpy(join_keys);
+        StringsMapKey key(std::move(cpy));
         JoinTuplePtr tuple_ptr{std::make_shared<JoinTuple>(std::make_tuple(std::move(join_keys), std::move(group_bys), std::move(bitmap_ptr)))};
 
         for (auto & pos_tuples : join_tuples_by_position) // Position value is in a small range, just compare one by one
         {
             if (pos-1 == pos_tuples.position)  // position starts from 0, but pos from user starts from 1
             {
-                pos_tuples.emplace_back(std::move(key), std::move(tuple_ptr));
+                pos_tuples.emplaceBack(std::move(key), std::move(tuple_ptr));
                 return;
             }
         }
@@ -457,7 +476,7 @@ struct AggregateFunctionBitMapJoinData
     void merge (const AggregateFunctionBitMapJoinData & rhs)
     {
         auto & lhs_tuples_by_position = this->join_tuples_by_position;
-        auto & rhs_tuples_by_position = const_cast<std::vector<PositionTuples> &>(rhs.join_tuples_by_position);
+        auto & rhs_tuples_by_position = const_cast<std::vector<JoinPositionTuples> &>(rhs.join_tuples_by_position);
 
         if (rhs_tuples_by_position.empty())
             return;
@@ -468,20 +487,20 @@ struct AggregateFunctionBitMapJoinData
         }
 
         // Position value is in a small range, just compare one by one
-        for (auto rt = rhs_tuples_by_position.begin(); rt != rhs_tuples_by_position.end(); ++rt)
+        for (auto & rt : rhs_tuples_by_position)
         {
             bool pos_exists = false;
-            for (auto lt = lhs_tuples_by_position.begin(); lt != lhs_tuples_by_position.end(); ++lt)
+            for (auto & lt : lhs_tuples_by_position)
             {
-                if (lt->position == rt->position)
+                if (lt.position == rt.position)
                 {
-                    lt->insert(std::move(*rt));
+                    lt.insert(std::move(rt));
                     pos_exists = true;
                 }
             }
             if (!pos_exists)
             {
-                lhs_tuples_by_position.emplace_back(std::move(*rt));
+                lhs_tuples_by_position.emplace_back(std::move(rt));
             }
         }
     }
@@ -490,10 +509,9 @@ struct AggregateFunctionBitMapJoinData
     {
         size_t position_num = join_tuples_by_position.size();
         writeVarUInt(position_num, buf);
-        for (auto it = join_tuples_by_position.begin();
-            it != join_tuples_by_position.end(); ++it)
+        for (const auto & it : join_tuples_by_position)
         {
-            it->serialize(buf);
+            it.serialize(buf);
         }
     }
 
@@ -504,7 +522,7 @@ struct AggregateFunctionBitMapJoinData
 
         for (size_t i = 0; i < position_num; ++i)
         {
-            PositionTuples pos_tuple;
+            JoinPositionTuples pos_tuple;
             pos_tuple.deserialize(buf);
             join_tuples_by_position.emplace_back(std::move(pos_tuple));
         }
@@ -563,12 +581,15 @@ public:
         for (auto pi : group_by_keys_idx)
         {
             if (pi.first == static_cast<UInt64>(pos) && columns_str.at(pi.second - 3) == "#-1#")
-                throw Exception("The column you identified for group by is invalid, where data is '#-1#'", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("The column you identified for group by is invalid, where data is '#-1#'", ErrorCodes::BAD_ARGUMENTS);
 
             group_by_keys.emplace_back(columns_str.at(pi.second - 3));
         }
 
-        this->data(place).add(pos, bitmap_ptr, join_keys, group_by_keys, union_num);
+        auto join_keys_ptr = make_shared<JoinKeys>(join_keys);
+        auto group_by_keys_ptr = make_shared<GroupByKeys>(group_by_keys);
+
+        this->data(place).add(pos, bitmap_ptr, join_keys_ptr, group_by_keys_ptr, union_num);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr __restrict rhs, Arena *) const override
@@ -588,13 +609,12 @@ public:
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        auto & this_join_tuples = const_cast<std::vector<PositionTuples> &>(this->data(place).join_tuples_by_position);
+        auto & this_join_tuples = const_cast<std::vector<JoinPositionTuples> &>(this->data(place).join_tuples_by_position);
         if (this_join_tuples.size() < 2)
             return;
-            // throw Exception("AggregateFunction " + getName() + ": at least one position has no data actually", ErrorCodes::LOGICAL_ERROR);
 
         sort(this_join_tuples.begin(), this_join_tuples.end(),
-            [](const PositionTuples & left, const PositionTuples & right) -> bool {
+            [](const JoinPositionTuples & left, const JoinPositionTuples & right) -> bool {
                 return left.position < right.position;
             });
 
@@ -619,31 +639,34 @@ private:
     {
         ThreadGroupStatusPtr thread_group = CurrentThread::getGroup();
 
-        auto runJoin = [&](size_t index)
+        auto run_join = [&](size_t index)
         {
             setThreadName("bitmapJoin");
             CurrentThread::attachToIfDetached(thread_group);
 
             JoinTuplePtrs tuples_tmp;
             Pairs & group = split_lhs_data.at(index);
-            for (auto gt = group.begin(); gt != group.end(); ++gt)
+            for (auto & gt : group)
             {
-                auto & key = gt->first;
-                auto & left = gt->second; // left JoinTuplePtrs
+                auto & key = gt.first;
+                auto & left = gt.second; // left JoinTuplePtrs
+
+                if (left.empty())
+                    continue;
 
                 auto rjt = rhs_data.find(key);
                 if (rjt == rhs_data.end()) // key is not matched
                 {
-                    switch (join_operation.joinOp)
+                    switch (join_operation.join_op)
                     {
                         case JoinType::INNER : // INNER JOIN
                             continue;
                         case JoinType::LEFT :   // ALL LEFT JOIN
                             {
-                                for (auto it = left.begin(); it != left.end(); ++it)
+                                for (auto & it : left)
                                 {
-                                    Strings group_by_keys = std::get<1>(*(*it));
-                                    result.put(StringsMapKey(std::move(group_by_keys)), {*it});
+                                    auto group_by_keys = std::get<1>(*it);
+                                    result.put(StringsMapKey(std::move(group_by_keys)), {it});
                                 }
                             }
                             continue;
@@ -653,39 +676,39 @@ private:
                 }
 
                 auto & right = rjt->second;  // right JoinTuplePtrs
-                for (auto lt = left.begin(); lt != left.end(); ++lt)
+                for (auto & lt : left)
                 {
-                    for (auto rt = right.cbegin(); rt != right.cend(); ++rt)
+                    for (const auto & rt : right)
                     {
-                        Strings join_keys;
-                        Strings lt_group_bys, rt_group_bys;
+                        JoinKeysPtr join_keys_ptr;
+                        GroupByKeysPtr lt_group_bys, rt_group_bys;
                         BitMapPtr lt_bitmap_ptr, rt_bitmap_ptr;
 
-                        std::tie(join_keys, lt_group_bys, lt_bitmap_ptr) = *(*lt);
-                        std::tie(std::ignore, rt_group_bys, rt_bitmap_ptr) = *(*rt);
+                        std::tie(join_keys_ptr, lt_group_bys, lt_bitmap_ptr) = *lt;
+                        std::tie(std::ignore, rt_group_bys, rt_bitmap_ptr) = *rt;
 
                         Strings group_bys;
                         for (size_t i = 0; i < group_by_keys_idx.size(); ++i)
                         {
                             if (group_by_keys_idx[i].first == 0xFF)  // If no position identifier
                             {
-                                if (lt_group_bys.at(i) != "#-1#") // left subquery has a group by key
-                                    group_bys.emplace_back(std::move(lt_group_bys.at(i)));
+                                if (lt_group_bys->at(i) != "#-1#") // left subquery has a group by key
+                                    group_bys.emplace_back(std::move(lt_group_bys->at(i)));
                                 else
-                                    group_bys.emplace_back(std::move(rt_group_bys.at(i)));
+                                    group_bys.emplace_back(std::move(rt_group_bys->at(i)));
                             }
                             else
                             {
                                 if (group_by_keys_idx[i].first == 1)
-                                    group_bys.emplace_back(std::move(lt_group_bys.at(i)));
+                                    group_bys.emplace_back(std::move(lt_group_bys->at(i)));
                                 else if (group_by_keys_idx[i].first == 2)
-                                    group_bys.emplace_back(std::move(rt_group_bys.at(i)));
+                                    group_bys.emplace_back(std::move(rt_group_bys->at(i)));
                             }
                         }
 
                         BitMap64 bitmap(*lt_bitmap_ptr);
 
-                        switch (logic_operation.logicOp)
+                        switch (logic_operation.logic_op)
                         {
                             case DB::LogicOperationType::NONE :
                             {
@@ -712,10 +735,12 @@ private:
                                 break;
                         }
 
-                        JoinTuple  tmp_tuple{std::make_tuple(join_keys, group_bys,
-                                                              std::make_shared<BitMap64>(std::move(bitmap)))};
+                        auto group_by_ptr = make_shared<GroupByKeys>(group_bys);
 
-                        result.put(std::move(StringsMapKey(std::move(group_bys))),
+                        JoinTuple tmp_tuple{std::make_tuple(join_keys_ptr, group_by_ptr,
+                                            std::make_shared<BitMap64>(std::move(bitmap)))};
+
+                        result.put(std::move(StringsMapKey(std::move(group_by_ptr))),
                                    std::move(JoinTuplePtrs{std::make_shared<JoinTuple>(tmp_tuple)}));
                    }
                 }
@@ -723,34 +748,44 @@ private:
             }
         };
 
-        std::unique_ptr<ThreadPool> threadPool = std::make_unique<ThreadPool>(thread_num_);
+        std::unique_ptr<ThreadPool> thread_pool = std::make_unique<ThreadPool>(thread_num_);
 
         for (size_t i = 0; i < thread_num_; ++i)
         {
-            auto joinAndFunc = std::bind(runJoin, i);
-            threadPool->scheduleOrThrowOnError(joinAndFunc);
+            auto join_and_func = [i, &run_join]() { run_join(i); };
+            thread_pool->scheduleOrThrowOnError(join_and_func);
         }
 
-        threadPool->wait();
+        thread_pool->wait();
     }
 
-    KVSharded doJoinWithLogicOperation(std::vector<PositionTuples> & this_join_tuples) const
+    KVSharded doJoinWithLogicOperation(std::vector<JoinPositionTuples> & this_join_tuples) const
     {
         HashedStringsKeyTuples & left_join_tuples = this_join_tuples.at(0).tuples;
         HashedStringsKeyTuples & right_join_tuples = this_join_tuples.at(1).tuples;
 
         // split the map to several vector
-        std::vector<Pairs> pair_vector_buckets(thread_num);
+        std::vector<Pairs> pair_vector_buckets;
         size_t idx = 0;
-        for (auto key_tuple_it = left_join_tuples.begin(); key_tuple_it != left_join_tuples.end(); ++key_tuple_it)
+        auto key_tuple_it = left_join_tuples.begin();
+        for (; key_tuple_it != left_join_tuples.end(); ++key_tuple_it)
         {
-            pair_vector_buckets.at(idx % thread_num).emplace_back(std::move(*key_tuple_it));
-            left_join_tuples.erase(key_tuple_it);
-            idx++;
+            Pairs p{{key_tuple_it->first, key_tuple_it->second}};
+            pair_vector_buckets.emplace_back(p);
+            ++idx;
         }
 
+        /// processing remaing data
+        for (; key_tuple_it != left_join_tuples.end(); ++key_tuple_it)
+        {
+            pair_vector_buckets.at(idx % thread_num).emplace_back(key_tuple_it->first, key_tuple_it->second);
+            ++idx;
+        }
+        left_join_tuples.clear();
+
         KVSharded result(128);
-        joinMultiThreads(result, pair_vector_buckets, right_join_tuples, thread_num);
+        size_t actual_thread_num = std::min(thread_num, pair_vector_buckets.size());
+        joinMultiThreads(result, pair_vector_buckets, right_join_tuples, actual_thread_num);
 
         return result;
     }

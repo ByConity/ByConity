@@ -22,6 +22,12 @@
 
 namespace DB
 {
+    namespace ErrorCodes
+    {
+        extern const int BAD_ARGUMENTS;
+        extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    }
+
     /// Expected format is 'P.I' or 'I', and P means the position,
     /// as well as the I means the index of argument
     PositionIndexPair parsePositionAndIndex(String & input)
@@ -52,15 +58,15 @@ namespace DB
             for (size_t i = 0; i < arr.size(); ++i)
             {
                 if (arr.at(i).safeGet<String>().empty())
-                    throw Exception("AggregateFunction " + name + ": empty string in parameter is invalid", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("AggregateFunction " + name + ": empty string in parameter is invalid", ErrorCodes::BAD_ARGUMENTS);
                 UInt64 pos = 0, idx = 0;
                 std::tie(pos, idx) = parsePositionAndIndex(arr.at(i).safeGet<String>());
                 if (pos == 0 || ((pos^0xFF) && pos > union_num+1))
                 {
-                    throw Exception("AggregateFunction " + name + ": wrong value of keys postion identifier, which starts from 1", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("AggregateFunction " + name + ": wrong value of keys postion identifier, which starts from 1", ErrorCodes::BAD_ARGUMENTS);
                 }
                 if (idx < 3 || idx > argument_num)
-                    throw Exception("AggregateFunction " + name + ": wrong value of key index, which starts from 3", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("AggregateFunction " + name + ": wrong value of key index, which starts from 3", ErrorCodes::BAD_ARGUMENTS);
                 to.emplace_back(pos, idx);
             }
         }
@@ -70,7 +76,7 @@ namespace DB
             {
                 UInt64 idx = arr.at(i).safeGet<UInt64>();
                 if (idx < 3 || idx > argument_num)
-                    throw Exception("AggregateFunction " + name + ": wrong value of key index", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("AggregateFunction " + name + ": wrong value of key index", ErrorCodes::BAD_ARGUMENTS);
                 to.emplace_back(0xFF, idx);
             }
         }
@@ -93,11 +99,11 @@ namespace
         /// 6 params are: (union_num, [join_keys], [group_by_keys], bitmap_op, join_type, thread_number, 0), the last 0 mean result is cardinality
         /// 7 params are: (union_num, [join_keys], [group_by_keys], bitmap_op, join_type, thread_number, result_type) result_type: 0->cardinality, 1->raw bitmap
         if (parameters.size() != 3 && parameters.size() != 5 && parameters.size() != 6 && parameters.size() != 7)
-            throw Exception("AggregateFunction " + name + " needs 3, 5, 6 or 7 parameters", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("AggregateFunction " + name + " needs 3, 5, 6 or 7 parameters", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         UInt64 union_num = parameters[0].safeGet<UInt64>();
         if (union_num != 1)
-            throw Exception("AggregateFunction " + name + " can only support one JOIN now, set 1 please", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("AggregateFunction " + name + " can only support one JOIN now, set 1 please", ErrorCodes::BAD_ARGUMENTS);
 
         Array join_arr = parameters[1].safeGet<Array>();
         Array group_by_arr = parameters[2].safeGet<Array>();
@@ -110,7 +116,7 @@ namespace
             keys_set.emplace(jk.second);
         }
         if (keys_set.size() != join_keys_idx.size())
-            throw Exception("AggregateFunction " + name + ": duplicated join key index, only one is ok", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("AggregateFunction " + name + ": duplicated join key index, only one is ok", ErrorCodes::BAD_ARGUMENTS);
 
         getParameterOfPositionAndIndex(group_by_arr, name, union_num, argument_types.size(), group_by_keys_idx);
 
@@ -125,12 +131,12 @@ namespace
                 if (group_by_keys_idx[i] == group_by_keys_idx[j] ||
                     (group_by_keys_idx[i].second == group_by_keys_idx[j].second
                         && (group_by_keys_idx[i].first == 0xFF || group_by_keys_idx[j].first == 0xFF)))
-                    throw Exception("AggregateFunction " + name + ": duplicated group by index", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("AggregateFunction " + name + ": duplicated group by index", ErrorCodes::BAD_ARGUMENTS);
             }
         }
 
         String logic_str, join_str;
-        if (parameters.size() == 5 || parameters.size() == 6)
+        if (parameters.size() >= 5)
         {
             logic_str = parameters[3].safeGet<String>();
             join_str = parameters[4].safeGet<String>();
@@ -140,16 +146,16 @@ namespace
         if (!logic_op.isValid())
             throw Exception(
                 "AggregateFunction " + name + " only support logic operation: AND, OR, XOR, besides empty string is also ok",
-                DB::ErrorCodes::LOGICAL_ERROR);
+                DB::ErrorCodes::BAD_ARGUMENTS);
 
         JoinOperation join_op(join_str);
         if (!join_op.isValid())
             throw Exception(
                 "AggregateFunction " + name + " only support join type: INNER, LEFT. And empty string means INNER JOIN",
-                DB::ErrorCodes::LOGICAL_ERROR);
+                DB::ErrorCodes::BAD_ARGUMENTS);
 
         UInt64 thread_num = 32;
-        if (parameters.size() == 6)
+        if (parameters.size() >= 6)
         {
             thread_num = parameters[5].safeGet<UInt64>();
         }
@@ -160,19 +166,19 @@ namespace
             result_type = parameters[6].safeGet<UInt64>();
         }
         if (result_type != 0 && result_type != 1)
-            throw Exception("AggregateFunction " + name + " only support result_type: 0, 1", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("AggregateFunction " + name + " only support result_type: 0, 1", ErrorCodes::BAD_ARGUMENTS);
 
         if (!WhichDataType(argument_types[0]).isUInt8())
-            throw Exception("AggregateFunction " + name + " needs Int type for its first argument", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception("AggregateFunction " + name + " needs Int type for its first argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (!isBitmap64(argument_types[1]))
             throw Exception(
-                "AggregateFunction " + name + " needs BitMap64 type for its second argument", ErrorCodes::NOT_IMPLEMENTED);
+                "AggregateFunction " + name + " needs BitMap64 type for its second argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         for (size_t i = 2; i < argument_types.size(); ++i)
         {
             if (!isString(argument_types[i]))
-                throw Exception("AggregateFunction " + name + " needs String type", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception("AggregateFunction " + name + " needs String type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
 
         return std::make_shared<AggregateFunctionBitMapJoin>(argument_types, union_num, join_keys_idx, group_by_keys_idx, logic_op, join_op, thread_num, result_type);

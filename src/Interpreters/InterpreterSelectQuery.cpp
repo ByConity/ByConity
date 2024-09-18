@@ -454,6 +454,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         if (view)
             view->replaceWithSubquery(getSelectQuery(), view_table, metadata_snapshot);
 
+        /// for bitmap expression aggregate functions
+        /// for example, bitmapCount('1 | 2 & 3')(a, b), we will construct 'a in (1, 2, 3)' expression to where
+        if (context->getServerType() == ServerType::cnch_server)
+            optimizeBitMapParametersToWhere(query_ptr, metadata_snapshot);
+
         syntax_analyzer_result = TreeRewriter(context).analyzeSelect(
             query_ptr,
             TreeRewriterResult(source_header.getNamesAndTypesList(), storage, storage_snapshot),

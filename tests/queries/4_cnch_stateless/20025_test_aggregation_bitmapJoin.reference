@@ -1,0 +1,47 @@
+orgin1	a	a1	6
+orgin1	b	b1	4
+orgin1	c	c1	2
+orgin1	c	c2	0
+agg1	a	a1	6
+agg1	b	b1	4
+agg1	c	c1	2
+agg1	c	c2	0
+origin2	a	a1	10
+origin2	b	b1	7
+origin2	c	c1	6
+origin2	c	c2	8
+origin2	d	d1	4
+agg2	a	a1	10
+agg2	b	b1	7
+agg2	c	c1	6
+agg2	c	c2	8
+agg2	d	d1	4
+origin3	a	a1	6
+origin3	b	b1	6
+origin3	c	c1	5
+origin3	c	c2	5
+agg3	a	a1	6
+agg3	b	b1	6
+agg3	c	c1	5
+agg3	c	c2	5
+a	a1	4
+b	b1	1
+c	c1	1
+c	c2	3
+a	a1	4
+b	b1	1
+c	c1	1
+c	c2	3
+a	a1	0
+b	b1	2
+c	c1	3
+c	c2	5
+a	a1	0
+b	b1	2
+c	c1	3
+c	c2	5
+('1',5)
+('1',4)
+('1',4)
+('1',4)
+('1',{2,3,4,5})

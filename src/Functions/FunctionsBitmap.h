@@ -50,6 +50,7 @@ namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int LOGICAL_ERROR;
+    extern const int ZERO_ARRAY_OR_TUPLE_INDEX;
 }
 
 /** Bitmap functions.
@@ -706,8 +707,83 @@ public:
     }
 };
 
+struct BitmapSubsetOffsetLimitImpl
+{
+public:
+    static constexpr auto name = "subBitmap";
+    template <typename T>
+    static void apply(
+        const AggregateFunctionGroupBitmapData<T> & bitmap_data_0,
+        UInt64 range_start,
+        UInt64 range_end,
+        AggregateFunctionGroupBitmapData<T> & bitmap_data_2)
+    {
+        bitmap_data_0.rbs.rb_offset_limit(range_start, range_end, bitmap_data_2.rbs);
+    }
+
+    static BitMap64 apply(const BitMap64 & bitmap, UInt64 offset, UInt64 card_limit)
+    {
+        if (bitmap.isEmpty() || bitmap.cardinality() <= offset || card_limit == 0)
+            return BitMap64();
+
+        PODArray<UInt64> res_array;
+        UInt64 count = 0;
+        UInt64 offset_count = 0;
+        auto it = bitmap.begin();
+        for (;it != bitmap.end() && offset_count < offset; ++it)
+            ++offset_count;
+
+        for (; it != bitmap.end() && count < card_limit; ++it, ++count)
+            res_array.emplace_back(*it);
+        return BitMap64(res_array.size(), res_array.data());
+    }
+};
+
+struct SubBitmapStartsFromOneImpl
+{
+    static constexpr auto name = "subBitmapStartsFromOne";
+
+    template <typename T>
+    static void apply(
+        const AggregateFunctionGroupBitmapData<T> & bitmap_data_0,
+        UInt64 range_start,
+        UInt64 range_end,
+        AggregateFunctionGroupBitmapData<T> & bitmap_data_2)
+    {
+        if (range_start == 0)
+            throw Exception("Indices in bitmap are 1-based, same as subString", ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX);
+
+        --range_start;
+        bitmap_data_0.rbs.rb_offset_limit(range_start, range_end, bitmap_data_2.rbs);
+    }
+
+    static BitMap64 apply(const BitMap64 & bitmap, UInt64 offset, UInt64 card_limit)
+    {
+        if (offset == 0)
+            throw Exception("Indices in bitmap are 1-based, same as subString", ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX);
+
+        --offset;
+
+        if (bitmap.isEmpty() || bitmap.cardinality() <= offset || card_limit == 0)
+            return BitMap64();
+
+        PODArray<UInt64> res_array;
+        UInt64 count = 0;
+        UInt64 offset_count = 0;
+        auto it = bitmap.begin();
+        for (;it != bitmap.end() && offset_count < offset; ++it)
+            ++offset_count;
+
+        for (; it != bitmap.end() && count < card_limit; ++it, ++count)
+            res_array.emplace_back(*it);
+        return BitMap64(res_array.size(), res_array.data());
+    }
+};
+
 using FunctionBitmapSubsetInRange = FunctionBitmapSubset<BitmapSubsetInRangeImpl>;
 using FunctionBitmapSubsetLimit = FunctionBitmapSubset<BitmapSubsetLimitImpl>;
+using FunctionBitmapSubsetOffsetLimit = FunctionBitmapSubset<BitmapSubsetOffsetLimitImpl>;
+using FunctionSubBitmapStartsFromOne = FunctionBitmapSubset<SubBitmapStartsFromOneImpl>;
 
 
 class FunctionBitmapTransform : public IFunction
@@ -847,16 +923,19 @@ private:
             if (from_end - from_start != to_end - to_start)
                 throw Exception("From array size and to array size mismatch", ErrorCodes::LOGICAL_ERROR);
 
-            auto & bitmap = column_bitmap->getBitMapAt( is_column_const[0] ? 0ULL : i );
+            /// get a copy of the original bitmap
+            auto bitmap = column_bitmap->getBitMapAt( is_column_const[0] ? 0ULL : i );
 
             for (size_t j = from_start; j < from_end; ++j)
             {
                 if (from_container[j] == to_container[j])
                     continue;
-                bool changed = const_cast<BitMap64 &>(bitmap).removeChecked(from_container[j]);
+                bool changed = bitmap.removeChecked(from_container[j]);
                 if (changed)
-                    const_cast<BitMap64 &>(bitmap).add(to_container[j]);
+                    bitmap.add(to_container[j]);
             }
+
+            col_to->insert(bitmap);
         }
         return col_to;
     }

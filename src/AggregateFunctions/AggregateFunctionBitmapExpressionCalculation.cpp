@@ -17,30 +17,37 @@
 #include <AggregateFunctions/AggregateFunctionBitmapExpressionCalculation.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
-
-#pragma  GCC diagnostic ignored  "-Wunused"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Functions/FunctionHelpers.h>
 
 namespace DB
 {
 
 struct Settings;
 
+namespace ErrorCodes
+{
+    const extern int TYPE_MISMATCH;
+    const extern int SIZES_OF_COLUMNS_DOESNT_MATCH;
+    const extern int AGGREGATE_FUNCTION_THROW;
+}
+
 namespace
 {
 
 template <template <typename, typename> class AggregateFunctionTemplate, typename... TArgs>
-static IAggregateFunction * createWithSpecificType(const IDataType & argument_type, TArgs &&... args)
+IAggregateFunction * createWithSpecificType(const IDataType & argument_type, TArgs &&... args)
 {
     WhichDataType which(argument_type);
-    if (which.idx == TypeIndex::UInt8)  return new AggregateFunctionTemplate<uint8_t, uint8_t>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt16) return new AggregateFunctionTemplate<UInt16, UInt16>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt32) return new AggregateFunctionTemplate<UInt32, UInt32>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt64) return new AggregateFunctionTemplate<UInt64, UInt64>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int8)   return new AggregateFunctionTemplate<Int8, Int8>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int16)  return new AggregateFunctionTemplate<Int16, Int16>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int32)  return new AggregateFunctionTemplate<Int32, Int32>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int64)  return new AggregateFunctionTemplate<Int64, Int64>(std::forward<TArgs>(args)...);
+
+    if (which.idx == TypeIndex::UInt8 || which.idx == TypeIndex::UInt16 ||
+            which.idx == TypeIndex::UInt32 || which.idx == TypeIndex::UInt64)
+        return new AggregateFunctionTemplate<UInt64, UInt64>(std::forward<TArgs>(args)...);
+    else if (which.idx == TypeIndex::Int8 || which.idx == TypeIndex::Int16 ||
+            which.idx == TypeIndex::Int32 || which.idx == TypeIndex::Int64)
+        return new AggregateFunctionTemplate<Int64, Int64>(std::forward<TArgs>(args)...);
+    else if (which.idx == TypeIndex::String)
+        return new AggregateFunctionTemplate<String, String>(std::forward<TArgs>(args)...);
+
     return nullptr;
 }
 
@@ -48,30 +55,30 @@ template<template <typename, typename> class Function>
 AggregateFunctionPtr createAggregateFunctionBitMapCount(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.size() != 2 )
-        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     String expression;
-    if (parameters.size() > 0)
-        parameters[0].tryGet<String>(expression);
+    if (!parameters.empty() && !parameters[0].tryGet<String>(expression))
+        throw Exception("AggregateFunction " + name + " need String as 1st parameter", ErrorCodes::BAD_TYPE_OF_FIELD);
 
     UInt64 is_bitmap_execute = 0;
     if (parameters.size() > 1)
         parameters[1].tryGet<UInt64>(is_bitmap_execute);
 
-    DataTypePtr data_type = argument_types[0];
-    if (!WhichDataType(data_type).isInt())
-        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) for its first argument", ErrorCodes::NOT_IMPLEMENTED);
+    const DataTypePtr& data_type = argument_types[0];
+    if (!WhichDataType(data_type).isNativeInt() && !WhichDataType(data_type).isString())
+        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) or a string type for its first argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     if (WhichDataType(data_type).isInt8())
         throw Exception("Int8 type is not recommended! Please use Int16 or bigger size number", ErrorCodes::BAD_TYPE_OF_FIELD);
 
     if (!isBitmap64(argument_types[1]))
-        throw Exception("AggregateFunction " + name + " need BitMap type for its second argument", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need BitMap type for its second argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     AggregateFunctionPtr res(createWithSpecificType<Function>(*data_type, argument_types, expression, is_bitmap_execute));
 
     // res.reset(createWithNumericType<Function>(*data_type, argument_types, expression, is_bitmap_execute));
     if (!res)
-        throw Exception("Failed to create aggregate function  " + name, ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Failed to create aggregate function  " + name, ErrorCodes::AGGREGATE_FUNCTION_THROW);
 
     return res;
 }
@@ -80,91 +87,174 @@ template<template <typename, typename> class Function>
 AggregateFunctionPtr createAggregateFunctionBitMapMultiCount(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.size() != 2 )
-        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     std::vector<String> expressions;
-    if (parameters.size() > 0)
+    if (!parameters.empty())
     {
-        for (size_t i = 0; i < parameters.size(); i++)
+        for (size_t i = 0; i < parameters.size(); ++i)
         {
             String expression;
-            parameters[i].tryGet<String>(expression);
+            if (!parameters[i].tryGet<String>(expression))
+                throw Exception(fmt::format("AggregateFunction {} need String as its {} parameter", name, argPositionToSequence(i+1)), ErrorCodes::BAD_TYPE_OF_FIELD);
             expressions.push_back(expression);
         }
     }
 
-    DataTypePtr data_type = argument_types[0];
-    if (!WhichDataType(data_type).isInt())
-        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) for its first argument", ErrorCodes::NOT_IMPLEMENTED);
+    const DataTypePtr& data_type = argument_types[0];
+    if (!WhichDataType(data_type).isNativeInt() && !WhichDataType(data_type).isString())
+        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) or a string type for its first argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     if (WhichDataType(data_type).isInt8())
         throw Exception("Int8 type is not recommended! Please use Int16 or bigger size number", ErrorCodes::BAD_TYPE_OF_FIELD);
 
     if (!isBitmap64(argument_types[1]))
-        throw Exception("AggregateFunction " + name + " need BitMap type for its second argument", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need BitMap type for its second argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    AggregateFunctionPtr res;
+    AggregateFunctionPtr res(createWithSpecificType<Function>(*data_type, argument_types, expressions));
 
-    res.reset(createWithSpecificType<Function>(*data_type, argument_types, expressions));
+    if (!res)
+        throw Exception("Failed to create aggregate function  " + name, ErrorCodes::AGGREGATE_FUNCTION_THROW);
 
     return res;
 }
 
+template<template <typename, typename> class Function>
 AggregateFunctionPtr createAggregateFunctionBitMapMultiCountWithDate(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.size() != 3 )
-        throw Exception("AggregateFunction " + name + " need three arguments", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need three arguments", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     std::vector<String> expressions;
-    if (parameters.size() > 0)
+    if (!parameters.empty())
     {
         for (size_t i = 0; i < parameters.size(); i++)
         {
             String expression;
-            parameters[i].tryGet<String>(expression);
+            if (!parameters[i].tryGet<String>(expression))
+                throw Exception(fmt::format("AggregateFunction {} need String as its {} parameter", name, argPositionToSequence(i+1)), ErrorCodes::BAD_TYPE_OF_FIELD);
             expressions.push_back(expression);
         }
     }
 
-    DataTypePtr date_type = argument_types[0];
-    if (!WhichDataType(date_type).isInt())
-        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) for its first argument", ErrorCodes::NOT_IMPLEMENTED);
+    const DataTypePtr& date_type = argument_types[0];
+    if (!WhichDataType(date_type).isNativeInt())
+        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) for its first argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    DataTypePtr data_type = argument_types[1];
-    if (!WhichDataType(data_type).isInt())
-        throw Exception("AggregateFunction " + name + " need signed numeric type for its second argument", ErrorCodes::NOT_IMPLEMENTED);
+    const DataTypePtr& data_type = argument_types[1];
+    if (!WhichDataType(data_type).isNativeInt() && !WhichDataType(data_type).isString())
+        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) or a string type for its second argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     if (!isBitmap64(argument_types[2]))
-        throw Exception("AggregateFunction " + name + " need BitMap type for its third argument", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need BitMap type for its third argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    return std::make_shared<AggregateFunctionBitMapMultiCountWithDate>(argument_types, expressions);
+    AggregateFunctionPtr res(createWithSpecificType<Function>(*data_type, argument_types, expressions));
+
+    if (!res)
+        throw Exception("Failed to create aggregate function  " + name, ErrorCodes::AGGREGATE_FUNCTION_THROW);
+
+    return res;
 }
 
 template<template <typename, typename> class Function>
 AggregateFunctionPtr createAggregateFunctionBitMapExtract(const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.size() != 2 )
-        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
 
     String expression;
-    if (parameters.size() > 0)
-        parameters[0].tryGet<String>(expression);
+    if (!parameters.empty() && !parameters[0].tryGet<String>(expression))
+        throw Exception("AggregateFunction " + name + " need String as 1st parameter", ErrorCodes::BAD_TYPE_OF_FIELD);
 
     UInt64 is_bitmap_execute = 0;
     if (parameters.size() > 1)
         parameters[1].tryGet<UInt64>(is_bitmap_execute);
 
-    DataTypePtr data_type = argument_types[0];
-    if (!WhichDataType(data_type).isInt())
-        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) for its first argument", ErrorCodes::NOT_IMPLEMENTED);
+    const DataTypePtr& data_type = argument_types[0];
+    if (!WhichDataType(data_type).isNativeInt() && !WhichDataType(data_type).isString())
+        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) or a string type for its first argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     if (WhichDataType(data_type).isInt8())
         throw Exception("Int8 type is not recommended! Please use Int16 or bigger size number", ErrorCodes::BAD_TYPE_OF_FIELD);
 
     if (!isBitmap64(argument_types[1]))
-        throw Exception("AggregateFunction " + name + " need BitMap type for its second argument", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("AggregateFunction " + name + " need BitMap type for its second argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    AggregateFunctionPtr res;
+    AggregateFunctionPtr res(createWithSpecificType<Function>(*data_type, argument_types, expression, is_bitmap_execute));
 
-    res.reset(createWithSpecificType<Function>(*data_type, argument_types, expression, is_bitmap_execute));
+    if (!res)
+        throw Exception("Failed to create aggregate function  " + name, ErrorCodes::AGGREGATE_FUNCTION_THROW);
+
+    return res;
+}
+
+template<template <typename, typename> class Function>
+AggregateFunctionPtr createAggregateFunctionBitMapMultiExtract(
+    const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+{
+    if (argument_types.size() != 2 )
+        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    std::vector<String> expressions;
+    if (!parameters.empty())
+    {
+        for (size_t i = 0; i < parameters.size(); i++)
+        {
+            String expression;
+            if (!parameters[i].tryGet<String>(expression))
+                throw Exception(fmt::format("AggregateFunction {} need String as its {} parameter", name, argPositionToSequence(i+1)), ErrorCodes::BAD_TYPE_OF_FIELD);
+            expressions.push_back(expression);
+        }
+    }
+
+    const DataTypePtr& data_type = argument_types[0];
+
+    if (!WhichDataType(data_type).isNativeInt() && !WhichDataType(data_type).isString())
+        throw Exception(
+            "AggregateFunction " + name + " need signed numeric type (Int16 or bigger) or a string type for its first argument",
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT
+        );
+
+    if (WhichDataType(data_type).isInt8())
+        throw Exception("Int8 type is not recommended! Please use Int16 or bigger size number", ErrorCodes::BAD_TYPE_OF_FIELD);
+
+    if (!isBitmap64(argument_types[1]))
+        throw Exception("AggregateFunction " + name + " need BitMap type for its second argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    AggregateFunctionPtr res(createWithSpecificType<Function>(*data_type, argument_types, expressions));
+
+    return res;
+}
+
+template<template <typename, typename> class Function>
+AggregateFunctionPtr createAggregateFunctionBitMapMultiExtractWithDate(
+    const String & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+{
+    if (argument_types.size() != 3)
+        throw Exception("AggregateFunction " + name + " need two arguments", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    std::vector<String> expressions;
+    if (!parameters.empty())
+    {
+        for (size_t i = 0; i < parameters.size(); i++)
+        {
+            String expression;
+            if (!parameters[i].tryGet<String>(expression))
+                throw Exception(fmt::format("AggregateFunction {} need String as its {} parameter", name, argPositionToSequence(i+1)), ErrorCodes::BAD_TYPE_OF_FIELD);
+            expressions.push_back(expression);
+        }
+    }
+
+    const DataTypePtr& date_type = argument_types[0];
+    if(!WhichDataType(date_type).isNativeInt())
+        throw Exception("AggregateFunction " + name + " need signed numeric type for its first argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    const DataTypePtr& data_type = argument_types[1];
+    if (!WhichDataType(data_type).isNativeInt() && !WhichDataType(data_type).isString())
+        throw Exception("AggregateFunction " + name + " need signed numeric type (Int16 or bigger) or a string type for its second argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    if (!isBitmap64(argument_types[2]))
+        throw Exception("AggregateFunction " + name + " need BitMap type for its third argument", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    AggregateFunctionPtr res(createWithSpecificType<Function>(*data_type, argument_types, expressions));
 
     return res;
 }
@@ -173,10 +263,54 @@ AggregateFunctionPtr createAggregateFunctionBitMapExtract(const String & name, c
 
 void registerAggregateFunctionsBitmapExpressionCalculation(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("BitMapCount", createAggregateFunctionBitMapCount<AggregateFunctionBitMapCount>, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction("BitMapMultiCount", createAggregateFunctionBitMapMultiCount<AggregateFunctionBitMapMultiCount>, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction("BitMapMultiCountWithDate", createAggregateFunctionBitMapMultiCountWithDate, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction("BitMapExtract", createAggregateFunctionBitMapExtract<AggregateFunctionBitMapExtract>, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(
+        "BitmapCount",
+        createAggregateFunctionBitMapCount<AggregateFunctionBitMapCount>,
+        AggregateFunctionFactory::CaseInsensitive
+    );
+
+    factory.registerFunction(
+        "BitmapMultiCount",
+        createAggregateFunctionBitMapMultiCount<AggregateFunctionBitMapMultiCount>,
+        AggregateFunctionFactory::CaseInsensitive
+    );
+
+    factory.registerFunction(
+        "BitmapMultiCountWithDate",
+        createAggregateFunctionBitMapMultiCountWithDate<AggregateFunctionBitMapMultiCountWithDate>,
+        AggregateFunctionFactory::CaseInsensitive
+    );
+
+    factory.registerFunction(
+        "BitmapExtract",
+        createAggregateFunctionBitMapExtract<AggregateFunctionBitMapExtract>,
+        AggregateFunctionFactory::CaseInsensitive
+    );
+
+    factory.registerFunction(
+        "BitmapMultiExtract",
+        createAggregateFunctionBitMapMultiExtract<AggregateFunctionBitMapMultiExtract>,
+        AggregateFunctionFactory::CaseInsensitive
+    );
+
+    factory.registerFunction(
+        "BitmapMultiExtractWithDate",
+        createAggregateFunctionBitMapMultiExtractWithDate<AggregateFunctionBitMapMultiExtractWithDate>,
+        AggregateFunctionFactory::CaseInsensitive
+    );
+
+    factory.registerAlias(
+        "BitmapCountV2", "BitmapCount", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias(
+        "BitmapMultiCountV2", "BitmapMultiCount", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias(
+        "BitmapMultiCountWithDateV2", "BitmapMultiCountWithDate", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias(
+        "BitmapExtractV2", "BitmapExtract", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias(
+        "BitmapMultiExtractV2", "BitmapMultiExtract", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias(
+        "BitmapMultiExtractWithDateV2", "BitmapMultiExtractWithDate", AggregateFunctionFactory::CaseInsensitive);
 }
 
 }

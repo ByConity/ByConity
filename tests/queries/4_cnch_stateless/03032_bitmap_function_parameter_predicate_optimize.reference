@@ -7,10 +7,10 @@ explain select bitmapCount('1')(f1, uids) as r1
 from test_tag_bitmap_v2 where p_date='2024-01-01'
 settings enable_optimizer=1;
 Projection Est. ? rows
-│     Expressions: r1:=`expr#BitMapCount(\'1\')(f1, uids)`
+│     Expressions: r1:=`expr#BitmapCount(\'1\')(f1, uids)`
 └─ Aggregating Est. ? rows
    │     Group by: {}
-   │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
+   │     Aggregates: expr#BitmapCount(\'1\')(f1, uids):=AggNull(BitmapCount)(f1,uids)
    └─ Gather Exchange Est. ? rows
       └─ Filter Est. ? rows
          │     Condition: f1 = 1
@@ -22,10 +22,10 @@ explain select bitmapMultiCount('1|2','2','3')(f1, uids) as r2
 from test_tag_bitmap_v2 where p_date='2024-01-01'
 settings enable_optimizer=1;
 Projection Est. ? rows
-│     Expressions: r2:=`expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids)`
+│     Expressions: r2:=`expr#BitmapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids)`
 └─ Aggregating Est. ? rows
    │     Group by: {}
-   │     Aggregates: expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids):=AggNull(bitmapMultiCount)(f1,uids)
+   │     Aggregates: expr#BitmapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids):=AggNull(BitmapMultiCount)(f1,uids)
    └─ Gather Exchange Est. ? rows
       └─ Filter Est. ? rows
          │     Condition: f1 IN (1, 2, 3)
@@ -45,10 +45,10 @@ explain select
 from test_tag_bitmap_v2 where p_date='2024-01-01'
 settings enable_optimizer=1;
 Projection Est. ? rows
-│     Expressions: r1:=`expr#BitMapCount(\'1\')(f1, uids)`, r2:=`expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids)`, r5:=`expr#BitMapCount(\'2\')(toInt64(f2), uids)`, r6:=`expr#BitMapCount(\'2~1\')(toInt64(f2), uids)`, r7:=`expr#BitMapCount(\'10\')(f4, uids)`, r8:=`expr#BitMapMultiCount(\'10|20\', \'20\', \'30\')(f4, uids)`
+│     Expressions: r1:=`expr#BitmapCount(\'1\')(f1, uids)`, r2:=`expr#BitmapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids)`, r5:=`expr#BitmapCount(\'2\')(toInt64(f2), uids)`, r6:=`expr#BitmapCount(\'2~1\')(toInt64(f2), uids)`, r7:=`expr#BitmapCount(\'10\')(f4, uids)`, r8:=`expr#BitmapMultiCount(\'10|20\', \'20\', \'30\')(f4, uids)`
 └─ Aggregating Est. ? rows
    │     Group by: {}
-   │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids), expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids):=AggNull(bitmapMultiCount)(f1,uids), expr#BitMapCount(\'2\')(toInt64(f2), uids):=AggNull(bitmapCount)(expr#toInt64(f2),uids), expr#BitMapCount(\'2~1\')(toInt64(f2), uids):=AggNull(bitmapCount)(expr#toInt64(f2),uids), expr#BitMapCount(\'10\')(f4, uids):=AggNull(bitmapCount)(f4,uids), expr#BitMapMultiCount(\'10|20\', \'20\', \'30\')(f4, uids):=AggNull(bitmapMultiCount)(f4,uids)
+   │     Aggregates: expr#BitmapCount(\'1\')(f1, uids):=AggNull(BitmapCount)(f1,uids), expr#BitmapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids):=AggNull(BitmapMultiCount)(f1,uids), expr#BitmapCount(\'2\')(toInt64(f2), uids):=AggNull(BitmapCount)(expr#toInt64(f2),uids), expr#BitmapCount(\'2~1\')(toInt64(f2), uids):=AggNull(BitmapCount)(expr#toInt64(f2),uids), expr#BitmapCount(\'10\')(f4, uids):=AggNull(BitmapCount)(f4,uids), expr#BitmapMultiCount(\'10|20\', \'20\', \'30\')(f4, uids):=AggNull(BitmapMultiCount)(f4,uids)
    └─ Gather Exchange Est. ? rows
       └─ Projection Est. ? rows
          │     Expressions: [f1, f4, uids], expr#toInt64(f2):=toInt64(f2)
@@ -67,10 +67,10 @@ Projection Est. ? rows
 └─ Projection Est. ? rows
    │     Expressions: expr#1:=1
    └─ Filter Est. ? rows
-      │     Condition: `expr#BitMapCount(\'1\')(f1, uids)` > 1
+      │     Condition: `expr#BitmapCount(\'1\')(f1, uids)` > 1
       └─ Aggregating Est. ? rows
          │     Group by: {}
-         │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
+         │     Aggregates: expr#BitmapCount(\'1\')(f1, uids):=AggNull(BitmapCount)(f1,uids)
          └─ Gather Exchange Est. ? rows
             └─ Filter Est. ? rows
                │     Condition: f1 = 1
@@ -87,13 +87,13 @@ settings enable_optimizer=1;
 Projection Est. 1 rows, cost 1.222000e+00
 │     Expressions: 1:=`expr#1_2`
 └─ Union Est. 1 rows, cost 1.148000e+00
-   │     OutputToInputs: expr#1_2 = [expr#1_1,expr#BitMapCount(\'1\')(f1, uids)]
+   │     OutputToInputs: expr#1_2 = [expr#1_1,expr#BitmapCount(\'1\')(f1, uids)]
    ├─ Projection Est. 1 rows, cost 1.480000e-01
    │  │     Expressions: expr#1_1:=cast(1, \'UInt64\')
    │  └─ Values Est. 1 rows, cost 7.400000e-02
    └─ Aggregating Est. ? rows, cost 1.000000e+00
       │     Group by: {}
-      │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
+      │     Aggregates: expr#BitmapCount(\'1\')(f1, uids):=AggNull(BitmapCount)(f1,uids)
       └─ Gather Exchange Est. ? rows, cost 1.000000e+00
          └─ Filter Est. ? rows, cost 0.000000e+00
             │     Condition: f1 = 1
@@ -109,10 +109,10 @@ from (
 ) s
 settings enable_optimizer=1;
 Projection Est. ? rows
-│     Expressions: r1:=`expr#BitMapCount(\'1\')(x, y)`
+│     Expressions: r1:=`expr#BitmapCount(\'1\')(x, y)`
 └─ Aggregating Est. ? rows
    │     Group by: {}
-   │     Aggregates: expr#BitMapCount(\'1\')(x, y):=AggNull(bitmapCount)(f1,uids)
+   │     Aggregates: expr#BitmapCount(\'1\')(x, y):=AggNull(BitmapCount)(f1,uids)
    └─ Gather Exchange Est. ? rows
       └─ Filter Est. ? rows
          │     Condition: f1 = 1
@@ -128,10 +128,10 @@ from (
 ) s cross join (select 1) as t
 settings enable_optimizer=1;
 Projection Est. ? rows
-│     Expressions: r1:=`expr#BitMapCount(\'1\')(x, y)`
+│     Expressions: r1:=`expr#BitmapCount(\'1\')(x, y)`
 └─ Aggregating Est. ? rows
    │     Group by: {}
-   │     Aggregates: expr#BitMapCount(\'1\')(x, y):=AggNull(bitmapCount)(f1,uids)
+   │     Aggregates: expr#BitmapCount(\'1\')(x, y):=AggNull(BitmapCount)(f1,uids)
    └─ Gather Exchange Est. ? rows
       └─ Inner Join Est. ? rows
          │     Condition: 
@@ -145,10 +145,10 @@ select bitmapCount('1')(f1, uids)
 from (select toInt64(1) as f1, arrayToBitmap([1,2,3]) as uids)
 settings enable_optimizer=1;
 Projection Est. 1 rows, cost 5.562000e+00
-│     Expressions: BitMapCount(\'1\')(f1, uids):=`expr#BitMapCount(\'1\')(f1, uids)`
+│     Expressions: BitmapCount(\'1\')(f1, uids):=`expr#BitmapCount(\'1\')(f1, uids)`
 └─ Aggregating Est. 1 rows, cost 5.488000e+00
    │     Group by: {}
-   │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(expr#toInt64(1),expr#arrayToBitmap([1, 2, 3]))
+   │     Aggregates: expr#BitmapCount(\'1\')(f1, uids):=AggNull(BitmapCount)(expr#toInt64(1),expr#arrayToBitmap([1, 2, 3]))
    └─ Projection Est. 1 rows, cost 1.480000e-01
       │     Expressions: expr#arrayToBitmap([1, 2, 3]):=arrayToBitmap([1, 2, 3]), expr#toInt64(1):=cast(1, \'Int64\')
       └─ Values Est. 1 rows, cost 7.400000e-02

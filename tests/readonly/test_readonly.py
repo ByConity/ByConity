@@ -54,6 +54,7 @@ skip_error = (
 )
 
 allowed_error_code = (
+    36,
     43,
     47,
     48,
@@ -414,4 +415,3 @@ if __name__ == "__main__":
 
     if not res==0:
         exit(1)
-
