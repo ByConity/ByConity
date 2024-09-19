@@ -149,7 +149,7 @@ void InterpreterSetQuery::applyABTestProfile(ContextMutablePtr query_context)
             try
             {
                 std::random_device rd;
-                std::mt19937 gen(rd()); 
+                std::mt19937 gen(rd());
                 std::uniform_real_distribution<DB::Float64> distribution(0.0, 1.0);
                 Float64 res = distribution(gen);
                 if (res <= ab_test_traffic_factor)
@@ -162,8 +162,47 @@ void InterpreterSetQuery::applyABTestProfile(ContextMutablePtr query_context)
         }
         else
         {
-            LOG_WARNING(getLogger("applyABTestProfile"), "Apply ab test profile failed, ab_test_traffic_factor must be between 0 and 1, ab_test_profile != default");        
+            LOG_WARNING(getLogger("applyABTestProfile"), "Apply ab test profile failed, ab_test_traffic_factor must be between 0 and 1, ab_test_profile != default");
         }
     }
 }
+
+void InterpreterSetQuery::applyPointLookupProfile(ContextMutablePtr query_context)
+{
+    if (query_context->getSettingsRef().enable_point_lookup_profile)
+    {
+        String profile = query_context->getSettingsRef().point_lookup_profile;
+        if (!profile.empty())
+        {
+            try
+            {
+                query_context->setCurrentProfile(profile);
+                return;
+            }
+            catch (...)
+            {
+                LOG_WARNING(
+                    getLogger("applyPointLookupProfile"),
+                    "Failed to apply profile {}: {}, fallback to default settings",
+                    profile,
+                    getCurrentExceptionMessage(false));
+            }
+
+        }
+        /// apply default settings for point lookup
+        SettingsChanges changes;
+        changes.setSetting("log_queries_min_type", "QUERY_FINISH");
+        changes.setSetting("max_threads", 1);
+        changes.setSetting("exchange_source_pipeline_threads", 1);
+        changes.setSetting("enable_plan_cache", true);
+        changes.setSetting("query_worker_fault_tolerance", false);
+        changes.setSetting("send_cacheable_table_definitions", true);
+        changes.setSetting("optimize_skip_unused_shards", true);
+        changes.setSetting("enable_prune_source_plan_segment", true);
+        changes.setSetting("enable_table_scan_build_pipeline_optimization", true);
+        changes.setSetting("use_sync_pipeline_executor", true);
+        query_context->applySettingsChanges(changes);
+    }
+}
+
 }

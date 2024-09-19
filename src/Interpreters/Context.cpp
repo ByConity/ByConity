@@ -5184,7 +5184,7 @@ void Context::setGINStoreReaderFactory(const GINStoreReaderFactorySettings & set
     if (shared->gin_store_reader_factory)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "GINStoreReaderFactory has already "
             "been created");
-    
+
     shared->gin_store_reader_factory = std::make_shared<GINStoreReaderFactory>(settings_);
 }
 

@@ -961,6 +961,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         /// to allow settings to take effect.
         InterpreterSetQuery::applySettingsFromQuery(ast, context);
 
+        /// Apply point-lookup specific optimization settings when enable_point_lookup_profile is enabled.
+        if (!internal && context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+            InterpreterSetQuery::applyPointLookupProfile(context);
+
         if (context->getServerType() == ServerType::cnch_server && context->hasQueryContext())
         {
             if (context->getSettingsRef().text_case_option == TextCaseOption::LOWERCASE)

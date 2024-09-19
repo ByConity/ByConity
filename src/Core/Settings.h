@@ -314,8 +314,6 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     \
-    M(Bool, use_sync_pipeline_executor, false, "Whether to use sync pipeline executor", 0) \
-    \
     M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, \
       min_chunk_bytes_for_parallel_parsing, \
@@ -1548,6 +1546,10 @@ enum PreloadLevelSettings : UInt64
     M(Float, ab_test_traffic_factor, 0, "Proportion of queries that perform ab test, meaningful between 0 and 1", 0) \
     M(String, ab_test_profile, "default", "Profile name for ab test", 0) \
     M(Bool, optimize_json_function_to_subcolumn, false, "Whether to optimize json extract functions to subcolumn read", 0) \
+    /** Point lookup optimizations */ \
+    M(Bool, enable_point_lookup_profile, false, "Whether to enable settings for point-lookup queries, If true, the settings from point_lookup_profile are applied in order to improve QPS.", 0) \
+    M(String, point_lookup_profile, "", "Name of the setting profile to apply when enable_point_lookup_profile is true. If empty, will apply engine's default settings for point-lookup queries. If not empty but the profile doesn't exist, will also fallback to engine's default settings", 0) \
+    M(Bool, use_sync_pipeline_executor, false, "Whether to use sync pipeline executor", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
     M(Bool, statistics_forward_query, false, "Indicate whether this query is coming from another replica", 0)  \
