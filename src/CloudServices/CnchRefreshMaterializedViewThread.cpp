@@ -185,6 +185,8 @@ void CnchRefreshMaterializedViewThread::runImpl()
 bool CnchRefreshMaterializedViewThread::constructAndScheduleRefreshTasks(StoragePtr & istorage, StorageMaterializedView & storage)
 {
     ContextMutablePtr query_context = Context::createCopy(getContext());
+    query_context->makeQueryContext();
+    query_context->makeSessionContext();
     auto refresh_params = storage.getAsyncRefreshParams(query_context, false);
     std::vector<String> task_ids = {};
 
@@ -296,18 +298,18 @@ String CnchRefreshMaterializedViewThread::executeTaskLocal(
                                 task_id = task_id,
                                 mv_refresh_param = mv_refresh_param,
                                 command_context = Context::createCopy(query_context)]() {
+                    auto settings = query_context->getSettings();
+                    auto user_password = const_cast<const Context &> (*command_context).getCnchInterserverCredentials();
                     command_context->setCurrentTransaction(nullptr, false);
                     command_context->setCurrentVW(nullptr);
                     command_context->setCurrentWorkerGroup(nullptr);
-                    command_context->makeSessionContext();
-                    command_context->makeQueryContext();
-                    auto settings = query_context->getSettings();
                     command_context->setSettings(settings);
-                    CurrentThread::get().pushTenantId(command_context->getSettingsRef().tenant_id);
-
-                    auto user_password = const_cast<const Context &> (*command_context).getCnchInterserverCredentials();
+                    command_context->setTenantId(command_context->getSettingsRef().tenant_id);
                     command_context->setUser(user_password.first, user_password.second, Poco::Net::SocketAddress{});
                     command_context->setCurrentQueryId(task_id);
+
+                    command_context->makeSessionContext();
+                    command_context->makeQueryContext();
 
                     storage.refreshAsync(mv_refresh_param, command_context);
                     command_context->setCurrentTransaction(nullptr);
