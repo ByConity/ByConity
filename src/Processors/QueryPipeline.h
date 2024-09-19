@@ -156,6 +156,7 @@ public:
     void addStorageHolder(StoragePtr storage) { pipe.addStorageHolder(std::move(storage)); }
     void addCacheHolder(CacheHolderPtr cache_holder) { pipe.addCacheHolder(std::move(cache_holder)); }
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { pipe.addQueryPlan(std::move(plan)); }
+    void addLockHolders(CnchLockHolderPtrs && lock_holders) { pipe.addLockHolders(std::move(lock_holders)); }
     void setLimits(const StreamLocalLimits & limits) { pipe.setLimits(limits); }
     void setLeafLimits(const SizeLimits & limits) { pipe.setLeafLimits(limits); }
     void setQuota(const std::shared_ptr<const EnabledQuota> & quota_)
