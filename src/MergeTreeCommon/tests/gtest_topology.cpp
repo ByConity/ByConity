@@ -1,7 +1,7 @@
+#include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
+#include <Protos/DataModelHelpers.h>
 #include <gtest/gtest.h>
-#include "Protos/DataModelHelpers.h"
-
 
 
 using namespace DB;
@@ -56,5 +56,23 @@ TEST(CnchServerTopology, Serialization)
 
     EXPECT_EQ(new_topo.size(), 1);
     EXPECT_TRUE(topo.isSameTopologyWith(new_topo.front()));
+}
+
+TEST(CnchServerTopology, VWCompare)
+{
+    EXPECT_TRUE(CnchServerManager::vwStartsWith(
+        "cnch-server-default-2.cnch-server-default-headless.cnch-yg.svc.cluster.local.", "cnch-server-default-2"));
+    EXPECT_TRUE(CnchServerManager::vwStartsWith(
+        "cnch-server-default-2", "cnch-server-default-2"));
+    EXPECT_TRUE(CnchServerManager::vwStartsWith(
+        "cnch-server-default-22-fasdfasf", "cnch-server-default-22"));
+    EXPECT_FALSE(CnchServerManager::vwStartsWith(
+        "cnch-server-default-22.cnch-server-default-headless.cnch-yg.svc.cluster.local.", "cnch-server-default-2"));
+    EXPECT_FALSE(CnchServerManager::vwStartsWith(
+        "cnch-server-default-2.cnch-server-default-headless.cnch-yg.svc.cluster.local.", "cnch-asdfasdfasfd"));
+    EXPECT_FALSE(CnchServerManager::vwStartsWith(
+        "cnch-server-default-22-fasdfasf", "cnch-server-default-2"));
+    EXPECT_FALSE(CnchServerManager::vwStartsWith(
+        "cnch-server-d", "cnch-server-default-2"));
 }
 }

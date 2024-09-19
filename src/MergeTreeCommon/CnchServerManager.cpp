@@ -196,7 +196,7 @@ bool CnchServerManager::refreshTopology()
                     String server_vw_name;
                     for (auto vw_it = server_virtual_warehouses.begin(); vw_it != server_virtual_warehouses.end(); ++vw_it)
                     {
-                        if (hostname.starts_with(vw_it->first))
+                        if (vwStartsWith(hostname, vw_it->first))
                         {
                             server_vw_name = vw_it->second;
                             break;
@@ -445,4 +445,13 @@ void CnchServerManager::dumpServerStatus() const
 }
 
 
+bool CnchServerManager::vwStartsWith(const String & full_name, const String & prefix)
+{
+    if (!full_name.starts_with(prefix))
+        return false;
+    /// If next char is an alpha or number, return false.
+    if (full_name.size() == prefix.size() || (!isalpha(full_name[prefix.size()]) && !isdigit(full_name[prefix.size()])))
+        return true;
+    return false;
+}
 }
