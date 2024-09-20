@@ -1406,7 +1406,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return doCreateOrReplaceTable(create, properties);
 
     /// when create materialized view and tenant id is not empty add setting tenant_id to select query
-    if (create.is_materialized_view && !getCurrentTenantId().empty())
+    if (create.is_materialized_view && create.refresh_strategy && (create.refresh_strategy->schedule_kind == RefreshScheduleKind::ASYNC || 
+        create.refresh_strategy->schedule_kind == RefreshScheduleKind::MANUAL) && !getCurrentTenantId().empty())
     {
         ASTPtr settings = std::make_shared<ASTSetQuery>();
         settings->as<ASTSetQuery &>().is_standalone = false;
