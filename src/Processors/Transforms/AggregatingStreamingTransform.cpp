@@ -110,7 +110,8 @@ ISimpleTransform::Status AggregatingStreamingTransform::prepare()
                 /// To do this, we pass a block with zero rows to aggregate.
                 if (params->params.keys_size == 0 && !params->params.empty_result_for_aggregation_by_empty_set)
                 {
-                    params->aggregator.executeOnBlock(getInputs().front().getHeader(), variants, key_columns, aggregate_columns, no_more_keys);
+                    params->aggregator.executeOnBlock(
+                        getInputs().front().getHeader(), variants, key_columns, aggregate_columns, no_more_keys);
                     has_left = true;
                     start_generated = true;
                     return Status::Ready;
@@ -172,12 +173,12 @@ void AggregatingStreamingTransform::transform(DB::Chunk & chunk)
             if (!is_generated)
             {
                 generate(chunk);
-                is_generated = true;
+                if (!is_without_key)
+                    is_generated = true;
                 return;
             }
 
-            output_data.chunk = std::move(chunks[chunk_idx++]);
-            output.pushData(std::move(output_data));
+            chunk = std::move(chunks[chunk_idx++]);
             has_left = chunk_idx != chunks.size();
         }
         return;
@@ -278,5 +279,7 @@ void AggregatingStreamingTransform::generate(DB::Chunk & chunk)
     chunk = std::move(chunks[chunk_idx++]);
     rows_returned += chunk.getNumRows();
     has_left = chunk_idx != chunks.size();
+    LOG_TRACE(
+        log, "{} blocks generate, {} chunks remain, {} rows return", blocks_list.size(), chunks.size() - chunk_idx, chunk.getNumRows());
 }
 }
