@@ -108,6 +108,12 @@ arrow::Status RandomAccessFileFromSeekableReadBuffer::Seek(int64_t position)
     return arrow::Status::OK();
 }
 
+arrow::Future<std::shared_ptr<arrow::Buffer>>
+RandomAccessFileFromSeekableReadBuffer::ReadAsync(const arrow::io::IOContext &, int64_t position, int64_t nbytes)
+{
+    /// Just a stub to to avoid using internal arrow thread pool
+    return arrow::Future<std::shared_ptr<arrow::Buffer>>::MakeFinished(ReadAt(position, nbytes));
+}
 
 ArrowInputStreamFromReadBuffer::ArrowInputStreamFromReadBuffer(ReadBuffer & in_) : in(in_), is_open{true}
 {

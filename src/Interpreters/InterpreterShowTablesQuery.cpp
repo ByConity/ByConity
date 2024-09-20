@@ -276,12 +276,12 @@ static String rewriteShowCatalogForExternal(const ASTShowTablesQuery & query, co
     if (!query.like.empty())
     {
         rewritten_query << " WHERE "
-                        << (tenant_id.empty() ? " catalog_name " : "  arrayStringConcat(arraySlice(splitByChar('.',catalog_name), 2),'.') ")
+                        << (tenant_id.empty() ? "catalog_name " : "  arrayStringConcat(arraySlice(splitByChar('.',catalog_name), 2),'.') ")
                         << (query.not_like ? "NOT " : "") << (query.case_insensitive_like ? "ILIKE " : "LIKE ") << DB::quote << query.like;
     }
     if (!tenant_id.empty())
     {
-        rewritten_query << (!query.like.empty() ? " AND " : " WHERE ") << " catalog_name "
+        rewritten_query << (!query.like.empty() ? " AND " : " WHERE ") << " system.external_catalogs.catalog_name "
                         << "LIKE '" << tenant_id << ".%'";
     }
 

@@ -356,7 +356,7 @@ void StorageCnchHive::read(
 }
 
 ASTPtr StorageCnchHive::applyFilter(
-    ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr local_context, PlanNodeStatisticsPtr /*storage_statistics*/) const
+    ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr local_context, PlanNodeStatisticsPtr storage_statistics) const
 {
     const auto & settings = local_context->getSettingsRef();
     auto * select_query = query_info.getSelectQuery();
@@ -403,6 +403,22 @@ ASTPtr StorageCnchHive::applyFilter(
                     getInMemoryMetadataPtr(),
                     current_info.syntax_analyzer_result->requiredSourceColumns(),
                     &Poco::Logger::get("OptimizerEarlyPrewherePushdown")};
+            }
+        }
+        else if (HiveMoveToPrewhereMethod::STATS == settings.hive_move_to_prewhere_method)
+        {
+            if (storage_statistics)
+            {
+                auto [pre_conjuncts, where_conjuncts]
+                    = push_filter_to_storage.extractPrewhereWithStats(select_query->getWhere(), storage_statistics);
+
+                if (!pre_conjuncts.empty())
+                    select_query->setExpression(ASTSelectQuery::Expression::PREWHERE, PredicateUtils::combineConjuncts(pre_conjuncts));
+
+                if (!where_conjuncts.empty())
+                    select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(where_conjuncts));
+                else
+                    select_query->setExpression(ASTSelectQuery::Expression::WHERE, nullptr);
             }
         }
         else if (HiveMoveToPrewhereMethod::NEVER == settings.hive_move_to_prewhere_method)

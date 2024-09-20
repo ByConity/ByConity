@@ -91,6 +91,7 @@ public:
 
     bool supportsOptimizer() const override { return true; }
     bool supportsDistributedRead() const override { return true; }
+    bool supportsPrewhere() const override { return true; }
     StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
     std::optional<TableStatistics> getTableStats(const Strings & columns, ContextPtr local_context) override;
     std::vector<std::pair<String, UInt64>> getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format = true);

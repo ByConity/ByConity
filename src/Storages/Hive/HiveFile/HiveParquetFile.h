@@ -16,7 +16,6 @@ public:
 
     std::optional<size_t> numRows() override;
 
-    SourcePtr getReader(const Block & block, const std::shared_ptr<ReadParams> & params) override;
 
 private:
     std::optional<size_t> num_rows;

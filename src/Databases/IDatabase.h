@@ -97,6 +97,7 @@ private:
 };
 
 
+
 /// Copies list of tables and iterates through such snapshot.
 class DatabaseTablesSnapshotIterator : public IDatabaseTablesIterator
 {

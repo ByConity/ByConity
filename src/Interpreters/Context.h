@@ -819,6 +819,10 @@ public:
     void checkAccess(const AccessRightsElement & element) const;
     void checkAccess(const AccessRightsElements & elements) const;
 
+
+    bool isGranted(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const; 
+    bool isGranted(const AccessFlags & flags, const StorageID & table_id, const std::string_view & column) const;
+
     void grantAllAccess();
     std::shared_ptr<const ContextAccess> getAccess() const;
 
@@ -1748,6 +1752,8 @@ public:
 
     bool is_tenant_user() const { return has_tenant_id_in_username; }
 
+    bool isExternalDb(const std::string_view & database_name) const;
+
 private:
 
     std::unique_lock<std::recursive_mutex> getLock() const;
@@ -1774,6 +1780,9 @@ private:
 
     template <typename... Args>
     void checkAccessImpl(const Args &... args) const;
+    
+    template <typename... Args>
+    bool isGrantedImpl(const Args &... args) const;
 
     EmbeddedDictionaries & getEmbeddedDictionariesImpl(bool throw_on_error) const;
 

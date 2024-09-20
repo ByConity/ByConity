@@ -44,6 +44,12 @@ void StorageSystemExternalTables::fillData(MutableColumns & res_columns, [[maybe
     {
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "`catalog_name = some_catalog` must be specified in where conditions");
     }
+    
+    const String tenant_id = context->getTenantId();
+    if(!tenant_id.empty() && !startsWith(catalog_name, tenant_id + "."))
+    {
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "could only view catalogs of the same tenant");
+    }
 
     String database_name;
     extracted = extractNameFromWhereClause(select->where(), "database", database_name);

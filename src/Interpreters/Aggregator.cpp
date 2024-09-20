@@ -433,7 +433,7 @@ void Aggregator::compileAggregateFunctions()
         return;
 
     std::vector<AggregateFunctionWithOffset> functions_to_compile;
-    size_t aggregate_instructions_size = 0;
+    // size_t aggregate_instructions_size = 0;
     String functions_description;
 
     is_aggregate_function_compiled.resize(aggregate_functions.size());
@@ -461,7 +461,7 @@ void Aggregator::compileAggregateFunctions()
             functions_description += ' ';
         }
 
-        ++aggregate_instructions_size;
+        // ++aggregate_instructions_size;
         is_aggregate_function_compiled[i] = function->isCompilable();
     }
 

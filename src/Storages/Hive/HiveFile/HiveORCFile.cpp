@@ -44,18 +44,7 @@ std::optional<size_t> HiveORCFile::numRows()
     return *num_rows;
 }
 
-SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiveFile::ReadParams> & params)
-{
-    auto read_buf = readFile(params->read_settings);
-    auto orc_format = FormatFactory::instance().getInputFormat(
-        "ORC", *read_buf, block, params->context, params->max_block_size, params->format_settings);
 
-    orc_format->addBuffer(std::move(read_buf));
-
-    if (params->query_info)
-        orc_format->setQueryInfo(*params->query_info, params->context);
-    return orc_format;
-}
 
 };
 

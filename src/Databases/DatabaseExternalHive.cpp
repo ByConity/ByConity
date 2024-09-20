@@ -56,17 +56,24 @@ StoragePtr DatabaseExternalHive::tryGetTable(const String & table_name, ContextP
 {
     try
     {
+        auto now = time(nullptr);
         {
             std::shared_lock rd{cache_mutex};
             auto it = cache.find(table_name);
             if (it != cache.end())
-                return it->second;
+            {
+                if (std::get<1>(it->second) + static_cast<int64_t>(context_->getSettingsRef().hive_cache_expire_time.value) >= now)
+                {
+                    return std::get<0>(it->second);
+                }
+            }
         }
+
         auto res = hive_catalog->getTable(getDatabaseName(), table_name, context_);
         if (res)
         {
             std::lock_guard wr{cache_mutex};
-            cache.emplace(table_name, res);
+            cache.emplace(table_name, std::make_tuple(res, now));
             return res;
         }
     }
@@ -77,11 +84,34 @@ StoragePtr DatabaseExternalHive::tryGetTable(const String & table_name, ContextP
     return nullptr;
 }
 
-DatabaseTablesIteratorPtr
-DatabaseExternalHive::getTablesIterator(ContextPtr, [[maybe_unused]] const FilterByNameFunction & filter_by_table_name)
+class FakeDatabaseTablesIterator : public IDatabaseTablesIterator
 {
+public:
+    FakeDatabaseTablesIterator(const std::string & name, const std::vector<StoragePtr> & all_tables_) : IDatabaseTablesIterator(name), all_tables(all_tables_) { }
+    FakeDatabaseTablesIterator(const std::string & name, std::vector<StoragePtr> && all_tables_) : IDatabaseTablesIterator(name), all_tables(std::move(all_tables_)) { }
+    void next() override { ++index;}
+    bool isValid() const override { return index < all_tables.size(); }
+    const String & name() const override {return database_name;}
+    const StoragePtr & table() const override { return all_tables[index]; }
 
-    return std::make_unique<EmptyDatabaseTablesIterator>(getDatabaseName());
+
+private:
+    std::vector<StoragePtr> all_tables;
+    size_t index = 0 ;
+};
+
+DatabaseTablesIteratorPtr DatabaseExternalHive::getTablesIterator(ContextPtr context_, [[maybe_unused]] const FilterByNameFunction & filter_by_table_name)
+{
+    auto all_table_name = hive_catalog->listTableNames(getDatabaseName());
+    std::vector<StoragePtr> all_tables;
+    for(const auto & name : all_table_name)
+    {
+        if(!filter_by_table_name || filter_by_table_name(name))
+        {
+            all_tables.push_back(tryGetTable(name, context_));
+        }
+    }
+    return std::make_unique<FakeDatabaseTablesIterator>(getDatabaseName(), std::move(all_tables));
 }
 
 bool DatabaseExternalHive::empty() const

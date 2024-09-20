@@ -85,7 +85,7 @@ template <> struct FunctionUnaryArithmeticMonotonicity<NameFactorial>
 
     static IFunction::Monotonicity get(const Field & left, const Field & right)
     {
-        bool is_strict = false;
+        [[maybe_unused]] bool is_strict = false;
         if (!left.isNull() && !right.isNull())
         {
             auto left_value = applyVisitor(FieldVisitorConvertToNumber<Int128>(), left);

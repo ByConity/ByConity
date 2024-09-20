@@ -2227,7 +2227,7 @@ void checkAccess(AnalysisPtr analysis, ContextPtr context)
             bool is_any_column_granted = false;
             for (const auto & column : storage_analysis.storage->getInMemoryMetadataPtr()->getColumns())
             {
-                if (access->isGranted(AccessType::SELECT, storage_analysis.database, storage_analysis.table, column.name))
+                if (context->isGranted(AccessType::SELECT, storage_analysis.database, storage_analysis.table, column.name))
                 {
                     is_any_column_granted = true;
                     break;

@@ -161,7 +161,7 @@ Status OrcScanner::prepareFileReader()
 
 
     // options.setMemoryPool(scanner_mem_pool);
-    file_reader = orc::createReader(std::make_unique<ORCArrowInputStream>(arrow_file), options);
+    file_reader = orc::createReader(std::make_unique<CachedORCArrowInputStream>(arrow_file), options);
     return Status::OK();
 }
 

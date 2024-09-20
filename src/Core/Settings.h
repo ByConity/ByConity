@@ -2092,6 +2092,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
     M(String, default_catalog, "", "current catalog", 0) \
+    M(Bool, inherit_glue_auth, true, "rely on glue to do all the authentication",0) \
+    M(UInt64, hive_cache_expire_time, 600, "time to expire hive cache",0) \
     \
     /** Hybrid allocation related settings */ \
     M(Bool, enable_hybrid_allocation, false, "Enalbe hybrid physical parts - virutal parts allocation", 0) \

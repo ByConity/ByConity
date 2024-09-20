@@ -71,6 +71,8 @@ bool parseDatabaseAndTableNameOrAsterisks(IParser::Pos & pos, Expected & expecte
 
         ASTPtr ast_db;
         ASTPtr ast_tb;
+        ASTPtr ast_catalog;
+        ASTPtr ast_tmp;
         ParserIdentifier identifier_parser;
         if (identifier_parser.parse(pos, ast_db, expected))
         {
@@ -90,6 +92,36 @@ bool parseDatabaseAndTableNameOrAsterisks(IParser::Pos & pos, Expected & expecte
                 }
                 else if (identifier_parser.parse(pos, ast_tb, expected))
                 {
+                    if(ParserToken{TokenType::Dot}.ignore(pos,expected))
+                    {
+                        // catalog.db.*
+                        if (ParserToken{TokenType::Asterisk}.ignore(pos, expected))
+                        {
+                            ast_catalog = ast_db;
+                            ast_db = ast_tb;
+                            tryAppendCatalogName(ast_catalog,ast_db);
+                            tryRewriteCnchDatabaseName(ast_db, pos.getContext());
+                            any_database =false;
+                            database = getIdentifierName(ast_db);
+                            any_table = true;
+                            table.clear();
+                            return true;
+                        } else if(identifier_parser.parse(pos, ast_tmp ,expected ))
+                        {
+                        // catalog.db.table
+                            ast_catalog = ast_db;
+                            ast_db = ast_tb;
+                            ast_tb = ast_tmp;
+                            any_database = false;
+                            any_table = false;
+                            tryAppendCatalogName(ast_catalog,ast_db);
+                            tryRewriteCnchDatabaseName(ast_db, pos.getContext());
+                            database = getIdentifierName(ast_db); 
+                            table = getIdentifierName(ast_tb);
+                            return true; 
+                        }
+                    }
+
                     /// db.table
                     tryRewriteCnchDatabaseName(ast_db, pos.getContext());
 

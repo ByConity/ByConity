@@ -37,13 +37,18 @@ void StorageSystemExternalDatabases::fillData(MutableColumns & res_columns, [[ma
     const auto & select = query_info.query->as<ASTSelectQuery>();
     if (!select->where() && !select->prewhere())
     {
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "'catalog_name' must be specified in where conditions");
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "'catalog_name must be specified in where conditions");
     }
     String catalog_name;
     bool extracted = extractNameFromWhereClause(select->where(), "catalog_name", catalog_name);
     if (!extracted)
     {
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "'catalog_name' must be specified in where conditions");
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "'catalog_name must be specified in where conditions");
+    }
+    const String tenant_id = context->getTenantId();
+    if(!tenant_id.empty() && !startsWith(catalog_name, tenant_id + "."))
+    {
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "could only view catalog infos within the same tenant");
     }
     auto catalog_ptr = ExternalCatalog::Mgr::instance().tryGetCatalog(catalog_name);
     if (!catalog_ptr)

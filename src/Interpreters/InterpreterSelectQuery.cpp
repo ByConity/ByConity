@@ -289,12 +289,14 @@ static void checkAccessRightsForSelect(
         /// In this case just checking access for `required_columns` doesn't work correctly
         /// because `required_columns` will contain the name of a column of minimum size (see TreeRewriterResult::collectUsedColumns())
         /// which is probably not the same column as the column the current user has access to.
-        auto access = context->getAccess();
+
         for (const auto & column : table_metadata->getColumns())
         {
-            if (access->isGranted(AccessType::SELECT, table_id.database_name, table_id.table_name, column.name))
+            if (context->isGranted(AccessType::SELECT, table_id.database_name, table_id.table_name, column.name))
                 return;
         }
+
+
         throw Exception(
             ErrorCodes::ACCESS_DENIED,
             "{}: Not enough privileges. To execute this query it's necessary to have grant SELECT for at least one column on {}",

@@ -143,6 +143,8 @@ SourcePtr IHiveFile::getReader(const Block & block, const std::shared_ptr<ReadPa
     auto buffer = readFile(settings);
     auto input_format = FormatFactory::instance().getInput(getFormatName(), *buffer, block, params->context, params->max_block_size);
     input_format->addBuffer(std::move(buffer));
+    if (params->query_info)
+        input_format->setQueryInfo(*params->query_info, params->context);
     return input_format;
 }
 

@@ -195,12 +195,12 @@ PlanNodePtr SelectivityBasedJoinReorder::getJoinOrder(const Graph & graph, RuleC
             {
                 if (edges.contains(source_group_id))
                 {
-                    for (const auto & [target_group_id, edges] : edges.at(source_group_id))
+                    for (const auto & [target_group_id, links] : edges.at(source_group_id))
                     {
                         if (!source_tables.contains(target_group_id))
                         {
                             outer_waiting_nodes_set.emplace(id_to_root_group_id.at(target_group_id));
-                            for (const auto & edge : edges)
+                            for (const auto & edge : links)
                                 outer_edges[id_to_root_group_id.at(target_group_id)].emplace_back(edge);
                         }
                     }
