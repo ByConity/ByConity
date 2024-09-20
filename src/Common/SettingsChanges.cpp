@@ -162,6 +162,7 @@ void SettingsChanges::fillFromProto(const Protos::SettingsChanges & proto)
 }
 std::unordered_set<String> SettingsChanges::WHITELIST_SETTINGS =
     {
+        "access_table_names",
         "accessible_table_names",
         "active_role",
         "add_http_cors_header",

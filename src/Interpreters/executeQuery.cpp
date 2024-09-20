@@ -1455,11 +1455,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     }
                 }
 
-                if (settings.log_query_plan) 
+                if (settings.log_query_plan)
                 {
                     elem.query_plan = context->getQueryContext()->getQueryPlan();
                 }
-            
+
                 interpreter->extendQueryLogElem(elem, ast, context, query_database, query_table);
 
                 if (settings.log_query_settings)
@@ -2451,48 +2451,55 @@ void adjustAccessTablesIfNeeded(ContextMutablePtr & context)
 {
     // In case access_table_names is set, this query will be readonly and
     // access right will be propagated to remote tables
+    bool is_access_table_names = true;
     String access_table_names = context->getSettingsRef().access_table_names;
-    if (!access_table_names.empty())
+    if (access_table_names.empty())
     {
-        auto add_access_table_name = [&](const String & db, const String & tbl)
-        {
-            access_table_names.append(",").append(db).append(".").append(tbl);
-            context->setSetting("access_table_names", access_table_names);
-        };
-        std::vector<String> tables;
-        boost::split(tables, access_table_names, boost::is_any_of(" ,"));
+        access_table_names = context->getSettingsRef().accessible_table_names;
+        is_access_table_names = false;
+    }
 
-        for (auto & table : tables)
-        {
-            char * begin = table.data();
-            char * end = begin + table.size();
-            Tokens tokens(begin, end);
-            IParser::Pos token_iterator(tokens, context->getSettingsRef().max_parser_depth);
-            auto pos = token_iterator;
-            Expected expected;
-            String database_name, table_name;
-            if (!parseDatabaseAndTableName(pos, expected, database_name, table_name))
-                continue;
+    if (access_table_names.empty())
+        return;
 
-            StorageID table_id{database_name, table_name};
-            /// tryGetTable below requires resolved table id
-            StorageID resolved = context->tryResolveStorageID(table_id);
-            if (!resolved)
-                continue;
+    auto add_access_table_name = [&](const String & db, const String & tbl)
+    {
+        access_table_names.append(",").append(db).append(".").append(tbl);
+        context->setSetting(is_access_table_names ? "access_table_names" : "accessible_table_names", access_table_names);
+    };
+    std::vector<String> tables;
+    boost::split(tables, access_table_names, boost::is_any_of(" ,"));
 
-            // continue if current table is temporary table.
-            if (resolved.database_name == DatabaseCatalog::TEMPORARY_DATABASE)
-                continue;
+    for (auto & table : tables)
+    {
+        char * begin = table.data();
+        char * end = begin + table.size();
+        Tokens tokens(begin, end);
+        IParser::Pos token_iterator(tokens, context->getSettingsRef().max_parser_depth);
+        auto pos = token_iterator;
+        Expected expected;
+        String database_name, table_name;
+        if (!parseDatabaseAndTableName(pos, expected, database_name, table_name))
+            continue;
 
-            /// access_table_names need to have resolved name, otherwise tryGetTable below will fail
-            if (table_id.database_name.empty() && !resolved.database_name.empty())
-                add_access_table_name(resolved.getDatabaseName(), resolved.getTableName());
+        StorageID table_id{database_name, table_name};
+        /// tryGetTable below requires resolved table id
+        StorageID resolved = context->tryResolveStorageID(table_id);
+        if (!resolved)
+            continue;
 
-            // auto storage_ptr = DatabaseCatalog::instance().tryGetTable(resolved, context);
-            // auto * distributed = dynamic_cast<StorageDistributed *>(storage_ptr.get());
-            // if (distributed && !distributed->getRemoteTableName().empty())
-            //     add_access_table_name(distributed->getRemoteDatabaseName(), distributed->getRemoteTableName());
-        }
+        // continue if current table is temporary table.
+        if (resolved.database_name == DatabaseCatalog::TEMPORARY_DATABASE)
+            continue;
+
+        /// access_table_names need to have resolved name, otherwise tryGetTable below will fail
+        if (table_id.database_name.empty() && !resolved.database_name.empty())
+            add_access_table_name(resolved.getDatabaseName(), resolved.getTableName());
+
+        // auto storage_ptr = DatabaseCatalog::instance().tryGetTable(resolved, context);
+        // auto * distributed = dynamic_cast<StorageDistributed *>(storage_ptr.get());
+        // if (distributed && !distributed->getRemoteTableName().empty())
+        //     add_access_table_name(distributed->getRemoteDatabaseName(), distributed->getRemoteTableName());
     }
 }
 

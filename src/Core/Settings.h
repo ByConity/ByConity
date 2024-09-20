@@ -1246,6 +1246,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, rewrite_unknown_left_join_identifier, true, "Whether to rewrite unknown left join identifier, this is a deprecated feature but Aeolus SQL depends on it", 0) \
     M(Bool, allow_mysql_having_name_resolution, false, "Whether to use MySQL special name resolution rules for HAVING clauses ", 0) \
     M(String, access_table_names, "", "Session level restricted tables query can access", 0) \
+    M(String, accessible_table_names, "", "Session level restricted tables query can access", 0) \
     \
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \

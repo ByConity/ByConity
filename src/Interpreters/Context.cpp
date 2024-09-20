@@ -1940,9 +1940,13 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
 
 void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
 {
-    String table_names = this->getSettingsRef().access_table_names;
+    String table_names = getSettingsRef().access_table_names;
     if (table_names.empty())
-        return;
+    {
+        table_names = getSettingsRef().accessible_table_names;
+        if (table_names.empty())
+            return;
+    }
     std::vector<String> tables;
     boost::split(tables, table_names, boost::is_any_of(" ,"));
     /// avoid check temporary table.
