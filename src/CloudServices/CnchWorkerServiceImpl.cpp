@@ -566,27 +566,28 @@ void CnchWorkerServiceImpl::preloadDataParts(
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
         auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
 
+        auto preload_level = request->preload_level();
+        auto submit_ts = request->submit_ts();
+        auto sync = request->sync();
+        auto read_injection = request->read_injection();
+
         LOG_TRACE(
             log,
             "Receiving preload parts task level = {}, sync = {}, current table preload setting: parts_preload_level = {}, "
             "enable_preload_parts = {}, enable_parts_sync_preload = {}, enable_local_disk_cache = {}, enable_nexus_fs = {}",
-            request->preload_level(),
-            request->sync(),
+            preload_level,
+            sync,
             cloud_merge_tree.getSettings()->parts_preload_level.value,
             cloud_merge_tree.getSettings()->enable_preload_parts.value,
             cloud_merge_tree.getSettings()->enable_parts_sync_preload,
             cloud_merge_tree.getSettings()->enable_local_disk_cache,
             cloud_merge_tree.getSettings()->enable_nexus_fs);
 
-        if (!request->preload_level()
+        if (!preload_level
             || (!cloud_merge_tree.getSettings()->parts_preload_level && !cloud_merge_tree.getSettings()->enable_preload_parts))
             return;
 
-        auto preload_level = request->preload_level();
-        auto submit_ts = request->submit_ts();
-        auto read_injection = request->read_injection();
-
-        if (request->sync())
+        if (sync)
         {
             auto & settings = getContext()->getSettingsRef();
             auto pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), settings.cnch_parallel_preloading.value));
@@ -599,26 +600,27 @@ void CnchWorkerServiceImpl::preloadDataParts(
                 });
             }
             pool->wait();
-            LOG_DEBUG(
-                log,
-                "Finish preload tasks in {} ms, level: {}, sync: {}, size: {}",
-                watch.elapsedMilliseconds(),
-                preload_level,
-                sync,
-                data_parts.size());
         }
         else
         {
             ThreadPool * preload_thread_pool = &(IDiskCache::getPreloadPool());
             for (const auto & part : data_parts)
             {
-                preload_thread_pool->scheduleOrThrowOnError([part, preload_level, submit_ts, read_injection, storage] {
+                preload_thread_pool->trySchedule([part, preload_level, submit_ts, read_injection, storage] {
                     part->remote_fs_read_failed_injection = read_injection;
                     part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;// avoid getCheckum & getIndex re-cache
                     part->preload(preload_level, submit_ts);
                 });
             }
         }
+        LOG_DEBUG(
+                log,
+                "Finish preload table {} tasks in {} ms, level: {}, sync: {}, size: {}",
+                cloud_merge_tree.getCnchStorageID().getNameForLogs(),
+                watch.elapsedMilliseconds(),
+                preload_level,
+                sync,
+                data_parts.size());
     })
 }
 
