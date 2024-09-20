@@ -314,8 +314,18 @@ BlockIO InterpreterInsertQuery::execute()
     auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), settings.lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
-    if (insert_query.is_replace && !metadata_snapshot->hasUniqueKey())
-        throw Exception("REPLACE INTO statement only supports table with UNIQUE KEY.", ErrorCodes::NOT_IMPLEMENTED);
+    if (!metadata_snapshot->hasUniqueKey())
+    {
+        if (insert_query.is_replace)
+            throw Exception("REPLACE INTO statement only supports table with UNIQUE KEY.", ErrorCodes::NOT_IMPLEMENTED);
+        if (insert_query.insert_ignore)
+            throw Exception("INSERT IGNORE statement only supports table with UNIQUE KEY.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+    else if (insert_query.insert_ignore)
+    {
+        auto mutable_context = const_pointer_cast<Context>(getContext());
+        mutable_context->setSetting("dedup_key_mode", String("ignore"));
+    }
 
     auto query_sample_block = getSampleBlock(insert_query, table, metadata_snapshot);
     if (!insert_query.table_function)

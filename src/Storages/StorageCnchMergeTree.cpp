@@ -233,7 +233,8 @@ void StorageCnchMergeTree::loadMutations()
                 LOG_TRACE(log, "All mutations:\n{}", res);
         };
 
-        print_mutations_debug_str();
+        if (log->trace())
+            print_mutations_debug_str();
     }
     catch(...)
     {

@@ -48,6 +48,9 @@ public:
     // REPLACE INTO
     bool is_replace = false;
 
+    /// INSERT IGNORE
+    bool insert_ignore = false;
+
     /// Data to insert
     const char * data = nullptr;
     const char * end = nullptr;
