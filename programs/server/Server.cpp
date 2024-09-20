@@ -1280,11 +1280,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setUncompressedCache(uncompressed_cache_size);
 
-
-    /// Bitengine memory cache
-    size_t cnch_bitengine_memory_dict_size = root_config.bitengine_memory_cache_size;
-    global_context->setMemoryDictCache(cnch_bitengine_memory_dict_size);
-
 #if USE_EMBEDDED_COMPILER
     /// Compiled expression cache
     CompiledExpressionCacheFactory::instance().init(root_config.compiled_expression_cache_size);
