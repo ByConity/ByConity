@@ -129,7 +129,6 @@
 #include <Storages/HDFS/HDFSCommon.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/program_options.hpp>
-#include <opentelemetry/trace/span.h>
 #include <programs/client/ClientBase.h>
 #include <Poco/String.h>
 #include <Poco/Util/Application.h>

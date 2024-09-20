@@ -135,6 +135,11 @@ message LeaderLease {
   required Status status = 5[default = Ready];
 }
 
+message TraceInfo {
+  optional string query_id = 1;
+  optional uint64 txn_id = 2;
+}
+
 message LeaderInfo {
   required HostWithPorts address = 1;
   required LeaderLease lease = 2;
