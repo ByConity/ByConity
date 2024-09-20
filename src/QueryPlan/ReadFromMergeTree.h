@@ -24,8 +24,11 @@ struct MergeTreeStreamSettings
 {
     UInt64 min_marks_for_concurrent_read;
     UInt64 max_block_size;
+    UInt64 min_block_size = 0;
+    UInt64 requested_num_streams;
     UInt64 preferred_block_size_bytes;
     UInt64 preferred_max_column_in_block_size_bytes;
+    bool size_predictor_estimate_lc_size_by_fullstate = 0;
     bool use_uncompressed_cache;
     ExpressionActionsSettings actions_settings;
     MergeTreeReaderSettings reader_settings = {};
@@ -198,9 +201,11 @@ private:
     ContextPtr context;
 
     const size_t max_block_size;
+    const size_t min_block_size;
     const size_t requested_num_streams;
     const size_t preferred_block_size_bytes;
     const size_t preferred_max_column_in_block_size_bytes;
+    const bool size_predictor_estimate_lc_size_by_fullstate;
     const bool sample_factor_column_queried;
     const bool map_column_keys_column_queried;
 

@@ -295,8 +295,10 @@ Chunk MergeTreeBaseSelectProcessor::readFromPartImpl()
         task->size_predictor->startBlock();
 
     const UInt64 current_max_block_size_rows = stream_settings.max_block_size;
+    const UInt64 current_min_block_size_rows = stream_settings.min_block_size;
     const UInt64 current_preferred_block_size_bytes = stream_settings.preferred_block_size_bytes;
     const UInt64 current_preferred_max_column_in_block_size_bytes = stream_settings.preferred_max_column_in_block_size_bytes;
+    const bool size_predictor_estimate_lc_size_by_fullstate = stream_settings.size_predictor_estimate_lc_size_by_fullstate;
     const MergeTreeIndexGranularity & index_granularity = task->data_part->index_granularity;
     const double min_filtration_ratio = 0.00001;
 
@@ -336,7 +338,8 @@ Chunk MergeTreeBaseSelectProcessor::readFromPartImpl()
     };
 
     UInt64 recommended_rows = estimate_num_rows(*task, task->range_reader);
-    UInt64 rows_to_read = std::max(UInt64(1), std::min(current_max_block_size_rows, recommended_rows));
+    UInt64 rows_to_read = std::max(current_min_block_size_rows, std::min(current_max_block_size_rows, recommended_rows));
+    rows_to_read = std::max(1UL, rows_to_read);
 
     auto read_result = task->range_reader.read(rows_to_read, task->mark_ranges_once_read);
 
@@ -362,7 +365,7 @@ Chunk MergeTreeBaseSelectProcessor::readFromPartImpl()
         task->size_predictor->updateFilteredRowsRation(read_result.numReadRows(), num_filtered_rows);
 
         if (!read_result.columns.empty())
-            task->size_predictor->update(sample_block, read_result.columns, read_result.num_rows);
+            task->size_predictor->update(sample_block, read_result.columns, read_result.num_rows, size_predictor_estimate_lc_size_by_fullstate);
     }
 
     if (read_result.num_rows == 0)

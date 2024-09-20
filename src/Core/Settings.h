@@ -79,6 +79,7 @@ enum PreloadLevelSettings : UInt64
       "The maximum size of blocks of uncompressed data before compressing for writing to a table.", \
       0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \
+    M(UInt64, min_block_size, 1024, "Minimum block size for reading", 0) \
     M(UInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.", 0) \
     M(UInt64, max_insert_block_size_bytes, DEFAULT_BLOCK_SIZE_BYTES, "The maximum block bytes for insertion, if we control the creation of blocks for insertion.", 0) \
     M(UInt64, min_insert_block_size_rows, DEFAULT_INSERT_BLOCK_SIZE, "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.", 0) \
@@ -805,13 +806,10 @@ enum PreloadLevelSettings : UInt64
       "will create several shared dictionaries.", \
       0) \
     M(Bool, decimal_check_overflow, true, "Check overflow of decimal arithmetic/comparison operations", 0) \
-\
-    M(Bool, \
-      prefer_localhost_replica, \
-      1, \
-      "1 - always send query to local replica, if it exists. 0 - choose replica to send query between local and remote ones according to " \
-      "load_balancing", \
-      0) \
+    \
+    M(Bool, size_predictor_estimate_lc_size_by_fullstate, true, "Using estimate size of fullstate LowCardinality in size predictor", 0) \
+    \
+    M(Bool, prefer_localhost_replica, 1, "1 - always send query to local replica, if it exists. 0 - choose replica to send query between local and remote ones according to load_balancing", 0) \
     M(UInt64, max_fetch_partition_retries_count, 5, "Amount of retries while fetching partition from another host.", 0) \
     M(UInt64, \
       http_max_multipart_form_data_size, \

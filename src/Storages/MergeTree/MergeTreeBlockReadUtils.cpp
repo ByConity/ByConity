@@ -180,6 +180,28 @@ MergeTreeReadTask::MergeTreeReadTask(
 MergeTreeReadTask::~MergeTreeReadTask() = default;
 
 
+static size_t getColumnsSize(const ColumnPtr & column, bool size_predictor_estimate_lc_size_by_fullstate)
+{
+    size_t byte_size = column->byteSize();
+
+    if (size_predictor_estimate_lc_size_by_fullstate)
+    {
+        auto * lc_col = typeid_cast<const ColumnLowCardinality *>(column.get());
+        if (lc_col && !lc_col->isFullState())
+        {
+            /// If lc contains a huge dictionary, limit to read a smaller rows may still get a big dictionary,
+            /// and makes average bytes of each rows larger and larger. So we assuming the column is in fullstate, so the result
+            /// of average bytes of each rows will converge to a stable value (max_bytes / avg_bytes_of_each_dict_key).
+            size_t approx_total_bytes_in_fullstate = lc_col->size() * lc_col->getDictionary().byteSize()
+                / std::max(1UL, lc_col->getDictionary().size());
+            byte_size = std::min(byte_size, approx_total_bytes_in_fullstate);
+        }
+    }
+
+    return byte_size;
+}
+
+
 MergeTreeBlockSizePredictor::MergeTreeBlockSizePredictor(
     const MergeTreeMetaBase::DataPartPtr & data_part_, const Names & columns, const Block & sample_block)
     : data_part(data_part_)
@@ -189,7 +211,12 @@ MergeTreeBlockSizePredictor::MergeTreeBlockSizePredictor(
     initialize(sample_block, {}, columns);
 }
 
-void MergeTreeBlockSizePredictor::initialize(const Block & sample_block, const Columns & columns, const Names & names, bool from_update)
+void MergeTreeBlockSizePredictor::initialize(
+    const Block & sample_block,
+    const Columns & columns,
+    const Names & names,
+    bool from_update,
+    bool size_predictor_estimate_lc_size_by_fullstate)
 {
     fixed_columns_bytes_per_row = 0;
     dynamic_columns_infos.clear();
@@ -229,7 +256,7 @@ void MergeTreeBlockSizePredictor::initialize(const Block & sample_block, const C
 
             info.bytes_per_row_global = column_size.data_uncompressed
                 ? column_size.data_uncompressed / number_of_rows_in_part
-                : column_data->byteSize() / std::max<size_t>(1, column_data->size());
+                : getColumnsSize(column_data, size_predictor_estimate_lc_size_by_fullstate) / std::max<size_t>(1, column_data->size());
 
             dynamic_columns_infos.emplace_back(info);
         }
@@ -256,7 +283,12 @@ void MergeTreeBlockSizePredictor::startBlock()
 
 
 /// TODO: add last_read_row_in_part parameter to take into account gaps between adjacent ranges
-void MergeTreeBlockSizePredictor::update(const Block & sample_block, const Columns & columns, size_t num_rows, double decay)
+void MergeTreeBlockSizePredictor::update(
+    const Block & sample_block,
+    const Columns & columns,
+    size_t num_rows,
+    bool size_predictor_estimate_lc_size_by_fullstate,
+    double decay)
 {
     if (columns.size() != sample_block.columns())
         throw Exception("Inconsistent number of columns passed to MergeTreeBlockSizePredictor. "
@@ -266,7 +298,7 @@ void MergeTreeBlockSizePredictor::update(const Block & sample_block, const Colum
     if (!is_initialized_in_update)
     {
         /// Reinitialize with read block to update estimation for DEFAULT and MATERIALIZED columns without data.
-        initialize(sample_block, columns, {}, true);
+        initialize(sample_block, columns, {}, true, size_predictor_estimate_lc_size_by_fullstate);
         is_initialized_in_update = true;
     }
 
@@ -289,8 +321,8 @@ void MergeTreeBlockSizePredictor::update(const Block & sample_block, const Colum
     max_size_per_row_dynamic = 0;
     for (auto & info : dynamic_columns_infos)
     {
-        size_t new_size = columns[sample_block.getPositionByName(info.name)]->byteSize();
-        size_t diff_size = new_size - info.size_bytes;
+        size_t new_size = getColumnsSize(columns[sample_block.getPositionByName(info.name)], size_predictor_estimate_lc_size_by_fullstate);
+        size_t diff_size = new_size - std::min(new_size, info.size_bytes);
 
         double local_bytes_per_row = static_cast<double>(diff_size) / diff_rows;
         info.bytes_per_row = alpha * info.bytes_per_row + (1. - alpha) * local_bytes_per_row;
