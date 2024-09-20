@@ -1,0 +1,40 @@
+Projection
+│     Expressions: sum(id):=`expr#sum(id)`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ IntermediateResultCache
+         └─ Aggregating
+            │     Group by: {}
+            │     Aggregates: expr#sum(id):=AggNull(sum)(id)
+            └─ Projection
+               │     Expressions: [id]
+               └─ Filter
+                  │     Condition: `arraySetCheck(vids, 1)` AND (id1 IN (2, 3, 4)) AND (id2 IN (\'3\', \'4\', \'5\'))
+                  └─ TableScan default.cache_index_expression
+                           Where: (id1 IN (2, 3, 4)) AND (id2 IN (\'3\', \'4\', \'5\'))
+                           Inline expressions: [arraySetCheck(vids, 1):=arraySetCheck(vids, 1)]
+                           Outputs: [id, id1, id2]
+1
+1
+1
+Projection
+│     Expressions: id_1:=id1, sum(id):=`expr#sum(id)`
+└─ Gather Exchange
+   └─ MergingAggregated
+      └─ Repartition Exchange
+         │     Partition by: {id1}
+         └─ IntermediateResultCache
+            └─ Aggregating
+               │     Group by: {id1}
+               │     Aggregates: expr#sum(id):=AggNull(sum)(id)
+               └─ Projection
+                  │     Expressions: [id, id1]
+                  └─ Filter
+                     │     Condition: `arraySetCheck(vids, 1)` AND (id1 IN (2, 3, 4)) AND (id2 IN (\'3\', \'4\', \'5\'))
+                     └─ TableScan default.cache_index_expression
+                              Where: (id1 IN (2, 3, 4)) AND (id2 IN (\'3\', \'4\', \'5\'))
+                              Inline expressions: [arraySetCheck(vids, 1):=arraySetCheck(vids, 1)]
+                              Outputs: [id, id1, id2]
+1	2
+1	2
+1	2

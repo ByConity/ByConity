@@ -1,6 +1,7 @@
 #include <Optimizer/IntermediateResult/CacheableChecker.h>
 
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/IAST_fwd.h>
@@ -58,8 +59,25 @@ namespace
         bool visitStep(const IQueryPlanStep &, ContextPtr &) override { return false; }
 
         bool visitAggregatingStep(const AggregatingStep &, ContextPtr &) override { return true; }
-        bool visitTableScanStep(const TableScanStep &, ContextPtr &) override { return true; }
-        bool visitJoinStep(const JoinStep &, ContextPtr &) override { return true; }
+
+        bool visitTableScanStep(const TableScanStep & step, ContextPtr & context) override
+        {
+            if (step.getQueryInfo().getSelectQuery()->sampleSize() != nullptr
+                || step.getQueryInfo().getSelectQuery()->sampleOffset() != nullptr)
+                return false;
+            if (auto prewhere = step.getPrewhere())
+            {
+                if (containsNonDeterministicFunction(step.getPrewhere(), context))
+                    return false;
+            }
+            return true;
+        }
+
+        bool visitJoinStep(const JoinStep & step, ContextPtr & context) override
+        {
+            return !containsNonDeterministicFunction(step.getFilter(), context);
+        }
+
         bool visitMergingAggregatedStep(const MergingAggregatedStep &, ContextPtr &) override { return true; }
         bool visitExpandStep(const ExpandStep &, ContextPtr &) override { return true; }
 
