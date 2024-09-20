@@ -31,16 +31,18 @@ AggregateFunctionPtr createAggregateFunctionWithK(const DataTypes & argument_typ
     const IDataType & argument_type = *argument_types[0];
     WhichDataType which(argument_type);
 
+    bool ignore_wrong_date = argument_types.size() == 2;
+
     if (which.idx == TypeIndex::SketchBinary)
     {
-        return std::make_shared<typename WithK<K>::template AggregateFunction<DataTypeSketchBinary>>(argument_types, params);
+        return std::make_shared<typename WithK<K>::template AggregateFunction<DataTypeSketchBinary>>(argument_types, params, ignore_wrong_date);
     }
     else if (which.isAggregateFunction())
     {
-        return std::make_shared<typename WithK<K>::template AggregateFunction<DataTypeAggregateFunction>>(argument_types, params);
+        return std::make_shared<typename WithK<K>::template AggregateFunction<DataTypeAggregateFunction>>(argument_types, params, ignore_wrong_date);
     }
 
-    return std::make_shared<typename WithK<K>::template AggregateFunction<String>>(argument_types, params);
+    return std::make_shared<typename WithK<K>::template AggregateFunction<String>>(argument_types, params, ignore_wrong_date);
 }
 
 AggregateFunctionPtr createAggregateFunctionHllSketchEstimate
@@ -67,7 +69,7 @@ AggregateFunctionPtr createAggregateFunctionHllSketchEstimate
         precision = precision_param;
     }
 
-    if (argument_types.size() != 1)
+    if (argument_types.size() != 1 && argument_types.size() != 2)
         throw Exception("Incorrect number of arguments for aggregate function " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     switch (precision)
@@ -137,7 +139,7 @@ AggregateFunctionPtr createAggregateFunctionHllSketchUnion
         precision = precision_param;
     }
 
-    if (argument_types.size() != 1)
+    if (argument_types.size() != 1 && argument_types.size() != 2)
         throw Exception("Incorrect number of arguments for aggregate function " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     if (argument_types[0]->getTypeId() != TypeIndex::SketchBinary)
         throw Exception("Incorrect type of arguments for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -190,7 +192,7 @@ AggregateFunctionPtr createAggregateFunctionHllSketchUnion
 AggregateFunctionPtr createAggregateFunctionKllSketchEstimate
         (const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
 {
-    if (argument_types.size() != 1)
+    if (argument_types.size() != 1 && argument_types.size() != 2)
         throw Exception("Incorrect number of arguments for aggregate function " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     Float64 quantile;
@@ -208,27 +210,28 @@ AggregateFunctionPtr createAggregateFunctionKllSketchEstimate
                 "Aggregate function " + name + " first parameter should between 0 and 1.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         String type_name = params[1].safeGet<String>();
-
+        bool ignore_wrong_date = argument_types.size() == 2;
+        
         if (type_name == "UInt8")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt8>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt8>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt16")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt16>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt16>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt32")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt32>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt32>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt64")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt64>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<UInt64>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int8")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<Int8>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<Int8>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int16")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<Int16>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<Int16>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int32")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<Int32>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<Int32>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int64")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<Int64>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<Int64>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Float32")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<Float32>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<Float32>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Float64")
-            return std::make_shared<AggregateFunctionKllSketchEstimate<Float64>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionKllSketchEstimate<Float64>>(quantile, argument_types, params, ignore_wrong_date);
         else
             throw Exception(
                 "Aggregate function " + name + " second parameter not correct.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -242,7 +245,7 @@ AggregateFunctionPtr createAggregateFunctionKllSketchEstimate
 AggregateFunctionPtr createAggregateFunctionQuantilesSketchEstimate
     (const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
 {
-    if (argument_types.size() != 1)
+    if (argument_types.size() != 1 && argument_types.size() != 2)
         throw Exception("Incorrect number of arguments for aggregate function " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     Float64 quantile;
@@ -260,27 +263,28 @@ AggregateFunctionPtr createAggregateFunctionQuantilesSketchEstimate
                 "Aggregate function " + name + " first parameter should between 0 and 1.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         String type_name = params[1].safeGet<String>();
+        bool ignore_wrong_date = argument_types.size() == 2;
 
         if (type_name == "UInt8")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt8>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt8>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt16")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt16>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt16>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt32")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt32>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt32>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt64")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt64>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<UInt64>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int8")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int8>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int8>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int16")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int16>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int16>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int32")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int32>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int32>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Int64")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int64>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Int64>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Float32")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Float32>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Float32>>(quantile, argument_types, params, ignore_wrong_date);
         else if (type_name == "Float64")
-            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Float64>>(quantile, argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchEstimate<Float64>>(quantile, argument_types, params, ignore_wrong_date);
         else
             throw Exception(
                 "Aggregate function " + name + " second parameter not correct.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -293,7 +297,7 @@ AggregateFunctionPtr createAggregateFunctionQuantilesSketchEstimate
 AggregateFunctionPtr createAggregateFunctionQuantilesSketchUnion
     (const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
 {
-    if (argument_types.size() != 1)
+    if (argument_types.size() != 1 && argument_types.size() != 2)
         throw Exception("Incorrect number of arguments for aggregate function " + name, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if (!params.empty())
@@ -305,27 +309,28 @@ AggregateFunctionPtr createAggregateFunctionQuantilesSketchUnion
         }
 
         String type_name = params[0].safeGet<String>();
+        bool ignore_wrong_date = argument_types.size() == 2;
 
         if (type_name == "UInt8")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt8>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt8>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt16")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt16>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt16>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt32")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt32>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt32>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "UInt64")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt64>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<UInt64>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "Int8")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int8>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int8>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "Int16")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int16>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int16>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "Int32")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int32>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int32>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "Int64")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int64>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Int64>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "Float32")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Float32>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Float32>>(argument_types, params, ignore_wrong_date);
         else if (type_name == "Float64")
-            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Float64>>(argument_types, params);
+            return std::make_shared<AggregateFunctionQuantilesSketchUnion<Float64>>(argument_types, params, ignore_wrong_date);
         else
             throw Exception(
                 "Aggregate function " + name + " second parameter not correct.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
