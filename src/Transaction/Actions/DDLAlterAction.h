@@ -71,6 +71,9 @@ private:
     void appendPart(MutableMergeTreeDataPartCNCHPtr part);
     static void updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTimestamp commit_time);
 
+    // return if the DDL will change table schema.
+    bool changeSchema() const;
+
     Poco::Logger * log;
     const StoragePtr table;
 

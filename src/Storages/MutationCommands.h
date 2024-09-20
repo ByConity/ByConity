@@ -121,10 +121,9 @@ public:
                 command.type != MutationCommand::UPDATE &&
                 command.type != MutationCommand::FAST_DELETE &&
                 command.type != MutationCommand::EMPTY &&
-                /* command.type != MutationCommand::BUILD_BITMAP && */
                 command.type != MutationCommand::CLEAR_MAP_KEY &&
-                command.type != MutationCommand::MATERIALIZE_INDEX /* &&
-                command.type != MutationCommand::DROP_BUILD_BITMAP */)
+                command.type != MutationCommand::MATERIALIZE_INDEX &&
+                command.type != MutationCommand::MATERIALIZE_PROJECTION)
 
                 return true;
         }

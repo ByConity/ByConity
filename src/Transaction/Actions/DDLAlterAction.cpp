@@ -74,7 +74,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
             final_mutation_entry->query_id = query_id;
             final_mutation_entry->commit_time = commit_time;
             final_mutation_entry->commands = mutation_commands;
-            final_mutation_entry->columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
+            final_mutation_entry->columns_commit_time = changeSchema() ? commit_time : table->commit_time;
 
             // Don't create mutation task for reclustering. It will manually triggered by user
             is_modify_cluster_by = final_mutation_entry->isModifyClusterBy();
@@ -87,7 +87,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         // table->checkMaskingPolicy(*cache);
 
         // updateTsCache(table->getStorageUUID(), commit_time);
-        if (!new_schema.empty() && new_schema!=old_schema)
+        if (changeSchema())
         {
             catalog->alterTable(*getContext(), query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_modify_cluster_by);
             LOG_DEBUG(log, "Successfully change schema in catalog.");
@@ -109,6 +109,15 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
 void DDLAlterAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTimestamp commit_time)
 {
     part->commit_time = commit_time;
+}
+
+bool DDLAlterAction::changeSchema() const
+{
+    // judge by both table schema and mutation commands. Make mutation entry has the correct commit time.
+    if (!mutation_commands.empty() && mutation_commands.changeSchema())
+        return true;
+
+    return !new_schema.empty() && new_schema!=old_schema;
 }
 
 #if 0
