@@ -52,13 +52,14 @@ namespace DB
 class TableJoin;
 class DictionaryReader;
 class RuntimeFilterConsumer;
+
 namespace JoinStuff
 {
 
 /// Flags needed to implement RIGHT and FULL JOINs.
 class JoinUsedFlags
 {
-    std::vector<std::atomic_bool> flags;
+    VectorWithAlloc<std::atomic<bool>> flags;
     bool need_flags;
 
 public:
@@ -343,15 +344,15 @@ public:
         BlocksList blocks; /// Blocks of "right" table.
         BlockNullmapList blocks_nullmaps; /// Nullmaps for blocks of "right" table (if needed)
         // TODO: optimize it, we can encode the block *, and use a flat array to record bools.
-        std::unordered_map<const Block *, std::vector<bool>> used_map; /// bool flags for right table when there is inequal conditions.
-        bthread::Mutex mutex;
+        std::unordered_map<UInt64, VectorWithAlloc<bool>> used_map; /// bool flags for right table when there is inequal conditions.
+        std::mutex mutex;
 
         bool checkUsed(const Block* block, size_t row_number) const
         {
             if (used_map.empty())
                 return false;
-            
-            return used_map.at(block)[row_number];
+
+            return used_map.at(reinterpret_cast<UInt64>(block))[row_number];
         }
 
         /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
@@ -451,18 +452,18 @@ private:
     /// Modify (structure) right block to save it in block list
     Block structureRightBlock(const Block & stored_block) const;
     void initRightBlockStructure(Block & saved_block_sample);
-    
-    /// Join Block imple without inequal condition 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+
+    /// Join Block imple without inequal condition
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool join_dict, typename Maps>
     Block joinBlockImpl(
         Block & block,
         const Names & key_names_left,
         const Block & block_with_columns_to_add,
         const Maps & maps,
         bool is_join_get = false) const;
-    
-    /// Join Block imple with inequal condition 
-    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
+
+    /// Join Block imple with inequal condition
+    template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, bool join_dict, typename Maps>
     Block joinBlockImplIneuqalCondition(Block & block,
         const Names & key_names_left,
         const Block & block_with_columns_to_add,

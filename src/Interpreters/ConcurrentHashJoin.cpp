@@ -88,8 +88,8 @@ void ConcurrentHashJoin::selectDispatchBlock(
 
     const auto & data = hash.getData();
 
-    std::vector<DB::UInt64> row_to_shard(num_rows);
-    std::vector<size_t> shard_count(num_shards);
+    VectorWithAlloc<DB::UInt64> row_to_shard(num_rows);
+    VectorWithAlloc<size_t> shard_count(num_shards);
     for (size_t row_num = 0; row_num < num_rows; ++row_num)
     {
         auto v = intHash64(data[row_num]) & (num_shards - 1);
@@ -99,7 +99,7 @@ void ConcurrentHashJoin::selectDispatchBlock(
     res_selector_points.resize(num_shards+1);
     res_selector_points[0] = 0;
 
-    std::vector<size_t> shard_offset(num_shards);
+    VectorWithAlloc<size_t> shard_offset(num_shards);
     for (size_t shard_num = 0; shard_num < num_shards; ++shard_num)
     {
         res_selector_points[shard_num+1] = res_selector_points[shard_num] + shard_count[shard_num];
@@ -467,51 +467,6 @@ bool ConcurrentHashJoin::alwaysReturnsEmptySet() const
     return true;
 }
 
-template <typename Mapped>
-struct AdderNonJoined2
-{
-    static void add(const Mapped & mapped, size_t & rows_added, MutableColumns & columns_right, const std::shared_ptr<HashJoin::RightTableData> & right_data)
-    {
-        constexpr bool mapped_asof = std::is_same_v<Mapped, AsofRowRefs>;
-        [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<Mapped, RowRef>;
-
-        if constexpr (mapped_asof)
-        {
-            /// Do nothing
-        }
-        else if constexpr (mapped_one)
-        {
-            if (right_data->checkUsed(mapped.block, mapped.row_num))
-                return;
-            
-            for (size_t j = 0; j < columns_right.size(); ++j)
-            {
-                const auto & mapped_column = mapped.block->getByPosition(j).column;
-                columns_right[j]->insertFrom(*mapped_column, mapped.row_num);
-            }
-
-            ++rows_added;
-        }
-        else
-        {
-            for (auto it = mapped.begin(); it.ok(); ++it)
-            {
-                if (right_data->checkUsed(it->block, it->row_num))
-                    continue;
-                
-                for (size_t j = 0; j < columns_right.size(); ++j)
-                {
-                    const auto & mapped_column = it->block->getByPosition(j).column;
-                    columns_right[j]->insertFrom(*mapped_column, it->row_num);
-                }
-
-                ++rows_added;
-            }
-        }
-    }
-};
-
-
 /// Stream from not joined earlier rows of the right table.
 class ConcurrentNotJoinedBlockInputStream : private NotJoined, public IBlockInputStream
 {
@@ -619,6 +574,28 @@ private:
         Iterator & it = std::any_cast<Iterator &>(position);
         auto end = map.end();
 
+        const static size_t BATCH_SIZE = 512;
+        size_t batch_pos = 0;
+        UInt64 rows_with_block[BATCH_SIZE];
+
+        const auto populate_col = [&]()
+        {
+            for (size_t j = 0; j < columns_keys_and_right.size(); ++j)
+            {
+                columns_keys_and_right[j]->reserve(columns_keys_and_right[j]->size() + batch_pos);
+                for (size_t ind = 0; ind < batch_pos; ++ind)
+                {
+                    const RowRef * ref = reinterpret_cast<RowRef *>(rows_with_block[ind]);
+                    const auto & mapped_column = ref->block->getByPosition(j).column;
+                    columns_keys_and_right[j]->insertFrom(*mapped_column, ref->row_num);
+                }
+            }
+            batch_pos = 0;
+        };
+
+        constexpr bool mapped_asof = std::is_same_v<Mapped, AsofRowRefs>;
+        [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<Mapped, RowRef>;
+
         for (; it != end; ++it)
         {
             const Mapped & mapped = it->getMapped();
@@ -627,7 +604,37 @@ private:
             if (parents[current_idx]->isUsed(off))
                 continue;
 
-            AdderNonJoined2<Mapped>::add(mapped, rows_added, columns_keys_and_right, parents[current_idx]->data);
+            const auto & right_data = parents[current_idx]->data;
+
+            if constexpr (mapped_asof)
+            {
+                /// Do nothing
+            }
+            else if constexpr (mapped_one)
+            {
+                if (right_data->checkUsed(mapped.block, mapped.row_num))
+                    continue;
+
+                rows_with_block[batch_pos++] = reinterpret_cast<UInt64>(&mapped);
+                ++rows_added;
+            }
+            else
+            {
+                for (auto itt = mapped.begin(); itt.ok(); ++itt)
+                {
+                    if (right_data->checkUsed(itt->block, itt->row_num))
+                        continue;
+
+                    rows_with_block[batch_pos++] = reinterpret_cast<UInt64>(itt.ptr());
+                    ++rows_added;
+                    if (batch_pos == BATCH_SIZE)
+                        populate_col();
+
+                }
+            }
+
+            if (batch_pos == BATCH_SIZE)
+                populate_col();
 
             if (rows_added >= max_block_size)
             {
@@ -635,6 +642,9 @@ private:
                 break;
             }
         }
+
+        if (batch_pos > 0)
+            populate_col();
 
         return rows_added;
     }
@@ -690,6 +700,7 @@ BlockInputStreamPtr ConcurrentHashJoin::createStreamWithNonJoinedRows(const Bloc
                     parents.push_back(&(*hash_joins[i]->data));
             }
         }
+
         if (!parents.empty())
         {
             LOG_TRACE((&Poco::Logger::get("ConcurrentHashJoin")), "create ConcurrentNotJoinedBlockInputStream with total_size:{} index:{} hash_joins:{}", total_size, index, parents.size());

@@ -3,15 +3,18 @@
 #include <string.h>
 #include <memory>
 #include <vector>
-#include <boost/noncopyable.hpp>
+#include <Common/config.h>
 #include <Core/Defines.h>
+#include <boost/noncopyable.hpp>
+#include <Common/Allocator.h>
+#include <Common/HuAllocator.h>
+#include <Common/ProfileEvents.h>
+#include <Common/memcpySmall.h>
+#include <Common/StdTrackAllocator.h>
+
 #if __has_include(<sanitizer/asan_interface.h>) && defined(ADDRESS_SANITIZER)
 #   include <sanitizer/asan_interface.h>
 #endif
-#include <Common/memcpySmall.h>
-#include <Common/ProfileEvents.h>
-#include <Common/Allocator.h>
-#include <Common/HuAllocator.h>
 
 
 namespace ProfileEvents
@@ -23,6 +26,8 @@ namespace ProfileEvents
 namespace DB
 {
 
+template<typename T>
+using VectorWithAlloc = std::vector<T, StdTrackAllocator<T>>;
 
 /** Memory pool to append something. For example, short strings.
   * Usage scenario:
