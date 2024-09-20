@@ -121,6 +121,7 @@ services:
       - SYS_PTRACE
   minio:
     ports:
+      - 19000:9000
       - 19001:9001
     environment:
       - MINIO_ROOT_USER=minio

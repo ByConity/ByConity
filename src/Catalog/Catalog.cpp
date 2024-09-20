@@ -1358,6 +1358,8 @@ namespace Catalog
                     if (cached_storage && cached_storage->commit_time <= ts && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
                     {
                         res = cached_storage;
+                        //TODO:(@lianwenlong) force fetch global object schema from catalog
+                        initStorageObjectSchema(res);
                         return;
                     }
                 }

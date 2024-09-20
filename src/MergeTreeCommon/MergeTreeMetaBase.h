@@ -404,7 +404,6 @@ public:
     /// Overridden in StorageReplicatedMergeTree
     virtual bool unlockSharedData(const IMergeTreeDataPart &) const { return true; }
 
-    bool isBucketTable() const override { return getInMemoryMetadataPtr()->isClusterByKeyDefined(); }
     TableDefinitionHash getTableHashForClusterBy() const override; // to compare table engines efficiently
     bool isTableClustered(ContextPtr context_) const override;
 

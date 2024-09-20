@@ -104,6 +104,7 @@ public:
         UInt64 selected_marks_pk = 0;
         UInt64 total_marks_pk = 0;
         UInt64 selected_rows = 0;
+        UInt64 selected_partitions = 0;
     };
 
     ReadFromMergeTree(
@@ -205,6 +206,15 @@ private:
         const Names & column_names);
 
     Pipe spreadMarkRangesAmongStreamsWithOrder(
+        RangesInDataParts && parts_with_ranges,
+        const Names & column_names,
+        const ActionsDAGPtr & sorting_key_prefix_expr,
+        ActionsDAGPtr & out_projection,
+        const InputOrderInfoPtr & input_order_info,
+        size_t num_streams,
+        bool need_preliminary_merge);
+
+    Pipe spreadMarkRangesAmongStreamsWithPartitionOrder(
         RangesInDataParts && parts_with_ranges,
         const Names & column_names,
         const ActionsDAGPtr & sorting_key_prefix_expr,

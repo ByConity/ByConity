@@ -1,8 +1,45 @@
+#include <chrono>
+#include <memory>
+#include <mutex>
 #include <Interpreters/DistributedStages/ProgressManager.h>
+#include <Poco/Logger.h>
+#include <Common/ThreadPool.h>
 #include <common/logger_useful.h>
+#include <common/sleep.h>
 
 namespace DB
 {
+
+TCPProgressSender::TCPProgressSender(std::function<void()> send_tcp_progress_, size_t interval_)
+    : logger(&Poco::Logger::get("ProgressManager")), send_tcp_progress(send_tcp_progress_), interval(interval_)
+{
+    if (send_tcp_progress && interval)
+    {
+        LOG_TRACE(logger, "TCPProgressSender started");
+        thread = std::make_unique<ThreadFromGlobalPool>([&]() {
+            while (true)
+            {
+                std::unique_lock<std::mutex> lock(mu);
+                var.wait_for(lock, std::chrono::milliseconds(this->interval), [&]() { return this->shutdown.load(); });
+                if (shutdown)
+                {
+                    LOG_TRACE(logger, "TCPProgressSender shutdown");
+                    break;
+                }
+                this->send_tcp_progress();
+            }
+        });
+    }
+}
+
+TCPProgressSender::~TCPProgressSender()
+{
+    shutdown = true;
+    var.notify_all();
+    if (thread && thread->joinable())
+        thread->join();
+}
+
 void ProgressManager::onProgress(UInt32 segment_id, UInt32 parallel_index, const Progress & progress_)
 {
     std::unique_lock lock(segment_progress_mutex);

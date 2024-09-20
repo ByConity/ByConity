@@ -78,6 +78,8 @@ struct ConfigurationFieldNumber : public ConfigurationFieldBase
             value = config.getUInt64(full_key, value);
     }
 
+    void setValue(T v) { value = v; }
+
     operator T() const { return value; }
 
     T value;
@@ -110,6 +112,8 @@ struct ConfigurationFieldMutableNumber : public ConfigurationFieldBase
 
     void reloadField(const PocoAbstractConfig & config) override { loadField(config); }
 
+    void setValue(T v) { value = v; }
+
     T safeGet() const { return value; }
 
 private:
@@ -130,6 +134,8 @@ struct ConfigurationFieldString : public ConfigurationFieldBase
 
     void loadField(const PocoAbstractConfig & config) override { value = config.getString(full_key, value); }
 
+    void setValue(const String & v) { value = v; }
+
     operator const String &() const { return value; }
 
     String value;
@@ -148,6 +154,8 @@ struct ConfigurationFieldMutableString : public ConfigurationFieldBase
         std::lock_guard lock(m);
         loadField(config);
     }
+
+    void setValue(const String & v) { value = v; }
 
     String safeGet() const
     {

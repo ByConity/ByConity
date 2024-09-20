@@ -176,13 +176,14 @@ public:
         return name;
     }
 
-    size_t getNumberOfArguments() const override { return 1; }
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
+        if (arguments.size() != 1 && arguments.size() != 2)
             throw Exception("Illegal argument size of function " + getName(),
                             ErrorCodes::BAD_ARGUMENTS);
 
@@ -207,6 +208,7 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
+        bool use_composite_estimate = arguments.size() > 1 ? true : false;
         if (arguments[0].column->isNullable())
         {
             auto result_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeFloat64>());
@@ -222,7 +224,10 @@ public:
                 else
                 {
                     datasketches::hll_sketch hll_sketch_data = datasketches::hll_sketch::deserialize(nullable_sketch.getDataAt(i).data, nullable_sketch.getDataAt(i).size, AggregateFunctionHllSketchAllocator());
-                    result_column->insert(hll_sketch_data.get_estimate());
+                    if (use_composite_estimate)
+                        result_column->insert(hll_sketch_data.get_composite_estimate());
+                    else
+                        result_column->insert(hll_sketch_data.get_estimate());
                 }
             }
             return result_column;
@@ -238,7 +243,10 @@ public:
             {
                 auto value = value_column.getDataAt(i);
                 datasketches::hll_sketch hll_sketch_data = datasketches::hll_sketch::deserialize(value.data, value.size, AggregateFunctionHllSketchAllocator());
-                dst_data[i] = hll_sketch_data.get_estimate();
+                if (use_composite_estimate)
+                    dst_data[i] = hll_sketch_data.get_composite_estimate();
+                else
+                    dst_data[i] = hll_sketch_data.get_estimate();
             }
 
             return result_column;

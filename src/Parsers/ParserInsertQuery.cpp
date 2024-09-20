@@ -46,9 +46,11 @@ namespace ErrorCodes
 
 bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserKeyword s_insert_into("INSERT INTO");
-    ParserKeyword s_replace_into("REPLACE INTO");
+    ParserKeyword s_insert_ignore("INSERT IGNORE INTO");
     ParserKeyword s_insert_overwrite("INSERT OVERWRITE");
+    ParserKeyword s_replace_into("REPLACE INTO");
+    ParserKeyword s_insert_into("INSERT INTO");
+
     ParserKeyword s_table("TABLE");
     ParserKeyword s_function("FUNCTION");
     ParserToken s_dot(TokenType::Dot);
@@ -85,13 +87,16 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr partition_by_expr;
     bool is_overwrite {false};
     bool is_replace {false};
+    bool insert_ignore {false};
     ASTPtr overwrite_partition;
 
     /// Insertion data
     const char * data = nullptr;
 
     // Check for key words `INSERT INTO` or `REPLACE INTO` or `INSERT OVERWRITE`. If it isn't found, the query can't be parsed as insert query.
-    if (s_insert_overwrite.ignore(pos, expected))
+    if (s_insert_ignore.ignore(pos, expected))
+        insert_ignore = true;
+    else if (s_insert_overwrite.ignore(pos, expected))
         is_overwrite = true;
     else if (s_replace_into.ignore(pos, expected))
         is_replace = true;
@@ -297,6 +302,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     tryGetIdentifierNameInto(format, query->format);
 
+    query->insert_ignore = insert_ignore;
     query->is_overwrite = is_overwrite;
     query->is_replace = is_replace;
     query->overwrite_partition = overwrite_partition;

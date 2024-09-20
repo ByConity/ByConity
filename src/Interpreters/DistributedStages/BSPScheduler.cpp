@@ -80,7 +80,12 @@ void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed,
 
 void BSPScheduler::onQueryFinished()
 {
-    for (const auto & address : dag_graph_ptr->plan_send_addresses)
+    std::set<AddressInfo> plan_send_addresses;
+    {
+        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
+        plan_send_addresses = dag_graph_ptr->plan_send_addresses;
+    }
+    for (const auto & address : plan_send_addresses)
     {
         try
         {

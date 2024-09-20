@@ -35,7 +35,6 @@ public:
 
     std::string getName() const override { return "CnchHive"; }
     bool isRemote() const override { return true; }
-    bool isBucketTable() const override;
 
     void startup() override;
 

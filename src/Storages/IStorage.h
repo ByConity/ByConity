@@ -255,9 +255,9 @@ public:
     void setCreateTableSql(String sql) { create_table_sql = std::move(sql); }
     String getCreateTableSql() const { return create_table_sql; }
 
-    virtual bool isBucketTable() const {return false;}
+    virtual bool isBucketTable() const { return getInMemoryMetadataPtr()->isClusterByKeyDefined(); }
     virtual TableDefinitionHash getTableHashForClusterBy() const {return {};}
-    virtual bool isTableClustered(ContextPtr /*context*/) const { return false; }
+    virtual bool isTableClustered(ContextPtr /*context*/) const { return isBucketTable(); }
 
     /// Return true if there is at least one part containing lightweight deleted mask.
     virtual bool hasLightweightDeletedMask() const { return false; }

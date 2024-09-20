@@ -37,8 +37,8 @@ class AggregateFunctionHLLSketchUnion final
     : public IAggregateFunctionDataHelper<AggregateFunctionHllSketchEstimateData<K>, AggregateFunctionHLLSketchUnion<K>>
 {
 public:
-    AggregateFunctionHLLSketchUnion(const DataTypes & argument_types_, const Array & params_)
-        : IAggregateFunctionDataHelper<AggregateFunctionHllSketchEstimateData<K>, AggregateFunctionHLLSketchUnion>(argument_types_, params_){}
+    AggregateFunctionHLLSketchUnion(const DataTypes & argument_types_, const Array & params_, bool ignore_wrong_data_ = false)
+        : IAggregateFunctionDataHelper<AggregateFunctionHllSketchEstimateData<K>, AggregateFunctionHLLSketchUnion>(argument_types_, params_), ignore_wrong_data(ignore_wrong_data_) {}
 
     String getName() const override
     {
@@ -52,9 +52,19 @@ public:
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-        datasketches::hll_sketch hll_sketch_data = datasketches::hll_sketch::deserialize(value.data, value.size, AggregateFunctionHllSketchAllocator());
-        this->data(place).u.update(hll_sketch_data);
+        try
+        {
+            const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
+            if (ignore_wrong_data && value.size == 0)
+                return;
+            datasketches::hll_sketch hll_sketch_data = datasketches::hll_sketch::deserialize(value.data, value.size, AggregateFunctionHllSketchAllocator());
+            this->data(place).u.update(hll_sketch_data);
+        }
+        catch (std::exception & e)
+        {
+            if (!ignore_wrong_data)
+                throw e;
+        }
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -84,6 +94,7 @@ public:
     bool allocatesMemoryInArena() const override { return true; }
 
 private:
+    bool ignore_wrong_data = false;
     inline datasketches::hll_sketch readHLLSketch(ReadBuffer & buf) const
     {
         String d;
@@ -97,8 +108,12 @@ class AggregateFunctionHllSketchEstimate final
    : public IAggregateFunctionDataHelper<AggregateFunctionHllSketchEstimateData<K>, AggregateFunctionHllSketchEstimate<T, K>>
 {
 public:
-    AggregateFunctionHllSketchEstimate(const DataTypes & argument_types_, const Array & params_)
-        : IAggregateFunctionDataHelper<AggregateFunctionHllSketchEstimateData<K>, AggregateFunctionHllSketchEstimate>(argument_types_, params_) {}
+    AggregateFunctionHllSketchEstimate(const DataTypes & argument_types_, const Array & params_, bool ignore_wrong_data_ = false)
+        : IAggregateFunctionDataHelper<AggregateFunctionHllSketchEstimateData<K>, AggregateFunctionHllSketchEstimate>(argument_types_, params_), ignore_wrong_data(ignore_wrong_data_)
+    {
+        if (params_.size() == 2)
+            use_composite_estimate = true;
+    }
 
     String getName() const override
     {
@@ -112,24 +127,36 @@ public:
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        // String is for new datatype "Sketch"
-        if constexpr (std::is_same_v<T, DataTypeSketchBinary>)
+        try
         {
-            const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-            datasketches::hll_sketch hllSketch = datasketches::hll_sketch::deserialize(value.data, value.size, AggregateFunctionHllSketchAllocator());
-            this->data(place).u.update(hllSketch);
+            // String is for new datatype "Sketch"
+            if constexpr (std::is_same_v<T, DataTypeSketchBinary>)
+            {
+                const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
+                if (ignore_wrong_data && value.size == 0)
+                    return;
+                datasketches::hll_sketch hllSketch = datasketches::hll_sketch::deserialize(value.data, value.size, AggregateFunctionHllSketchAllocator());
+                this->data(place).u.update(hllSketch);
+            }
+            else if constexpr (std::is_same_v<T, DataTypeAggregateFunction>)
+            {
+                //the format of this value should be the same with serialize
+                const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
+                if (ignore_wrong_data && value.size == 0)
+                    return;
+                ReadBuffer buf(const_cast<char *>(value.data), value.size);
+                this->data(place).u.update(readHllSketch(buf));
+            }
+            else
+            {
+                StringRef value = columns[0]->getDataAt(row_num);
+                this->data(place).u.update(value.toString());
+            }
         }
-        else if constexpr (std::is_same_v<T, DataTypeAggregateFunction>)
+        catch (std::exception & e)
         {
-            //the format of this value should be the same with serialize
-            const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-            ReadBuffer buf(const_cast<char *>(value.data), value.size);
-            this->data(place).u.update(readHllSketch(buf));
-        }
-        else
-        {
-            StringRef value = columns[0]->getDataAt(row_num);
-            this->data(place).u.update(value.toString());
+            if (!ignore_wrong_data)
+                throw e;
         }
     }
 
@@ -152,12 +179,17 @@ public:
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * ) const override
     {
-        static_cast<ColumnFloat64 &>(to).getData().push_back(this->data(place).u.get_estimate());
+        if (use_composite_estimate)
+            static_cast<ColumnFloat64 &>(to).getData().push_back(this->data(place).u.get_composite_estimate());
+        else
+            static_cast<ColumnFloat64 &>(to).getData().push_back(this->data(place).u.get_estimate());
     }
 
     bool allocatesMemoryInArena() const override { return true; }
 
 private:
+    bool ignore_wrong_data = false;
+    bool use_composite_estimate = false;
     inline datasketches::hll_sketch readHllSketch(ReadBuffer & buf) const
     {
         String d;
@@ -181,8 +213,8 @@ class AggregateFunctionKllSketchEstimate final
     : public IAggregateFunctionDataHelper<AggregateFunctionKllSketchEstimateData<T>, AggregateFunctionKllSketchEstimate<T>>
 {
 public:
-    AggregateFunctionKllSketchEstimate(const double quantile_, const DataTypes & argument_types_, const Array & params_)
-        : IAggregateFunctionDataHelper<AggregateFunctionKllSketchEstimateData<T>, AggregateFunctionKllSketchEstimate<T>>(argument_types_, params_),quantile(quantile_) {}
+    AggregateFunctionKllSketchEstimate(const double quantile_, const DataTypes & argument_types_, const Array & params_, bool ignore_wrong_data_ = false)
+        : IAggregateFunctionDataHelper<AggregateFunctionKllSketchEstimateData<T>, AggregateFunctionKllSketchEstimate<T>>(argument_types_, params_),quantile(quantile_), ignore_wrong_data(ignore_wrong_data_) {}
 
     Float64 quantile = 0;
 
@@ -198,9 +230,18 @@ public:
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-        datasketches::kll_sketch<T> kll_sketch_data = datasketches::kll_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
-        this->data(place).u.merge(kll_sketch_data);
+        try {
+            const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
+            if (ignore_wrong_data && value.size == 0)
+                return;
+            datasketches::kll_sketch<T> kll_sketch_data = datasketches::kll_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
+            this->data(place).u.merge(kll_sketch_data);
+        } 
+        catch (std::exception & e)
+        {
+            if (!ignore_wrong_data)
+                throw e;
+        }
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -229,6 +270,7 @@ public:
     bool allocatesMemoryInArena() const override { return true; }
 
 private:
+    bool ignore_wrong_data = false;
     inline datasketches::kll_sketch<T> readKllSketch(ReadBuffer & buf) const
     {
         String d;
@@ -252,8 +294,8 @@ class AggregateFunctionQuantilesSketchEstimate final
     : public IAggregateFunctionDataHelper<AggregateFunctionQuantilesSketchEstimateData<T>, AggregateFunctionQuantilesSketchEstimate<T>>
 {
 public:
-    AggregateFunctionQuantilesSketchEstimate(const double quantile_, const DataTypes & argument_types_, const Array & params_)
-        : IAggregateFunctionDataHelper<AggregateFunctionQuantilesSketchEstimateData<T>, AggregateFunctionQuantilesSketchEstimate<T>>(argument_types_, params_),quantile(quantile_) {}
+    AggregateFunctionQuantilesSketchEstimate(const double quantile_, const DataTypes & argument_types_, const Array & params_, bool ignore_wrong_data_ = false)
+        : IAggregateFunctionDataHelper<AggregateFunctionQuantilesSketchEstimateData<T>, AggregateFunctionQuantilesSketchEstimate<T>>(argument_types_, params_),quantile(quantile_), ignore_wrong_data(ignore_wrong_data_) {}
 
     Float64 quantile = 0;
 
@@ -269,9 +311,19 @@ public:
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-        datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
-        this->data(place).u.merge(quantiles_sketch_data);
+        try
+        {
+            const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
+            if (ignore_wrong_data && value.size == 0)
+                return;
+            datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
+            this->data(place).u.merge(quantiles_sketch_data);
+        }
+        catch (std::exception & e)
+        {
+            if (!ignore_wrong_data)
+                throw e;
+        }
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -299,6 +351,7 @@ public:
     bool allocatesMemoryInArena() const override { return true; }
 
 private:
+    bool ignore_wrong_data = false;
     inline datasketches::quantiles_sketch<T> readQuantilesSketch(ReadBuffer & buf) const
     {
         String d;
@@ -309,11 +362,11 @@ private:
 
 template <typename T>
 class AggregateFunctionQuantilesSketchUnion final
-    : public IAggregateFunctionDataHelper<AggregateFunctionQuantilesSketchEstimateData<T>, AggregateFunctionQuantilesSketchEstimate<T>>
+    : public IAggregateFunctionDataHelper<AggregateFunctionQuantilesSketchEstimateData<T>, AggregateFunctionQuantilesSketchUnion<T>>
 {
 public:
-    AggregateFunctionQuantilesSketchUnion(const DataTypes & argument_types_, const Array & params_)
-        : IAggregateFunctionDataHelper<AggregateFunctionQuantilesSketchEstimateData<T>, AggregateFunctionQuantilesSketchEstimate<T>>(argument_types_, params_){}
+    AggregateFunctionQuantilesSketchUnion(const DataTypes & argument_types_, const Array & params_, bool ignore_wrong_data_ = false)
+        : IAggregateFunctionDataHelper<AggregateFunctionQuantilesSketchEstimateData<T>, AggregateFunctionQuantilesSketchUnion<T>>(argument_types_, params_), ignore_wrong_data(ignore_wrong_data_) {}
 
     String getName() const override
     {
@@ -327,9 +380,19 @@ public:
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
-        datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
-        this->data(place).u.merge(quantiles_sketch_data);
+        try
+        {
+            const auto & value = static_cast<const ColumnSketchBinary &>(*columns[0]).getDataAt(row_num);
+            if (ignore_wrong_data && value.size == 0)
+                    return;
+            datasketches::quantiles_sketch<T> quantiles_sketch_data = datasketches::quantiles_sketch<T>::deserialize(value.data, value.size, datasketches::serde<T>(), std::less<T>(), AggregateFunctionHllSketchAllocator());
+            this->data(place).u.merge(quantiles_sketch_data);
+        }
+        catch (std::exception & e)
+        {
+           if (!ignore_wrong_data)
+                throw e;
+        }
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -359,6 +422,7 @@ public:
     bool allocatesMemoryInArena() const override { return true; }
 
 private:
+    bool ignore_wrong_data = false;
     inline datasketches::quantiles_sketch<T> readQuantilesSketch(ReadBuffer & buf) const
     {
         String d;

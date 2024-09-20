@@ -1743,6 +1743,17 @@ void CnchServerServiceImpl::executeOptimize(
                 auto & database_catalog = DatabaseCatalog::instance();
                 auto istorage = database_catalog.getTable(storage_id, global_context);
 
+                if (istorage && istorage->getInMemoryMetadataPtr()->hasDynamicSubcolumns())
+                {
+                    if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(istorage.get()))
+                    {
+                        LOG_TRACE(
+                            log,
+                            "Object schema snapshot:{}",
+                            cnch_table->getStorageSnapshot(cnch_table->getInMemoryMetadataPtr(), nullptr)->object_columns.toString());
+                    }
+                }
+
                 auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
                 auto task_id = merge_mutate_thread->triggerPartMerge(istorage, partition_id, false, enable_try, false);
                 if (request->mutations_sync())

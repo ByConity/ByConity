@@ -19,17 +19,18 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <filesystem>
 #include <Interpreters/InterpreterInsertQuery.h>
 
 #include <Access/AccessFlags.h>
 #include <CloudServices/CnchServerResource.h>
 #include <Columns/ColumnNullable.h>
+#include <Core/Types.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsFilterBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/LockHoldBlockInputStream.h>
-#include <Processors/Transforms/ProcessorToOutputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/OwningBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
@@ -61,6 +62,7 @@
 #include <Processors/Sources/SinkToOutputStream.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Transforms/ExpressionTransform.h>
+#include <Processors/Transforms/ProcessorToOutputStream.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/PartitionCommands.h>
@@ -69,6 +71,11 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMaterializedView.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include <Common/Exception.h>
+#include <Common/FilePathMatcher.h>
+#include <Common/HDFSFilePathMatcher.h>
+#include <Common/LocalFilePathMatcher.h>
+#include <Common/S3FilePathMatcher.h>
 #include <Common/checkStackSize.h>
 #include "Interpreters/Context_fwd.h"
 #include <Databases/DatabasesCommon.h>
@@ -307,8 +314,18 @@ BlockIO InterpreterInsertQuery::execute()
     auto table_lock = table->lockForShare(getContext()->getInitialQueryId(), settings.lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
-    if (insert_query.is_replace && !metadata_snapshot->hasUniqueKey())
-        throw Exception("REPLACE INTO statement only supports table with UNIQUE KEY.", ErrorCodes::NOT_IMPLEMENTED);
+    if (!metadata_snapshot->hasUniqueKey())
+    {
+        if (insert_query.is_replace)
+            throw Exception("REPLACE INTO statement only supports table with UNIQUE KEY.", ErrorCodes::NOT_IMPLEMENTED);
+        if (insert_query.insert_ignore)
+            throw Exception("INSERT IGNORE statement only supports table with UNIQUE KEY.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+    else if (insert_query.insert_ignore)
+    {
+        auto mutable_context = const_pointer_cast<Context>(getContext());
+        mutable_context->setSetting("dedup_key_mode", String("ignore"));
+    }
 
     auto query_sample_block = getSampleBlock(insert_query, table, metadata_snapshot);
     if (!insert_query.table_function)
@@ -644,6 +661,72 @@ void InterpreterInsertQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
     }
 }
 
+void parseFuzzyName(const ContextPtr & context_ptr, std::vector<String> & file_path_list, const String & source_uri, const String & scheme)
+{
+    // Assume no query and fragment in uri, todo, add sanity check
+    String fuzzy_file_name;
+    String uri_prefix = source_uri.substr(0, source_uri.find_last_of('/'));
+    if (uri_prefix.length() == source_uri.length())
+    {
+        fuzzy_file_name = source_uri;
+        uri_prefix.clear();
+    }
+    else
+    {
+        uri_prefix += "/";
+        fuzzy_file_name = source_uri.substr(uri_prefix.length());
+    }
+
+    auto max_files = context_ptr->getSettingsRef().fuzzy_max_files;
+    std::vector<String> parent_list = parseDescription(fuzzy_file_name, 0, fuzzy_file_name.length(), ',', max_files);
+    for (const auto & fuzzy_name : parent_list)
+    {
+        std::vector<String> child_list = parseDescription(fuzzy_name, 0, fuzzy_name.length(), '|', max_files);
+        for (const auto & star_name : child_list)
+        {
+            String full_path = uri_prefix + star_name;
+            if (star_name.find_first_of("*?{") == std::string::npos)
+            {
+                file_path_list.emplace_back(full_path);
+                continue;
+            }
+
+            std::shared_ptr<FilePathMatcher> matcher;
+            if (scheme.empty() || scheme == "file")
+            {
+                matcher = std::make_shared<LocalFilePathMatcher>();
+            }
+#if USE_HDFS
+            else if (DB::isHdfsOrCfsScheme(scheme))
+            {
+                matcher = std::make_shared<HDFSFilePathMatcher>(full_path, context_ptr);
+            }
+#endif
+#if USE_AWS_S3
+            else if (isS3URIScheme(scheme))
+            {
+                matcher = std::make_shared<S3FilePathMatcher>(full_path, context_ptr);
+            }
+#endif
+            else
+            {
+                file_path_list.emplace_back(full_path);
+            }
+
+            if (matcher)
+            {
+                // match files
+                String match_path = matcher->removeSchemeAndPrefix(full_path);
+                Strings match_file_list = matcher->regexMatchFiles("/", match_path);
+                file_path_list.insert(file_path_list.end(), match_file_list.begin(), match_file_list.end());
+            }
+
+            if (file_path_list.size() > max_files)
+                throw Exception(uri_prefix + fuzzy_file_name + " generates too many files, please modify the value of fuzzy_max_files.", ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
+}
+
 BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
     const ContextPtr context_ptr,
     const ColumnsDescription & columns,
@@ -654,83 +737,71 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
     bool is_enable_squash,
     const String & compression_method)
 {
-    // Assume no query and fragment in uri, todo, add sanity check
-    String fuzzyFileNames;
-    String uriPrefix = source_uri.substr(0, source_uri.find_last_of('/'));
-    if (uriPrefix.length() == source_uri.length())
-    {
-        fuzzyFileNames = source_uri;
-        uriPrefix.clear();
-    }
-    else
-    {
-        uriPrefix += "/";
-        fuzzyFileNames = source_uri.substr(uriPrefix.length());
-    }
-
-    Poco::URI uri(uriPrefix);
+    Poco::URI uri(source_uri);
     const String & scheme = uri.getScheme();
 
     BlockInputStreams inputs;
     {
-        auto max_files = context_ptr->getSettingsRef().fuzzy_max_files;
-        std::vector<String> fuzzyNameList = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',' , max_files);
-        std::vector<std::vector<String> > fileNames;
-        for (auto fuzzyName : fuzzyNameList)
-            fileNames.push_back(parseDescription(fuzzyName, 0, fuzzyName.length(), '|', max_files));
+        std::vector<String> file_path_list;
+        parseFuzzyName(context_ptr, file_path_list, source_uri, scheme);
 
-        for (auto & vecNames : fileNames)
+        for (auto & file_path : file_path_list)
         {
-            for (auto & name : vecNames)
-            {
-                std::unique_ptr<ReadBuffer> read_buf = nullptr;
+            std::unique_ptr<ReadBuffer> read_buf = nullptr;
 
-                if (scheme.empty() || scheme == "file")
-                {
-                    read_buf = std::make_unique<ReadBufferFromFile>(Poco::URI(uriPrefix + name).getPath());
-                }
+            if (scheme.empty() || scheme == "file")
+            {
+                read_buf = std::make_unique<ReadBufferFromFile>(Poco::URI(file_path).getPath());
+            }
 #if USE_HDFS
-                else if (DB::isHdfsOrCfsScheme(scheme))
-                {
-                    ReadSettings read_settings;
-                    read_settings.remote_throttler = context_ptr->getProcessList().getHDFSDownloadThrottler();
-                    read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, context_ptr->getHdfsConnectionParams(), read_settings);
-                }
+            else if (DB::isHdfsOrCfsScheme(scheme))
+            {
+                ReadSettings read_settings;
+                read_settings.remote_throttler = context_ptr->getProcessList().getHDFSDownloadThrottler();
+                read_buf = std::make_unique<ReadBufferFromByteHDFS>(file_path, context_ptr->getHdfsConnectionParams(), read_settings);
+            }
 #endif
 #if USE_AWS_S3
-                else if (isS3URIScheme(scheme))
-                {
-                    S3::URI s3_uri(Poco::URI(uriPrefix + name));
-                    String endpoint = s3_uri.endpoint.empty() ? context_ptr->getSettingsRef().s3_endpoint.toString() : s3_uri.endpoint;
-                    String bucket = s3_uri.bucket;
-                    String key = s3_uri.key;
-                    S3::S3Config s3_cfg(endpoint, context_ptr->getSettingsRef().s3_region.toString(), bucket,
-                        context_ptr->getSettingsRef().s3_ak_id.toString(), context_ptr->getSettingsRef().s3_ak_secret.toString(),
-                        "", "", context_ptr->getSettingsRef().s3_use_virtual_hosted_style);
-                    const std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
-                    read_buf = std::make_unique<ReadBufferFromS3>(client, bucket, key, context_ptr->getReadSettings());
-                }
-#endif
-                else
-                {
-                    throw Exception("URI scheme " + scheme + " is not supported with insert statement yet", ErrorCodes::NOT_IMPLEMENTED);
-                }
-
-                read_buf = wrapReadBufferWithCompressionMethod(std::move(read_buf), chooseCompressionMethod(name, compression_method), settings.snappy_format_blocked);
-
-                inputs.emplace_back(
-                    std::make_shared<OwningBlockInputStream<ReadBuffer>>(
-                        context_ptr->getInputStreamByFormatNameAndBuffer(format, *read_buf,
-                            sample, // sample_block
-                            settings.max_insert_block_size,
-                            columns),
-                std::move(read_buf)));
+            else if (isS3URIScheme(scheme))
+            {
+                S3::URI s3_uri(file_path);
+                String endpoint = s3_uri.endpoint.empty() ? context_ptr->getSettingsRef().s3_endpoint.toString() : s3_uri.endpoint;
+                String bucket = s3_uri.bucket;
+                String key = s3_uri.key;
+                S3::S3Config s3_cfg(
+                    endpoint,
+                    context_ptr->getSettingsRef().s3_region.toString(),
+                    bucket,
+                    context_ptr->getSettingsRef().s3_ak_id.toString(),
+                    context_ptr->getSettingsRef().s3_ak_secret.toString(),
+                    "",
+                    "",
+                    context_ptr->getSettingsRef().s3_use_virtual_hosted_style);
+                const std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
+                read_buf = std::make_unique<ReadBufferFromS3>(client, bucket, key, context_ptr->getReadSettings());
             }
+#endif
+            else
+            {
+                throw Exception("URI scheme " + scheme + " is not supported with insert statement yet", ErrorCodes::NOT_IMPLEMENTED);
+            }
+
+            read_buf = wrapReadBufferWithCompressionMethod(
+                std::move(read_buf), chooseCompressionMethod(file_path, compression_method), settings.snappy_format_blocked);
+
+            inputs.emplace_back(std::make_shared<OwningBlockInputStream<ReadBuffer>>(
+                context_ptr->getInputStreamByFormatNameAndBuffer(
+                    format,
+                    *read_buf,
+                    sample, // sample_block
+                    settings.max_insert_block_size,
+                    columns),
+                std::move(read_buf)));
         }
     }
 
-    if (inputs.size() == 0)
-        throw Exception("Inputs interpreter error", ErrorCodes::LOGICAL_ERROR);
+    if (inputs.empty())
+        throw Exception("Input files is empty.", ErrorCodes::LOGICAL_ERROR);
 
     auto stream = inputs[0];
     if (inputs.size() > 1)

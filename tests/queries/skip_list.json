@@ -637,7 +637,8 @@
         "11007_atomic_attach_parts",
         "11007_attach_commit_time_bug",
         "00828_test_bitmap_format_parquet",
-        "02681_partial_part_columns"
+        "02681_partial_part_columns",
+        "02460_regex_infile_hdfs"
     ],
     
     /// Please do not add new tests to this list. It is only for backward compatibility.

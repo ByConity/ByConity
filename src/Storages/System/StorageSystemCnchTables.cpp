@@ -184,7 +184,11 @@ Pipe StorageSystemCnchTables::read(
         if (columns_require_storage.count(*it))
             require_storage = true;
         if (key_columns.count(*it))
+        {
+            /// looks very strange
+            require_storage = true;
             require_key_columns = true;
+        }
     }
 
     NameSet names_set(column_names.begin(), column_names.end());
@@ -380,41 +384,14 @@ Pipe StorageSystemCnchTables::read(
         String engine;
         if (require_key_columns)
         {
-            const char * begin = table_model.definition().data();
-            const char * end = begin + table_model.definition().size();
-            ParserQuery parser(end);
-            IAST * ast_partition_by = nullptr;
-            IAST * ast_primary_key = nullptr;
-            IAST * ast_unique_key = nullptr;
-            IAST * ast_order_by = nullptr;
-            IAST * ast_sample_by = nullptr;
-            IAST * ast_cluster_by = nullptr;
-            /// create AST from CREATE query to extract storage info
-            ASTPtr ast;
-
-            try
-            {
-                ast = parseQuery(parser, begin, end, "", 0, 0);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(&Poco::Logger::get("StorageSystemCnchTables"));
-            }
-
-            if (ast)
-            {
-                const auto & ast_create_query = ast->as<ASTCreateQuery &>();
-                const ASTStorage * ast_storage = ast_create_query.storage;
-                if (ast_storage) {
-                    engine = queryToString(*ast_storage->engine);
-                    ast_partition_by = ast_storage->partition_by;
-                    ast_order_by = ast_storage->order_by;
-                    ast_primary_key = ast_storage->primary_key;
-                    ast_unique_key = ast_storage->unique_key;
-                    ast_sample_by = ast_storage->sample_by;
-                    ast_cluster_by = ast_storage->cluster_by;
-                }
-            }
+            /// I just update what i need
+            auto metadata = storage->getInMemoryMetadataPtr();
+            auto ast_partition_by = metadata->getPartitionKeyAST();
+            auto ast_primary_key = metadata->getPrimaryKeyAST();
+            auto ast_unique_key = metadata->getUniqueKeyAST();
+            auto ast_order_by = metadata->getSortingKeyAST();
+            auto ast_sample_by = metadata->getSamplingKeyAST();
+            auto ast_cluster_by = metadata->getClusterByKeyAST();
 
             if (columns_mask[src_index++])
                 ast_partition_by ? (res_columns[col_num++]->insert(queryToString(*ast_partition_by))) : (res_columns[col_num++]->insertDefault());

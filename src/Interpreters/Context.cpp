@@ -1455,6 +1455,11 @@ const Poco::Util::AbstractConfiguration & Context::getCnchConfigRef() const
     return shared->cnch_config ? *shared->cnch_config : getConfigRef();
 }
 
+void Context::updateRootConfig(std::function<void (RootConfiguration &)> update_callback)
+{
+    update_callback(shared->root_config);
+}
+
 const RootConfiguration & Context::getRootConfig() const
 {
     return shared->root_config;
@@ -2723,6 +2728,16 @@ void Context::setProgressCallback(ProgressCallback callback)
 ProgressCallback Context::getProgressCallback() const
 {
     return progress_callback;
+}
+
+void Context::setSendTCPProgress(std::function<void()> callback)
+{
+    send_tcp_progress = callback;
+}
+
+std::function<void()> Context::getSendTCPProgress() const
+{
+    return send_tcp_progress;
 }
 
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)

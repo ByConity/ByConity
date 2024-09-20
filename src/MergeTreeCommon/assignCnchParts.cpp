@@ -249,14 +249,22 @@ static std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrict
 
 HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts)
 {
-    auto workers = worker_group->getWorkerIDVec();
-    auto num_workers = workers.size();
+    auto worker_ids = worker_group->getWorkerIDVec();
+    /// we don't know the order of workers returned from consul so sort explicitly now
+    sort(worker_ids.begin(), worker_ids.end());
+
+    auto num_workers = worker_ids.size();
     HivePartsAssignMap ret;
 
     for (const auto & file : parts)
     {
-        auto idx = consistentHashForString(file->file_path, num_workers);
-        ret[workers[idx]].emplace_back(file);
+        size_t assigned_worker_idx = -1;
+        if (auto bucket_id = file->getBucketId(); bucket_id)
+            assigned_worker_idx = *bucket_id % num_workers;
+        else
+            assigned_worker_idx = consistentHashForString(file->file_path, num_workers);
+
+        ret[worker_ids[assigned_worker_idx]].emplace_back(file);
     }
 
     return ret;
