@@ -45,7 +45,7 @@ namespace DB
 
 S3ClientPtr initializeS3Client(const ContextPtr & ctx, const CnchFileArguments & arguments)
 {
-    S3::URI uri(arguments.url);
+    S3::URI uri(arguments.url, true);
     if (uri.bucket.find_first_of("*?{") != DB::String::npos)
         throw Exception("Expression can not have wildcards inside bucket name", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 

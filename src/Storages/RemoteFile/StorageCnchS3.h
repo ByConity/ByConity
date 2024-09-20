@@ -56,7 +56,7 @@ public:
         const CnchFileArguments & arguments_,
         const CnchFileSettings & settings_)
         : IStorageCnchFile(context_, table_id_, required_columns_, constraints_, setting_changes_, arguments_, settings_)
-        , s3_uri(arguments_.url)
+        , s3_uri(arguments_.url, true)
     {
         if (file_list.size() == 1)
             file_list[0] = s3_uri.key;
