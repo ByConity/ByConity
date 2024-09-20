@@ -1,7 +1,7 @@
 Projection Est. 5 rows, cost 8.362000e+00
 │     Expressions: res:=_in_subquery
 └─ Projection Est. 5 rows, cost 7.992000e+00
-   │     Expressions: _in_subquery:=if(isNull(number), NULL, cast(multiIf(build_side_non_null_symbol = 1, 1, build_side_non_null_symbol = NULL, 0, 0), \'UInt8\'))
+   │     Expressions: _in_subquery:=if(isNull(number), NULL, multiIf(build_side_non_null_symbol = 1, 1, build_side_non_null_symbol = NULL, 0, 0))
    └─ Limit Est. 5 rows, cost 7.622000e+00
       │     Limit: 5
       └─ Gather Exchange Est. 5 rows, cost 7.622000e+00

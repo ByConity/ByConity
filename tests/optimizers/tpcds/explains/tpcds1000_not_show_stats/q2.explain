@@ -20,7 +20,7 @@ Projection
                └─ Repartition Exchange
                   │     Partition by: {expr#cast(minus(d_week_seq_3, 53), 'Int32')}
                   └─ Projection
-                     │     Expressions: [expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_2], expr#cast(minus(d_week_seq_3, 53), 'Int32'):=cast(d_week_seq_3 - 53, 'Int32')
+                     │     Expressions: [expr#sum(multiIf(equals(d_day_name, 'Friday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Monday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Saturday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Sunday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Thursday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), sales_price, NULL))_2, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), sales_price, NULL))_2], expr#cast(minus(d_week_seq_3, 53), 'Int32'):=d_week_seq_3 - 53
                      └─ Filter
                         │     Condition: (d_week_seq_4 = d_week_seq_3) AND (d_year_1 = cast(2002, 'UInt32'))
                         └─ Buffer

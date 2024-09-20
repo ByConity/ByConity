@@ -1,0 +1,61 @@
+Projection
+│     Expressions: toDateTime(datetime):=`expr#toDateTime(datetime)`, toDateTime32(datetime):=`expr#toDateTime32(datetime)`, toFixedString(fxstr, 10):=`expr#toFixedString(fxstr, 10)`, toFixedString(fxstr, 12):=`expr#toFixedString(fxstr, 12)`, toInt64(i64):=i64, toInt64(i64glc):=i64glc, toInt64(i64glcnull):=i64glcnull, toInt64(i64lc):=i64lc, toInt64(i64lcnull):=i64lcnull, toInt64(i64null):=i64null, toInt64(u64):=`expr#toInt64(u64)`, toInt64(u64null):=`expr#toInt64(u64null)`, toString(fxstr):=`expr#toString(fxstr)`, toString(str):=str
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [i64, i64glc, i64glcnull, i64lc, i64lcnull, i64null, str], expr#toDateTime(datetime):=datetime, expr#toDateTime32(datetime):=datetime, expr#toFixedString(fxstr, 10):=toFixedString(fxstr, 10), expr#toFixedString(fxstr, 12):=toFixedString(fxstr, 12), expr#toInt64(u64):=toInt64(u64), expr#toInt64(u64null):=toInt64(u64null), expr#toString(fxstr):=toString(fxstr)
+      └─ TableScan trim_cast_48057.tb
+               Outputs: [i64, i64null, i64lc, i64glc, i64lcnull, i64glcnull, u64, u64null, datetime, str, fxstr]
+Projection
+│     Expressions: toDateTimeOrZero(datetime):=datetime, toInt64OrZero(i64):=i64, toInt64OrZero(i64glc):=i64glc, toInt64OrZero(i64glcnull):=i64glcnull, toInt64OrZero(i64lc):=i64lc, toInt64OrZero(i64lcnull):=i64lcnull, toInt64OrZero(i64null):=i64null, toInt64OrZero(u64):=`expr#toInt64OrZero(u64)`, toInt64OrZero(u64null):=`expr#toInt64OrZero(u64null)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [datetime, i64, i64glc, i64glcnull, i64lc, i64lcnull, i64null], expr#toInt64OrZero(u64):=toInt64OrZero(u64), expr#toInt64OrZero(u64null):=toInt64OrZero(u64null)
+      └─ TableScan trim_cast_48057.tb
+               Outputs: [i64, i64null, i64lc, i64glc, i64lcnull, i64glcnull, u64, u64null, datetime]
+Projection
+│     Expressions: toDateTimeOrNull(datetime):=`expr#toDateTimeOrNull(datetime)`, toInt64OrNull(i64):=`expr#toInt64OrNull(i64)`, toInt64OrNull(i64glc):=`expr#toInt64OrNull(i64glc)`, toInt64OrNull(i64glcnull):=i64glcnull, toInt64OrNull(i64lc):=`expr#toInt64OrNull(i64lc)`, toInt64OrNull(i64lcnull):=i64lcnull, toInt64OrNull(i64null):=i64null, toInt64OrNull(u64):=`expr#toInt64OrNull(u64)`, toInt64OrNull(u64null):=`expr#toInt64OrNull(u64null)`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [i64glcnull, i64lcnull, i64null], expr#toDateTimeOrNull(datetime):=toDateTimeOrNull(datetime), expr#toInt64OrNull(i64):=toInt64OrNull(i64), expr#toInt64OrNull(i64glc):=toInt64OrNull(i64glc), expr#toInt64OrNull(i64lc):=toInt64OrNull(i64lc), expr#toInt64OrNull(u64):=toInt64OrNull(u64), expr#toInt64OrNull(u64null):=toInt64OrNull(u64null)
+      └─ TableScan trim_cast_48057.tb
+               Outputs: [i64, i64null, i64lc, i64glc, i64lcnull, i64glcnull, u64, u64null, datetime]
+Projection
+│     Expressions: CAST(datetime, \'Int64\'):=`expr#CAST(datetime, \'Int64\')`, CAST(fxstr, \'FixedString(12)\'):=`expr#CAST(fxstr, \'FixedString(12)\')`, CAST(fxstr, \'Int64\'):=`expr#CAST(fxstr, \'Int64\')`, CAST(i64, \'Int64\'):=i64, CAST(i64glc, \'Int64\'):=`expr#CAST(i64glc, \'Int64\')`, CAST(i64glcnull, \'Int64\'):=`expr#CAST(i64glcnull, \'Int64\')`, CAST(i64lc, \'Int64\'):=`expr#CAST(i64lc, \'Int64\')`, CAST(i64lcnull, \'Int64\'):=`expr#CAST(i64lcnull, \'Int64\')`, CAST(i64null, \'Int64\'):=`expr#CAST(i64null, \'Int64\')`, CAST(i64null, \'Int64\')_1:=`expr#CAST(i64null, \'Int64\')`, CAST(str, \'Int64\'):=`expr#CAST(str, \'Int64\')`, CAST(u64, \'Int64\'):=`expr#CAST(u64, \'Int64\')`, CAST(u64null, \'Int64\'):=`expr#CAST(u64null, \'Int64\')`
+└─ Gather Exchange
+   └─ Projection
+      │     Expressions: [i64], expr#CAST(datetime, \'Int64\'):=CAST(datetime, \'Int64\'), expr#CAST(fxstr, \'FixedString(12)\'):=CAST(fxstr, \'FixedString(12)\'), expr#CAST(fxstr, \'Int64\'):=CAST(fxstr, \'Int64\'), expr#CAST(i64glc, \'Int64\'):=CAST(i64glc, \'Int64\'), expr#CAST(i64glcnull, \'Int64\'):=CAST(i64glcnull, \'Int64\'), expr#CAST(i64lc, \'Int64\'):=CAST(i64lc, \'Int64\'), expr#CAST(i64lcnull, \'Int64\'):=CAST(i64lcnull, \'Int64\'), expr#CAST(i64null, \'Int64\'):=CAST(i64null, \'Int64\'), expr#CAST(str, \'Int64\'):=CAST(str, \'Int64\'), expr#CAST(u64, \'Int64\'):=CAST(u64, \'Int64\'), expr#CAST(u64null, \'Int64\'):=CAST(u64null, \'Int64\')
+      └─ TableScan trim_cast_48057.tb
+               Outputs: [i64, i64null, i64lc, i64glc, i64lcnull, i64glcnull, u64, u64null, datetime, str, fxstr]
+Projection
+│     Expressions: CAST(datetime, \'DateTime\'):=datetime, CAST(datetime, \'DateTime32\'):=datetime, CAST(fxstr, \'FixedString(10)\'):=fxstr, CAST(i64, \'Int64\'):=i64, CAST(i64glc, \'LowCardinality(Int64)\'):=i64glc, CAST(i64glcnull, \'LowCardinality(Nullable(Int64))\'):=i64glcnull, CAST(i64lc, \'LowCardinality(Int64)\'):=i64lc, CAST(i64lcnull, \'LowCardinality(Nullable(Int64))\'):=i64lcnull, CAST(i64null, \'Nullable(Int64)\'):=i64null, CAST(str, \'String\'):=str, CAST(u64, \'UInt64\'):=u64, CAST(u64null, \'Nullable(UInt64)\'):=u64null
+└─ Gather Exchange
+   └─ TableScan trim_cast_48057.tb
+            Outputs: [i64, i64null, i64lc, i64glc, i64lcnull, i64glcnull, u64, u64null, datetime, str, fxstr]
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Inner Join
+            │     Condition: i64 == i64_1
+            ├─ TableScan trim_cast_48057.tb
+            │        Outputs: [i64]
+            └─ Broadcast Exchange
+               └─ TableScan trim_cast_48057.tb
+                        Outputs: i64_1:=i64
+Projection
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Inner Join
+            │     Condition: i64 == i64_1
+            ├─ TableScan trim_cast_48057.tb
+            │        Outputs: [i64]
+            └─ Broadcast Exchange
+               └─ TableScan trim_cast_48057.tb
+                        Outputs: i64_1:=i64
