@@ -1,0 +1,30 @@
+test enable replace_if_not_null with non-nullable column, stage 1
+2023-01-01	1001	20	c1	e1
+2023-01-01	1002	21	c2	e2
+2023-01-01	1003	22	c3	e3
+2023-01-02	1004	23	c4	e4
+2023-01-02	1005	30	d2	x2
+test enable replace_if_not_null with non-nullable column, stage 2
+2023-01-01	1001	20	c1	e1
+2023-01-01	1002	21	c2	e2
+2023-01-01	1003	22	c3	e3
+2023-01-02	1004	23	c4	e4
+2023-01-02	1005	30	d2	
+test enable replace_if_not_null with non-nullable column, stage 3
+2023-01-01	1001	20	c1	e1
+2023-01-01	1002	21	c2	e2
+2023-01-01	1003	22	c3	e3
+2023-01-02	1004	23	c4	e4
+2023-01-02	1005	30	\N	
+test enable replace_if_not_null with non-nullable column, stage 4
+2023-01-01	1001	20	c1	e1
+2023-01-01	1002	21	c2	e2
+2023-01-01	1003	22	c3	e3
+2023-01-02	1004	23	c4	e4
+2023-01-02	1005	30	\N	
+test enable replace_if_not_null with non-nullable column, stage 5
+1	2	m	m\0\0\0\0\0\0\0\0\0	[]	{'a':2,'d':7}
+2	3		\0\0\0\0\0\0\0\0\0\0	[5,6]	{'e':6,'f':9}
+test enable replace_if_not_null with non-nullable column, stage 6
+1	2		m\0\0\0\0\0\0\0\0\0	[]	{'a':2,'d':7}
+2	3		\0\0\0\0\0\0\0\0\0\0	[5,6]	{'e':6,'f':9}

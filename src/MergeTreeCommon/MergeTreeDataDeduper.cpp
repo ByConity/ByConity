@@ -236,13 +236,19 @@ namespace
         if (optimize_for_same_update_columns)
         {
             Names columns_from_metadata = res.getNames();
+            NameSet columns_of_replace_if_not_null = data.getInMemoryMetadataPtr()->getColumns().getReplaceIfNotNullColumns();
             for (const auto & col_name : columns_from_metadata)
             {
                 if (!same_update_column_set.contains(col_name))
                     continue;
+
                 /// For map type, we still need to read origin value even if it's in update_columns when partial_update_enable_merge_map is true
-                if (!data.getInMemoryMetadataPtr()->getColumns().getPhysical(col_name).type->isMap()
-                    || !data.getSettings()->partial_update_enable_merge_map)
+                bool need_read_for_map_column = data.getInMemoryMetadataPtr()->getColumns().getPhysical(col_name).type->isMap() && data.getSettings()->partial_update_enable_merge_map;
+                /// For nullable type, we still need to read origin value when replace_if_not_null is true
+                bool need_read_for_nullable_column = data.getInMemoryMetadataPtr()->getColumns().getPhysical(col_name).type->isNullable() &&
+                    (columns_of_replace_if_not_null.count(col_name) || data.getSettings()->partial_update_replace_if_not_null);
+
+                if (!need_read_for_map_column && !need_read_for_nullable_column)
                     res.erase(col_name);
             }
         }
@@ -2124,6 +2130,8 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
                 parseUpdateColumns(update_columns->getDataAt(i).toString(), default_filters, check_column, get_column_by_index, i);
         }
     }
+
+    NameSet columns_of_replace_if_not_null = data.getInMemoryMetadataPtr()->getColumns().getReplaceIfNotNullColumns();
     auto parse_update_columns_time = timer.elapsedMilliseconds();
     size_t thread_num = std::max(static_cast<size_t>(1), std::min(block.columns(), static_cast<size_t>(data.getSettings()->partial_update_replace_columns_thread_size)));
     ThreadPool replace_column_pool(thread_num);
@@ -2167,6 +2175,15 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
                     if (!default_filters.count(col.name))
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find default filter of column {} when partial_update_enable_specify_update_columns is true.", col.name);
 
+                    if (col.type->isNullable() && (columns_of_replace_if_not_null.count(col.name) || data.getSettings()->partial_update_replace_if_not_null))
+                    {
+                        auto& default_filter_ref = default_filters[col.name];
+                        for (size_t row = 0; row < block_size; ++row)
+                        {
+                            if (col.column->isNullAt(row))
+                                default_filter_ref->getData()[row] = 1;
+                        }
+                    }
                     is_default_col = std::move(default_filters[col.name]);
 
                     const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();

@@ -797,6 +797,15 @@ ColumnsDescription::ColumnOnUpdates ColumnsDescription::getOnUpdates() const
     return ret;
 }
 
+NameSet ColumnsDescription::getReplaceIfNotNullColumns() const
+{
+    NameSet ret;
+    for (const auto & col : columns)
+        if (col.replace_if_not_null)
+            ret.emplace(col.name);
+    return ret;
+}
+
 bool ColumnsDescription::hasCompressionCodec(const String & column_name) const
 {
     const auto it = columns.get<1>().find(column_name);

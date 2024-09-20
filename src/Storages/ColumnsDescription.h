@@ -101,8 +101,10 @@ struct ColumnDescription
     String name;
     DataTypePtr type;
     ColumnDefault default_desc;
-    // TODO: Wrap on update expression using a structure similar to default_desc
+    /// TODO: Wrap on update expression using a structure similar to default_desc
     ASTPtr on_update_expression;
+    /// For partial update, this means the imported data will only be replaced when it is of non-null value
+    bool replace_if_not_null = false;
     String comment;
     ASTPtr codec;
     ASTPtr ttl;
@@ -219,6 +221,7 @@ public:
     std::optional<ColumnDefault> getDefault(const String & column_name) const;
     using ColumnOnUpdates = std::unordered_map<std::string, ASTPtr>;
     ColumnOnUpdates getOnUpdates() const;
+    NameSet getReplaceIfNotNullColumns() const;
 
     /// Does column has non default specified compression codec
     bool hasCompressionCodec(const String & column_name) const;

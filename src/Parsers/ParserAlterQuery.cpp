@@ -178,6 +178,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_comment("COMMENT");
     ParserKeyword s_codec("CODEC");
     ParserKeyword s_ttl("TTL");
+    ParserKeyword s_replace_if_not_null{"REPLACE_IF_NOT_NULL"};
 
     ParserKeyword s_remove_ttl("REMOVE TTL");
 
@@ -1126,6 +1127,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                         command->remove_property = "CODEC";
                     else if (s_ttl.ignore(pos, expected))
                         command->remove_property = "TTL";
+                    else if (s_replace_if_not_null.ignore(pos, expected))
+                        command->remove_property = "REPLACE_IF_NOT_NULL";
                     else
                         return false;
                 }

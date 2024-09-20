@@ -153,6 +153,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserDataType type_parser(dt);
     ParserKeyword s_default{"DEFAULT"};
     ParserKeyword s_auto_increment{"AUTO_INCREMENT"};
+    ParserKeyword s_replace_if_not_null{"REPLACE_IF_NOT_NULL"};
     ParserKeyword s_null{"NULL"};
     ParserKeyword s_not{"NOT"};
     ParserKeyword s_pk{"PRIMARY KEY"};
@@ -244,6 +245,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         && !s_pk.checkWithoutMoving(pos, expected)
         && !s_default.checkWithoutMoving(pos, expected)
         && !s_auto_increment.checkWithoutMoving(pos, expected)
+        && !s_replace_if_not_null.checkWithoutMoving(pos, expected)
         && !s_materialized.checkWithoutMoving(pos, expected)
         && !s_alias.checkWithoutMoving(pos, expected)
         && (require_type
@@ -322,6 +324,11 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     if (s_pk.ignore(pos, expected))
     {
         column_declaration->mysql_primary_key = true;
+    }
+
+    if (s_replace_if_not_null.ignore(pos, expected))
+    {
+        column_declaration->replace_if_not_null = true;
     }
 
     if (s_comment.ignore(pos, expected))

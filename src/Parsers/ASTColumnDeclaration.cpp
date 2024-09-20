@@ -55,6 +55,9 @@ ASTPtr ASTColumnDeclaration::clone() const
         res->children.push_back(res->on_update_expression);
     }
 
+    if (replace_if_not_null)
+        res->replace_if_not_null = replace_if_not_null;
+
     if (comment)
     {
         res->comment = comment->clone();
@@ -123,6 +126,11 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
         on_update_expression->formatImpl(settings, state, frame);
     }
 
+    if (replace_if_not_null)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "REPLACE_IF_NOT_NULL"  << (settings.hilite ? hilite_none : "");
+    }
+
     if (flags & TYPE_COMPRESSION_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "COMPRESSION"  << (settings.hilite ? hilite_none : "");
@@ -141,18 +149,18 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
     if (flags & TYPE_BITENGINE_ENCODE_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BitEngineEncode"  << (settings.hilite ? hilite_none : "");
-    }   
+    }
 
     if (flags & TYPE_BLOOM_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BLOOM"  << (settings.hilite ? hilite_none : "");
-    } 
+    }
 
     if (flags & TYPE_BITMAP_INDEX_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BitmapIndex"  << (settings.hilite ? hilite_none : "");
     }
-    
+
     if (flags & TYPE_SEGMENT_BITMAP_INDEX_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "SegmentBitmapIndex"  << (settings.hilite ? hilite_none : "");
