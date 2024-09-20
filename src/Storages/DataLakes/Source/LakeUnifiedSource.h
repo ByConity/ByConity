@@ -1,22 +1,19 @@
 #pragma once
 
-#include <Common/Logger.h>
 #include <unordered_map>
-#include "Common/config.h"
-#if USE_HIVE
-
+#include <Formats/SharedParsingThreadPool.h>
+#include <Processors/QueryPipeline.h>
 #include <Processors/Sources/SourceWithProgress.h>
-#include "Formats/SharedParsingThreadPool.h"
-#include "Processors/QueryPipeline.h"
-#include "Storages/Hive/HiveFile/IHiveFile.h"
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
-#include "Storages/StorageInMemoryMetadata.h"
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
+#include <Storages/Hive/HivePartition.h>
+#include <Storages/StorageInMemoryMetadata.h>
+#include <Common/Logger.h>
 
 namespace DB
 {
 class PullingPipelineExecutor;
 
-class StorageHiveSource : public SourceWithProgress, WithContext
+class LakeUnifiedSource : public SourceWithProgress, WithContext, public shared_ptr_helper<LakeUnifiedSource>
 {
 public:
     /// shared between threads
@@ -26,8 +23,8 @@ public:
         BlockInfo(const Block & header_, const StorageMetadataPtr & metadata_);
         Block getHeader() const;
 
-        Block header;           /// physical columns + partition columns + virtual columns
-        Block physical_header;  /// physical columns
+        Block header; /// physical columns + partition columns + virtual columns
+        Block physical_header; /// physical columns
 
         StorageMetadataPtr metadata;
         std::unordered_map<String, size_t> partition_name_to_index;
@@ -36,50 +33,59 @@ public:
 
     struct Allocator
     {
-        explicit Allocator(HiveFiles && files_);
+        explicit Allocator(LakeScanInfos && lake_scan_infos_);
 
         /// next file slice to read from
-        HiveFilePtr next() const;
+        LakeScanInfoPtr next() const;
 
-        HiveFiles hive_files;
+        LakeScanInfos lake_scan_infos;
+
     private:
         mutable std::atomic_size_t unallocated = 0;
     };
 
     using AllocatorPtr = std::shared_ptr<Allocator>;
 
-    StorageHiveSource(
+    LakeUnifiedSource(
         ContextPtr context_,
-        size_t max_block_size,
+        size_t max_block_size_,
         BlockInfoPtr info_,
         AllocatorPtr allocator_,
         const std::shared_ptr<SelectQueryInfo> & query_info_,
         const SharedParsingThreadPoolPtr & shared_pool_);
 
-    ~StorageHiveSource() override;
+    ~LakeUnifiedSource() override;
 
+    String getName() const override { return "LakeUnifiedSource"; }
     Chunk generate() override;
-    String getName() const override { return "HiveSource"; }
     void onFinish() override { shared_pool->finishStream(); }
     void prepareReader();
 
 private:
-    Chunk buildResultChunk(Chunk & chunk) const;
+    void resetReader();
+    SourcePtr getSource() const;
+    Chunk generatePostProcessor(Chunk & chunk);
+    Chunk generatePostProcessorForHive(Chunk & chunk);
+
+    HivePartitionPtr getHivePartition(const String & partition_id);
 
     std::shared_ptr<const BlockInfo> block_info;
     std::shared_ptr<const Allocator> allocator;
 
-    HiveFilePtr hive_file;
+    LakeScanInfoPtr lake_scan_info;
     SourcePtr data_source;
     SharedParsingThreadPoolPtr shared_pool;
     const bool need_only_count;
 
-    std::shared_ptr<IHiveFile::ReadParams> read_params;
+    std::shared_ptr<ILakeScanInfo::ReadParams> read_params;
     std::unique_ptr<QueryPipeline> pipeline;
     std::unique_ptr<PullingPipelineExecutor> reader;
-    LoggerPtr log {getLogger("StorageHiveSource")};
+
+    // Only used for hive
+    // partition_id -> partition
+    std::unordered_map<String, HivePartitionPtr> hive_partitions;
+
+    LoggerPtr log{getLogger("LakeUnifiedSource")};
 };
 
 }
-
-#endif

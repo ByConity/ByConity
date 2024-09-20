@@ -1,9 +1,9 @@
 #pragma once
-#include <Common/Logger.h>
 #include "Common/config.h"
+#include <Common/Logger.h>
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
-#include "Storages/Hive/StorageCnchHive.h"
+#include <Storages/Hive/StorageCnchHive.h>
 
 namespace DB
 {
@@ -31,14 +31,12 @@ public:
 
     std::optional<TableStatistics> getTableStats(const Strings & columns, ContextPtr local_context) override;
 
-    void serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files) override;
-
 private:
     Strings getHiveColumnNames() const;
     Strings getHiveColumnTypes() const;
 
     JNIHiveMetastoreClient * jni_meta_client = nullptr;
-    LoggerPtr log {getLogger("CnchLas")};
+    LoggerPtr log{getLogger("CnchLas")};
 };
 
 }

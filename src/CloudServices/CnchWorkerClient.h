@@ -29,7 +29,6 @@
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include <Storages/CheckResults.h>
-#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/DataPart_fwd.h>
 

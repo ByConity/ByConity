@@ -144,10 +144,10 @@ endif()
 
 if (USE_HIVE)
     add_headers_and_sources(dbms Storages/Hive)
-    add_headers_and_sources(dbms Storages/Hive/HiveFile)
     add_headers_and_sources(dbms Storages/Hive/Metastore)
     add_headers_and_sources(dbms Storages/DataLakes)
-    add_headers_and_sources(dbms Storages/DataLakes/HiveFile)
+    add_headers_and_sources(dbms Storages/DataLakes/ScanInfo)
+    add_headers_and_sources(dbms Storages/DataLakes/Source)
 endif()
 
 add_headers_and_sources(dbms Protos)

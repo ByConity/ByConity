@@ -83,10 +83,15 @@ Protos::Paimon::Schema PaimonCatalogClient::getPaimonSchema(const String & datab
 }
 
 PaimonScanInfo PaimonCatalogClient::getScanInfo(
-    const String & database, const String & table, const std::vector<String> & required_fields, const std::optional<String> & rpn_predicate)
+    const String & database,
+    const String & table,
+    const std::vector<String> & required_fields,
+    const std::optional<String> & rpn_predicate,
+    const bool force_jni)
 {
     JNI_INVOKE({
         std::map<String, String> params;
+        params[paimon_utils::PARAMS_KEY_FORCE_JNI] = force_jni ? "true" : "false";
         params[paimon_utils::PARAMS_KEY_DATABASE] = database;
         params[paimon_utils::PARAMS_KEY_TABLE] = table;
         params[paimon_utils::PARAMS_KEY_REQUIRED_FIELDS] = paimon_utils::concat(required_fields);
@@ -94,18 +99,27 @@ PaimonScanInfo PaimonCatalogClient::getScanInfo(
         {
             params[paimon_utils::PARAMS_KEY_RPN_PREDICATE] = rpn_predicate.value();
         }
-        auto [encoded_table, encoded_predicate, encoded_splits] = jni_client->getPaimonScanInfo(params);
-        return PaimonScanInfo{std::move(encoded_table), std::move(encoded_predicate), std::move(encoded_splits)};
+        auto [encoded_table, encoded_predicate, encoded_splits, raw_files] = jni_client->getPaimonScanInfo(params);
+        return PaimonScanInfo{std::move(encoded_table), std::move(encoded_predicate), std::move(encoded_splits), std::move(raw_files)};
     };)
 }
 
-void PaimonCatalogClient::checkOrConvert(const String & database, const String & table, StorageInMemoryMetadata & metadata)
+void PaimonCatalogClient::checkMetadataIfNecessary(const String & database, const String & table, const StorageMetadataPtr metadata)
 {
+    if (metadata->columns.empty())
+        return;
+
     paimon_utils::PaimonSchemaConverter converter(getContext(), storage_settings, getPaimonSchema(database, table));
+    converter.check(*metadata);
+}
+
+void PaimonCatalogClient::convertMetadataIfNecessary(const String & database, const String & table, StorageInMemoryMetadata & metadata)
+{
     if (!metadata.columns.empty())
-        converter.check(metadata);
-    else
-        converter.convert(metadata);
+        return;
+
+    paimon_utils::PaimonSchemaConverter converter(getContext(), storage_settings, getPaimonSchema(database, table));
+    converter.convert(metadata);
 }
 
 
@@ -227,7 +241,7 @@ Poco::JSON::Object PaimonS3CatalogClient::buildCatalogParams()
     json.set(paimon_utils::PARAMS_KEY_S3_ENDPOINT, storage_settings->endpoint.value);
     json.set(paimon_utils::PARAMS_KEY_S3_ACCESS_KEY, storage_settings->ak_id.value);
     json.set(paimon_utils::PARAMS_KEY_S3_SECRET_KEY, storage_settings->ak_secret.value);
-    json.set(paimon_utils::PARAMS_KEY_S3_PATH_STYLE_ACCESS, storage_settings->s3_use_virtual_hosted_style.value);
+    json.set(paimon_utils::PARAMS_KEY_S3_PATH_STYLE_ACCESS, !storage_settings->s3_use_virtual_hosted_style.value);
     json.set(paimon_utils::PARAMS_KEY_WAREHOUSE, warehouse);
 
     if (!storage_settings->s3_extra_options.value.empty())

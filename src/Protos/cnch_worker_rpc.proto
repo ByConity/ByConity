@@ -490,7 +490,7 @@ message TableDataParts
   required string table = 2;
   repeated DataModelPart server_parts = 3;
   repeated DataModelDeleteBitmap server_part_bitmaps = 4;
-  optional ProtoHiveFiles hive_parts = 5;
+  optional LakeScanInfos lake_scan_info_parts = 5;
   repeated int64 bucket_numbers = 6;
   repeated CnchFilePartModel file_parts = 7;
   /// mutations: CloudMergeTree need this to find the actual column name in storage.

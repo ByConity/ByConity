@@ -27,14 +27,13 @@
 #include <ResourceManagement/CommonData.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DataLakes/HudiDirectoryLister.h>
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
 #include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/Hive/DirectoryLister.h>
-#include <Storages/Hive/HiveFile/IHiveFile.h>
 #include <Storages/Hive/HivePartition.h>
 #include <Storages/Hive/HiveSchemaConverter.h>
 #include <Storages/Hive/HiveWhereOptimizer.h>
 #include <Storages/Hive/Metastore/HiveMetastore.h>
-#include <Storages/Hive/StorageHiveSource.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/StorageFactory.h>
@@ -67,7 +66,8 @@ StorageCnchLakeBase::StorageCnchLakeBase(
 
 StorageID StorageCnchLakeBase::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
 {
-    auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context, maxStreams(local_context));
+    auto prepare_result
+        = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context, maxStreams(local_context));
     StorageID storage_id = getStorageID();
     storage_id.table_name = prepare_result.local_table_name;
     return storage_id;
@@ -103,7 +103,7 @@ void StorageCnchLakeBase::read(
 
     auto worker_group = getWorkerGroupForTable(local_context, shared_from_this());
     /// Return directly (with correct header) if no shard read from
-    if (!worker_group || worker_group->getShardsInfo().empty() || result.hive_files.empty())
+    if (!worker_group || worker_group->getShardsInfo().empty() || result.lake_scan_infos.empty())
     {
         LOG_TRACE(log, " worker group empty ");
         Pipe pipe(std::make_shared<NullSource>(header));
@@ -226,18 +226,12 @@ void StorageCnchLakeBase::alter(const AlterCommands & params, ContextPtr local_c
     setInMemoryMetadata(new_metadata);
 }
 
-void StorageCnchLakeBase::serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
+void StorageCnchLakeBase::serializeLakeScanInfos(Protos::LakeScanInfos & proto, const LakeScanInfos & lake_scan_infos)
 {
-    /// TODO: {caoliu} hack here
-    if (!hive_files.empty() && hive_files.front()->partition)
+    for (const auto & lake_scan_info : lake_scan_infos)
     {
-        proto.set_sd_url(hive_files.front()->partition->location);
-    }
-
-    for (const auto & hive_file : hive_files)
-    {
-        auto * proto_file = proto.add_files();
-        hive_file->serialize(*proto_file);
+        auto * scan_info_proto = proto.add_scan_infos();
+        lake_scan_info->serialize(*scan_info_proto);
     }
 }
 
@@ -254,7 +248,7 @@ void StorageCnchLakeBase::collectResource(ContextPtr local_context, PrepareConte
 
     LOG_TRACE(log, "Create cloud table sql {}", cloud_table_sql);
     cnch_resource->addCreateQuery(local_context, shared_from_this(), cloud_table_sql, builder.cloudTableName());
-    cnch_resource->addDataParts(getStorageUUID(), result.hive_files);
+    cnch_resource->addDataParts(getStorageUUID(), result.lake_scan_infos);
     result.local_table_name = builder.cloudTableName();
 }
 

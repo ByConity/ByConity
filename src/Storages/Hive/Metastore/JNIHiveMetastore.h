@@ -1,9 +1,11 @@
 #pragma once
-#include "Common/config.h"
+#include <Common/config.h>
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
-#include "Common/Exception.h"
-#include "Storages/Hive/Metastore/IMetaClient.h"
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
+#include <Storages/Hive/HivePartition.h>
+#include <Storages/Hive/Metastore/IMetaClient.h>
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -34,17 +36,13 @@ public:
     std::optional<TableStatistics> getTableStats(const String &, const String &, const Strings &, bool) override { return {}; }
 
     // ApacheHive::TableStatsResult getPartitionedTableStats(const String & db_name, const String & table_name, const Strings& col_names, const std::vector<ApacheHive::Partition>& partitions ) override;
-    ApacheHive::PartitionsStatsResult getPartitionStats(
-        const String &,
-        const String &,
-        const Strings &,
-        const Strings &,
-        const std::vector<Strings> &) override
+    ApacheHive::PartitionsStatsResult
+    getPartitionStats(const String &, const String &, const Strings &, const Strings &, const std::vector<Strings> &) override
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "getAllDatabases is not implement");
     }
 
-    HiveFiles getFilesInPartition(const HivePartitions & partitions, size_t min_split_num, size_t max_threads);
+    LakeScanInfos getFilesInPartition(const HivePartitions & partitions, size_t min_split_num, size_t max_threads);
 
     std::unordered_map<String, String> & getProperties() { return properties; }
 

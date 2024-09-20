@@ -26,7 +26,6 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
-#include <Storages/Hive/HiveFile/IHiveFile.h>
 #include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <brpc/controller.h>
 #include "Common/ProfileEvents.h"
@@ -64,7 +63,7 @@ AssignedResource::AssignedResource(AssignedResource & resource)
 
     server_parts = resource.server_parts;
     virtual_parts = resource.virtual_parts;
-    hive_parts = resource.hive_parts;
+    lake_scan_info_parts = resource.lake_scan_info_parts;
     file_parts = resource.file_parts;
     part_names = resource.part_names; // don't call move here
 
@@ -82,7 +81,7 @@ AssignedResource::AssignedResource(AssignedResource && resource)
 
     server_parts = std::move(resource.server_parts);
     virtual_parts = std::move(resource.virtual_parts);
-    hive_parts = std::move(resource.hive_parts);
+    lake_scan_info_parts = std::move(resource.lake_scan_info_parts);
     file_parts = std::move(resource.file_parts);
     part_names = resource.part_names; // don't call move here
 
@@ -114,18 +113,18 @@ void AssignedResource::addDataParts(ServerVirtualPartVector parts)
     }
 }
 
-void AssignedResource::addDataParts(const HiveFiles & parts)
+void AssignedResource::addDataParts(const LakeScanInfos & parts)
 {
     for (const auto & part : parts)
     {
-        auto [it, insert] = part_names.emplace(part->file_path);
+        auto [it, insert] = part_names.emplace(part->identifier());
         if (!insert) {
             // what to do here? if we addede duplicated file path
             // self join case may trigger the exception
             // throw Exception(ErrorCodes::BAD_ARGUMENTS, "Find duplicated part name '{}'", part->file_path);
         }
         else {
-            hive_parts.emplace_back(part);
+            lake_scan_info_parts.emplace_back(part);
         }
     }
 }
@@ -536,7 +535,7 @@ void CnchServerResource::allocateResource(
             BucketNumbersAssignmentMap assigned_bucket_map;
             ServerAssignmentMap assigned_map;
             VirtualPartAssignmentMap assigned_virtual_part_map;
-            HivePartsAssignMap assigned_hive_map;
+            LakeScanInfoPartsAssignMap assigned_lake_scan_info_map;
             FilePartsAssignMap assigned_file_map;
             ServerDataPartsVector bucket_parts;
             ServerDataPartsVector leftover_server_parts;
@@ -593,7 +592,7 @@ void CnchServerResource::allocateResource(
             }
             else if (auto * cnch_lake = dynamic_cast<StorageCnchLakeBase *>(storage.get()))
             {
-                assigned_hive_map = assignCnchHiveParts(worker_group, resource.hive_parts);
+                assigned_lake_scan_info_map = assignCnchLakeScanInfoParts(worker_group, resource.lake_scan_info_parts);
             }
             else if (auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get()))
             {
@@ -621,7 +620,7 @@ void CnchServerResource::allocateResource(
                 std::set<Int64> assigned_buckets;
                 ServerDataPartsVector assigned_parts;
                 ServerVirtualPartVector assigned_virtual_parts;
-                HiveFiles assigned_hive_parts;
+                LakeScanInfos assigned_lake_scan_info_parts;
                 FileDataPartsCNCHVector assigned_file_parts;
 
                 if (auto it = assigned_bucket_map.find(host_ports.id); it != assigned_bucket_map.end())
@@ -660,13 +659,13 @@ void CnchServerResource::allocateResource(
                     CnchPartsHelper::flattenPartsVector(assigned_virtual_parts);
                 }
 
-                if (auto it = assigned_hive_map.find(host_ports.id); it != assigned_hive_map.end())
+                if (auto it = assigned_lake_scan_info_map.find(host_ports.id); it != assigned_lake_scan_info_map.end())
                 {
-                    assigned_hive_parts = std::move(it->second);
+                    assigned_lake_scan_info_parts = std::move(it->second);
                     LOG_TRACE(
                         log,
                         "Allocate {} hive parts from table {} to {}",
-                        assigned_hive_parts.size(),
+                        assigned_lake_scan_info_parts.size(),
                         storage->getStorageID().getNameForLogs(),
                         host_ports.toDebugString());
                 }
@@ -685,7 +684,7 @@ void CnchServerResource::allocateResource(
                 bool empty = (resource.table_version == 0 || (use_bucket_assignment && assigned_buckets.empty()))
                         && assigned_parts.empty()
                         && assigned_virtual_parts.empty()
-                        && assigned_hive_parts.empty()
+                        && assigned_lake_scan_info_parts.empty()
                         && assigned_file_parts.empty();
 
                 if (!empty)
@@ -713,7 +712,7 @@ void CnchServerResource::allocateResource(
 
                 worker_resource.addDataParts(assigned_parts);
                 worker_resource.addDataParts(std::move(assigned_virtual_parts));
-                worker_resource.addDataParts(assigned_hive_parts);
+                worker_resource.addDataParts(assigned_lake_scan_info_parts);
                 worker_resource.addDataParts(assigned_file_parts);
                 worker_resource.bucket_numbers = use_bucket_assignment ? assigned_buckets : required_bucket_numbers;
                 worker_resource.sent_create_query = resource.sent_create_query;

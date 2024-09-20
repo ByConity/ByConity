@@ -22,7 +22,7 @@
 #include <Interpreters/WorkerGroupHandle.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Storages/DataPart_fwd.h>
-#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
@@ -33,7 +33,7 @@ struct PrepareContextResult
 {
     String local_table_name;
     ServerDataPartsVector parts;
-    HiveFiles hive_files;
+    LakeScanInfos lake_scan_infos;
     FileDataPartsCNCHVector file_parts;
 };
 

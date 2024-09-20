@@ -21,9 +21,16 @@ class StorageCnchPaimon : public shared_ptr_helper<StorageCnchPaimon>, public St
 
 public:
     std::string getName() const override { return "PaimonCnch"; }
-    bool supportsPrewhere() const override { return false; }
+    bool supportsPrewhere() const override { return true; }
+    void checkSchema() const override
+    {
+        if (catalog_client)
+            catalog_client->checkMetadataIfNecessary(db_name, table_name, getInMemoryMetadataPtr());
+    }
+    ASTPtr
+    applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr stats) const override;
 
-    std::optional<TableStatistics> getTableStats(const Strings & /*columns*/, ContextPtr /*local_context*/) override
+    std::optional<TableStatistics> getTableStats(const Strings & /*columns*/, ContextPtr /*query_context*/) override
     {
         return std::nullopt;
     }
@@ -42,11 +49,11 @@ protected:
         const Names & column_names,
         const StorageMetadataPtr & metadata_snapshot,
         SelectQueryInfo & query_info,
-        ContextPtr & local_context,
+        ContextPtr & query_context,
         unsigned num_streams) override;
 
 private:
-    LoggerPtr log{getLogger("StoragePaimonCluster")};
+    LoggerPtr log{getLogger("StorageCnchPaimon")};
 
     PaimonCatalogClientPtr catalog_client;
 };
