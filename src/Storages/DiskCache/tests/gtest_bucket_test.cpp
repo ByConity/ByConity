@@ -3,6 +3,7 @@
 #include <random>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <pcg_random.hpp>
 
 #include <Storages/DiskCache/Bucket.h>
 #include <Storages/DiskCache/HashKey.h>
@@ -321,7 +322,7 @@ TEST(Bucket, Iteration)
     }
 }
 
-TEST(Bucket, DISABLED_EvictionExpired)
+TEST(Bucket, EvictionExpired)
 {
     constexpr uint32_t bucket_size = 1024;
     const uint32_t item_min_size = BucketEntry::computeSize(sizeof("key "), sizeof("value "));
@@ -329,15 +330,16 @@ TEST(Bucket, DISABLED_EvictionExpired)
     Buffer buf(bucket_size);
     auto & bucket = Bucket::initNew(buf.mutableView(), 0);
     uint32_t num_item = 0;
+    pcg64 rng;
 
     char key_str[64];
     char value_str[64];
 
     std::vector<bool> valid_items(total_items, false);
-    ExpiredCheck exp_cb = [&valid_items, &num_item](BufferView v) -> bool {
+    ExpiredCheck exp_cb = [&valid_items, &num_item, &rng](BufferView v) -> bool {
         // expire by 50% of probability
         std::uniform_int_distribution<UInt32> dist(0, 100);
-        if (dist(thread_local_rng) > 50)
+        if (dist(rng) > 50)
         {
             return false;
         }
