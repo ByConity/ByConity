@@ -35,3 +35,4 @@
 #cmakedefine01 USE_NLP
 #cmakedefine01 USE_HUALLOC
 #cmakedefine01 USE_LIBURING
+#cmakedefine01 USE_SKIM

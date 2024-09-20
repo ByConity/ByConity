@@ -33,7 +33,13 @@
 #   include <common/LineReader.h>
 #endif
 
-#include <stdlib.h>
+#include <algorithm>
+#include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <optional>
+#include <unordered_set>
 #include <fcntl.h>
 #include <signal.h>
 #include <map>
@@ -61,7 +67,6 @@
 #include <Core/QueryProcessingStage.h>
 #include <Core/ExternalTable.h>
 #include <DataStreams/InternalTextLogsRowOutputStream.h>
-#include <Processors/Formats/Impl/NullFormat.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/registerFormats.h>
 #include <Functions/registerFunctions.h>
@@ -76,6 +81,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
 #include <IO/VETosCommon.h>
+#include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/WriteHelpers.h>
@@ -100,7 +106,37 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
-#include <Client/Connection.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTQueryWithOutput.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTUseQuery.h>
+#include <Parsers/ParserQuery.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
+#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <Processors/Formats/IInputFormat.h>
+#include <Processors/Formats/IOutputFormat.h>
+#include <Processors/Formats/Impl/NullFormat.h>
+#include <Processors/QueryPipeline.h>
+#include <Processors/Transforms/AddingDefaultsTransform.h>
+#include <Storages/ColumnsDescription.h>
+#include <Storages/HDFS/HDFSCommon.h>
+#include <boost/algorithm/string/replace.hpp>
+#include <boost/program_options.hpp>
+#include <opentelemetry/trace/span.h>
+#include <programs/client/ClientBase.h>
+#include <Poco/String.h>
+#include <Poco/Util/Application.h>
+#include <Common/ClickHouseRevision.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/Config/configReadClient.h>
+#include <Common/Exception.h>
 #include <Common/InterruptListener.h>
 #include <Common/NetException.h>
 #include <Common/PODArray.h>
@@ -150,6 +186,7 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
     extern const int TOO_DEEP_RECURSION;
     extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
+    extern const int CANNOT_SET_SIGNAL_HANDLER;
 }
 
 
@@ -287,6 +324,8 @@ private:
 
     QueryFuzzer fuzzer;
     int query_fuzzer_runs = 0;
+
+    bool cancelled = false;
 
     std::optional<Suggest> suggest;
 
@@ -553,6 +592,7 @@ private:
     {
         UseSSL use_ssl;
 
+        setupSignalHandler();
         registerFormats();
         registerFunctions();
         registerAggregateFunctions();
@@ -1784,6 +1824,9 @@ private:
             query_to_send = serializeAST(*parsed_query);
         }
 
+        QueryInterruptHandler::start(1);
+        SCOPE_EXIT({ QueryInterruptHandler::stop(); });
+
         int retries_left = 10;
         for (;;)
         {
@@ -1829,6 +1872,9 @@ private:
         const auto parsed_insert_query = parsed_query->as<ASTInsertQuery &>();
         if (!parsed_insert_query.data && !parsed_insert_query.in_file && (is_interactive || (!stdin_is_a_tty && std_in.eof())))
             throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
+
+        QueryInterruptHandler::start(1);
+        SCOPE_EXIT({ QueryInterruptHandler::stop(); });
 
         connection->sendQuery(
             connection_parameters.timeouts,
@@ -1977,6 +2023,13 @@ private:
         Block block;
         while (executor.pull(block))
         {
+            if (!cancelled && QueryInterruptHandler::cancelled())
+            {
+                cancelQuery();
+                executor.cancel();
+                return;
+            }
+
             /// Check if server send Log packet
             receiveLogs();
 
@@ -2014,6 +2067,14 @@ private:
         {
             pager_cmd->in.close();
             pager_cmd->wait();
+            if (SIG_ERR == signal(SIGPIPE, SIG_DFL))
+                throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+            if (SIG_ERR == signal(SIGINT, SIG_DFL))
+                throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+            if (SIG_ERR == signal(SIGQUIT, SIG_DFL))
+                throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+
+            setupSignalHandler();
         }
         pager_cmd = nullptr;
 
@@ -2027,13 +2088,22 @@ private:
         std_out.next();
     }
 
+    void cancelQuery() {
+        connection->sendCancel();
+        cancelled = true;
+        if (is_interactive)
+        {
+            if (need_render_progress)
+                progress_indication.clearProgressOutput();
+            std::cout << "Cancelling query." << std::endl;
+        }
+    }
 
     /// Receives and processes packets coming from server.
     /// Also checks if query execution should be cancelled.
     void receiveResult()
     {
-        InterruptListener interrupt_listener;
-        bool cancelled = false;
+        cancelled = false;
 
         // TODO: get the poll_interval from commandline.
         const auto receive_timeout = connection_parameters.timeouts.receive_timeout;
@@ -2053,22 +2123,9 @@ private:
                 /// to avoid losing sync.
                 if (!cancelled)
                 {
-                    auto cancel_query = [&] {
-                        connection->sendCancel();
-                        cancelled = true;
-                        if (is_interactive)
-                        {
-                            progress_indication.clearProgressOutput();
-                            std::cout << "Cancelling query." << std::endl;
-                        }
-
-                        /// Pressing Ctrl+C twice results in shut down.
-                        interrupt_listener.unblock();
-                    };
-
-                    if (interrupt_listener.check())
+                    if (QueryInterruptHandler::cancelled())
                     {
-                        cancel_query();
+                        cancelQuery();
                     }
                     else
                     {
@@ -2079,7 +2136,7 @@ private:
                                       << " Waited for " << static_cast<size_t>(elapsed) << " seconds,"
                                       << " timeout is " << receive_timeout.totalSeconds() << " seconds." << std::endl;
 
-                            cancel_query();
+                            cancelQuery();
                         }
                     }
                 }
@@ -2102,7 +2159,7 @@ private:
     /// Receive a part of the result, or progress info or an exception and process it.
     /// Returns true if one should continue receiving packets.
     /// Output of result is suppressed if query was cancelled.
-    bool receiveAndProcessPacket(bool cancelled)
+    bool receiveAndProcessPacket(bool cancelled_)
     {
         Packet packet = connection->receivePacket();
 
@@ -2112,7 +2169,7 @@ private:
                 return true;
 
             case Protocol::Server::Data:
-                if (!cancelled)
+                if (!cancelled_)
                     onData(packet.block);
                 return true;
 
@@ -2125,12 +2182,12 @@ private:
                 return true;
 
             case Protocol::Server::Totals:
-                if (!cancelled)
+                if (!cancelled_)
                     onTotals(packet.block);
                 return true;
 
             case Protocol::Server::Extremes:
-                if (!cancelled)
+                if (!cancelled_)
                     onExtremes(packet.block);
                 return true;
 
@@ -2253,6 +2310,18 @@ private:
             String pager = config().getString("pager", "");
             if (!pager.empty())
             {
+                if (SIG_ERR == signal(SIGPIPE, SIG_IGN))
+                    throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+                /// We need to reset signals that had been installed in the
+                /// setupSignalHandler() since terminal will send signals to both
+                /// processes and so signals will be delivered to the
+                /// clickhouse-client/local as well, which will be terminated when
+                /// signal will be delivered second time.
+                if (SIG_ERR == signal(SIGINT, SIG_IGN))
+                    throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+                if (SIG_ERR == signal(SIGQUIT, SIG_IGN))
+                    throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+
                 signal(SIGPIPE, SIG_IGN);
                 pager_cmd = ShellCommand::execute(pager, true);
                 out_buf = &pager_cmd->in;
@@ -2509,6 +2578,30 @@ private:
         /// A test for this feature: perl -e 'print "x"x100000'; echo -ne '\033[0;0H\033[?25l'; clickhouse-client
         std::cout << "\033[0J"
                      "\033[?25h";
+    }
+
+    static void setupSignalHandler()
+    {
+        QueryInterruptHandler::stop();
+
+        struct sigaction new_act;
+        memset(&new_act, 0, sizeof(new_act));
+
+        new_act.sa_handler = interruptSignalHandler;
+        new_act.sa_flags = 0;
+
+#if defined(OS_DARWIN)
+        sigemptyset(&new_act.sa_mask);
+#else
+        if (sigemptyset(&new_act.sa_mask))
+            throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+#endif
+
+        if (sigaction(SIGINT, &new_act, nullptr))
+            throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
+
+        if (sigaction(SIGQUIT, &new_act, nullptr))
+            throwFromErrno("Cannot set signal handler", ErrorCodes::CANNOT_SET_SIGNAL_HANDLER);
     }
 
 public:

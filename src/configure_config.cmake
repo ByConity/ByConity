@@ -14,6 +14,10 @@ if (TARGET ch_rust::blake3)
     set(USE_BLAKE3 1)
 endif()
 
+if (TARGET ch_rust::skim)
+    set(USE_SKIM 1)
+endif()
+
 if (TARGET hualloc AND ENABLE_HUALLOC)
     set(USE_HUALLOC 1)
 endif()

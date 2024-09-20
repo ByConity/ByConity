@@ -52,6 +52,11 @@ else()
     target_link_libraries(common PUBLIC brpc-static)
 endif()
 
+if (TARGET ch_rust::skim)
+    target_include_directories(common PUBLIC ch_rust::skim)
+    target_link_libraries(common PUBLIC ch_rust::skim)
+endif()
+
 if (OS_DARWIN AND NOT MAKE_STATIC_LIBRARIES)
     target_link_libraries(common PUBLIC -Wl,-U,_inside_main)
 endif()
