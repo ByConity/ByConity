@@ -2115,13 +2115,6 @@ void TCPHandler::updateProgress(const Progress & value)
 void TCPHandler::sendProgress()
 {
     auto increment = state.progress.fetchAndResetPiecewiseAtomically();
-    LOG_DEBUG(
-        &Poco::Logger::get("debug"),
-        fmt::format(
-            "send progress rows:{} bytes:{} total_rows_to_read:{}",
-            increment.read_rows,
-            increment.read_bytes,
-            increment.total_rows_to_read));
     writeVarUInt(Protocol::Server::Progress, *out);
     increment.write(*out, client_tcp_protocol_version);
     out->next();
