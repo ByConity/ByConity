@@ -114,7 +114,7 @@ public:
                 throw Exception{"The first argument of function " + String(Name::name) + " should be a string containing JSON, illegal type: " + first_column.type->getName(),
                                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
             
-            const ColumnPtr & arg_json = recursiveAssumeNotNullable(first_column.column);
+            const ColumnPtr & arg_json = recursiveAssumeNotNullable(recursiveRemoveLowCardinality(first_column.column));
             const auto * col_json_const = typeid_cast<const ColumnConst *>(arg_json.get());
             const auto * col_json_string
                 = typeid_cast<const ColumnString *>(col_json_const ? col_json_const->getDataColumnPtr().get() : arg_json.get());
@@ -510,9 +510,11 @@ public:
     String getName() const override { return Name::name; }
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
+    // bool useDefaultImplementationForLowCardinalityColumns()  const override { return false; }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
+        NullPresence lc_null_presence = getNullPresense(arguments);
         if (null_presence.has_null_constant)
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
 
@@ -520,6 +522,10 @@ public:
         auto temporary_result = Derived::run(temp_arguments, json_return_type, input_rows_count);
         if (null_presence.has_nullable)
             return wrapInNullable(temporary_result, arguments, result_type, input_rows_count);
+
+        if (lc_null_presence.has_nullable)
+            return wrapInNullable(temporary_result, arguments, result_type, input_rows_count);
+
         return temporary_result;
     }
 
@@ -750,6 +756,7 @@ public:
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
     bool useDefaultImplementationForNulls() const override { return false; }
+    // bool useDefaultImplementationForLowCardinalityColumns()  const override { return false; }
 
     FunctionBasePtr build(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -763,6 +770,8 @@ public:
 
         const auto & first_column = arguments[0];
         auto first_type_base = removeNullable(removeLowCardinality(first_column.type));
+        auto first_type_is_lc_null = first_column.type->isLowCardinalityNullable();
+        auto first_type_is_lc = WhichDataType(first_column.type).isLowCardinality();
 
         bool is_string = isString(first_type_base);
         bool is_object = isObject(first_type_base);
@@ -783,6 +792,10 @@ public:
             return_type = makeNullable(std::make_shared<DataTypeNothing>());
         else if (null_presence.has_nullable)
             return_type = makeNullable(json_return_type);
+        else if (first_type_is_lc_null)
+            return_type = std::make_shared<DataTypeLowCardinality>(makeNullable(json_return_type));
+        else if (first_type_is_lc)
+            return_type = std::make_shared<DataTypeLowCardinality>(json_return_type);
         else
             return_type = json_return_type;
 
