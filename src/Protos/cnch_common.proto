@@ -141,3 +141,4 @@ message LeaderInfo {
   optional HostWithPorts previous_leader_address = 3;
   optional LeaderLease previous_leader_lease = 4;
 }
+

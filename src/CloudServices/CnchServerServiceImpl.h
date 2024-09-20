@@ -101,13 +101,13 @@ public:
         google::protobuf::Closure * done) override;
 
     void fetchDataParts(
-        ::google::protobuf::RpcController * controller,
+        ::google::protobuf::RpcController * c,
         const ::DB::Protos::FetchDataPartsReq * request,
         ::DB::Protos::FetchDataPartsResp * response,
         ::google::protobuf::Closure * done) override;
 
     void fetchDeleteBitmaps(
-        ::google::protobuf::RpcController * controller,
+        ::google::protobuf::RpcController * c,
         const ::DB::Protos::FetchDeleteBitmapsReq * request,
         ::DB::Protos::FetchDeleteBitmapsResp * response,
         ::google::protobuf::Closure * done) override;

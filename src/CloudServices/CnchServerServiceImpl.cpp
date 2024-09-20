@@ -88,6 +88,25 @@ namespace
     }
 }
 
+/**
+ * @brief Set trace info to current thread.
+ *
+ * @return A owned `QueryScope` that hold the trace information.
+ * Under its lifetime, LOG_XXX contains trace info automatically.
+ */
+static std::unique_ptr<CurrentThread::QueryScope>
+getTraceInfo(const Protos::TraceInfo & trace_info, const ContextPtr ctx, ::google::protobuf::RpcController * c)
+{
+    /// In order to let log entry contains query_id and txn_id, we need to create query session and bind to current thread.
+    auto rpc_context = RPCHelpers::createSessionContextForRPC(ctx, *c);
+    if (trace_info.has_query_id())
+        rpc_context->setCurrentQueryId(trace_info.query_id());
+    if (trace_info.has_txn_id())
+        rpc_context->setTemporaryTransaction(trace_info.txn_id(), {}, false); // Skip txn_id check.
+
+    return (trace_info.has_query_id() || trace_info.has_txn_id()) ? std::make_unique<CurrentThread::QueryScope>(rpc_context) : nullptr;
+}
+
 CnchServerServiceImpl::CnchServerServiceImpl(ContextMutablePtr global_context)
     : WithMutableContext(global_context),
       server_start_time(getTS(global_context)),
@@ -609,13 +628,18 @@ void CnchServerServiceImpl::reportDeduperHeartbeat(
 }
 
 void CnchServerServiceImpl::fetchDataParts(
-    ::google::protobuf::RpcController *,
+    ::google::protobuf::RpcController * c,
     const ::DB::Protos::FetchDataPartsReq * request,
     ::DB::Protos::FetchDataPartsResp * response,
     ::google::protobuf::Closure * done)
 {
-    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+    RPCHelpers::serviceHandler(done, response, [c, request, response, done, gc = getContext(), log = log] {
         brpc::ClosureGuard done_guard(done);
+
+        /// Init trace info.
+        std::unique_ptr<CurrentThread::QueryScope> query_scope
+            = request->has_trace_info() ? getTraceInfo(request->trace_info(), gc, c) : nullptr;
+
         try
         {
             StoragePtr storage
@@ -663,13 +687,18 @@ void CnchServerServiceImpl::fetchDataParts(
 }
 
 void CnchServerServiceImpl::fetchDeleteBitmaps(
-    ::google::protobuf::RpcController *,
+    ::google::protobuf::RpcController * c,
     const ::DB::Protos::FetchDeleteBitmapsReq * request,
     ::DB::Protos::FetchDeleteBitmapsResp * response,
     ::google::protobuf::Closure * done)
 {
-    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+    RPCHelpers::serviceHandler(done, response, [c,request, response, done, gc = getContext(), log = log] {
         brpc::ClosureGuard done_guard(done);
+
+        /// Init trace info.
+        std::unique_ptr<CurrentThread::QueryScope> query_scope
+            = request->has_trace_info() ? getTraceInfo(request->trace_info(), gc, c) : nullptr;
+
         try
         {
             StoragePtr storage
@@ -710,62 +739,66 @@ void CnchServerServiceImpl::fetchDeleteBitmaps(
 }
 
 void CnchServerServiceImpl::fetchPartitions(
-    [[maybe_unused]] ::google::protobuf::RpcController* controller,
+    [[maybe_unused]] ::google::protobuf::RpcController* cntl,
     [[maybe_unused]] const ::DB::Protos::FetchPartitionsReq* request,
     [[maybe_unused]] ::DB::Protos::FetchPartitionsResp* response,
     [[maybe_unused]] ::google::protobuf::Closure* done)
 {
-    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
-        brpc::ClosureGuard done_guard(done);
-        try
-        {
-            StoragePtr storage
-                = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(),  TxnTimestamp::maxTS());
+    RPCHelpers::serviceHandler(
+        done, response, [c = cntl, request, response, done, gc = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
 
-            auto calculated_host = gc->getCnchTopologyMaster()
-                                       ->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true).getRPCAddress();
+            /// Init trace info.
+            std::unique_ptr<CurrentThread::QueryScope> query_scope
+                = request->has_trace_info() ? getTraceInfo(request->trace_info(), gc, c) : nullptr;
 
-            if (request->remote_host() != calculated_host)
-                throw Exception(
-                    "Fetch partitions failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
-                        + ", calculated_host: " + calculated_host,
-                    ErrorCodes::LOGICAL_ERROR);
-
-            if (!isLocalServer(calculated_host, std::to_string(gc->getRPCPort())))
-                throw Exception(
-                    "Fetch partition failed because calculated host server (" + calculated_host + ") is not current server.",
-                    ErrorCodes::LOGICAL_ERROR);
-
-            Names column_names;
-            for (const auto & name : request->column_name_filter())
-                column_names.push_back(name);
-            auto session_context = Context::createCopy(gc);
-            session_context->setCurrentDatabase(request->database());
-            ReadBufferFromString rb(request->predicate());
-            ASTPtr query_ptr = deserializeAST(rb);
-            /// We should to add `database` into AST before calling `buildSelectQueryInfoForQuery`.
+            try
             {
-                ASTSelectQuery * select_query = query_ptr->as<ASTSelectQuery>();
-                if (!select_query)
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected AST type found in buildSelectQueryInfoForQuery");
-                select_query->replaceDatabaseAndTable(request->database(), request->table());
+                StoragePtr storage = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(), TxnTimestamp::maxTS());
+
+                auto calculated_host
+                    = gc->getCnchTopologyMaster()
+                          ->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true)
+                          .getRPCAddress();
+
+                if (request->remote_host() != calculated_host)
+                    throw Exception(
+                        "Fetch partitions failed because of inconsistent view of topology in remote server, remote_host: "
+                            + request->remote_host() + ", calculated_host: " + calculated_host,
+                        ErrorCodes::LOGICAL_ERROR);
+
+                Names column_names;
+                for (const auto & name : request->column_name_filter())
+                    column_names.push_back(name);
+                auto session_context = Context::createCopy(gc);
+                session_context->setCurrentDatabase(request->database());
+                ReadBufferFromString rb(request->predicate());
+                ASTPtr query_ptr = deserializeAST(rb);
+                /// We should to add `database` into AST before calling `buildSelectQueryInfoForQuery`.
+                {
+                    ASTSelectQuery * select_query = query_ptr->as<ASTSelectQuery>();
+                    if (!select_query)
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected AST type found in buildSelectQueryInfoForQuery");
+                    select_query->replaceDatabaseAndTable(request->database(), request->table());
+                }
+                SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
+
+                session_context->setTemporaryTransaction(
+                    TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
+                auto required_partitions
+                    = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
+
+                response->set_total_size(required_partitions.total_partition_number);
+                auto & mutable_partitions = *response->mutable_partitions();
+                for (auto & partition : required_partitions.partitions)
+                    *mutable_partitions.Add() = std::move(partition);
             }
-            SelectQueryInfo query_info = buildSelectQueryInfoForQuery(query_ptr, session_context);
-
-            session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
-            auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
-
-            response->set_total_size(required_partitions.total_partition_number);
-            auto & mutable_partitions = *response->mutable_partitions();
-            for (auto & partition : required_partitions.partitions)
-                *mutable_partitions.Add() = std::move(partition);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            RPCHelpers::handleException(response->mutable_exception());
-        }
-    });
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        });
 }
 
 void CnchServerServiceImpl::fetchUniqueTableMeta(

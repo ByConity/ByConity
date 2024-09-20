@@ -49,6 +49,16 @@ CnchServerClient::CnchServerClient(HostWithPorts host_ports_)
 
 CnchServerClient::~CnchServerClient() = default;
 
+static std::optional<Protos::TraceInfo> setTraceInfo()
+{
+    Protos::TraceInfo trace_info;
+    if (auto query_id = CurrentThread::getQueryId(); !query_id.empty())
+        trace_info.set_query_id(query_id.toString());
+    if (auto txn_id = CurrentThread::getTransactionId(); txn_id)
+        trace_info.set_txn_id(txn_id);
+    return (trace_info.has_txn_id() || trace_info.has_query_id()) ? std::optional<Protos::TraceInfo>(trace_info) : std::nullopt;
+}
+
 std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransaction(
     const TxnTimestamp & primary_txn_id, bool read_only)
 {
@@ -189,6 +199,12 @@ ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_hos
     request.set_table_commit_time(table->commit_time);
     request.set_timestamp(ts.toUInt64());
 
+    auto trace_info = setTraceInfo();
+    if (trace_info)
+    {
+        *request.mutable_trace_info() = *trace_info;
+    }
+
     for (const auto & partition_id : partition_list)
         request.add_partitions(partition_id);
 
@@ -224,6 +240,9 @@ DeleteBitmapMetaPtrVector CnchServerClient::fetchDeleteBitmaps(
     request.set_table(table->getTableName());
     request.set_table_commit_time(table->commit_time);
     request.set_timestamp(ts.toUInt64());
+    auto trace_info = setTraceInfo();
+    if (trace_info)
+        *request.mutable_trace_info() = *trace_info;
 
     for (const auto & bucket_number : bucket_numbers)
         request.add_bucket_numbers(bucket_number);
@@ -278,6 +297,10 @@ PrunedPartitions CnchServerClient::fetchPartitions(
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);
+
+    auto trace_info = setTraceInfo();
+    if (trace_info)
+        *request.mutable_trace_info() = *trace_info;
 
     UInt64 total_size = response.total_size();
     Strings fetched_partitions;
