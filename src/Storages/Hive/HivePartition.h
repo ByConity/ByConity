@@ -15,10 +15,10 @@
 
 #pragma once
 
-#include "Common/config.h"
+#include <Common/config.h>
 #if USE_HIVE
 
-#    include "Core/Field.h"
+#include <Core/Field.h>
 
 namespace Apache::Hadoop::Hive
 {
@@ -28,11 +28,6 @@ class StorageDescriptor;
 
 namespace DB
 {
-namespace Protos
-{
-    class ProtoHiveFile;
-    class ProtoHiveFiles;
-}
 
 struct KeyDescription;
 struct FormatSettings;
@@ -62,7 +57,7 @@ struct HivePartition
 };
 
 using HivePartitionPtr = std::shared_ptr<HivePartition>;
-using HivePartitons = std::vector<HivePartitionPtr>;
+using HivePartitions = std::vector<HivePartitionPtr>;
 }
 
 #endif

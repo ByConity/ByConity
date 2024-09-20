@@ -1,4 +1,5 @@
 #include <common/logger_useful.h>
+#include "Storages/DataLakes/ScanInfo/ILakeScanInfo.h"
 #include <Processors/IntermediateResult/CacheManager.h>
 
 namespace ProfileEvents
@@ -108,9 +109,9 @@ CacheHolderPtr CacheManager::createCacheHolder(
     // tpcds1.item_449936491680890882 -> tpcds1.item
     auto table_name =storage_id.getFullTableName().substr(0,storage_id.getFullTableName().rfind("_"));
 
-    for (auto & part_with_ranges : parts_with_ranges)
+    for (const auto & part_with_ranges : parts_with_ranges)
     {
-        auto & data_part = part_with_ranges.data_part;
+        const auto & data_part = part_with_ranges.data_part;
 
         if (storage->getInMemoryMetadataPtr()->hasUniqueKey())
             last_modified_timestamp = data_part->getDeleteBitmapVersion();
@@ -142,32 +143,32 @@ CacheHolderPtr CacheManager::createCacheHolder(
     const ContextPtr & context,
     const String & digest,
     const StorageID & storage_id,
-    const HiveFiles & hive_files,
-    HiveFiles & new_hive_files)
+    const LakeScanInfos & lake_scan_infos,
+    LakeScanInfos & new_lake_scan_infos)
 {
     auto hive_file_cache_holder = std::make_shared<CacheHolder>();
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     auto storage = DatabaseCatalog::instance().tryGetTable(storage_id, context);
 
-    for (auto & file : hive_files)
+    for (const auto & lake_scan_info : lake_scan_infos)
     {
-        validateIntermediateCache<HiveFilePtr>(
+        validateIntermediateCache<LakeScanInfoPtr>(
             hive_file_cache_holder,
             context,
             digest,
             storage_id.getFullTableName(),
             false,
-            file->getLastModifiedTimestamp(),
+            0,
             now,
-            file->file_path,
-            file,
-            new_hive_files);
+            lake_scan_info->identifier(),
+            lake_scan_info,
+            new_lake_scan_infos);
     }
 
-    hive_file_cache_holder->all_part_in_cache = new_hive_files.empty();
+    hive_file_cache_holder->all_part_in_cache = new_lake_scan_infos.empty();
     // It may be better to use proportional control here, add a configuration?
     // But now a merging agg will be added after the cache oper, so in the worst case, the performance will not be particularly bad
-    hive_file_cache_holder->all_part_in_storage = hive_file_cache_holder->write_cache.empty() && new_hive_files.size() == hive_files.size();
+    hive_file_cache_holder->all_part_in_storage = hive_file_cache_holder->write_cache.empty() && new_lake_scan_infos.size() == lake_scan_infos.size();
 
     return hive_file_cache_holder;
 }
@@ -181,7 +182,7 @@ void CacheManager::setComplete(const CacheKey & key)
         return;
     }
 
-    if (value->chunks.size() == 0)
+    if (value->chunks.empty())
     {
         auto empty_key = key.cloneWithoutOwnerInfo();
         value = tryGetUncompletedCache(empty_key);

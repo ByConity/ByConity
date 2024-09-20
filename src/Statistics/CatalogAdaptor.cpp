@@ -18,6 +18,7 @@
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <boost/regex.hpp>
 #include "DataTypes/MapHelpers.h"
 #include "Parsers/formatTenantDatabaseName.h"
@@ -71,7 +72,7 @@ TableOptions CatalogAdaptor::getTableOptionsForStorage(IStorage & storage)
     }
     else if (engine == "Memory")
         return only_manual;
-    else if (engine == "CnchHive")
+    else if (dynamic_cast<StorageCnchLakeBase *>(&storage))
         return only_manual;
     else
         return unsupported;

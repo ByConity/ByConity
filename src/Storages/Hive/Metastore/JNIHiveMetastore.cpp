@@ -1,11 +1,11 @@
-#include "Storages/Hive/Metastore/JNIHiveMetastore.h"
+#include "JNIHiveMetastore.h"
+
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
-#include "Storages/DataLakes/HiveFile/HiveInputSplitFile.h"
-#include "Storages/Hive/HivePartition.h"
-
-#include <jni/JNIMetaClient.h>
 #include <hive_metastore_types.h>
+#include <Storages/DataLakes/ScanInfo/HudiJNIScanInfo.h>
+#include <Storages/Hive/HivePartition.h>
+#include <jni/JNIMetaClient.h>
 #include <thrift/protocol/TCompactProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <hudi.pb.h>
@@ -13,8 +13,8 @@
 namespace DB
 {
 
-using apache::thrift::transport::TMemoryBuffer;
 using apache::thrift::protocol::TCompactProtocolT;
+using apache::thrift::transport::TMemoryBuffer;
 
 JNIHiveMetastoreClient::JNIHiveMetastoreClient(
     std::shared_ptr<JNIMetaClient> jni_metaclient_, const std::unordered_map<String, String> & properties_)
@@ -39,8 +39,7 @@ bool JNIHiveMetastoreClient::isTableExist(const String &, const String &)
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "JNIHiveMetastoreClient::isTableExists is not implemented");
 }
 
-std::vector<ApacheHive::Partition>
-JNIHiveMetastoreClient::getPartitionsByFilter(const String &, const String &, const String & /*filter*/)
+std::vector<ApacheHive::Partition> JNIHiveMetastoreClient::getPartitionsByFilter(const String &, const String &, const String & /*filter*/)
 {
     // TODO: filter
     String partitions_binary = jni_metaclient->getPartitionPaths();
@@ -51,7 +50,7 @@ JNIHiveMetastoreClient::getPartitionsByFilter(const String &, const String &, co
     return partitions_spec.partitions;
 }
 
-HiveFiles JNIHiveMetastoreClient::getFilesInPartition(const HivePartitions & partitions, size_t min_split_num, size_t max_threads)
+LakeScanInfos JNIHiveMetastoreClient::getFilesInPartition(const HivePartitions & partitions, size_t min_split_num, size_t max_threads)
 {
     Protos::PartitionPaths required_partitions;
     required_partitions.set_split_num(min_split_num);
@@ -61,17 +60,15 @@ HiveFiles JNIHiveMetastoreClient::getFilesInPartition(const HivePartitions & par
 
     String input_splits_bytes = jni_metaclient->getFilesInPartition(required_partitions.SerializeAsString());
     Protos::InputSplits input_splits;
-    HiveFiles hive_files;
+    LakeScanInfos lake_scan_infos;
     input_splits.ParseFromString(input_splits_bytes);
-    /// file_path is used for hash in worker service; and does not allow duplicated file_path
-    int file_idx = 0;
-    for (const auto & input_split : input_splits.input_splits()) {
-        auto it = hive_files.emplace_back(std::make_shared<HiveInputSplitFile>(input_split, properties));
-        it->file_path = std::to_string(file_idx++);
-        it->format = IHiveFile::FileFormat::InputSplit;
-        it->partition = partitions.at(input_split.partition_index());
+    size_t id = 0;
+    for (const auto & input_split : input_splits.input_splits())
+    {
+        String partition_id = partitions.at(input_split.partition_index())->partition_id;
+        lake_scan_infos.push_back(HudiJNIScanInfo::create(id++, partition_id, input_split.input_split_bytes(), properties));
     }
-    return hive_files;
+    return lake_scan_infos;
 }
 
 }

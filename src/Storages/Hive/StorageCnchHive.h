@@ -6,24 +6,19 @@
 
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/DataLakes/StorageCnchLakeBase.h>
-#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
+#include <Storages/Hive/HivePartition.h>
 #include <Storages/Hive/Metastore/IMetaClient.h>
 #include <common/shared_ptr_helper.h>
 
 namespace Apache::Hadoop::Hive
 {
-    class Table;
-    class TableStatsResult;
+class Table;
+class TableStatsResult;
 }
 namespace ApacheHive = Apache::Hadoop::Hive;
 
 namespace DB
 {
-namespace Protos
-{
-    class ProtoHiveFiles;
-}
-
 struct PrepareContextResult;
 struct HivePartition;
 class IMetaClient;
@@ -56,7 +51,8 @@ public:
     void initialize(StorageInMemoryMetadata metadata_);
 
     std::optional<TableStatistics> getTableStats(const Strings & columns, ContextPtr local_context) override;
-    std::vector<std::pair<String, UInt64>> getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format = true);
+    std::vector<std::pair<String, UInt64>>
+    getPartitionLastModificationTime(const StorageMetadataPtr & metadata_snapshot, bool binary_format = true);
 
 protected:
     size_t maxStreams(ContextPtr local_context) const override;
@@ -68,15 +64,11 @@ protected:
         ContextPtr & local_context,
         unsigned num_streams) override;
 
-    HivePartitions selectPartitions(
-        ContextPtr local_context,
-        const StorageMetadataPtr & metadata_snapshot,
-        const SelectQueryInfo & query_info);
+    HivePartitions
+    selectPartitions(ContextPtr local_context, const StorageMetadataPtr & metadata_snapshot, const SelectQueryInfo & query_info);
 
-    std::optional<UInt64> getSelectedBucketNumber(
-        ContextPtr local_context,
-        SelectQueryInfo & query_info,
-        const StorageMetadataPtr & metadata_snapshot) const;
+    std::optional<UInt64>
+    getSelectedBucketNumber(ContextPtr local_context, SelectQueryInfo & query_info, const StorageMetadataPtr & metadata_snapshot) const;
 
     /// DirectoryList is not multi-threaded
     virtual std::shared_ptr<IDirectoryLister> getDirectoryLister(ContextPtr local_context);
@@ -88,8 +80,7 @@ protected:
     std::exception_ptr hive_exception = nullptr;
 
 private:
-    LoggerPtr log {getLogger("CnchHive")};
-
+    LoggerPtr log{getLogger("CnchHive")};
 };
 }
 

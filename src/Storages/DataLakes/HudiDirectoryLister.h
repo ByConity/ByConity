@@ -2,8 +2,8 @@
 #include "Common/config.h"
 #if USE_HIVE
 
-#include "Storages/Hive/DirectoryLister.h"
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include <Storages/DataLakes/ScanInfo/ILakeScanInfo.h>
+#include <Storages/Hive/DirectoryLister.h>
 
 namespace DB
 {
@@ -13,7 +13,7 @@ class HudiCowDirectoryLister : public DiskDirectoryLister
 public:
     explicit HudiCowDirectoryLister(const DiskPtr & disk);
 
-    HiveFiles list(const HivePartitionPtr & partition) override;
+    LakeScanInfos list(const HivePartitionPtr & partition) override;
 };
 
 }

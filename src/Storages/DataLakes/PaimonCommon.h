@@ -8,7 +8,6 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Parsers/ASTVisitor.h>
-#include <Storages/DataLakes/HiveFile/JNIArrowSource.h>
 #include <Storages/DataLakes/JNIUtils.h>
 #include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/StorageInMemoryMetadata.h>
@@ -34,6 +33,7 @@ struct PaimonScanInfo
     String encoded_table;
     std::optional<String> encoded_predicate;
     std::vector<String> encoded_splits;
+    std::vector<String> raw_files;
 };
 
 class PaimonCatalogClient : WithContext
@@ -46,13 +46,15 @@ public:
     std::vector<String> listDatabases();
     std::vector<String> listTables(const String & database);
     bool isTableExist(const String & database, const String & table);
-    void checkOrConvert(const String & database, const String & table, StorageInMemoryMetadata & metadata);
+    void checkMetadataIfNecessary(const String & database, const String & table, StorageMetadataPtr metadata);
+    void convertMetadataIfNecessary(const String & database, const String & table, StorageInMemoryMetadata & metadata);
     Protos::Paimon::Schema getPaimonSchema(const String & database, const String & table);
     PaimonScanInfo getScanInfo(
         const String & database,
         const String & table,
         const std::vector<String> & required_fields,
-        const std::optional<String> & rpn_predicate);
+        const std::optional<String> & rpn_predicate,
+        bool force_jni = true);
 
 protected:
     virtual Poco::JSON::Object buildCatalogParams() = 0;
@@ -161,6 +163,8 @@ namespace paimon_utils
     static constexpr auto PARAMS_KEY_ENCODED_TABLE = "encoded_table";
     static constexpr auto PARAMS_KEY_ENCODED_SPLITS = "encoded_splits";
     static constexpr auto PARAMS_KEY_ENCODED_PREDICATE = "encoded_predicate";
+    static constexpr auto PARAMS_KEY_RAW_FILES = "raw_files";
+    static constexpr auto PARAMS_KEY_FORCE_JNI = "force_jni";
 
     static constexpr auto METASTORE_TYPE_HIVE = "hive";
     static constexpr auto METASTORE_TYPE_FILESYSTEM = "filesystem";

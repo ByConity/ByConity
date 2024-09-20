@@ -1,4 +1,4 @@
-#include "Storages/DataLakes/HiveFile/JNIArrowSource.h"
+#include "JNIArrowSource.h"
 #if USE_JAVA_EXTENSIONS
 
 #include <jni/JNIArrowReader.h>

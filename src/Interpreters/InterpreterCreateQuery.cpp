@@ -55,6 +55,7 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/DataLakes/StorageCnchLakeBase.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
@@ -917,9 +918,10 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
 
     if (create.ignore_bitengine_encode)
     {
-        /// there's no bitengine columns in table, just reset the flag
-        if (0 == processIgnoreBitEngineEncode(properties.columns))
-            create.ignore_bitengine_encode = false;
+        /// For BitEngineEncode EncodeNonBitEngineColumn, this
+        /// function will return 0, and `ignore_bitengine_encode`
+        /// cannot be set to false
+        processIgnoreBitEngineEncode(properties.columns);
     }
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
@@ -1675,6 +1677,11 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             properties.foreign_keys,
             properties.unique,
             false);
+
+        if (auto * storage_lake = dynamic_cast<StorageCnchLakeBase *>(res.get()); storage_lake)
+        {
+            storage_lake->checkSchema();
+        }
     }
 
     try

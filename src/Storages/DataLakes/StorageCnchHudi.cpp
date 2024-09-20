@@ -28,15 +28,7 @@ StorageCnchHudi::StorageCnchHudi(
     ContextPtr context_,
     std::shared_ptr<CnchHiveSettings> settings_,
     IMetaClientPtr client_from_catalog)
-    : StorageCnchHive(
-        table_id_,
-        hive_metastore_url_,
-        hive_db_name_,
-        hive_table_name_,
-        metadata_,
-        context_,
-        client_from_catalog,
-        settings_)
+    : StorageCnchHive(table_id_, hive_metastore_url_, hive_db_name_, hive_table_name_, metadata_, context_, client_from_catalog, settings_)
 {
 }
 
@@ -51,7 +43,7 @@ std::shared_ptr<IDirectoryLister> StorageCnchHudi::getDirectoryLister(ContextPtr
 #if USE_JAVA_EXTENSIONS
     else if (input_format == "org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat")
     {
-        return std::make_shared<HudiMorDirectoryLister>(disk, hive_table->sd.location, *this);
+        return std::make_shared<HudiMorDirectoryLister>(hive_table->sd.location, *this);
     }
 #endif
     else
@@ -84,51 +76,53 @@ void registerStorageHudi(StorageFactory & factory)
         .supports_schema_inference = true,
     };
 
-    factory.registerStorage("CnchHudi", [](const StorageFactory::Arguments & args)
-    {
-        ASTs & engine_args = args.engine_args;
-        if (engine_args.size() != 3)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Storage CnchHudi require 3 arguments: hive_metastore_url, hudi_db_name and hudi_table_name.");
+    factory.registerStorage(
+        "CnchHudi",
+        [](const StorageFactory::Arguments & args) {
+            ASTs & engine_args = args.engine_args;
+            if (engine_args.size() != 3)
+                throw Exception(
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "Storage CnchHudi require 3 arguments: hive_metastore_url, hudi_db_name and hudi_table_name.");
 
-        for (auto & engine_arg : engine_args)
-            engine_arg = evaluateConstantExpressionOrIdentifierAsLiteral(engine_arg, args.getLocalContext());
+            for (auto & engine_arg : engine_args)
+                engine_arg = evaluateConstantExpressionOrIdentifierAsLiteral(engine_arg, args.getLocalContext());
 
-        String hive_metastore_url = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
-        String hive_database = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
-        String hive_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
+            String hive_metastore_url = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
+            String hive_database = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
+            String hive_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
 
-        StorageInMemoryMetadata metadata;
-        std::shared_ptr<CnchHiveSettings> hive_settings = std::make_shared<CnchHiveSettings>(args.getContext()->getCnchHiveSettings());
-        if (args.storage_def->settings)
-        {
-            hive_settings->loadFromQuery(*args.storage_def);
-            metadata.settings_changes = args.storage_def->settings->ptr();
-        }
+            StorageInMemoryMetadata metadata;
+            std::shared_ptr<CnchHiveSettings> hive_settings = std::make_shared<CnchHiveSettings>(args.getContext()->getCnchHiveSettings());
+            if (args.storage_def->settings)
+            {
+                hive_settings->loadFromQuery(*args.storage_def);
+                metadata.settings_changes = args.storage_def->settings->ptr();
+            }
 
-        if (!args.columns.empty())
-            metadata.setColumns(args.columns);
+            if (!args.columns.empty())
+                metadata.setColumns(args.columns);
 
-        metadata.setComment(args.comment);
+            metadata.setComment(args.comment);
 
-        if (args.storage_def->partition_by)
-        {
-            ASTPtr partition_by_key;
-            partition_by_key = args.storage_def->partition_by->ptr();
-            metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
-        }
+            if (args.storage_def->partition_by)
+            {
+                ASTPtr partition_by_key;
+                partition_by_key = args.storage_def->partition_by->ptr();
+                metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
+            }
 
-        return std::make_shared<StorageCnchHudi>(
-            args.table_id,
-            hive_metastore_url,
-            hive_database,
-            hive_table,
-            std::move(metadata),
-            args.getContext(),
-            hive_settings,
-            args.hive_client);
-    },
-    features);
+            return std::make_shared<StorageCnchHudi>(
+                args.table_id,
+                hive_metastore_url,
+                hive_database,
+                hive_table,
+                std::move(metadata),
+                args.getContext(),
+                hive_settings,
+                args.hive_client);
+        },
+        features);
 }
 
 }

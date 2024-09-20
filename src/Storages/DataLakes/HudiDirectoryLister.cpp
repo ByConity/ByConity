@@ -1,22 +1,20 @@
 #include "Storages/DataLakes/HudiDirectoryLister.h"
 #if USE_HIVE
 
-#include "Storages/Hive/HiveFile/IHiveFile.h"
-#include "Storages/Hive/HivePartition.h"
+#include <Storages/Hive/HivePartition.h>
 
 namespace DB
 {
 HudiCowDirectoryLister::HudiCowDirectoryLister(const DiskPtr & disk_)
-    : DiskDirectoryLister(disk_, IHiveFile::FileFormat::PARQUET)
+    : DiskDirectoryLister(disk_, ILakeScanInfo::StorageType::Hudi, FileScanInfo::FormatType::PARQUET)
 {
 }
 
-static constexpr auto data_format = IHiveFile::FileFormat::PARQUET;
 static constexpr auto data_format_suffix = ".parquet";
 
-HiveFiles HudiCowDirectoryLister::list(const HivePartitionPtr & partition)
+LakeScanInfos HudiCowDirectoryLister::list(const HivePartitionPtr & partition)
 {
-    HiveFiles hive_files;
+    LakeScanInfos lake_scan_infos;
     using FileID = std::string;
     struct FileInfo
     {
@@ -54,10 +52,12 @@ HiveFiles HudiCowDirectoryLister::list(const HivePartitionPtr & partition)
 
     for (auto & [_, file_info] : data_files)
     {
-        HiveFilePtr file = IHiveFile::create(data_format, std::move(file_info.file_path), file_info.file_size, disk, partition);
-        hive_files.push_back(std::move(file));
+        Poco::URI uri(partition->location);
+        uri.setPath(file_info.file_path);
+        lake_scan_infos.push_back(
+            FileScanInfo::create(storage_type, format_type, uri.toString(), file_info.file_size, partition->partition_id));
     }
-    return hive_files;
+    return lake_scan_infos;
 }
 
 }
