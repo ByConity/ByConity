@@ -1044,7 +1044,9 @@ std::vector<Block> MergeTreeDataDeduper::restoreBlockFromNewParts(const IMergeTr
 
     auto read_new_part = [&](size_t part_id) {
         auto & to_block = blocks_from_current_dedup_new_parts[part_id];
-        to_block = sample_block;
+        /// A new sample block is needed here by sample_block.cloneEmpty().
+        /// In the case of direct assignment, the sizes of map columns will be affected by different threads, causing checkNumberOfRows to fail.
+        to_block = sample_block.cloneEmpty();
         const auto & part = current_dedup_new_parts[part_id];
         Stopwatch inner_watch;
         UInt64 read_func_columns_ms = 0, read_cost_ms = 0;
