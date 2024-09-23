@@ -174,7 +174,7 @@ public:
 
     SelectQueryInfo fillQueryInfo(ContextPtr context);
     void fillPrewhereInfo(ContextPtr context);
-    void makeSetsForIndex(const ASTPtr & node, ContextPtr context, PreparedSets & prepared_sets) const;
+    void makeSetsForIndex(const ASTPtr & node, ContextPtr context, PreparedSets & prepared_sets, const NamesAndTypesList & source) const;
     void fillQueryInfoV2(ContextPtr context);
 
     void allocate(ContextPtr context);

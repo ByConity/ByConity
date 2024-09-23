@@ -637,7 +637,8 @@ ASTPtr TableScanExecutor::rewriteExpr(ASTPtr expr, ProjectionMatchContext & cand
         return expr;
 }
 
-void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, PreparedSets & prepared_sets) const
+void TableScanStep::makeSetsForIndex(
+    const ASTPtr & node, ContextPtr context, PreparedSets & prepared_sets, const NamesAndTypesList & source) const
 {
     auto settings = context->getSettingsRef();
     SizeLimits size_limits_for_set(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode);
@@ -652,7 +653,7 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
         if (func && func->name == "lambda")
             continue;
 
-        makeSetsForIndex(child, context, prepared_sets);
+        makeSetsForIndex(child, context, prepared_sets, source);
     }
 
     const auto * func = node->as<ASTFunction>();
@@ -671,11 +672,9 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
             }
             else
             {
-                Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
-
                 Names output;
                 output.emplace_back(left_in_operand->getColumnName());
-                auto temp_actions = createExpressionActions(context, header.getNamesAndTypesList(), output, left_in_operand);
+                auto temp_actions = createExpressionActions(context, source, output, left_in_operand);
                 if (temp_actions->tryFindInOutputs(left_in_operand->getColumnName()))
                 {
                     makeExplicitSet(func, *temp_actions, true, context, size_limits_for_set, prepared_sets);
@@ -834,8 +833,9 @@ TableScanStep::TableScanStep(
 SelectQueryInfo TableScanStep::fillQueryInfo(ContextPtr context)
 {
     SelectQueryInfo copy_query_info = query_info;
-    makeSetsForIndex(query_info.getSelectQuery()->where(), context, copy_query_info.sets);
-    makeSetsForIndex(query_info.getSelectQuery()->prewhere(), context, copy_query_info.sets);
+    auto source = storage_snapshot->getSampleBlockForColumns(getRequiredColumns()).getNamesAndTypesList();
+    makeSetsForIndex(query_info.getSelectQuery()->where(), context, copy_query_info.sets, source);
+    makeSetsForIndex(query_info.getSelectQuery()->prewhere(), context, copy_query_info.sets, source);
     // partition_filter shouldn't be included, since it won't be used in the QueryPipeline
     return copy_query_info;
 }
@@ -1687,18 +1687,15 @@ void TableScanStep::cleanStorage()
 void TableScanStep::allocate(ContextPtr context)
 {
     // init query_info.syntax_analyzer
-    if (!query_info.syntax_analyzer_result)
-    {
-        Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumnsAndPartitionColumns());
-
-        auto tree_rewriter_result
-            = std::make_shared<TreeRewriterResult>(header.getNamesAndTypesList(), storage, storage_snapshot);
-        tree_rewriter_result->required_source_columns = header.getNamesAndTypesList();
-        tree_rewriter_result->analyzed_join = std::make_shared<TableJoin>();
-        query_info.syntax_analyzer_result = tree_rewriter_result;
-    }
-
+    Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumnsAndPartitionColumns());
+    auto source = header.getNamesAndTypesList();
+    auto tree_rewriter_result = std::make_shared<TreeRewriterResult>(source, storage, storage_snapshot);
+    tree_rewriter_result->required_source_columns = source;
+    tree_rewriter_result->analyzed_join = std::make_shared<TableJoin>();
+    query_info.syntax_analyzer_result = tree_rewriter_result;
+    // make set for IN statements for subsequent partition pruning
     query_info = fillQueryInfo(context);
+    makeSetsForIndex(query_info.partition_filter, context, query_info.sets, source);
     original_table = storage_id.table_name;
     storage_id = storage->prepareTableRead(getRequiredColumns(), query_info, context);
     size_t shards = context->tryGetCurrentWorkerGroup() ? context->getCurrentWorkerGroup()->getShardsInfo().size() : 1;
@@ -1989,15 +1986,16 @@ void TableScanStep::fillQueryInfoV2(ContextPtr context)
     assert(storage);
     auto required_columns = getRequiredColumns();
     auto block = storage_snapshot->getSampleBlockForColumns(required_columns);
+    auto source = block.getNamesAndTypesList();
 
     /// 1. build tree rewriter result
-    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(block.getNamesAndTypesList(), storage, storage_snapshot);
+    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(source, storage, storage_snapshot);
     syntax_analyzer_result->analyzed_join = std::make_shared<TableJoin>();
     query_info.syntax_analyzer_result = syntax_analyzer_result;
 
     /// 2. build prepared sets
-    makeSetsForIndex(query_info.getSelectQuery()->where(), context, query_info.sets);
-    makeSetsForIndex(query_info.getSelectQuery()->prewhere(), context, query_info.sets);
+    makeSetsForIndex(query_info.getSelectQuery()->where(), context, query_info.sets, source);
+    makeSetsForIndex(query_info.getSelectQuery()->prewhere(), context, query_info.sets, source);
 
     // partition_filter shouldn't be included, since it won't be used in the QueryPipeline
     // TODO: atomic_predicates_expr
