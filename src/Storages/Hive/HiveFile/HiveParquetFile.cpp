@@ -46,18 +46,7 @@ std::optional<size_t> HiveParquetFile::numRows()
     return *num_rows;
 }
 
-SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<IHiveFile::ReadParams> & params)
-{
-    auto read_buf = readFile(params->read_settings);
-    auto parquet_format = FormatFactory::instance().getInputFormat(
-        "Parquet", *read_buf, block, params->context, params->max_block_size, params->format_settings);
 
-    parquet_format->addBuffer(std::move(read_buf));
-
-    if (params->query_info)
-        parquet_format->setQueryInfo(*params->query_info, params->context);
-    return parquet_format;
-}
 
 }
 

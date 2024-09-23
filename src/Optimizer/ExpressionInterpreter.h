@@ -172,6 +172,8 @@ private:
     InterpretIMResult visitASTPreparedParameter(const ASTPreparedParameter & prepared_param, const ConstASTPtr & node) const;
     InterpretIMResult visitOrdinaryFunction(const ASTFunction & function, const ConstASTPtr & node) const;
     InterpretIMResult visitInFunction(const ASTFunction & function, const ConstASTPtr & node) const;
+    // including toXXX and cast
+    InterpretIMResult visitConvertFunction(const ASTFunction & function, const ConstASTPtr & node) const;
 
     DataTypePtr getType(const ConstASTPtr & node) const
     {

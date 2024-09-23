@@ -26,6 +26,10 @@
 #include <cstring>
 #include <cstdint>
 
+#pragma clang diagnostic push
+#if __has_warning("-Wreserved-identifier")
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#endif
 
 namespace detail
 {
@@ -477,3 +481,5 @@ size_t hash(const std::string &s)
 }
 
 }
+
+#pragma clang diagnostic pop

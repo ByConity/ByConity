@@ -116,32 +116,30 @@ Projection Est. ? rows
                         └─ TableScan test.t40047_y Est. ? rows
                                  Outputs: c_5:=c
 Projection Est. ? rows
-│     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
+│     Expressions: _subquery1:=`expr#max(c)_2`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
 └─ Gather Exchange Est. ? rows
    └─ Projection Est. ? rows
-      │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=`expr#max(c)_1` + 1
-      └─ Projection Est. ? rows
-         │     Expressions: expr#max(c)_1:=cast(`expr#max(c)_2`, \'Nullable(Int32)\')
-         └─ Left Join Est. ? rows
-            │     Condition: b == c
-            ├─ TableScan test.t40047_x Est. ? rows
-            │        Outputs: [b]
-            └─ Broadcast Exchange Est. ? rows
-               └─ MergingAggregated Est. ? rows
-                  └─ Repartition Exchange Est. ? rows
-                     │     Partition by: {c}
-                     └─ Aggregating Est. ? rows
-                        │     Group by: {c}
-                        │     Aggregates: expr#max(c)_2:=AggNull(maxIf)(c,build_side_non_null_symbol)
-                        └─ Projection Est. ? rows
-                           │     Expressions: [c], build_side_non_null_symbol:=1
-                           └─ TableScan test.t40047_y Est. ? rows
-                                    Outputs: [c]
+      │     Expressions: [expr#max(c)_2], expr#plus(_subquery2, 1):=`expr#max(c)_2` + 1
+      └─ Left Join Est. ? rows
+         │     Condition: b == c
+         ├─ TableScan test.t40047_x Est. ? rows
+         │        Outputs: [b]
+         └─ Broadcast Exchange Est. ? rows
+            └─ MergingAggregated Est. ? rows
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {c}
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {c}
+                     │     Aggregates: expr#max(c)_2:=AggNull(maxIf)(c,build_side_non_null_symbol)
+                     └─ Projection Est. ? rows
+                        │     Expressions: [c], build_side_non_null_symbol:=1
+                        └─ TableScan test.t40047_y Est. ? rows
+                                 Outputs: [c]
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
 └─ Gather Exchange Est. ? rows
    └─ Projection Est. ? rows
-      │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=cast(`expr#max(c)_4`, \'Nullable(Int32)\') + 1
+      │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=`expr#max(c)_4` + 1
       └─ Left Join Est. ? rows
          │     Condition: a == c_1
          ├─ Inner Join Est. ? rows

@@ -16,7 +16,7 @@ Projection Est. 100 rows
                   ├─ Repartition Exchange Est. 150901 rows
                   │  │     Partition by: {expr#cast(minus(d_week_seq_3, 52), 'Int32'), s_store_id_1}
                   │  └─ Projection Est. 150598 rows
-                  │     │     Expressions: [expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL))_4, s_store_id_1], expr#cast(minus(d_week_seq_3, 52), 'Int32'):=cast(d_week_seq_6 - 52, 'Int32')
+                  │     │     Expressions: [expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL))_4, expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL))_4, s_store_id_1], expr#cast(minus(d_week_seq_3, 52), 'Int32'):=d_week_seq_6 - 52
                   │     └─ Inner Join Est. 150598 rows
                   │        │     Condition: d_week_seq_6 == d_week_seq_4
                   │        │     Runtime Filters Builder: {d_week_seq_4}

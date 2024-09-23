@@ -26,6 +26,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <type_traits>
 #include <unordered_map>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
@@ -84,20 +85,18 @@
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
-#include <Interpreters/NamedSession.h>
 #include <Interpreters/Lemmatizers.h>
+#include <Interpreters/NamedSession.h>
 #include <Interpreters/PreparedStatement/PreparedStatementManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueueManager.h>
-#include <Interpreters/VirtualWarehouseQueue.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/SynonymsExtensions.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/VirtualWarehousePool.h>
+#include <Interpreters/VirtualWarehouseQueue.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Interpreters/WorkerStatusManager.h>
-#include <Interpreters/SynonymsExtensions.h>
-#include <Interpreters/Lemmatizers.h>
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
@@ -107,11 +106,11 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/parseQuery.h>
-#include <Processors/Formats/InputStreamFromInputFormat.h>
-#include <QueryPlan/PlanCache.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
-#include <Processors/Transforms/AddingDefaultsTransform.h>
 #include <Processors/Formats/Impl/ArrowColumnCache.h>
+#include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <Processors/Transforms/AddingDefaultsTransform.h>
+#include <QueryPlan/PlanCache.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <ResourceGroup/InternalResourceGroupManager.h>
 #include <ResourceGroup/VWResourceGroupManager.h>
@@ -124,6 +123,7 @@
 #include <Storages/DiskCache/Types.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
+#include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
@@ -132,6 +132,7 @@
 #include <Storages/MergeTree/GinIndexStore.h>
 #include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Storages/MergeTree/GinIndexStore.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
@@ -1768,10 +1769,91 @@ void Context::calculateAccessRightsWithLock(const std::unique_lock<SharedMutex> 
 }
 
 
+
+
+bool Context::isExternalDb(const std::string_view& database) const
+{
+        std::optional<std::string> catalog_name;
+        std::optional<std::string> db_name;
+        std::tie(catalog_name, db_name) = getCatalogNameAndDatabaseName(database);
+
+
+        if (!catalog_name.has_value())
+        {
+            auto current_catalog = getCurrentCatalog();
+            catalog_name = current_catalog.empty() ? "cnch" : current_catalog;
+        }
+        // skip access check to resources under hive catalog.
+        if (getOriginalDatabaseName(catalog_name.value()) != "cnch")
+        {
+            return true;
+        } 
+        return false;
+}
+
+template <typename... OtherArgs>
+std::string_view getDatabase([[maybe_unused]] const AccessFlags & args1, const std::string_view & arg2, const OtherArgs &...)
+{
+    return arg2;
+}
+
+
+template <typename... OtherArgs>
+std::string_view getDatabase([[maybe_unused]] const AccessFlags & args1, const std::string & arg2, const OtherArgs &...)
+{
+    return arg2;
+}
+
 template <typename... Args>
 void Context::checkAccessImpl(const Args &... args) const
 {
-    return getAccess()->checkAccess(args...);
+    if constexpr (sizeof...(Args) <= 1) 
+    {
+        getAccess()->checkAccess(args...);
+    } 
+    else 
+    {
+        static_assert(sizeof...(Args) > 1, "Logical Error");
+        using FirstType = typename std::tuple_element<0, std::tuple<Args...>>::type;
+        using SecondType = typename std::tuple_element<1, std::tuple<Args...>>::type;
+        static_assert(std::is_same_v<std::decay_t<FirstType>, AccessFlags>, "First argument must be AccessFlags");
+        static_assert(
+            std::is_same_v<std::decay_t<SecondType>, std::string_view> || std::is_same_v<std::decay_t<SecondType>, std::string>,
+            "Second argument must be std::string_view");
+
+        // we know the second argument is database.
+        if(isExternalDb(getDatabase(args...)))
+        {
+            return;
+        }
+        getAccess()->checkAccess(args...);
+    }
+}
+
+template <typename... Args>
+bool Context::isGrantedImpl(const Args &... args) const
+{
+    if constexpr (sizeof...(Args) <= 1) 
+    {
+        getAccess()->isGranted(args...);
+    } 
+    else 
+    {
+        static_assert(sizeof...(Args) > 1, "Logical Error");
+        using FirstType = typename std::tuple_element<0, std::tuple<Args...>>::type;
+        using SecondType = typename std::tuple_element<1, std::tuple<Args...>>::type;
+        static_assert(std::is_same_v<std::decay_t<FirstType>, AccessFlags>, "First argument must be AccessFlags");
+        static_assert(
+            std::is_same_v<std::decay_t<SecondType>, std::string_view> || std::is_same_v<std::decay_t<SecondType>, std::string>,
+            "Second argument must be std::string_view");
+
+        // we know the second argument is database.
+        if(isExternalDb(getDatabase(args...)))
+        {
+            return true;
+        }
+        return getAccess()->isGranted(args...);
+    } 
 }
 
 void Context::checkAccess(const AccessFlags & flags) const
@@ -1829,6 +1911,15 @@ void Context::checkAccess(const AccessRightsElements & elements) const
     return checkAccessImpl(elements);
 }
 
+bool Context::isGranted(const AccessFlags & flags, const StorageID & table_id, const std::string_view & column) const
+{
+    return isGrantedImpl(flags, table_id.getDatabaseName(), table_id.getTableName(), column);
+}
+
+bool Context::isGranted(const AccessFlags & flags, const std::string_view & database, const std::string_view & table, const std::string_view & column) const
+{
+    return isGrantedImpl(flags, database, table, column);
+}
 
 void Context::grantAllAccess()
 {
@@ -1849,9 +1940,13 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
 
 void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
 {
-    String table_names = this->getSettingsRef().access_table_names;
+    String table_names = getSettingsRef().access_table_names;
     if (table_names.empty())
-        return;
+    {
+        table_names = getSettingsRef().accessible_table_names;
+        if (table_names.empty())
+            return;
+    }
     std::vector<String> tables;
     boost::split(tables, table_names, boost::is_any_of(" ,"));
     /// avoid check temporary table.

@@ -93,9 +93,9 @@ public:
 
         for (const auto & [from, map] : edges)
         {
-            for (const auto & [to, edges] : map)
+            for (const auto & [to, links] : map)
             {
-                for (const auto & edge : edges)
+                for (const auto & edge : links)
                 {
                     auto * e = proto.add_edges();
                     e->set_from(from);

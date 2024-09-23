@@ -79,9 +79,12 @@ void IntermediateResultCacheTransform::transform(DB::Chunk & chunk)
 
     auto cache_chunk = chunk.clone();
     size_t num_columns = cache_chunk.getNumColumns();
-    auto columns = cache_chunk.detachColumns();
+    size_t num_rows = cache_chunk.getNumRows();
+    auto output_columns = cache_chunk.detachColumns();
+    Columns cache_columns(num_columns);
     for (size_t i = 0; i < num_columns; ++i)
-        cache_chunk.addColumn(std::move(columns[cache_param.output_pos_to_cache_pos[i]]));
+        cache_columns[cache_param.output_pos_to_cache_pos[i]] = std::move(output_columns[i]);
+    cache_chunk.setColumns(std::move(cache_columns), num_rows);
 
     if (value)
         value->addChunk(cache_chunk);

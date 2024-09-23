@@ -27,6 +27,7 @@
 #include <Common/TestUtils.h>
 #include <Interpreters/PartMergeLog.h>
 #include <Interpreters/ServerPartLog.h>
+#include <IO/WriteBufferFromString.h>
 #include <Parsers/formatAST.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
@@ -137,7 +138,7 @@ namespace
 }
 
 /// We maintain merging_mutating_parts based on the merge task's lifecycle.
-/// Source parts are added to merging_mutating_parts when task is created, see FutureManipulationTask::assignSourceParts.
+/// Source parts are added to merging_mutating_parts when task is created, see FutureManipulationTask::tagSourceParts.
 /// And they are removed from merging_mutating_parts when task record is destroyed.
 /// As the merge txn is committed in a 2-phase style, we need to hold the task record until txn phase-2 finish (success or fail).
 /// * phase 1 - ::finishTask is called. We mark the task record as committing by set commit_start_time, instead of destroy the record.
@@ -150,7 +151,15 @@ ManipulationTaskRecord::~ManipulationTaskRecord()
         {
             std::lock_guard lock(parent.currently_merging_mutating_parts_mutex);
             for (auto & part : parts)
+            {
                 parent.currently_merging_mutating_parts.erase(part->name());
+                auto prev_part = part->tryGetPreviousPart();
+                while(prev_part)
+                {
+                    parent.currently_merging_mutating_parts.erase(prev_part->name());
+                    prev_part = prev_part->tryGetPreviousPart();
+                }
+            }
         }
 
         {
@@ -165,11 +174,22 @@ ManipulationTaskRecord::~ManipulationTaskRecord()
     }
 }
 
-Strings ManipulationTaskRecord::getSourcePartNames() const
+Strings ManipulationTaskRecord::getSourcePartNames(bool flatten) const
 {
     Strings res;
     for (const auto & part : parts)
+    {
         res.emplace_back(part->name());
+        if (likely(flatten))
+        {
+            auto prev_part = part->tryGetPreviousPart();
+            while (prev_part)
+            {
+                res.emplace_back(prev_part->name());
+                prev_part = prev_part->tryGetPreviousPart();
+            }
+        }
+    }
     return res;
 }
 
@@ -181,7 +201,15 @@ FutureManipulationTask::~FutureManipulationTask()
         {
             std::lock_guard lock(parent.currently_merging_mutating_parts_mutex);
             for (auto & part : parts)
+            {
                 parent.currently_merging_mutating_parts.erase(part->name());
+                auto prev_part = part->tryGetPreviousPart();
+                while(prev_part)
+                {
+                    parent.currently_merging_mutating_parts.erase(prev_part->name());
+                    prev_part = prev_part->tryGetPreviousPart();
+                }
+            }
         }
     }
     catch (...)
@@ -190,26 +218,38 @@ FutureManipulationTask::~FutureManipulationTask()
     }
 }
 
-FutureManipulationTask & FutureManipulationTask::assignSourceParts(ServerDataPartsVector && parts_)
+/// Add source parts (include invisible parts) to merging_mutating_parts.
+FutureManipulationTask & FutureManipulationTask::tagSourceParts(ServerDataPartsVector && parts_)
 {
-    for (auto & part : parts_)
-    {
-        LOG_DEBUG(&Poco::Logger::get("MergeMutateDEBUG"), "assignSourceParts part {} name {}", static_cast<const void*>(part.get()), part->name());
-    }
-
-    /// flatten the parts
-    CnchPartsHelper::flattenPartsVector(parts_);
+    auto check_and_add = [&](const auto & part_name) {
+        if (parent.currently_merging_mutating_parts.count(part_name))
+            throw Exception("Part '" + part_name + "' was already in other Task, cancel merge.", ErrorCodes::ABORTED);
+        parent.currently_merging_mutating_parts.emplace(part_name);
+    };
 
     if (!record->try_execute)
     {
         std::lock_guard lock(parent.currently_merging_mutating_parts_mutex);
 
-        for (auto & part : parts_)
-            if (parent.currently_merging_mutating_parts.count(part->name()))
-                throw Exception("Part '" + part->name() + "' was already in other Task, cancel merge.", ErrorCodes::ABORTED);
+        for (const auto & p : parts_)
+        {
+            check_and_add(p->name());
 
-        for (auto & part : parts_)
-            parent.currently_merging_mutating_parts.emplace(part->name());
+            auto prev_part = p->tryGetPreviousPart();
+            while (prev_part)
+            {
+                check_and_add(prev_part->name());
+                prev_part = prev_part->tryGetPreviousPart();
+            }
+        }
+    }
+
+    if (parent.log->trace())
+    {
+        WriteBufferFromOwnString wb;
+        for (const auto & p : parts_)
+            wb << p->name() << " ";
+        LOG_TRACE(parent.log, "Added parts to merging_mutating_parts: {}", wb.str());
     }
 
     parts = std::move(parts_);
@@ -612,16 +652,14 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
         submitFutureManipulationTask(storage, *future_task);
     }
 
-    try
-    {
-        /// TODO: catch the exception during tryMergeParts() ?
-
-        writePartMergeLogElement(istorage, part_merge_log_elem, metrics);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
+    // try
+    // {
+    //     writePartMergeLogElement(istorage, part_merge_log_elem, metrics);
+    // }
+    // catch (...)
+    // {
+    //     tryLogCurrentException(__PRETTY_FUNCTION__);
+    // }
 
     return result;
 }
@@ -785,7 +823,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         postpone_partitions.erase(selected_parts.front()->info().partition_id);
 
         auto future_task = std::make_unique<FutureManipulationTask>(*this, ManipulationType::Merge);
-        future_task->assignSourceParts(std::move(selected_parts));
+        future_task->tagSourceParts(std::move(selected_parts));
 
         merge_pending_queue.push(std::move(future_task));
     }
@@ -800,7 +838,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
 
 Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
 {
-    constexpr UInt64 SLOW_THRESHOLD_MS = 200;
+    constexpr UInt64 slow_threshold_ms = 200;
     Stopwatch watch;
     auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
     auto transaction = txn_coordinator.createTransaction(
@@ -844,7 +882,7 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
     /// And finishTransaction in the SCOPE_EXIT make sure the txn is clean by server but not DM.
     transaction->commitV2();
     UInt64 milliseconds = watch.elapsedMilliseconds();
-    if (milliseconds >= SLOW_THRESHOLD_MS)
+    if (milliseconds >= slow_threshold_ms)
         LOG_INFO(log, "removeLockedPartition took {} ms.", milliseconds);
     return res;
 }
@@ -955,7 +993,6 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
 
     task_record.task_id = params.task_id;
     task_record.worker = worker_client;
-    task_record.result_part_name = params.new_part_names.front();
     task_record.manipulation_entry = local_context->getGlobalContext()->getManipulationList().insert(params, true, getContext());
     task_record.manipulation_entry->get()->related_node = worker_client->getRPCAddress();
 
@@ -1032,6 +1069,7 @@ String CnchMergeMutateThread::triggerPartMerge(
     std::map<TxnTimestamp, CnchMergeTreeMutationEntry> mutation_entries;
     std::vector<std::pair<TxnTimestamp, bool>> mutation_timestamps;
     catalog->fillMutationsByStorage(storage_id, mutation_entries);
+    mutation_timestamps.reserve(mutation_entries.size());
     for (const auto & [_, mutation_entry] : mutation_entries)
         mutation_timestamps.emplace_back(mutation_entry.commit_time, mutation_entry.commands.changeSchema());
 
@@ -1091,7 +1129,7 @@ String CnchMergeMutateThread::triggerPartMerge(
             storage,
             FutureManipulationTask(*this, ManipulationType::Merge)
                 .setTryExecute(try_execute)
-                .assignSourceParts(std::move(res.front())),
+                .tagSourceParts(std::move(res.front())),
             true);
     }
 
@@ -1196,7 +1234,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, std::function<voi
         it->second->commit_start_time = time(nullptr);
 
         partition_id = it->second->parts.front()->info().partition_id;
-        source_part_names = it->second->getSourcePartNames();
+        source_part_names = it->second->getSourcePartNames(/*flatten*/true);
         try_execute = it->second->try_execute;
         manipulation_submit_time_ns = it->second->submit_time_ns;
     }
@@ -1400,7 +1438,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
                     storage,
                     FutureManipulationTask(*this, type)
                         .setMutationEntry(*current_mutate_entry)
-                        .assignSourceParts(std::move(alter_parts)));
+                        .tagSourceParts(std::move(alter_parts)));
                 alter_parts.clear();
                 curr_mutate_part_size = 0;
                 if (running_mutation_tasks >= storage.getSettings()->max_addition_mutation_task_num)
@@ -1415,7 +1453,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
                 storage,
                 FutureManipulationTask(*this, type)
                     .setMutationEntry(*current_mutate_entry)
-                    .assignSourceParts(std::move(alter_parts)));
+                    .tagSourceParts(std::move(alter_parts)));
         }
 
         return remain_tasks_in_partition;

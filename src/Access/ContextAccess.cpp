@@ -91,7 +91,10 @@ namespace
         "cnch_tables",
         "cnch_columns",
         "cnch_parts",
-        "data_skipping_indices"
+        "data_skipping_indices",
+        "external_catalogs",
+        "external_tables",
+        "external_databases"
     };
 
     AccessRights mixAccessRightsFromUserAndRoles(const User & user, const EnabledRolesInfo & roles_info)

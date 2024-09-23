@@ -14,7 +14,12 @@
 #include <fcntl.h>
 #include <fstream>
 #include <fmt/format.h>
+#include <Common/config.h> // USE_SKIM
 
+
+#if USE_SKIM
+#include <skim.h>
+#endif
 
 namespace
 {
@@ -188,6 +193,84 @@ ReplxxLineReader::ReplxxLineReader(
     rx.bind_key(Replxx::KEY::control('W'), [this](char32_t code) { return rx.invoke(Replxx::ACTION::KILL_TO_WHITESPACE_ON_LEFT, code); });
 
     rx.bind_key(Replxx::KEY::meta('E'), [this](char32_t) { openEditor(); return Replxx::ACTION_RESULT::CONTINUE; });
+    rx.bind_key(Replxx::KEY::control('O'), [this](char32_t) { openEditor(); return Replxx::ACTION_RESULT::CONTINUE; });
+
+    auto insert_comment_action = [this](char32_t code)
+    {
+        replxx::Replxx::State state(rx.get_state());
+        const char * line = state.text();
+        const char * line_end = line + strlen(line);
+
+        std::string commented_line;
+        if (std::find(line, line_end, '\n') != line_end)
+        {
+            /// If query has multiple lines, multiline comment is used over
+            /// commenting each line separately for easier uncomment (though
+            /// with invoking editor it is simpler to uncomment multiple lines)
+            ///
+            /// Note, that using multiline comment is OK even with nested
+            /// comments, since nested comments are supported.
+            commented_line = fmt::format("/* {} */", state.text());
+        }
+        else
+        {
+            // In a simplest case use simple comment.
+            commented_line = fmt::format("-- {}", state.text());
+        }
+        rx.set_state(replxx::Replxx::State(commented_line.c_str(), static_cast<int>(commented_line.size())));
+
+        return rx.invoke(Replxx::ACTION::COMMIT_LINE, code);
+    };
+    rx.bind_key(Replxx::KEY::meta('#'), insert_comment_action);
+    rx.bind_key(Replxx::KEY::control('#'), insert_comment_action);
+
+    #if USE_SKIM
+    auto interactive_history_search = [this](char32_t code)
+    {
+        std::vector<std::string> words;
+        {
+            auto hs(rx.history_scan());
+            while (hs.next())
+                words.push_back(hs.get().text());
+        }
+
+        std::string current_query(rx.get_state().text());
+        std::string new_query;
+        try
+        {
+            new_query = std::string(skim(current_query, words));
+        }
+        catch (const std::exception & e)
+        {
+            rx.print("skim failed: %s (consider using Ctrl-T for a regular non-fuzzy reverse search)\n", e.what());
+        }
+
+        /// REPAINT before to avoid prompt overlap by the query
+        rx.invoke(Replxx::ACTION::REPAINT, code);
+
+        if (!new_query.empty())
+            rx.set_state(replxx::Replxx::State(new_query.c_str(), static_cast<int>(new_query.size())));
+
+        if (bracketed_paste_enabled)
+            enableBracketedPaste();
+
+        rx.invoke(Replxx::ACTION::CLEAR_SELF, code);
+        return rx.invoke(Replxx::ACTION::REPAINT, code);
+    };
+
+    rx.bind_key(Replxx::KEY::control('R'), interactive_history_search);
+#endif
+
+    /// Rebind regular incremental search to C-T.
+    ///
+    /// NOTE: C-T by default this is a binding to swap adjustent chars
+    /// (TRANSPOSE_CHARACTERS), but for SQL it sounds pretty useless.
+    rx.bind_key(Replxx::KEY::control('T'), [this](char32_t)
+    {
+        /// Reverse search is detected by C-R.
+        uint32_t reverse_search = Replxx::KEY::control('R');
+        return rx.invoke(Replxx::ACTION::HISTORY_INCREMENTAL_SEARCH, reverse_search);
+    });
 }
 
 ReplxxLineReader::~ReplxxLineReader()

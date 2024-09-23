@@ -28,6 +28,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/regex.hpp>
 #include "common/types.h"
+#include "Databases/DatabaseExternalHive.h"
 #include "Statistics/StatisticsBase.h"
 #include "Storages/TableStatistics.h"
 
@@ -209,8 +210,19 @@ std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const Strin
         return {};
     }
 
-    auto table_identifiers = context->getCnchCatalog()->getAllTablesID(database_name);
     std::vector<StatsTableIdentifier> results;
+    if(auto * db_hive = dynamic_cast<DatabaseExternalHive*>(db.get()); db_hive)
+    {
+        auto iter = db_hive->getTablesIterator(context, {});
+        while(iter->isValid())
+        {
+            results.emplace_back(iter->table()->getStorageID());
+            iter->next();
+        }
+        return results;
+    }
+
+    auto table_identifiers = context->getCnchCatalog()->getAllTablesID(database_name);
     for (auto & identifier : table_identifiers)
         results.emplace_back(StorageID{identifier->database(), identifier->name(), UUIDHelpers::toUUID(identifier->uuid())});
     return results;

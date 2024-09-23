@@ -17,7 +17,7 @@ Projection Est. 400000 rows
             │     │  │     Partition by: {l_partkey}
             │     │  └─ Inner (PARALLEL_HASH) Join Est. 3689965835 rows
             │     │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-            │     │     │     Filter: ps_availqty > cast('0.5' * `expr#sum(l_quantity)_1`, 'Nullable(Decimal(38, 3))')
+            │     │     │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)_1`)
             │     │     ├─ MergingAggregated Est. 911261094 rows
             │     │     │  └─ Repartition Exchange Est. 911261094 rows
             │     │     │     │     Partition by: {l_partkey, l_suppkey}

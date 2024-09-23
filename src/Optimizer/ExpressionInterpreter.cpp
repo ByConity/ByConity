@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <optional>
 #include <Optimizer/ExpressionInterpreter.h>
 
 #include <Columns/ColumnAggregateFunction.h>
@@ -21,7 +22,6 @@
 #include <Columns/ColumnSet.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/IColumn.h>
-#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
@@ -35,9 +35,12 @@
 #include <Optimizer/FunctionInvoker.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
+#include <Optimizer/makeCastFunction.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/formatAST.h>
+#include <Statistics/TypeUtils.h>
+#include <Poco/String.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 
 namespace DB
@@ -72,7 +75,7 @@ static DataTypePtr makeNullableByArgumentTypes(const InterpretIMResults & argume
 {
     DataTypePtr result = std::make_shared<T>();
 
-    if (std::any_of(arguments.begin(), arguments.end(), [](auto & arg) { return isNullableOrLowCardinalityNullable(arg.type);}))
+    if (std::any_of(arguments.begin(), arguments.end(), [](auto & arg) { return isNullableOrLowCardinalityNullable(arg.type); }))
         result = JoinCommon::tryConvertTypeToNullable(result);
 
     return result;
@@ -102,6 +105,76 @@ static bool inFunctionIsNullSkipped(const String & func_name)
 static bool isInFunction(const String & func_name)
 {
     return inFunctionIsPositive(func_name) || inFunctionIsNegative(func_name);
+}
+
+// handle toXXX functions
+struct ConvertFunctionInfo
+{
+    String type_name;
+    bool or_zero = false;
+    bool or_null = false;
+    static std::optional<ConvertFunctionInfo> analyze(const String & original_func)
+    {
+        // we don't handle cast here
+        if (original_func.substr(0, 2) != "to")
+        {
+            return std::nullopt;
+        }
+        ConvertFunctionInfo info;
+        auto func = original_func.substr(2);
+        if (func.ends_with("OrZero"))
+        {
+            func = func.substr(0, func.size() - 6);
+            info.or_zero = true;
+        }
+        else if (func.ends_with("OrNull"))
+        {
+            func = func.substr(0, func.size() - 6);
+            info.or_null = true;
+        }
+
+        if (supported_types.count(func))
+        {
+            info.type_name = func;
+            return info;
+        }
+        return std::nullopt;
+    }
+
+    static std::unordered_set<String> supported_types;
+};
+
+std::unordered_set<String> ConvertFunctionInfo::supported_types = {
+    "UInt8",
+    "UInt16",
+    "UInt32",
+    "UInt64",
+    "Int8",
+    "Int16",
+    "Int32",
+    "Int64",
+    "Float32",
+    "Float64",
+    "UUID",
+    "String",
+    // "FixedString", // TODO: not implemented since it requires size
+    "Date",
+    "Date32",
+    "DateTime",
+    "DateTime32", // alias to toDateTime
+    // "DateTime64",  // TODO: not implemented since it requires decimal scale
+    // "Decimal32",
+    // "Decimal64",
+    // "Decimal128",
+};
+
+static bool isConvertFunction(const String & func_name)
+{
+    if (Poco::toLower(func_name) == "cast")
+        return true;
+    ConvertFunctionInfo info;
+    auto info_opt = ConvertFunctionInfo::analyze(func_name);
+    return info_opt.has_value();
 }
 
 namespace function_simplify_rules_
@@ -552,6 +625,8 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
             return originalNode(node);
         if (isInFunction(func_name))
             return visitInFunction(*ast_func, node);
+        if (isConvertFunction(func_name))
+            return visitConvertFunction(*ast_func, node);
         return visitOrdinaryFunction(*ast_func, node);
     }
     if (const auto * ast_table_column = node->as<ASTTableColumnReference>())
@@ -577,6 +652,65 @@ InterpretIMResult ExpressionInterpreter::visitASTIdentifier(const ASTIdentifier 
 InterpretIMResult ExpressionInterpreter::visitASTPreparedParameter(const ASTPreparedParameter &, const ConstASTPtr & node) const
 {
     return originalNode(node);
+}
+
+static bool isDataTypeIdentical(const DataTypePtr & a, const DataTypePtr & b)
+{
+    if (!a->equals(*b))
+    {
+        return false;
+    }
+
+    // NOTE: we ignore different glc dictionary names
+    // NOTE: but custom name like 'Bool' v.s. 'UInt8' should be not equal
+    auto is_equal = a->getName() == b->getName();
+    return is_equal;
+}
+
+// this function will trim the conversion function if possible
+// or let visitOrdinaryFunction to handle it
+InterpretIMResult ExpressionInterpreter::visitConvertFunction(const ASTFunction & function, const ConstASTPtr & node) const
+{
+    if (Poco::toLower(function.name) == "cast" && function.arguments->getChildren().size() == 2)
+    {
+        auto source = function.arguments->getChildren()[0];
+        auto source_type = getType(source);
+        const auto * target_type_name = function.arguments->getChildren()[1]->as<ASTLiteral>();
+        auto target_type = DataTypeFactory::instance().get(target_type_name->value.safeGet<String>());
+
+        if (isDataTypeIdentical(source_type, target_type))
+        {
+            return visit(source);
+        }
+        else
+        {
+            return visitOrdinaryFunction(function, node);
+        }
+    }
+
+    auto func_info_opt = ConvertFunctionInfo::analyze(function.name);
+    if (func_info_opt && function.arguments->getChildren().size() == 1)
+    {
+        auto func_info = func_info_opt.value();
+        auto source = function.arguments->getChildren()[0];
+        auto source_type = getType(source);
+        auto source_type_info = Statistics::decayDataTypeVerbose(source_type);
+        auto target_type = DataTypeFactory::instance().get(func_info.type_name);
+        if (isDataTypeIdentical(source_type_info.type, target_type))
+        {
+            // LowCardinality has no effect, always same
+            // orZero has no effect, e.g., toInt32OrZero(Null) == Null
+            // orNull will make type Nullable
+            bool need_convert = func_info.or_null && !source_type_info.is_nullable;
+            if (!need_convert)
+            {
+                // trim the cast
+                return visit(source);
+            }
+        }
+    }
+    // fallback to ordinary function handler if we cannot handle it
+    return visitOrdinaryFunction(function, node);
 }
 
 InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction & function, const ConstASTPtr & node) const

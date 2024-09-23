@@ -517,6 +517,8 @@ public:
     public:
         Index();
         Index(const Index & other) = default;
+        Index &operator=(const Index &other) = default;
+
         explicit Index(MutableColumnPtr && positions_);
         explicit Index(ColumnPtr positions_);
 
@@ -570,6 +572,8 @@ private:
     {
     public:
         Dictionary(const Dictionary & other) = default;
+        Dictionary &operator=(const Dictionary &other) = default;
+
         explicit Dictionary(MutableColumnPtr && column_unique, bool is_shared);
         explicit Dictionary(ColumnPtr column_unique, bool is_shared);
 

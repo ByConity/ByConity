@@ -43,7 +43,7 @@ public:
     HiveFiles getHiveFiles() const { return files; }
     std::shared_ptr<CnchHiveSettings> getSettings() const { return storage_settings; }
     bool supportIntermedicateResultCache() const override { return true; }
-
+    bool supportsPrewhere() const override { return true; }
 private:
     void selectFiles(
         ContextPtr local_context,

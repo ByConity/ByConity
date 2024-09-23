@@ -33,9 +33,12 @@ NamesAndTypesList StorageSystemExternalCatalogs::getNamesAndTypes()
 void StorageSystemExternalCatalogs::fillData(
     MutableColumns & res_columns, [[maybe_unused]] ContextPtr context, const SelectQueryInfo &) const
 {
+    const String tenant_id = context->getTenantId();
     auto catalogs = ExternalCatalog::Mgr::instance().listCatalog();
     for (const auto & c : catalogs)
     {
+        if (!tenant_id.empty() && !startsWith(c.first, tenant_id + "."))
+            continue;
         res_columns[0]->insert(c.first);
         if (c.second.create_time.has_value())
         {

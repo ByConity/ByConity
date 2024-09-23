@@ -278,13 +278,28 @@ String formatCatalogDatabaseName(const String & database_name, const String cata
     return result;
 }
 
-std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDatabaseName(const String & database_name)
+// std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDatabaseName(const String & database_name)
+// {
+//     auto pos = database_name.find(catalog_delim);
+//     if (pos == String::npos)
+//         return {std::nullopt, {database_name}};
+//     return
+//     {
+//         {database_name.substr(0, pos)}, { database_name.substr(pos + catalog_delim.size()) }
+//     };
+// }
+
+std::tuple<std::optional<String>, std::optional<String>> getCatalogNameAndDatabaseName(const std::string_view & database_name)
 {
     auto pos = database_name.find(catalog_delim);
     if (pos == String::npos)
-        return {std::nullopt, {database_name}};
-    return {{database_name.substr(0, pos)}, {database_name.substr(pos + catalog_delim.size())}};
+        return {std::nullopt, std::string(database_name)};
+    return
+    {
+        {std::string(database_name.substr(0, pos))}, { std::string(database_name.substr(pos + catalog_delim.size())) }
+    };
 }
+
 
 DisableTenantGuard::DisableTenantGuard()
 {

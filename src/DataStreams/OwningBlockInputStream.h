@@ -16,8 +16,7 @@ template <typename OwnType>
 class OwningBlockInputStream : public IBlockInputStream
 {
 public:
-    OwningBlockInputStream(const BlockInputStreamPtr & stream_, std::unique_ptr<OwnType> own_)
-        : own{std::move(own_)}, stream{stream_}
+    OwningBlockInputStream(const BlockInputStreamPtr & stream_, std::unique_ptr<OwnType> own_) : own{std::move(own_)}, stream{stream_}
     {
         children.push_back(stream);
     }
@@ -29,6 +28,10 @@ public:
         children.clear();
         if (stream.use_count() > 1)
             LOG_WARNING(&Poco::Logger::get("OwningBlockInputStream"), "The BlockInputStream might outlive the buffer!");
+        if (stream)
+            stream.reset();
+        if (own)
+            own.reset();
     }
 
 private:
@@ -37,7 +40,7 @@ private:
     String getName() const override { return "Owning"; }
 
 protected:
-    std::unique_ptr<OwnType> own;
+    std::unique_ptr<OwnType> own = nullptr;
     BlockInputStreamPtr stream;
 };
 

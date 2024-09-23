@@ -17,7 +17,7 @@ Projection
             │     │  │     Partition by: {l_partkey}
             │     │  └─ Inner (PARALLEL_HASH) Join
             │     │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-            │     │     │     Filter: ps_availqty > cast('0.5' * `expr#sum(l_quantity)_1`, 'Nullable(Decimal(38, 3))')
+            │     │     │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)_1`)
             │     │     ├─ MergingAggregated
             │     │     │  └─ Repartition Exchange
             │     │     │     │     Partition by: {l_partkey, l_suppkey}

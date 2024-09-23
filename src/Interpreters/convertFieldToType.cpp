@@ -399,29 +399,32 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
     }
     else if (const DataTypeMap * type_map = typeid_cast<const DataTypeMap *>(&type))
     {
-        const auto & key_type = *type_map->getKeyType();
-        const auto & value_type = *type_map->getValueType();
-
-        const auto & map = src.get<Map>();
-        size_t map_size = map.size();
-
-        Map res(map_size);
-
-        bool have_unconvertible_element = false;
-        for (size_t i = 0; i < map_size; ++i)
+        if (src.getType() == Field::Types::Map)
         {
-            const auto & key = map[i].first;
-            const auto & value = map[i].second;
+            const auto & key_type = *type_map->getKeyType();
+            const auto & value_type = *type_map->getValueType();
 
-            res[i] = {convertFieldToType(key, key_type), convertFieldToType(value, value_type)};
-            if (res[i].first.isNull() && !key_type.isNullable())
-                have_unconvertible_element = true;
+            const auto & map = src.get<Map>();
+            size_t map_size = map.size();
 
-            if (res[i].second.isNull() && !value_type.isNullable())
-                have_unconvertible_element = true;
+            Map res(map_size);
+
+            bool have_unconvertible_element = false;
+            for (size_t i = 0; i < map_size; ++i)
+            {
+                const auto & key = map[i].first;
+                const auto & value = map[i].second;
+
+                res[i] = {convertFieldToType(key, key_type), convertFieldToType(value, value_type)};
+                if (res[i].first.isNull() && !key_type.isNullable())
+                    have_unconvertible_element = true;
+
+                if (res[i].second.isNull() && !value_type.isNullable())
+                    have_unconvertible_element = true;
+            }
+
+            return have_unconvertible_element ? Field(Null()) : Field(res);
         }
-
-        return have_unconvertible_element ? Field(Null()) : Field(res);
     }
     else if (const DataTypeAggregateFunction * agg_func_type = typeid_cast<const DataTypeAggregateFunction *>(&type))
     {

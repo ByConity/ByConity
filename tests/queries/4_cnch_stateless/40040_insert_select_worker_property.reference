@@ -22,9 +22,9 @@ TableFinish Est. 1 rows, cost 9.480000e-01
                            │     └─ Projection Est. ? rows, cost 0.000000e+00
                            │        │     Expressions: [base_id, date, tenant_dau_au_rate]
                            │        └─ Filter Est. ? rows, cost 0.000000e+00
-                           │           │     Condition: (toDate(p_date) >= cast(19384, \'Date\')) AND (toDate(p_date) <= cast(19473, \'Date\'))
+                           │           │     Condition: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
                            │           └─ TableScan test.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
-                           │                    Where: (toDate(p_date) >= cast(19384, \'Date\')) AND (toDate(p_date) <= cast(19473, \'Date\'))
+                           │                    Where: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
                            │                    Outputs: [tenant_dau_au_rate, base_id, date, p_date]
                            └─ Broadcast Exchange Est. ? rows, cost 1.600000e-01
                               └─ Aggregating Est. ? rows, cost 0.000000e+00
@@ -33,7 +33,7 @@ TableFinish Est. 1 rows, cost 9.480000e-01
                                  └─ Projection Est. ? rows, cost 0.000000e+00
                                     │     Expressions: [base_id_1, date_1]
                                     └─ Filter Est. ? rows, cost 0.000000e+00
-                                       │     Condition: (toDate(p_date_1) >= cast(19384, \'Date\')) AND (toDate(p_date_1) <= cast(19473, \'Date\'))
+                                       │     Condition: (p_date_1 >= cast(19384, \'Date\')) AND (p_date_1 <= cast(19473, \'Date\'))
                                        └─ TableScan test.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
-                                                Where: (toDate(p_date) >= cast(19384, \'Date\')) AND (toDate(p_date) <= cast(19473, \'Date\'))
+                                                Where: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
                                                 Outputs: base_id_1:=base_id, date_1:=date, p_date_1:=p_date

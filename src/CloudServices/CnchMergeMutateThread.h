@@ -74,10 +74,7 @@ struct ManipulationTaskRecord
     CnchWorkerClientPtr worker;
     size_t lost_count{0};
 
-    /// for system.part_merge_log & system.server_part_log
-    String result_part_name;
-
-    Strings getSourcePartNames() const;
+    Strings getSourcePartNames(bool flatten = false) const;
 };
 
 struct FutureManipulationTask
@@ -102,7 +99,7 @@ struct FutureManipulationTask
     }
 
     TxnTimestamp calcColumnsCommitTime() const;
-    FutureManipulationTask & assignSourceParts(ServerDataPartsVector && parts);
+    FutureManipulationTask & tagSourceParts(ServerDataPartsVector && parts);
     FutureManipulationTask & prepareTransaction();
     std::unique_ptr<ManipulationTaskRecord> moveRecord();
 

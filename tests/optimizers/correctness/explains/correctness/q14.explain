@@ -58,14 +58,14 @@ Projection Est. ? rows
          └─ Inner Join Est. ? rows
             │     Condition: 
             ├─ Inner Join Est. ? rows
-            │  │     Condition: expr#cast(sk_1, 'Nullable(Int64)') == expr#cast(sk, 'Nullable(Int64)')
+            │  │     Condition: expr#cast(sk_1, 'Nullable(Int64)') == sk
             │  ├─ Projection Est. ? rows
             │  │  │     Expressions: expr#cast(sk_1, 'Nullable(Int64)'):=cast(sk_1, 'Nullable(Int64)')
             │  │  └─ TableScan correctness.cust Est. ? rows
             │  │           Outputs: sk_1:=sk
             │  └─ Broadcast Exchange Est. ? rows
             │     └─ Projection Est. ? rows
-            │        │     Expressions: expr#cast(sk, 'Nullable(Int64)'):=cast(sk, 'Nullable(Int64)')
+            │        │     Expressions: [sk]
             │        └─ Filter Est. ? rows
             │           │     Condition: price < 10.
             │           └─ TableScan correctness.web Est. ? rows
