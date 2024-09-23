@@ -4,7 +4,7 @@
 #include <boost/core/noncopyable.hpp>
 #include <common/types.h>
 
-#include <programs/client/safeExit.h>
+#include "safeExit.h"
 
 namespace DB
 {

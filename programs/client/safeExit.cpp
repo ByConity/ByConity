@@ -3,8 +3,8 @@
 #endif
 #include <cstdlib>
 #include <unistd.h>
-#include <programs/client/safeExit.h>
-#include <base/common/defines.h> /// for THREAD_SANITIZER
+#include <common/defines.h>
+#include "safeExit.h"
 
 [[noreturn]] void safeExit(int code)
 {

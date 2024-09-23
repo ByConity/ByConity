@@ -129,7 +129,6 @@
 #include <Storages/HDFS/HDFSCommon.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/program_options.hpp>
-#include <programs/client/ClientBase.h>
 #include <Poco/String.h>
 #include <Poco/Util/Application.h>
 #include <Common/ClickHouseRevision.h>
@@ -152,8 +151,10 @@
 #include <Common/typeid_cast.h>
 #include <common/LineReader.h>
 #include <common/argsToConfig.h>
-#include <filesystem>
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <common/find_symbols.h>
+#include <common/scope_guard_safe.h>
+#include "ClientBase.h"
 
 #if !defined(ARCADIA_BUILD)
 #    include <Common/config_version.h>
