@@ -21,6 +21,7 @@
 
 #include <Common/ErrorCodes.h>
 #include <Common/Exception.h>
+#include <Common/LabelledMetrics.h>
 #include <chrono>
 
 /** Previously, these constants were located in one enum.
@@ -952,6 +953,10 @@
     M(4081, PLAN_CACHE_NOT_USED) \
     /* See END */
 
+namespace LabelledMetrics
+{
+    extern const Metric ErrorCodes;
+}
 namespace DB
 {
 namespace ErrorCodes
@@ -962,6 +967,7 @@ namespace ErrorCodes
 
     constexpr ErrorCode END = 13000;
     ErrorPairHolder values[END + 1]{};
+    static constexpr int ErrorCountReminder = 100;
 
     struct ErrorCodesNames
     {
@@ -1007,10 +1013,10 @@ namespace ErrorCodes
             error_code = end() - 1;
         }
 
-        values[error_code].increment(remote, message, trace);
+        values[error_code].increment(remote, message, trace, error_code);
     }
 
-    void ErrorPairHolder::increment(bool remote, const std::string & message, const FramePointers & trace)
+    void ErrorPairHolder::increment(bool remote, const std::string & message, const FramePointers & trace, ErrorCode error_code)
     {
         const auto now = std::chrono::system_clock::now();
 
@@ -1019,6 +1025,17 @@ namespace ErrorCodes
         auto & error = remote ? value.remote : value.local;
 
         ++error.count;
+        if ((error.count < ErrorCountReminder || error.count % ErrorCountReminder == 0) && !remote)
+        {
+            LabelledMetrics::MetricLabels labels;
+            std::string name(ErrorCodes::getName(error_code));
+            labels.insert({"name", name});
+            labels.insert({"error_code", std::to_string(error_code)});
+            if (error.count > ErrorCountReminder)
+                LabelledMetrics::increment(LabelledMetrics::ErrorCodes, 100, labels);
+            else
+                LabelledMetrics::increment(LabelledMetrics::ErrorCodes, 1, labels);
+        }
         error.message = message;
         error.trace = trace;
         error.error_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
