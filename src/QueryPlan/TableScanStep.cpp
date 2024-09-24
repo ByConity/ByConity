@@ -903,7 +903,7 @@ TableScanStep::TableScanStep(
         column_names.emplace_back(item.first);
     }
 
-    if (storage_id.empty() && context->getSettingsRef().enable_prune_empty_resource)
+    if (storage_id.empty() && context->getSettingsRef().enable_prune_source_plan_segment)
     {
         LOG_DEBUG(log, "Create tableScanStep without storage");
         is_null_source = true;
@@ -1657,7 +1657,7 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
 
 std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
 {
-    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context)
+    auto storage_id = context->getSettingsRef().enable_prune_source_plan_segment ? StorageID::tryFromProto(proto.storage_id(), context)
                                                                             : StorageID::fromProto(proto.storage_id(), context);
     NamesWithAliases column_alias;
     for (const auto & proto_element : proto.column_alias())
