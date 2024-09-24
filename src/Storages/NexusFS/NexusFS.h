@@ -59,12 +59,14 @@ public:
     // Region size
     UInt64 region_size{1 * MiB};
     UInt64 metadata_size{100 * MiB};
+    UInt64 source_buffer_size{DBMS_DEFAULT_BUFFER_SIZE};
     UInt32 segment_size{256 * KiB};
     UInt32 alloc_align_size{4096};
     UInt32 io_align_size{1};
     UInt32 stripe_size{4096};
 
     UInt32 reader_threads{4};
+    UInt32 insert_threads{2};
 
     UInt32 clean_regions_pool{2};
     UInt32 clean_region_threads{2};
@@ -137,6 +139,7 @@ public:
     String getFilePrefix() const { return file_prefix; }
     String getFileSurfix() const { return file_surfix; }
     UInt64 getNumSegments() const { return num_segments.load(); }
+    UInt64 getNumInflightInserts() const { return num_inflight_inserts.load(); }
     UInt64 getNumInodes() const { return index.getNumInodes(); }
     UInt64 getNumFileMetas() const { return index.getNumFileMetas(); }
     std::vector<NexusFSComponents::FileCachedState> getFileCachedStates() { return index.getFileCachedStates(); }
@@ -169,7 +172,7 @@ private:
     class InFlightInserts
     {
     public:
-        std::shared_ptr<InsertCxt> getOrCreateContext(const String & file_and_segment_id, bool & is_newly_created)
+        std::pair<std::shared_ptr<InsertCxt>, bool> getOrCreateContext(const String & file_and_segment_id)
         {
             auto shard = std::hash<String>()(file_and_segment_id) % kShards;
             auto & mutex = mutexs[shard];
@@ -178,14 +181,10 @@ private:
                 std::lock_guard<std::mutex> guard{mutex};
                 auto it = map.find(file_and_segment_id);
                 if (it != map.end())
-                {
-                    is_newly_created = false;
-                    return it->second;
-                }
-                is_newly_created = true;
+                    return std::make_pair(it->second, false);
                 auto cxt = std::make_shared<InsertCxt>();
                 map[file_and_segment_id] = cxt;
-                return cxt;
+                return std::make_pair(cxt, true);
             }
         }
 
@@ -226,13 +225,19 @@ private:
 
     UInt64 getSegmentId(const off_t offset) const { return offset / segment_size; }
     static String getSegmentName(const String file, const UInt64 segment_id) { return file + "#" + std::to_string(segment_id); }
+    static String getSourceSegmentName(const String file, const UInt64 segment_id) { return file + "@" + std::to_string(segment_id); }
     off_t getOffsetInSourceFile(const UInt64 segment_id) const { return segment_id * segment_size; }
     off_t getOffsetInSegment(const off_t file_offset) const { return file_offset % segment_size; }
+    off_t getOffsetInSourceBuffer(const off_t file_offset) const { return file_offset % source_buffer_size; }
     static size_t getReadSizeInSegment(const off_t offset_in_segemt, const size_t segment_size, const size_t buffer_size)
     {
         return segment_size >= static_cast<size_t>(offset_in_segemt) ? std::min(buffer_size, segment_size - offset_in_segemt) : 0;
     }
     UInt32 alignedSize(UInt32 size) const { return roundup(size, alloc_align_size); }
+    HybridCache::FiberThread & getInsertWorker()
+    {
+        return *(insert_workers[insert_task_counter.fetch_add(1, std::memory_order_relaxed) % insert_workers.size()]);
+    }
 
     std::tuple<std::shared_ptr<NexusFSComponents::BlockHandle>, std::shared_ptr<InsertCxt>, UInt64> open(
         const String & segment_name,
@@ -331,7 +336,9 @@ private:
     const std::unique_ptr<HybridCache::Device> device;
     const UInt32 alloc_align_size{};
     const UInt64 metadata_size{};
+    const UInt64 source_buffer_size{};
     const UInt32 segment_size{};
+    const UInt32 num_segments_per_source_buffer{};
     const UInt32 timeout_ms{};
 
     const String file_prefix;
@@ -346,8 +353,11 @@ private:
     const bool support_prefetch;
     NexusFSComponents::BufferManager * buffer_manager;
     std::vector<std::unique_ptr<HybridCache::FiberThread>> reader_workers;
+    std::vector<std::unique_ptr<HybridCache::FiberThread>> insert_workers;
     mutable std::atomic<UInt64> reader_task_counter{0};
+    mutable std::atomic<UInt64> insert_task_counter{0};
 
     std::atomic<UInt64> num_segments{0};
+    std::atomic<UInt64> num_inflight_inserts{0};
 };
 }

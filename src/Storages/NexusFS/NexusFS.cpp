@@ -17,6 +17,7 @@
 #include <Storages/DiskCache/Types.h>
 #include <Storages/NexusFS/NexusFSBufferWithHandle.h>
 #include <sys/stat.h>
+#include <Common/ElapsedTimeProfileEventIncrement.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
@@ -25,7 +26,6 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <common/unit.h>
-#include <Common/ElapsedTimeProfileEventIncrement.h>
 
 namespace ProfileEvents
 {
@@ -124,12 +124,14 @@ void NexusFSConfig::loadFromConfig(const Poco::Util::AbstractConfiguration & con
 {
     String config_name(CONFIG_NAME);
     cache_size = conf.getUInt64(config_name + ".cache_size", 10 * GiB);
-    region_size = conf.getUInt64(config_name + ".region_size", 1 * MiB);
+    region_size = conf.getUInt64(config_name + ".region_size", 2 * MiB);
     segment_size = conf.getUInt64(config_name + ".segment_size", 128 * KiB);
+    source_buffer_size = conf.getUInt64(config_name + ".source_buffer_size", DBMS_DEFAULT_BUFFER_SIZE);
     alloc_align_size = conf.getUInt(config_name + ".alloc_align_size", 512);
     io_align_size = conf.getUInt(config_name + ".io_align_size", 4096);
     stripe_size = conf.getUInt(config_name + ".stripe_size", 4096);
     reader_threads = conf.getUInt(config_name + ".reader_threads", getNumberOfPhysicalCPUCores() >> 1);
+    insert_threads = conf.getUInt(config_name + ".reader_threads", 4);
     clean_regions_pool = conf.getUInt(config_name + ".clean_regions_pool", 4);
     clean_region_threads = conf.getUInt(config_name + ".clean_region_threads", 2);
     num_in_mem_buffers = conf.getUInt(config_name + ".num_in_mem_buffers", 8);
@@ -192,6 +194,8 @@ NexusFSConfig & NexusFSConfig::validate()
         throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "missing required param");
     if (region_size > 256u << 20)
         throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "region is too large");
+    if (source_buffer_size % segment_size != 0)
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "source_buffer_size must be aligned to segment_size");
     if (cache_size <= 0)
         throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "invalid size");
     if (cache_size % region_size != 0)
@@ -216,7 +220,9 @@ NexusFS::NexusFS(NexusFSConfig && config)
     , device{std::move(config.device)}
     , alloc_align_size{config.alloc_align_size}
     , metadata_size(config.metadata_size)
+    , source_buffer_size(config.source_buffer_size)
     , segment_size(config.segment_size)
+    , num_segments_per_source_buffer(source_buffer_size / segment_size)
     , timeout_ms(config.timeout_ms)
     , file_prefix(config.file_prefix)
     , file_surfix(config.file_surfix)
@@ -261,12 +267,19 @@ NexusFS::NexusFS(NexusFSConfig && config)
             auto name = fmt::format("NexusFS_read_worker_{}", i);
             reader_workers.emplace_back(std::make_unique<FiberThread>(name));
         }
+        for (uint32_t i = 0; i < config.insert_threads; i++)
+        {
+            auto name = fmt::format("NexusFS_insert_worker_{}", i);
+            insert_workers.emplace_back(std::make_unique<FiberThread>(name));
+        }
     }
     LOG_TRACE(log, "NexusFS created");
 }
 
 NexusFS::~NexusFS()
 {
+    reader_workers.clear();
+    insert_workers.clear();
     if (buffer_manager)
         buffer_manager->destroy();
     LOG_TRACE(log, "NexusFS destroyed");
@@ -303,53 +316,62 @@ NexusFS::open(const String & segment_name, const String & file, const UInt64 seg
     std::shared_ptr<InsertCxt> insert_cxt = nullptr;
     if (!handle)
     {
-        LOG_TRACE(log, "{} not found, check InFlightInserts", segment_name);
-
+        UInt64 source_segment_id = segment_id / num_segments_per_source_buffer;
+        String source_segment_name = getSourceSegmentName(file, source_segment_id);
+        LOG_TRACE(log, "{} not found, check InFlightInserts by {}", segment_name, source_segment_name);
         bool is_newly_created;
-        insert_cxt = in_flight_inserts.getOrCreateContext(segment_name, is_newly_created);
+        std::tie(insert_cxt, is_newly_created) = in_flight_inserts.getOrCreateContext(source_segment_name);
         if (is_newly_created)
         {
             // double check index
             handle = index.lookup(file, segment_id);
             if (handle)
             {
-                in_flight_inserts.removeContext(segment_name);
+                in_flight_inserts.removeContext(source_segment_name);
                 insert_cxt.reset();
-                LOG_TRACE(log, "{} already inserted to index", segment_name);
+                LOG_TRACE(log, "{} already inserted to index, remove {} from in_flight_inserts", segment_name, source_segment_name);
                 ProfileEvents::increment(ProfileEvents::NexusFSHit);
             }
             else
             {
                 LOG_TRACE(log, "create InsertCxt for {}, read from source and insert to cache", segment_name);
                 ProfileEvents::increment(ProfileEvents::NexusFSMiss);
+                num_inflight_inserts++;
 
                 {
                     std::lock_guard<std::mutex> lock(insert_cxt->mutex);
                     ProfileEventTimeIncrement<Microseconds> source_watch(ProfileEvents::NexusFSReadFromSourceMicroseconds);
 
-                    insert_cxt->buffer = Buffer(segment_size);
-                    off_t offset_in_source = getOffsetInSourceFile(segment_id);
+                    insert_cxt->buffer = Buffer(source_buffer_size);
+                    off_t offset_in_source = getOffsetInSourceFile(source_segment_id * num_segments_per_source_buffer);
                     size_t bytes_read
-                        = source->readBigAt(reinterpret_cast<char *>(insert_cxt->buffer.data()), segment_size, offset_in_source);
+                        = source->readBigAt(reinterpret_cast<char *>(insert_cxt->buffer.data()), source_buffer_size, offset_in_source);
                     ProfileEvents::increment(ProfileEvents::NexusFSReadFromSourceBytesRead, bytes_read);
-                    LOG_TRACE(log, "read {} bytes from source, key={}, offset={}", bytes_read, segment_name, offset_in_source);
+                    LOG_TRACE(log, "read {} bytes from source, key={}, offset={}", bytes_read, source_segment_name, offset_in_source);
 
                     insert_cxt->buffer.shrink(bytes_read);
                     insert_cxt->ready = true;
                     insert_cxt->cv.notify_all();
                 }
 
-                try
+                auto source_file_size = source->getFileSize();
+                getInsertWorker().addTaskRemote([insert_cxt, source_segment_id, file, source_segment_name, source_file_size, this]()
                 {
-                    auto get_file_and_segment_size = [&source, this]() { return std::make_pair(source->getFileSize(), segment_size); };
-                    handle = insert(file, segment_id, insert_cxt->buffer.view(), get_file_and_segment_size);
-                }
-                catch (Exception & e)
-                {
-                    in_flight_inserts.removeContext(segment_name);
-                    throw e;
-                }
-                in_flight_inserts.removeContext(segment_name);
+                    auto get_file_and_segment_size = [source_file_size, this]() { return std::make_pair(source_file_size, segment_size); };
+                    for (UInt32 i = 0; i < num_segments_per_source_buffer; i++)
+                    {
+                        if (insert_cxt->buffer.size() > segment_size * i)
+                        {
+                            UInt64 current_segment_id = source_segment_id * num_segments_per_source_buffer + i;
+                            size_t data_size = std::min(insert_cxt->buffer.size() - segment_size * i, static_cast<size_t>(segment_size));
+                            UInt8 * data_ptr = insert_cxt->buffer.data() + segment_size * i;
+                            BufferView view(data_size, data_ptr);
+                            insert(file, current_segment_id, view, get_file_and_segment_size);
+                        }
+                    }
+                    in_flight_inserts.removeContext(source_segment_name);
+                    num_inflight_inserts--;
+                });
             }
         }
         else
@@ -684,7 +706,8 @@ NexusFS::read(const String & file, const off_t offset, const size_t max_size, st
         if (cxt)
         {
             // read from InsertCxt
-            auto [should_retry, bytes_read] = readFromInsertCxt(watch, segment_name, cxt, offset_in_segment, max_size, to);
+            auto offset_in_source_buffer = getOffsetInSourceBuffer(offset);
+            auto [should_retry, bytes_read] = readFromInsertCxt(watch, segment_name, cxt, offset_in_source_buffer, max_size, to);
             if (should_retry)
                 continue;
             else
@@ -744,7 +767,8 @@ NexusFS::read(const String & file, const off_t offset, const size_t max_size, st
         if (cxt)
         {
             // read from InsertCxt
-            auto [should_retry, bwh] = readFromInsertCxt(watch, segment_name, cxt, offset_in_segment, max_size);
+            auto offset_in_source_buffer = getOffsetInSourceBuffer(offset);
+            auto [should_retry, bwh] = readFromInsertCxt(watch, segment_name, cxt, offset_in_source_buffer, max_size);
             if (should_retry)
                 continue;
             else
@@ -833,7 +857,7 @@ std::shared_ptr<BlockHandle> NexusFS::insert(
     {
         ProfileEvents::increment(ProfileEvents::NexusFSDiskCacheError);
         LOG_ERROR(log, "failed to insert {}#{}, size={}", file, segment_id, slot_size);
-        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "failed to insert {}#{}, size={}", file, segment_id, slot_size);
+        return nullptr;
     }
 
     chassert(addr.offset() + slot_size <= region_manager.regionSize());
@@ -1037,7 +1061,12 @@ bool NexusFS::recover()
         return false;
     }
     if (recovered)
-        LOG_INFO(log, "Finished NexusFS recovery. Recover {} inodes, {} files, {} segments", index.getNumInodes(), index.getNumFileMetas(), num_segments);
+        LOG_INFO(
+            log,
+            "Finished NexusFS recovery. Recover {} inodes, {} files, {} segments",
+            index.getNumInodes(),
+            index.getNumFileMetas(),
+            num_segments);
     return recovered;
 }
 

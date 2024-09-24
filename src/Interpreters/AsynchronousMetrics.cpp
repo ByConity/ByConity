@@ -730,6 +730,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             new_values["NexusFSNumSegments"] = nexus_fs->getNumSegments();
             new_values["NexusFSNumFiles"] = nexus_fs->getNumFileMetas();
             new_values["NexusFSNumInodes"] = nexus_fs->getNumInodes();
+            new_values["NexusFSNumInflightInserts"] = nexus_fs->getNumInflightInserts();
         }
     }
 
