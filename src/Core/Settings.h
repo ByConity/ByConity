@@ -90,11 +90,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_insert_squashing, true, "Squashing when insert", 0) \
     M(UInt64, max_final_threads, 16, "The maximum number of threads to read from table with FINAL.", 0) \
     M(MaxThreads, max_threads, 0, "The maximum number of threads to execute the request. By default, it is determined automatically.", 0) \
-    M(MaxThreads, \
-      max_alter_threads, \
-      0, \
-      "The maximum number of threads to execute the ALTER requests. By default, it is determined automatically.", \
-      0) \
+    M(MaxThreads, max_alter_threads, 0, "The maximum number of threads to execute the ALTER requests. By default, it is determined automatically.", 0) \
+    M(MaxThreads, max_download_threads, 4, "The maximum number of threads to download data (e.g. for Hive engine).", 0) \
+    M(MaxThreads, max_parsing_threads, 0, "The maximum number of threads to parse data in input formats that support parallel parsing.", 0) \
     M(UInt64, max_read_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to read from the filesystem.", 0) \
     M(UInt64, max_read_buffer_size_local_fs, 128*1024, "The maximum size of the buffer to read from local filesystem. If set to 0 then max_read_buffer_size will be used.", 0) \
     M(UInt64, max_read_buffer_size_remote_fs, 0, "The maximum size of the buffer to read from remote filesystem. If set to 0 then max_read_buffer_size will be used.", 0) \
@@ -824,7 +822,7 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_profile_events, true, "Log query performance statistics into the query_log and query_thread_log.", 0) \
     M(Bool, log_query_settings, true, "Log query settings into the query_log.", 0) \
-    M(Bool, log_query_threads, true, "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", 0) \
+    M(Bool, log_query_threads, false, "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", 0) \
     M(Bool, log_query_exchange, false, "Log query exchange metric.", 0) \
     M(String, log_comment, "", "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", 0) \
     M(LogsLevel, send_logs_level, LogsLevel::fatal, "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'", 0) \
@@ -1972,14 +1970,14 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, output_format_pretty_color, true, "Use ANSI escape sequences to paint colors in Pretty formats", 0) \
     M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
-    M(UInt64, max_download_threads, 4, "The maximum number of threads to download data (Actually I should put it in common settings instead of format settings).", 0) \
     M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
     M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
     M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
     M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
-    M(UInt64, input_format_parquet_min_bytes_for_seek, 8192, "Min bytes for seek when reading parquet file", 0) \
+    M(UInt64, input_format_parquet_min_bytes_for_seek, DBMS_DEFAULT_BUFFER_SIZE, "Min bytes for seek when reading parquet file", 0) \
+    M(UInt64, input_format_parquet_max_buffer_size, 8 * DBMS_DEFAULT_BUFFER_SIZE, "Max buffer size for parquet read", 0) \
     M(Bool, input_format_parquet_filter_push_down, true, "When reading Parquet files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
     M(Bool, input_format_parquet_use_footer_cache, false, "Whether to use footer cache, cache footer data in memory", 0) \
     M(Bool, input_format_parquet_use_native_reader, false, "When reading Parquet files, to use native reader instead of arrow reader.", 0) \
@@ -1988,7 +1986,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_parquet_case_insensitive_column_matching, false, "Ignore case when matching Parquet columns with CH columns.", 0) \
     M(Bool, input_format_parquet_preserve_order, false, "Avoid reordering rows when reading from Parquet files. Usually makes it much slower.", 0) \
     M(Bool, input_format_parquet_coalesce_read, true, "Merge small IO ranges, See arrow::ReadRangeCache", 0) \
-    M(Bool, input_format_parquet_use_lazy_io_cache, true, "Lazy caching will trigger io requests when they are requested for the first time. See arrow::ReadRangeCache", 0) \
+    M(Bool, input_format_parquet_use_threads, false, "Use threads to decode columns in parallel", 0) \
     M(Bool, input_format_orc_filter_push_down, true, "When reading Orc files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
     M(DateTimeOverflowBehavior, date_time_overflow_behavior, "ignore", "Overflow mode for Date, Date32, DateTime, DateTime64 types. Possible values: 'ignore', 'throw', 'saturate'.", 0) \
     \

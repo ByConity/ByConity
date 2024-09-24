@@ -26,6 +26,7 @@
 #include "Columns/ColumnsCommon.h"
 #include "Columns/FilterDescription.h"
 #include "Core/BlockInfo.h"
+#include "Core/DecimalFunctions.h"
 #include "Core/Names.h"
 #include "ParquetLeafColReader.h"
 #include "ParquetArrowColReader.h"
@@ -38,6 +39,7 @@ namespace ProfileEvents
 {
     extern const Event ParquetPrewhereSkippedRows;
     extern const Event ParquetReadRows;
+    extern const Event ParquetColumnCastElapsedMicroseconds;
 }
 
 namespace DB
@@ -95,7 +97,21 @@ std::unique_ptr<ParquetColumnReader> createLeafColReader(
             }
             case parquet::Type::FIXED_LEN_BYTE_ARRAY:
             {
-                if (col_descriptor.type_length() <= static_cast<int>(sizeof(Decimal128)))
+                if (col_descriptor.type_length() <= static_cast<int>(sizeof(Decimal32)))
+                {
+                    auto data_type = std::make_shared<DataTypeDecimal32>(
+                        col_descriptor.type_precision(), col_descriptor.type_scale());
+                    return std::make_unique<ParquetLeafColReader<ColumnDecimal<Decimal32>>>(
+                    col_descriptor, data_type, std::move(meta), std::move(reader));
+                }
+                else if (col_descriptor.type_length() <= static_cast<int>(sizeof(Decimal64)))
+                {
+                    auto data_type = std::make_shared<DataTypeDecimal64>(
+                        col_descriptor.type_precision(), col_descriptor.type_scale());
+                    return std::make_unique<ParquetLeafColReader<ColumnDecimal<Decimal64>>>(
+                    col_descriptor, data_type, std::move(meta), std::move(reader));
+                }
+                else if (col_descriptor.type_length() <= static_cast<int>(sizeof(Decimal128)))
                 {
                     auto data_type = std::make_shared<DataTypeDecimal128>(
                         col_descriptor.type_precision(), col_descriptor.type_scale());
@@ -408,9 +424,13 @@ Columns ParquetRecordReader::ChunkReader::readBatch(size_t num_rows, const IColu
     Columns columns(sample_block.columns());
     for (size_t i = 0; i < sample_block.columns(); i++)
     {
-        columns[i] = castColumn(
-            column_readers[i]->readBatch(sample_block.getByPosition(i).name, num_rows, filter),
-            sample_block.getByPosition(i).type);
+        auto res = column_readers[i]->readBatch(sample_block.getByPosition(i).name, num_rows, filter);
+
+        {
+            Stopwatch watch;
+            columns[i] = castColumn(std::move(res), sample_block.getByPosition(i).type);
+            ProfileEvents::increment(ProfileEvents::ParquetColumnCastElapsedMicroseconds, watch.elapsedMicroseconds());
+        }
     }
 
     return columns;

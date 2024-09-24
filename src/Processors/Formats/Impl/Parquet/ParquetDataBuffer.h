@@ -6,6 +6,7 @@
 #include <arrow/util/bit_stream_utils.h>
 #include <arrow/util/decimal.h>
 #include <parquet/types.h>
+#include "Common/Endian.h"
 #include "common/types.h"
 
 namespace DB
@@ -17,12 +18,10 @@ namespace ErrorCodes
 }
 
 template <typename T> struct ToArrowDecimal;
-
 template <> struct ToArrowDecimal<Decimal<wide::integer<128, signed>>>
 {
     using ArrowDecimal = arrow::Decimal128;
 };
-
 template <> struct ToArrowDecimal<Decimal<wide::integer<256, signed>>>
 {
     using ArrowDecimal = arrow::Decimal256;
@@ -171,20 +170,34 @@ public:
         consume(value_len);
     }
 
-    template <is_over_big_decimal TDecimal>
-    void ALWAYS_INLINE readOverBigDecimal(TDecimal * out, Int32 elem_bytes_num)
+    template <is_decimal TDecimal>
+    void ALWAYS_INLINE readBigEndianDecimal(TDecimal * out, Int32 elem_bytes_num)
     {
-        using TArrowDecimal = typename ToArrowDecimal<TDecimal>::ArrowDecimal;
-
         checkAvaible(elem_bytes_num);
 
-        // refer to: RawBytesToDecimalBytes in reader_internal.cc, Decimal128::FromBigEndian in decimal.cc
-        auto status = TArrowDecimal::FromBigEndian(getArrowData(), elem_bytes_num);
-        if (unlikely(!status.ok()))
+        if constexpr (is_over_big_decimal<TDecimal>)
         {
-            throw Exception(ErrorCodes::PARQUET_EXCEPTION, "Read parquet decimal failed: {}", status.status().ToString());
+            using TArrowDecimal = typename ToArrowDecimal<TDecimal>::ArrowDecimal;
+            // refer to: RawBytesToDecimalBytes in reader_internal.cc, Decimal128::FromBigEndian in decimal.cc
+            auto status = TArrowDecimal::FromBigEndian(getArrowData(), elem_bytes_num);
+            if (unlikely(!status.ok()))
+            {
+                throw Exception(ErrorCodes::PARQUET_EXCEPTION, "Read parquet decimal failed: {}", status.status().ToString());
+            }
+            status.ValueUnsafe().ToBytes(reinterpret_cast<uint8_t *>(out));
         }
-        status.ValueUnsafe().ToBytes(reinterpret_cast<uint8_t *>(out));
+        else
+        {
+            chassert(elem_bytes_num <= 8);
+            UInt64 val = 0;
+            memcpy(reinterpret_cast<uint8_t*>(&val) + 8 - elem_bytes_num, getArrowData(), elem_bytes_num);
+            val = Endian::swap(val);
+            if ((val >> (elem_bytes_num * 8 - 1)) != 0)
+                val |= 0 - (1ul << (elem_bytes_num * 8));
+
+            *out = static_cast<Int64>(val);
+        }
+
         consume(elem_bytes_num);
     }
 

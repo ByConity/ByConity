@@ -40,7 +40,8 @@
 #include <DataTypes/DataTypeBitMap64.h>
 #include <Common/DateLUTImpl.h>
 #include <common/types.h>
-#include <Core/Block.h>
+#include <Processors/Chunk.h>
+#include <Processors/Formats/Impl/ArrowBufferedStreams.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnArray.h>
@@ -1202,7 +1203,7 @@ void ArrowColumnToCHColumn::arrowTableToCHChunk(Chunk & res, std::shared_ptr<arr
 
         if (case_insensitive_matching)
             boost::to_lower(column_name);
-        
+
         name_to_arrow_column[std::move(column_name)] = {std::move(arrow_column), std::move(arrow_field)};
     }
 
