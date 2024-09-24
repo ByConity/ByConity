@@ -335,3 +335,4 @@ CTEDef [1]
    │     Expressions: expr#rand(1):=rand(1)
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
+1	\N
