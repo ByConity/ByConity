@@ -28,10 +28,7 @@ public:
     TypeIndex getTypeId() const override { return TypeIndex::Date32; }
     const char * getFamilyName() const override { return family_name; }
 
-    Field getDefault() const override
-    {
-        return -static_cast<Int64>(DateLUT::instance().getDayNumOffsetEpoch());
-    }
+    Field getDefault() const override { return -static_cast<Int64>(DateLUT::serverTimezoneInstance().getDayNumOffsetEpoch()); }
 
     bool canBeUsedAsVersion() const override { return true; }
     bool canBeInsideNullable() const override { return true; }

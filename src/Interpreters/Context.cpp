@@ -5961,6 +5961,11 @@ Context::HybridPartAllocator Context::getHybridPartAllocationAlgo() const
     }
 }
 
+bool Context::hasSessionTimeZone() const
+{
+    return !settings.session_timezone.value.empty();
+}
+
 void Context::createPlanNodeIdAllocator(int max_id)
 {
     id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id);

@@ -376,6 +376,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     /// so it should be larger than max_execution_time to make sure the session is not to be destroyed in advance.
     UInt64 recycle_timeout = max_execution_time > 0 ? max_execution_time + 60UL : 3600;
     request.set_timeout(recycle_timeout);
+    if (!settings.session_timezone.value.empty())
+        request.set_session_timezone(settings.session_timezone.value);
 
     bool require_worker_info = false;
     for (const auto & resource: resources_to_send)

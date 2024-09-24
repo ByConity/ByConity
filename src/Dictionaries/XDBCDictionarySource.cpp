@@ -143,7 +143,7 @@ std::string XDBCDictionarySource::getUpdateFieldAndDate()
     if (update_time != std::chrono::system_clock::from_time_t(0))
     {
         time_t hr_time = std::chrono::system_clock::to_time_t(update_time) - configuration.update_lag;
-        std::string str_time = DateLUT::instance().timeToString(hr_time);
+        std::string str_time = DateLUT::serverTimezoneInstance().timeToString(hr_time);
         update_time = std::chrono::system_clock::now();
         return query_builder.composeUpdateQuery(configuration.update_field, str_time);
     }

@@ -1,5 +1,9 @@
 #include <Common/DateLUT.h>
 
+#include <Interpreters/Context.h>
+#include <Common/CurrentThread.h>
+#include <Common/filesystemHelpers.h>
+
 #include <Poco/DigestStream.h>
 #include <Poco/Exception.h>
 #include <Poco/SHA1Engine.h>
@@ -29,12 +33,12 @@ std::string determineDefaultTimeZone()
 {
     namespace fs = std::filesystem;
 
-    const char * tzdir_env_var = std::getenv("TZDIR");
+    const char * tzdir_env_var = std::getenv("TZDIR"); // NOLINT(concurrency-mt-unsafe) // ok, because it does not run concurrently with other getenv calls
     fs::path tz_database_path = tzdir_env_var ? tzdir_env_var : "/usr/share/zoneinfo/";
 
     fs::path tz_file_path;
     std::string error_prefix;
-    const char * tz_env_var = std::getenv("TZ");
+    const char * tz_env_var = std::getenv("TZ"); // NOLINT(concurrency-mt-unsafe) // ok, because it does not run concurrently with other getenv calls
 
     /// In recent tzdata packages some files now are symlinks and canonical path resolution
     /// may give wrong timezone names - store the name as it is, if possible.
@@ -138,6 +142,38 @@ std::string determineDefaultTimeZone()
 
 }
 
+const DateLUTImpl & DateLUT::sessionInstance()
+{
+    const auto & date_lut = getInstance();
+
+    if (DB::CurrentThread::isInitialized())
+    {
+        std::string timezone_from_context;
+        const DB::ContextPtr query_context = DB::CurrentThread::get().getQueryContext();
+
+        if (query_context)
+        {
+            timezone_from_context = extractTimezoneFromContext(query_context);
+
+            if (!timezone_from_context.empty())
+                return date_lut.getImplementation(timezone_from_context);
+        }
+
+        /// On the server side, timezone is passed in query_context,
+        /// but on CH-client side we have no query context,
+        /// and each time we modify client's global context
+        const DB::ContextPtr global_context = DB::CurrentThread::get().getGlobalContext();
+        if (global_context)
+        {
+            timezone_from_context = extractTimezoneFromContext(global_context);
+
+            if (!timezone_from_context.empty())
+                return date_lut.getImplementation(timezone_from_context);
+        }
+    }
+    return serverTimezoneInstance();
+}
+
 DateLUT::DateLUT()
 {
     /// Initialize the pointer to the default DateLUTImpl.
@@ -148,7 +184,7 @@ DateLUT::DateLUT()
 
 const DateLUTImpl & DateLUT::getImplementation(const std::string & time_zone) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard lock(mutex);
 
     auto it = impls.emplace(time_zone, nullptr).first;
     if (!it->second)
@@ -161,4 +197,9 @@ DateLUT & DateLUT::getInstance()
 {
     static DateLUT ret;
     return ret;
+}
+
+std::string DateLUT::extractTimezoneFromContext(DB::ContextPtr query_context)
+{
+    return query_context->getSettingsRef().session_timezone.value;
 }

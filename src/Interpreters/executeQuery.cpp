@@ -2142,7 +2142,7 @@ void executeQuery(
 
             if (set_result_details)
                 set_result_details(
-                    context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::instance().getTimeZone(), streams.coordinator);
+                    context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::serverTimezoneInstance().getTimeZone(), streams.coordinator);
 
             copyData(
                 *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
@@ -2199,7 +2199,7 @@ void executeQuery(
 
                 if (set_result_details)
                     set_result_details(
-                        context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::instance().getTimeZone(), streams.coordinator);
+                        context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::serverTimezoneInstance().getTimeZone(), streams.coordinator);
 
                 pipeline.setOutputFormat(std::move(out));
             }
@@ -2346,7 +2346,7 @@ void executeHttpQueryInAsyncMode(
                     query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
                 auto & pipeline = streams.pipeline;
                 if (set_result_details_cp)
-                    set_result_details_cp(query_id, "text/plain; charset=UTF-8", format_name1_cp, DateLUT::instance().getTimeZone(), streams.coordinator);
+                    set_result_details_cp(query_id, "text/plain; charset=UTF-8", format_name1_cp, DateLUT::serverTimezoneInstance().getTimeZone(), streams.coordinator);
                 if (streams.in)
                 {
                     const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());

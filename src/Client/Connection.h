@@ -96,6 +96,8 @@ struct Packet
     BlockStreamProfileInfo profile_info;
     std::vector<UUID> part_uuids;
 
+    std::string server_timezone;
+
     Packet() : type(Protocol::Server::Hello) {}
 };
 

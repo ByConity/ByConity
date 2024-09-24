@@ -247,8 +247,11 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
 
         LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {} {}", table_meta_ptr->table, partition->partition_id);
 
-        auto task = [this, partition, current_time, table_meta_ptr, force]() {
+        auto thread_group = CurrentThread::getGroup();
+        auto task = [this, partition, current_time, table_meta_ptr, force, thread_group]() {
             CurrentMetrics::Increment metric_increment(CurrentMetrics::SystemCnchPartsInfoRecalculationTasksSize);
+            if (thread_group)
+                CurrentThread::attachToIfDetached(thread_group);
             /// After actually recalculated, update `metrics_last_update_time`.
             if (partition->metrics_ptr->recalculate(current_time, getContext(), force))
             {

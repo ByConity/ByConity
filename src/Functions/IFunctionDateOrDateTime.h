@@ -63,7 +63,7 @@ public:
         const IFunction::Monotonicity is_monotonic{.is_monotonic = true, .is_positive = true, .is_always_monotonic = false};
         const IFunction::Monotonicity is_not_monotonic;
 
-        const DateLUTImpl * date_lut = &DateLUT::instance();
+        const DateLUTImpl * date_lut = &DateLUT::sessionInstance();
         if (const auto * timezone = dynamic_cast<const TimezoneMixin *>(&type))
             date_lut = &timezone->getTimeZone();
 

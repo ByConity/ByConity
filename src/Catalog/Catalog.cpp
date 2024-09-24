@@ -1344,7 +1344,6 @@ namespace Catalog
                     throw Exception("Table not found: " + database + "." + name, ErrorCodes::UNKNOWN_TABLE);
                 }
 
-
                 auto cache_manager = context.getPartCacheManager();
                 bool is_host_server = false;
                 const auto host_server = context.getCnchTopologyMaster()->getTargetServer(table_id->uuid(), getServerVwNameFrom(*table_id), true);
@@ -1352,7 +1351,7 @@ namespace Catalog
                 if (!host_server.empty())
                     is_host_server = isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort()));
 
-                if (is_host_server && cache_manager)
+                if (is_host_server && cache_manager && !query_context.hasSessionTimeZone())
                 {
                     auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version);
                     if (cached_storage && cached_storage->commit_time <= ts && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)

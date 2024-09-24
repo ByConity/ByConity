@@ -262,6 +262,7 @@ Packet HedgedConnections::drain()
             case Protocol::Server::Totals:
             case Protocol::Server::Extremes:
             case Protocol::Server::EndOfStream:
+            case Protocol::Server::TimezoneUpdate:
                 break;
 
             case Protocol::Server::Exception:

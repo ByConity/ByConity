@@ -459,46 +459,19 @@ enum PreloadLevelSettings : UInt64
     M(String, count_distinct_implementation, "uniqExact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
 \
     M(Bool, add_http_cors_header, false, "Write add http CORS header.", 0) \
-\
-    M(UInt64, \
-      max_http_get_redirects, \
-      0, \
-      "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server " \
-      "to redirect your requests to unexpected services.", \
-      0) \
-\
-    M(Bool, \
-      use_client_time_zone, \
-      false, \
-      "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", \
-      0) \
-\
-    M(Bool, \
-      send_progress_in_http_headers, \
-      false, \
-      "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python " \
-      "requests in particular), so it is disabled by default.", \
-      0) \
-\
-    M(UInt64, \
-      http_headers_progress_interval_ms, \
-      100, \
-      "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", \
-      0) \
-\
-    M(Bool, \
-      fsync_metadata, \
-      1, \
-      "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with " \
-      "high load of DDL queries and high load of disk subsystem.", \
-      0) \
-\
-    M(Bool, \
-      join_use_nulls, \
-      1, \
-      "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding " \
-      "columns data type.", \
-      IMPORTANT) \
+    \
+    M(UInt64, max_http_get_redirects, 0, "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server to redirect your requests to unexpected services.", 0) \
+    \
+    M(Bool, use_client_time_zone, false, "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", 0) \
+    M(Timezone, session_timezone, "", "The default timezone for current session or query. The default value is server default timezone if empty.", 0) \
+    \
+    M(Bool, send_progress_in_http_headers, false, "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python requests in particular), so it is disabled by default.", 0) \
+    \
+    M(UInt64, http_headers_progress_interval_ms, 100, "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", 0) \
+    \
+    M(Bool, fsync_metadata, 1, "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with high load of DDL queries and high load of disk subsystem.", 0) \
+    \
+    M(Bool, join_use_nulls, 1, "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding columns data type.", IMPORTANT) \
     M(Bool, join_using_null_safe, 0, "Force null safe equal comparison for USING keys except the last key of ASOF join", 0) \
     \
     M(Bool, allow_return_nullable_array, 1, "For array related functions, if true, will return nullable(array)", 0) \

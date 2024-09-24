@@ -55,7 +55,7 @@ public:
         const IFunction::Monotonicity is_not_monotonic;
 
         /// This method is called only if the function has one argument. Therefore, we do not care about the non-local time zone.
-        const DateLUTImpl & date_lut = DateLUT::instance();
+        const DateLUTImpl & date_lut = DateLUT::sessionInstance();
 
         if (left.isNull() || right.isNull())
             return {};

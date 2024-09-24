@@ -10,13 +10,12 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-ITTLAlgorithm::ITTLAlgorithm(
-    const TTLDescription & description_, const TTLInfo & old_ttl_info_, time_t current_time_, bool force_)
+ITTLAlgorithm::ITTLAlgorithm(const TTLDescription & description_, const TTLInfo & old_ttl_info_, time_t current_time_, bool force_)
     : description(description_)
     , old_ttl_info(old_ttl_info_)
     , current_time(current_time_)
     , force(force_)
-    , date_lut(DateLUT::instance())
+    , date_lut(DateLUT::serverTimezoneInstance())
 {
 }
 
