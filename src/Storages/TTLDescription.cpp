@@ -361,7 +361,7 @@ TTLDescription TTLDescription::getTTLFromAST(
     return result;
 }
 
-void TTLDescription::tryRewriteTTLWithPartitionKey(TTLDescription & ttl_description, const ColumnsDescription & columns, const KeyDescription & partition_key, const KeyDescription & primary_key, ContextPtr context)
+void TTLDescription::tryRewriteTTLWithPartitionKey(TTLDescription & ttl_description, const ColumnsDescription & columns, const KeyDescription & partition_key, const KeyDescription & primary_key, ContextPtr context, bool allow_nullable_key)
 {
     /// no need to rewrite if partition columns is empty
     if (partition_key.column_names.empty())
@@ -412,7 +412,7 @@ void TTLDescription::tryRewriteTTLWithPartitionKey(TTLDescription & ttl_descript
     }
 
     /// update the ttl_description based on new definition AST.
-    ttl_description = getTTLFromAST(ttl_description.expression_ast, full_columns, context, primary_key);
+    ttl_description = getTTLFromAST(ttl_description.expression_ast, full_columns, context, primary_key, allow_nullable_key);
 }
 
 TTLTableDescription::TTLTableDescription(const TTLTableDescription & other)

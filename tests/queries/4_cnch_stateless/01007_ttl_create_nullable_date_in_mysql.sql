@@ -48,7 +48,7 @@ SYSTEM START MERGES t_mysql_ttl_nullable_date;
 SELECT '------ TEST ALTER ------';
 ALTER TABLE t_mysql_ttl_nullable_date MODIFY SETTING cnch_merge_enable_batch_select = 1;
 
-ALTER TABLE t_mysql_ttl_nullable_date MODIFY COLUMN m UInt64;
+ALTER TABLE t_mysql_ttl_nullable_date MODIFY COLUMN m Nullable(UInt64);
 SELECT count() FROM t_mysql_ttl_nullable_date;
 
 

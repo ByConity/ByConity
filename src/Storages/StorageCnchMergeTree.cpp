@@ -577,8 +577,7 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 
     auto block = partition_key_sample.cloneWithColumns(std::move(columns));
 
-    TTLDescription::tryRewriteTTLWithPartitionKey(
-        rows_ttl, metadata_snapshot->columns, metadata_snapshot->partition_key, metadata_snapshot->primary_key, getContext());
+    TTLDescription::tryRewriteTTLWithPartitionKey(rows_ttl, metadata_snapshot->columns, metadata_snapshot->partition_key, metadata_snapshot->primary_key, getContext(), allow_nullable_key);
     rows_ttl.expression->execute(block);
 
     const auto & current = block.getByName(rows_ttl.result_column);
