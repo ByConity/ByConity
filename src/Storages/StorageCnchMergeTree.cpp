@@ -3225,7 +3225,7 @@ std::optional<UInt64> StorageCnchMergeTree::totalRowsByPartitionPredicate(const 
     if (partition_column_valid)
     {
         auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
-        Block partition_block = getBlockWithVirtualPartitionColumns(partition_list);
+        Block partition_block = getPartitionBlockWithVirtualColumns(partition_list);
         ASTPtr expression_ast;
 
         /// Generate valid expressions for filtering
