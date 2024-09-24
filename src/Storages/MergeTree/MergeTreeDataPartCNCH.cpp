@@ -1176,26 +1176,8 @@ void MergeTreeDataPartCNCH::removeImpl(bool /*keep_shared_data*/) const
 {
     auto disk = volume->getDisk();
     auto path_on_disk = fs::path(storage.getRelativeDataPath(location)) / relative_path;
-    try
-    {
-        disk->removeFile(path_on_disk / "data");
-        if (disk->getType() != DiskType::Type::ByteS3) disk->removeDirectory(path_on_disk);
-    }
-    catch (...)
-    {
-        if (!disk->fileExists(path_on_disk / "data")) {
-            /// Early exit if the part has already been deleted.
-            LOG_TRACE(storage.log, "the Part {} has already been removed.", fullPath(disk, path_on_disk));
-            return;
-        }
-        /// Recursive directory removal does many excessive "stat" syscalls under the hood.
-        LOG_INFO(
-            storage.log,
-            "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}",
-            fullPath(disk, path_on_disk),
-            getCurrentExceptionMessage(false));
-        disk->removeRecursive(path_on_disk);
-    }
+    LOG_TRACE(storage.log, "Remove the part {} from {} disk.", fullPath(disk, path_on_disk), DiskType::toString(disk->getType()));
+    disk->removePart(path_on_disk);
 }
 
 void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file)
