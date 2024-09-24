@@ -68,7 +68,7 @@ void BrpcGflagsConfigHolder::afterInit(const RawConfig * config_ptr)
         LOG_INFO(logger, "Set brpc gflags [ {} : {} ]", entry.first, config_val);
         auto result = GFLAGS_NAMESPACE::SetCommandLineOption(entry.first.c_str(), config_val.c_str());
         if (result.empty())
-            throw Poco::IllegalStateException(Poco::format("Fail to set gflags with key : {}, value : {}", entry.first, config_val));
+            throw Poco::IllegalStateException(fmt::format("Fail to set gflags with key : {}, value : {}", entry.first, config_val));
     }
 }
 

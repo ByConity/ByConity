@@ -1,16 +1,14 @@
 #pragma once
 
 #include "Common/config.h"
-#include "Storages/SelectQueryInfo.h"
 #if USE_HIVE
 
-#include "Core/NamesAndTypes.h"
 #include "Disks/IDisk.h"
+#include "Formats/SharedParsingThreadPool.h"
 #include "Processors/ISource.h"
 #include "Storages/Hive/CnchHiveSettings.h"
 #include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
-#include "Storages/MergeTree/KeyCondition.h"
-#include "Storages/KeyDescription.h"
+#include "Storages/SelectQueryInfo.h"
 
 namespace DB
 {
@@ -69,6 +67,7 @@ public:
         std::optional<size_t> slice;
         ReadSettings read_settings;
         std::shared_ptr<SelectQueryInfo> query_info;
+        SharedParsingThreadPoolPtr shared_pool;
     };
     virtual SourcePtr getReader(const Block & block, const std::shared_ptr<ReadParams> & params);
 

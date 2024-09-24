@@ -82,10 +82,16 @@ void ISource::work()
 
         if (isCancelled())
             finished = true;
+
+        if (finished)
+            onFinish();
     }
     catch (...)
     {
-        finished = true;
+        got_exception = true;
+        if (!std::exchange(finished, true))
+            onFinish();
+
         throw;
     }
 }

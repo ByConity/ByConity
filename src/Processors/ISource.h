@@ -17,6 +17,7 @@ protected:
 
     virtual Chunk generate();
     virtual std::optional<Chunk> tryGenerate();
+    virtual void onFinish() {}
 
 public:
     explicit ISource(Block header);

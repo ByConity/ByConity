@@ -1688,9 +1688,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, early_execute_scalar_subquery, false, "Whether to early execute scalar subquery", 0) \
     M(Bool, early_execute_in_subquery, false, "Whether to early execute in subquery", 0) \
     \
-    /** remote disk cache*/ \
-    M(Bool, use_local_cache_for_remote_storage, true, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
-    M(Bool, enable_parquert_orc_split, false, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
+    /** Hive settings */ \
+    M(Bool, hive_allow_missing_columns, true, "Allow missing columns while reading Hive tables", 0) \
+    M(Bool, hive_case_insensitive_column_matching, true, "Ignore case when matching Hive columns with CH columns.", 0) \
+    M(Bool, hive_use_native_reader, true, "Enable native reader for Parquet/ORC format", 0) \
     \
     /** Exchange settings */ \
     M(UInt64, min_compatible_brpc_minor_version, 4, "Min compatble version of inter server BRPC protocol", 0) \

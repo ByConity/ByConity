@@ -1,4 +1,5 @@
 #include "Storages/Hive/HiveFile/IHiveFile.h"
+#include <optional>
 #if USE_HIVE
 
 #include "Disks/DiskFactory.h"
@@ -141,7 +142,18 @@ SourcePtr IHiveFile::getReader(const Block & block, const std::shared_ptr<ReadPa
     settings.remote_fs_prefetch = false;
     settings.local_fs_prefetch = false;
     auto buffer = readFile(settings);
-    auto input_format = FormatFactory::instance().getInput(getFormatName(), *buffer, block, params->context, params->max_block_size);
+    auto input_format = FormatFactory::instance().getInputFormat(
+        getFormatName(),
+        *buffer,
+        block,
+        params->context,
+        params->max_block_size,
+        params->format_settings,
+        params->shared_pool->getThreadsPerStream(),
+        std::nullopt,
+        true,
+        params->shared_pool);
+
     input_format->addBuffer(std::move(buffer));
     if (params->query_info)
         input_format->setQueryInfo(*params->query_info, params->context);

@@ -3,9 +3,9 @@
 #include <Columns/IColumn.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Formats/FormatSettings.h>
+#include <Formats/SharedParsingThreadPool.h>
 #include <Interpreters/Context_fwd.h>
 #include <IO/BufferWithOwnMemory.h>
-#include "Common/ThreadPool.h"
 #include <common/types.h>
 
 #include <boost/noncopyable.hpp>
@@ -99,7 +99,7 @@ private:
             bool is_remote_fs,
             size_t max_download_threads,
             size_t max_parsing_threads,
-            ThreadPoolPtr parsing_thread_pool)>;
+            SharedParsingThreadPoolPtr parsing_thread_pool)>;
 
     using OutputCreator = std::function<BlockOutputStreamPtr(
         WriteBuffer & buf,
@@ -178,7 +178,7 @@ public:
         std::optional<size_t> max_download_threads = std::nullopt,
         // affects things like buffer sizes and parallel reading
         bool is_remote_fs = false,
-        ThreadPoolPtr parsing_thread_pool = nullptr) const;
+        SharedParsingThreadPoolPtr shared_pool = nullptr) const;
 
     /// Checks all preconditions. Returns ordinary format if parallel formatting cannot be done
     /// For exporting into multiple files, ParallelFormat can't be used because of concurrency calculation

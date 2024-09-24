@@ -69,7 +69,7 @@ LMNativeORCBlockInputFormat::LMNativeORCBlockInputFormat(
     const FormatSettings & format_settings_,
     size_t max_download_threads_,
     size_t max_parsing_threads_,
-    ThreadPoolPtr parsing_thread_pool)
+    SharedParsingThreadPoolPtr parsing_thread_pool)
     : ParallelDecodingBlockInputFormat(
         in_,
         header_,

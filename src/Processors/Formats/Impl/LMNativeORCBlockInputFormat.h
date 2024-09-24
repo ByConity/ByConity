@@ -32,7 +32,7 @@ public:
         const FormatSettings & format_settings_,
         size_t max_download_threads,
         size_t max_parsing_threads,
-        ThreadPoolPtr parsing_thread_pool);
+        SharedParsingThreadPoolPtr parsing_thread_pool);
 
     ~LMNativeORCBlockInputFormat() override;
     String getName() const override { return "ORCBlockInputFormat"; }

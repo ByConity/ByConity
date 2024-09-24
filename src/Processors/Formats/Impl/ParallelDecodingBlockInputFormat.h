@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Formats/FormatSettings.h>
+#include <bthread/condition_variable.h>
+#include "Formats/SharedParsingThreadPool.h"
 #include "Processors/Formats/IInputFormat.h"
 #include "Storages/MergeTree/KeyCondition.h"
 #include "Common/ThreadPool.h"
@@ -20,7 +22,7 @@ public:
         size_t max_parsing_threads,
         bool preserve_order,
         std::unordered_set<int> skip_row_groups,
-        ThreadPoolPtr parsing_thread_pool = nullptr);
+        SharedParsingThreadPoolPtr parsing_thread_pool = nullptr);
 
     ~ParallelDecodingBlockInputFormat() override;
 
@@ -29,6 +31,8 @@ public:
     void setQueryInfo(const SelectQueryInfo & query_info, ContextPtr context) override;
 
 protected:
+    using Mutex = std::mutex;
+    using ConditionVariable = std::condition_variable;
 
     Chunk generate() override;
 
@@ -48,7 +52,7 @@ protected:
     struct PendingChunk;
     virtual std::optional<PendingChunk> readBatch(size_t row_group_idx) = 0;
 
-    void decodeOneChunk(size_t row_group_idx, std::unique_lock<std::mutex> & lock);
+    void decodeOneChunk(size_t row_group_idx, std::unique_lock<Mutex> & lock);
 
     void scheduleMoreWorkIfNeeded(std::optional<size_t> row_group_touched = std::nullopt);
     void scheduleRowGroup(size_t row_group_idx);
@@ -142,9 +146,9 @@ protected:
     //    ^   ^                       ^   ^   ^
     //    Done                        NotStarted
 
-    std::mutex mutex;
+    Mutex mutex;
     // Wakes up the generate() call, if any.
-    std::condition_variable condvar;
+    ConditionVariable condvar;
 
     std::vector<RowGroupState> row_groups;
     std::priority_queue<PendingChunk, std::vector<PendingChunk>, PendingChunk::Compare> pending_chunks;
@@ -155,6 +159,8 @@ protected:
 
     std::shared_ptr<ThreadPool> pool;
     std::unique_ptr<TaskTracker> task_tracker;
+    SharedParsingThreadPoolPtr shared_pool;
+    size_t additional_parsing_threads = 0;
 
     BlockMissingValues previous_block_missing_values;
     size_t previous_approx_bytes_read_for_chunk = 0;

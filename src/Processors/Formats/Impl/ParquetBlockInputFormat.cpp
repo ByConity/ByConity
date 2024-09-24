@@ -403,7 +403,7 @@ ParquetBlockInputFormat::ParquetBlockInputFormat(
     bool is_remote_fs_,
     size_t max_download_threads_,
     size_t max_parsing_threads_,
-    ThreadPoolPtr parsing_thread_pool)
+    SharedParsingThreadPoolPtr parsing_thread_pool)
     : ParallelDecodingBlockInputFormat(
         buf_,
         header_,
@@ -418,6 +418,8 @@ ParquetBlockInputFormat::ParquetBlockInputFormat(
 {
     if (format_settings.parquet.use_native_reader)
         LOG_TRACE(log, "Parquet use native reader");
+    else
+        LOG_TRACE(log, "Parquet use arrow reader");
 }
 
 ParquetBlockInputFormat::~ParquetBlockInputFormat()
@@ -718,7 +720,7 @@ void registerInputFormatProcessorParquet(FormatFactory & factory)
            bool is_remote_fs,
            size_t max_download_threads,
            size_t max_parsing_threads,
-           ThreadPoolPtr parsing_thread_pool) {
+           SharedParsingThreadPoolPtr parsing_thread_pool) {
             return std::make_shared<ParquetBlockInputFormat>(buf, sample, settings, read_settings,
                 is_remote_fs, max_download_threads, max_parsing_threads, parsing_thread_pool);
         });

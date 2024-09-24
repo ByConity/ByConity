@@ -45,12 +45,6 @@ public:
     bool supportIntermedicateResultCache() const override { return true; }
     bool supportsPrewhere() const override { return true; }
 private:
-    void selectFiles(
-        ContextPtr local_context,
-        const StorageMetadataPtr & metadata_snapshot,
-        const SelectQueryInfo & query_info,
-        HiveFiles & hive_files,
-        unsigned num_streams);
 
     HiveFiles files;
     std::shared_ptr<CnchHiveSettings> storage_settings;
