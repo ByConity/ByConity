@@ -475,10 +475,10 @@ std::pair<DataTypePtr, ASTPtr> ExpressionInterpreter::optimizeExpression(const C
 ASTPtr ExpressionInterpreter::optimizePredicate(const ConstASTPtr & expression) const
 {
     auto result = evaluate(expression);
-    Utils::checkState(isBoolCompatibleType(result.type));
 
+    // other rules(e.g. CommonPredicateRewriteRule) may generate predicate with invalid types, cast them to UInt8
     if (result.isAST())
-        return result.ast;
+        return isBoolCompatibleType(result.type) ? result.ast : makeASTFunction("toBool", result.ast);
 
     const auto & field = result.value;
     UInt8 x = !field.isNull() && applyVisitor(FieldVisitorConvertToNumber<bool>(), field);
