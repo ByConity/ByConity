@@ -454,7 +454,7 @@ void CnchServerResource::allocateResource(
             ServerDataPartsVector leftover_server_parts;
             auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
             // For function : arrayToBitmapWithEncode/EncodeBitmap
-            bool bitengine_related_table = cnch_table && (cnch_table->isBitEngineDictTable() || cnch_table->isBitEngineTable());
+            bool bitengine_related_table = false;
 
             if (resource.table_version > 0) // query with table version instead of parts
             {

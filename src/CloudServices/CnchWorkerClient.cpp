@@ -462,7 +462,6 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
-    LOG_TRACE(log, "request : {}", request.ShortDebugString());
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
