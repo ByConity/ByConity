@@ -1700,11 +1700,11 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, exchange_timeout_ms, 1000000, "Exchange request timeout ms",0) \
     M(UInt64, exchange_wait_accept_max_timeout_ms, 20000, "Exchange receiver wait accept max timeout ms",0) \
     M(UInt64, exchange_queue_bytes, 209715200, "Queue size(bytes) for exchange queue, 0 means disable", 0) \
-    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
-    M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
-    M(UInt64, exchange_multi_path_receiver_queue_size, 200, "Queue size for multi path exchange receiver", 0) \
-    M(Bool, exchange_enable_block_compress, false, "Whether enable exchange block compress ", 0) \
-    M(UInt64, exchange_stream_max_buf_size, 209715200, "Default 200M, -1 means no limit", 0) \
+    M(UInt64, exchange_local_receiver_queue_size, 30, "Queue size for local exchange receiver",0) \
+    M(UInt64, exchange_remote_receiver_queue_size, 10, "Queue size for remote exchange receiver",0) \
+    M(UInt64, exchange_multi_path_receiver_queue_size, 20, "Queue size for multi path exchange receiver", 0) \
+    M(Bool, exchange_enable_block_compress, true, "Whether enable exchange block compress ", 0) \
+    M(UInt64, exchange_stream_max_buf_size, 20971520, "Default 20M, -1 means no limit", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_row, 65505, "The minimum row num when exchange will flush send buffer", 0) \
     M(UInt64, \
