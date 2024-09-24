@@ -172,7 +172,11 @@ public:
     void skipCleanWorker() { skip_clean_worker = true; }
 
     template <typename T>
-    void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & required_bucket_numbers = {})
+    void addDataParts(
+        const UUID & storage_id,
+        const std::vector<T> & data_parts,
+        const std::set<Int64> & required_bucket_numbers = {},
+        bool replicated = false)
     {
         std::lock_guard lock(mutex);
         auto & assigned_resource = assigned_table_resource.at(storage_id);
