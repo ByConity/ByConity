@@ -480,7 +480,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             uki_checksum.file_size,
             uki_checksum.file_hash};
         writeDataFileFooter(*data_out, meta);
-        data_out->sync();
         data_out->finalize();
     }
 
