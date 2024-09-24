@@ -72,7 +72,7 @@ void executePlanSegmentInternal(
         throw Exception("Cannot execute empty plan segment", ErrorCodes::LOGICAL_ERROR);
 
     const auto & settings = context->getSettingsRef();
-    if (settings.debug_plan_generation)
+    if (settings.query_dry_run_mode == QueryDryRunMode::SKIP_EXECUTE_SEGMENT)
         return;
 
     bool inform_success_status = settings.enable_wait_for_post_processing || settings.bsp_mode || settings.report_segment_profiles;

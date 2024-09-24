@@ -38,7 +38,7 @@ drop session binding uuid '142afa3b-d741-6912-0d42-e644f491156c';
 show bindings;
 
 -- test session regular expression binding
-create session binding '(^select \'bbb*\')|(^select \'aaa*\')' settings enable_execute_query=0;
+create session binding '(^select \'bbb*\')|(^select \'aaa*\')' settings query_dry_run_mode = 'skip_execute_query';
 show bindings;
 select 'bbbb';
 select 'aaaa';
@@ -46,7 +46,7 @@ drop session binding '(^select \'bbb*\')|(^select \'aaa*\')';
 
 set enable_optimizer=1;
 explain select * from system.one;
-create session binding '^explain.*select.*from system\.one' settings enable_execute_query = 0;
+create session binding '^explain.*select.*from system\.one' settings query_dry_run_mode = 'skip_execute_query';
 explain select * from system.one;
 drop session binding '^explain.*select.*from system\.one';
 show bindings;
@@ -54,12 +54,12 @@ show bindings;
 -- test global regular expression binding
 set enable_optimizer=1;
 explain select * from system.one;
-create global binding '^explain.*select.*from system\.one' settings enable_execute_query = 0;
+create global binding '^explain.*select.*from system\.one' settings query_dry_run_mode = 'skip_execute_query';
 explain select * from system.one;
 drop global binding '^explain.*select.*from system\.one';
 show bindings;
 
-create global binding '^select \'bbb\'' settings enable_execute_query=0;
+create global binding '^select \'bbb\'' settings query_dry_run_mode = 'skip_execute_query';
 select 'bbb';
 create global binding select * from test.bindings using select a+1 from test.bindings order by a;
 select * from test.bindings;
@@ -71,9 +71,9 @@ show bindings;
 
 -- test binding match priority
 create session binding select * from test.bindings  order by a using select a+1 from test.bindings order by a;
-create session binding '^select \* from test\.bindings.*' settings enable_execute_query=0;
+create session binding '^select \* from test\.bindings.*' settings query_dry_run_mode = 'skip_execute_query';
 create global binding select * from test.bindings order by a using select a+2 from test.bindings order by a;
-create global binding '^select \* from test\.bindings.*' settings enable_execute_query=0;
+create global binding '^select \* from test\.bindings.*' settings query_dry_run_mode = 'skip_execute_query';
 show bindings;
 select * from test.bindings order by a;
 drop session binding select * from test.bindings order by a;
@@ -85,7 +85,7 @@ select * from test.bindings order by a;
 drop global binding '^select \* from test\.bindings.*';
 
 -- Different regular expression binding can be matched
-create session binding '^select \* from test\.bindings.*' settings enable_execute_query=0;
+create session binding '^select \* from test\.bindings.*' settings query_dry_run_mode = 'skip_execute_query';
 create session binding '^select \* from test\.bindin.*' settings enable_optimizer=0;
 
 show bindings;
@@ -95,7 +95,7 @@ select * from test.bindings order by a;
 drop session binding '^select \* from test\.bindings.*';
 show bindings;
 
-create global binding '^select \* from test\.bindings.*' settings enable_execute_query=0;
+create global binding '^select \* from test\.bindings.*' settings query_dry_run_mode = 'skip_execute_query';
 create global binding '^select \* from test\.bindin.*' settings enable_optimizer=0;
 
 show bindings;
@@ -107,17 +107,17 @@ show bindings;
 
 set tenant_id='';
 create session binding select * from test.bindings  order by a using select a+1 from test.bindings order by a;
-create global binding '^select \* from test\.bindings.*' settings enable_execute_query=0;
+create global binding '^select \* from test\.bindings.*' settings query_dry_run_mode = 'skip_execute_query';
 set tenant_id='12345';
 show bindings;
 create session binding select * from test.bindings  order by a using select a+1 from test.bindings order by a;
-create global binding '^explain.*select.*from system\.one.*' settings enable_execute_query=0;
+create global binding '^explain.*select.*from system\.one.*' settings query_dry_run_mode = 'skip_execute_query';
 
 -- test replace
-create global binding or replace '^explain.*select.*from system\.one.*' settings enable_execute_query = 0;
+create global binding or replace '^explain.*select.*from system\.one.*' settings query_dry_run_mode = 'skip_execute_query';
 
 -- test if not exists
-create global binding if not exists '^explain.*select.*from system\.one.*' settings enable_execute_query = 0;
+create global binding if not exists '^explain.*select.*from system\.one.*' settings query_dry_run_mode = 'skip_execute_query';
 
 show bindings;
 explain select * from system.one;

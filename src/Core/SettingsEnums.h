@@ -464,4 +464,15 @@ DECLARE_SETTING_ENUM(SchemaInferenceMode)
 
 DECLARE_SETTING_ENUM_WITH_RENAME(DateTimeOverflowBehavior, FormatSettings::DateTimeOverflowBehavior)
 
+enum class QueryDryRunMode
+{
+    NONE,
+    SKIP_SEND_PARTS,
+    SKIP_READ_PARTS,
+    SKIP_EXECUTE_SEGMENT,
+    SKIP_EXECUTE_QUERY,
+};
+
+DECLARE_SETTING_ENUM(QueryDryRunMode);
+
 }

@@ -296,4 +296,11 @@ IMPLEMENT_SETTING_ENUM(DateTimeOverflowBehavior, ErrorCodes::BAD_ARGUMENTS,
      {"ignore", FormatSettings::DateTimeOverflowBehavior::Ignore},
      {"saturate", FormatSettings::DateTimeOverflowBehavior::Saturate}})
 
+IMPLEMENT_SETTING_ENUM(QueryDryRunMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"none", QueryDryRunMode::NONE},
+     {"skip_send_parts", QueryDryRunMode::SKIP_SEND_PARTS},
+     {"skip_read_parts", QueryDryRunMode::SKIP_READ_PARTS},
+     {"skip_execute_segment", QueryDryRunMode::SKIP_EXECUTE_SEGMENT},
+     {"skip_execute_query", QueryDryRunMode::SKIP_EXECUTE_QUERY}})
+
 } // namespace DB

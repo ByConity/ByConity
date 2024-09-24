@@ -1207,7 +1207,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
             try
             {
-                if (!settings.enable_execute_query)
+                if (settings.query_dry_run_mode == QueryDryRunMode::SKIP_EXECUTE_QUERY)
                 {
                     Block block;
                     auto warning_column = ColumnString::create();
