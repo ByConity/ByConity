@@ -85,9 +85,9 @@ public:
     ColumnPtr convertToFullColumn() const;
     ColumnPtr convertToFullColumnIfLowCardinality() const override { return convertToFullColumn(); }
 
-    void tryToFlushZeroCopyBuffer() const override 
+    void tryToFlushZeroCopyBuffer() const override
     {
-        
+
         if (idx.getPositions())
             idx.getPositions()->tryToFlushZeroCopyBuffer();
         if (nested_column)

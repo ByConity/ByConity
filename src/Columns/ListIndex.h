@@ -132,6 +132,8 @@ class IListIndex
     size_t total_rows = 0;
     BitMap m_index_data;
 public:
+    IListIndex() = default;
+    IListIndex(const IListIndex &) = default;
     virtual ~IListIndex() = default;
     virtual void addMSN(size_t msn) { m_index_data.set(msn); }
     virtual size_t size() { return m_index_data.cardinality(); }

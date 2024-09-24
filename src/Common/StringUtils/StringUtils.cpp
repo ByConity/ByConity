@@ -19,6 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
+#pragma clang diagnostic ignored "-Wreserved-identifier"
 #include "StringUtils.h"
 #include <type_traits>
 #include <initializer_list>

@@ -114,7 +114,7 @@ UInt64 CnchManifestCheckpointThread::checkPointImpl(StoragePtr & istorage)
     ServerDataPartsWithDBM parts_with_dbm = loadPartsWithDBMFromTableVersions(versions_to_checkpoint, storage);
     auto & server_parts = parts_with_dbm.first;
     auto & delete_bitmaps = parts_with_dbm.second;
-    server_parts = CnchPartsHelper::calcVisibleParts(server_parts, false, CnchPartsHelper::LoggingOption::DisableLogging, true);
+    server_parts = CnchPartsHelper::calcVisibleParts(server_parts, false, CnchPartsHelper::LoggingOption::DisableLogging);
     DeleteBitmapMetaPtrVector visible_delete_bitmaps;
     CnchPartsHelper::calcVisibleDeleteBitmaps(delete_bitmaps, visible_delete_bitmaps);
 

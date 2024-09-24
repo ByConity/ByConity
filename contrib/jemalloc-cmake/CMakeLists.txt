@@ -143,6 +143,9 @@ target_compile_options(jemalloc PRIVATE -Wno-redundant-decls)
 # for RTLD_NEXT
 target_compile_options(jemalloc PRIVATE -D_GNU_SOURCE)
 
+# For LLVM-16
+target_compile_options(jemalloc PRIVATE -Wno-implicit-function-declaration)
+
 set_property(TARGET jemalloc APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS USE_JEMALLOC=1)
 if (MAKE_STATIC_LIBRARIES)
     # To detect whether we need to register jemalloc for osx as default zone.

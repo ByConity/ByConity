@@ -58,9 +58,9 @@ public:
     Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right) const override
     {
         if constexpr (std::is_same_v<typename Transform::FactorTransform, ZeroTransform>)
-            return Monotonicity(/* is_monotonic */ true, /* is_positive */ true, /* is_always_monotonic */ true);
+            return Monotonicity{.is_monotonic = true, .is_positive = true, .is_always_monotonic = true};
 
-        const IFunction::Monotonicity is_monotonic(/* is_monotonic */ true, /* is_positive */ true, /* is_always_monotonic */false);
+        const IFunction::Monotonicity is_monotonic{.is_monotonic = true, .is_positive = true, .is_always_monotonic = false};
         const IFunction::Monotonicity is_not_monotonic;
 
         const DateLUTImpl * date_lut = &DateLUT::sessionInstance();

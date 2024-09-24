@@ -9,6 +9,7 @@
 #include <Interpreters/GinFilter.h>
 
 #pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
 #pragma clang diagnostic ignored "-Wcast-qual"
@@ -20,6 +21,7 @@
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
 #pragma clang diagnostic ignored "-Wunused-variable"
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #include <cppjieba/Jieba.hpp>
 #pragma clang diagnostic pop
 

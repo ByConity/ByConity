@@ -314,7 +314,6 @@ int HDFSFileSystem::open(const std::string& path, int flags, mode_t mode)
 int HDFSFileSystem::getNextFd(const std::string& path) {
     // SKIP_FD_NUM to (SKIP_FD_NUM + MAX_FD_NUM)
     int index = std::hash<std::string>{}(path) % MAX_FD_NUM;
-    auto dumpy = 0;
     auto i = 0;
     // if flag_ has been set by others, we wait for next cycle
     while (flag_.test_and_set(std::memory_order_acquire))
@@ -323,11 +322,6 @@ int HDFSFileSystem::getNextFd(const std::string& path) {
         if (i < 32)
         {
             continue;
-        }
-        else if (i < 100)
-        {
-            dumpy = i;
-            dumpy++;
         }
         else
         {

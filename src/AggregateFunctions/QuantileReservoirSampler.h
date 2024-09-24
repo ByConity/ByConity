@@ -62,8 +62,19 @@ struct QuantileReservoirSampler
     /// indices - an array of index levels such that the corresponding elements will go in ascending order.
     void getMany(const Float64 * levels, const size_t * indices, size_t size, Value * result)
     {
+        bool is_empty = data.empty();
+
         for (size_t i = 0; i < size; ++i)
-            result[indices[i]] = Value(data.quantileInterpolated(levels[indices[i]]));
+        {
+            if (is_empty)
+            {
+                result[i] = Value{};
+            }
+            else
+            {
+                result[indices[i]] = Value(data.quantileInterpolated(levels[indices[i]]));
+            }
+        }
     }
 
     /// The same, but in the case of an empty state, NaN is returned.

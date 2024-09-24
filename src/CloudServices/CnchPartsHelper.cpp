@@ -335,8 +335,7 @@ namespace
         bool skip_drop_ranges,
         Vec * visible_alone_drop_ranges,
         Vec * invisible_dropped_parts,
-        LoggingOption logging,
-        bool move_source_parts = false /* Reduce the all_parts destruct time */)
+        LoggingOption logging)
     {
         using Part = typename Vec::value_type;
 
@@ -356,9 +355,6 @@ namespace
                 *visible_alone_drop_ranges = all_parts;
             return visible_parts;
         }
-
-        if (logging == EnableLogging)
-            move_source_parts = false; /// Do not use move operate to enable serverPartsToDebugString(all_parts)
 
         auto process_parts = [&](Vec & parts, size_t begin_pos, size_t end_pos, Vec & visible_parts_)
         {
@@ -553,9 +549,9 @@ MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, 
     return calcVisiblePartsImpl<MergeTreeDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
-ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging, bool move_source_parts)
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging)
 {
-    return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging, move_source_parts);
+    return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
 MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all_parts, bool flatten, LoggingOption logging)

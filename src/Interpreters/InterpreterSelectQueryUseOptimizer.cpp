@@ -578,7 +578,8 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
 
     BlockIO res = coodinator->execute();
 
-    if (auto * select_union = query_ptr->as<ASTSelectWithUnionQuery>())
+    auto select_union = query_ptr ? query_ptr->as<ASTSelectWithUnionQuery>() : nullptr;
+    if (select_union)
     {
         if (unlikely(select_union->tealimit))
             res.pipeline = executeTEALimit(res.pipeline, context, query_ptr, log);

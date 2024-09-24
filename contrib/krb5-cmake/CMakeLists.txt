@@ -681,6 +681,8 @@ target_compile_definitions(${KRB5_LIBRARY} PRIVATE
     LIBDIR="/usr/local/lib"
 )
 
+target_compile_options(${KRB5_LIBRARY} PRIVATE -Wno-implicit-function-declaration)
+
 target_link_libraries(${KRB5_LIBRARY}
     PRIVATE ${OPENSSL_CRYPTO_LIBRARY}
 )

@@ -13,9 +13,12 @@
 #include <Common/HashTable/HashMap.h>
 
 #pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #pragma clang diagnostic ignored "-Wreserved-id-macro"
 #pragma clang diagnostic ignored "-Wthread-safety-negative"
+#pragma clang diagnostic ignored "-Wdeprecated-builtins"
+#pragma clang diagnostic ignored "-Wdeprecated"
 #include <absl/container/flat_hash_map.h>
 #pragma clang diagnostic pop
 

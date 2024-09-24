@@ -1,3 +1,6 @@
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
+#pragma clang diagnostic ignored "-Wcast-function-type"
+#pragma clang diagnostic ignored "-Wcast-function-type-strict"
 /*
  * Copyright 2023 Bytedance Ltd. and/or its affiliates.
  * Licensed under the Apache License, Version 2.0 (the "License");

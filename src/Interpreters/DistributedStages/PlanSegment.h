@@ -75,6 +75,7 @@ public:
     IPlanSegment(const Block & header_, const PlanSegmentType & type_)
     : header(header_), type(type_) {}
 
+    IPlanSegment(const IPlanSegment &) = default;
     virtual ~IPlanSegment() = default;
 
     Block getHeader() const { return header; }
