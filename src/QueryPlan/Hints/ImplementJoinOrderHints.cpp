@@ -93,7 +93,7 @@ PlanNodePtr JoinOrderHintsVisitor::swapJoinOrder(PlanNodePtr node, SwapOrderPtr 
             kind = ASTTableJoin::Kind::Right;
         else if (step->getKind() == ASTTableJoin::Kind::Right)
             kind = ASTTableJoin::Kind::Left;
-        
+
         DataStreams streams = {step->getInputStreams()[1], step->getInputStreams()[0]};
         auto join_step = std::make_shared<JoinStep>(
             streams,
@@ -104,6 +104,7 @@ PlanNodePtr JoinOrderHintsVisitor::swapJoinOrder(PlanNodePtr node, SwapOrderPtr 
             step->getKeepLeftReadInOrder(),
             step->getRightKeys(),
             step->getLeftKeys(),
+            step->getKeyIdsNullSafe(),
             step->getFilter(),
             step->isHasUsing(),
             step->getRequireRightKeys(),

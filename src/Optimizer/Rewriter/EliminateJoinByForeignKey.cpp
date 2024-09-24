@@ -1031,6 +1031,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitJoinNode(JoinNode & node, JoinEl
         step->getKeepLeftReadInOrder(),
         left_keys,
         right_keys,
+        step->getKeyIdsNullSafe(),
         step->getFilter(),
         step->isHasUsing(),
         step->getRequireRightKeys(),

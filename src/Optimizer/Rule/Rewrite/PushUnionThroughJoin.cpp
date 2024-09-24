@@ -285,6 +285,7 @@ TransformResult PushUnionThroughJoin::transformImpl(PlanNodePtr node, const Capt
             context.context->getSettingsRef().optimize_read_in_order,
             left_keys_mapped[0],
             dynamic_cast<const JoinStep &>(*node->getChildren()[0]->getStep()).getRightKeys(),
+            dynamic_cast<const JoinStep &>(*node->getChildren()[0]->getStep()).getKeyIdsNullSafe(),
             filter ? filter : PredicateConst::TRUE_VALUE),
         {new_union_node, node->getChildren()[0]->getChildren()[1]});
 

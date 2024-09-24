@@ -230,6 +230,7 @@ std::shared_ptr<JoinStep> SymbolMapper::map(const JoinStep & join)
         join.getKeepLeftReadInOrder(),
         map(join.getLeftKeys()),
         map(join.getRightKeys()),
+        join.getKeyIdsNullSafe(),
         map(join.getFilter()),
         join.isHasUsing(),
         join.getRequireRightKeys(),

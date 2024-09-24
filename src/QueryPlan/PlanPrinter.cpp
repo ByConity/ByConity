@@ -892,9 +892,11 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         const auto * join_step = dynamic_cast<const JoinStep *>(plan.get());
         out << intent.detailIntent() << "Condition: ";
         if (!join_step->getLeftKeys().empty())
-            out << join_step->getLeftKeys()[0] << " == " << join_step->getRightKeys()[0];
+            out << join_step->getLeftKeys()[0] << " == " << join_step->getRightKeys()[0]
+                << (join_step->getKeyIdNullSafe(0) ? "(null aware)" : "");
         for (size_t i = 1; i < join_step->getLeftKeys().size(); i++)
-            out << ", " << join_step->getLeftKeys()[i] << " == " << join_step->getRightKeys()[i];
+            out << ", " << join_step->getLeftKeys()[i] << " == " << join_step->getRightKeys()[i]
+                << (join_step->getKeyIdNullSafe(i) ? "(null aware)" : "");
 
         if (!ASTEquality::compareTree(join_step->getFilter(), PredicateConst::TRUE_VALUE))
         {
