@@ -37,6 +37,7 @@ class MetastoreFDBImpl : public IMetaStore
 #define MAX_FDB_TRANSACTION_SIZE 10000000
 
 public:
+    using ReadOnlyKeyChecker = std::function<void(const String &)>;
     struct FDBIterator: public IMetaStore::Iterator
     {
     public:
@@ -108,11 +109,24 @@ public:
     // leave some margin
     uint32_t getMaxKVSize() final { return MAX_FDB_KV_SIZE - 200; }
 
+    void assertNotReadonly(const String & key)
+    {
+        if(unlikely(readOnlyKeyChecker))
+            readOnlyKeyChecker(key);
+    }
+
+    void setReadOnlyChecker(ReadOnlyKeyChecker func) override
+    {
+        readOnlyKeyChecker = func;
+    }
+
 private:
     /// convert metastore specific error code to Clickhouse error code for processing convenience in upper layer.
     static int toCommonErrorCode(const fdb_error_t & error_t);
 
     FDB::FDBClientPtr fdb_client;
+
+    ReadOnlyKeyChecker readOnlyKeyChecker = nullptr;
 };
 
 }

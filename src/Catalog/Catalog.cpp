@@ -544,7 +544,7 @@ namespace Catalog
         settings.loadFromConfig(config_elem + ".settings", config);
     }
 
-    Catalog::Catalog(Context & _context, const MetastoreConfig & config, String _name_space) : context(_context), name_space(_name_space)
+    Catalog::Catalog(Context & _context, const MetastoreConfig & config, String _name_space, bool writable) : context(_context), name_space(_name_space)
     {
         runWithMetricSupport(
             [&] {
@@ -561,7 +561,7 @@ namespace Catalog
                     LOG_DEBUG(log, "Using consul agent: {}", brpc::policy::FLAGS_consul_agent_addr);
                 }
 
-                meta_proxy = std::make_shared<MetastoreProxy>(config);
+                meta_proxy = std::make_shared<MetastoreProxy>(config, writable);
                 /// Support set a custom topology key
                 if (config.topology_key.empty())
                     topology_key = name_space;

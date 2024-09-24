@@ -97,7 +97,7 @@ public:
 
     using MetastoreProxyPtr = std::shared_ptr<MetastoreProxy>;
 
-    Catalog(Context & _context, const MetastoreConfig & config, String _name_space = "default");
+    Catalog(Context & _context, const MetastoreConfig & config, String _name_space = "default", bool writable = true);
 
     ~Catalog() = default;
 

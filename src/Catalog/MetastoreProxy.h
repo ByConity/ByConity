@@ -52,6 +52,7 @@
 namespace DB::ErrorCodes
 {
     extern const int METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED;
+    extern const int READONLY;
 }
 
 namespace DB::Catalog
@@ -187,9 +188,11 @@ public:
     using MetastorePtr = std::shared_ptr<IMetaStore>;
     using RepeatedFields = google::protobuf::RepeatedPtrField<std::string>;
 
-    explicit MetastoreProxy(const MetastoreConfig & config)
+    explicit MetastoreProxy(const MetastoreConfig & config, bool writable)
         : metastore_ptr(getMetastorePtr(config))
     {
+        if(!writable)
+            metastore_ptr->setReadOnlyChecker(assertNotReadonly);
     }
 
     explicit MetastoreProxy(MetastorePtr metastore_ptr_)
@@ -1229,7 +1232,7 @@ public:
         const String & table_uuid,
         const DeleteBitmapMetaPtrVector & bitmaps,
         BatchCommitRequest & batch_write,
-        const UInt64 txn_id, 
+        const UInt64 txn_id,
         const std::vector<String> & expected_bitmaps = {},
         bool write_manifest = false);
 
@@ -1428,6 +1431,13 @@ public:
      * @brief Get a table level trash items metrics snapshot.
      */
     String getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid);
+
+    static void assertNotReadonly(const String & key)
+    {
+        // only server topology and leader election are allowed to update
+        if(!key.ends_with(SERVERS_TOPOLOGY_KEY) && !key.ends_with("-election"))
+            throw Exception("metadata is not writable according to config 'enable_cnch_write_remote_catalog' ", ErrorCodes::READONLY);
+    }
 
 private:
 

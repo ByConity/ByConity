@@ -1597,7 +1597,7 @@ public:
     std::shared_ptr<PartCacheManager> getPartCacheManager() const;
 
     /// catalog related
-    void initCatalog(const MetastoreConfig & catalog_conf, const String & name_space);
+    void initCatalog(const MetastoreConfig & catalog_conf, const String & name_space, bool writable);
     std::shared_ptr<Catalog::Catalog> tryGetCnchCatalog() const;
     std::shared_ptr<Catalog::Catalog> getCnchCatalog() const;
 

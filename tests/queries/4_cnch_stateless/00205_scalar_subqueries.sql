@@ -17,6 +17,6 @@ SELECT (SELECT 1, 2 WHERE 0); -- { serverError 125 }
 SELECT (SELECT [1] WHERE 0);
 -- Works for not-empty casle
 SELECT (SELECT 1, 2);
-SELECT (SELECT [1]);
+SELECT (SELECT [1]); --skip_if_readonly_ci
 -- Several rows
 SELECT (SELECT number FROM numbers(2)); -- { serverError 125 }

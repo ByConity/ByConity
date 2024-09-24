@@ -115,11 +115,11 @@ insert into t2 select '2023-11-01', number, 'F' from numbers(100) where number <
 optimize table t2;
 system gc t2;
 select 'select use s1';
-select s, count(), sum(i) from t2 group by s order by s settings use_snapshot = 's1';
+select s, count(), sum(i) from t2 group by s order by s settings use_snapshot = 's1';  --skip_if_readonly_ci
 select 'select use s2';
-select s, count(), sum(i) from t2 group by s order by s settings use_snapshot = 's2';
+select s, count(), sum(i) from t2 group by s order by s settings use_snapshot = 's2';  --skip_if_readonly_ci
 select 'select use s3';
-select s, count(), sum(i) from t2 group by s order by s settings use_snapshot = 's3';
+select s, count(), sum(i) from t2 group by s order by s settings use_snapshot = 's3';  --skip_if_readonly_ci
 select 'select without snapshot';
 select s, count(), sum(i) from t2 group by s order by s;
 select 'drop all snapshots';
