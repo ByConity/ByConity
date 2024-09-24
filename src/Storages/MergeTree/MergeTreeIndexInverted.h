@@ -24,6 +24,7 @@ namespace DB
 class MergeTreeIndexGranuleInverted final : public IMergeTreeIndexGranule
 {
 public:
+    MergeTreeIndexGranuleInverted(const MergeTreeIndexGranuleInverted& rhs_);
     explicit MergeTreeIndexGranuleInverted(const String & index_name_, size_t columns_number, const GinFilterParameters & params_);
 
     ~MergeTreeIndexGranuleInverted() override = default;

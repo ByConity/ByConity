@@ -79,6 +79,13 @@ bool MergeTreeConditionInverted::createFunctionTextSearchCondition(
 #endif
 
 MergeTreeIndexGranuleInverted::MergeTreeIndexGranuleInverted(
+    const MergeTreeIndexGranuleInverted& rhs_):
+        index_name(rhs_.index_name), params(rhs_.params), gin_filters(rhs_.gin_filters),
+        has_elems(rhs_.has_elems)
+{
+}
+
+MergeTreeIndexGranuleInverted::MergeTreeIndexGranuleInverted(
     const String & index_name_, size_t columns_number, const GinFilterParameters & params_)
     : index_name(index_name_), params(params_), gin_filters(columns_number, GinFilter(params_)), has_elems(false)
 {

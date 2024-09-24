@@ -34,17 +34,17 @@ insert into test_skip_read select number, concat(toString(number), ',', toString
 EOF
 
 ${CLICKHOUSE_CLIENT} -q "select 'Without inverted index: ';"
-${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_merge_tree_without_inverted" -q "select * from test_skip_read where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1, enable_inverted_index=0;"
+${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_merge_tree_without_inverted" -q "select * from test_skip_read where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1, enable_inverted_index=0, enable_optimizer = 0;"
 wait_for_log_flush "${QUERY_ID_PREFIX}_merge_tree_without_inverted" ${WORKER_COUNT}
 ${CLICKHOUSE_CLIENT} -q "select sum(ProfileEvents['TotalSkippedGranules']) from cnch(vw_default, system.query_log) where initial_query_id = '${QUERY_ID_PREFIX}_merge_tree_without_inverted' and type > 1;"
 
 ${CLICKHOUSE_CLIENT} -q "select 'Without skip read: ';"
-${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_merge_tree_without_skip" -q "select * from test_skip_read where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1;"
+${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_merge_tree_without_skip" -q "select * from test_skip_read where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1, enable_optimizer = 0;"
 wait_for_log_flush "${QUERY_ID_PREFIX}_merge_tree_without_skip" ${WORKER_COUNT}
 ${CLICKHOUSE_CLIENT} -q "select sum(ProfileEvents['TotalSkippedGranules']), sum(ProfileEvents['TotalGranulesCount']) from cnch(vw_default, system.query_log) where initial_query_id = '${QUERY_ID_PREFIX}_merge_tree_without_skip' and type > 1;"
 
 ${CLICKHOUSE_CLIENT} -q "select 'With skip read: ';"
-${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_merge_tree_with_skip" -q "select * from test_skip_read where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 1, log_queries = 1;"
+${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_merge_tree_with_skip" -q "select * from test_skip_read where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 1, log_queries = 1, enable_optimizer = 0;"
 wait_for_log_flush "${QUERY_ID_PREFIX}_merge_tree_with_skip" ${WORKER_COUNT}
 ${CLICKHOUSE_CLIENT} -q "select sum(ProfileEvents['TotalSkippedGranules']), sum(ProfileEvents['TotalGranulesCount']) from cnch(vw_default, system.query_log) where initial_query_id = '${QUERY_ID_PREFIX}_merge_tree_with_skip' and type > 1;"
 
@@ -59,17 +59,17 @@ insert into test_skip_read_unique select number, concat(toString(number), ',', t
 EOF
 
 ${CLICKHOUSE_CLIENT} -q "select 'Without inverted index: ';"
-${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_unique_tree_without_inverted" -q "select * from test_skip_read_unique where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1, enable_inverted_index=0;"
+${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_unique_tree_without_inverted" -q "select * from test_skip_read_unique where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1, enable_inverted_index=0, enable_optimizer = 0;"
 wait_for_log_flush "${QUERY_ID_PREFIX}_unique_tree_without_inverted" ${WORKER_COUNT}
 ${CLICKHOUSE_CLIENT} -q "select sum(ProfileEvents['TotalSkippedGranules']) from cnch(vw_default, system.query_log) where initial_query_id = '${QUERY_ID_PREFIX}_unique_tree_without_inverted' and type > 1;"
 
 ${CLICKHOUSE_CLIENT} -q "select 'Without skip read: ';"
-${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_unique_tree_without_skip" -q "select * from test_skip_read_unique where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1;"
+${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_unique_tree_without_skip" -q "select * from test_skip_read_unique where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 0, log_queries = 1, enable_optimizer = 0;"
 wait_for_log_flush "${QUERY_ID_PREFIX}_unique_tree_without_skip" ${WORKER_COUNT}
 ${CLICKHOUSE_CLIENT} -q "select sum(ProfileEvents['TotalSkippedGranules']), sum(ProfileEvents['TotalGranulesCount']) from cnch(vw_default, system.query_log) where initial_query_id = '${QUERY_ID_PREFIX}_unique_tree_without_skip' and type > 1;"
 
 ${CLICKHOUSE_CLIENT} -q "select 'With skip read: ';"
-${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_unique_tree_with_skip" -q "select * from test_skip_read_unique where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 1, log_queries = 1;"
+${CLICKHOUSE_CLIENT} --query_id "${QUERY_ID_PREFIX}_unique_tree_with_skip" -q "select * from test_skip_read_unique where hasTokenBySeperator(value, '7', ', ') settings filtered_ratio_to_use_skip_read = 1, log_queries = 1, enable_optimizer = 0;"
 wait_for_log_flush "${QUERY_ID_PREFIX}_unique_tree_with_skip" ${WORKER_COUNT}
 ${CLICKHOUSE_CLIENT} -q "select sum(ProfileEvents['TotalSkippedGranules']), sum(ProfileEvents['TotalGranulesCount']) from cnch(vw_default, system.query_log) where initial_query_id = '${QUERY_ID_PREFIX}_unique_tree_with_skip' and type > 1;"
 
