@@ -173,6 +173,12 @@ namespace DB::RPCHelpers
     /// throw exception when cntl.Failed
     void assertController(const brpc::Controller & cntl);
 
+    template<class Res>
+    bool rpcFailed(const brpc::Controller & cntl, const Res & res)
+    {
+        return cntl.Failed() || res.has_exception();
+    }
+
     template <typename Resp>
     void onAsyncCallDone(Resp * response, brpc::Controller * cntl, ExceptionHandlerPtr handler)
     {
@@ -180,8 +186,13 @@ namespace DB::RPCHelpers
         {
             std::unique_ptr<Resp> response_guard(response);
             std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-            RPCHelpers::assertController(*cntl);
-            RPCHelpers::checkResponse(*response);
+            if (handler->hasException())
+                return;
+            if (rpcFailed(*cntl, *response) && handler->testException())
+            {
+                RPCHelpers::assertController(*cntl);
+                RPCHelpers::checkResponse(*response);
+            }
         }
         catch (...)
         {
@@ -207,22 +218,31 @@ namespace DB::RPCHelpers
         }
     }
 
-    template <typename Resp>
-    void onAsyncCallDoneWithFailedInfo(Resp * response, brpc::Controller * cntl, ExceptionHandlerWithFailedInfoPtr handler, const DB::WorkerId worker_id)
+    template <typename Resp, typename Handler>
+    void onAsyncCallDoneWithFailedInfo(Resp * response, brpc::Controller * cntl, Handler handler, const DB::WorkerId worker_id)
     {
         int32_t error_code = 0;
         try
         {
             std::unique_ptr<Resp> response_guard(response);
             std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-            error_code = cntl->ErrorCode();
-            RPCHelpers::assertController(*cntl);
-            RPCHelpers::checkResponse(*response);
             handler->addWorker(worker_id);
+            auto failed = rpcFailed(*cntl, *response);
+            if (failed)
+            {
+                error_code = cntl->ErrorCode();
+                handler->addFailedRpc(worker_id, error_code);
+            }
+            if (handler->hasException())
+                return;
+            if (failed && handler->testException())
+            {
+                RPCHelpers::assertController(*cntl);
+                RPCHelpers::checkResponse(*response);
+            }
         }
         catch (...)
         {
-            handler->addFailedRpc(worker_id, error_code);
             handler->setException(std::current_exception());
         }
     }
