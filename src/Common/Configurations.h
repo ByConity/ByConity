@@ -139,6 +139,8 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, async_query_status_ttl, "", 86400, ConfigFlag::Default, "TTL for async query status stored in catalog, in seconds.") \
     M(UInt64, async_query_expire_time, "", 3600, ConfigFlag::Default, "Expire time for async query, in seconds.") \
     M(UInt64, async_query_status_check_period, "", 15 * 60, ConfigFlag::Default, "Cycle for checking expired async query status stored in catalog, in seconds.") \
+    M(Bool, enable_cnch_write_remote_catalog, "", true, ConfigFlag::Default, "Set to false to disable writing catalog") \
+    M(Bool, enable_cnch_write_remote_disk, "", true, ConfigFlag::Default, "set to false to disable writing data") \
     /**
      * Memory caches */ \
     M(UInt64, bitengine_memory_cache_size, "", 50UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \

@@ -80,6 +80,7 @@ void MetastoreByteKVImpl::init()
 
 void MetastoreByteKVImpl::put(const String & key, const String & value, bool if_not_exists)
 {
+    assertNotReadonly(key);
     PutRequest put_req;
     PutResponse put_resp;
     put_req.table = this->table_name;
@@ -92,6 +93,7 @@ void MetastoreByteKVImpl::put(const String & key, const String & value, bool if_
 
 void MetastoreByteKVImpl::putTTL(const String & key, const String & value, UInt64 ttl)
 {
+    assertNotReadonly(key);
     PutRequest put_req{this->table_name, key, value, ttl};
     PutResponse put_resp;
     auto code = retryWhenHostIsDown([&]() { return client->Put(put_req, &put_resp); });
@@ -100,6 +102,7 @@ void MetastoreByteKVImpl::putTTL(const String & key, const String & value, UInt6
 
 std::pair<bool, String> MetastoreByteKVImpl::putCAS(const String & key, const String & value, const String & expected, [[maybe_unused]]bool with_old_value)
 {
+    assertNotReadonly(key);
     PutRequest put_req;
     PutResponse put_resp;
     Slice expected_value{expected};
@@ -181,6 +184,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
 
     for (auto & single_put : req.puts)
     {
+        assertNotReadonly(single_put.key);
         bytekv::sdk::PutRequest put_req;
         put_req.table = this->table_name;
         put_req.key = Slice(single_put.key);
@@ -199,6 +203,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
 
     for (auto & delete_key : req.deletes)
     {
+        assertNotReadonly(delete_key.key);
         DeleteRequest del_req;
         del_req.table = this->table_name;
         del_req.key = Slice(delete_key.key);
@@ -251,6 +256,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
 
 void MetastoreByteKVImpl::drop(const String & key, const UInt64 & expected_version)
 {
+    assertNotReadonly(key);
     DeleteRequest del_req;
     DeleteResponse del_resp;
     del_req.table = this->table_name;
@@ -321,6 +327,7 @@ void MetastoreByteKVImpl::clean(const String & prefix)
         wb_req.deletes_.resize(keys.size());
         for (size_t i=0; i < keys.size(); i++)
         {
+            assertNotReadonly(keys[i]);
             auto & del_req = wb_req.deletes_[i];
             del_req.table = this->table_name;
             del_req.key = keys[i];
@@ -369,6 +376,7 @@ void MetastoreByteKVImpl::cleanAll()
         WriteBatchRequest wb_req;
         for (size_t i=0; i<keys.size(); i++)
         {
+            assertNotReadonly(keys[i]);
             DeleteRequest del_req;
             del_req.table = this->table_name;
             del_req.key = keys[i];

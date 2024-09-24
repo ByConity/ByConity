@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <common/StringRef.h>
@@ -43,6 +44,7 @@ public:
     };
 
     using IteratorPtr = std::shared_ptr<Iterator>;
+    using ReadOnlyKeyChecker = std::function<void(const String &)>;
     IMetaStore(){}
     virtual ~IMetaStore() {}
 
@@ -122,6 +124,12 @@ public:
      * get limitation single a KV size
     */
     virtual uint32_t getMaxKVSize() = 0;
+
+    /***
+     * set a callback function for metastore when enable_cnch_write_remote_catalog is disabled
+     */
+    virtual void setReadOnlyChecker(ReadOnlyKeyChecker func) = 0;
+
 };
 
 }

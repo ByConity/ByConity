@@ -155,6 +155,7 @@ DiskByteS3::DiskByteS3(
     , min_upload_part_size(min_upload_part_size_)
     , max_single_part_upload_size(max_single_part_upload_size_)
 {
+    setDiskWritable();
 }
 
 ReservationPtr DiskByteS3::reserve(UInt64 bytes)
@@ -251,32 +252,36 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & path, const WriteSettings & settings)
 {
-        return std::make_unique<WriteBufferFromByteS3>(
-            s3_util.getClient(),
-            s3_util.getBucket(),
-            std::filesystem::path(root_prefix) / path,
-            max_single_part_upload_size,
-            min_upload_part_size,
-            settings.file_meta,
-            settings.buffer_size,
-            false,
-            nullptr,
-            0,
-            true);
+    assertNotReadonly();
+    return std::make_unique<WriteBufferFromByteS3>(
+        s3_util.getClient(),
+        s3_util.getBucket(),
+        std::filesystem::path(root_prefix) / path,
+        max_single_part_upload_size,
+        min_upload_part_size,
+        settings.file_meta,
+        settings.buffer_size,
+        false,
+        nullptr,
+        0,
+        true);
 }
 
 void DiskByteS3::removeFile(const String& path)
 {
+    assertNotReadonly();
     s3_util.deleteObject(std::filesystem::path(root_prefix) / path);
 }
 
 void DiskByteS3::removeFileIfExists(const String& path)
 {
+    assertNotReadonly();
     s3_util.deleteObject(std::filesystem::path(root_prefix) / path, false);
 }
 
 void DiskByteS3::removeDirectory(const String & path)
 {
+    assertNotReadonly();
     String prefix = std::filesystem::path(root_prefix) / path;
     auto res = s3_util.listObjectsWithPrefix(prefix, std::nullopt, /*limit*/ 1);
     if (!res.object_names.empty())
@@ -285,6 +290,7 @@ void DiskByteS3::removeDirectory(const String & path)
 
 void DiskByteS3::removeRecursive(const String& path)
 {
+    assertNotReadonly();
     String prefix = std::filesystem::path(root_prefix) / path;
 
     LOG_TRACE(&Poco::Logger::get("DiskByteS3"), "RemoveRecursive: {} - {}", prefix, path);

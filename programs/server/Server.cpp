@@ -711,8 +711,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         global_context->initVirtualWarehousePool();
         global_context->initServiceDiscoveryClient();
-        global_context->initCatalog(catalog_conf,
-            global_context->getCnchConfigRef().getString("catalog.name_space", "default"));
+        global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"), root_config.enable_cnch_write_remote_catalog);
         global_context->initTSOClientPool(root_config.service_discovery.tso_psm);
         global_context->initDaemonManagerClientPool(root_config.service_discovery.daemon_manager_psm);
         global_context->initCnchServerClientPool(root_config.service_discovery.server_psm);

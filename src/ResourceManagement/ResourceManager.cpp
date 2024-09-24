@@ -121,7 +121,7 @@ int ResourceManager::main(const std::vector<std::string> &)
     /// Initialize catalog
     MetastoreConfig catalog_conf(global_context->getCnchConfigRef(), CATALOG_SERVICE_CONFIGURE);
     auto name_space = global_context->getCnchConfigRef().getString("catalog.name_space", "default");
-    global_context->initCatalog(catalog_conf, name_space);
+    global_context->initCatalog(catalog_conf, name_space, config().getBool("enable_cnch_write_remote_catalog", true));
 
     auto rm_controller = std::make_shared<RM::ResourceManagerController>(global_context);
 

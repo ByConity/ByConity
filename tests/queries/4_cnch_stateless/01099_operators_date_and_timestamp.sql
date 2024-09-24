@@ -1,6 +1,6 @@
 select interval 1 second, interval 1 minute, interval 1 hour;
 select interval 1 day, interval 1 week, interval 1 month;
-select interval 1 quarter, interval 1 year;
+select interval 1 quarter, interval 1 year;  --skip_if_readonly_ci
 
 select date '2001-09-28';
 select (date '2001-09-28' + interval 7 day) x, toTypeName(x);

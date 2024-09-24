@@ -30,7 +30,7 @@ select string_map['s1'], string_map['s10'], string_array_map['s2'], string_array
 
 select '';
 select 'select {} :';
-select string_map{'s1'}, string_map{'s10'}, string_array_map{'s2'}, string_array_map{'s10'}, fixed_string_map{'s1'::FixedString(2)}, fixed_string_map{'s8'::FixedString(2)}, int_map{1}, int_map{10}, lowcardinality_map{'s1'}, lowcardinality_map{'s10'}, float_map{0.5}, float_map{0.4}, date_map{'2022-06-14'}, date_map{'2021-06-14'}, datetime_map{'2022-06-14 12:00:00'}, datetime_map{'2021-06-14 12:00:00'}, uuid_map{'93fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, uuid_map{'53fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, enums_map{'hello'}, new_enums_map{'non-exists'} from 00745_merge_tree_map_data_type order by n;
+select string_map{'s1'}, string_map{'s10'}, string_array_map{'s2'}, string_array_map{'s10'}, fixed_string_map{'s1'::FixedString(2)}, fixed_string_map{'s8'::FixedString(2)}, int_map{1}, int_map{10}, lowcardinality_map{'s1'}, lowcardinality_map{'s10'}, float_map{0.5}, float_map{0.4}, date_map{'2022-06-14'}, date_map{'2021-06-14'}, datetime_map{'2022-06-14 12:00:00'}, datetime_map{'2021-06-14 12:00:00'}, uuid_map{'93fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, uuid_map{'53fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, enums_map{'hello'}, new_enums_map{'non-exists'} from 00745_merge_tree_map_data_type order by n;  --skip_if_readonly_ci
 
 select '';
 select 'select mapKeys :';
@@ -76,7 +76,7 @@ select string_map['s1'], string_map['s10'], string_array_map['s2'], string_array
 
 select '';
 select 'select {} :';
-select string_map{'s1'}, string_map{'s10'}, string_array_map{'s2'}, string_array_map{'s10'}, fixed_string_map{'s1'::FixedString(2)}, fixed_string_map{'s8'::FixedString(2)}, int_map{1}, int_map{10}, lowcardinality_map{'s1'}, lowcardinality_map{'s10'}, float_map{0.5}, float_map{0.4}, date_map{'2022-06-14'}, date_map{'2021-06-14'}, datetime_map{'2022-06-14 12:00:00'}, datetime_map{'2021-06-14 12:00:00'}, uuid_map{'93fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, uuid_map{'53fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, enums_map{'hello'} from 00745_merge_tree_map_data_type order by n;
+select string_map{'s1'}, string_map{'s10'}, string_array_map{'s2'}, string_array_map{'s10'}, fixed_string_map{'s1'::FixedString(2)}, fixed_string_map{'s8'::FixedString(2)}, int_map{1}, int_map{10}, lowcardinality_map{'s1'}, lowcardinality_map{'s10'}, float_map{0.5}, float_map{0.4}, date_map{'2022-06-14'}, date_map{'2021-06-14'}, datetime_map{'2022-06-14 12:00:00'}, datetime_map{'2021-06-14 12:00:00'}, uuid_map{'93fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, uuid_map{'53fd2f47-4567-4eb8-9e7b-0e17f4c77837'}, enums_map{'hello'} from 00745_merge_tree_map_data_type order by n;  --skip_if_readonly_ci
 
 select '';
 select 'select mapKeys :';
