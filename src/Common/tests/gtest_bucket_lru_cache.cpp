@@ -652,3 +652,62 @@ TEST_F(BucketLRUCacheTest, concurrentGetOrSet)
     }
     ASSERT_EQ(loaded, 1);
 }
+
+TEST_F(BucketLRUCacheTest, cacheTTL)
+{
+    size_t cache_size = 5;
+
+    TrivialBucketLRUCache cache(TrivialBucketLRUCache::Options {
+        .lru_update_interval = 24 * 60 * 60,
+        .mapping_bucket_size = 3,
+        .max_weight = DimensionBucketLRUWeight<2>({std::numeric_limits<size_t>::max(), cache_size}),
+        .cache_ttl = 24 * 60 * 60,
+    });
+
+    insertToCache(cache, 0, 5);
+    VERIFY_CACHE_RANGE_EXIST(cache, 0, 5);
+    VERIFY_CACHE_LRU_ORDER(cache, std::vector<String>({"0", "1", "2", "3", "4"}));
+    VERIFY_CACHE_WEIGHT(cache, DimensionBucketLRUWeight<2>({5, 5}));
+
+    cache.insert("5", std::make_shared<String>("5"));
+    VERIFY_CACHE_RANGE_EXIST(cache, 0, 5);
+    VERIFY_CACHE_LRU_ORDER(cache, std::vector<String>({"0", "1", "2", "3", "4"}));
+    VERIFY_CACHE_WEIGHT(cache, DimensionBucketLRUWeight<2>({5, 5}));
+
+    std::shared_ptr<String> ret = cache.getOrSet("6", []() {
+        return std::make_shared<String>("6");
+    });
+    ASSERT_EQ(*ret, "6");
+    VERIFY_CACHE_RANGE_EXIST(cache, 0, 5);
+    VERIFY_CACHE_LRU_ORDER(cache, std::vector<String>({"0", "1", "2", "3", "4"}));
+    VERIFY_CACHE_WEIGHT(cache, DimensionBucketLRUWeight<2>({5, 5}));
+}
+
+TEST_F(BucketLRUCacheTest, multiGetOrSetWithTTL)
+{
+    size_t cache_size = 5;
+
+    TrivialBucketLRUCache cache(TrivialBucketLRUCache::Options {
+        .lru_update_interval = 24 * 60 * 60,
+        .mapping_bucket_size = 3,
+        .max_weight = DimensionBucketLRUWeight<2>({std::numeric_limits<size_t>::max(), cache_size}),
+        .cache_ttl = 24 * 60 * 60,
+    });
+
+    insertToCache(cache, 0, 5);
+    VERIFY_CACHE_RANGE_EXIST(cache, 0, 5);
+    VERIFY_CACHE_LRU_ORDER(cache, std::vector<String>({"0", "1", "2", "3", "4"}));
+    VERIFY_CACHE_WEIGHT(cache, DimensionBucketLRUWeight<2>({5, 5}));
+
+    size_t loaded = 0;
+    for (size_t i = 0; i < 10; ++i)
+    {
+        cache.getOrSet("10", [&]() {
+            ++loaded;
+            return std::make_shared<String>();
+        });
+    }
+
+    ASSERT_EQ(loaded, 10);
+    ASSERT_EQ(cache.get("10"), nullptr);
+}

@@ -692,6 +692,7 @@ GinIndexStoreFactory::GinIndexStoreFactory(const GinIndexStoreCacheSettings & se
             .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
             .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
             .max_weight = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / settings.cache_shard_num)),
+            .cache_ttl = static_cast<UInt32>(settings.cache_ttl),
         })
 {
 }
