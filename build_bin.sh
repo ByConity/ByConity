@@ -6,7 +6,7 @@ PROJECT="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P  )"
 
 export PATH=`echo $PATH | sed -e 's/:\/opt\/tiger\/typhoon-blade//'`
 ENABLE_JAVA_EXTENSIONS="${ENABLE_JAVA_EXTENSIONS:-1}"
-JAVA_EXTENSIONS_VERSION="${JAVA_EXTENSIONS_VERSION:-1.0.0.56}"
+JAVA_EXTENSIONS_VERSION="${JAVA_EXTENSIONS_VERSION:-1.0.0.57}"
 
 rm -rf output/
 mkdir -p output/bin
