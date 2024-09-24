@@ -26,16 +26,16 @@ namespace Catalog
 {
     using Job = std::function<void()>;
 
-    static void runWithMetricSupport(const Job & job, const ProfileEvents::Event & /*success*/, const ProfileEvents::Event & /*failed*/)
+    static void runWithMetricSupport(const Job & job, const ProfileEvents::Event & success, const ProfileEvents::Event & failed)
     {
         try
         {
             job();
-            //ProfileEvents::increment(success);
+            ProfileEvents::increment(success);
         }
         catch (...)
         {
-            //ProfileEvents::increment(failed);
+            ProfileEvents::increment(failed);
             throw;
         }
     }
