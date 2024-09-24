@@ -1316,6 +1316,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ginindex_store_cache_settings.mapping_bucket_size = root_config.ginindex_store_cache_bucket;
     ginindex_store_cache_settings.cache_shard_num = root_config.ginindex_store_cache_shard;
     ginindex_store_cache_settings.lru_update_interval = root_config.ginindex_store_cache_lru_update_interval;
+    ginindex_store_cache_settings.cache_ttl = root_config.ginindex_store_cache_ttl;
     global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
 
     size_t compressed_data_index_cache_size = root_config.compressed_data_index_cache;

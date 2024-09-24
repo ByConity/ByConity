@@ -325,6 +325,7 @@ struct GinIndexStoreCacheSettings
     size_t lru_update_interval {60};
 
     size_t cache_shard_num {2};
+    size_t cache_ttl {60};
 };
 
 struct GinIndexStoreWeightFunction

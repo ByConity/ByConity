@@ -156,7 +156,8 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, gin_index_filter_result_cache, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, ginindex_store_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, ginindex_store_cache_bucket, "", 5000, ConfigFlag::Default, "") \
-    M(UInt64, ginindex_store_cache_shard, "", 8, ConfigFlag::Default, "") \
+    M(UInt64, ginindex_store_cache_shard, "", 2, ConfigFlag::Default, "") \
+    M(UInt64, ginindex_store_cache_ttl, "", 60, ConfigFlag::Default, "") \
     M(UInt64, ginindex_store_cache_lru_update_interval, "", 60, ConfigFlag::Default, "In seconds") \
     M(UInt64, intermediate_result_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, mark_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
