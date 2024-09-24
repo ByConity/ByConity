@@ -435,6 +435,12 @@ endif ()
 
 if (WERROR)
     add_warning(error)
+    # Don't pollute CMAKE_CXX_FLAGS with -Werror as it will break some CMake checks.
+    # Instead, adopt modern cmake usage requirement.
+    # TODO: Set CMAKE_COMPILE_WARNING_AS_ERROR (cmake 3.24)
+    if (TARGET global-group)
+        target_compile_options(global-group INTERFACE "-Werror")
+    endif ()
 endif ()
 
 # Make this extra-checks for correct library dependencies.
