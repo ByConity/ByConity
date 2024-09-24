@@ -146,7 +146,7 @@ public:
     void waitForStagedPartsToPublish(ContextPtr context);
 
     // Allocate parts to workers before we want to do some calculation on the parts, support non-select query.
-    void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts);
+    void allocateParts(ContextPtr local_context, const ServerDataPartsVector & parts);
 
     ColumnSizeByName getColumnSizes() const override { return {}; }
 
@@ -273,20 +273,13 @@ private:
 
     void collectResource(
         ContextPtr local_context,
-        ServerDataPartsVector & parts,
+        UInt64 table_version,
+        const ServerDataPartsVector & parts,
         const String & local_table_name,
         const std::set<Int64> & required_bucket_numbers = {},
         const StorageSnapshotPtr & storage_snapshot = nullptr,
         WorkerEngineType engine_type = WorkerEngineType::CLOUD,
         bool replicated = false);
-
-    void collectResourceWithTableVersion(
-        ContextPtr local_context,
-        const UInt64 & table_version,
-        const String & local_table_name,
-        const StorageSnapshotPtr & storage_snapshot,
-        WorkerEngineType engine_type = WorkerEngineType::CLOUD
-    );
 
     /// NOTE: No need to implement this for CnchMergeTree as data processing is on CloudMergeTree.
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }

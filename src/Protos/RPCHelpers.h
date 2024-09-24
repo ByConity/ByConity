@@ -243,20 +243,4 @@ namespace DB::RPCHelpers
     {
         return std::make_shared<WGWorkerInfo>(worekr_info_data.worker_id(), worekr_info_data.num_workers(), worekr_info_data.index());
     }
-
-    inline void fillWorkerInfo(Protos::WorkerInfo & worekr_info_data, const String & worker_id, UInt64 num_workers)
-    {
-        /// TODO: Since worker IDs have the same format {commonprefix}-{index}, we can have a specific function to resolve worker index
-        if (auto pos = worker_id.find_last_of('-'); pos != String::npos)
-        {
-            worekr_info_data.set_index(std::stoul(worker_id.substr(pos + 1)));
-        }
-        else
-        {
-            // set an invalid index if cannot parse index from workerID
-            worekr_info_data.set_index(num_workers);
-        }
-        worekr_info_data.set_worker_id(worker_id);
-        worekr_info_data.set_num_workers(num_workers);
-    }
 }

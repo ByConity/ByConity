@@ -52,6 +52,8 @@ HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, c
 template <typename DataPartsCnchVector>
 std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator = std::nullopt);
 
+BucketNumbersAssignmentMap assignBuckets(const std::set<Int64> & required_bucket_numbers, const WorkerList & workers, bool replicated);
+
 /**
  * splitCnchParts will split server parts into bucketed parts and leftover server parts.
  * This is useful for partially clustered tables so that parts are assigned to their corresponding
