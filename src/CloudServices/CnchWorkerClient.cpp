@@ -486,17 +486,6 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
-    if (context->hasQueryContext())
-    {
-        auto &udf_info = context->getQueryContext()->getToWorkerUDFMap();
-        for (const auto & [name, version]: udf_info)
-        {
-            auto & new_info = *request.mutable_udf_infos()->Add();
-            new_info.set_function_name(name);
-            new_info.set_version(version);
-        }
-    }
-
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
