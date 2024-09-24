@@ -12,6 +12,10 @@ namespace ErrorCodes
     // extern const int BAD_CAST;
 }
 
+GlobalTxnCommitter::GlobalTxnCommitter(const ContextPtr & context_)
+    : WithContext(context_->getGlobalContext())
+{}
+
 TableTxnCommitterPtr GlobalTxnCommitter::getTableTxnCommitter(const UUID & uuid)
 {
     TableTxnCommitterPtr table_txn_commiter;
@@ -32,7 +36,7 @@ bool GlobalTxnCommitter::commit(const TransactionCnchPtr & txn)
     auto server_manager = getContext()->getCnchServerManager();
     if (!server_manager)
         throw Exception("Cannot commit transaction because ServerManager is unavailable.", ErrorCodes::LOGICAL_ERROR);
-    
+
     if (!server_manager->isLeader())
     {
         auto current_leader = server_manager->getCurrentLeader();
@@ -43,7 +47,7 @@ bool GlobalTxnCommitter::commit(const TransactionCnchPtr & txn)
         return true;
     }
     else
-    {  
+    {
         auto committer = getTableTxnCommitter(txn->getMainTableUUID());
         return committer->commit(txn);
     }

@@ -425,6 +425,7 @@ struct ContextSharedPart
     mutable CnchTopologyMasterPtr topology_master;
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
+    mutable OnceFlag global_txn_committer_initialized;
     mutable GlobalTxnCommitterPtr global_txn_committer;
     mutable GlobalDataManagerPtr global_data_manager;
 
@@ -5228,9 +5229,9 @@ std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
 
 GlobalTxnCommitterPtr Context::getGlobalTxnCommitter() const
 {
-    auto lock = getLock(); // checked
-    if (!shared->global_txn_committer)
-        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(shared_from_this());
+    callOnce(shared->global_txn_committer_initialized, [&] {
+        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(getGlobalContext());
+    });
     return shared->global_txn_committer;
 }
 

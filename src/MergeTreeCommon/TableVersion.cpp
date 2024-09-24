@@ -208,7 +208,7 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
         String checkpoint_file_path = joinPaths({getCheckpointRelativePath(storage), toString(version)});
         if (!remote_disk->exists(checkpoint_file_path))
             throw Exception("Cannot find checkpoint " + toString(version) + " for table " + storage.getStorageID().getFullTableName(), ErrorCodes::LOGICAL_ERROR);
-        
+
         auto read_buffer = remote_disk->readFile(checkpoint_file_path);
         do
         {

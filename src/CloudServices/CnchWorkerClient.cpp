@@ -450,8 +450,9 @@ brpc::CallId CnchWorkerClient::sendResources(
     {
         auto current_wg = context->getCurrentWorkerGroup();
         auto * worker_info = request.mutable_worker_info();
-        // TODO: resource manager should gurantee the worker number and worker index are consistent
-        RPCHelpers::fillWorkerInfo(*worker_info, worker_id.id, current_wg->workerNum());
+        worker_info->set_worker_id(worker_id.id);
+        worker_info->set_index(current_wg->getWorkerIndex(worker_id.id));
+        worker_info->set_num_workers(current_wg->workerNum());
 
         // worker info validation
         if (worker_info->num_workers() <= worker_info->index())
