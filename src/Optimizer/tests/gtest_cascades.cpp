@@ -71,6 +71,7 @@ PlanNodePtr join(const PlanNodePtr & left, const PlanNodePtr & right, const Name
         false,
         left_keys,
         right_keys,
+        std::vector<bool>{},
         PredicateConst::TRUE_VALUE);
     return PlanNodeBase::createPlanNode(1, std::move(join_step), {left, right});
 }

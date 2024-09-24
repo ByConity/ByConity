@@ -99,7 +99,8 @@ static std::optional<PlanNodePtr> createNewJoin(
         context.getSettingsRef().max_threads,
         context.getSettingsRef().optimize_read_in_order,
         inner_join->getLeftKeys(),
-        inner_join->getRightKeys());
+        inner_join->getRightKeys(),
+        inner_join->getKeyIdsNullSafe());
     new_left->setOrdered(inner_join->isOrdered());
     new_left->setSimpleReordered(inner_join->isSimpleReordered());
     new_left->setHints(inner_join->getHints());
@@ -127,6 +128,7 @@ static std::optional<PlanNodePtr> createNewJoin(
         left_join->getKeepLeftReadInOrder(),
         left_join->getLeftKeys(),
         left_join->getRightKeys(),
+        left_join->getKeyIdsNullSafe(),
         PredicateConst::TRUE_VALUE,
         left_join->isHasUsing(),
         left_join->getRequireRightKeys(),

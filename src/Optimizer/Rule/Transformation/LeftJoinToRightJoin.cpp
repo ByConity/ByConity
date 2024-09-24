@@ -45,6 +45,7 @@ TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captu
         step.getKeepLeftReadInOrder(),
         step.getRightKeys(),
         step.getLeftKeys(),
+        step.getKeyIdsNullSafe(),
         step.getFilter(),
         step.isHasUsing(),
         step.getRequireRightKeys(),

@@ -1440,7 +1440,7 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     details << "JoinKeys\\n";
     for (int i = 0; i < static_cast<int>(left.size()); ++i)
     {
-        details << left.at(i) << "=" << right.at(i) << "\\n";
+        details << left.at(i) << "=" << right.at(i) << (step.getKeyIdNullSafe(i) ? "(null aware)" : "") << "\\n";
     }
     details << "|";
     if (!PredicateUtils::isTruePredicate(step.getFilter()))

@@ -50,6 +50,7 @@ PlanNodePtr InnerJoinCommutation::swap(JoinNode & node, RuleContext & rule_conte
         step.getKeepLeftReadInOrder(),
         step.getRightKeys(),
         step.getLeftKeys(),
+        step.getKeyIdsNullSafe(),
         step.getFilter(),
         step.isHasUsing(),
         step.getRequireRightKeys(),

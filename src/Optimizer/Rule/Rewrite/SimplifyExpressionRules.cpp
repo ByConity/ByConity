@@ -80,7 +80,7 @@ TransformResult CommonJoinFilterRewriteRule::transformImpl(PlanNodePtr node, con
     }
 
     QueryPlanStepPtr join_step = std::make_shared<JoinStep>(
-       step.getInputStreams(),
+        step.getInputStreams(),
         step.getOutputStream(),
         step.getKind(),
         step.getStrictness(),
@@ -88,6 +88,7 @@ TransformResult CommonJoinFilterRewriteRule::transformImpl(PlanNodePtr node, con
         step.getKeepLeftReadInOrder(),
         step.getLeftKeys(),
         step.getRightKeys(),
+        step.getKeyIdsNullSafe(),
         rewritten,
         step.isHasUsing(),
         step.getRequireRightKeys(),
@@ -281,6 +282,7 @@ TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, c
         step.getKeepLeftReadInOrder(),
         step.getLeftKeys(),
         step.getRightKeys(),
+        step.getKeyIdsNullSafe(),
         rewritten,
         step.isHasUsing(),
         step.getRequireRightKeys(),

@@ -138,6 +138,7 @@ static PlanNodePtr createJoinNode(
         context->getOptimizerContext().getContext()->getSettingsRef().optimize_read_in_order,
         join_keys.first,
         join_keys.second,
+        std::vector<bool>{},
         filter,
         false,
         std::nullopt,

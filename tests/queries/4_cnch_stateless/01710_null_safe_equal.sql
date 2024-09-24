@@ -1,8 +1,8 @@
 DROP TABLE IF EXISTS nse_lhs;
 DROP TABLE IF EXISTS nse_rhs;
 
-CREATE TABLE nse_lhs (key int, value Nullable(UInt8)) ENGINE=Memory;
-CREATE TABLE nse_rhs (key int, value Nullable(UInt8)) ENGINE=Memory;
+CREATE TABLE nse_lhs (key int, value Nullable(UInt8)) ENGINE=CnchMergeTree ORDER BY tuple();
+CREATE TABLE nse_rhs (key int, value Nullable(UInt8)) ENGINE=CnchMergeTree ORDER BY tuple();
 
 INSERT INTO nse_lhs VALUES (1,1) (2, 2) (3, NULL) (4, NULL) (5,6) (6, NULL);
 INSERT INTO nse_rhs VALUES (1,1) (2, NULL) (3, 2) (4, NULL) (5,7) (6, 0);
@@ -21,9 +21,9 @@ select '';
 
 SET join_algorithm='partial_merge';
 select '# Null safe join (merge join)';
-SELECT key, value FROM nse_lhs JOIN nse_rhs ON nse_lhs.key=nse_rhs.key AND nse_rhs.value<=>nse_lhs.value;
-SELECT key, value FROM nse_lhs JOIN nse_rhs ON nse_lhs.key<=>nse_rhs.key AND nse_rhs.value <=> nse_lhs.value;
-SELECT key, value FROM nse_lhs JOIN nse_rhs ON nse_lhs.key<=>nse_rhs.key AND nse_rhs.key <=> nse_lhs.value;
+SELECT key, value FROM nse_lhs JOIN nse_rhs ON nse_lhs.key=nse_rhs.key AND nse_rhs.value<=>nse_lhs.value settings enable_optimizer = 0;
+SELECT key, value FROM nse_lhs JOIN nse_rhs ON nse_lhs.key<=>nse_rhs.key AND nse_rhs.value <=> nse_lhs.value settings enable_optimizer = 0;
+SELECT key, value FROM nse_lhs JOIN nse_rhs ON nse_lhs.key<=>nse_rhs.key AND nse_rhs.key <=> nse_lhs.value settings enable_optimizer = 0;
 select '';
 
 SET join_algorithm='nested_loop';
@@ -53,7 +53,7 @@ select '';
 
 select '# USING <=> partial_merge';
 SET join_algorithm='partial_merge';
-SELECT key, value FROM nse_lhs JOIN nse_rhs USING (value, key);
+SELECT key, value FROM nse_lhs JOIN nse_rhs USING (value, key) settings enable_optimizer = 0;
 select '';
 
 select '# USING <=> nested_loop';

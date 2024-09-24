@@ -69,8 +69,8 @@ ASTPtr getLambdaExpressionBody(ASTFunction & lambda)
 
 bool isComparisonFunction(const ASTFunction & function)
 {
-    return function.name == "equals" || function.name == "less" || function.name == "lessOrEquals" || function.name == "greater"
-        || function.name == "greaterOrEquals";
+    return function.name == "equals" || function.name == "bitEquals" || function.name == "less" || function.name == "lessOrEquals"
+        || function.name == "greater" || function.name == "greaterOrEquals";
 }
 
 bool functionIsInSubquery(const ASTFunction & function)
