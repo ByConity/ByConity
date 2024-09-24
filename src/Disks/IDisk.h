@@ -268,6 +268,9 @@ public:
     /// Second bool param is a flag to remove (true) or keep (false) shared data on S3
     virtual void removeSharedFileIfExists(const String & path, bool) { removeFileIfExists(path); }
 
+    /// Remove CNCH MergeTreeDataPart, only used in ByteS3/ByteHDFS disks
+    virtual void removePart(const String &) { throw Exception("removePart is not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
     /// Set last modified time to file or directory at `path`.
     virtual void setLastModified(const String & path, const Poco::Timestamp & timestamp) = 0;
 

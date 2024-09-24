@@ -257,6 +257,24 @@ void DiskByteHDFS::removeRecursive(const String & path)
     hdfs_fs.remove(absolutePath(path), true);
 }
 
+void DiskByteHDFS::removePart(const String & path)
+{
+    try
+    {
+        removeRecursive(path);
+    }
+    catch (Poco::FileException &e)
+    {
+        /// We don't know if this exception is caused by a non-existent path,
+        /// so we need to determine it manually
+        if (!exists(path)) {
+            /// the part has already been deleted, exit
+            return;
+        }
+        throw e;
+    }
+}
+
 void DiskByteHDFS::setLastModified(const String & path, const Poco::Timestamp & timestamp)
 {
     hdfs_fs.setLastModifiedInSeconds(absolutePath(path), timestamp.epochTime());
