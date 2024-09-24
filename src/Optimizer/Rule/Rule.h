@@ -174,6 +174,8 @@ enum class RuleType : UInt32
     PUSH_UNION_THROUGH_AGG,
 
     EXTRACT_BITMAP_IMPLICIT_FILTER,
+
+    ADD_REPARTITION_COLUMN,
     // Implementation
     SET_JOIN_DISTRIBUTION,
 

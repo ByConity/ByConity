@@ -41,6 +41,7 @@ public:
         const SelectQueryInfo & query_info_,
         size_t max_block_size_,
         String alias_ = "",
+        bool bucket_scan_ = false,
         PlanHints hints_ = {},
         Assignments inline_expressions_ = {},
         std::shared_ptr<AggregatingStep> aggregation_ = nullptr,
@@ -76,6 +77,7 @@ public:
         SelectQueryInfo query_info_,
         size_t max_block_size_,
         String alias_,
+        bool bucket_scan_,
         PlanHints hints_,
         Assignments inline_expressions_,
         std::shared_ptr<AggregatingStep> aggregation_,
@@ -97,6 +99,7 @@ public:
         , pushdown_projection(std::move(projection_))
         , pushdown_filter(std::move(filter_))
         , table_output_stream(std::move(table_output_stream_))
+        , bucket_scan(bucket_scan_)
         , alias(alias_)
         , log(&Poco::Logger::get("TableScanStep"))
     {
@@ -176,7 +179,8 @@ public:
     void allocate(ContextPtr context);
     Int32 getUniqueId() const { return unique_id; }
     void setUniqueId(Int32 unique_id_) { unique_id = unique_id_; }
-
+    bool isBucketScan() const { return bucket_scan; }
+    void setBucketScan(bool bucket_scan_) { bucket_scan = bucket_scan_; }
     // ues for plan cache
     void cleanStorage();
     void setStorage(ContextPtr context) { storage = DatabaseCatalog::instance().getTable(storage_id, context); }
@@ -237,6 +241,7 @@ private:
 
     // just for cascades, in order to distinguish between the same tables.
     Int32 unique_id{0};
+    bool bucket_scan;
     String alias;
 
     // Only for worker.

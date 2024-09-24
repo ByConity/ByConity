@@ -120,6 +120,9 @@ public:
     bool isPartitionHandle() const { return handle == Handle::BUCKET_TABLE || handle == Handle::FIXED_HASH; }
 
     bool isExchangeSchema(bool support_bucket_shuffle) const;
+    bool isSimpleExchangeSchema(bool support_bucket_shuffle) const;
+
+    ASTPtr getShuffleExpr() const;
 
     String getHashFunc(String default_func) const;
     Array getParams() const;

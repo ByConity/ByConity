@@ -1044,6 +1044,7 @@ TEST_F(ProtobufTest, TableScanStep)
             query_info,
             max_block_size,
             String{} /*alias*/,
+            false,
             PlanHints{},
             Assignments{},
             pushdown_aggregation,

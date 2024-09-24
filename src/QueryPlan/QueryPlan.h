@@ -162,6 +162,10 @@ public:
     using CTENodes = std::unordered_map<CTEId, Node *>;
 
     Nodes & getNodes() { return nodes; }
+    const Nodes & getNodes() const
+    {
+        return nodes;
+    }
 
     Node * getRoot() { return root; }
     const Node * getRoot() const { return root; }

@@ -2030,6 +2030,11 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     }
     details << "|";
 
+    if (step.isBucketScan())
+    {
+        details << "Bucket Scan |";
+    }
+
     details << "Inline Expressions: \\n";
     for (const auto & assigment : step.getInlineExpressions())
     {
