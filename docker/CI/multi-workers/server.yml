@@ -5,6 +5,10 @@ logger:
   testlog: /var/log/byconity/test.log
   size: 1000M
   count: 10
+additional_services:
+  GIS: 1
+  VectorSearch: 1
+  FullTextSearch: 1
 http_port: 21557
 rpc_port: 30605
 tcp_port: 52145

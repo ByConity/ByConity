@@ -3,6 +3,7 @@
 #include <IO/RemappingReadBuffer.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/FileDiskCacheSegment.h>
+#include "Core/SettingsEnums.h"
 
 namespace ProfileEvents
 {
@@ -65,9 +66,9 @@ String GinDataLocalPartHelper::getPartUniqueID() const
 }
 
 GinDataCNCHPartHelper::GinDataCNCHPartHelper(const IMergeTreeDataPartPtr& part_,
-    const IDiskCachePtr& cache_):
+    const IDiskCachePtr& cache_, DiskCacheMode mode_):
         cache(cache_), part_checksums(part_->getChecksums()),
-        disk(part_->volume->getDisk()), part_rel_path(part_->getFullRelativePath())
+        disk(part_->volume->getDisk()), part_rel_path(part_->getFullRelativePath()), mode(mode_), log(&Poco::Logger::get("GinDataCNCHPartHelper"))
 {
     if (part_->getType() != IMergeTreeDataPart::Type::CNCH)
     {
@@ -92,23 +93,32 @@ std::unique_ptr<SeekableReadBuffer> GinDataCNCHPartHelper::readFile(
     if (cache != nullptr)
     {
         std::pair<size_t, size_t> data_range = {offset, offset + size};
-        auto cache_segment = std::make_shared<FileDiskCacheSegment>(disk, part_rel_path + "/data",
+        auto cache_segment = std::make_shared<FileDiskCacheSegment>(disk, fs::path(part_rel_path) / "data",
             ReadSettings{}, data_range);
 
-        auto [cache_disk, cache_path] = cache->getDataCache()->get(cache_segment->getSegmentName());
+        auto [cache_disk, cache_path] = cache->get(cache_segment->getSegmentName());
 
         if (cache_disk != nullptr && !cache_path.empty())
         {
+            LOG_TRACE(log, "GIN index cache hit, part: {}, path: {}", part_rel_path, cache_path);
             ProfileEvents::increment(ProfileEvents::GinIndexCacheHit);
 
             return cache_disk->readFile(cache_path);
         }
-        ProfileEvents::increment(ProfileEvents::GinIndexCacheHit);
+        else if (mode == DiskCacheMode::FORCE_DISK_CACHE)
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "GIN DiskCache data `{}` is not found but mode is FORCE_DISK_CACHE", cache_segment->getSegmentName());
+        }
 
         auto filtered_segments = cache->getStrategy()->getCacheSegments(cache, {cache_segment});
         cache->cacheSegmentsToLocalDisk(filtered_segments);
     }
+    else if (mode == DiskCacheMode::FORCE_DISK_CACHE)
+    {
+        throw Exception("GIN DiskCache data is not inited but mode is FORCE_DISK_CACHE", ErrorCodes::LOGICAL_ERROR);
+    }
 
+    LOG_TRACE(log, "GIN index cache miss, part: {}", part_rel_path);
     ProfileEvents::increment(ProfileEvents::GinIndexCacheMiss);
 
     std::unique_ptr<ReadBufferFromFileBase> part_reader =

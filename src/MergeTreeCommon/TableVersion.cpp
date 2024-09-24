@@ -29,7 +29,7 @@ class ManifestDiskCacheSegment : public IDiskCacheSegment
 {
 public:
     explicit ManifestDiskCacheSegment(TableVersionPtr version_)
-        : IDiskCacheSegment(0, 0),
+        : IDiskCacheSegment(0, 0, SegmentType::MANIFEST),
           version_ptr(version_)
     {
     }

@@ -21,6 +21,19 @@
 
 namespace DB
 {
+
+std::unordered_map<SegmentType, String> SegmentTypeToString = {
+    {PART_DATA, "PART_DATA"},
+    {FILE_DATA, "FILE_DATA"},
+    {SENCONDARY_INDEX, "SENCONDARY_INDEX"},
+    {GIN_INDEX, "GIN_INDEX"},
+    {BITMAP_INDEX, "BITMAP_INDEX"},
+    {PRIMARY_INDEX, "PRIMARY_INDEX"},
+    {CHECKSUMS_DATA, "CHECKSUMS_DATA"},
+    {META_INFO, "META_INFO"},
+    {GEO_INDEX, "GEO_INDEX"}
+};
+
 String IDiskCacheSegment::formatSegmentName(
     const String & uuid, const String & part_name, const String & column_name, UInt32 segment_number, const String & extension)
 {

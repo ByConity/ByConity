@@ -7,6 +7,9 @@
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/DiskCache/DiskCache_fwd.h>
+#include "Core/SettingsEnums.h"
+#include "Disks/IDisk.h"
+#include "Storages/DiskCache/DiskCacheLRU.h"
 
 namespace DB
 {
@@ -42,6 +45,7 @@ public:
     String getPartUniqueID() const override;
 
     bool exists(const String& file_name) const override;
+
 private:
     DiskPtr disk;
     String relative_path;
@@ -51,7 +55,7 @@ class GinDataCNCHPartHelper: public IGinDataPartHelper
 {
 public:
     GinDataCNCHPartHelper(const IMergeTreeDataPartPtr& part_,
-        const IDiskCachePtr& cache_);
+        const IDiskCachePtr& cache_, DiskCacheMode mode_ = DiskCacheMode::AUTO);
 
     std::unique_ptr<SeekableReadBuffer> readFile(const String& file_name) override;
     std::unique_ptr<WriteBufferFromFileBase> writeFile(const String& file_name,
@@ -70,6 +74,10 @@ private:
 
     DiskPtr disk;
     String part_rel_path;
+
+    DiskCacheMode mode;
+
+    Poco::Logger * log;
 };
 
 }
