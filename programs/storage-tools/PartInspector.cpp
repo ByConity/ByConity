@@ -6,6 +6,8 @@
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <IO/S3Common.h>
+#include <IO/ReadBufferFromS3.h>
 #include <IO/HashingReadBuffer.h>
 #include <IO/LimitReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
@@ -41,7 +43,7 @@ namespace ErrorCodes {
 
 class HDFSFSOp: public FSOp {
 public:
-    HDFSFSOp(const HDFSConnectionParams& params): hdfs_params_(params) {
+    explicit HDFSFSOp(const HDFSConnectionParams& params): hdfs_params_(params) {
         registerDefaultHdfsFileSystem(params, 1, 0, 0);
     }
 
@@ -89,6 +91,46 @@ public:
         }
         return files;
     }
+};
+
+class S3FSOp: public FSOp {
+public:
+    explicit S3FSOp(const S3::S3Config& cfg): s3_util_(cfg.create(), cfg.bucket) {}
+
+    virtual std::unique_ptr<ReadBufferFromFileBase> read(const String& path) override {
+        return std::make_unique<ReadBufferFromS3>(s3_util_.getClient(),
+            s3_util_.getBucket(), path, ReadSettings(), 3, false);
+    }
+
+    virtual size_t getSize(const String& path) override {
+        return s3_util_.getObjectSize(path);
+    }
+
+    virtual bool isFile([[maybe_unused]]const String& path) override {
+        S3::S3Util::S3ListResult result = s3_util_.listObjectsWithPrefix(
+            path, std::nullopt, 1);
+        if (result.object_names.empty()) {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Didn't find any file start with {}",
+                path);
+        }
+        return result.object_names.front() == path;
+    }
+
+    virtual std::vector<String> list(const String& path) override {
+        std::vector<String> file_paths;
+
+        S3::S3Util::S3ListResult result;
+        do {
+            result = s3_util_.listObjectsWithPrefix(path, result.token);
+            file_paths.insert(file_paths.end(), result.object_names.begin(),
+                result.object_names.end());
+        } while (result.has_more);
+
+        return file_paths;
+    }
+
+private:
+    S3::S3Util s3_util_;
 };
 
 String PartInspector::Footer::info() const {
@@ -369,7 +411,9 @@ int parseAndRunInspectPartTask(const std::vector<String>& args) {
     desc.add_options()
         ("help", po::bool_switch()->default_value(false), "Help")
         ("user", po::value<String>()->default_value("clickhouse"), "user when access hdfs")
-        ("prefix", po::value<String>()->required(), "file system prefix, supported are hdfs://nnip:nnport/, cfs://nnip:nnport, nnproxy or empty for local file system")
+        ("prefix", po::value<String>()->required(), "file system prefix, supported are "
+            "https://host/bucket/prefix, http://host/bucket/prefix, hdfs://nnip:nnport/, "
+            "cfs://nnip:nnport, nnproxy or empty for local file system")
         ("path", po::value<String>()->required(), "relative data path, can be a folder or just a file")
         ("threads", po::value<size_t>()->default_value(1), "threads to use")
         ("type", po::value<String>()->required(), "inspect type, can be brief, checksum, all, marks, check_files")
@@ -409,28 +453,37 @@ int parseAndRunInspectPartTask(const std::vector<String>& args) {
     if (prefix.empty()) {
         fs = std::make_unique<LocalFSOp>();
     } else {
-        HDFSConnectionParams hdfs_params;
         String uri_scheme = Poco::toLower(uri.getScheme());
-        if (uri_scheme.empty()) {
-            hdfs_params = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY,
-                user, prefix);
+        if (uri_scheme == "http" || uri_scheme == "https") {
+            S3::URI s3_uri(uri);
+            S3::S3Config s3_cfg(s3_uri.endpoint, s3_uri.region, s3_uri.bucket, "", "",
+                s3_uri.key);
+            s3_cfg.collectCredentialsFromEnv();
+
+            fs = std::make_unique<S3FSOp>(s3_cfg);
         } else {
-            HDFSConnectionParams::HDFSConnectionType type = HDFSConnectionParams::CONN_DUMMY;
-            if (uri_scheme == "cfs") {
-                type = HDFSConnectionParams::CONN_CFS;
-            } else if (uri_scheme == "hdfs") {
-                type = HDFSConnectionParams::CONN_HDFS;
+            HDFSConnectionParams hdfs_params;
+            if (uri_scheme.empty()) {
+                hdfs_params = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY,
+                    user, prefix);
             } else {
-                std::cerr << "Failed to parse uri prefix " << prefix << std::endl;
-                return 1;
+                HDFSConnectionParams::HDFSConnectionType type = HDFSConnectionParams::CONN_DUMMY;
+                if (uri_scheme == "cfs") {
+                    type = HDFSConnectionParams::CONN_CFS;
+                } else if (uri_scheme == "hdfs") {
+                    type = HDFSConnectionParams::CONN_HDFS;
+                } else {
+                    std::cerr << "Failed to parse uri prefix " << prefix << std::endl;
+                    return 1;
+                }
+
+                String host = uri.getHost();
+                int port = uri.getPort() == 0 ? 65212 : uri.getPort();
+                hdfs_params = HDFSConnectionParams(type, user, {{host, port}});
             }
 
-            String host = uri.getHost();
-            int port = uri.getPort() == 0 ? 65212 : uri.getPort();
-            hdfs_params = HDFSConnectionParams(type, user, {{host, port}});
+            fs = std::make_unique<HDFSFSOp>(hdfs_params);
         }
-
-        fs = std::make_unique<HDFSFSOp>(hdfs_params);
     }
 
     ParallelInspectRunner::InspectTask::Type tsk_type = ParallelInspectRunner::InspectTask::ALL;
