@@ -44,7 +44,8 @@ bool FunctionIsInjective::isInjective(const ConstASTPtr & expr, ContextMutablePt
     }
     Scope scope(Scope::ScopeType::RELATION, nullptr, true, fields);
     ExprAnalyzerOptions options;
-    ExprAnalyzer::analyze(std::const_pointer_cast<IAST>(expr), &scope, context, analysis, options);
+    ASTPtr tmp_expr = std::const_pointer_cast<IAST>(expr);
+    ExprAnalyzer::analyze(tmp_expr, &scope, context, analysis, options);
     FunctionIsInjectiveVisitor visitor{context, analysis.getExpressionColumnWithTypes()};
     NameSet remind_partition_cols = partition_cols;
     return ASTVisitorUtil::accept(expr, visitor, remind_partition_cols) && remind_partition_cols.empty();
@@ -78,7 +79,7 @@ bool FunctionIsInjectiveVisitor::visitASTFunction(const ConstASTPtr & node, Name
         processed_arguments.emplace_back(col_type.column, col_type.type, arg->getColumnName());
     }
     auto function_base = function_builder->build(processed_arguments);
-    bool is_injective = function_base->isInjective(processed_arguments);    
+    bool is_injective = function_base->isInjective(processed_arguments);
     if (is_injective)
     {
         visitNode(node, c);

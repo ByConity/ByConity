@@ -20,6 +20,8 @@
 #include <Analyzers/ResolvedWindow.h>
 #include <Analyzers/Scope.h>
 #include <Analyzers/SubColumnID.h>
+#include <Core/Block.h>
+#include <Interpreters/Set.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/Utils.h>
@@ -468,6 +470,12 @@ struct Analysis
 
     std::unordered_map<String, std::vector<String>> function_arguments;
     void addUsedFunctionArgument(const String & func_name, ColumnsWithTypeAndName & processed_arguments);
+
+    std::map<String, Block> executed_scalar_subqueries;
+    const Block & getScalarSubqueryResult(const ASTPtr & subquery, ContextPtr context);
+
+    std::map<String, SetPtr> executed_in_subqueries;
+    SetPtr getInSubqueryResult(const ASTPtr & subquery, ContextPtr context);
 };
 
 }

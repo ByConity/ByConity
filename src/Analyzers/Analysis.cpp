@@ -15,6 +15,10 @@
 
 #include <Analyzers/Analysis.h>
 
+#include <DataStreams/materializeBlock.h>
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
+#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+
 namespace DB
 {
 
@@ -31,6 +35,11 @@ namespace DB
                 if(!(container).emplace((key), (val)).second)                                              \
                     throw Exception("Object already exists in " #container, ErrorCodes::LOGICAL_ERROR);    \
             } while(false)                                                                                 \
+
+namespace ErrorCodes
+{
+    extern const int INCORRECT_RESULT_OF_SCALAR_SUBQUERY;
+}
 
 void Analysis::setScope(IAST & statement, ScopePtr scope)
 {
@@ -435,5 +444,144 @@ void Analysis::addUsedFunctionArgument(const String & func_name, ColumnsWithType
         if (arg.column && !arg.column->empty())
         function_arguments[func_name].emplace_back((*arg.column)[0].toString());
     }
+}
+
+const Block & Analysis::getScalarSubqueryResult(const ASTPtr & subquery, ContextPtr context)
+{
+    auto hash = subquery->getTreeHash();
+    String hash_str = toString(hash.first) + "_" + toString(hash.second);
+
+    if (!executed_scalar_subqueries.count(hash_str))
+    {
+        // ContextMutablePtr subquery_context = Context::createCopy(context);
+        // Settings subquery_settings = context->getSettings();
+        // subquery_settings.max_result_rows = 1;
+        // subquery_settings.extremes = false;
+        // subquery_context->setSettings(subquery_settings);
+        SelectQueryOptions subquery_options;
+        auto & ast_subquery = subquery->as<ASTSubquery &>();
+        auto & inner_query = ast_subquery.children.front();
+        if (!inner_query->as<ASTSelectWithUnionQuery>())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Unrecognized query type '{}' when executing subquery {}",
+                inner_query->getID(),
+                inner_query->formatForErrorMessage());
+        InterpreterSelectQueryUseOptimizer interpreter{inner_query, std::const_pointer_cast<Context>(context), subquery_options};
+        auto io = interpreter.execute();
+        PullingAsyncPipelineExecutor executor(io.pipeline);
+        Block block;
+
+        while (block.rows() == 0 && executor.pull(block))
+            ;
+
+        if (block.rows() > 1)
+            throw Exception(
+                ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY,
+                "Scalar subquery returned more than one row: {}",
+                subquery->formatForErrorMessage());
+
+        if (block.rows() == 0)
+        {
+            auto types = interpreter.getSampleBlock().getDataTypes();
+            if (types.size() != 1)
+                types = {std::make_shared<DataTypeTuple>(types)};
+
+            auto & type = types[0];
+            if (!type->isNullable())
+            {
+                if (!type->canBeInsideNullable())
+                    throw Exception(
+                        ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY,
+                        "Scalar subquery returned empty result of type {} which cannot be Nullable",
+                        type->getName());
+
+                type = makeNullable(type);
+            }
+
+            auto null_column = type->createColumn();
+            null_column->insert(Null{});
+            block.clear();
+            block.insert(ColumnWithTypeAndName{ColumnPtr{std::move(null_column)}, type, ""});
+        }
+        else
+        {
+            block = materializeBlock(block);
+            size_t columns = block.columns();
+
+            if (columns == 1)
+            {
+                auto & column = block.getByPosition(0);
+                /// Here we wrap type to nullable if we can.
+                /// It is needed cause if subquery return no rows, it's result will be Null.
+                /// In case of many columns, do not check it cause tuple can't be nullable.
+                if (!column.type->isNullable() && column.type->canBeInsideNullable())
+                {
+                    column.type = makeNullable(column.type);
+                    column.column = makeNullable(column.column);
+                }
+            }
+            else
+            {
+                ColumnWithTypeAndName ctn;
+                ctn.type = std::make_shared<DataTypeTuple>(block.getDataTypes());
+                ctn.column = ColumnTuple::create(block.getColumns());
+                block = Block{ctn};
+            }
+
+            Block tmp_block;
+            while (tmp_block.rows() == 0 && executor.pull(tmp_block))
+                ;
+
+            if (tmp_block.rows() > 0)
+                throw Exception(
+                    ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY,
+                    "Scalar subquery returned more than one row: {}",
+                    subquery->formatForErrorMessage());
+        }
+
+        executed_scalar_subqueries.emplace(hash_str, std::move(block));
+    }
+
+    return executed_scalar_subqueries.at(hash_str);
+}
+
+SetPtr Analysis::getInSubqueryResult(const ASTPtr & subquery, ContextPtr context)
+{
+    auto hash = subquery->getTreeHash();
+    String hash_str = toString(hash.first) + "_" + toString(hash.second);
+
+    if (!executed_in_subqueries.count(hash_str))
+    {
+        // ContextMutablePtr subquery_context = Context::createCopy(context);
+        SelectQueryOptions subquery_options;
+        auto & ast_subquery = subquery->as<ASTSubquery &>();
+        auto & inner_query = ast_subquery.children.front();
+        if (!inner_query->as<ASTSelectWithUnionQuery>())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Unrecognized query type '{}' when executing subquery {}",
+                inner_query->getID(),
+                inner_query->formatForErrorMessage());
+        InterpreterSelectQueryUseOptimizer interpreter{inner_query, std::const_pointer_cast<Context>(context), subquery_options};
+        BlockIO io = interpreter.execute();
+        PullingAsyncPipelineExecutor executor(io.pipeline);
+        SizeLimits limites(context->getSettingsRef().max_rows_in_set, context->getSettingsRef().max_bytes_in_set, OverflowMode::THROW);
+        SetPtr set = std::make_shared<Set>(limites, true, context->getSettingsRef().transform_null_in);
+        set->setHeader(interpreter.getSampleBlock());
+        Block block;
+
+        while (executor.pull(block))
+        {
+            if (block.rows() == 0)
+                continue;
+            set->insertFromBlock(block);
+        }
+
+        set->finishInsert();
+        executed_in_subqueries.emplace(hash_str, set);
+    }
+
+    return executed_in_subqueries.at(hash_str);
 }
 }
