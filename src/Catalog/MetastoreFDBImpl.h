@@ -18,6 +18,7 @@
 #include <Catalog/IMetastore.h>
 #include <Catalog/FDBClient.h>
 #include <Common/Exception.h>
+#include <common/defines.h>
 
 namespace DB
 {
