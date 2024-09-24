@@ -37,12 +37,20 @@ namespace DB
 {
 
 NameSet PushPartialAggThroughExchange::BLOCK_AGGS{
-    "pathCount",
-    "attributionAnalysis",
-    "attributionCorrelationFuse",
+    "pathcount",
+    "attributionanalysis",
+    "attributioncorrelationfuse",
     "attribution",
-    "attributionCorrelation",
-};
+    "attributioncorrelation",
+    "bitmapjoinandcard",
+    "bitmapjoinandcard2",
+    "bitmapjoin",
+    "bitmapcount",
+    "bitmapextract",
+    "bitmapmulticount",
+    "bitmapmulticountwithdate",
+    "bitmapmaxlevel",
+    "bitmapcolumndiff"};
 
 static std::pair<bool, bool> canPushPartialWithHint(const AggregatingStep * step)
 {
@@ -201,13 +209,7 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
 
     for (const auto & agg : step->getAggregates())
     {
-        if (BLOCK_AGGS.count(agg.function->getName()))
-        {
-            return {};
-        }
-
-        // fixme: remove bitmap* if correctness problem fixed
-        if (Poco::toLower(agg.function->getName()).starts_with("bitmap"))
+        if (BLOCK_AGGS.count(Poco::toLower(agg.function->getName())))
         {
             return {};
         }

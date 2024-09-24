@@ -1,0 +1,19 @@
+Projection
+│     Expressions: BitMapColumnCardinality(bm):=`expr#BitMapColumnCardinality(bm)`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#BitMapColumnCardinality(bm):=AggNull(bitmapColumnCardinality)(bm)
+         └─ TableScan default.t40106
+                  Outputs: [bm]
+Projection
+│     Expressions: BitMapCount(\'1\')(toInt64(1), bm):=`expr#BitMapCount(\'1\')(toInt64(1), bm)`
+└─ Aggregating
+   │     Group by: {}
+   │     Aggregates: expr#BitMapCount(\'1\')(toInt64(1), bm):=AggNull(bitmapCount)(expr#toInt64(1),bm)
+   └─ Gather Exchange
+      └─ Projection
+         │     Expressions: [bm], expr#toInt64(1):=cast(1, \'Int64\')
+         └─ TableScan default.t40106
+                  Outputs: [bm]
