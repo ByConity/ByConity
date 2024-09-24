@@ -14,7 +14,11 @@
  */
 
 #include "MergeTreeDataPartCNCH.h"
+#include <memory>
+#include <unordered_map>
 
+#include <common/types.h>
+#include <Common/tests/gtest_global_context.h>
 #include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/Priority.h>
@@ -42,7 +46,9 @@
 #include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
-#include "Storages/MergeTree/IMergeTreeDataPart_fwd.h"
+#include <Storages/DiskCache/IDiskCacheSegment.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/DiskCache/BitmapIndexDiskCacheSegment.h>
 
 
 namespace ProfileEvents
@@ -342,8 +348,7 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes(
 
 void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
 {
-    const bool enable_disk_cache = storage.getSettings()->enable_local_disk_cache;
-    if (parent_part && enable_disk_cache)
+    if (parent_part && enableDiskCache())
     {
         try
         {
@@ -379,7 +384,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
         fillProjectionNamesFromChecksums(checksums_ptr->files["checksums.txt"]);
 
     /// we only cache meta data info for projection part, because projection part is constructed in worker's side
-    if (parent_part && enable_disk_cache)
+    if (parent_part && enableDiskCache())
     {
         auto segment = std::make_shared<MetaInfoDiskCacheSegment>(shared_from_this());
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
@@ -1250,7 +1255,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
 
             IMergeTreeDataPartPtr source_data_part
                 = isProjectionPart() ? shared_from_this() : getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
-            auto seg = cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
+            auto segs = cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
                 all_mark_ranges,
                 source_data_part,
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(mark_file_name), getFileSizeOrZero(mark_file_name)},
@@ -1261,7 +1266,11 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
                 DATA_FILE_EXTENSION,
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(data_file_name), getFileSizeOrZero(data_file_name)},
                 preload_level);
-            segments.insert(segments.end(), std::make_move_iterator(seg.begin()), std::make_move_iterator(seg.end()));
+
+            for (auto & seg : segs)
+            {
+                segments.emplace_back(seg);
+            }
         };
 
         auto serialization = getSerializationForColumn(real_column);
@@ -1299,9 +1308,105 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
     {
         segments.emplace_back(std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this(), preload_level));
         segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this(), preload_level));
+        segments.emplace_back(std::make_shared<MetaInfoDiskCacheSegment>(shared_from_this(), preload_level));
+        // add skip_index segment
+        if (storage.getContext()->getSettingsRef().enable_skip_index)
+        {
+            for (const auto & index : storage.getInMemoryMetadataPtr()->getSecondaryIndices())
+            {
+                auto index_helper = MergeTreeIndexFactory::instance().get(index);
+                auto index_name = index_helper->getFileName();
+
+                auto mvcc_full_path = fs::path(getMvccDataPart(index_name + INDEX_FILE_EXTENSION)->getFullRelativePath()) / DATA_FILE;
+
+                // preload additional inverted index
+                if (index_helper->isInvertedIndex())
+                {
+                    ChecksumsPtr checksums = getChecksums();
+                    std::vector<String> file_names
+                        = {index_name + GIN_SEGMENT_ID_FILE_EXTENSION,
+                           index_name + GIN_SEGMENT_METADATA_FILE_EXTENSION,
+                           index_name + GIN_DICTIONARY_FILE_EXTENSION,
+                           index_name + GIN_POSTINGS_FILE_EXTENSION};
+                    for (auto & file_name : file_names)
+                    {
+                        auto file_iter = checksums->files.find(file_name);
+                        if (file_iter == checksums->files.end())
+                        {
+                            LOG_WARNING(
+                                storage.log,
+                                "Gin index file {} is not in part {} checksums when preload level: {}",
+                                file_name,
+                                full_path + DATA_FILE,
+                                preload_level);
+                            continue;
+                        }
+
+                        size_t offset = file_iter->second.file_offset;
+                        size_t size = file_iter->second.file_size;
+
+                        std::pair<size_t, size_t> data_range = {offset, offset + size};
+                        segments.emplace_back(std::make_shared<FileDiskCacheSegment>(volume->getDisk(), mvcc_full_path, ReadSettings{}, data_range, SegmentType::GIN_INDEX, file_name));
+                    }
+                }
+
+                // preload common secondary index
+                {
+                    MergeTreeDataPartPtr source_data_part = getMvccDataPart(index_name + INDEX_FILE_EXTENSION);
+                    String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(index_name);
+
+                    off_t data_file_offset = source_data_part->getFileOffsetOrZero(index_name + INDEX_FILE_EXTENSION);
+                    size_t data_file_size = source_data_part->getFileSizeOrZero(index_name + INDEX_FILE_EXTENSION);
+
+                    off_t mark_file_offset = source_data_part->getFileOffsetOrZero(mark_file_name);
+                    size_t mark_file_size = source_data_part->getFileSizeOrZero(mark_file_name);
+
+                    IDiskCacheSegmentsVector segs = cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
+                            all_mark_ranges,
+                            source_data_part,
+                            PartFileDiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
+                            getMarksCount(),
+                            mark_cache_holder.get(),
+                            disk_cache->getMetaCache().get(),
+                            index_name,
+                            INDEX_FILE_EXTENSION,
+                            PartFileDiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size},
+                            preload_level);
+
+                    for (const auto & seg : segs)
+                    {
+                        segments.emplace_back(seg);
+                    }
+                }
+            }
+        }
+
+        for (const NameAndTypePair & column : *columns_ptr)
+        {
+            if (column.type->isBitmapIndex())
+            {
+                MergeTreeDataPartPtr source_data_part;
+                auto file_column_name = escapeForFileName(column.name);
+                auto idx_pos = FileOffsetAndSize{
+                    getFileOffsetOrZero(file_column_name + BITMAP_IDX_EXTENSION),
+                    getFileSizeOrZero(file_column_name + BITMAP_IDX_EXTENSION)};
+                auto irk_pos = FileOffsetAndSize{
+                    getFileOffsetOrZero(file_column_name + BITMAP_IRK_EXTENSION),
+                    getFileSizeOrZero(file_column_name + BITMAP_IRK_EXTENSION)};
+
+                if ((idx_pos.file_offset != 0 && idx_pos.file_size != 0) && (irk_pos.file_offset != 0 && irk_pos.file_size != 0))
+                    source_data_part = getMvccDataPart(file_column_name + BITMAP_IDX_EXTENSION);
+                else
+                    source_data_part = shared_from_this();
+                std::shared_ptr<BitmapIndexDiskCacheSegment> seg
+                    = std::make_shared<BitmapIndexDiskCacheSegment>(source_data_part, column.name, BITMAP_IDX_EXTENSION);
+                segments.emplace_back(seg);
+            }
+        }
     }
 
     String last_exception{};
+    std::unordered_map<String, UInt64> segments_map;
     int real_cache_segments_count = 0;
 
     auto meta_disk_cache = disk_cache->getMetaCache();
@@ -1312,13 +1417,30 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
         {
             String mark_key = segment->getMarkName();
             String seg_key = segment->getSegmentName();
-            if (!mark_key.empty()) // means this is PartFileDiskCacheSegment
+            SegmentType seg_type = segment->getSegmentType();
+            if (seg_type > SegmentType::FILE_DATA)
+            {
+                if (!mark_key.empty() && meta_disk_cache->get(mark_key).second.empty())
+                {
+                    segment->cacheToDisk(*meta_disk_cache);
+                    segments_map[SegmentTypeToString[seg_type]]++;
+                    real_cache_segments_count++;
+                }
+                else if (meta_disk_cache->get(seg_key).second.empty())
+                {
+                    segment->cacheToDisk(*meta_disk_cache);
+                    segments_map[SegmentTypeToString[seg_type]]++;
+                    real_cache_segments_count++;
+                }
+            }
+            else
             {
                 if (preload_level == PreloadLevelSettings::MetaPreload)
                 {
                     if (meta_disk_cache->get(mark_key).second.empty())
                     {
                         segment->cacheToDisk(*meta_disk_cache);
+                        segments_map[SegmentTypeToString[seg_type]]++;
                         real_cache_segments_count++;
                     }
                 }
@@ -1327,24 +1449,18 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
                     if (data_disk_cache->get(seg_key).second.empty())
                     {
                         segment->cacheToDisk(*data_disk_cache);
+                        segments_map[SegmentTypeToString[seg_type]]++;
                         real_cache_segments_count++;
                     }
                 }
                 else
                 {
-                    if (data_disk_cache->get(seg_key).second.empty() || meta_disk_cache->get(mark_key).second.empty())
+                    if (meta_disk_cache->get(seg_key).second.empty() || meta_disk_cache->get(mark_key).second.empty())
                     {
                         segment->cacheToDisk(*disk_cache);
+                        segments_map[SegmentTypeToString[seg_type]]++;
                         real_cache_segments_count++;
                     }
-                }
-            }
-            else // means this is ChecksumsDiskCacheSegment or PrimaryIndexDiskCacheSegment
-            {
-                if (meta_disk_cache->get(seg_key).second.empty())
-                {
-                    segment->cacheToDisk(*meta_disk_cache);
-                    real_cache_segments_count++;
                 }
             }
         }
@@ -1357,11 +1473,11 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
 
     auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName());
     part_log->add(PartLog::createElement(
-        PartLogElement::PRELOAD_PART, shared_from_this(), watch.elapsedNanoseconds(), last_exception, submit_ts, real_cache_segments_count, preload_level));
+        PartLogElement::PRELOAD_PART, shared_from_this(), watch.elapsedNanoseconds(), last_exception, submit_ts, real_cache_segments_count, segments_map, preload_level));
 
     LOG_TRACE(
         storage.log,
-        "Preloaded part: {}, marks_count: {}, segments_count: {}, cached_count: {}, time_ns: {}",
+        "Preloaded part: {}, marks_count: {}, total_segments: {}, cached_count: {}, time_ns: {}",
         name,
         getMarksCount(),
         segments.size(),

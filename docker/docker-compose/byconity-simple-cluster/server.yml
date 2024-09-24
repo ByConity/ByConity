@@ -1,11 +1,15 @@
 logger:
-  level: debug
+  level: trace
   log: /var/log/byconity/out.log
   errorlog: /var/log/byconity/err.log
   testlog: /var/log/byconity/test.log
   size: 1000M
   count: 10
   console: true
+additional_services:
+  GIS: 1
+  VectorSearch: 1
+  FullTextSearch: 1
 http_port: 21557
 rpc_port: 30605
 tcp_port: 52145
