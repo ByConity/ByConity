@@ -2008,6 +2008,10 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
     }
 
     // verify no reference to non grouping fields after aggregate
+    if (!context->getSettingsRef().only_full_group_by)
+        return;
+
+    // verify no reference to non grouping fields after aggregate
     PostAggregateAnalyzerExpressionVisitor post_agg_visitor{context, analysis, source_scope, grouping_field_indices};
     PostAggregateExpressionTraverser post_agg_traverser{post_agg_visitor, {}, analysis, context, grouping_expressions};
 
