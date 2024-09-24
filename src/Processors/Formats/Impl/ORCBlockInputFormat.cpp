@@ -210,7 +210,7 @@ void registerInputFormatProcessorORC(FormatFactory &factory)
            bool /*is_remote_fs*/,
            size_t max_download_threads,
            size_t max_parsing_threads,
-           ThreadPoolPtr parsing_thread_pool) -> InputFormatPtr {
+           SharedParsingThreadPoolPtr parsing_thread_pool) -> InputFormatPtr {
             if (settings.orc.use_fast_decoder >= 1)
                 return std::make_shared<LMNativeORCBlockInputFormat>(
                     buf, sample, settings, max_download_threads, max_parsing_threads, parsing_thread_pool);

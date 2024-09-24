@@ -1,13 +1,15 @@
 #pragma once
 
+#include <unordered_map>
 #include "Common/config.h"
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
-#include "Storages/StorageInMemoryMetadata.h"
 #if USE_HIVE
 
-#include "Processors/QueryPipeline.h"
 #include <Processors/Sources/SourceWithProgress.h>
+#include "Formats/SharedParsingThreadPool.h"
+#include "Processors/QueryPipeline.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
+#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include "Storages/StorageInMemoryMetadata.h"
 
 namespace DB
 {
@@ -20,15 +22,13 @@ public:
     struct BlockInfo
     {
         BlockInfo() = delete;
-        BlockInfo(const Block & header_, bool need_path_column_, bool need_file_column_, const StorageMetadataPtr & metadata);
+        BlockInfo(const Block & header_, const StorageMetadataPtr & metadata_);
         Block getHeader() const;
 
-        Block header;   /// phsical columns + partition columns
-        Block to_read;  /// phsical columns
-        bool need_path_column = false;
-        bool need_file_column = false;
+        Block header;           /// physical columns + partition columns
+        Block physical_header;  /// physical columns
 
-        KeyDescription partition_description;
+        StorageMetadataPtr metadata;
         std::unordered_map<String, size_t> partition_name_to_index;
         bool all_partition_column = false; /// whether only partition columns present
     };
@@ -48,11 +48,19 @@ public:
 
     using AllocatorPtr = std::shared_ptr<Allocator>;
 
-    StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, AllocatorPtr allocator_, const std::shared_ptr<SelectQueryInfo> & query_info_);
+    StorageHiveSource(
+        ContextPtr context_,
+        size_t max_block_size,
+        BlockInfoPtr info_,
+        AllocatorPtr allocator_,
+        const std::shared_ptr<SelectQueryInfo> & query_info_,
+        const SharedParsingThreadPoolPtr & shared_pool_);
+
     ~StorageHiveSource() override;
 
     Chunk generate() override;
     String getName() const override { return "HiveSource"; }
+    void onFinish() override { shared_pool->finishStream(); }
     void prepareReader();
 
 private:
@@ -63,6 +71,7 @@ private:
 
     HiveFilePtr hive_file;
     SourcePtr data_source;
+    SharedParsingThreadPoolPtr shared_pool;
     std::shared_ptr<IHiveFile::ReadParams> read_params;
     std::unique_ptr<QueryPipeline> pipeline;
     std::unique_ptr<PullingPipelineExecutor> reader;

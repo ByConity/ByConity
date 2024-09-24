@@ -35,6 +35,7 @@
 #include "Storages/Hive/HivePartition.h"
 #include "Storages/Hive/HiveSchemaConverter.h"
 #include "Storages/Hive/HiveWhereOptimizer.h"
+#include "Storages/Hive/HiveVirtualColumns.h"
 #include "Storages/Hive/Metastore/HiveMetastore.h"
 #include "Storages/Hive/StorageHiveSource.h"
 #include "Storages/MergeTree/MergeTreeWhereOptimizer.h"
@@ -438,7 +439,7 @@ ASTPtr StorageCnchHive::applyFilter(
 
 NamesAndTypesList StorageCnchHive::getVirtuals() const
 {
-    return NamesAndTypesList{{"_path", std::make_shared<DataTypeString>()}, {"_file", std::make_shared<DataTypeString>()}};
+    return getHiveVirtuals();
 }
 
 static void filterPartitions(const ASTPtr & partition_filter, const StorageMetadataPtr & storage_metadata, ContextPtr local_context, HivePartitions & hive_partitions)

@@ -150,9 +150,8 @@ Status OrcScanner::init()
 Status OrcScanner::prepareFileReader()
 {
     // prepare file reader.
-    std::atomic<int> is_stopped;
-    auto arrow_file
-        = asArrowFile(*scan_params.in, scan_params.format_settings, is_stopped, "ORC", ORC_MAGIC_BYTES, /* avoid_buffering */ true);
+    std::atomic_int stopped = false;
+    auto arrow_file = asArrowFile(*scan_params.in, scan_params.format_settings, stopped, "ORC", ORC_MAGIC_BYTES, /* avoid_buffering */ true);
     orc::ReaderOptions options;
     if (scan_params.orc_tail)
     {

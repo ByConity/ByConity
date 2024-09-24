@@ -3,12 +3,9 @@
 #endif
 
 #include "ArrowBufferedStreams.h"
-#include <optional>
-#include "Common/threadPoolCallbackRunner.h"
 
 #if USE_ARROW || USE_ORC || USE_PARQUET
-
-#include <Formats/FormatSettings.h>
+#include <Common/assert_cast.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromString.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
@@ -16,10 +13,12 @@
 
 #include <arrow/util/future.h>
 #include <arrow/buffer.h>
-#include <arrow/io/api.h>
+#include <arrow/util/future.h>
+#include <arrow/io/memory.h>
 #include <arrow/result.h>
 #include <arrow/memory_pool_internal.h>
-#include <arrow/util/future.h>
+#include <Core/Settings.h>
+
 #include <sys/stat.h>
 
 
@@ -252,8 +251,9 @@ arrow::Status ArrowMemoryPool::Reallocate(int64_t old_size, int64_t new_size, in
 
     try
     {
-        void * p = Allocator<false>().realloc(*ptr, size_t(old_size), size_t(new_size), size_t(alignment));
-        *ptr = reinterpret_cast<uint8_t*>(p);
+        void * p = Allocator<false>().realloc(
+            *ptr, static_cast<size_t>(old_size), static_cast<size_t>(new_size), static_cast<size_t>(alignment));
+        *ptr = reinterpret_cast<uint8_t *>(p);
     }
     catch (...)
     {
@@ -271,7 +271,7 @@ void ArrowMemoryPool::Free(uint8_t * buffer, int64_t size, int64_t /*alignment*/
         return;
     }
 
-    Allocator<false>().free(buffer, size_t(size));
+    Allocator<false>().free(buffer, static_cast<size_t>(size));
 }
 
 std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(

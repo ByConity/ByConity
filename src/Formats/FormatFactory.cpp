@@ -328,7 +328,7 @@ InputFormatPtr FormatFactory::getInputFormat(
     std::optional<size_t> _max_parsing_threads,
     std::optional<size_t> _max_download_threads,
     bool is_remote_fs,
-    ThreadPoolPtr parsing_thread_pool) const
+    SharedParsingThreadPoolPtr parsing_thread_pool) const
 {
     const auto& creators = getCreators(name);
     if (!creators.input_processor_creator && !creators.random_access_input_creator)

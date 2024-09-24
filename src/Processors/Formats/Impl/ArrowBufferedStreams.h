@@ -10,7 +10,7 @@
 #include "Common/ThreadPoolTaskTracker.h"
 
 #define ORC_MAGIC_BYTES "ORC"
-#define PARQUET_MAGIC_BYTES "PAR1"
+#define PARQUET_MAGIC_BYTES "PAR"
 #define ARROW_MAGIC_BYTES "ARROW1"
 
 #include <optional>
