@@ -6,13 +6,23 @@ namespace DB::HybridCache
 {
 enum class EngineTag : UInt32
 {
-    MarkCache = 0,
-    UncompressedCache,
-    ChecksumCache,
-    PrimaryIndexCache,
+    UncompressedCache = 0,
     // keep count at last
     COUNT,
 };
+
+inline StringRef getEngineTagName(EngineTag t)
+{
+    switch (t)
+    {
+        case EngineTag::UncompressedCache:
+            return "uncompressed_cache";
+        default:
+            return "invalid";
+    }
+    chassert(false);
+    return "invalid";
+}
 
 enum class Status
 {
@@ -52,7 +62,6 @@ using ExpiredCheck = std::function<bool(BufferView value)>;
 enum class IoEngine : uint8_t
 {
     IoUring,
-    LibAio,
     Sync
 };
 
@@ -62,8 +71,6 @@ inline StringRef getIoEngineName(IoEngine e)
     {
         case IoEngine::IoUring:
             return "io_uring";
-        case IoEngine::LibAio:
-            return "libaio";
         case IoEngine::Sync:
             return "sync";
     }

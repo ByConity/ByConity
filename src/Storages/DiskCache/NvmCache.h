@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include <folly/container/F14Map.h>
 #include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/AbstractCache.h>
@@ -142,7 +143,7 @@ private:
             it->second->invalidate();
     }
 
-    using FillMap = std::unordered_map<StringRef, std::unique_ptr<GetCtx>>;
+    using FillMap = folly::F14ValueMap<StringRef, std::unique_ptr<GetCtx>>;
 
     static size_t getShardForKey(HybridCache::HashedKey key) { return key.keyHash() % kShards; }
 

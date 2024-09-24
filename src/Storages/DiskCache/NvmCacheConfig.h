@@ -120,11 +120,14 @@ public:
         return *this;
     }
 
-    BlockCacheConfig & setCleanRegions(UInt32 clean_resions_) noexcept
+    BlockCacheConfig & setCleanRegions(UInt32 clean_resions_, UInt32 clean_region_threads_ = 1)
     {
+        if (!clean_region_threads_ || clean_region_threads_ > clean_resions_ + 1)
+            throw Exception(
+                "number of clean region threads should be in the range of [1, {}]", clean_resions_ + 1, ErrorCodes::BAD_ARGUMENTS);
         clean_regions = clean_resions_;
         num_in_mem_buffers = 2 * clean_resions_;
-        clean_region_threads = clean_resions_;
+        clean_region_threads = clean_region_threads_;
         return *this;
     }
 
@@ -298,6 +301,9 @@ public:
     unsigned int getReaderThreads() const { return reader_threads; }
     unsigned int getWriterThreads() const { return writer_threads; }
     UInt64 getReqOrderingShards() const { return req_ordering_shards; }
+    unsigned int getMaxNumReads() const { return max_num_reads; }
+    unsigned int getMaxNumWrites() const { return max_num_writes; }
+    unsigned int getStackSize() const { return stack_size; }
 
     UInt32 getMaxConcurrentInserts() const { return max_concurrent_inserts; }
     UInt64 getMaxParcelMemoryMB() const { return max_parcel_memory_mb; }
@@ -325,11 +331,11 @@ public:
     void setDeviceMetadataSize(UInt64 device_metadata_size_) noexcept { device_metadata_size = device_metadata_size_; }
     void setDeviceMaxWriteSize(UInt32 device_max_write_size_) noexcept { device_max_write_size = device_max_write_size_; }
 
-    void enableAsyncIo(unsigned int q_depth_, bool enable_io_uring)
+    void enableAsyncIo(unsigned int q_depth_)
     {
         if (q_depth_ == 0)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "qdepth {} should be >=1 to use async IO", q_depth_);
-        io_engine = enable_io_uring ? HybridCache::IoEngine::IoUring : HybridCache::IoEngine::LibAio;
+        io_engine = HybridCache::IoEngine::IoUring;
         q_depth = q_depth_;
     }
 
@@ -340,10 +346,44 @@ public:
     void addEnginePair(EnginesConfig config) { engines_configs.push_back(std::move(config)); }
     void setEnginesSelector(EnginesSelector selector_) { selector = std::move(selector_); }
 
-    void setReaderAndWriterThreads(unsigned int reader_threads_, unsigned int writer_threads_) noexcept
+    void setReaderAndWriterThreads(
+        unsigned int reader_threads_,
+        unsigned int writer_threads_,
+        unsigned int max_num_reads_ = 0,
+        unsigned int max_num_writes_ = 0,
+        unsigned int stack_size_kb_ = 0)
     {
         reader_threads = reader_threads_;
         writer_threads = writer_threads_;
+        max_num_reads = max_num_reads_;
+        max_num_writes = max_num_writes_;
+        if (stack_size_kb_ >= 1024)
+            throw Exception("Maximum fiber stack size for each thread should be less than 1024 KB", ErrorCodes::BAD_ARGUMENTS);
+        stack_size = stack_size_kb_ * KiB;
+
+        if ((max_num_reads > 0 && max_num_writes == 0) || (max_num_reads == 0 && max_num_writes > 0))
+            throw Exception("maxNumReads and maxNumWrites should be both 0 or both >0", ErrorCodes::BAD_ARGUMENTS);
+
+
+        if (max_num_reads > 0 || max_num_writes > 0)
+            if ((max_num_reads % reader_threads) || (max_num_writes % writer_threads))
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "reader threads ({}) and writer threads ({}) should divide evenly into maxNumReads ({}) or maxNumWrites ({})",
+                    reader_threads,
+                    writer_threads,
+                    max_num_reads,
+                    max_num_writes);
+
+        if (!q_depth)
+        {
+            q_depth = std::max(max_num_reads / reader_threads, max_num_writes / writer_threads);
+            if (q_depth > 0)
+            {
+                chassert(io_engine == HybridCache::IoEngine::Sync);
+                io_engine = HybridCache::IoEngine::IoUring;
+            }
+        }
     }
     void setReqOrderingShards(UInt64 req_ordering_shards_)
     {
@@ -389,9 +429,12 @@ private:
     EnginesSelector selector{};
 
     // ============= Job Scheduler settings ==============
-    unsigned int reader_threads{32};
-    unsigned int writer_threads{32};
+    unsigned int reader_threads{4};
+    unsigned int writer_threads{4};
     UInt64 req_ordering_shards{20};
+    unsigned int max_num_reads{64};
+    unsigned int max_num_writes{32};
+    unsigned int stack_size{64 * KiB};
 
     // ================= Use settings ====================
     UInt32 max_concurrent_inserts{1'000'000};

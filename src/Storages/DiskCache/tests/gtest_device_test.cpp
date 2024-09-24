@@ -203,7 +203,7 @@ TEST_P(DeviceParamTest, RAID0IOAlignment)
     }
 
     size = 2 * 1024 * 1024 + stripe_size / fvec.size();
-    ASSERT_THROW(createFileDevice(std::move(fvec), size, io_align_size, stripe_size, 0), DB::ErrnoException);
+    ASSERT_THROW(createFileDevice(std::move(fvec), size, io_align_size, stripe_size, 0), DB::Exception);
 }
 
 INSTANTIATE_TEST_SUITE_P(DeviceParamTestSuite_Sync, DeviceParamTest, testing::Values(std::make_tuple(IoEngine::Sync, 0)));

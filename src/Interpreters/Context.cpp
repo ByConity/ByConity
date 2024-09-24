@@ -2928,10 +2928,7 @@ void Context::setNvmCache(const Poco::Util::AbstractConfiguration &config)
     std::shared_ptr<HybridCache::AbstractCache> cache_ptr = std::move(cache);
 
     shared->nvm_cache = std::static_pointer_cast<NvmCache>(cache_ptr);
-    shared->mark_cache->setNvmCache(shared->nvm_cache);
     shared->uncompressed_cache->setNvmCache(shared->nvm_cache);
-    shared->checksums_cache->setNvmCache(shared->nvm_cache);
-    shared->primary_index_cache->setNvmCache(shared->nvm_cache);
 }
 
 NvmCachePtr Context::getNvmCache() const

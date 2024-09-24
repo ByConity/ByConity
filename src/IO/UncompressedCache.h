@@ -177,6 +177,8 @@ private:
         {
             auto hash_key = HybridCache::makeHashKey(&key, sizeof(Key));
             auto token = nvm_cache->createPutToken(hash_key.key());
+            if (!token.isValid())
+                return;
             nvm_cache->put(hash_key, std::move(value), std::move(token), [](void * obj) {
                 auto * ptr = reinterpret_cast<Mapped *>(obj);
                 memcpy(ptr->data.data() + ptr->data.size(), &ptr->compressed_size, sizeof(ptr->compressed_size));
