@@ -79,21 +79,23 @@ BlockCache::Config & BlockCache::Config::validate()
 {
     chassert(scheduler != nullptr);
     if (!device || !eviction_policy)
-        throwFromErrno("missing required param", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("missing required param", ErrorCodes::INVALID_CONFIG_PARAMETER);
     if (region_size > 256u << 20)
-        throwFromErrno("region is too large", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("region is too large", ErrorCodes::INVALID_CONFIG_PARAMETER);
     if (cache_size <= 0)
-        throwFromErrno("invalid size", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("invalid size", ErrorCodes::INVALID_CONFIG_PARAMETER);
     if (cache_size % region_size != 0)
-        throwFromErrno(
-            fmt::format("Cache size is not aligned to region size! cache size: {} region size: {]}", cache_size, region_size),
-            ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception(
+            ErrorCodes::INVALID_CONFIG_PARAMETER,
+            "Cache size is not aligned to region size! cache size: {} region size: {]}",
+            cache_size,
+            region_size);
     if (getNumberRegions() < clean_regions_pool)
-        throwFromErrno("not enough space on device", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("not enough space on device", ErrorCodes::INVALID_CONFIG_PARAMETER);
     if (num_in_mem_buffers == 0)
-        throwFromErrno("there must be at least one in-mem buffers", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("there must be at least one in-mem buffers", ErrorCodes::INVALID_CONFIG_PARAMETER);
     if (num_priorities == 0)
-        throwFromErrno("allocator must have at least one priority", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("allocator must have at least one priority", ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     reinsertion_config.validate();
 
@@ -104,9 +106,9 @@ void BlockCache::validate(BlockCache::Config & config) const
 {
     UInt32 align_size = calcAllocAlignSize();
     if (!isPowerOf2(align_size))
-        throwFromErrno("invalid block size", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("invalid block size", ErrorCodes::INVALID_CONFIG_PARAMETER);
     if (config.region_size % align_size != 0)
-        throwFromErrno("invalid region size", ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("invalid region size", ErrorCodes::INVALID_CONFIG_PARAMETER);
     auto shift_width = NumBits<decltype(RelAddress().offset())>::value;
     if (config.cache_size > static_cast<UInt64>(align_size) << shift_width)
         throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "can't address cache with {} bits", static_cast<UInt32>(shift_width));

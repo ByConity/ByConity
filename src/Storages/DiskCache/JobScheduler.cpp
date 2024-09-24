@@ -203,7 +203,7 @@ createOrderedThreadPoolJobScheduler(UInt32 reader_threads, UInt32 writer_threads
     return std::make_unique<OrderedThreadPoolJobScheduler>(reader_threads, writer_threads, req_order_shard_power);
 }
 
-std::unique_ptr<JobScheduler> createNavyRequestScheduler(
+std::unique_ptr<JobScheduler> createFiberRequestScheduler(
     size_t reader_threads,
     size_t writer_threads,
     size_t max_concurrent_reads,

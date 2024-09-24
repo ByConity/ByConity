@@ -185,11 +185,8 @@ TEST(NvmCacheConfigTest, Device)
         NvmCacheConfig config{};
         EXPECT_EQ(config.getIoEngine(), HybridCache::IoEngine::Sync);
         EXPECT_EQ(config.getQDepth(), 0);
-        EXPECT_THROW(config.enableAsyncIo(0, false), Exception);
-        EXPECT_THROW(config.enableAsyncIo(0, true), Exception);
-        config.enableAsyncIo(1, false);
-        EXPECT_EQ(config.getIoEngine(), HybridCache::IoEngine::LibAio);
-        config.enableAsyncIo(64, true);
+        EXPECT_THROW(config.enableAsyncIo(0), Exception);
+        config.enableAsyncIo(64);
         EXPECT_EQ(config.getIoEngine(), HybridCache::IoEngine::IoUring);
         EXPECT_EQ(config.getQDepth(), 64);
     }

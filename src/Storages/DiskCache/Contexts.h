@@ -9,6 +9,9 @@
 #include <utility>
 #include <stdint.h>
 
+#include <folly/container/F14Map.h>
+#include <folly/fibers/TimedMutex.h>
+
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/InFlightPuts.h>
 #include <Common/Exception.h>
@@ -37,6 +40,8 @@ private:
     std::string key;
 };
 
+using folly::fibers::TimedMutex;
+
 class alignas(hardware_destructive_interference_size) TombStones
 {
 public:
@@ -44,7 +49,7 @@ public:
 
     Guard add(StringRef key)
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         auto it = keys.find(key.toString());
 
         if (it == keys.end())
@@ -56,7 +61,7 @@ public:
 
     bool isPresent(StringRef key)
     {
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         return keys.count(key.toString()) != 0;
     }
 
@@ -101,7 +106,7 @@ public:
 private:
     void remove(StringRef key)
     {
-        std::lock_guard guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         auto it = keys.find(key.toString());
         if (it == keys.end() || it->second == 0)
             throw Exception(
@@ -113,8 +118,8 @@ private:
         if (--(it->second) == 0)
             keys.erase(it);
     }
-    std::mutex mutex;
-    std::unordered_map<std::string, UInt64> keys;
+    TimedMutex mutex;
+    folly::F14NodeMap<std::string, UInt64> keys;
 };
 
 class DelCtx
@@ -139,7 +144,7 @@ public:
     {
         auto ctx = std::make_unique<T>(key, std::forward<Args>(args)...);
         uintptr_t ctx_key = reinterpret_cast<uintptr_t>(ctx.get());
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         auto it = map.find(ctx_key);
         if (it != map.end())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Duplicate {} for key {}", T::type(), key);
@@ -151,22 +156,22 @@ public:
 
     bool hasContexts() const
     {
-        std::lock_guard guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         return map.size() != 0;
     }
 
     void destroyContext(const T & ctx)
     {
         uintptr_t ctx_key = reinterpret_cast<uintptr_t>(&ctx);
-        std::lock_guard<std::mutex> guard{mutex};
+        std::lock_guard<TimedMutex> guard{mutex};
         size_t num_removed = map.erase(ctx_key);
         if (num_removed != 1)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid {} state for {}, found {}", T::type(), ctx.getKey(), num_removed);
     }
 
 private:
-    std::unordered_map<uintptr_t, std::unique_ptr<T>> map;
-    mutable std::mutex mutex;
+    folly::F14FastMap<uintptr_t, std::unique_ptr<T>> map;
+    mutable TimedMutex mutex;
 };
 
 using PutContexts = ContextMap<PutCtx>;

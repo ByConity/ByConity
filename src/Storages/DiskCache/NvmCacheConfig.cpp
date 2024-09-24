@@ -23,6 +23,12 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    const extern int CANNOT_FSTAT;
+    const extern int CANNOT_TRUNCATE_FILE;
+}
+
 using namespace HybridCache;
 
 namespace
@@ -44,9 +50,15 @@ namespace
         return region_size;
     }
 
-    UInt64 alignDown(UInt64 num, UInt64 alignment) { return num - num % alignment; }
+    UInt64 alignDown(UInt64 num, UInt64 alignment)
+    {
+        return num - num % alignment;
+    }
 
-    UInt64 alignUp(UInt64 num, UInt64 alignment) { return alignDown(num + alignment - 1, alignment); }
+    UInt64 alignUp(UInt64 num, UInt64 alignment)
+    {
+        return alignDown(num + alignment - 1, alignment);
+    }
 
     File openCacheFile(const std::string & file_name, UInt64 size, bool truncate)
     {
@@ -62,9 +74,9 @@ namespace
         {
             f = File(file_name.c_str(), flags | O_DIRECT);
         }
-        catch (const std::system_error & e)
+        catch (const ErrnoException & e)
         {
-            if (e.code().value() == EINVAL)
+            if (e.getErrno() == EINVAL)
             {
                 LOG_ERROR(&Poco::Logger::get("NvmCacheConfig"), "failed to open with o_direct, error: {}", e.what());
                 f = File(file_name.c_str(), flags);
@@ -76,17 +88,16 @@ namespace
 
         struct stat file_stat;
         if (fstat(f.getFd(), &file_stat) < 0)
-            throw std::system_error(errno, std::system_category(), fmt::format("failed to get the file stat for file {}", file_name));
+            throwFromErrno(fmt::format("failed to get the file stat for file {}", file_name), ErrorCodes::CANNOT_FSTAT);
 
         UInt64 cur_file_size = file_stat.st_size;
 
         if (truncate && cur_file_size < size)
         {
             if (::ftruncate(f.getFd(), size) < 0)
-                throw std::system_error(
-                    errno,
-                    std::system_category(),
-                    fmt::format("ftruncate failed with requested size {}, current size {}", size, cur_file_size));
+                throwFromErrno(
+                    fmt::format("ftruncate failed with requested size {}, current size {}", size, cur_file_size),
+                    ErrorCodes::CANNOT_TRUNCATE_FILE);
 
             LOG_INFO(
                 &Poco::Logger::get("NvmCacheConfig"),
@@ -118,7 +129,7 @@ namespace
             {
                 f = openCacheFile(path, file_size, truncate_file);
             }
-            catch (const std::exception & e)
+            catch (const ErrnoException & e)
             {
                 LOG_ERROR(
                     &Poco::Logger::get("NvmCacheConfig"), "Exception in openCacheFile {}, error: {} errno: {}", path, e.what(), errno);
@@ -135,7 +146,12 @@ namespace
         auto reader_threads = config.getReaderThreads();
         auto writer_threads = config.getWriterThreads();
         auto req_ordering_shards = config.getReqOrderingShards();
-        return createOrderedThreadPoolJobScheduler(reader_threads, writer_threads, req_ordering_shards);
+        auto max_num_reads = config.getMaxNumReads();
+        auto max_num_writes = config.getMaxNumWrites();
+        auto stack_size = config.getStackSize();
+        if (max_num_reads == 0 && max_num_writes == 0)
+            return createOrderedThreadPoolJobScheduler(reader_threads, writer_threads, req_ordering_shards);
+        return createFiberRequestScheduler(reader_threads, writer_threads, max_num_reads, max_num_writes, stack_size, req_ordering_shards);
     }
 
     UInt64 setupBigHash(
@@ -193,7 +209,8 @@ namespace
         if (region_size != alignUp(region_size, io_align_size))
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "region size: {} is not aligned to io_align_size: {}", region_size, io_align_size);
         if (clean_region_threads == 0 || clean_region_threads > clean_regions + 1)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "number of clean region threads should be in the range of [1, {}]", clean_regions + 1);
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS, "number of clean region threads should be in the range of [1, {}]", clean_regions + 1);
 
         if (uses_raid_files)
         {
@@ -386,24 +403,33 @@ void NvmCacheConfig::loadFromConfig(const std::string & config_elem, const Poco:
     policy_name = conf.getString(config_elem + ".policy", "default");
     volume_name = conf.getString(config_elem + ".volume", "local");
 
-    device_metadata_size = conf.getUInt64(config_elem + ".device_metadata_size", 0);
-    file_size = conf.getUInt64(config_elem + ".file_size", 100 * GiB);
-    reader_threads = conf.getUInt(config_elem + ".reader_threads", 32);
-    writer_threads = conf.getUInt(config_elem + ".writer_threads", 32);
-    req_ordering_shards = conf.getUInt64(config_elem + ".req_ordering_shards", 20);
+    device_metadata_size = conf.getUInt64(config_elem + ".device_metadata_size_mb", 0) * MiB;
+    file_size = conf.getUInt64(config_elem + ".file_size", 10 * GiB);
+    q_depth = conf.getUInt(config_elem + ".q_depth", 0);
+    if (q_depth)
+        enableAsyncIo(q_depth);
+
+    setReqOrderingShards(conf.getUInt64(config_elem + ".req_ordering_shards", 20));
+    setReaderAndWriterThreads(
+        conf.getUInt(config_elem + ".reader_threads", 4),
+        conf.getUInt(config_elem + ".writer_threads", 4),
+        conf.getUInt(config_elem + ".max_num_reads", 64),
+        conf.getUInt(config_elem + ".max_num_writes", 32),
+        conf.getUInt(config_elem + ".stack_size_kb", 64));
+
     max_concurrent_inserts = conf.getUInt(config_elem + ".max_concurrent_inserts", 1'000'000);
     max_parcel_memory_mb = conf.getUInt64(config_elem + ".max_parcel_memory_mb", 256);
     UInt32 engines_size = static_cast<UInt32>(EngineTag::COUNT);
     engines_configs.resize(engines_size);
     for (unsigned int i = 0; i < engines_size; ++i)
-        engines_configs[i].loadFromConfig(fmt::format("{}.engines{}", config_elem, i), conf);
+        engines_configs[i].loadFromConfig(fmt::format("{}.{}", config_elem, getEngineTagName(static_cast<EngineTag>(i))), conf);
 }
 
 void EnginesConfig::loadFromConfig(const std::string & config_elem, const Poco::Util::AbstractConfiguration & conf)
 {
     big_hash_config.setSizePctAndMaxItemSize(
         conf.getUInt(config_elem + ".bh_size_pct", 0), conf.getUInt64(config_elem + ".small_item_max_size", 2048));
-    block_cache_config.setSize(conf.getUInt64(config_elem + ".bc_size", 0));
-    block_cache_config.setCleanRegions(conf.getUInt(config_elem + ".bc_regions", 16));
+    block_cache_config.setSize(conf.getUInt64(config_elem + ".bc_size_mb", 0) * MiB);
+    block_cache_config.setCleanRegions(conf.getUInt(config_elem + ".bc_clean_regions", 1));
 }
 }

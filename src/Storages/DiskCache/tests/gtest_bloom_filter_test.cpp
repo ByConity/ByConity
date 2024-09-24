@@ -192,9 +192,9 @@ TEST(BloomFilter, SharedCollision)
 TEST(BloomFilter, InvalidArgs)
 {
     EXPECT_NO_THROW(BloomFilter(2, 2, 3));
-    EXPECT_THROW(BloomFilter(0, 2, 2), DB::ErrnoException);
-    EXPECT_THROW(BloomFilter(2, 0, 2), DB::ErrnoException);
-    EXPECT_THROW(BloomFilter(2, 2, 0), DB::ErrnoException);
+    EXPECT_THROW(BloomFilter(0, 2, 2), DB::Exception);
+    EXPECT_THROW(BloomFilter(2, 0, 2), DB::Exception);
+    EXPECT_THROW(BloomFilter(2, 2, 0), DB::Exception);
 }
 
 TEST(BloomFilter, Clear)
@@ -259,21 +259,21 @@ TEST(BloomFilter, PersistRecoverWithInvalidParams)
             BloomFilter bf(num_filters + 1, num_hash, bits_per_filter);
             google::protobuf::io::IstreamInputStream raw_istream(&ss);
             google::protobuf::io::CodedInputStream istream(&raw_istream);
-            ASSERT_THROW(bf.recover(&istream), ErrnoException);
+            ASSERT_THROW(bf.recover(&istream), Exception);
         }
         {
             make_bloom_filter(&stream);
             BloomFilter bf(num_filters, num_hash + 1, bits_per_filter);
             google::protobuf::io::IstreamInputStream raw_istream(&ss);
             google::protobuf::io::CodedInputStream istream(&raw_istream);
-            ASSERT_THROW(bf.recover(&istream), ErrnoException);
+            ASSERT_THROW(bf.recover(&istream), Exception);
         }
         {
             make_bloom_filter(&stream);
             BloomFilter bf(num_filters, num_hash, bits_per_filter + 8);
             google::protobuf::io::IstreamInputStream raw_istream(&ss);
             google::protobuf::io::CodedInputStream istream(&raw_istream);
-            ASSERT_THROW(bf.recover(&istream), ErrnoException);
+            ASSERT_THROW(bf.recover(&istream), Exception);
         }
     }
 }
