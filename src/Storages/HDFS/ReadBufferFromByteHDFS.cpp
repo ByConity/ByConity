@@ -14,6 +14,7 @@
  */
 
 #include "Storages/HDFS/ReadBufferFromByteHDFS.h"
+#include "metric_helper.h"
 #include <Interpreters/RemoteReadLog.h>
 
 #if USE_HDFS
@@ -206,7 +207,7 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
         file_offset += total_bytes_read;
 
         ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsRead, 1);
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsReadBytes, total_bytes_read);
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsReadBytes, total_bytes_read, Metrics::MetricType::Counter);
         ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMicroseconds, duration_us);
         return total_bytes_read;
     }

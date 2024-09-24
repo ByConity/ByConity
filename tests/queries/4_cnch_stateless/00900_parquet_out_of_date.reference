@@ -1,4 +1,4 @@
-Code: 321. DB::Ex---tion: Input value 2567653 of a column "last_login_time" is out of allowed Date32 range, which is [-25567, 120530]: While executing ParquetBlockInputFormat: data for INSERT was parsed from stdin SQLSTATE: 22003
+Code: 321. DB::Ex---tion: host = 127.0.0.1: Input value 2567653 of a column "last_login_time" is out of allowed Date32 range, which is [-25567, 120530]: While executing ParquetBlockInputFormat: data for INSERT was parsed from stdin SQLSTATE: 22003
 
 3	2299-12-31
 4	1900-01-01

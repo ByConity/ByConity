@@ -232,7 +232,7 @@ bool ReadBufferFromS3::nextImpl()
     }
 
     BufferBase::set(impl->buffer().begin(), impl->buffer().size(), impl->offset());
-    ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadBytes, working_buffer.size());
+    ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadBytes, working_buffer.size(), Metrics::MetricType::Counter);
     if (read_settings.remote_read_log)
     {
         read_settings.remote_read_log->insert(
