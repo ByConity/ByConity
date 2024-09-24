@@ -94,7 +94,9 @@ void ArrowBlockInputFormat::prepareReader()
     }
     else
     {
-        auto file_reader_status = arrow::ipc::RecordBatchFileReader::Open(asArrowFile(in));
+        std::atomic_int stopped = false;
+        auto arrow_file = asArrowFile(in, format_settings, stopped, "Arrow", ARROW_MAGIC_BYTES);
+        auto file_reader_status = arrow::ipc::RecordBatchFileReader::Open(arrow_file);
         if (!file_reader_status.ok())
             throw Exception(ErrorCodes::UNKNOWN_EXCEPTION,
                 "Error while opening a table: {}", file_reader_status.status().ToString());

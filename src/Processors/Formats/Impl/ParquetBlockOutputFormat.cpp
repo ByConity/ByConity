@@ -57,9 +57,11 @@ void ParquetBlockOutputFormat::consume(Chunk chunk)
 #    endif
         auto props = builder.build();
         auto status = parquet::arrow::FileWriter::Open(
-                          *arrow_table->schema(), arrow::default_memory_pool(), sink, props /*parquet::default_writer_properties(),*/
-                          )
-                          .Value(&file_writer);
+            *arrow_table->schema(),
+            ArrowMemoryPool::instance(),
+            sink,
+            props  /*parquet::default_writer_properties(),*/
+            ).Value(&file_writer);
         if (!status.ok())
             throw Exception{"Error while opening a table: " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION};
     }

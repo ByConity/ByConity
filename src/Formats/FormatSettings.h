@@ -164,6 +164,24 @@ struct FormatSettings
         bool try_infer_numbers_from_strings = false;
     } json;
 
+    enum class ParquetVersion
+    {
+        V1_0,
+        V2_4,
+        V2_6,
+        V2_LATEST,
+    };
+
+    enum class ParquetCompression
+    {
+        NONE,
+        SNAPPY,
+        ZSTD,
+        LZ4,
+        GZIP,
+        BROTLI,
+    };
+
     struct
     {
         UInt64 row_group_size = 1000000;
@@ -177,13 +195,15 @@ struct FormatSettings
         bool coalesce_read = false;
         bool case_insensitive_column_matching = false;
         UInt64 max_block_size = 8192;
-        size_t max_download_threads = 1;
-        size_t min_bytes_for_seek = 8192;
-        size_t max_buffer_size = 8 * 1024 * 1024;
-        bool use_lazy_io_cache = true;
+        ParquetVersion output_version = ParquetVersion::V2_LATEST;
+        ParquetCompression output_compression_method = ParquetCompression::SNAPPY;
+        bool output_compliant_nested_types = true;
+        size_t min_bytes_for_seek = DBMS_DEFAULT_BUFFER_SIZE;
+        size_t max_buffer_size = 8 * DBMS_DEFAULT_BUFFER_SIZE;
         bool filter_push_down = true;
         bool use_footer_cache = false;
         bool use_native_reader = false;
+        bool use_threads = false;
     } parquet;
 
     struct Orc

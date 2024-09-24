@@ -1,5 +1,8 @@
 #include "ParallelDecodingBlockInputFormat.h"
+
+#include "Common/ThreadPoolTaskTracker.h"
 #include "Common/setThreadName.h"
+#include "Common/threadPoolCallbackRunner.h"
 #include "Formats/FormatSettings.h"
 
 namespace DB
@@ -15,35 +18,45 @@ ParallelDecodingBlockInputFormat::ParallelDecodingBlockInputFormat(
     ReadBuffer & buf,
     const Block & header_,
     const FormatSettings &  format_settings_,
-    size_t max_decoding_threads_,
+    size_t max_download_threads_,
+    size_t max_parsing_threads_,
     bool preserve_order_,
-    std::unordered_set<int> skip_row_groups_)
+    std::unordered_set<int> skip_row_groups_,
+    ThreadPoolPtr parsing_thread_pool)
     : IInputFormat(header_, buf)
     , format_settings(format_settings_)
-    , skip_row_groups(skip_row_groups_)
-    , max_decoding_threads(max_decoding_threads_)
+    , max_download_threads(max_download_threads_)
+    , max_parsing_threads(max_parsing_threads_)
     , preserve_order(preserve_order_)
+    , skip_row_groups(skip_row_groups_)
     , pending_chunks(PendingChunk::Compare { .row_group_first = preserve_order })
+    , pool(std::move(parsing_thread_pool))
 {
-    if (max_decoding_threads > 1)
-    {
-        LOG_TRACE(&Poco::Logger::get("ParallelDecodingBlockInputFormat"), "Use parallel decoding with {} threads", max_decoding_threads);
-        pool = std::make_unique<ThreadPool>(max_decoding_threads);
-    }
+    if (!pool && max_parsing_threads > 1)
+        pool = std::make_unique<ThreadPool>(max_parsing_threads);
+
+    if (max_parsing_threads <= 1)
+        pool = nullptr;
+
+    if (pool)
+        task_tracker = std::make_unique<TaskTracker>(threadPoolCallbackRunnerUnsafe<void>(*pool, "ParalDecoder"));
 }
 
-ParallelDecodingBlockInputFormat::~ParallelDecodingBlockInputFormat()
-{
-    // is_stopped = true;
-    // if (pool)
-    //     pool->wait();
-}
+ParallelDecodingBlockInputFormat::~ParallelDecodingBlockInputFormat() = default;
 
 void ParallelDecodingBlockInputFormat::close()
 {
     is_stopped = true;
-    if (pool)
-        pool->wait();
+    if (task_tracker)
+        task_tracker->safeWaitAll();
+}
+
+void ParallelDecodingBlockInputFormat::setQueryInfo(const SelectQueryInfo & query_info, ContextPtr query_context)
+{
+    if (format_settings.orc.filter_push_down)
+        key_condition.emplace(query_info, query_context, getPort().getHeader().getNames(),
+            std::make_shared<ExpressionActions>(std::make_shared<ActionsDAG>(
+                getPort().getHeader().getColumnsWithTypeAndName())));
 }
 
 void ParallelDecodingBlockInputFormat::initializeIfNeeded()
@@ -67,25 +80,18 @@ void ParallelDecodingBlockInputFormat::scheduleRowGroup(size_t row_group_idx)
 
     status = RowGroupState::Status::Running;
 
-    pool->scheduleOrThrowOnError(
-        [this, row_group_idx, thread_group = CurrentThread::getGroup()]()
+    task_tracker->add([this, row_group_idx]() {
+        try
         {
-            if (thread_group)
-                CurrentThread::attachToIfDetached(thread_group);
-            SCOPE_EXIT({if (thread_group) CurrentThread::detachQueryIfNotDetached();});
-
-            try
-            {
-                setThreadName("ParalDecoder");
-                threadFunction(row_group_idx);
-            }
-            catch (...)
-            {
-                std::lock_guard lock(mutex);
-                background_exception = std::current_exception();
-                condvar.notify_all();
-            }
-        });
+            threadFunction(row_group_idx);
+        }
+        catch (...)
+        {
+            std::lock_guard lock(mutex);
+            background_exception = std::current_exception();
+            condvar.notify_all();
+        }
+    });
 }
 
 
@@ -171,7 +177,7 @@ void ParallelDecodingBlockInputFormat::scheduleMoreWorkIfNeeded(std::optional<si
 
     if (pool)
     {
-        while (row_groups_started - row_groups_completed < max_decoding_threads &&
+        while (row_groups_started - row_groups_completed < max_parsing_threads &&
                row_groups_started < row_groups.size())
             scheduleRowGroup(row_groups_started++);
 
@@ -182,6 +188,14 @@ void ParallelDecodingBlockInputFormat::scheduleMoreWorkIfNeeded(std::optional<si
                 row_group.num_pending_chunks < max_pending_chunks_per_row_group)
                 scheduleRowGroup(*row_group_touched);
         }
+    }
+
+    for (size_t row_groups_prefetched = std::max(row_groups_started, row_groups_completed);
+         row_groups_prefetched - row_groups_started < max_download_threads && row_groups_prefetched < row_groups.size();
+         row_groups_prefetched++)
+    {
+        if (!skip_row_groups.count(row_groups_prefetched))
+            prefetchRowGroup(row_groups_prefetched);
     }
 }
 

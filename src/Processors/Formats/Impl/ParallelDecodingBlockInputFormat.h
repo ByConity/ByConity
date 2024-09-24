@@ -7,6 +7,8 @@
 
 namespace DB
 {
+class TaskTracker;
+
 class ParallelDecodingBlockInputFormat : public IInputFormat
 {
 public:
@@ -14,14 +16,17 @@ public:
         ReadBuffer & buf,
         const Block & header,
         const FormatSettings & format_settings,
-        size_t max_decoding_threads,
+        size_t max_download_threads,
+        size_t max_parsing_threads,
         bool preserve_order,
-        std::unordered_set<int> skip_row_groups);
+        std::unordered_set<int> skip_row_groups,
+        ThreadPoolPtr parsing_thread_pool = nullptr);
 
     ~ParallelDecodingBlockInputFormat() override;
 
     void resetParser() override;
     const BlockMissingValues & getMissingValues() const override;
+    void setQueryInfo(const SelectQueryInfo & query_info, ContextPtr context) override;
 
 protected:
 
@@ -47,6 +52,7 @@ protected:
 
     void scheduleMoreWorkIfNeeded(std::optional<size_t> row_group_touched = std::nullopt);
     void scheduleRowGroup(size_t row_group_idx);
+    virtual void prefetchRowGroup(size_t /*row_group_idx*/) {}
 
     void threadFunction(size_t row_group_idx);
 
@@ -118,9 +124,10 @@ protected:
 
     FormatSettings format_settings;
 
-    std::unordered_set<int> skip_row_groups;
-    size_t max_decoding_threads;
+    size_t max_download_threads;
+    size_t max_parsing_threads;
     bool preserve_order = false;
+    std::unordered_set<int> skip_row_groups;
 
     const size_t max_pending_chunks_per_row_group = 8;
 
@@ -145,7 +152,9 @@ protected:
 
     // These are only used when max_decoding_threads > 1.
     size_t row_groups_started = 0;
-    std::unique_ptr<ThreadPool> pool;
+
+    std::shared_ptr<ThreadPool> pool;
+    std::unique_ptr<TaskTracker> task_tracker;
 
     BlockMissingValues previous_block_missing_values;
     size_t previous_approx_bytes_read_for_chunk = 0;

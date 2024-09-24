@@ -1787,7 +1787,7 @@ bool Context::isExternalDb(const std::string_view& database) const
         if (getOriginalDatabaseName(catalog_name.value()) != "cnch")
         {
             return true;
-        } 
+        }
         return false;
 }
 
@@ -1807,11 +1807,11 @@ std::string_view getDatabase([[maybe_unused]] const AccessFlags & args1, const s
 template <typename... Args>
 void Context::checkAccessImpl(const Args &... args) const
 {
-    if constexpr (sizeof...(Args) <= 1) 
+    if constexpr (sizeof...(Args) <= 1)
     {
         getAccess()->checkAccess(args...);
-    } 
-    else 
+    }
+    else
     {
         static_assert(sizeof...(Args) > 1, "Logical Error");
         using FirstType = typename std::tuple_element<0, std::tuple<Args...>>::type;
@@ -1833,11 +1833,11 @@ void Context::checkAccessImpl(const Args &... args) const
 template <typename... Args>
 bool Context::isGrantedImpl(const Args &... args) const
 {
-    if constexpr (sizeof...(Args) <= 1) 
+    if constexpr (sizeof...(Args) <= 1)
     {
         getAccess()->isGranted(args...);
-    } 
-    else 
+    }
+    else
     {
         static_assert(sizeof...(Args) > 1, "Logical Error");
         using FirstType = typename std::tuple_element<0, std::tuple<Args...>>::type;
@@ -1853,7 +1853,7 @@ bool Context::isGrantedImpl(const Args &... args) const
             return true;
         }
         return getAccess()->isGranted(args...);
-    } 
+    }
 }
 
 void Context::checkAccess(const AccessFlags & flags) const

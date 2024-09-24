@@ -17,9 +17,12 @@
 #include <IO/ReadBufferFromMemory.h>
 
 #include <arrow/util/bit_util.h>
+#include "Common/ProfileEvents.h"
 #include <common/logger_useful.h>
 #include "Columns/ColumnsCommon.h"
+#include "Core/Types.h"
 #include "Interpreters/castColumn.h"
+#include "Processors/Formats/Impl/Parquet/ParquetDataValuesReader.h"
 #include <parquet/column_page.h>
 #include <parquet/column_reader.h>
 #include <parquet/metadata.h>
@@ -29,6 +32,10 @@
 namespace ProfileEvents
 {
     extern const Event ParquetPrewhereSkippedPageRows;
+    extern const Event ParquetGetDataPageElapsedMicroseconds;
+    extern const Event ParquetDecodeColumnElapsedMicroseconds;
+    extern const Event ParquetDegradeDictionaryElapsedMicroseconds;
+    extern const Event ParquetPrewhereSkippedPages;
 }
 
 namespace DB
@@ -138,31 +145,24 @@ ColumnPtr readDictPage<ColumnDecimal<DateTime64>>(
     return dict_col;
 }
 
-template <is_col_over_big_decimal TColumnDecimal>
-ColumnPtr readDictPage(
-    const parquet::DictionaryPage & page,
-    const parquet::ColumnDescriptor & col_des,
-    const DataTypePtr & /* data_type */)
+template <is_col_decimal TColumnDecimal>
+requires (!std::is_same_v<typename TColumnDecimal::ValueType, DateTime64>)
+ColumnPtr readDictPage(const parquet::DictionaryPage & page, const parquet::ColumnDescriptor & col_des, const DataTypePtr & /* data_type */)
 {
     auto dict_col = TColumnDecimal::create(page.num_values(), col_des.type_scale());
+    ParquetDataBuffer buffer(page.data(), page.size());
     auto * col_data = dict_col->getData().data();
-    ParquetDataBuffer buffer(page.data(), page.size());
-    for (auto i = 0; i < page.num_values(); i++)
+    if (col_des.physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
     {
-        buffer.readOverBigDecimal(col_data + i, col_des.type_length());
+        /// big endian
+        for (auto i = 0; i < page.num_values(); i++)
+            buffer.readBigEndianDecimal(col_data + i, col_des.type_length());
     }
-    return dict_col;
-}
+    else
+    {
+        buffer.readBytes(col_data, page.num_values() * sizeof(typename TColumnDecimal::ValueType));
+    }
 
-template <is_col_int_decimal TColumnDecimal> requires (!std::is_same_v<typename TColumnDecimal::ValueType, DateTime64>)
-ColumnPtr readDictPage(
-    const parquet::DictionaryPage & page,
-    const parquet::ColumnDescriptor & col_des,
-    const DataTypePtr & /* data_type */)
-{
-    auto dict_col = TColumnDecimal::create(page.num_values(), col_des.type_scale());
-    ParquetDataBuffer buffer(page.data(), page.size());
-    buffer.readBytes(dict_col->getData().data(), page.num_values() * sizeof(typename TColumnDecimal::ValueType));
     return dict_col;
 }
 
@@ -188,17 +188,25 @@ std::unique_ptr<ParquetDataValuesReader> createPlainReader(
     RleValuesReaderPtr def_level_reader,
     ParquetDataBuffer buffer);
 
-template <is_col_over_big_decimal TColumnDecimal>
-std::unique_ptr<ParquetDataValuesReader> createPlainReader(
-    const parquet::ColumnDescriptor & col_des,
-    RleValuesReaderPtr def_level_reader,
-    ParquetDataBuffer buffer)
+template <is_col_decimal TColumnDecimal>
+    requires(!std::is_same_v<typename TColumnDecimal::ValueType, DateTime64>)
+std::unique_ptr<ParquetDataValuesReader>
+createPlainReader(const parquet::ColumnDescriptor & col_des, RleValuesReaderPtr def_level_reader, ParquetDataBuffer buffer)
 {
-    return std::make_unique<ParquetFixedLenPlainReader<TColumnDecimal>>(
-        col_des.max_definition_level(),
-        col_des.type_length(),
-        std::move(def_level_reader),
-        std::move(buffer));
+    if constexpr (is_col_over_big_decimal<TColumnDecimal>)
+    {
+        return std::make_unique<ParquetFixedLenPlainReader<TColumnDecimal>>(
+            col_des.max_definition_level(), col_des.type_length(), std::move(def_level_reader), std::move(buffer));
+    }
+    else
+    {
+        if (col_des.physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
+            return std::make_unique<ParquetFixedLenPlainReader<TColumnDecimal>>(
+                col_des.max_definition_level(), col_des.type_length(), std::move(def_level_reader), std::move(buffer));
+        else
+            return std::make_unique<ParquetPlainValuesReader<TColumnDecimal>>(
+                col_des.max_definition_level(), std::move(def_level_reader), std::move(buffer));
+    }
 }
 
 template <typename TColumn>
@@ -242,6 +250,8 @@ ColumnWithTypeAndName ParquetLeafColReader<TColumn>::readBatch(const String & co
             && DB::memoryIsZero(filter->data() + cur_row_num, values_in_page))
         {
             ProfileEvents::increment(ProfileEvents::ParquetPrewhereSkippedPageRows, values_in_page);
+            ProfileEvents::increment(ProfileEvents::ParquetPrewhereSkippedPages);
+
             if (!column)
                 resetColumn(batch_row_count);
 
@@ -257,6 +267,7 @@ ColumnWithTypeAndName ParquetLeafColReader<TColumn>::readBatch(const String & co
         // if dictionary page encountered, another page should be read
         nextDataPage();
 
+        Stopwatch watch;
         auto read_values = std::min(batch_row_count - cur_row_num, num_values_remaining_in_page);
 
         if (read_values)
@@ -268,6 +279,7 @@ ColumnWithTypeAndName ParquetLeafColReader<TColumn>::readBatch(const String & co
 
         num_values_remaining_in_page -= read_values;
         cur_row_num += read_values;
+        ProfileEvents::increment(ProfileEvents::ParquetDecodeColumnElapsedMicroseconds, watch.elapsedMicroseconds());
     }
     return releaseColumn(column_name);
 }
@@ -355,6 +367,8 @@ void ParquetLeafColReader<TColumn>::degradeDictionary()
     }
     assert(dictionary && !column->empty());
 
+    Stopwatch watch;
+
     null_map = std::make_unique<LazyNullMap>(batch_row_count);
     auto col_existing = std::move(column);
     column = ColumnString::create();
@@ -386,6 +400,8 @@ void ParquetLeafColReader<TColumn>::degradeDictionary()
         }
     });
     dictionary = nullptr;
+
+    ProfileEvents::increment(ProfileEvents::ParquetDegradeDictionaryElapsedMicroseconds, watch.elapsedMicroseconds());
     LOG_DEBUG(log, "degraded dictionary to normal column");
 }
 
@@ -429,7 +445,10 @@ void ParquetLeafColReader<TColumn>::nextDataPage()
 {
     while (!num_values_remaining_in_page)
     {
+        Stopwatch watch;
         auto page = parquet_page_reader->NextPage();
+        ProfileEvents::increment(ProfileEvents::ParquetGetDataPageElapsedMicroseconds, watch.elapsedMicroseconds());
+
         if (page)
             readPage(*page);
         else

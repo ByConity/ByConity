@@ -487,23 +487,9 @@ template <typename TColumn>
 void ParquetFixedLenPlainReader<TColumn>::readBatch(
     MutableColumnPtr & col_ptr, LazyNullMap & null_map, UInt32 num_values)
 {
-    if constexpr (std::same_as<TColumn, ColumnDecimal<Decimal128>> || std::same_as<TColumn, ColumnDecimal<Decimal256>>)
-    {
-        readOverBigDecimal(col_ptr, null_map, num_values);
-    }
-    else
-    {
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "unsupported type");
-    }
-}
-
-template <typename TColumnOverBigDecimal>
-void ParquetFixedLenPlainReader<TColumnOverBigDecimal>::readOverBigDecimal(
-    MutableColumnPtr & col_ptr, LazyNullMap & null_map, UInt32 num_values)
-{
     auto cursor = col_ptr->size();
     auto * column_data = getResizedPrimitiveData(
-        *assert_cast<TColumnOverBigDecimal *>(col_ptr.get()), cursor + num_values);
+        *assert_cast<TColumn *>(col_ptr.get()), cursor + num_values);
 
     def_level_reader->visitNullableValues(
         cursor,
@@ -512,14 +498,14 @@ void ParquetFixedLenPlainReader<TColumnOverBigDecimal>::readOverBigDecimal(
         null_map,
         /* individual_visitor */ [&](size_t nest_cursor)
         {
-            plain_data_buffer.readOverBigDecimal(column_data + nest_cursor, elem_bytes_num);
+            plain_data_buffer.readBigEndianDecimal(column_data + nest_cursor, elem_bytes_num);
         },
         /* repeated_visitor */ [&](size_t nest_cursor, UInt32 count)
         {
             auto col_data_pos = column_data + nest_cursor;
             for (UInt32 i = 0; i < count; i++)
             {
-                plain_data_buffer.readOverBigDecimal(col_data_pos + i, elem_bytes_num);
+                plain_data_buffer.readBigEndianDecimal(col_data_pos + i, elem_bytes_num);
             }
         }
     );
@@ -528,32 +514,21 @@ void ParquetFixedLenPlainReader<TColumnOverBigDecimal>::readOverBigDecimal(
 template <typename TColumn>
 void ParquetFixedLenPlainReader<TColumn>::skip(size_t num_values)
 {
-    if constexpr (std::same_as<TColumn, ColumnDecimal<Decimal128>> || std::same_as<TColumn, ColumnDecimal<Decimal256>>)
-    {
-        typename TColumn::ValueType data;
-        def_level_reader->visitNullableValues(
-            0,
-            num_values,
-            max_def_level,
-            /* individual_visitor */ [&](size_t)
-            {
-                plain_data_buffer.readOverBigDecimal(&data, elem_bytes_num);
-            },
-            /* individual_null_visitor */ [] (size_t) {},
-            /* repeated_visitor */ [&](size_t, UInt32 count)
-            {
-                for (UInt32 i = 0; i < count; i++)
-                {
-                    plain_data_buffer.readOverBigDecimal(&data, elem_bytes_num);
-                }
-            },
-            /* repeated_null_visitor */ [] (size_t, size_t) {}
-        );
-    }
-    else
-    {
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "unsupported type");
-    }
+    def_level_reader->visitNullableValues(
+        0,
+        num_values,
+        max_def_level,
+        /* individual_visitor */ [&](size_t)
+        {
+            plain_data_buffer.skipBytes(elem_bytes_num);
+        },
+        /* individual_null_visitor */ [] (size_t) {},
+        /* repeated_visitor */ [&](size_t, UInt32 count)
+        {
+            plain_data_buffer.skipBytes(count * elem_bytes_num);
+        },
+        /* repeated_null_visitor */ [] (size_t, size_t) {}
+    );
 }
 
 template <typename TColumnVector>
@@ -788,6 +763,8 @@ template class ParquetPlainValuesReader<ColumnDecimal<Decimal32>>;
 template class ParquetPlainValuesReader<ColumnDecimal<Decimal64>>;
 template class ParquetPlainValuesReader<ColumnString>;
 
+template class ParquetFixedLenPlainReader<ColumnDecimal<Decimal32>>;
+template class ParquetFixedLenPlainReader<ColumnDecimal<Decimal64>>;
 template class ParquetFixedLenPlainReader<ColumnDecimal<Decimal128>>;
 template class ParquetFixedLenPlainReader<ColumnDecimal<Decimal256>>;
 

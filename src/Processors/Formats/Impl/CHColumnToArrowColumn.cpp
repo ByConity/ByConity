@@ -41,6 +41,7 @@
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <Processors/Formats/Impl/ArrowBufferedStreams.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Common/DateLUTImpl.h>
 #include <arrow/api.h>
@@ -421,7 +422,7 @@ namespace DB
         /// Convert dictionary values to arrow array.
         auto value_type = assert_cast<arrow::DictionaryType *>(builder->type().get())->value_type();
         std::unique_ptr<arrow::ArrayBuilder> values_builder;
-        arrow::MemoryPool* pool = arrow::default_memory_pool();
+        arrow::MemoryPool* pool = ArrowMemoryPool::instance();
         arrow::Status status = MakeBuilder(pool, value_type, &values_builder);
         checkStatus(status, column->getName(), format_name);
 
