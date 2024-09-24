@@ -584,7 +584,8 @@ protected:
     mutable std::unordered_set<std::string> nondeterministic_functions_out_of_query_scope;
 
     // worker status
-    WorkerGroupStatusPtr worker_group_status;
+    mutable WorkerGroupStatusPtr worker_group_status;
+    mutable WorkerStatusManagerPtr worker_status_manager;
 
     std::shared_ptr<OptimizerProfile> optimizer_profile = nullptr;
     /// Temporary data for query execution accounting.
@@ -625,7 +626,6 @@ protected:
     /// VirtualWarehouse for each query, session level
     mutable VirtualWarehouseHandle current_vw;
     mutable WorkerGroupHandle current_worker_group;
-    mutable WorkerGroupHandle health_worker_group;
 
     DequeueReleasePtr dequeue_ptr;
     /// Transaction for each query, query level
@@ -833,14 +833,13 @@ public:
 
     void checkAeolusTableAccess(const String & database_name, const String & table_name) const;
 
-    WorkerGroupStatusPtr & getWorkerGroupStatusPtr() { return worker_group_status; }
     const WorkerGroupStatusPtr & getWorkerGroupStatusPtr() const { return worker_group_status; }
 
     void updateAdaptiveSchdulerConfig();
-    WorkerStatusManagerPtr getWorkerStatusManager();
     WorkerStatusManagerPtr getWorkerStatusManager() const;
-    WorkerGroupHandle tryGetHealthWorkerGroup() const;
-    void selectWorkerNodesWithMetrics();
+    void  setWorkerStatusManager();
+
+    void adaptiveSelectWorkers(SchedulerMode mode);
 
     ASTPtr getRowPolicyCondition(const String & database, const String & table_name, RowPolicy::ConditionType type) const;
 

@@ -56,6 +56,7 @@
 #include "common/defines.h"
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
+#include <Core/SettingsEnums.h>
 #include "Interpreters/ClientInfo.h"
 #include "Interpreters/Context_fwd.h"
 
@@ -258,6 +259,18 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     LOG_DEBUG(log, "optimizer stage run time: plan normalize, {} ms", stage_watch.elapsedMillisecondsAsDouble());
     stage_watch.restart();
 
+    // select health worker before split
+    if (context->getSettingsRef().scheduler_mode != SchedulerMode::SKIP && context->tryGetCurrentWorkerGroup())
+    {
+        context->adaptiveSelectWorkers(context->getSettingsRef().scheduler_mode);
+        auto wg_status = context->getWorkerGroupStatusPtr();
+        if (wg_status && wg_status->getWorkerGroupHealth() == GroupHealthType::Critical)
+            throw Exception("No worker available", ErrorCodes::LOGICAL_ERROR);
+    }
+    else if (context->getSettingsRef().bsp_mode)
+    {
+        context->setWorkerStatusManager();
+    }
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
     ClusterInfoContext cluster_info_context{.query_plan = *query_plan, .context = context, .plan_segment_tree = plan_segment_tree};
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
@@ -267,14 +280,6 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
 
     if (context->getSettingsRef().block_json_query_in_optimizer)
         blockQueryJSONUseOptimizer(used_storage_ids, context);
-    // select health worker before split
-    if (context->getSettingsRef().enable_adaptive_scheduler && context->tryGetCurrentWorkerGroup())
-    {
-        context->selectWorkerNodesWithMetrics();
-        auto wg_health = context->getWorkerGroupStatusPtr()->getWorkerGroupHealth();
-        if (wg_health == WorkerGroupHealthStatus::Critical)
-            throw Exception("no worker available", ErrorCodes::LOGICAL_ERROR);
-    }
 
     PlanSegmentSplitter::split(plan, plan_segment_context);
     context->logOptimizerProfile(
@@ -846,16 +851,14 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
     if (cnch_table || cnch_lake || cnch_file)
     {
         const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
-        auto worker_group_status_ptr = cluster_info_context.context->getWorkerGroupStatusPtr();
         PlanSegmentContext plan_segment_context{
             .context = cluster_info_context.context,
             .query_plan = cluster_info_context.query_plan,
             .query_id = cluster_info_context.context->getCurrentQueryId(),
             .shard_number = worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
-            .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
-            .health_parallel
-            = worker_group_status_ptr ? std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
+            .plan_segment_tree = cluster_info_context.plan_segment_tree.get()};
+
         return plan_segment_context;
     }
     return std::nullopt;
@@ -878,16 +881,13 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableWriteNode(TableWr
     if (cnch_table || cnch_lake || cnch_file)
     {
         const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
-        auto worker_group_status_ptr = cluster_info_context.context->getWorkerGroupStatusPtr();
         PlanSegmentContext plan_segment_context{
             .context = cluster_info_context.context,
             .query_plan = cluster_info_context.query_plan,
             .query_id = cluster_info_context.context->getCurrentQueryId(),
             .shard_number = worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
-            .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
-            .health_parallel
-            = worker_group_status_ptr ? std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
+            .plan_segment_tree = cluster_info_context.plan_segment_tree.get()};
 
         return plan_segment_context;
     }

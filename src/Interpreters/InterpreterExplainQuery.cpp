@@ -766,6 +766,14 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(const ASTExplainQu
     auto settings = checkAndGetSettings<QueryPlanSettings>(explain_ast.getSettings());
     QueryPlan query_plan = PlanNodeToNodeVisitor::convert(plan);
     PlanSegmentTreePtr plan_segment_tree = std::make_unique<PlanSegmentTree>();
+    // select health worker before split
+    if (context_ptr->getSettingsRef().scheduler_mode != SchedulerMode::SKIP && context_ptr->tryGetCurrentWorkerGroup())
+    {
+        context_ptr->adaptiveSelectWorkers(context_ptr->getSettingsRef().scheduler_mode);
+        auto wg_status = context_ptr->getWorkerGroupStatusPtr();
+        if (wg_status && wg_status->getWorkerGroupHealth() == GroupHealthType::Critical)
+            throw Exception("No worker available", ErrorCodes::LOGICAL_ERROR);
+    }
 
     ClusterInfoContext cluster_info_context{.query_plan = query_plan, .context = context_ptr, .plan_segment_tree = plan_segment_tree};
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(plan, cluster_info_context);
@@ -953,7 +961,6 @@ void InterpreterExplainQuery::explainPipelineWithOptimizer(const ASTExplainQuery
 
     ClusterInfoContext cluster_info_context{.query_plan = query_plan, .context = context_ptr, .plan_segment_tree = plan_segment_tree};
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(plan, cluster_info_context);
-
     // query_plan.allocateLocalTable(context_ptr);
     PlanSegmentSplitter::split(query_plan, plan_segment_context);
     auto & plan_segments = plan_segment_tree->getNodes();

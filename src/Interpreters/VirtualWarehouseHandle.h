@@ -23,6 +23,8 @@
 #include <ResourceManagement/VWScheduleAlgo.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/WorkerStatusManager.h>
 #include <Core/SettingsEnums.h>
 
 #include <atomic>
@@ -159,10 +161,21 @@ public:
     std::optional<WorkerComplement> complementPhysicalWorkerGroup(WorkerGroupData & common_group, const WorkerGroupData & completion_group);
 
     void updatePriorityGroups();
-private:
-    bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);
+
+    WorkerStatusManagerPtr getWorkerStatusManager(const String & wg_id)
+    {
+        std::lock_guard lock(state_mutex);
+        if (auto iter = worker_status_managers.find(wg_id); iter != worker_status_managers.end())
+        {
+            return iter->second;
+        }
+        return worker_status_managers.emplace(wg_id, std::make_shared<WorkerStatusManager>(getContext())).first->second;
+    }
 
     void tryUpdateWorkerGroups(UpdateMode mode);
+
+private:
+    bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);
     bool updateWorkerGroupsFromRM();
     bool updateWorkerGroupsFromPSM();
 
@@ -194,6 +207,7 @@ private:
     std::vector<PriorityGroups> priority_groups;
     std::atomic<size_t> pick_group_sequence = 0; /// round-robin index for pickWorkerGroup.
     VirtualWarehouseQueueManager queue_manager;
+    std::unordered_map<String, WorkerStatusManagerPtr> worker_status_managers;
 };
 
 using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;

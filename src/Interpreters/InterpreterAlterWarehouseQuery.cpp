@@ -383,6 +383,26 @@ BlockIO InterpreterAlterWarehouseQuery::execute()
                 {
                     vw_alter_settings.cooldown_seconds_after_scaledown = change.value.safeGet<size_t>();
                 }
+                else if (change.name == "recommended_concurrent_query_limit")
+                {
+                    vw_alter_settings.recommended_concurrent_query_limit = change.value.safeGet<size_t>();
+                }
+                else if (change.name == "health_worker_cpu_usage_threshold")
+                {
+                    vw_alter_settings.health_worker_cpu_usage_threshold = change.value.safeGet<float>();
+                }
+                else if (change.name == "circuit_breaker_open_to_halfopen_wait_seconds")
+                {
+                    vw_alter_settings.circuit_breaker_open_to_halfopen_wait_seconds = change.value.safeGet<size_t>();
+                }
+                else if (change.name == "unhealth_worker_recheck_wait_seconds")
+                {
+                    vw_alter_settings.unhealth_worker_recheck_wait_seconds = change.value.safeGet<size_t>();
+                }
+                else if (change.name == "circuit_breaker_open_error_threshold")
+                {
+                    vw_alter_settings.circuit_breaker_open_error_threshold = change.value.safeGet<size_t>();
+                }
                 else
                 {
                     throw Exception("Unknown setting " + change.name, ErrorCodes::RESOURCE_MANAGER_UNKNOWN_SETTING);

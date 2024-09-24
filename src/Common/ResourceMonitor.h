@@ -45,6 +45,7 @@ public:
     {
         double cpu_usage;
         double cpu_usage_avg_1min;
+        double cpu_usage_avg_10sec;
     };
     struct Data : public CommonData
     {
@@ -67,6 +68,8 @@ public:
 private:
     int fd;
     boost::circular_buffer<double> buffer{60};
+    boost::circular_buffer<double> buffer_10sec{10};
+    double cpu_usage_accumulate_10sec{0};
     double cpu_usage_accumulate{0};
     Data data{};
     ContainerData container_data{};

@@ -370,6 +370,15 @@ enum class VWLoadBalancing
 
 DECLARE_SETTING_ENUM(VWLoadBalancing);
 
+enum class SchedulerMode
+{
+    SKIP = 0,
+    SKIP_UNREACHABLE_NODE,
+    SKIP_SLOW_NODE,
+};
+
+DECLARE_SETTING_ENUM(SchedulerMode);
+
 enum class SpanHierarchy : int
 {
     TRACE = 0,

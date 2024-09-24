@@ -444,6 +444,12 @@ message VirtualWarehouseSettings {
   optional uint32 cooldown_seconds_after_scaledown = 21;
 
   repeated QueueData queue_datas = 22;
+
+  optional uint64 recommended_concurrent_query_limit = 23;
+  optional double health_worker_cpu_usage_threshold = 24;
+  optional int64 circuit_breaker_open_to_halfopen_wait_seconds = 25;
+  optional int64 unhealth_worker_recheck_wait_seconds = 26;
+  optional int64 circuit_breaker_open_error_threshold = 27;
 };
 
 enum QueueAlterType {
@@ -509,6 +515,11 @@ message VirtualWarehouseAlterSettings {
   repeated string databases = 33;
   optional string fingerprint = 34;
   optional string queue_name = 35;
+  optional uint64 recommended_concurrent_query_limit = 36;
+  optional double health_worker_cpu_usage_threshold = 37;
+  optional int64 circuit_breaker_open_to_halfopen_wait_seconds = 38;
+  optional int64 unhealth_worker_recheck_wait_seconds = 39;
+  optional int64 circuit_breaker_open_error_threshold = 40;
 };
 
 
@@ -568,6 +579,7 @@ message WorkerNodeResourceData {
   optional uint32 dedup_num = 21;
 
   optional uint64 last_status_create_time = 22;
+  optional double cpu_usage_10sec = 23;
 }
 
 message WorkerGroupData {

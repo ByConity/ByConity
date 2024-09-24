@@ -39,10 +39,13 @@ public:
 
     VirtualWarehouseHandle get(const String & vw_name);
 
+    ~VirtualWarehousePool();
     using ConcurrentMapForCreating::erase;
     using ConcurrentMapForCreating::size;
     using ConcurrentMapForCreating::getAll;
 
+    void startRepeatTask(BackgroundSchedulePool & pool_);
+    void doTask();
 private:
     VirtualWarehouseHandle creatorImpl(const String & vw_name);
 
@@ -55,6 +58,11 @@ private:
     LoggerPtr log {};
 
     std::atomic<UInt64> last_update_time_ns{0};
+
+    //update task 
+    mutable std::optional<BackgroundSchedulePool> schedule_pool;
+    std::atomic<UInt64> task_interval{1000}; /// in ms;
+    BackgroundSchedulePool::TaskHolder task;
 };
 
 }

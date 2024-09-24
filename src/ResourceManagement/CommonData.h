@@ -115,6 +115,13 @@ struct VirtualWarehouseSettings
 
     std::vector<QueueData> queue_datas;
 
+    //adaptive scheduler
+    size_t recommended_concurrent_query_limit{480};
+    double health_worker_cpu_usage_threshold{0.95};
+    int64_t circuit_breaker_open_to_halfopen_wait_seconds{60};
+    int64_t unhealth_worker_recheck_wait_seconds{30};
+    int64_t circuit_breaker_open_error_threshold{8};
+
     void fillProto(Protos::VirtualWarehouseSettings & pb_settings) const;
     void parseFromProto(const Protos::VirtualWarehouseSettings & pb_settings);
 
@@ -164,6 +171,13 @@ struct VirtualWarehouseAlterSettings
     std::vector<String> databases;
 
     std::optional<QueueData> queue_data;
+
+    //adaptive scheduler
+    std::optional<size_t> recommended_concurrent_query_limit;
+    std::optional<double> health_worker_cpu_usage_threshold;
+    std::optional<int64_t> circuit_breaker_open_to_halfopen_wait_seconds;
+    std::optional<int64_t> unhealth_worker_recheck_wait_seconds;
+    std::optional<int64_t> circuit_breaker_open_error_threshold;
 
     void fillProto(Protos::VirtualWarehouseAlterSettings & pb_settings) const;
     void parseFromProto(const Protos::VirtualWarehouseAlterSettings & pb_settings);
@@ -248,6 +262,7 @@ struct WorkerNodeResourceData
 
     double cpu_usage;
     double cpu_usage_1min;
+    double cpu_usage_10sec;
     double memory_usage;
     double memory_usage_1min;
     UInt64 memory_available;

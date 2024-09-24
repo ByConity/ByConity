@@ -1174,7 +1174,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (global_context->getServerType() == ServerType::cnch_server)
             {
                 global_context->updateQueueManagerConfig();
-                global_context->updateAdaptiveSchdulerConfig();
                 if (auto * auto_stats_manager = global_context->getAutoStatisticsManager())
                 {
                     auto_stats_manager->prepareNewConfig(*config);

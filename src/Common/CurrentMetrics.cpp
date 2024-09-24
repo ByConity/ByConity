@@ -81,8 +81,8 @@
     M(BackgroundQueueManagerSchedulePoolTask, \
       "Number of active tasks in BackgroundSchedulePool. This pool is used for queue manager threads.") \
     M(BackgroundBspGCSchedulePoolTask, "Number of active tasks in BspGCSchedulePool. This pool is used for bsp gc task.") \
-    M(BackgroundRMHeartbeatSchedulePoolTask, \
-      "Number of active tasks in BackgroundRMHeartBeatSchedulePool. This pool is used for update worker status.") \
+    M(BackgroundVWPoolSchedulePoolTask, \
+      "Number of active tasks in BackgroundVWPoolSchedulePoolTask. This pool is used for update worker groups.") \
     M(CacheDictionaryUpdateQueueBatches, "Number of 'batches' (a set of keys) in update queue in CacheDictionaries.") \
     M(CacheDictionaryUpdateQueueKeys, "Exact number of keys in update queue in CacheDictionaries.") \
     M(DiskSpaceReservedForMerge, \

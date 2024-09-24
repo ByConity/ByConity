@@ -62,6 +62,11 @@ NamesAndTypesList StorageSystemVirtualWarehouses::getNamesAndTypes()
         {"mem_threshold_for_recall", std::make_shared<DataTypeUInt32>()},
         {"cooldown_seconds_after_auto_link", std::make_shared<DataTypeUInt32>()},
         {"cooldown_seconds_after_auto_unlink", std::make_shared<DataTypeUInt32>()},
+        {"recommended_concurrent_query_limit", std::make_shared<DataTypeUInt64>()},
+        {"health_worker_cpu_usage_threshold", std::make_shared<DataTypeFloat64>()},
+        {"circuit_breaker_open_to_halfopen_wait_seconds", std::make_shared<DataTypeUInt64>()},
+        {"unhealth_worker_recheck_wait_seconds", std::make_shared<DataTypeUInt64>()},
+        {"circuit_breaker_open_error_threshold", std::make_shared<DataTypeUInt64>()},
     };
 }
 
@@ -115,6 +120,12 @@ void StorageSystemVirtualWarehouses::fillData(MutableColumns & res_columns, cons
         res_columns[i++]->insert(vw_settings.mem_threshold_for_recall);
         res_columns[i++]->insert(vw_settings.cooldown_seconds_after_scaleup);
         res_columns[i++]->insert(vw_settings.cooldown_seconds_after_scaledown);
+        res_columns[i++]->insert(vw_settings.recommended_concurrent_query_limit);
+        res_columns[i++]->insert(vw_settings.health_worker_cpu_usage_threshold);
+        res_columns[i++]->insert(vw_settings.circuit_breaker_open_to_halfopen_wait_seconds);
+        res_columns[i++]->insert(vw_settings.unhealth_worker_recheck_wait_seconds);
+        res_columns[i++]->insert(vw_settings.circuit_breaker_open_error_threshold);
+
     }
 }
 

@@ -81,14 +81,6 @@ public:
     virtual ~QeueueThrottler() = default;
 };
 
-class ResourceQeueueThrottler : public QeueueThrottler, WithContext
-{
-public:
-    ResourceQeueueThrottler(ContextPtr context);
-    virtual bool isThrottling(QueueInfo * queue_info) override;
-    virtual ~ResourceQeueueThrottler() override = default;
-};
-
 using QeueueThrottlerPtr = std::shared_ptr<QeueueThrottler>;
 using QeueueThrottlersPtr = std::vector<QeueueThrottlerPtr>;
 

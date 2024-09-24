@@ -22,6 +22,7 @@
 #pragma once
 
 #include <cerrno>
+#include <unordered_set>
 #include <vector>
 #include <memory>
 #include <mutex>
@@ -283,11 +284,22 @@ public:
         std::unique_lock lock(mutex);
         failed_rpc_info.emplace(worker_id, error_code);
     }
-
+    void setNeedRecord() { record_all_workers = true; }
+    void addWorker(const WorkerId & id)
+    {
+        if (record_all_workers)
+        {
+            std::unique_lock lock(mutex);
+            workers.emplace(id);
+        }
+    }
     const WorkerIdErrorCodeMap & getFailedRpcInfo() { return failed_rpc_info; }
+    const WorkerNodeSet & getWorkers() { return workers; }
 
 private:
     WorkerIdErrorCodeMap failed_rpc_info;
+    bool record_all_workers{false};
+    WorkerNodeSet workers;
 };
 
 using ExceptionHandlerWithFailedInfoPtr = std::shared_ptr<ExceptionHandlerWithFailedInfo>;

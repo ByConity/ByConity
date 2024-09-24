@@ -471,12 +471,10 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
             if (!input_has_table && !split_context.inputs.empty() && split_context.scalable)
             {
                 size_t ret = plan_segment_context.shard_number;
-                if (max_parallel_size > 0 || plan_segment_context.health_parallel)
+                if (max_parallel_size > 0)
                 {
                     if (max_parallel_size > 0 && max_parallel_size < ret)
                         ret = max_parallel_size;
-                    if (plan_segment_context.health_parallel && *plan_segment_context.health_parallel < ret)
-                        ret = *plan_segment_context.health_parallel;
                     // In bsp mode, we ignore the number of health node.
                     if (plan_segment_context.context->getSettingsRef().bsp_mode && max_parallel_size > ret)
                         ret = max_parallel_size;

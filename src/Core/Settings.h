@@ -1361,6 +1361,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
     M(VWQueueMode, vw_queue_mode, VWQueueMode::Skip, "Whether enqueue virtual warehouse queue: Skip/Match/Force", 0) \
     M(QueueName, queue_name, QueueName::Auto, "the name of vw queue: highest/high/normal/low/lowest/auto", 0) \
+    M(SchedulerMode, scheduler_mode, SchedulerMode::SKIP, "adaptive scheduler mode: skip/skip_unreachable_node/skip_slow_node", 0) \
     M(UInt64, vw_query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
     M(Bool, enable_concurrency_control, false, "Whether enable concurrency control", 0) \
@@ -1623,7 +1624,6 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
-    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(UInt64, parallel_join_rows_batch_threshold, 4096, "Rows that concurrent hash join wait data reach, then to build hashtable or join block", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
@@ -1874,6 +1874,7 @@ enum PreloadLevelSettings : UInt64
     MAKE_OBSOLETE(M, Bool, enable_parallel_input_generator, false) \
     MAKE_OBSOLETE(M, Bool, exchange_enable_metric, true) \
     MAKE_OBSOLETE(M, UInt64, cnch_offloading_mode, 0) \
+    MAKE_OBSOLETE(M, Bool, enable_adaptive_scheduler, false) \
     MAKE_OBSOLETE(M, UInt64, distributed_query_max_threads, 0) \
     MAKE_OBSOLETE(M, UInt64, exchange_local_no_repartition_extra_threads, 32) \
     MAKE_OBSOLETE(M, UInt64, filtered_ratio_to_use_skip_read, 0) \

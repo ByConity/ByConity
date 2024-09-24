@@ -64,8 +64,8 @@ struct ClusterNodes
     {
         // Pick workers per policy.
         AdaptiveScheduler adaptive_scheduler(query_context);
-        rank_worker_ids = query_context->getSettingsRef().enable_adaptive_scheduler ? adaptive_scheduler.getHealthyWorkerRank()
-                                                                                    : adaptive_scheduler.getRandomWorkerRank();
+        rank_worker_ids = query_context->getSettingsRef().scheduler_mode != SchedulerMode::SKIP ? adaptive_scheduler.getHealthyWorkerRank()
+                                                                                                : adaptive_scheduler.getRandomWorkerRank();
 
 
         const auto & worker_group = query_context->tryGetCurrentWorkerGroup();

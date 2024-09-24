@@ -10,7 +10,7 @@ struct WorkerId
     String vw_name;
     String wg_name;
     String id;
-    const String ToString() const
+    const String toString() const
     {
         return vw_name + "." + wg_name + "." + id;
     }
@@ -26,8 +26,10 @@ struct WorkerIdHash
 {
     std::size_t operator()(const WorkerId & worker_id) const
     {
-        return std::hash<String>()(worker_id.ToString());
+        return std::hash<String>()(worker_id.toString());
     }
 };
+
+using WorkerNodeSet = std::unordered_set<WorkerId, WorkerIdHash>;
 
 } // namespace DB

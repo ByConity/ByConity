@@ -197,6 +197,11 @@ IMPLEMENT_SETTING_ENUM(VWQueueMode, ErrorCodes::BAD_ARGUMENTS,
      {"match", VWQueueMode::Match},
      {"force", VWQueueMode::Force}})
 
+IMPLEMENT_SETTING_ENUM(SchedulerMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"skip", SchedulerMode::SKIP},
+     {"skip_unreachable_node", SchedulerMode::SKIP_UNREACHABLE_NODE},
+     {"skip_slow_node", SchedulerMode::SKIP_SLOW_NODE}})
+
 IMPLEMENT_SETTING_ENUM(VWLoadBalancing, ErrorCodes::BAD_ARGUMENTS,
     {{"random",           VWLoadBalancing::RANDOM},
      {"in_order",         VWLoadBalancing::IN_ORDER},
