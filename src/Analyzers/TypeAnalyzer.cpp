@@ -53,7 +53,8 @@ DataTypePtr TypeAnalyzer::getType(const ConstASTPtr & expr) const
     Analysis analysis;
     ExprAnalyzerOptions options;
     options.expandUntuple(false);
-    return ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis, options);
+    ASTPtr tmp_ast = REMOVE_CONST(expr);
+    return ExprAnalyzer::analyze(tmp_ast, &scope, context, analysis, options);
 }
 
 DataTypePtr TypeAnalyzer::getTypeWithoutCheck(const ConstASTPtr & expr) const
@@ -63,7 +64,8 @@ DataTypePtr TypeAnalyzer::getTypeWithoutCheck(const ConstASTPtr & expr) const
     options.expandUntuple(false);
     options.aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED);
     options.windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
-    return ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis, options);
+    ASTPtr tmp_ast = REMOVE_CONST(expr);
+    return ExprAnalyzer::analyze(tmp_ast, &scope, context, analysis, options);
 }
 
 ExpressionTypes TypeAnalyzer::getExpressionTypes(const ConstASTPtr & expr) const
@@ -71,7 +73,8 @@ ExpressionTypes TypeAnalyzer::getExpressionTypes(const ConstASTPtr & expr) const
     Analysis analysis;
     ExprAnalyzerOptions options;
     options.expandUntuple(false);
-    ExprAnalyzer::analyze(REMOVE_CONST(expr), &scope, context, analysis, options);
+    ASTPtr tmp_ast = REMOVE_CONST(expr);
+    ExprAnalyzer::analyze(tmp_ast, &scope, context, analysis, options);
     return analysis.getExpressionTypes();
 }
 
