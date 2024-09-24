@@ -311,7 +311,7 @@ QueryPipeline QueryPipeline::unitePipelines(
         pipeline.setMaxThreads(max_threads);
         pipeline.limitMaxThreads(max_threads_limit);
     }
-    pipeline.setMinThreads(min_threads);
+    pipeline.limitMinThreads(min_threads);
 
     return pipeline;
 }
