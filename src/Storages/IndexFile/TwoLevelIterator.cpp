@@ -23,7 +23,7 @@ namespace
     class TwoLevelIterator : public Iterator
     {
     public:
-        TwoLevelIterator(const Comparator * comparator, Iterator * index_iter, BlockFunction block_function, void * arg, const ReadOptions & options);
+        TwoLevelIterator(const Comparator * comparator, Iterator * index_iter, FilterBlockReader * filter, BlockFunction block_function, void * arg, const ReadOptions & options);
 
         ~TwoLevelIterator() override;
 
@@ -73,6 +73,7 @@ namespace
         void SkipEmptyDataBlocksBackward();
         void SetDataIterator(Iterator * data_iter);
         void InitDataBlock();
+        bool KeyMayMatch(const Slice & target) const;
 
         const Comparator * comparator_;
         BlockFunction block_function_;
@@ -81,13 +82,14 @@ namespace
         Status status_;
         IteratorWrapper index_iter_;
         IteratorWrapper data_iter_; // May be nullptr
+        FilterBlockReader * filter_;
         // If data_iter_ is non-null, then "data_block_handle_" holds the
         // "index_value" passed to block_function_ to create the data_iter_.
         std::string data_block_handle_;
     };
 
-    TwoLevelIterator::TwoLevelIterator(const Comparator * comparator, Iterator * index_iter, BlockFunction block_function, void * arg, const ReadOptions & options)
-        : comparator_(comparator), block_function_(block_function), arg_(arg), options_(options), index_iter_(index_iter), data_iter_(nullptr)
+    TwoLevelIterator::TwoLevelIterator(const Comparator * comparator, Iterator * index_iter, FilterBlockReader * filter, BlockFunction block_function, void * arg, const ReadOptions & options)
+        : comparator_(comparator), block_function_(block_function), arg_(arg), options_(options), index_iter_(index_iter), data_iter_(nullptr), filter_(filter)
     {
     }
 
@@ -127,6 +129,18 @@ namespace
         SkipEmptyDataBlocksForward();
     }
 
+    bool TwoLevelIterator::KeyMayMatch(const Slice & target) const
+    {
+        // If filter block is null, then cannot use this function to filter data
+        if (filter_ == nullptr)
+            return true;
+        BlockHandle handle;
+        Slice input = index_iter_.value();
+        if (handle.DecodeFrom(&input).ok())
+            return filter_->KeyMayMatch(handle.offset(), target);
+        return true;
+    }
+
     void TwoLevelIterator::NextUntil(const Slice & target, bool & exact_match)
     {
         assert(Compare(key(), target) < 0);
@@ -142,8 +156,18 @@ namespace
             }
             // move to the next block
             index_iter_.Next();
+
+            // Filter data using min max index. 
+            // If target is greater than index.key(max), then find target in next data block
             if (index_iter_.Valid() && Compare(index_iter_.key(), target) < 0)
                 continue; // skip the next block
+
+            // If target can be filtered by filter block(bloom filter), break the function, but don't move iterator
+            // If move the iterator(using continue here), this iterator cannot be used for finding next key(index_iter_ reach the end)
+            if (index_iter_.Valid() && !KeyMayMatch(target))
+                return; // target do not in this part
+
+            // Get data block to find target
             InitDataBlock();
             if (data_iter_.iter() != nullptr)
             {
@@ -229,9 +253,9 @@ namespace
 
 } // namespace
 
-Iterator * NewTwoLevelIterator(const Comparator * comparator, Iterator * index_iter, BlockFunction block_function, void * arg, const ReadOptions & options)
+Iterator * NewTwoLevelIterator(const Comparator * comparator, Iterator * index_iter, FilterBlockReader * filter, BlockFunction block_function, void * arg, const ReadOptions & options)
 {
-    return new TwoLevelIterator(comparator, index_iter, block_function, arg, options);
+    return new TwoLevelIterator(comparator, index_iter, filter, block_function, arg, options);
 }
 
 }

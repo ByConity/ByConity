@@ -11,6 +11,7 @@
 
 #include <Storages/IndexFile/Comparator.h>
 #include <Storages/IndexFile/Iterator.h>
+#include <Storages/IndexFile/FilterBlock.h>
 
 namespace DB::IndexFile
 {
@@ -28,6 +29,7 @@ struct ReadOptions;
 Iterator * NewTwoLevelIterator(
     const Comparator * comparator,
     Iterator * index_iter,
+    FilterBlockReader * filter,
     Iterator * (*block_function)(void * arg, const ReadOptions & options, const Slice & index_value),
     void * arg,
     const ReadOptions & options);
