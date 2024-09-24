@@ -34,8 +34,8 @@ void FileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
 
         String segment_key = getSegmentName();
         disk_cache.set(segment_key, limit_reader, end - begin, false);
-        LOG_TRACE(log, "Cached {} range {}-{} segment {} to disk", path,
-            begin, end, getSegmentName());
+        LOG_TRACE(log, "Cached file data range {}-{} segment={}, stream={} to disk",
+            begin, end, getSegmentName(), stream_name);
     }
     catch (...)
     {

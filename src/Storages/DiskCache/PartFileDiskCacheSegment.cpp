@@ -66,7 +66,7 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     const String & extension_,
     const FileOffsetAndSize & stream_file_pos_,
     UInt64 preload_level_)
-    : IDiskCacheSegment(segment_number_, segment_size_)
+    : IDiskCacheSegment(segment_number_, segment_size_, extension_ == ".bin" ? SegmentType::PART_DATA : SegmentType::SENCONDARY_INDEX)
     , data_part(data_part_)
     , storage(data_part_->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
     , mrk_file_pos(mrk_file_pos_)
@@ -185,7 +185,7 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
                 data_file->seek(stream_file_pos.file_offset + cache_data_left_offset);
                 LimitReadBuffer segment_value(*data_file, cache_data_bytes, false);
                 disk_cache.getDataCache()->set(getSegmentName(), segment_value, cache_data_bytes, preload_level > 0);
-                LOG_TRACE(disk_cache.getLogger(), "Cached data file: {}, preload_level: {}", getSegmentName(), preload_level);
+                LOG_TRACE(disk_cache.getLogger(), "Cached part{} data file: {}, preload_level: {}", extension, getSegmentName(), preload_level);
             }
 
             /// cache mark segment
@@ -195,7 +195,7 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
                 LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
                 String marks_key = getMarkName();
                 disk_cache.getMetaCache()->set(marks_key, marks_value, mrk_file_pos.file_size, preload_level > 0);
-                LOG_TRACE(disk_cache.getLogger(), "Cached mark file: {}, preload_level: {}", marks_key, preload_level);
+                LOG_TRACE(disk_cache.getLogger(), "Cached part{} mark file: {}, preload_level: {}", extension, marks_key, preload_level);
             }
 
         }
