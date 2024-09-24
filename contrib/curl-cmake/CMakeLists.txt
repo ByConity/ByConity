@@ -164,6 +164,8 @@ target_link_libraries (curl PRIVATE ssl)
 # The library is large - avoid bloat (XXX: is it?)
 target_compile_options (curl PRIVATE -g0)
 
+target_compile_options(curl PRIVATE -Wno-implicit-function-declaration)
+
 # find_package(CURL) compatibility for the following packages that uses
 # find_package(CURL)/include(FindCURL):
 # - mariadb-connector-c

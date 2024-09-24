@@ -1237,7 +1237,7 @@ ServerDataPartsWithDBM StorageCnchMergeTree::getAllPartsInPartitionsWithDBM(
         // TEST_LOG(testlog, "get dataparts in partitions.");
         LOG_DEBUG(log, "Total number of parts get from bytekv: {}", all_parts.size());
         auto catalog_time_ms = watch.elapsedMilliseconds();
-        all_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context), true);
+        all_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
 
         ProfileEvents::increment(ProfileEvents::CatalogTime, catalog_time_ms);
         ProfileEvents::increment(ProfileEvents::PrunePartsTime, watch.elapsedMilliseconds() - catalog_time_ms);

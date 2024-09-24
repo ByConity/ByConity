@@ -822,9 +822,9 @@ static void extractMergingAndGatheringColumns(
 }
 
 static void handleCompactPartWithCompactMapCol(
-    NamesAndTypesList & gathering_columns, 
+    NamesAndTypesList & gathering_columns,
     Names & gathering_column_names,
-    NamesAndTypesList & merging_columns, 
+    NamesAndTypesList & merging_columns,
     Names & merging_column_names)
 {
     NamesAndTypesList copy_gathering_columns = gathering_columns;
@@ -2144,7 +2144,7 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             {
                 rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + ".idx", "");
                 rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + mrk_extension, "");
-                
+
                 // For GIN index
                 if (source_checksums->has(INDEX_FILE_PREFIX + command.column_name + GIN_SEGMENT_ID_FILE_EXTENSION))
                 {

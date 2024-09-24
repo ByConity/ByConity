@@ -268,7 +268,7 @@ void AttachContext::commit()
         ThreadPool & pool = getWorkerPool(total_records);
         for (const auto & [_, meta_name_records] : meta_files_to_delete)
         {
-            for (const auto & [file_path, _] : meta_name_records.rename_map)
+            for (const auto & [file_path, __] : meta_name_records.rename_map)
                 pool.scheduleOrThrowOnError([&disk = meta_name_records.disk, path = file_path]() { disk->removeFileIfExists(path); });
         }
         pool.wait();

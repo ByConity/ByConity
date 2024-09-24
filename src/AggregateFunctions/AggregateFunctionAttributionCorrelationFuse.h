@@ -280,7 +280,6 @@ struct AggregateFunctionAttributionCorrelationFuseData
 
         // sort x_values
         std::sort(std::begin(tmp_values), std::end(tmp_values), ComparePairFirst<std::greater>{});
-        Float64 sumx = 0;
         Float64 sumy = 0;
 
         for (size_t j = 0; j < size;)
@@ -290,7 +289,6 @@ struct AggregateFunctionAttributionCorrelationFuseData
             size_t same = 1;
             size_t cur_sum = rank;
             size_t cur_start = j;
-            sumx += tmp_values[j].first;
 
             while (j < size - 1)
             {

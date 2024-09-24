@@ -295,12 +295,11 @@ public:
     /// The property of monotonicity for a certain range.
     struct Monotonicity
     {
-        bool is_monotonic = false;    /// Is the function monotonous (nondecreasing or nonincreasing).
-        bool is_positive = true;    /// true if the function is nondecreasing, false, if notincreasing. If is_monotonic = false, then it does not matter.
+        bool is_monotonic = false; /// Is the function monotonous (nondecreasing or nonincreasing).
+        bool is_positive
+            = true; /// true if the function is nondecreasing, false, if notincreasing. If is_monotonic = false, then it does not matter.
         bool is_always_monotonic = false; /// Is true if function is monotonic on the whole input range I
-
-        Monotonicity(bool is_monotonic_ = false, bool is_positive_ = true, bool is_always_monotonic_ = false)
-                : is_monotonic(is_monotonic_), is_positive(is_positive_), is_always_monotonic(is_always_monotonic_) {}
+        bool is_strict = false; /// true if the function is strictly decreasing or increasing.
     };
 
     /** Get information about monotonicity on a range of values. Call only if hasInformationAboutMonotonicity.

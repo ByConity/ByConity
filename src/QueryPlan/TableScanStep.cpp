@@ -1622,11 +1622,11 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
 {
     storage_id.toProto(*proto.mutable_storage_id());
-    for (auto & [name, alias] : column_alias)
+    for (auto & [name, c_alias] : column_alias)
     {
         auto proto_element = proto.add_column_alias();
         proto_element->set_name(name);
-        proto_element->set_alias(alias);
+        proto_element->set_alias(c_alias);
     }
 
     query_info.toProto(*proto.mutable_query_info());

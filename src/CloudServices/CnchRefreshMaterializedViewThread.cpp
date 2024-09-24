@@ -154,14 +154,12 @@ void CnchRefreshMaterializedViewThread::runImpl()
             vm_handle = getContext()->getVirtualWarehousePool().get(vw_name);
         }
 
-        bool success = false;
-
         try
         {
             int max_bg_task_num = storage_settings->max_refresh_materialized_view_task_num;
             if (running_tasks < max_bg_task_num)
             {
-                success = startRefreshTask(istorage, storage);
+                startRefreshTask(istorage, storage);
             }
             else
             {

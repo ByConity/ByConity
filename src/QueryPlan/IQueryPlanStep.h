@@ -212,6 +212,9 @@ public:
 
 #undef ENUM_DEF
 
+    IQueryPlanStep() = default;
+    IQueryPlanStep(const IQueryPlanStep &) = default;
+    IQueryPlanStep & operator=(IQueryPlanStep &) = default;
     virtual ~IQueryPlanStep() = default;
 
     virtual String getName() const = 0;

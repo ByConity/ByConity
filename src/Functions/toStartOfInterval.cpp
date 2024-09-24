@@ -440,7 +440,7 @@ public:
 
     Monotonicity getMonotonicityForRange(const IDataType &, const Field &, const Field &) const override
     {
-        return Monotonicity(/* is_monotonic */ true, /* is_positive */ true, /* is_always_monotonic */ true);
+        return Monotonicity{.is_monotonic = true, .is_positive = true, .is_always_monotonic = true};
     }
 
 private:

@@ -2339,7 +2339,6 @@ void MergeTreeMetaBase::getDeleteBitmapMetaForServerParts(const ServerDataPartsV
                 }
             }
         }
-
     }
 }
 

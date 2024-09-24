@@ -89,14 +89,7 @@ ExecutePlan TableScanExecutorWithIndex::buildExecutePlan(const DistributedPipeli
 
     for (auto & part_group: part_groups)
     {
-        size_t min_sum_marks = std::numeric_limits<size_t>::max();
-
         auto normal_read_result = estimateReadMarks(part_group);
-
-        // Add 1 to base sum_marks so that we prefer projections even when they have equal number of marks to read.
-        // NOTE: It is not clear if we need it. E.g. projections do not support skip index for now.
-        if (!normal_read_result->error())
-            min_sum_marks = normal_read_result->marks() + 1;
 
         bool has_bitmap_index = part_group.hasBitmapIndx();
         auto plan_element = ExecutePlanElement(part_group, std::move(normal_read_result), part_group.parts);

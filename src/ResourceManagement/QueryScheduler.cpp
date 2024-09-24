@@ -148,7 +148,7 @@ void QueryScheduler::filterWorker(const Requirement & requirement, std::vector<W
     /// Otherwise, scan all.
     for (const auto & [_, group] : vw.groups)
     {
-        for (const auto & [_, worker] : group->getWorkers())
+        for (const auto & [__, worker] : group->getWorkers())
         {
             if (worker->available(requirement))
             {
