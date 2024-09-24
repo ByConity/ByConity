@@ -39,7 +39,7 @@ Projection Est. 100 rows
                                  │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                                  │                    Where: (d_date >= cast(10644, 'Date32')) AND (d_date <= cast(10674, 'Date32'))
                                  │                    Outputs: [d_date_sk, d_date]
-                                 └─ Filter Est. 89906 rows
+                                 └─ Filter Est. 89907 rows
                                     │     Condition: i_category IN ('Books', 'Home', 'Sports')
                                     └─ TableScan tpcds1000_sample.item Est. 300000 rows
                                              Where: i_category IN ('Books', 'Home', 'Sports')

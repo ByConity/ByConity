@@ -31,37 +31,28 @@ Projection
 CTEDef [1]
    Inner Join
    │     Condition: ws_sold_time_sk == t_time_sk
-   ├─ Repartition Exchange
-   │  │     Partition by: {ws_sold_time_sk}
-   │  └─ Inner Join
-   │     │     Condition: ws_ship_hdemo_sk == hd_demo_sk
-   │     │     Runtime Filters Builder: {hd_demo_sk}
-   │     ├─ Inner Join
-   │     │  │     Condition: ws_web_page_sk == wp_web_page_sk
-   │     │  │     Runtime Filters Builder: {wp_web_page_sk}
-   │     │  ├─ Filter
-   │     │  │  │     Condition: Runtime Filters: {ws_ship_hdemo_sk, ws_web_page_sk}
-   │     │  │  └─ TableScan tpcds1000.web_sales
-   │     │  │           Where: Runtime Filters: {ws_ship_hdemo_sk, ws_web_page_sk}
-   │     │  │           Outputs: [ws_sold_time_sk, ws_ship_hdemo_sk, ws_web_page_sk]
-   │     │  └─ Broadcast Exchange
-   │     │     └─ Filter
-   │     │        │     Condition: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
-   │     │        └─ TableScan tpcds1000.web_page
-   │     │                 Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
-   │     │                 Outputs: [wp_web_page_sk, wp_char_count]
-   │     └─ Broadcast Exchange
-   │        └─ Filter
-   │           │     Condition: hd_dep_count = 6
-   │           └─ TableScan tpcds1000.household_demographics
-   │                    Where: hd_dep_count = 6
-   │                    Outputs: [hd_demo_sk, hd_dep_count]
-   └─ Repartition Exchange
-      │     Partition by: {t_time_sk}
+   ├─ Inner Join
+   │  │     Condition: ws_ship_hdemo_sk == hd_demo_sk
+   │  ├─ Inner Join
+   │  │  │     Condition: ws_web_page_sk == wp_web_page_sk
+   │  │  ├─ TableScan tpcds1000.web_sales
+   │  │  │        Outputs: [ws_sold_time_sk, ws_ship_hdemo_sk, ws_web_page_sk]
+   │  │  └─ Broadcast Exchange
+   │  │     └─ Filter
+   │  │        │     Condition: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
+   │  │        └─ TableScan tpcds1000.web_page
+   │  │                 Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
+   │  │                 Outputs: [wp_web_page_sk, wp_char_count]
+   │  └─ Broadcast Exchange
+   │     └─ Filter
+   │        │     Condition: hd_dep_count = 6
+   │        └─ TableScan tpcds1000.household_demographics
+   │                 Where: hd_dep_count = 6
+   │                 Outputs: [hd_demo_sk, hd_dep_count]
+   └─ Broadcast Exchange
       └─ Filter
          │     Condition: ((t_hour >= 8) OR (t_hour >= 19)) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour >= 19)) AND ((t_hour >= 8) OR (t_hour <= cast(20, 'UInt16'))) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour <= cast(20, 'UInt16')))
          └─ TableScan tpcds1000.time_dim
                   Where: ((t_hour >= 8) OR (t_hour >= 19)) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour >= 19)) AND ((t_hour >= 8) OR (t_hour <= cast(20, 'UInt16'))) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour <= cast(20, 'UInt16')))
                   Outputs: [t_time_sk, t_hour]
-note: Runtime Filter is applied for 2 times.
 note: CTE(Common Table Expression) is applied for 2 times.

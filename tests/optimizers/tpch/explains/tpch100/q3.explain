@@ -5,16 +5,16 @@ Projection Est. 10 rows
    └─ Sorting Est. 10 rows
       │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 178470646 rows
+      └─ Gather Exchange Est. 46781695 rows
          └─ Sorting Est. 10 rows
             │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 10
-            └─ Aggregating Est. 178470646 rows
+            └─ Aggregating Est. 46781695 rows
                │     Group by: {l_orderkey, o_orderdate, o_shippriority}
                │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-               └─ Projection Est. 178470646 rows
+               └─ Projection Est. 46781695 rows
                   │     Expressions: [l_orderkey, o_orderdate, o_shippriority], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                  └─ Inner (PARALLEL_HASH) Join Est. 178470646 rows
+                  └─ Inner (PARALLEL_HASH) Join Est. 46781695 rows
                      │     Condition: l_orderkey == o_orderkey
                      │     Runtime Filters Builder: {o_orderkey}
                      ├─ Repartition Exchange Est. 323744565 rows
@@ -26,9 +26,9 @@ Projection Est. 10 rows
                      │        └─ TableScan tpch100.lineitem Est. 600037902 rows
                      │                 Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
                      │                 Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
-                     └─ Repartition Exchange Est. 45136391 rows
+                     └─ Repartition Exchange Est. 21928665 rows
                         │     Partition by: {o_orderkey}
-                        └─ Inner (PARALLEL_HASH) Join Est. 45136391 rows
+                        └─ Inner (PARALLEL_HASH) Join Est. 21928665 rows
                            │     Condition: o_custkey == c_custkey
                            │     Runtime Filters Builder: {c_custkey}
                            ├─ Repartition Exchange Est. 72874681 rows

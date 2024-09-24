@@ -2563,8 +2563,9 @@ String StepPrinter::printFilter(const ConstASTPtr & filter)
         buf << "\\nAND ";
         conjuncts[i]->format(settings);
     }
-
-    return buf.str();
+    auto result = buf.str();
+    boost::replace_all(result, "|", "!");
+    return result;
 }
 
 String StepPrinter::printExplainAnalyzeStep(const ExplainAnalyzeStep & step)

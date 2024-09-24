@@ -1,36 +1,36 @@
-Projection Est. 920454389 rows
-│     Expressions: b_city:=ca_city_2, b_street_name:=ca_street_name_2, b_street_number:=ca_street_number_2, b_zip:=ca_zip_2, c_city:=ca_city_3, c_street_name:=ca_street_name_3, c_street_number:=ca_street_number_3, c_zip:=ca_zip_3, cnt:=`expr#count()_1`, cnt_1:=`expr#count()_2`, product_name:=i_product_name_1, s11:=`expr#sum(ss_wholesale_cost)_1`, s12:=`expr#sum(ss_wholesale_cost)_2`, s21:=`expr#sum(ss_list_price)_1`, s22:=`expr#sum(ss_list_price)_2`, s31:=`expr#sum(ss_coupon_amt)_1`, s32:=`expr#sum(ss_coupon_amt)_2`, store_name:=s_store_name_2, store_zip:=s_zip_2, syear:=d_year_3, syear_1:=d_year_6
-└─ Sorting Est. 920454389 rows
-   │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_2 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
-   └─ Gather Exchange Est. 920454389 rows
-      └─ Sorting Est. 920454389 rows
-         │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_2 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
-         └─ Inner Join Est. 920454389 rows
-            │     Condition: i_item_sk_2 == i_item_sk_1, s_store_name_2 == s_store_name_1, s_zip_2 == s_zip_1
+Projection Est. 26268931 rows
+│     Expressions: b_city:=ca_city_2, b_street_name:=ca_street_name_2, b_street_number:=ca_street_number_2, b_zip:=ca_zip_2, c_city:=ca_city_3, c_street_name:=ca_street_name_3, c_street_number:=ca_street_number_3, c_zip:=ca_zip_3, cnt:=`expr#count()_1`, cnt_1:=`expr#count()_2`, product_name:=i_product_name_1, s11:=`expr#sum(ss_wholesale_cost)_1`, s12:=`expr#sum(ss_wholesale_cost)_2`, s21:=`expr#sum(ss_list_price)_1`, s22:=`expr#sum(ss_list_price)_2`, s31:=`expr#sum(ss_coupon_amt)_1`, s32:=`expr#sum(ss_coupon_amt)_2`, store_name:=s_store_name_1, store_zip:=s_zip_1, syear:=d_year_3, syear_1:=d_year_6
+└─ Sorting Est. 26268931 rows
+   │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
+   └─ Gather Exchange Est. 26268931 rows
+      └─ Sorting Est. 26268931 rows
+         │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
+         └─ Inner Join Est. 26268931 rows
+            │     Condition: i_item_sk_1 == i_item_sk_2, s_store_name_1 == s_store_name_2, s_zip_1 == s_zip_2
             │     Filter: `expr#count()_2` <= `expr#count()_1`
-            ├─ Repartition Exchange Est. 747011 rows
-            │  │     Partition by: {i_item_sk_2, s_store_name_2, s_zip_2}
-            │  └─ Filter Est. 186752 rows
-            │     │     Condition: d_year_6 = cast(2000, 'UInt32')
-            │     └─ Buffer Est. 747011 rows
-            │        └─ CTERef[0] Est. 747011 rows
-            └─ Repartition Exchange Est. 747011 rows
-               │     Partition by: {i_item_sk_1, s_store_name_1, s_zip_1}
-               └─ Filter Est. 186752 rows
-                  │     Condition: d_year_3 = 1999
-                  └─ Buffer Est. 747011 rows
-                     └─ CTERef[0] Est. 747011 rows
+            ├─ Repartition Exchange Est. 170229 rows
+            │  │     Partition by: {i_item_sk_1, s_store_name_1, s_zip_1}
+            │  └─ Filter Est. 85114 rows
+            │     │     Condition: d_year_3 = 1999
+            │     └─ Buffer Est. 340457 rows
+            │        └─ CTERef[0] Est. 340457 rows
+            └─ Repartition Exchange Est. 170229 rows
+               │     Partition by: {i_item_sk_2, s_store_name_2, s_zip_2}
+               └─ Filter Est. 85114 rows
+                  │     Condition: d_year_6 = cast(2000, 'UInt32')
+                  └─ Buffer Est. 340457 rows
+                     └─ CTERef[0] Est. 340457 rows
 CTEDef [0]
-   Projection Est. 747011 rows
+   Projection Est. 340457 rows
    │     Expressions: [ca_city, ca_city_1, ca_street_name, ca_street_name_1, ca_street_number, ca_street_number_1, ca_zip, ca_zip_1, d_year, expr#count(), expr#sum(ss_coupon_amt), expr#sum(ss_list_price), expr#sum(ss_wholesale_cost), i_product_name, s_store_name, s_zip], i_item_sk:=ss_item_sk
-   └─ MergingAggregated Est. 747011 rows
-      └─ Repartition Exchange Est. 376045 rows
+   └─ MergingAggregated Est. 340457 rows
+      └─ Repartition Exchange Est. 342773 rows
          │     Partition by: {i_product_name, ss_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
-         └─ Aggregating Est. 376045 rows
+         └─ Aggregating Est. 342773 rows
             │     Group by: {i_product_name, ss_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
             │     Group by keys not hashed: {i_product_name}
             │     Aggregates: expr#count():=AggNull(count)(), expr#sum(ss_wholesale_cost):=AggNull(sum)(ss_wholesale_cost), expr#sum(ss_list_price):=AggNull(sum)(ss_list_price), expr#sum(ss_coupon_amt):=AggNull(sum)(ss_coupon_amt)
-            └─ Inner Join Est. 376045 rows
+            └─ Inner Join Est. 342773 rows
                │     Condition: ca_address_sk_1 == c_current_addr_sk
                │     Runtime Filters Builder: {c_current_addr_sk}
                ├─ Repartition Exchange Est. 6000000 rows
@@ -40,151 +40,137 @@ CTEDef [0]
                │     └─ TableScan tpcds1000.customer_address Est. 6000000 rows
                │              Where: Runtime Filters: {ca_address_sk}
                │              Outputs: ca_address_sk_1:=ca_address_sk, ca_street_number_1:=ca_street_number, ca_street_name_1:=ca_street_name, ca_city_1:=ca_city, ca_zip_1:=ca_zip
-               └─ Repartition Exchange Est. 376045 rows
+               └─ Repartition Exchange Est. 342773 rows
                   │     Partition by: {c_current_addr_sk}
-                  └─ Inner Join Est. 376045 rows
-                     │     Condition: cd_demo_sk_1 == c_current_cdemo_sk
+                  └─ Inner Join Est. 342773 rows
+                     │     Condition: c_current_cdemo_sk == cd_demo_sk_1
                      │     Filter: cd_marital_status != cd_marital_status_1
-                     │     Runtime Filters Builder: {c_current_cdemo_sk}
-                     ├─ Repartition Exchange Est. 1920800 rows
-                     │  │     Partition by: {cd_demo_sk_1}
-                     │  └─ Filter Est. 1920800 rows
-                     │     │     Condition: Runtime Filters: {cd_demo_sk_1}
-                     │     └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
-                     │              Where: Runtime Filters: {cd_demo_sk}
-                     │              Outputs: cd_demo_sk_1:=cd_demo_sk, cd_marital_status_1:=cd_marital_status
-                     └─ Repartition Exchange Est. 750088 rows
-                        │     Partition by: {c_current_cdemo_sk}
-                        └─ Inner Join Est. 750088 rows
-                           │     Condition: c_first_shipto_date_sk == d_date_sk_2
-                           ├─ Repartition Exchange Est. 750088 rows
-                           │  │     Partition by: {c_first_shipto_date_sk}
-                           │  └─ Inner Join Est. 750088 rows
-                           │     │     Condition: c_first_sales_date_sk == d_date_sk_1
-                           │     ├─ Repartition Exchange Est. 750088 rows
-                           │     │  │     Partition by: {c_first_sales_date_sk}
-                           │     │  └─ Inner Join Est. 750088 rows
-                           │     │     │     Condition: hd_income_band_sk_1 == ib_income_band_sk_1
-                           │     │     ├─ Inner Join Est. 750088 rows
-                           │     │     │  │     Condition: c_current_hdemo_sk == hd_demo_sk_1
-                           │     │     │  ├─ Inner Join Est. 750088 rows
-                           │     │     │  │  │     Condition: c_customer_sk == ss_customer_sk
-                           │     │     │  │  │     Runtime Filters Builder: {ss_customer_sk}
-                           │     │     │  │  ├─ Repartition Exchange Est. 12000000 rows
-                           │     │     │  │  │  │     Partition by: {c_customer_sk}
-                           │     │     │  │  │  └─ Filter Est. 12000000 rows
-                           │     │     │  │  │     │     Condition: Runtime Filters: {c_customer_sk}
-                           │     │     │  │  │     └─ TableScan tpcds1000.customer Est. 12000000 rows
-                           │     │     │  │  │              Where: Runtime Filters: {c_customer_sk}
-                           │     │     │  │  │              Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_shipto_date_sk, c_first_sales_date_sk]
-                           │     │     │  │  └─ Repartition Exchange Est. 749002 rows
-                           │     │     │  │     │     Partition by: {ss_customer_sk}
-                           │     │     │  │     └─ Inner Join Est. 749002 rows
-                           │     │     │  │        │     Condition: cd_demo_sk == ss_cdemo_sk
-                           │     │     │  │        │     Runtime Filters Builder: {ss_cdemo_sk}
-                           │     │     │  │        ├─ Repartition Exchange Est. 1920800 rows
-                           │     │     │  │        │  │     Partition by: {cd_demo_sk}
-                           │     │     │  │        │  └─ Filter Est. 1920800 rows
-                           │     │     │  │        │     │     Condition: Runtime Filters: {cd_demo_sk}
-                           │     │     │  │        │     └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
-                           │     │     │  │        │              Where: Runtime Filters: {cd_demo_sk}
-                           │     │     │  │        │              Outputs: [cd_demo_sk, cd_marital_status]
-                           │     │     │  │        └─ Repartition Exchange Est. 747007 rows
-                           │     │     │  │           │     Partition by: {ss_cdemo_sk}
-                           │     │     │  │           └─ Inner Join Est. 747007 rows
-                           │     │     │  │              │     Condition: ss_store_sk == s_store_sk
-                           │     │     │  │              ├─ Inner Join Est. 747007 rows
-                           │     │     │  │              │  │     Condition: ss_hdemo_sk == hd_demo_sk
-                           │     │     │  │              │  ├─ Inner Join Est. 747007 rows
-                           │     │     │  │              │  │  │     Condition: ca_address_sk == ss_addr_sk
-                           │     │     │  │              │  │  │     Runtime Filters Builder: {ss_addr_sk}
-                           │     │     │  │              │  │  ├─ Repartition Exchange Est. 6000000 rows
-                           │     │     │  │              │  │  │  │     Partition by: {ca_address_sk}
-                           │     │     │  │              │  │  │  └─ Filter Est. 6000000 rows
-                           │     │     │  │              │  │  │     │     Condition: Runtime Filters: {ca_address_sk}
-                           │     │     │  │              │  │  │     └─ TableScan tpcds1000.customer_address Est. 6000000 rows
-                           │     │     │  │              │  │  │              Where: Runtime Filters: {ca_address_sk}
-                           │     │     │  │              │  │  │              Outputs: [ca_address_sk, ca_street_number, ca_street_name, ca_city, ca_zip]
-                           │     │     │  │              │  │  └─ Repartition Exchange Est. 747007 rows
-                           │     │     │  │              │  │     │     Partition by: {ss_addr_sk}
-                           │     │     │  │              │  │     └─ Inner Join Est. 747007 rows
-                           │     │     │  │              │  │        │     Condition: ss_sold_date_sk == d_date_sk
-                           │     │     │  │              │  │        │     Runtime Filters Builder: {d_date_sk}
-                           │     │     │  │              │  │        ├─ Inner Join Est. 1787886 rows
-                           │     │     │  │              │  │        │  │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                           │     │     │  │              │  │        │  │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
-                           │     │     │  │              │  │        │  ├─ Projection Est. 2750390903 rows
-                           │     │     │  │              │  │        │  │  │     Expressions: [ss_addr_sk, ss_cdemo_sk, ss_coupon_amt, ss_customer_sk, ss_hdemo_sk, ss_item_sk, ss_list_price, ss_sold_date_sk, ss_store_sk, ss_ticket_number, ss_wholesale_cost]
-                           │     │     │  │              │  │        │  │  └─ Filter Est. 2750390903 rows
-                           │     │     │  │              │  │        │  │     │     Condition: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                           │     │     │  │              │  │        │  │     └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
-                           │     │     │  │              │  │        │  │              Where: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
-                           │     │     │  │              │  │        │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_cdemo_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_promo_sk, ss_ticket_number, ss_wholesale_cost, ss_list_price, ss_coupon_amt]
-                           │     │     │  │              │  │        │  └─ Inner Join Est. 186239 rows
-                           │     │     │  │              │  │        │     │     Condition: sr_item_sk == cs_item_sk
-                           │     │     │  │              │  │        │     │     Runtime Filters Builder: {cs_item_sk}
-                           │     │     │  │              │  │        │     ├─ Filter Est. 287999764 rows
-                           │     │     │  │              │  │        │     │  │     Condition: Runtime Filters: {sr_item_sk}
-                           │     │     │  │              │  │        │     │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
-                           │     │     │  │              │  │        │     │           Where: Runtime Filters: {sr_item_sk}
-                           │     │     │  │              │  │        │     │           Outputs: [sr_item_sk, sr_ticket_number]
-                           │     │     │  │              │  │        │     └─ Inner Join Est. 194 rows
-                           │     │     │  │              │  │        │        │     Condition: cs_item_sk == i_item_sk
-                           │     │     │  │              │  │        │        │     Runtime Filters Builder: {i_item_sk}
-                           │     │     │  │              │  │        │        ├─ Projection Est. 75000 rows
-                           │     │     │  │              │  │        │        │  │     Expressions: [cs_item_sk]
-                           │     │     │  │              │  │        │        │  └─ Filter Est. 75000 rows
-                           │     │     │  │              │  │        │        │     │     Condition: `expr#sum(cs_ext_list_price)` > (2 * `expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))`)
-                           │     │     │  │              │  │        │        │     └─ Aggregating Est. 300000 rows
-                           │     │     │  │              │  │        │        │        │     Group by: {cs_item_sk}
-                           │     │     │  │              │  │        │        │        │     Aggregates: expr#sum(cs_ext_list_price):=AggNull(sum)(cs_ext_list_price), expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)):=AggNull(sum)(expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))
-                           │     │     │  │              │  │        │        │        └─ Projection Est. 1035231767 rows
-                           │     │     │  │              │  │        │        │           │     Expressions: [cs_ext_list_price, cs_item_sk], expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit):=(cr_refunded_cash + cr_reversed_charge) + cr_store_credit
-                           │     │     │  │              │  │        │        │           └─ Inner (PARALLEL_HASH) Join Est. 1035231767 rows
-                           │     │     │  │              │  │        │        │              │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                           │     │     │  │              │  │        │        │              │     Runtime Filters Builder: {cr_order_number}
-                           │     │     │  │              │  │        │        │              ├─ Filter Est. 1439980416 rows
-                           │     │     │  │              │  │        │        │              │  │     Condition: Runtime Filters: {cs_item_sk, cs_order_number}
-                           │     │     │  │              │  │        │        │              │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-                           │     │     │  │              │  │        │        │              │           Where: Runtime Filters: {cs_item_sk, cs_order_number}
-                           │     │     │  │              │  │        │        │              │           Outputs: [cs_item_sk, cs_order_number, cs_ext_list_price]
-                           │     │     │  │              │  │        │        │              └─ Filter Est. 143996756 rows
-                           │     │     │  │              │  │        │        │                 │     Condition: Runtime Filters: {cr_item_sk}
-                           │     │     │  │              │  │        │        │                 └─ TableScan tpcds1000.catalog_returns Est. 143996756 rows
-                           │     │     │  │              │  │        │        │                          Where: Runtime Filters: {cr_item_sk}
-                           │     │     │  │              │  │        │        │                          Outputs: [cr_item_sk, cr_order_number, cr_refunded_cash, cr_reversed_charge, cr_store_credit]
-                           │     │     │  │              │  │        │        └─ Projection Est. 194 rows
-                           │     │     │  │              │  │        │           │     Expressions: [i_item_sk, i_product_name]
-                           │     │     │  │              │  │        │           └─ Filter Est. 194 rows
-                           │     │     │  │              │  │        │              │     Condition: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
-                           │     │     │  │              │  │        │              └─ TableScan tpcds1000.item Est. 300000 rows
-                           │     │     │  │              │  │        │                       Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
-                           │     │     │  │              │  │        │                       Outputs: [i_item_sk, i_current_price, i_color, i_product_name]
-                           │     │     │  │              │  │        └─ Broadcast Exchange Est. 729 rows
-                           │     │     │  │              │  │           └─ Filter Est. 729 rows
-                           │     │     │  │              │  │              │     Condition: (d_year = 1999) OR (d_year = cast(2000, 'UInt32'))
-                           │     │     │  │              │  │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                           │     │     │  │              │  │                       Where: (d_year = 1999) OR (d_year = cast(2000, 'UInt32'))
-                           │     │     │  │              │  │                       Outputs: [d_date_sk, d_year]
-                           │     │     │  │              │  └─ Broadcast Exchange Est. 7200 rows
-                           │     │     │  │              │     └─ TableScan tpcds1000.household_demographics Est. 7200 rows
-                           │     │     │  │              │              Outputs: [hd_demo_sk]
-                           │     │     │  │              └─ Broadcast Exchange Est. 1002 rows
-                           │     │     │  │                 └─ TableScan tpcds1000.store Est. 1002 rows
-                           │     │     │  │                          Outputs: [s_store_sk, s_store_name, s_zip]
-                           │     │     │  └─ Broadcast Exchange Est. 7200 rows
-                           │     │     │     └─ TableScan tpcds1000.household_demographics Est. 7200 rows
-                           │     │     │              Outputs: hd_demo_sk_1:=hd_demo_sk, hd_income_band_sk_1:=hd_income_band_sk
-                           │     │     └─ Broadcast Exchange Est. 20 rows
-                           │     │        └─ TableScan tpcds1000.income_band Est. 20 rows
-                           │     │                 Outputs: ib_income_band_sk_1:=ib_income_band_sk
-                           │     └─ Repartition Exchange Est. 73049 rows
-                           │        │     Partition by: {d_date_sk_1}
-                           │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                           │                 Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
-                           └─ Repartition Exchange Est. 73049 rows
-                              │     Partition by: {d_date_sk_2}
-                              └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
-note: Runtime Filter is applied for 12 times.
+                     ├─ Repartition Exchange Est. 683720 rows
+                     │  │     Partition by: {c_current_cdemo_sk}
+                     │  └─ Inner Join Est. 683720 rows
+                     │     │     Condition: c_first_shipto_date_sk == d_date_sk_2
+                     │     ├─ Inner Join Est. 683720 rows
+                     │     │  │     Condition: c_first_sales_date_sk == d_date_sk_1
+                     │     │  ├─ Inner Join Est. 683720 rows
+                     │     │  │  │     Condition: hd_income_band_sk_1 == ib_income_band_sk_1
+                     │     │  │  ├─ Inner Join Est. 683720 rows
+                     │     │  │  │  │     Condition: c_current_hdemo_sk == hd_demo_sk_1
+                     │     │  │  │  ├─ Inner Join Est. 683720 rows
+                     │     │  │  │  │  │     Condition: c_customer_sk == ss_customer_sk
+                     │     │  │  │  │  │     Runtime Filters Builder: {ss_customer_sk}
+                     │     │  │  │  │  ├─ Repartition Exchange Est. 12000000 rows
+                     │     │  │  │  │  │  │     Partition by: {c_customer_sk}
+                     │     │  │  │  │  │  └─ Filter Est. 12000000 rows
+                     │     │  │  │  │  │     │     Condition: Runtime Filters: {c_customer_sk}
+                     │     │  │  │  │  │     └─ TableScan tpcds1000.customer Est. 12000000 rows
+                     │     │  │  │  │  │              Where: Runtime Filters: {c_customer_sk}
+                     │     │  │  │  │  │              Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_shipto_date_sk, c_first_sales_date_sk]
+                     │     │  │  │  │  └─ Repartition Exchange Est. 682730 rows
+                     │     │  │  │  │     │     Partition by: {ss_customer_sk}
+                     │     │  │  │  │     └─ Inner Join Est. 682730 rows
+                     │     │  │  │  │        │     Condition: ss_cdemo_sk == cd_demo_sk
+                     │     │  │  │  │        ├─ Repartition Exchange Est. 680912 rows
+                     │     │  │  │  │        │  │     Partition by: {ss_cdemo_sk}
+                     │     │  │  │  │        │  └─ Inner Join Est. 680912 rows
+                     │     │  │  │  │        │     │     Condition: ss_store_sk == s_store_sk
+                     │     │  │  │  │        │     ├─ Inner Join Est. 680912 rows
+                     │     │  │  │  │        │     │  │     Condition: ss_hdemo_sk == hd_demo_sk
+                     │     │  │  │  │        │     │  ├─ Inner Join Est. 680912 rows
+                     │     │  │  │  │        │     │  │  │     Condition: ca_address_sk == ss_addr_sk
+                     │     │  │  │  │        │     │  │  │     Runtime Filters Builder: {ss_addr_sk}
+                     │     │  │  │  │        │     │  │  ├─ Repartition Exchange Est. 6000000 rows
+                     │     │  │  │  │        │     │  │  │  │     Partition by: {ca_address_sk}
+                     │     │  │  │  │        │     │  │  │  └─ Filter Est. 6000000 rows
+                     │     │  │  │  │        │     │  │  │     │     Condition: Runtime Filters: {ca_address_sk}
+                     │     │  │  │  │        │     │  │  │     └─ TableScan tpcds1000.customer_address Est. 6000000 rows
+                     │     │  │  │  │        │     │  │  │              Where: Runtime Filters: {ca_address_sk}
+                     │     │  │  │  │        │     │  │  │              Outputs: [ca_address_sk, ca_street_number, ca_street_name, ca_city, ca_zip]
+                     │     │  │  │  │        │     │  │  └─ Repartition Exchange Est. 680912 rows
+                     │     │  │  │  │        │     │  │     │     Partition by: {ss_addr_sk}
+                     │     │  │  │  │        │     │  │     └─ Inner Join Est. 680912 rows
+                     │     │  │  │  │        │     │  │        │     Condition: ss_sold_date_sk == d_date_sk
+                     │     │  │  │  │        │     │  │        │     Runtime Filters Builder: {d_date_sk}
+                     │     │  │  │  │        │     │  │        ├─ Inner Join Est. 1707432 rows
+                     │     │  │  │  │        │     │  │        │  │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                     │     │  │  │  │        │     │  │        │  │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
+                     │     │  │  │  │        │     │  │        │  ├─ Projection Est. 2750390903 rows
+                     │     │  │  │  │        │     │  │        │  │  │     Expressions: [ss_addr_sk, ss_cdemo_sk, ss_coupon_amt, ss_customer_sk, ss_hdemo_sk, ss_item_sk, ss_list_price, ss_sold_date_sk, ss_store_sk, ss_ticket_number, ss_wholesale_cost]
+                     │     │  │  │  │        │     │  │        │  │  └─ Filter Est. 2750390903 rows
+                     │     │  │  │  │        │     │  │        │  │     │     Condition: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                     │     │  │  │  │        │     │  │        │  │     └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
+                     │     │  │  │  │        │     │  │        │  │              Where: isNotNull(ss_promo_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
+                     │     │  │  │  │        │     │  │        │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_cdemo_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_promo_sk, ss_ticket_number, ss_wholesale_cost, ss_list_price, ss_coupon_amt]
+                     │     │  │  │  │        │     │  │        │  └─ Inner Join Est. 186239 rows
+                     │     │  │  │  │        │     │  │        │     │     Condition: sr_item_sk == cs_item_sk
+                     │     │  │  │  │        │     │  │        │     │     Runtime Filters Builder: {cs_item_sk}
+                     │     │  │  │  │        │     │  │        │     ├─ Filter Est. 287999764 rows
+                     │     │  │  │  │        │     │  │        │     │  │     Condition: Runtime Filters: {sr_item_sk}
+                     │     │  │  │  │        │     │  │        │     │  └─ TableScan tpcds1000.store_returns Est. 287999764 rows
+                     │     │  │  │  │        │     │  │        │     │           Where: Runtime Filters: {sr_item_sk}
+                     │     │  │  │  │        │     │  │        │     │           Outputs: [sr_item_sk, sr_ticket_number]
+                     │     │  │  │  │        │     │  │        │     └─ Inner Join Est. 194 rows
+                     │     │  │  │  │        │     │  │        │        │     Condition: cs_item_sk == i_item_sk
+                     │     │  │  │  │        │     │  │        │        │     Runtime Filters Builder: {i_item_sk}
+                     │     │  │  │  │        │     │  │        │        ├─ Projection Est. 75000 rows
+                     │     │  │  │  │        │     │  │        │        │  │     Expressions: [cs_item_sk]
+                     │     │  │  │  │        │     │  │        │        │  └─ Filter Est. 75000 rows
+                     │     │  │  │  │        │     │  │        │        │     │     Condition: `expr#sum(cs_ext_list_price)` > (2 * `expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))`)
+                     │     │  │  │  │        │     │  │        │        │     └─ Aggregating Est. 300000 rows
+                     │     │  │  │  │        │     │  │        │        │        │     Group by: {cs_item_sk}
+                     │     │  │  │  │        │     │  │        │        │        │     Aggregates: expr#sum(cs_ext_list_price):=AggNull(sum)(cs_ext_list_price), expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)):=AggNull(sum)(expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))
+                     │     │  │  │  │        │     │  │        │        │        └─ Projection Est. 1035231767 rows
+                     │     │  │  │  │        │     │  │        │        │           │     Expressions: [cs_ext_list_price, cs_item_sk], expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit):=(cr_refunded_cash + cr_reversed_charge) + cr_store_credit
+                     │     │  │  │  │        │     │  │        │        │           └─ Inner (PARALLEL_HASH) Join Est. 1035231767 rows
+                     │     │  │  │  │        │     │  │        │        │              │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+                     │     │  │  │  │        │     │  │        │        │              │     Runtime Filters Builder: {cr_order_number}
+                     │     │  │  │  │        │     │  │        │        │              ├─ Filter Est. 1439980416 rows
+                     │     │  │  │  │        │     │  │        │        │              │  │     Condition: Runtime Filters: {cs_item_sk, cs_order_number}
+                     │     │  │  │  │        │     │  │        │        │              │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                     │     │  │  │  │        │     │  │        │        │              │           Where: Runtime Filters: {cs_item_sk, cs_order_number}
+                     │     │  │  │  │        │     │  │        │        │              │           Outputs: [cs_item_sk, cs_order_number, cs_ext_list_price]
+                     │     │  │  │  │        │     │  │        │        │              └─ Filter Est. 143996756 rows
+                     │     │  │  │  │        │     │  │        │        │                 │     Condition: Runtime Filters: {cr_item_sk}
+                     │     │  │  │  │        │     │  │        │        │                 └─ TableScan tpcds1000.catalog_returns Est. 143996756 rows
+                     │     │  │  │  │        │     │  │        │        │                          Where: Runtime Filters: {cr_item_sk}
+                     │     │  │  │  │        │     │  │        │        │                          Outputs: [cr_item_sk, cr_order_number, cr_refunded_cash, cr_reversed_charge, cr_store_credit]
+                     │     │  │  │  │        │     │  │        │        └─ Projection Est. 194 rows
+                     │     │  │  │  │        │     │  │        │           │     Expressions: [i_item_sk, i_product_name]
+                     │     │  │  │  │        │     │  │        │           └─ Filter Est. 194 rows
+                     │     │  │  │  │        │     │  │        │              │     Condition: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
+                     │     │  │  │  │        │     │  │        │              └─ TableScan tpcds1000.item Est. 300000 rows
+                     │     │  │  │  │        │     │  │        │                       Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
+                     │     │  │  │  │        │     │  │        │                       Outputs: [i_item_sk, i_current_price, i_color, i_product_name]
+                     │     │  │  │  │        │     │  │        └─ Broadcast Exchange Est. 729 rows
+                     │     │  │  │  │        │     │  │           └─ Filter Est. 729 rows
+                     │     │  │  │  │        │     │  │              │     Condition: (d_year = 1999) OR (d_year = cast(2000, 'UInt32'))
+                     │     │  │  │  │        │     │  │              └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                     │     │  │  │  │        │     │  │                       Where: (d_year = 1999) OR (d_year = cast(2000, 'UInt32'))
+                     │     │  │  │  │        │     │  │                       Outputs: [d_date_sk, d_year]
+                     │     │  │  │  │        │     │  └─ Broadcast Exchange Est. 7200 rows
+                     │     │  │  │  │        │     │     └─ TableScan tpcds1000.household_demographics Est. 7200 rows
+                     │     │  │  │  │        │     │              Outputs: [hd_demo_sk]
+                     │     │  │  │  │        │     └─ Broadcast Exchange Est. 1002 rows
+                     │     │  │  │  │        │        └─ TableScan tpcds1000.store Est. 1002 rows
+                     │     │  │  │  │        │                 Outputs: [s_store_sk, s_store_name, s_zip]
+                     │     │  │  │  │        └─ Repartition Exchange Est. 1920800 rows
+                     │     │  │  │  │           │     Partition by: {cd_demo_sk}
+                     │     │  │  │  │           └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
+                     │     │  │  │  │                    Outputs: [cd_demo_sk, cd_marital_status]
+                     │     │  │  │  └─ Broadcast Exchange Est. 7200 rows
+                     │     │  │  │     └─ TableScan tpcds1000.household_demographics Est. 7200 rows
+                     │     │  │  │              Outputs: hd_demo_sk_1:=hd_demo_sk, hd_income_band_sk_1:=hd_income_band_sk
+                     │     │  │  └─ Broadcast Exchange Est. 20 rows
+                     │     │  │     └─ TableScan tpcds1000.income_band Est. 20 rows
+                     │     │  │              Outputs: ib_income_band_sk_1:=ib_income_band_sk
+                     │     │  └─ Broadcast Exchange Est. 73049 rows
+                     │     │     └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                     │     │              Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+                     │     └─ Broadcast Exchange Est. 73049 rows
+                     │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                     │                 Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                     └─ Repartition Exchange Est. 1920800 rows
+                        │     Partition by: {cd_demo_sk_1}
+                        └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
+                                 Outputs: cd_demo_sk_1:=cd_demo_sk, cd_marital_status_1:=cd_marital_status
+note: Runtime Filter is applied for 10 times.
 note: CTE(Common Table Expression) is applied for 2 times.

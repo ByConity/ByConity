@@ -53,10 +53,10 @@ Projection Est. 100 rows
                │           │     │           └─ TableScan tpcds100.household_demographics Est. 7200 rows
                │           │     │                    Where: (hd_dep_count = 4) OR (hd_vehicle_count = 3)
                │           │     │                    Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
-               │           │     └─ Broadcast Exchange Est. 57 rows
-               │           │        └─ Projection Est. 57 rows
+               │           │     └─ Broadcast Exchange Est. 58 rows
+               │           │        └─ Projection Est. 58 rows
                │           │           │     Expressions: [s_store_sk]
-               │           │           └─ Filter Est. 57 rows
+               │           │           └─ Filter Est. 58 rows
                │           │              │     Condition: s_city IN (' Fairview', 'Fairview', 'Midway')
                │           │              └─ TableScan tpcds100.store Est. 402 rows
                │           │                       Where: s_city IN (' Fairview', 'Fairview', 'Midway')

@@ -751,7 +751,7 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
     if (settings.json)
     {
         auto plan_cost = CostCalculator::calculatePlanCost(plan, *context_ptr);
-        buffer << PlanPrinter::jsonLogicalPlan(plan, plan_cost, {}, costs, settings);
+        buffer << PlanPrinter::jsonLogicalPlan(plan, plan_cost, CostModel(*context_ptr), {}, costs, settings);
     }
     else if (settings.pb_json)
     {

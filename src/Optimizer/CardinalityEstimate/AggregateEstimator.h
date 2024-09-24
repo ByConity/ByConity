@@ -30,7 +30,7 @@ public:
     static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const DistinctStep &, ContextMutablePtr context);
 
 private:
-    static SymbolStatisticsPtr estimateAggFun(AggregateFunctionPtr agg_function, UInt64 row_count, DataTypePtr);
+    static SymbolStatisticsPtr estimateAggFun(AggregateFunctionPtr agg_function, const Names & args, UInt64 row_count, DataTypePtr, PlanNodeStatisticsPtr & child_stats);
 };
 
 }

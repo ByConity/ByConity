@@ -302,7 +302,7 @@ void OptimizeInput::execute()
                               children_stats,
                               *context->getOptimizerContext().getContext(),
                               context->getOptimizerContext().getWorkerSize())
-                              .getCost();
+                              .getCost(context->getOptimizerContext().getCostModel());
 
             group_expr->setCost(cost);
         }
@@ -743,7 +743,7 @@ void OptimizeInput::enforcePropertyAndUpdateWinner(
                           {group_stats},
                           *opt_context->getOptimizerContext().getContext(),
                           opt_context->getOptimizerContext().getWorkerSize())
-                          .getCost();
+                          .getCost(opt_context->getOptimizerContext().getCostModel());
     }
 
     if (!require.getStreamPartitioning().isPreferred()
@@ -767,7 +767,7 @@ void OptimizeInput::enforcePropertyAndUpdateWinner(
                           {group_stats},
                           *opt_context->getOptimizerContext().getContext(),
                           opt_context->getOptimizerContext().getWorkerSize())
-                          .getCost();
+                          .getCost(opt_context->getOptimizerContext().getCostModel());
     }
 
     // Merge cte actual props

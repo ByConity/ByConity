@@ -45,44 +45,41 @@ Projection Est. 1 rows
                                        └─ Repartition Exchange Est. 5634 rows
                                           │     Partition by: {ws_order_number}
                                           └─ Inner Join Est. 5634 rows
-                                             │     Condition: ws_ship_addr_sk == ca_address_sk
-                                             │     Runtime Filters Builder: {ca_address_sk}
-                                             ├─ Repartition Exchange Est. 178831 rows
-                                             │  │     Partition by: {ws_ship_addr_sk}
-                                             │  └─ Inner Join Est. 178831 rows
-                                             │     │     Condition: ws_web_site_sk == web_site_sk
-                                             │     │     Runtime Filters Builder: {web_site_sk}
-                                             │     ├─ Inner Join Est. 2145977 rows
-                                             │     │  │     Condition: ws_ship_date_sk == d_date_sk
-                                             │     │  │     Runtime Filters Builder: {d_date_sk}
-                                             │     │  ├─ Filter Est. 72001237 rows
-                                             │     │  │  │     Condition: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
-                                             │     │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                                             │     │  │           Where: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
-                                             │     │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_warehouse_sk, ws_order_number, ws_ext_ship_cost, ws_net_profit]
-                                             │     │  └─ Broadcast Exchange Est. 59 rows
-                                             │     │     └─ Projection Est. 59 rows
-                                             │     │        │     Expressions: [d_date_sk]
-                                             │     │        └─ Filter Est. 59 rows
-                                             │     │           │     Condition: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))
-                                             │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                             │     │                    Where: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))
-                                             │     │                    Outputs: [d_date_sk, d_date]
-                                             │     └─ Broadcast Exchange Est. 2 rows
-                                             │        └─ Projection Est. 2 rows
-                                             │           │     Expressions: [web_site_sk]
-                                             │           └─ Filter Est. 2 rows
-                                             │              │     Condition: web_company_name = 'pri'
-                                             │              └─ TableScan tpcds100.web_site Est. 24 rows
-                                             │                       Where: web_company_name = 'pri'
-                                             │                       Outputs: [web_site_sk, web_company_name]
-                                             └─ Repartition Exchange Est. 31500 rows
-                                                │     Partition by: {ca_address_sk}
-                                                └─ Projection Est. 31500 rows
-                                                   │     Expressions: [ca_address_sk]
-                                                   └─ Filter Est. 31500 rows
-                                                      │     Condition: ca_state = 'IL'
-                                                      └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                                                               Where: ca_state = 'IL'
-                                                               Outputs: [ca_address_sk, ca_state]
+                                             │     Condition: ws_web_site_sk == web_site_sk
+                                             │     Runtime Filters Builder: {web_site_sk}
+                                             ├─ Inner Join Est. 67612 rows
+                                             │  │     Condition: ws_ship_addr_sk == ca_address_sk
+                                             │  │     Runtime Filters Builder: {ca_address_sk}
+                                             │  ├─ Inner Join Est. 2145977 rows
+                                             │  │  │     Condition: ws_ship_date_sk == d_date_sk
+                                             │  │  │     Runtime Filters Builder: {d_date_sk}
+                                             │  │  ├─ Filter Est. 72001237 rows
+                                             │  │  │  │     Condition: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
+                                             │  │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                                             │  │  │           Where: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
+                                             │  │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_warehouse_sk, ws_order_number, ws_ext_ship_cost, ws_net_profit]
+                                             │  │  └─ Broadcast Exchange Est. 59 rows
+                                             │  │     └─ Projection Est. 59 rows
+                                             │  │        │     Expressions: [d_date_sk]
+                                             │  │        └─ Filter Est. 59 rows
+                                             │  │           │     Condition: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))
+                                             │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                             │  │                    Where: (d_date >= cast(10623, 'Date32')) AND (d_date <= cast(10683, 'Date32'))
+                                             │  │                    Outputs: [d_date_sk, d_date]
+                                             │  └─ Broadcast Exchange Est. 31500 rows
+                                             │     └─ Projection Est. 31500 rows
+                                             │        │     Expressions: [ca_address_sk]
+                                             │        └─ Filter Est. 31500 rows
+                                             │           │     Condition: ca_state = 'IL'
+                                             │           └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                                             │                    Where: ca_state = 'IL'
+                                             │                    Outputs: [ca_address_sk, ca_state]
+                                             └─ Broadcast Exchange Est. 2 rows
+                                                └─ Projection Est. 2 rows
+                                                   │     Expressions: [web_site_sk]
+                                                   └─ Filter Est. 2 rows
+                                                      │     Condition: web_company_name = 'pri'
+                                                      └─ TableScan tpcds100.web_site Est. 24 rows
+                                                               Where: web_company_name = 'pri'
+                                                               Outputs: [web_site_sk, web_company_name]
 note: Runtime Filter is applied for 5 times.

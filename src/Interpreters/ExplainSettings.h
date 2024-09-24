@@ -41,6 +41,7 @@ struct QueryPlanSettings
     bool optimize = true;
     bool json = false;
     bool stats = true;
+    bool cost = true;
     bool profile = true;
     bool pb_json = false;
     bool verbose = true;
@@ -58,6 +59,7 @@ struct QueryPlanSettings
         {"json", json},
         {"pb_json", pb_json},
         {"stats", stats},
+        {"cost", cost},
         {"profile", profile},
         {"add_whitespace", add_whitespace},
         {"aggregate_profiles", aggregate_profiles},

@@ -18,78 +18,74 @@ Projection
                         └─ Projection
                            │     Expressions: [n_name, o_orderdate], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
                            └─ Inner Join
-                              │     Condition: s_nationkey == n_nationkey_1
-                              ├─ Inner (PARALLEL_HASH) Join
-                              │  │     Condition: l_suppkey == s_suppkey
-                              │  ├─ Repartition Exchange
-                              │  │  │     Partition by: {l_suppkey}
-                              │  │  └─ Inner Join
-                              │  │     │     Condition: c_nationkey == n_nationkey
-                              │  │     │     Runtime Filters Builder: {n_nationkey}
-                              │  │     ├─ Inner (PARALLEL_HASH) Join
-                              │  │     │  │     Condition: c_custkey == o_custkey
-                              │  │     │  │     Runtime Filters Builder: {o_custkey}
-                              │  │     │  ├─ Repartition Exchange
-                              │  │     │  │  │     Partition by: {c_custkey}
-                              │  │     │  │  └─ Filter
-                              │  │     │  │     │     Condition: Runtime Filters: {c_custkey, c_nationkey}
-                              │  │     │  │     └─ TableScan tpch1000.customer
-                              │  │     │  │              Where: Runtime Filters: {c_custkey, c_nationkey}
-                              │  │     │  │              Outputs: [c_custkey, c_nationkey]
-                              │  │     │  └─ Repartition Exchange
-                              │  │     │     │     Partition by: {o_custkey}
-                              │  │     │     └─ Inner (PARALLEL_HASH) Join
-                              │  │     │        │     Condition: o_orderkey == l_orderkey
-                              │  │     │        │     Runtime Filters Builder: {l_orderkey}
-                              │  │     │        ├─ Repartition Exchange
-                              │  │     │        │  │     Partition by: {o_orderkey}
-                              │  │     │        │  └─ Filter
-                              │  │     │        │     │     Condition: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
-                              │  │     │        │     └─ TableScan tpch1000.orders
-                              │  │     │        │              Where: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
-                              │  │     │        │              Outputs: [o_orderkey, o_custkey, o_orderdate]
-                              │  │     │        └─ Repartition Exchange
-                              │  │     │           │     Partition by: {l_orderkey}
-                              │  │     │           └─ Inner Join
-                              │  │     │              │     Condition: l_partkey == p_partkey
-                              │  │     │              │     Runtime Filters Builder: {p_partkey}
-                              │  │     │              ├─ Repartition Exchange
-                              │  │     │              │  │     Partition by: {l_partkey}
-                              │  │     │              │  └─ Filter
-                              │  │     │              │     │     Condition: Runtime Filters: {l_partkey}
-                              │  │     │              │     └─ TableScan tpch1000.lineitem
-                              │  │     │              │              Where: Runtime Filters: {l_partkey}
-                              │  │     │              │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
-                              │  │     │              └─ Repartition Exchange
-                              │  │     │                 │     Partition by: {p_partkey}
-                              │  │     │                 └─ Projection
-                              │  │     │                    │     Expressions: [p_partkey]
-                              │  │     │                    └─ Filter
-                              │  │     │                       │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
-                              │  │     │                       └─ TableScan tpch1000.part
-                              │  │     │                                Where: p_type = 'ECONOMY ANODIZED STEEL'
-                              │  │     │                                Outputs: [p_partkey, p_type]
-                              │  │     └─ Broadcast Exchange
-                              │  │        └─ Inner Join
-                              │  │           │     Condition: n_regionkey == r_regionkey
-                              │  │           ├─ Repartition Exchange
-                              │  │           │  │     Partition by: {n_regionkey}
-                              │  │           │  └─ TableScan tpch1000.nation
-                              │  │           │           Outputs: [n_nationkey, n_regionkey]
-                              │  │           └─ Repartition Exchange
-                              │  │              │     Partition by: {r_regionkey}
-                              │  │              └─ Projection
-                              │  │                 │     Expressions: [r_regionkey]
-                              │  │                 └─ Filter
-                              │  │                    │     Condition: r_name = 'AMERICA'
-                              │  │                    └─ TableScan tpch1000.region
-                              │  │                             Where: r_name = 'AMERICA'
-                              │  │                             Outputs: [r_regionkey, r_name]
-                              │  └─ Repartition Exchange
-                              │     │     Partition by: {s_suppkey}
-                              │     └─ TableScan tpch1000.supplier
-                              │              Outputs: [s_suppkey, s_nationkey]
+                              │     Condition: n_regionkey == r_regionkey
+                              ├─ Inner Join
+                              │  │     Condition: s_nationkey == n_nationkey_1
+                              │  ├─ Inner (PARALLEL_HASH) Join
+                              │  │  │     Condition: c_custkey == o_custkey
+                              │  │  │     Runtime Filters Builder: {o_custkey}
+                              │  │  ├─ Repartition Exchange
+                              │  │  │  │     Partition by: {c_custkey}
+                              │  │  │  └─ Inner Join
+                              │  │  │     │     Condition: c_nationkey == n_nationkey
+                              │  │  │     ├─ Filter
+                              │  │  │     │  │     Condition: Runtime Filters: {c_custkey}
+                              │  │  │     │  └─ TableScan tpch1000.customer
+                              │  │  │     │           Where: Runtime Filters: {c_custkey}
+                              │  │  │     │           Outputs: [c_custkey, c_nationkey]
+                              │  │  │     └─ Broadcast Exchange
+                              │  │  │        └─ TableScan tpch1000.nation
+                              │  │  │                 Outputs: [n_nationkey, n_regionkey]
+                              │  │  └─ Repartition Exchange
+                              │  │     │     Partition by: {o_custkey}
+                              │  │     └─ Inner (PARALLEL_HASH) Join
+                              │  │        │     Condition: o_orderkey == l_orderkey
+                              │  │        │     Runtime Filters Builder: {l_orderkey}
+                              │  │        ├─ Repartition Exchange
+                              │  │        │  │     Partition by: {o_orderkey}
+                              │  │        │  └─ Filter
+                              │  │        │     │     Condition: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
+                              │  │        │     └─ TableScan tpch1000.orders
+                              │  │        │              Where: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
+                              │  │        │              Outputs: [o_orderkey, o_custkey, o_orderdate]
+                              │  │        └─ Repartition Exchange
+                              │  │           │     Partition by: {l_orderkey}
+                              │  │           └─ Inner (PARALLEL_HASH) Join
+                              │  │              │     Condition: l_suppkey == s_suppkey
+                              │  │              ├─ Repartition Exchange
+                              │  │              │  │     Partition by: {l_suppkey}
+                              │  │              │  └─ Inner Join
+                              │  │              │     │     Condition: l_partkey == p_partkey
+                              │  │              │     │     Runtime Filters Builder: {p_partkey}
+                              │  │              │     ├─ Repartition Exchange
+                              │  │              │     │  │     Partition by: {l_partkey}
+                              │  │              │     │  └─ Filter
+                              │  │              │     │     │     Condition: Runtime Filters: {l_partkey}
+                              │  │              │     │     └─ TableScan tpch1000.lineitem
+                              │  │              │     │              Where: Runtime Filters: {l_partkey}
+                              │  │              │     │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
+                              │  │              │     └─ Repartition Exchange
+                              │  │              │        │     Partition by: {p_partkey}
+                              │  │              │        └─ Projection
+                              │  │              │           │     Expressions: [p_partkey]
+                              │  │              │           └─ Filter
+                              │  │              │              │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
+                              │  │              │              └─ TableScan tpch1000.part
+                              │  │              │                       Where: p_type = 'ECONOMY ANODIZED STEEL'
+                              │  │              │                       Outputs: [p_partkey, p_type]
+                              │  │              └─ Repartition Exchange
+                              │  │                 │     Partition by: {s_suppkey}
+                              │  │                 └─ TableScan tpch1000.supplier
+                              │  │                          Outputs: [s_suppkey, s_nationkey]
+                              │  └─ Broadcast Exchange
+                              │     └─ TableScan tpch1000.nation
+                              │              Outputs: [n_name], n_nationkey_1:=n_nationkey
                               └─ Broadcast Exchange
-                                 └─ TableScan tpch1000.nation
-                                          Outputs: [n_name], n_nationkey_1:=n_nationkey
-note: Runtime Filter is applied for 4 times.
+                                 └─ Projection
+                                    │     Expressions: [r_regionkey]
+                                    └─ Filter
+                                       │     Condition: r_name = 'AMERICA'
+                                       └─ TableScan tpch1000.region
+                                                Where: r_name = 'AMERICA'
+                                                Outputs: [r_regionkey, r_name]
+note: Runtime Filter is applied for 3 times.

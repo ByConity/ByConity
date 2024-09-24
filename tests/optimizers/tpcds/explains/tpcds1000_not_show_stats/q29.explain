@@ -16,66 +16,66 @@ Projection
                      │     Group by: {i_item_id, i_item_desc, s_store_id, s_store_name}
                      │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity), expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity), expr#sum(cs_quantity):=AggNull(sum)(cs_quantity)
                      └─ Inner Join
-                        │     Condition: cs_sold_date_sk == d_date_sk_2
-                        │     Runtime Filters Builder: {d_date_sk_2}
-                        ├─ Inner (PARALLEL_HASH) Join
-                        │  │     Condition: cs_bill_customer_sk == ss_customer_sk, cs_item_sk == ss_item_sk
-                        │  │     Runtime Filters Builder: {ss_customer_sk}
-                        │  ├─ Filter
-                        │  │  │     Condition: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
-                        │  │  └─ TableScan tpcds1000.catalog_sales
-                        │  │           Where: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
-                        │  │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_quantity]
-                        │  └─ Inner Join
-                        │     │     Condition: ss_store_sk == s_store_sk
-                        │     ├─ Inner Join
-                        │     │  │     Condition: ss_sold_date_sk == d_date_sk
-                        │     │  │     Runtime Filters Builder: {d_date_sk}
-                        │     │  ├─ Inner (PARALLEL_HASH) Join
-                        │     │  │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                        │     │  │  │     Runtime Filters Builder: {sr_ticket_number}
-                        │     │  │  ├─ Filter
-                        │     │  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
-                        │     │  │  │  └─ TableScan tpcds1000.store_sales
-                        │     │  │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
-                        │     │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_quantity]
-                        │     │  │  └─ Inner Join
-                        │     │  │     │     Condition: sr_item_sk == i_item_sk
-                        │     │  │     ├─ Inner Join
-                        │     │  │     │  │     Condition: sr_returned_date_sk == d_date_sk_1
-                        │     │  │     │  │     Runtime Filters Builder: {d_date_sk_1}
-                        │     │  │     │  ├─ Filter
-                        │     │  │     │  │  │     Condition: Runtime Filters: {sr_returned_date_sk}
-                        │     │  │     │  │  └─ TableScan tpcds1000.store_returns
-                        │     │  │     │  │           Where: Runtime Filters: {sr_returned_date_sk}
-                        │     │  │     │  │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number, sr_return_quantity]
-                        │     │  │     │  └─ Broadcast Exchange
-                        │     │  │     │     └─ Projection
-                        │     │  │     │        │     Expressions: [d_date_sk_1]
-                        │     │  │     │        └─ Filter
-                        │     │  │     │           │     Condition: (d_year_1 = 1999) AND (d_moy_1 >= 9) AND (d_moy_1 <= cast(12, 'UInt16'))
-                        │     │  │     │           └─ TableScan tpcds1000.date_dim
-                        │     │  │     │                    Where: (d_year = 1999) AND (d_moy >= 9) AND (d_moy <= cast(12, 'UInt16'))
-                        │     │  │     │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
-                        │     │  │     └─ TableScan tpcds1000.item
-                        │     │  │              Outputs: [i_item_sk, i_item_id, i_item_desc]
-                        │     │  └─ Broadcast Exchange
-                        │     │     └─ Projection
-                        │     │        │     Expressions: [d_date_sk]
-                        │     │        └─ Filter
-                        │     │           │     Condition: (d_moy = 9) AND (d_year = 1999)
-                        │     │           └─ TableScan tpcds1000.date_dim
-                        │     │                    Where: (d_moy = 9) AND (d_year = 1999)
-                        │     │                    Outputs: [d_date_sk, d_year, d_moy]
-                        │     └─ Broadcast Exchange
-                        │        └─ TableScan tpcds1000.store
-                        │                 Outputs: [s_store_sk, s_store_id, s_store_name]
-                        └─ Broadcast Exchange
-                           └─ Projection
-                              │     Expressions: [d_date_sk_2]
-                              └─ Filter
-                                 │     Condition: d_year_2 IN (1999, 2000, 2001)
-                                 └─ TableScan tpcds1000.date_dim
-                                          Where: d_year IN (1999, 2000, 2001)
-                                          Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                        │     Condition: cs_item_sk == i_item_sk
+                        ├─ Inner Join
+                        │  │     Condition: ss_store_sk == s_store_sk
+                        │  ├─ Inner Join
+                        │  │  │     Condition: cs_sold_date_sk == d_date_sk_2
+                        │  │  │     Runtime Filters Builder: {d_date_sk_2}
+                        │  │  ├─ Inner (PARALLEL_HASH) Join
+                        │  │  │  │     Condition: cs_bill_customer_sk == ss_customer_sk, cs_item_sk == ss_item_sk
+                        │  │  │  │     Runtime Filters Builder: {ss_customer_sk}
+                        │  │  │  ├─ Filter
+                        │  │  │  │  │     Condition: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
+                        │  │  │  │  └─ TableScan tpcds1000.catalog_sales
+                        │  │  │  │           Where: Runtime Filters: {cs_bill_customer_sk, cs_sold_date_sk}
+                        │  │  │  │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_item_sk, cs_quantity]
+                        │  │  │  └─ Inner (PARALLEL_HASH) Join
+                        │  │  │     │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                        │  │  │     │     Runtime Filters Builder: {sr_ticket_number}
+                        │  │  │     ├─ Inner Join
+                        │  │  │     │  │     Condition: ss_sold_date_sk == d_date_sk
+                        │  │  │     │  │     Runtime Filters Builder: {d_date_sk}
+                        │  │  │     │  ├─ Filter
+                        │  │  │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
+                        │  │  │     │  │  └─ TableScan tpcds1000.store_sales
+                        │  │  │     │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_ticket_number}
+                        │  │  │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_ticket_number, ss_quantity]
+                        │  │  │     │  └─ Broadcast Exchange
+                        │  │  │     │     └─ Projection
+                        │  │  │     │        │     Expressions: [d_date_sk]
+                        │  │  │     │        └─ Filter
+                        │  │  │     │           │     Condition: (d_moy = 9) AND (d_year = 1999)
+                        │  │  │     │           └─ TableScan tpcds1000.date_dim
+                        │  │  │     │                    Where: (d_moy = 9) AND (d_year = 1999)
+                        │  │  │     │                    Outputs: [d_date_sk, d_year, d_moy]
+                        │  │  │     └─ Inner Join
+                        │  │  │        │     Condition: sr_returned_date_sk == d_date_sk_1
+                        │  │  │        │     Runtime Filters Builder: {d_date_sk_1}
+                        │  │  │        ├─ Filter
+                        │  │  │        │  │     Condition: Runtime Filters: {sr_returned_date_sk}
+                        │  │  │        │  └─ TableScan tpcds1000.store_returns
+                        │  │  │        │           Where: Runtime Filters: {sr_returned_date_sk}
+                        │  │  │        │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number, sr_return_quantity]
+                        │  │  │        └─ Broadcast Exchange
+                        │  │  │           └─ Projection
+                        │  │  │              │     Expressions: [d_date_sk_1]
+                        │  │  │              └─ Filter
+                        │  │  │                 │     Condition: (d_year_1 = 1999) AND (d_moy_1 >= 9) AND (d_moy_1 <= cast(12, 'UInt16'))
+                        │  │  │                 └─ TableScan tpcds1000.date_dim
+                        │  │  │                          Where: (d_year = 1999) AND (d_moy >= 9) AND (d_moy <= cast(12, 'UInt16'))
+                        │  │  │                          Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
+                        │  │  └─ Broadcast Exchange
+                        │  │     └─ Projection
+                        │  │        │     Expressions: [d_date_sk_2]
+                        │  │        └─ Filter
+                        │  │           │     Condition: d_year_2 IN (1999, 2000, 2001)
+                        │  │           └─ TableScan tpcds1000.date_dim
+                        │  │                    Where: d_year IN (1999, 2000, 2001)
+                        │  │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year
+                        │  └─ Broadcast Exchange
+                        │     └─ TableScan tpcds1000.store
+                        │              Outputs: [s_store_sk, s_store_id, s_store_name]
+                        └─ TableScan tpcds1000.item
+                                 Outputs: [i_item_sk, i_item_id, i_item_desc]
 note: Runtime Filter is applied for 5 times.

@@ -7,11 +7,11 @@ Projection Est. 100 rows
       └─ Sorting Est. 100 rows
          │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(ss_ext_sales_price) ASC NULLS LAST}
          │     Limit: 100
-         └─ Gather Exchange Est. 25524 rows
+         └─ Gather Exchange Est. 25525 rows
             └─ Sorting Est. 100 rows
                │     Order by: {i_item_id_1 ASC NULLS LAST, expr#sum(ss_ext_sales_price) ASC NULLS LAST}
                │     Limit: 100
-               └─ Inner Join Est. 25524 rows
+               └─ Inner Join Est. 25525 rows
                   │     Condition: i_item_id_1 == i_item_id
                   │     Filter: (`expr#sum(ws_ext_sales_price)` >= ('0.9' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` <= ('1.1' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= ('1.1' * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= ('1.1' * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` >= ('0.9' * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` <= ('1.1' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` >= ('0.9' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` >= ('0.9' * `expr#sum(ws_ext_sales_price)`))
                   │     Runtime Filters Builder: {i_item_id}
@@ -92,29 +92,29 @@ Projection Est. 100 rows
                               │     Group by: {i_item_id_2}
                               │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
                               └─ Inner Join Est. 236976 rows
-                                 │     Condition: ws_item_sk == i_item_sk_2
-                                 ├─ Inner Join Est. 236976 rows
-                                 │  │     Condition: ws_sold_date_sk == d_date_sk_2
-                                 │  │     Runtime Filters Builder: {d_date_sk_2}
-                                 │  ├─ Filter Est. 72001237 rows
-                                 │  │  │     Condition: Runtime Filters: {ws_sold_date_sk}
-                                 │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                                 │  │           Where: Runtime Filters: {ws_sold_date_sk}
-                                 │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_ext_sales_price]
-                                 │  └─ Broadcast Exchange Est. 6 rows
-                                 │     └─ Left Semi Join Est. 6 rows
-                                 │        │     Condition: d_date_6 == d_date_7
-                                 │        │     Runtime Filters Builder: {d_date_7}
-                                 │        ├─ Filter Est. 73049 rows
-                                 │        │  │     Condition: Runtime Filters: {d_date_6}
-                                 │        │  └─ TableScan tpcds100.date_dim Est. 73049 rows
-                                 │        │           Where: Runtime Filters: {d_date}
-                                 │        │           Outputs: d_date_sk_2:=d_date_sk, d_date_6:=d_date
-                                 │        └─ Broadcast Exchange Est. 6 rows
-                                 │           └─ Buffer Est. 6 rows
-                                 │              └─ CTERef[1] Est. 6 rows
-                                 └─ TableScan tpcds100.item Est. 204000 rows
-                                          Outputs: i_item_sk_2:=i_item_sk, i_item_id_2:=i_item_id
+                                 │     Condition: i_item_sk_2 == ws_item_sk
+                                 ├─ TableScan tpcds100.item Est. 204000 rows
+                                 │        Outputs: i_item_sk_2:=i_item_sk, i_item_id_2:=i_item_id
+                                 └─ Inner Join Est. 236976 rows
+                                    │     Condition: ws_sold_date_sk == d_date_sk_2
+                                    │     Runtime Filters Builder: {d_date_sk_2}
+                                    ├─ Filter Est. 72001237 rows
+                                    │  │     Condition: Runtime Filters: {ws_sold_date_sk}
+                                    │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                                    │           Where: Runtime Filters: {ws_sold_date_sk}
+                                    │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_ext_sales_price]
+                                    └─ Broadcast Exchange Est. 6 rows
+                                       └─ Left Semi Join Est. 6 rows
+                                          │     Condition: d_date_6 == d_date_7
+                                          │     Runtime Filters Builder: {d_date_7}
+                                          ├─ Filter Est. 73049 rows
+                                          │  │     Condition: Runtime Filters: {d_date_6}
+                                          │  └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                          │           Where: Runtime Filters: {d_date}
+                                          │           Outputs: d_date_sk_2:=d_date_sk, d_date_6:=d_date
+                                          └─ Broadcast Exchange Est. 6 rows
+                                             └─ Buffer Est. 6 rows
+                                                └─ CTERef[1] Est. 6 rows
 CTEDef [1]
    Repartition Exchange Est. 6 rows
    │     Partition by: {d_date_1}

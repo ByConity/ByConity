@@ -129,7 +129,7 @@ TEST_F(PlanSignatureTest, DISABLED_testQ1WithoutRuntimeFilter)
     //      select sr_returned_date_sk, sr_customer_sk, sr_store_sk, sr_return_amt from store_returns
     //          where sr_store_sk in (select distinct s_store_sk from store)
     // ), date_dim where d_year = 2000 and sr_return_date_sk = d_date_sk
-    EXPECT_EQ(res.size(), 3);
+    EXPECT_EQ(res.size(), 1);
     auto repeats = (*res.begin()).second;
     EXPECT_EQ(repeats.size(), 2);
     // auto table_scan_nodes = PlanNodeSearcher::searchFrom(const_pointer_cast<PlanNodeBase>(repeats.front().node))

@@ -239,6 +239,7 @@ CascadesContext::CascadesContext(
     , enable_trace((context->getSettingsRef().log_optimizer_run_time))
     , enable_cbo(enable_cbo_ && context->getSettingsRef().enable_cbo)
     , max_join_size(max_join_size_)
+    , cost_model(CostModel(*context_))
     , log(&Poco::Logger::get("CascadesOptimizer"))
 {
     LOG_DEBUG(log, "max join size: {}", max_join_size_);

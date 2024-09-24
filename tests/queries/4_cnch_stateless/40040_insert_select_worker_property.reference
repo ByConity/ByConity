@@ -1,18 +1,18 @@
-TableFinish Est. 1 rows, cost 9.480000e-01
-└─ Gather Exchange Est. 1 rows, cost 9.480000e-01
-   └─ TableWrite Est. 1 rows, cost 6.280000e-01
+TableFinish Est. 1 rows, cost 1.114800e+01
+└─ Gather Exchange Est. 1 rows, cost 1.114800e+01
+   └─ TableWrite Est. 1 rows, cost 1.148000e+00
       │     Insert test.profile_map_tags_test_348590820934
-      └─ Local Exchange Est. 1 rows, cost 6.280000e-01
-         └─ Projection Est. 1 rows, cost 6.280000e-01
+      └─ Local Exchange Est. 1 rows, cost 1.148000e+00
+         └─ Projection Est. 1 rows, cost 1.148000e+00
             │     Expressions: [base_id], double_map:=`expr#map(\'1427\', CAST(label_value, \'Float64\'))`, id_type:=`expr#2296`, p_date:=`expr#\'2023-04-26\'`
-            └─ Projection Est. 1 rows, cost 5.540000e-01
+            └─ Projection Est. 1 rows, cost 1.074000e+00
                │     Expressions: [base_id], expr#\'2023-04-26\':=\'2023-04-26\', expr#2296:=2296, expr#map(\'1427\', CAST(label_value, \'Float64\')):=map(\'1427\', CAST(`expr#max(tenant_dau_au_rate)`, \'Float64\'))
-               └─ Limit Est. 1 rows, cost 4.800000e-01
+               └─ Limit Est. 1 rows, cost 1.000000e+00
                   │     Limit: 1
-                  └─ Gather Exchange Est. 1 rows, cost 4.800000e-01
-                     └─ Limit Est. 1 rows, cost 1.600000e-01
+                  └─ Gather Exchange Est. 1 rows, cost 1.000000e+00
+                     └─ Limit Est. 1 rows, cost 1.000000e+00
                         │     Limit: 1
-                        └─ Inner Join Est. ? rows, cost 1.600000e-01
+                        └─ Inner Join Est. ? rows, cost 1.000000e+00
                            │     Condition: base_id == base_id_1, date == expr#max(date)
                            ├─ Filter Est. ? rows, cost 0.000000e+00
                            │  │     Condition: isNotNull(`expr#max(tenant_dau_au_rate)`)
@@ -26,7 +26,7 @@ TableFinish Est. 1 rows, cost 9.480000e-01
                            │           └─ TableScan test.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
                            │                    Where: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
                            │                    Outputs: [tenant_dau_au_rate, base_id, date, p_date]
-                           └─ Broadcast Exchange Est. ? rows, cost 1.600000e-01
+                           └─ Broadcast Exchange Est. ? rows, cost 1.000000e+00
                               └─ Aggregating Est. ? rows, cost 0.000000e+00
                                  │     Group by: {base_id_1}
                                  │     Aggregates: expr#max(date):=AggNull(max)(date_1)

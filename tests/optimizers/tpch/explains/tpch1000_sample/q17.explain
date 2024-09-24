@@ -7,9 +7,9 @@ Projection Est. 1 rows
          └─ Aggregating Est. 1 rows
             │     Group by: {}
             │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
-            └─ Projection Est. 1583284 rows
+            └─ Projection Est. 1583285 rows
                │     Expressions: [l_extendedprice]
-               └─ Filter Est. 1583284 rows
+               └─ Filter Est. 1583285 rows
                   │     Condition: l_quantity < cast('0.2' * `expr#avg(l_quantity)`, 'Nullable(Float64)')
                   └─ Window Est. 6333138 rows
                      └─ Repartition Exchange Est. 6333138 rows

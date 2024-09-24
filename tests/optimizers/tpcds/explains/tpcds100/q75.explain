@@ -5,34 +5,34 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt) ASC NULLS LAST, expr#minus(curr_yr.sales_amt, prev_yr.sales_amt) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 417387872 rows
+      └─ Gather Exchange Est. 68497244403 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt) ASC NULLS LAST, expr#minus(curr_yr.sales_amt, prev_yr.sales_amt) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 417387872 rows
+            └─ Projection Est. 68497244403 rows
                │     Expressions: [d_year_4, d_year_5, expr#sum(sales_cnt)_1, expr#sum(sales_cnt)_2, i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4], expr#minus(curr_yr.sales_amt, prev_yr.sales_amt):=`expr#sum(sales_amt)_1` - `expr#sum(sales_amt)_2`, expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt):=`expr#sum(sales_cnt)_1` - `expr#sum(sales_cnt)_2`
-               └─ Inner Join Est. 417387872 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 68497244403 rows
                   │     Condition: i_brand_id_4 == i_brand_id_5, i_category_id_4 == i_category_id_5, i_class_id_4 == i_class_id_5, i_manufact_id_4 == i_manufact_id_5
                   │     Filter: (CAST(`expr#sum(sales_cnt)_1`, 'DECIMAL(17, 2)') / CAST(`expr#sum(sales_cnt)_2`, 'DECIMAL(17, 2)')) < '0.9'
-                  ├─ Repartition Exchange Est. 489563 rows
+                  ├─ Repartition Exchange Est. 16357486 rows
                   │  │     Partition by: {i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4}
-                  │  └─ Filter Est. 244781 rows
+                  │  └─ Filter Est. 8178743 rows
                   │     │     Condition: d_year_4 = 2002
-                  │     └─ Buffer Est. 979126 rows
-                  │        └─ CTERef[0] Est. 979126 rows
-                  └─ Repartition Exchange Est. 489563 rows
+                  │     └─ Buffer Est. 32714971 rows
+                  │        └─ CTERef[0] Est. 32714971 rows
+                  └─ Repartition Exchange Est. 16357486 rows
                      │     Partition by: {i_brand_id_5, i_category_id_5, i_class_id_5, i_manufact_id_5}
-                     └─ Filter Est. 244781 rows
+                     └─ Filter Est. 8178743 rows
                         │     Condition: d_year_5 = cast(2001, 'Int32')
-                        └─ Buffer Est. 979126 rows
-                           └─ CTERef[0] Est. 979126 rows
+                        └─ Buffer Est. 32714971 rows
+                           └─ CTERef[0] Est. 32714971 rows
 CTEDef [0]
-   Projection Est. 979126 rows
+   Projection Est. 32714971 rows
    │     Expressions: [expr#sum(sales_amt), expr#sum(sales_cnt)], d_year_3:=d_year_6, i_brand_id_3:=i_brand_id_6, i_category_id_3:=i_category_id_6, i_class_id_3:=i_class_id_6, i_manufact_id_3:=i_manufact_id_6
-   └─ MergingAggregated Est. 979126 rows
-      └─ Repartition Exchange Est. 979126 rows
+   └─ MergingAggregated Est. 32714971 rows
+      └─ Repartition Exchange Est. 32714971 rows
          │     Partition by: {d_year_6, i_brand_id_6, i_class_id_6, i_category_id_6, i_manufact_id_6}
-         └─ Aggregating Est. 979126 rows
+         └─ Aggregating Est. 32714971 rows
             │     Group by: {d_year_6, i_brand_id_6, i_class_id_6, i_category_id_6, i_manufact_id_6}
             │     Aggregates: expr#sum(sales_cnt):=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_1), expr#sum(sales_amt):=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0'))_1)
             └─ MergingAggregated Est. 32714971 rows

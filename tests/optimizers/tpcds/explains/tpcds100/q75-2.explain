@@ -5,34 +5,34 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 423070489 rows
+      └─ Gather Exchange Est. 69054929391 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 423070489 rows
+            └─ Projection Est. 69054929391 rows
                │     Expressions: [d_year_4, d_year_5, expr#sum(sales_cnt)_1, expr#sum(sales_cnt)_2, i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4], expr#minus(curr_yr.sales_amt, prev_yr.sales_amt):=`expr#sum(sales_amt)_1` - `expr#sum(sales_amt)_2`, expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt):=`expr#sum(sales_cnt)_1` - `expr#sum(sales_cnt)_2`
-               └─ Inner Join Est. 423070489 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 69054929391 rows
                   │     Condition: i_brand_id_4 == i_brand_id_5, i_category_id_4 == i_category_id_5, i_class_id_4 == i_class_id_5, i_manufact_id_4 == i_manufact_id_5
                   │     Filter: (`expr#sum(sales_cnt)_1` / `expr#sum(sales_cnt)_2`) < 0.9
-                  ├─ Repartition Exchange Est. 494558 rows
+                  ├─ Repartition Exchange Est. 16423940 rows
                   │  │     Partition by: {i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4}
-                  │  └─ Filter Est. 247279 rows
+                  │  └─ Filter Est. 8211970 rows
                   │     │     Condition: d_year_4 = 2002
-                  │     └─ Buffer Est. 989117 rows
-                  │        └─ CTERef[0] Est. 989117 rows
-                  └─ Repartition Exchange Est. 494558 rows
+                  │     └─ Buffer Est. 32847880 rows
+                  │        └─ CTERef[0] Est. 32847880 rows
+                  └─ Repartition Exchange Est. 16423940 rows
                      │     Partition by: {i_brand_id_5, i_category_id_5, i_class_id_5, i_manufact_id_5}
-                     └─ Filter Est. 247279 rows
+                     └─ Filter Est. 8211970 rows
                         │     Condition: d_year_5 = cast(2001, 'Int32')
-                        └─ Buffer Est. 989117 rows
-                           └─ CTERef[0] Est. 989117 rows
+                        └─ Buffer Est. 32847880 rows
+                           └─ CTERef[0] Est. 32847880 rows
 CTEDef [0]
-   Projection Est. 989117 rows
+   Projection Est. 32847880 rows
    │     Expressions: [expr#sum(sales_amt), expr#sum(sales_cnt)], d_year_3:=d_year_6, i_brand_id_3:=i_brand_id_6, i_category_id_3:=i_category_id_6, i_class_id_3:=i_class_id_6, i_manufact_id_3:=i_manufact_id_6
-   └─ MergingAggregated Est. 989117 rows
-      └─ Repartition Exchange Est. 989117 rows
+   └─ MergingAggregated Est. 32847880 rows
+      └─ Repartition Exchange Est. 32847880 rows
          │     Partition by: {d_year_6, i_brand_id_6, i_class_id_6, i_category_id_6, i_manufact_id_6}
-         └─ Aggregating Est. 989117 rows
+         └─ Aggregating Est. 32847880 rows
             │     Group by: {d_year_6, i_brand_id_6, i_class_id_6, i_category_id_6, i_manufact_id_6}
             │     Aggregates: expr#sum(sales_cnt):=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_1), expr#sum(sales_amt):=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0'))_1)
             └─ Projection Est. 32847880 rows
@@ -58,9 +58,9 @@ CTEDef [0]
                   │     │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                   │     │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                   │     │  │           Outputs: [cs_sold_date_sk, cs_item_sk, cs_order_number, cs_quantity, cs_ext_sales_price]
-                  │     │  └─ Projection Est. 20271 rows
+                  │     │  └─ Projection Est. 20272 rows
                   │     │     │     Expressions: [i_brand_id, i_category_id, i_class_id, i_item_sk, i_manufact_id]
-                  │     │     └─ Filter Est. 20271 rows
+                  │     │     └─ Filter Est. 20272 rows
                   │     │        │     Condition: i_category = 'Men'
                   │     │        └─ TableScan tpcds100.item Est. 204000 rows
                   │     │                 Where: i_category = 'Men'
@@ -90,9 +90,9 @@ CTEDef [0]
                   │     │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                   │     │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                   │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ticket_number, ss_quantity, ss_ext_sales_price]
-                  │     │  └─ Projection Est. 20271 rows
+                  │     │  └─ Projection Est. 20272 rows
                   │     │     │     Expressions: [i_brand_id_1, i_category_id_1, i_class_id_1, i_item_sk_1, i_manufact_id_1]
-                  │     │     └─ Filter Est. 20271 rows
+                  │     │     └─ Filter Est. 20272 rows
                   │     │        │     Condition: i_category_1 = 'Men'
                   │     │        └─ TableScan tpcds100.item Est. 204000 rows
                   │     │                 Where: i_category = 'Men'
@@ -122,9 +122,9 @@ CTEDef [0]
                         │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                         │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
                         │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_order_number, ws_quantity, ws_ext_sales_price]
-                        │  └─ Projection Est. 20271 rows
+                        │  └─ Projection Est. 20272 rows
                         │     │     Expressions: [i_brand_id_2, i_category_id_2, i_class_id_2, i_item_sk_2, i_manufact_id_2]
-                        │     └─ Filter Est. 20271 rows
+                        │     └─ Filter Est. 20272 rows
                         │        │     Condition: i_category_2 = 'Men'
                         │        └─ TableScan tpcds100.item Est. 204000 rows
                         │                 Where: i_category = 'Men'

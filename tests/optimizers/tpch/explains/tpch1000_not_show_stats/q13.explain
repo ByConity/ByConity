@@ -11,24 +11,21 @@ Projection
                └─ Aggregating
                   │     Group by: {expr#count(o_orderkey)}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ MergingAggregated
-                     └─ Repartition Exchange
-                        │     Partition by: {c_custkey}
-                        └─ Aggregating
-                           │     Group by: {c_custkey}
-                           │     Aggregates: expr#count(o_orderkey):=AggNull(count)(o_orderkey)
-                           └─ Right (PARALLEL_HASH) Join
-                              │     Condition: o_custkey == c_custkey
-                              ├─ Repartition Exchange
-                              │  │     Partition by: {o_custkey}
-                              │  └─ Projection
-                              │     │     Expressions: [o_custkey, o_orderkey]
-                              │     └─ Filter
-                              │        │     Condition: o_comment NOT LIKE '%special%requests%'
-                              │        └─ TableScan tpch1000.orders
-                              │                 Where: o_comment NOT LIKE '%special%requests%'
-                              │                 Outputs: [o_orderkey, o_custkey, o_comment]
-                              └─ Repartition Exchange
-                                 │     Partition by: {c_custkey}
-                                 └─ TableScan tpch1000.customer
-                                          Outputs: [c_custkey]
+                  └─ Aggregating
+                     │     Group by: {c_custkey}
+                     │     Aggregates: expr#count(o_orderkey):=AggNull(count)(o_orderkey)
+                     └─ Left (PARALLEL_HASH) Join
+                        │     Condition: c_custkey == o_custkey
+                        ├─ Repartition Exchange
+                        │  │     Partition by: {c_custkey}
+                        │  └─ TableScan tpch1000.customer
+                        │           Outputs: [c_custkey]
+                        └─ Repartition Exchange
+                           │     Partition by: {o_custkey}
+                           └─ Projection
+                              │     Expressions: [o_custkey, o_orderkey]
+                              └─ Filter
+                                 │     Condition: o_comment NOT LIKE '%special%requests%'
+                                 └─ TableScan tpch1000.orders
+                                          Where: o_comment NOT LIKE '%special%requests%'
+                                          Outputs: [o_orderkey, o_custkey, o_comment]

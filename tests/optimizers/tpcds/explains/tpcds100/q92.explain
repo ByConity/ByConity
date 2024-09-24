@@ -10,9 +10,9 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#sum(ws_ext_discount_amt):=AggNull(sum)(ws_ext_discount_amt)
-               └─ Projection Est. 715 rows
+               └─ Projection Est. 716 rows
                   │     Expressions: [ws_ext_discount_amt]
-                  └─ Filter Est. 715 rows
+                  └─ Filter Est. 716 rows
                      │     Condition: ws_ext_discount_amt > ('1.3' * `expr#avg(ws_ext_discount_amt)`)
                      └─ Window Est. 2863 rows
                         └─ Inner Join Est. 2863 rows

@@ -99,9 +99,9 @@ Projection Est. 1 rows
                                        └─ Aggregating Est. 11815786 rows
                                           │     Group by: {ss_customer_sk_3}
                                           │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_5:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_3)
-                                          └─ Projection Est. 2303073773 rows
+                                          └─ Projection Est. 2198216328 rows
                                              │     Expressions: [ss_customer_sk_3], expr#multiply(ss_quantity, ss_sales_price)_3:=ss_quantity_3 * ss_sales_price_3
-                                             └─ Inner Join Est. 2303073773 rows
+                                             └─ Inner Join Est. 2198216328 rows
                                                 │     Condition: ss_sold_date_sk_3 == d_date_sk_5
                                                 ├─ Filter Est. 2750410684 rows
                                                 │  │     Condition: isNotNull(ss_customer_sk_3)
@@ -159,7 +159,7 @@ Projection Est. 100 rows
                │                    │  └─ Right Semi (PARALLEL_HASH) Join Est. 21960485 rows
                │                    │     │     Condition: i_item_sk_5 == cs_item_sk_2
                │                    │     │     Runtime Filters Builder: {cs_item_sk_2}
-               │                    │     ├─ Filter Est. 143861166 rows
+               │                    │     ├─ Filter Est. 143861167 rows
                │                    │     │  │     Condition: Runtime Filters: {i_item_sk_5}
                │                    │     │  └─ Local Exchange Est. 575444667 rows
                │                    │     │     └─ Buffer Est. 575444667 rows
@@ -211,7 +211,7 @@ Projection Est. 100 rows
                                     │  └─ Right Semi (PARALLEL_HASH) Join Est. 11058700 rows
                                     │     │     Condition: i_item_sk_6 == ws_item_sk_1
                                     │     │     Runtime Filters Builder: {ws_item_sk_1}
-                                    │     ├─ Filter Est. 143861166 rows
+                                    │     ├─ Filter Est. 143861167 rows
                                     │     │  │     Condition: Runtime Filters: {i_item_sk_6}
                                     │     │  └─ Local Exchange Est. 575444667 rows
                                     │     │     └─ Buffer Est. 575444667 rows
@@ -291,9 +291,9 @@ CTEDef [1]
                         └─ Aggregating Est. 11815786 rows
                            │     Group by: {ss_customer_sk_5}
                            │     Aggregates: expr#sum(multiply(ss_quantity, ss_sales_price))_7:=AggNull(sum)(expr#multiply(ss_quantity, ss_sales_price)_5)
-                           └─ Projection Est. 2303073773 rows
+                           └─ Projection Est. 2198216328 rows
                               │     Expressions: [ss_customer_sk_5], expr#multiply(ss_quantity, ss_sales_price)_5:=ss_quantity_5 * ss_sales_price_5
-                              └─ Inner Join Est. 2303073773 rows
+                              └─ Inner Join Est. 2198216328 rows
                                  │     Condition: ss_sold_date_sk_5 == d_date_sk_8
                                  ├─ Filter Est. 2750410684 rows
                                  │  │     Condition: isNotNull(ss_customer_sk_5)

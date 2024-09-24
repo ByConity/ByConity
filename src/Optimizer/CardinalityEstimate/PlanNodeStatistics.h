@@ -68,10 +68,27 @@ public:
     void updateSymbolStatistics(const String & symbol, SymbolStatisticsPtr stats) { symbol_statistics[symbol] = stats; }
 
     UInt64 getOutputSizeInBytes() const;
+    UInt64 getColumnSize(Names symbols) const;
 
     String toString() const;
 
     Poco::JSON::Object::Ptr toJson() const;
+
+    void pruneSymbols(NameSet && names)
+    {
+        auto pm_it = symbol_statistics.begin();
+        while (pm_it != symbol_statistics.end())
+        {
+            if (!names.contains(pm_it->first))
+            {
+                pm_it = symbol_statistics.erase(pm_it);
+            }
+            else
+            {
+                ++pm_it;
+            }
+        }
+    }
 
 private:
     UInt64 row_count;

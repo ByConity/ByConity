@@ -5,21 +5,21 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {s_store_name ASC NULLS LAST, s_company_id ASC NULLS LAST, s_street_number ASC NULLS LAST, s_street_name ASC NULLS LAST, s_street_type ASC NULLS LAST, s_suite_number ASC NULLS LAST, s_city ASC NULLS LAST, s_county ASC NULLS LAST, s_state ASC NULLS LAST, s_zip ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 35259830 rows
+      └─ Gather Exchange Est. 33674906 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_store_name ASC NULLS LAST, s_company_id ASC NULLS LAST, s_street_number ASC NULLS LAST, s_street_name ASC NULLS LAST, s_street_type ASC NULLS LAST, s_suite_number ASC NULLS LAST, s_city ASC NULLS LAST, s_county ASC NULLS LAST, s_state ASC NULLS LAST, s_zip ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 35259830 rows
-               └─ Repartition Exchange Est. 35259830 rows
+            └─ MergingAggregated Est. 33674906 rows
+               └─ Repartition Exchange Est. 33674906 rows
                   │     Partition by: {s_store_name, s_company_id, s_street_number, s_street_name, s_street_type, s_suite_number, s_city, s_county, s_state, s_zip}
-                  └─ Aggregating Est. 35259830 rows
+                  └─ Aggregating Est. 33674906 rows
                      │     Group by: {s_store_name, s_company_id, s_street_number, s_street_name, s_street_type, s_suite_number, s_city, s_county, s_state, s_zip}
                      │     Aggregates: expr#sum(multiIf(lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 30), 1, 0)):=AggNull(sum)(expr#multiIf(lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 30), 1, 0)), expr#sum(multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 30), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 60)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 30), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 60)), 1, 0)), expr#sum(multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 60), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 90)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 60), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 90)), 1, 0)), expr#sum(multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 90), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 120)), 1, 0)):=AggNull(sum)(expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 90), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 120)), 1, 0)), expr#sum(multiIf(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 120), 1, 0)):=AggNull(sum)(expr#multiIf(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 120), 1, 0))
-                     └─ Projection Est. 35259830 rows
+                     └─ Projection Est. 33674906 rows
                         │     Expressions: [s_city, s_company_id, s_county, s_state, s_store_name, s_street_name, s_street_number, s_street_type, s_suite_number, s_zip], expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 30), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 60)), 1, 0):=multiIf(((sr_returned_date_sk - ss_sold_date_sk) > 30) AND ((sr_returned_date_sk - ss_sold_date_sk) <= 60), 1, 0), expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 60), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 90)), 1, 0):=multiIf(((sr_returned_date_sk - ss_sold_date_sk) > 60) AND ((sr_returned_date_sk - ss_sold_date_sk) <= 90), 1, 0), expr#multiIf(and(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 90), lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 120)), 1, 0):=multiIf(((sr_returned_date_sk - ss_sold_date_sk) > 90) AND ((sr_returned_date_sk - ss_sold_date_sk) <= 120), 1, 0), expr#multiIf(greater(minus(sr_returned_date_sk, ss_sold_date_sk), 120), 1, 0):=multiIf((sr_returned_date_sk - ss_sold_date_sk) > 120, 1, 0), expr#multiIf(lessOrEquals(minus(sr_returned_date_sk, ss_sold_date_sk), 30), 1, 0):=multiIf((sr_returned_date_sk - ss_sold_date_sk) <= 30, 1, 0)
-                        └─ Inner Join Est. 35259830 rows
+                        └─ Inner Join Est. 33674906 rows
                            │     Condition: ss_store_sk == s_store_sk
-                           ├─ Inner (PARALLEL_HASH) Join Est. 35259830 rows
+                           ├─ Inner (PARALLEL_HASH) Join Est. 33674906 rows
                            │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │  │     Runtime Filters Builder: {sr_customer_sk,sr_ticket_number}
                            │  ├─ Filter Est. 2750533043 rows
@@ -35,10 +35,10 @@ Projection Est. 100 rows
                            │     │  └─ TableScan tpcds1000_sample.store_returns Est. 287999764 rows
                            │     │           Where: Runtime Filters: {sr_returned_date_sk}
                            │     │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_customer_sk, sr_ticket_number]
-                           │     └─ Broadcast Exchange Est. 30 rows
-                           │        └─ Projection Est. 30 rows
+                           │     └─ Broadcast Exchange Est. 31 rows
+                           │        └─ Projection Est. 31 rows
                            │           │     Expressions: [d_date_sk_1]
-                           │           └─ Filter Est. 30 rows
+                           │           └─ Filter Est. 31 rows
                            │              │     Condition: (d_moy = 8) AND (d_year = 2001)
                            │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                            │                       Where: (d_moy = 8) AND (d_year = 2001)

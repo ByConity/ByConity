@@ -44,17 +44,15 @@ Projection
                   │           │     │           └─ TableScan tpcds1000.date_dim
                   │           │     │                    Where: (d_moy = 2) AND (d_year = 2001)
                   │           │     │                    Outputs: [d_date_sk, d_year, d_moy]
-                  │           │     └─ Broadcast Exchange
-                  │           │        └─ Left Semi Join
-                  │           │           │     Condition: i_item_id == i_item_id_1
-                  │           │           │     Runtime Filters Builder: {i_item_id_1}
-                  │           │           ├─ Repartition Exchange
-                  │           │           │  │     Partition by: {i_item_id}
-                  │           │           │  └─ Filter
-                  │           │           │     │     Condition: Runtime Filters: {i_item_id}
-                  │           │           │     └─ TableScan tpcds1000.item
-                  │           │           │              Where: Runtime Filters: {i_item_id}
-                  │           │           │              Outputs: [i_item_sk, i_item_id]
+                  │           │     └─ Left Semi Join
+                  │           │        │     Condition: i_item_id == i_item_id_1
+                  │           │        │     Runtime Filters Builder: {i_item_id_1}
+                  │           │        ├─ Filter
+                  │           │        │  │     Condition: Runtime Filters: {i_item_id}
+                  │           │        │  └─ TableScan tpcds1000.item
+                  │           │        │           Where: Runtime Filters: {i_item_id}
+                  │           │        │           Outputs: [i_item_sk, i_item_id]
+                  │           │        └─ Broadcast Exchange
                   │           │           └─ Buffer
                   │           │              └─ CTERef[1]
                   │           └─ Repartition Exchange
@@ -105,17 +103,15 @@ Projection
                   │                 │           └─ TableScan tpcds1000.date_dim
                   │                 │                    Where: (d_year = 2001) AND (d_moy = 2)
                   │                 │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
-                  │                 └─ Broadcast Exchange
-                  │                    └─ Left Semi Join
-                  │                       │     Condition: i_item_id_2 == i_item_id_3
-                  │                       │     Runtime Filters Builder: {i_item_id_3}
-                  │                       ├─ Repartition Exchange
-                  │                       │  │     Partition by: {i_item_id_2}
-                  │                       │  └─ Filter
-                  │                       │     │     Condition: Runtime Filters: {i_item_id_2}
-                  │                       │     └─ TableScan tpcds1000.item
-                  │                       │              Where: Runtime Filters: {i_item_id}
-                  │                       │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
+                  │                 └─ Left Semi Join
+                  │                    │     Condition: i_item_id_2 == i_item_id_3
+                  │                    │     Runtime Filters Builder: {i_item_id_3}
+                  │                    ├─ Filter
+                  │                    │  │     Condition: Runtime Filters: {i_item_id_2}
+                  │                    │  └─ TableScan tpcds1000.item
+                  │                    │           Where: Runtime Filters: {i_item_id}
+                  │                    │           Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
+                  │                    └─ Broadcast Exchange
                   │                       └─ Buffer
                   │                          └─ CTERef[1]
                   └─ MergingAggregated
@@ -157,28 +153,24 @@ Projection
                                     │           └─ TableScan tpcds1000.date_dim
                                     │                    Where: (d_moy = 2) AND (d_year = 2001)
                                     │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
-                                    └─ Broadcast Exchange
-                                       └─ Left Semi Join
-                                          │     Condition: i_item_id_4 == i_item_id_5
-                                          │     Runtime Filters Builder: {i_item_id_5}
-                                          ├─ Repartition Exchange
-                                          │  │     Partition by: {i_item_id_4}
-                                          │  └─ Filter
-                                          │     │     Condition: Runtime Filters: {i_item_id_4}
-                                          │     └─ TableScan tpcds1000.item
-                                          │              Where: Runtime Filters: {i_item_id}
-                                          │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
+                                    └─ Left Semi Join
+                                       │     Condition: i_item_id_4 == i_item_id_5
+                                       │     Runtime Filters Builder: {i_item_id_5}
+                                       ├─ Filter
+                                       │  │     Condition: Runtime Filters: {i_item_id_4}
+                                       │  └─ TableScan tpcds1000.item
+                                       │           Where: Runtime Filters: {i_item_id}
+                                       │           Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
+                                       └─ Broadcast Exchange
                                           └─ Buffer
                                              └─ CTERef[1]
 CTEDef [1]
-   Repartition Exchange
-   │     Partition by: {i_item_id_1}
-   └─ Projection
-      │     Expressions: [i_item_id_1]
-      └─ Filter
-         │     Condition: i_color IN ('blanched', 'burnished', 'slate')
-         └─ TableScan tpcds1000.item
-                  Where: i_color IN ('blanched', 'burnished', 'slate')
-                  Outputs: [i_color], i_item_id_1:=i_item_id
+   Projection
+   │     Expressions: [i_item_id_1]
+   └─ Filter
+      │     Condition: i_color IN ('blanched', 'burnished', 'slate')
+      └─ TableScan tpcds1000.item
+               Where: i_color IN ('blanched', 'burnished', 'slate')
+               Outputs: [i_color], i_item_id_1:=i_item_id
 note: Runtime Filter is applied for 12 times.
 note: CTE(Common Table Expression) is applied for 3 times.

@@ -93,7 +93,7 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     for (const auto & agg_desc : agg_descs)
     {
         symbol_statistics[agg_desc.column_name]
-            = AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]);
+            = AggregateEstimator::estimateAggFun(agg_desc.function, agg_desc.argument_names, row_count, name_to_type[agg_desc.column_name], child_stats);
     }
 
     return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
@@ -119,7 +119,7 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     for (const auto & agg_desc : agg_descs)
     {
         symbol_statistics[agg_desc.column_name]
-            = AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]);
+            = AggregateEstimator::estimateAggFun(agg_desc.function, agg_desc.argument_names, row_count, name_to_type[agg_desc.column_name], child_stats);
     }
 
     return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
@@ -146,9 +146,16 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     return std::make_shared<PlanNodeStatistics>(row_count, std::move(symbol_statistics));
 }
 
-SymbolStatisticsPtr AggregateEstimator::estimateAggFun(AggregateFunctionPtr fun, UInt64 row_count, DataTypePtr data_type)
+SymbolStatisticsPtr AggregateEstimator::estimateAggFun(AggregateFunctionPtr fun, const Names & args, UInt64 row_count, DataTypePtr data_type, PlanNodeStatisticsPtr & child_stats)
 {
-    SymbolStatistics statistics{row_count, 0, 0, 0, 0, {}, data_type, fun->getName(), false};
+    Float64 min = 0;
+    Float64 max = 0;
+    if (fun->getName() == "sum" && !args.empty() && child_stats->getSymbolStatistics(args[0]))
+    {
+        min = child_stats->getSymbolStatistics(args[0])->getMin();
+        max = child_stats->getSymbolStatistics(args[0])->getMax();
+    }
+    SymbolStatistics statistics{row_count, min, max, 0, 0, {}, data_type, "unknown", false};
     return std::make_shared<SymbolStatistics>(statistics);
 }
 

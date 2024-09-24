@@ -1,27 +1,27 @@
-Projection Est. 170870 rows
+Projection Est. 1030483 rows
 │     Expressions: [P_BRAND, S_CITY], d_year:=`expr#toYear(LO_ORDERDATE)`, profit:=`expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST))`
-└─ Sorting Est. 170870 rows
+└─ Sorting Est. 1030483 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-   └─ Gather Exchange Est. 170870 rows
-      └─ Sorting Est. 170870 rows
+   └─ Gather Exchange Est. 1030483 rows
+      └─ Sorting Est. 1030483 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-         └─ MergingAggregated Est. 170870 rows
-            └─ Repartition Exchange Est. 170870 rows
+         └─ MergingAggregated Est. 1030483 rows
+            └─ Repartition Exchange Est. 1030483 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), S_CITY, P_BRAND}
-               └─ Aggregating Est. 170870 rows
+               └─ Aggregating Est. 1030483 rows
                   │     Group by: {expr#toYear(LO_ORDERDATE), S_CITY, P_BRAND}
                   │     Aggregates: expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST)):=AggNull(sum)(expr#minus(LO_REVENUE, LO_SUPPLYCOST))
-                  └─ Projection Est. 10943147 rows
+                  └─ Projection Est. 1030483 rows
                      │     Expressions: [P_BRAND, S_CITY], expr#minus(LO_REVENUE, LO_SUPPLYCOST):=LO_REVENUE - LO_SUPPLYCOST, expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner (PARALLEL_HASH) Join Est. 10943147 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 1030483 rows
                         │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     Runtime Filters Builder: {C_CUSTKEY}
-                        ├─ Repartition Exchange Est. 54706846 rows
+                        ├─ Repartition Exchange Est. 3419172 rows
                         │  │     Partition by: {LO_CUSTKEY}
-                        │  └─ Inner Join Est. 54706846 rows
+                        │  └─ Inner Join Est. 3419172 rows
                         │     │     Condition: LO_PARTKEY == P_PARTKEY
                         │     │     Runtime Filters Builder: {P_PARTKEY}
-                        │     ├─ Inner Join Est. 239624219 rows
+                        │     ├─ Inner Join Est. 59905964 rows
                         │     │  │     Condition: LO_SUPPKEY == S_SUPPKEY
                         │     │  │     Runtime Filters Builder: {S_SUPPKEY}
                         │     │  ├─ Filter Est. 1499997453 rows

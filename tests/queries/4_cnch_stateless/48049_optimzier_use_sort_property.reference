@@ -195,14 +195,14 @@ Projection Est. ? rows
                         Input Order Info: {a DESC ANY, b DESC ANY, c DESC ANY}
                         Outputs: a_1:=a, b_1:=b, c_1:=c
 explain select a, b, c from (select a, b, c from test where a = '1' and b = '1' union all select a, b, c from test where a = '3' and b = '3') order by c desc limit 10;
-Projection Est. 10 rows, cost 2.500000e+00
+Projection Est. 10 rows, cost 7.400000e-01
 │     Expressions: a:=a_2, b:=b_2, c:=c_2
-└─ Limit Est. 10 rows, cost 1.760000e+00
+└─ Limit Est. 10 rows, cost 0.000000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 1.760000e+00
+   └─ Sorting Est. 10 rows, cost 0.000000e+00
       │     Order by: {c_2 DESC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
+      └─ Gather Exchange Est. 10 rows, cost 0.000000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {c_2 DESC NULLS LAST}
             │     Limit: 10

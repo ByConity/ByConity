@@ -5,40 +5,40 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#count() DESC NULLS LAST, i_item_desc ASC NULLS LAST, w_warehouse_name ASC NULLS LAST, d_week_seq ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 9195469 rows
+      └─ Gather Exchange Est. 1226357317 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#count() DESC NULLS LAST, i_item_desc ASC NULLS LAST, w_warehouse_name ASC NULLS LAST, d_week_seq ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 9195469 rows
-               └─ Repartition Exchange Est. 9195469 rows
+            └─ MergingAggregated Est. 1226357317 rows
+               └─ Repartition Exchange Est. 1226357317 rows
                   │     Partition by: {i_item_desc, w_warehouse_name, d_week_seq}
-                  └─ Aggregating Est. 9195469 rows
+                  └─ Aggregating Est. 1226357317 rows
                      │     Group by: {i_item_desc, w_warehouse_name, d_week_seq}
                      │     Aggregates: expr#sum(multiIf(isNull(p_promo_sk), 1, 0)):=AggNull(sum)(expr#multiIf(isNull(p_promo_sk), 1, 0)), expr#sum(multiIf(isNotNull(p_promo_sk), 1, 0)):=AggNull(sum)(expr#multiIf(isNotNull(p_promo_sk), 1, 0)), expr#count():=AggNull(count)()
-                     └─ Projection Est. 60138605188 rows
+                     └─ Projection Est. 4939415070 rows
                         │     Expressions: [d_week_seq, i_item_desc, w_warehouse_name], expr#multiIf(isNotNull(p_promo_sk), 1, 0):=multiIf(isNotNull(cs_promo_sk), 1, 0), expr#multiIf(isNull(p_promo_sk), 1, 0):=multiIf(isNull(cs_promo_sk), 1, 0)
-                        └─ Left (PARALLEL_HASH) Join Est. 60138605188 rows
+                        └─ Left (PARALLEL_HASH) Join Est. 4939415070 rows
                            │     Condition: inv_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                           ├─ Inner Join Est. 39515341192 rows
+                           ├─ Inner Join Est. 4939415070 rows
                            │  │     Condition: inv_warehouse_sk == w_warehouse_sk
-                           │  ├─ Inner (PARALLEL_HASH) Join Est. 34770745202 rows
+                           │  │     Runtime Filters Builder: {w_warehouse_sk}
+                           │  ├─ Inner (PARALLEL_HASH) Join Est. 34770752510 rows
                            │  │  │     Condition: inv_date_sk == d_date_sk_1, inv_item_sk == cs_item_sk
                            │  │  │     Filter: inv_quantity_on_hand < cs_quantity
-                           │  │  │     Runtime Filters Builder: {cs_item_sk}
                            │  │  ├─ Repartition Exchange Est. 783000000 rows
                            │  │  │  │     Partition by: {inv_item_sk}
                            │  │  │  └─ Filter Est. 783000000 rows
-                           │  │  │     │     Condition: Runtime Filters: {inv_item_sk}
+                           │  │  │     │     Condition: Runtime Filters: {inv_warehouse_sk}
                            │  │  │     └─ TableScan tpcds1000.inventory Est. 783000000 rows
-                           │  │  │              Where: Runtime Filters: {inv_item_sk}
+                           │  │  │              Where: Runtime Filters: {inv_warehouse_sk}
                            │  │  │              Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
-                           │  │  └─ Inner Join Est. 33305311 rows
+                           │  │  └─ Inner Join Est. 33305318 rows
                            │  │     │     Condition: d_week_seq == d_week_seq_1
-                           │  │     ├─ Inner Join Est. 4758097 rows
+                           │  │     ├─ Inner Join Est. 4758098 rows
                            │  │     │  │     Condition: cs_item_sk == i_item_sk
-                           │  │     │  ├─ Repartition Exchange Est. 4758097 rows
+                           │  │     │  ├─ Repartition Exchange Est. 4758098 rows
                            │  │     │  │  │     Partition by: {cs_item_sk}
-                           │  │     │  │  └─ Inner Join Est. 4758097 rows
+                           │  │     │  │  └─ Inner Join Est. 4758098 rows
                            │  │     │  │     │     Condition: cs_ship_date_sk == d_date_sk_2
                            │  │     │  │     │     Filter: d_date_1 > (d_date + toIntervalDay(5))
                            │  │     │  │     ├─ Inner Join Est. 9516195 rows

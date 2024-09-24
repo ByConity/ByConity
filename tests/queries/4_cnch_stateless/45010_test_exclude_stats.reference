@@ -23,21 +23,21 @@ ba	1	1
 Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ TableScan test_45010.a Est. ? rows
-Projection Est. 1 rows, cost 1.134000e+00
-└─ Gather Exchange Est. 1 rows, cost 1.060000e+00
-   └─ TableScan test_45010.ba Est. 1 rows, cost 7.400000e-01
+Projection Est. 1 rows, cost 3.886000e+00
+└─ Gather Exchange Est. 1 rows, cost 3.812000e+00
+   └─ TableScan test_45010.ba Est. 1 rows, cost 2.812000e+00
 Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ TableScan test_45010.a Est. ? rows
 a	1	1
 aa	1	2
 aaa	1	3
-Projection Est. 1 rows, cost 1.134000e+00
-└─ Gather Exchange Est. 1 rows, cost 1.060000e+00
-   └─ TableScan test_45010.a Est. 1 rows, cost 7.400000e-01
-Projection Est. 1 rows, cost 1.134000e+00
-└─ Gather Exchange Est. 1 rows, cost 1.060000e+00
-   └─ TableScan test_45010.ba Est. 1 rows, cost 7.400000e-01
-Projection Est. 1 rows, cost 1.134000e+00
-└─ Gather Exchange Est. 1 rows, cost 1.060000e+00
-   └─ TableScan test_45010.a Est. 1 rows, cost 7.400000e-01
+Projection Est. 1 rows, cost 3.886000e+00
+└─ Gather Exchange Est. 1 rows, cost 3.812000e+00
+   └─ TableScan test_45010.a Est. 1 rows, cost 2.812000e+00
+Projection Est. 1 rows, cost 3.886000e+00
+└─ Gather Exchange Est. 1 rows, cost 3.812000e+00
+   └─ TableScan test_45010.ba Est. 1 rows, cost 2.812000e+00
+Projection Est. 1 rows, cost 3.886000e+00
+└─ Gather Exchange Est. 1 rows, cost 3.812000e+00
+   └─ TableScan test_45010.a Est. 1 rows, cost 2.812000e+00

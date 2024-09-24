@@ -1479,6 +1479,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_unwrap_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
+    M(Bool, enable_cbo_push_partial_agg, false, "Whether enable cost base push partial agg", 0) \
     M(Bool, enable_shuffle_before_state_func, true, "Whether shuffle when agg func is state func.", 0) \
     M(Bool, enable_share_common_plan_node, true, "Whether enable share common plan node using cte", 0) \
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
@@ -1495,7 +1496,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
     M(Bool, enable_remove_remove_unnecessary_buffer, false, "Whether to only add buffer for cte consumer that may cause deadlock", 0) \
-    M(Int64, max_buffer_size_for_deadlock_cte, 8000000000, "Inline CTE if buffer is oversized, set 0 to inline all cte, set -1 to buffer data for all cte even no stats", 0) \
+    M(Int64, max_buffer_size_for_deadlock_cte, 13000000000, "Inline CTE if buffer is oversized, set 0 to inline all cte, set -1 to buffer data for all cte even no stats", 0) \
     M(UInt64, max_prewhere_or_expression_size, 0, "Max depth of condition which can push down to prewhere", 0) \
     M(Bool, enable_add_exchange, true, "Whether to enable AddExchange rule", 0) \
     M(Bool, enable_bitmap_index_splitter, true, "Whether to enable BitMapIndexSplitter", 0) \
@@ -1620,7 +1621,10 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, statistics_max_partitions, 0, "Max partitions in total to collect partitioned stats, 0 for unlimited", 0) \
     M(Bool, statistics_query_cnch_parts_for_row_count, true, "Use cnch parts instead of count(*) for row count to speed up test", 0) \
     /** Optimizer relative settings, cost model and estimation */ \
-    M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_cpu_cost_ratio, 0.74, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_mem_cost_ratio, 0.16, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_net_cost_ratio, 1.0, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_table_scan_weight, 3.8, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
     M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
     M(Float, cost_calculator_join_build_weight, 1.5, "Join build side weight for cost calculator", 0) \
@@ -1628,7 +1632,11 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight_for_join_build_side, 1.3, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
+    M(Bool, cost_calculator_use_size, true, "Whether use byte size to calc cost", 0) \
+    M(Bool, cost_calculator_use_size_in_join, true, "Whether use byte size to calc cost in join", 0) \
+    M(Float, cost_calculator_byte_size_weight, 1, " Byte size weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 0.5, "Join filter selectivity", 0) \
+    M(Bool, stats_estimator_join_use_histogram, true, "Estimate join use histogram", 0) \
     M(Float, stats_estimator_anti_join_filter_coefficient, 0.6, "Anti Join filter coefficient", 0) \
     M(Float, stats_estimator_first_agg_key_filter_coefficient, 0.3, "First agg key coefficient", 0) \
     M(Float, stats_estimator_remaining_agg_keys_filter_coefficient, 1.5, "Remaining agg key coefficient", 0) \

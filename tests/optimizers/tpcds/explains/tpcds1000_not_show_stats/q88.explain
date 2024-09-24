@@ -97,23 +97,23 @@ CTEDef [1]
    Inner Join
    │     Condition: ss_sold_time_sk == t_time_sk
    ├─ Inner Join
-   │  │     Condition: ss_hdemo_sk == hd_demo_sk
+   │  │     Condition: ss_store_sk == s_store_sk
    │  ├─ Inner Join
-   │  │  │     Condition: ss_store_sk == s_store_sk
+   │  │  │     Condition: ss_hdemo_sk == hd_demo_sk
    │  │  ├─ TableScan tpcds1000.store_sales
    │  │  │        Outputs: [ss_sold_time_sk, ss_hdemo_sk, ss_store_sk]
    │  │  └─ Broadcast Exchange
    │  │     └─ Filter
-   │  │        │     Condition: s_store_name = 'ese'
-   │  │        └─ TableScan tpcds1000.store
-   │  │                 Where: s_store_name = 'ese'
-   │  │                 Outputs: [s_store_sk, s_store_name]
+   │  │        │     Condition: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
+   │  │        └─ TableScan tpcds1000.household_demographics
+   │  │                 Where: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
+   │  │                 Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
    │  └─ Broadcast Exchange
    │     └─ Filter
-   │        │     Condition: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
-   │        └─ TableScan tpcds1000.household_demographics
-   │                 Where: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
-   │                 Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
+   │        │     Condition: s_store_name = 'ese'
+   │        └─ TableScan tpcds1000.store
+   │                 Where: s_store_name = 'ese'
+   │                 Outputs: [s_store_sk, s_store_name]
    └─ Broadcast Exchange
       └─ Filter
          │     Condition: ((t_hour = 8) AND (t_minute >= 30)) OR ((t_hour = 9) AND (t_minute < 30)) OR ((t_hour = 9) AND (t_minute >= 30)) OR ((t_hour = 10) AND (t_minute < 30)) OR ((t_hour = 10) AND (t_minute >= 30)) OR ((t_hour = 11) AND (t_minute < 30)) OR ((t_hour = 11) AND (t_minute >= 30)) OR ((t_hour = 12) AND (t_minute < 30))
