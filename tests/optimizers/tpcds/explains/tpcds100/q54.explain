@@ -89,10 +89,10 @@ Projection Est. 100 rows
                                        │           │                    │        └─ TableScan tpcds100.item Est. 204000 rows
                                        │           │                    │                 Where: (i_class = 'maternity') AND (i_category = 'Women')
                                        │           │                    │                 Outputs: [i_item_sk, i_class, i_category]
-                                       │           │                    └─ Broadcast Exchange Est. 30 rows
-                                       │           │                       └─ Projection Est. 30 rows
+                                       │           │                    └─ Broadcast Exchange Est. 31 rows
+                                       │           │                       └─ Projection Est. 31 rows
                                        │           │                          │     Expressions: [d_date_sk]
-                                       │           │                          └─ Filter Est. 30 rows
+                                       │           │                          └─ Filter Est. 31 rows
                                        │           │                             │     Condition: (d_year = 1998) AND (d_moy = 12)
                                        │           │                             └─ TableScan tpcds100.date_dim Est. 73049 rows
                                        │           │                                      Where: (d_year = 1998) AND (d_moy = 12)
@@ -101,48 +101,48 @@ Projection Est. 100 rows
                                        │              │     Partition by: {s_county, s_state}
                                        │              └─ TableScan tpcds100.store Est. 402 rows
                                        │                       Outputs: [s_county, s_state]
-                                       └─ Repartition Exchange Est. 18262 rows
+                                       └─ Repartition Exchange Est. 18263 rows
                                           │     Partition by: {d_date_sk_1}
-                                          └─ Inner Join Est. 18262 rows
+                                          └─ Inner Join Est. 18263 rows
                                              │     Condition: 
                                              │     Filter: d_month_seq <= `expr#plus(d_month_seq, 3)_1`
-                                             ├─ Inner Join Est. 36524 rows
+                                             ├─ Inner Join Est. 36525 rows
                                              │  │     Condition: 
                                              │  │     Filter: d_month_seq >= `expr#plus(d_month_seq, 1)_1`
                                              │  ├─ TableScan tpcds100.date_dim Est. 73049 rows
                                              │  │        Outputs: [d_month_seq], d_date_sk_1:=d_date_sk
                                              │  └─ Broadcast Exchange Est. 1 rows
                                              │     └─ EnforceSingleRow Est. 1 rows
-                                             │        └─ Gather Exchange Est. 1 rows
-                                             │           └─ Projection Est. 1 rows
+                                             │        └─ Gather Exchange Est. 31 rows
+                                             │           └─ Projection Est. 31 rows
                                              │              │     Expressions: expr#plus(d_month_seq, 1)_1:=cast(`expr#plus(d_month_seq, 1)`, 'Nullable(Int32)')
-                                             │              └─ MergingAggregated Est. 1 rows
-                                             │                 └─ Repartition Exchange Est. 1 rows
+                                             │              └─ MergingAggregated Est. 31 rows
+                                             │                 └─ Repartition Exchange Est. 31 rows
                                              │                    │     Partition by: {expr#plus(d_month_seq, 1)}
-                                             │                    └─ Aggregating Est. 1 rows
+                                             │                    └─ Aggregating Est. 31 rows
                                              │                       │     Group by: {expr#plus(d_month_seq, 1)}
-                                             │                       └─ Projection Est. 30 rows
+                                             │                       └─ Projection Est. 31 rows
                                              │                          │     Expressions: expr#plus(d_month_seq, 1):=d_month_seq_1 + 1
-                                             │                          └─ Buffer Est. 30 rows
-                                             │                             └─ CTERef[1] Est. 30 rows
+                                             │                          └─ Buffer Est. 31 rows
+                                             │                             └─ CTERef[1] Est. 31 rows
                                              └─ Broadcast Exchange Est. 1 rows
                                                 └─ EnforceSingleRow Est. 1 rows
-                                                   └─ Gather Exchange Est. 1 rows
-                                                      └─ Projection Est. 1 rows
+                                                   └─ Gather Exchange Est. 31 rows
+                                                      └─ Projection Est. 31 rows
                                                          │     Expressions: expr#plus(d_month_seq, 3)_1:=cast(`expr#plus(d_month_seq, 3)`, 'Nullable(Int32)')
-                                                         └─ MergingAggregated Est. 1 rows
-                                                            └─ Repartition Exchange Est. 1 rows
+                                                         └─ MergingAggregated Est. 31 rows
+                                                            └─ Repartition Exchange Est. 31 rows
                                                                │     Partition by: {expr#plus(d_month_seq, 3)}
-                                                               └─ Aggregating Est. 1 rows
+                                                               └─ Aggregating Est. 31 rows
                                                                   │     Group by: {expr#plus(d_month_seq, 3)}
-                                                                  └─ Projection Est. 30 rows
+                                                                  └─ Projection Est. 31 rows
                                                                      │     Expressions: expr#plus(d_month_seq, 3):=d_month_seq_2 + 3
-                                                                     └─ Buffer Est. 30 rows
-                                                                        └─ CTERef[1] Est. 30 rows
+                                                                     └─ Buffer Est. 31 rows
+                                                                        └─ CTERef[1] Est. 31 rows
 CTEDef [1]
-   Projection Est. 30 rows
+   Projection Est. 31 rows
    │     Expressions: [d_month_seq_1]
-   └─ Filter Est. 30 rows
+   └─ Filter Est. 31 rows
       │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 12)
       └─ TableScan tpcds100.date_dim Est. 73049 rows
                Where: (d_year = 1998) AND (d_moy = 12)

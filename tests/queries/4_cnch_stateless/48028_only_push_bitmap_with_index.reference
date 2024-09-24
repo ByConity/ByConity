@@ -1,12 +1,12 @@
-Projection Est. 100 rows, cost 2.380000e+01
+Projection Est. 100 rows, cost 8.900000e+00
 │     Expressions: _1700004311268:=`expr#sum(mapElement(int_params, \'predict_step\'))`, _1700050188505:=`expr#multiIf(arraySetCheck(splitByChar(\',\', mapElement(string_params, \'local_life_deboost_ab_list\')), \'33\'), \'AA\', \'-1\')`
-└─ Limit Est. 100 rows, cost 1.640000e+01
+└─ Limit Est. 100 rows, cost 1.500000e+00
    │     Limit: 100
-   └─ Gather Exchange Est. 100 rows, cost 1.640000e+01
-      └─ Limit Est. 100 rows, cost 2.400000e-01
+   └─ Gather Exchange Est. 100 rows, cost 1.500000e+00
+      └─ Limit Est. 100 rows, cost 1.500000e+00
          │     Limit: 100
-         └─ MergingAggregated Est. ? rows, cost 2.400000e-01
-            └─ Repartition Exchange Est. ? rows, cost 2.400000e-01
+         └─ MergingAggregated Est. ? rows, cost 1.500000e+00
+            └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                │     Partition by: {expr#multiIf(arraySetCheck(splitByChar(\',\', mapElement(string_params, \'local_life_deboost_ab_list\')), \'33\'), \'AA\', \'-1\')}
                └─ Aggregating Est. ? rows, cost 0.000000e+00
                   │     Group by: {expr#multiIf(arraySetCheck(splitByChar(\',\', mapElement(string_params, \'local_life_deboost_ab_list\')), \'33\'), \'AA\', \'-1\')}

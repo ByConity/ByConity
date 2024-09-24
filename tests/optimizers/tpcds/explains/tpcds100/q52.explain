@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 165 rows
+      └─ Gather Exchange Est. 81905 rows
          └─ Sorting Est. 100 rows
             │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 165 rows
-               └─ Repartition Exchange Est. 165 rows
+            └─ MergingAggregated Est. 81905 rows
+               └─ Repartition Exchange Est. 81905 rows
                   │     Partition by: {d_year, i_brand, i_brand_id}
-                  └─ Aggregating Est. 165 rows
+                  └─ Aggregating Est. 81905 rows
                      │     Group by: {d_year, i_brand, i_brand_id}
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                      └─ Inner Join Est. 81905 rows
@@ -34,9 +34,9 @@ Projection Est. 100 rows
                         │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                         │                    Where: (d_moy = 11) AND (d_year = 2000)
                         │                    Outputs: [d_date_sk, d_year, d_moy]
-                        └─ Projection Est. 3647 rows
+                        └─ Projection Est. 3648 rows
                            │     Expressions: [i_brand, i_brand_id, i_item_sk]
-                           └─ Filter Est. 3647 rows
+                           └─ Filter Est. 3648 rows
                               │     Condition: i_manager_id = 1
                               └─ TableScan tpcds100.item Est. 204000 rows
                                        Where: i_manager_id = 1

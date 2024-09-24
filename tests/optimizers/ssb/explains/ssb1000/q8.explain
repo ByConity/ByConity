@@ -1,24 +1,24 @@
-Projection Est. 39431 rows
+Projection Est. 3609416 rows
 │     Expressions: [C_CITY, S_CITY], d_year:=`expr#toYear(LO_ORDERDATE)`, revenue:=`expr#sum(LO_REVENUE)`
-└─ Sorting Est. 39431 rows
+└─ Sorting Est. 3609416 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-   └─ Gather Exchange Est. 39431 rows
-      └─ Sorting Est. 39431 rows
+   └─ Gather Exchange Est. 3609416 rows
+      └─ Sorting Est. 3609416 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-         └─ MergingAggregated Est. 39431 rows
-            └─ Repartition Exchange Est. 39431 rows
+         └─ MergingAggregated Est. 3609416 rows
+            └─ Repartition Exchange Est. 3609416 rows
                │     Partition by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
-               └─ Aggregating Est. 39431 rows
+               └─ Aggregating Est. 3609416 rows
                   │     Group by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 57750760 rows
+                  └─ Projection Est. 3609416 rows
                      │     Expressions: [C_CITY, LO_REVENUE, S_CITY], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join Est. 57750760 rows
+                     └─ Inner Join Est. 3609416 rows
                         │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     Runtime Filters Builder: {C_CUSTKEY}
-                        ├─ Repartition Exchange Est. 239624219 rows
+                        ├─ Repartition Exchange Est. 59905964 rows
                         │  │     Partition by: {LO_CUSTKEY}
-                        │  └─ Inner Join Est. 239624219 rows
+                        │  └─ Inner Join Est. 59905964 rows
                         │     │     Condition: LO_SUPPKEY == S_SUPPKEY
                         │     │     Runtime Filters Builder: {S_SUPPKEY}
                         │     ├─ Filter Est. 1499997453 rows

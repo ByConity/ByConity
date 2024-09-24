@@ -15,6 +15,7 @@
 
 #pragma once
 #include <Core/Types.h>
+#include <Optimizer/CostModel/CostModel.h>
 
 namespace DB
 {
@@ -41,7 +42,7 @@ public:
     static PlanNodeCost memCost(double cost) { return PlanNodeCost{0.0, 0.0, cost}; }
     static PlanNodeCost memCost(size_t cost) { return memCost(static_cast<double>(cost)); }
 
-    double getCost() const;
+    double getCost(const CostModel & cost_model) const;
 
     double getCpuValue() const { return cpu_value; }
     double getNetValue() const { return net_value; }

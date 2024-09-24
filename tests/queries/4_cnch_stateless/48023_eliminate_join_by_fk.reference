@@ -29,14 +29,14 @@ Projection Est. ? rows
                      Outputs: [price]
 1
 OK: fk left outer join pk
-Projection Est. 10 rows, cost 2.500000e+00
+Projection Est. 10 rows, cost 7.400000e-01
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 1.760000e+00
+└─ Limit Est. 10 rows, cost 0.000000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 1.760000e+00
+   └─ Sorting Est. 10 rows, cost 0.000000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
+      └─ Gather Exchange Est. 10 rows, cost 0.000000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
@@ -46,14 +46,14 @@ Projection Est. 10 rows, cost 2.500000e+00
 2000.3
 3003.5
 OK: pk right outer join fk
-Projection Est. 10 rows, cost 2.500000e+00
+Projection Est. 10 rows, cost 7.400000e-01
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 1.760000e+00
+└─ Limit Est. 10 rows, cost 0.000000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 1.760000e+00
+   └─ Sorting Est. 10 rows, cost 0.000000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
+      └─ Gather Exchange Est. 10 rows, cost 0.000000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
@@ -63,24 +63,24 @@ Projection Est. 10 rows, cost 2.500000e+00
 2000.3
 3003.5
 not OK: fk right outer join pk
-Projection Est. 10 rows, cost 2.980000e+00
+Projection Est. 10 rows, cost 3.740000e+00
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 2.240000e+00
+└─ Limit Est. 10 rows, cost 3.000000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 2.240000e+00
+   └─ Sorting Est. 10 rows, cost 3.000000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 2.240000e+00
-         └─ Sorting Est. 10 rows, cost 4.800000e-01
+      └─ Gather Exchange Est. 10 rows, cost 3.000000e+00
+         └─ Sorting Est. 10 rows, cost 3.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
-            └─ Right Join Est. ? rows, cost 4.800000e-01
+            └─ Right Join Est. ? rows, cost 3.000000e+00
                │     Condition: sk == expr#cast(sk_1, \'Nullable(Int64)\')
-               ├─ Repartition Exchange Est. ? rows, cost 2.400000e-01
+               ├─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                │  │     Partition by: {sk}
                │  └─ TableScan test.web Est. ? rows, cost 0.000000e+00
                │           Outputs: [sk, price]
-               └─ Repartition Exchange Est. ? rows, cost 2.400000e-01
+               └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                   │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
                   └─ Projection Est. ? rows, cost 0.000000e+00
                      │     Expressions: expr#cast(sk_1, \'Nullable(Int64)\'):=cast(sk_1, \'Nullable(Int64)\')
@@ -90,14 +90,14 @@ Projection Est. 10 rows, cost 2.980000e+00
 2000.3
 \N
 OK: fk semi join pk
-Projection Est. 10 rows, cost 2.500000e+00
+Projection Est. 10 rows, cost 7.400000e-01
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 1.760000e+00
+└─ Limit Est. 10 rows, cost 0.000000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 1.760000e+00
+   └─ Sorting Est. 10 rows, cost 0.000000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
+      └─ Gather Exchange Est. 10 rows, cost 0.000000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10

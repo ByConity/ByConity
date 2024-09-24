@@ -1,72 +1,72 @@
 Projection
-│     Expressions: ca_county:=ca_county_3, d_year:=d_year_1, store_q1_q2_increase:=`expr#divide(ss2.store_sales, ss1.store_sales)`, store_q2_q3_increase:=`expr#divide(ss3.store_sales, ss2.store_sales)`, web_q1_q2_increase:=`expr#divide(ws2.web_sales, ws1.web_sales)`, web_q2_q3_increase:=`expr#divide(ws3.web_sales, ws2.web_sales)`
+│     Expressions: ca_county:=ca_county_5, d_year:=d_year_1, store_q1_q2_increase:=`expr#divide(ss2.store_sales, ss1.store_sales)`, store_q2_q3_increase:=`expr#divide(ss3.store_sales, ss2.store_sales)`, web_q1_q2_increase:=`expr#divide(ws2.web_sales, ws1.web_sales)`, web_q2_q3_increase:=`expr#divide(ws3.web_sales, ws2.web_sales)`
 └─ Sorting
-   │     Order by: {ca_county_3 ASC NULLS LAST}
+   │     Order by: {ca_county_5 ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {ca_county_3 ASC NULLS LAST}
+         │     Order by: {ca_county_5 ASC NULLS LAST}
          └─ Projection
-            │     Expressions: [ca_county_3, d_year_1], expr#divide(ss2.store_sales, ss1.store_sales):=`expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, expr#divide(ss3.store_sales, ss2.store_sales):=`expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, expr#divide(ws2.web_sales, ws1.web_sales):=`expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, expr#divide(ws3.web_sales, ws2.web_sales):=`expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`
+            │     Expressions: [ca_county_5, d_year_1], expr#divide(ss2.store_sales, ss1.store_sales):=`expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, expr#divide(ss3.store_sales, ss2.store_sales):=`expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, expr#divide(ws2.web_sales, ws1.web_sales):=`expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, expr#divide(ws3.web_sales, ws2.web_sales):=`expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`
             └─ Inner Join
-               │     Condition: ca_county_3 == ca_county_1
+               │     Condition: ca_county_5 == ca_county_1
                │     Filter: multiIf(`expr#sum(ws_ext_sales_price)_1` > 0, `expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_1` > 0, `expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, NULL)
                ├─ Inner Join
-               │  │     Condition: ca_county_3 == ca_county_7
-               │  │     Filter: multiIf(`expr#sum(ws_ext_sales_price)_2` > 0, `expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_2` > 0, `expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, NULL)
-               │  ├─ Inner Join
-               │  │  │     Condition: ca_county_3 == ca_county_2
-               │  │  ├─ Repartition Exchange
-               │  │  │  │     Partition by: {ca_county_3}
-               │  │  │  └─ Projection
-               │  │  │     │     Expressions: [ca_county_3, expr#sum(ss_ext_sales_price)_3]
-               │  │  │     └─ Filter
-               │  │  │        │     Condition: (d_year_3 = 2000) AND (d_qoy_3 = 3)
-               │  │  │        └─ Buffer
-               │  │  │           └─ CTERef[0]
-               │  │  └─ Repartition Exchange
-               │  │     │     Partition by: {ca_county_2}
-               │  │     └─ Projection
-               │  │        │     Expressions: [ca_county_2, expr#sum(ss_ext_sales_price)_2]
-               │  │        └─ Filter
-               │  │           │     Condition: (d_qoy_2 = 2) AND (d_year_2 = 2000)
-               │  │           └─ Buffer
-               │  │              └─ CTERef[0]
+               │  │     Condition: ca_county_5 == ca_county_3
+               │  ├─ Repartition Exchange
+               │  │  │     Partition by: {ca_county_5}
+               │  │  └─ Projection
+               │  │     │     Expressions: [ca_county_5, expr#sum(ws_ext_sales_price)_1]
+               │  │     └─ Filter
+               │  │        │     Condition: (d_year_5 = 2000) AND (d_qoy_5 = 1)
+               │  │        └─ Buffer
+               │  │           └─ CTERef[1]
                │  └─ Inner Join
-               │     │     Condition: ca_county_7 == ca_county_6
-               │     ├─ Repartition Exchange
-               │     │  │     Partition by: {ca_county_7}
-               │     │  └─ Projection
-               │     │     │     Expressions: [ca_county_7, expr#sum(ws_ext_sales_price)_3]
-               │     │     └─ Filter
-               │     │        │     Condition: (d_qoy_7 = 3) AND (d_year_7 = 2000)
-               │     │        └─ Buffer
-               │     │           └─ CTERef[1]
-               │     └─ Repartition Exchange
-               │        │     Partition by: {ca_county_6}
-               │        └─ Projection
-               │           │     Expressions: [ca_county_6, expr#sum(ws_ext_sales_price)_2]
-               │           └─ Filter
-               │              │     Condition: (d_year_6 = 2000) AND (d_qoy_6 = 2)
-               │              └─ Buffer
-               │                 └─ CTERef[1]
-               └─ Inner Join
-                  │     Condition: ca_county_1 == ca_county_5
-                  ├─ Repartition Exchange
-                  │  │     Partition by: {ca_county_1}
-                  │  └─ Projection
-                  │     │     Expressions: [ca_county_1, d_year_1, expr#sum(ss_ext_sales_price)_1]
-                  │     └─ Filter
-                  │        │     Condition: (d_year_1 = 2000) AND (d_qoy_1 = 1)
-                  │        └─ Buffer
-                  │           └─ CTERef[0]
-                  └─ Repartition Exchange
-                     │     Partition by: {ca_county_5}
-                     └─ Projection
-                        │     Expressions: [ca_county_5, expr#sum(ws_ext_sales_price)_1]
-                        └─ Filter
-                           │     Condition: (d_year_5 = 2000) AND (d_qoy_5 = 1)
-                           └─ Buffer
-                              └─ CTERef[1]
+               │     │     Condition: ca_county_3 == ca_county_7
+               │     │     Filter: multiIf(`expr#sum(ws_ext_sales_price)_2` > 0, `expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_2` > 0, `expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, NULL)
+               │     ├─ Inner Join
+               │     │  │     Condition: ca_county_3 == ca_county_2
+               │     │  ├─ Repartition Exchange
+               │     │  │  │     Partition by: {ca_county_3}
+               │     │  │  └─ Projection
+               │     │  │     │     Expressions: [ca_county_3, expr#sum(ss_ext_sales_price)_3]
+               │     │  │     └─ Filter
+               │     │  │        │     Condition: (d_year_3 = 2000) AND (d_qoy_3 = 3)
+               │     │  │        └─ Buffer
+               │     │  │           └─ CTERef[0]
+               │     │  └─ Repartition Exchange
+               │     │     │     Partition by: {ca_county_2}
+               │     │     └─ Projection
+               │     │        │     Expressions: [ca_county_2, expr#sum(ss_ext_sales_price)_2]
+               │     │        └─ Filter
+               │     │           │     Condition: (d_qoy_2 = 2) AND (d_year_2 = 2000)
+               │     │           └─ Buffer
+               │     │              └─ CTERef[0]
+               │     └─ Inner Join
+               │        │     Condition: ca_county_7 == ca_county_6
+               │        ├─ Repartition Exchange
+               │        │  │     Partition by: {ca_county_7}
+               │        │  └─ Projection
+               │        │     │     Expressions: [ca_county_7, expr#sum(ws_ext_sales_price)_3]
+               │        │     └─ Filter
+               │        │        │     Condition: (d_qoy_7 = 3) AND (d_year_7 = 2000)
+               │        │        └─ Buffer
+               │        │           └─ CTERef[1]
+               │        └─ Repartition Exchange
+               │           │     Partition by: {ca_county_6}
+               │           └─ Projection
+               │              │     Expressions: [ca_county_6, expr#sum(ws_ext_sales_price)_2]
+               │              └─ Filter
+               │                 │     Condition: (d_year_6 = 2000) AND (d_qoy_6 = 2)
+               │                 └─ Buffer
+               │                    └─ CTERef[1]
+               └─ Repartition Exchange
+                  │     Partition by: {ca_county_1}
+                  └─ Projection
+                     │     Expressions: [ca_county_1, d_year_1, expr#sum(ss_ext_sales_price)_1]
+                     └─ Filter
+                        │     Condition: (d_year_1 = 2000) AND (d_qoy_1 = 1)
+                        └─ Buffer
+                           └─ CTERef[0]
 CTEDef [0]
    MergingAggregated
    └─ Repartition Exchange

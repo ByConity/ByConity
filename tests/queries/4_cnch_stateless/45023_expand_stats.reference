@@ -9,66 +9,66 @@ tb.old_date	Date	800	0	100	18153	18252	2	1
 tb.old_date32	Date32	800	0	100	18153	18252	4	1
 tb.old_datetime	DateTime	800	0	100	1577825891	1577825990	4	1
 tb.old_datetime64	DateTime64(3)	800	0	100	1577825891	1577825990	8	1
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
+Projection Est. 1 rows, cost 2.256335e+04
+└─ Gather Exchange Est. 1 rows, cost 2.256327e+04
+   └─ Projection Est. 1 rows, cost 2.255527e+04
+      └─ Filter Est. 1 rows, cost 2.255520e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.249600e+04
+Projection Est. 1 rows, cost 2.256335e+04
+└─ Gather Exchange Est. 1 rows, cost 2.256327e+04
+   └─ Projection Est. 1 rows, cost 2.255527e+04
+      └─ Filter Est. 1 rows, cost 2.255520e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.249600e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 3.606095e+04
+└─ Gather Exchange Est. 1 rows, cost 3.606087e+04
+   └─ Projection Est. 1 rows, cost 3.605287e+04
+      └─ Filter Est. 1 rows, cost 3.605280e+04
+         └─ TableScan default.tb Est. 800 rows, cost 3.599360e+04
+Projection Est. 1 rows, cost 3.606095e+04
+└─ Gather Exchange Est. 1 rows, cost 3.606087e+04
+   └─ Projection Est. 1 rows, cost 3.605287e+04
+      └─ Filter Est. 1 rows, cost 3.605280e+04
+         └─ TableScan default.tb Est. 800 rows, cost 3.599360e+04
+Projection Est. 1 rows, cost 2.256335e+04
+└─ Gather Exchange Est. 1 rows, cost 2.256327e+04
+   └─ Projection Est. 1 rows, cost 2.255527e+04
+      └─ Filter Est. 1 rows, cost 2.255520e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.249600e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 3.606095e+04
+└─ Gather Exchange Est. 1 rows, cost 3.606087e+04
+   └─ Projection Est. 1 rows, cost 3.605287e+04
+      └─ Filter Est. 1 rows, cost 3.605280e+04
+         └─ TableScan default.tb Est. 800 rows, cost 3.599360e+04
 tb.*		884						
 tb.id	UInt64	884	0	100	0	99	8	1
 tb.date	Date	884	0	110	19747	19856.513888888891	2	1
@@ -79,66 +79,66 @@ tb.old_date	Date	884	0	100	18153	18252	2	1
 tb.old_date32	Date32	884	0	100	18153	18252	4	1
 tb.old_datetime	DateTime	884	0	100	1577825891	1577825990	4	1
 tb.old_datetime64	DateTime64(3)	884	0	100	1577825891	1577825990	8	1
-Projection Est. 43 rows, cost 7.329800e+02
-└─ Gather Exchange Est. 43 rows, cost 7.297980e+02
-   └─ Projection Est. 43 rows, cost 7.227580e+02
-      └─ Filter Est. 43 rows, cost 7.195760e+02
-         └─ TableScan default.tb Est. 884 rows, cost 6.541600e+02
-Projection Est. 7 rows, cost 7.218920e+02
-└─ Gather Exchange Est. 7 rows, cost 7.213740e+02
-   └─ Projection Est. 7 rows, cost 7.200940e+02
-      └─ Filter Est. 7 rows, cost 7.195760e+02
-         └─ TableScan default.tb Est. 884 rows, cost 6.541600e+02
-Projection Est. 43 rows, cost 7.329800e+02
-└─ Gather Exchange Est. 43 rows, cost 7.297980e+02
-   └─ Projection Est. 43 rows, cost 7.227580e+02
-      └─ Filter Est. 43 rows, cost 7.195760e+02
-         └─ TableScan default.tb Est. 884 rows, cost 6.541600e+02
-Projection Est. 7 rows, cost 7.218920e+02
-└─ Gather Exchange Est. 7 rows, cost 7.213740e+02
-   └─ Projection Est. 7 rows, cost 7.200940e+02
-      └─ Filter Est. 7 rows, cost 7.195760e+02
-         └─ TableScan default.tb Est. 884 rows, cost 6.541600e+02
-Projection Est. 39 rows, cost 7.284920e+02
-└─ Gather Exchange Est. 39 rows, cost 7.256060e+02
-   └─ Projection Est. 39 rows, cost 7.192060e+02
-      └─ Filter Est. 39 rows, cost 7.163200e+02
-         └─ TableScan default.tb Est. 880 rows, cost 6.512000e+02
-Projection Est. 7 rows, cost 7.186360e+02
-└─ Gather Exchange Est. 7 rows, cost 7.181180e+02
-   └─ Projection Est. 7 rows, cost 7.168380e+02
-      └─ Filter Est. 7 rows, cost 7.163200e+02
-         └─ TableScan default.tb Est. 880 rows, cost 6.512000e+02
-Projection Est. 39 rows, cost 7.284920e+02
-└─ Gather Exchange Est. 39 rows, cost 7.256060e+02
-   └─ Projection Est. 39 rows, cost 7.192060e+02
-      └─ Filter Est. 39 rows, cost 7.163200e+02
-         └─ TableScan default.tb Est. 880 rows, cost 6.512000e+02
-Projection Est. 7 rows, cost 7.186360e+02
-└─ Gather Exchange Est. 7 rows, cost 7.181180e+02
-   └─ Projection Est. 7 rows, cost 7.168380e+02
-      └─ Filter Est. 7 rows, cost 7.163200e+02
-         └─ TableScan default.tb Est. 880 rows, cost 6.512000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
-Projection Est. 1 rows, cost 6.516680e+02
-└─ Gather Exchange Est. 1 rows, cost 6.515940e+02
-   └─ Projection Est. 1 rows, cost 6.512740e+02
-      └─ Filter Est. 1 rows, cost 6.512000e+02
-         └─ TableScan default.tb Est. 800 rows, cost 5.920000e+02
+Projection Est. 44 rows, cost 2.528201e+04
+└─ Gather Exchange Est. 44 rows, cost 2.527875e+04
+   └─ Projection Est. 44 rows, cost 2.492675e+04
+      └─ Filter Est. 44 rows, cost 2.492350e+04
+         └─ TableScan default.tb Est. 884 rows, cost 2.485808e+04
+Projection Est. 8 rows, cost 2.498868e+04
+└─ Gather Exchange Est. 8 rows, cost 2.498809e+04
+   └─ Projection Est. 8 rows, cost 2.492409e+04
+      └─ Filter Est. 8 rows, cost 2.492350e+04
+         └─ TableScan default.tb Est. 884 rows, cost 2.485808e+04
+Projection Est. 44 rows, cost 3.025362e+04
+└─ Gather Exchange Est. 44 rows, cost 3.025037e+04
+   └─ Projection Est. 44 rows, cost 2.989837e+04
+      └─ Filter Est. 44 rows, cost 2.989511e+04
+         └─ TableScan default.tb Est. 884 rows, cost 2.982970e+04
+Projection Est. 8 rows, cost 2.996030e+04
+└─ Gather Exchange Est. 8 rows, cost 2.995970e+04
+   └─ Projection Est. 8 rows, cost 2.989570e+04
+      └─ Filter Est. 8 rows, cost 2.989511e+04
+         └─ TableScan default.tb Est. 884 rows, cost 2.982970e+04
+Projection Est. 40 rows, cost 3.008576e+04
+└─ Gather Exchange Est. 40 rows, cost 3.008280e+04
+   └─ Projection Est. 40 rows, cost 2.976280e+04
+      └─ Filter Est. 40 rows, cost 2.975984e+04
+         └─ TableScan default.tb Est. 880 rows, cost 2.969472e+04
+Projection Est. 8 rows, cost 2.982502e+04
+└─ Gather Exchange Est. 8 rows, cost 2.982443e+04
+   └─ Projection Est. 8 rows, cost 2.976043e+04
+      └─ Filter Est. 8 rows, cost 2.975984e+04
+         └─ TableScan default.tb Est. 880 rows, cost 2.969472e+04
+Projection Est. 40 rows, cost 3.998400e+04
+└─ Gather Exchange Est. 40 rows, cost 3.998104e+04
+   └─ Projection Est. 40 rows, cost 3.966104e+04
+      └─ Filter Est. 40 rows, cost 3.965808e+04
+         └─ TableScan default.tb Est. 880 rows, cost 3.959296e+04
+Projection Est. 8 rows, cost 3.972326e+04
+└─ Gather Exchange Est. 8 rows, cost 3.972267e+04
+   └─ Projection Est. 8 rows, cost 3.965867e+04
+      └─ Filter Est. 8 rows, cost 3.965808e+04
+         └─ TableScan default.tb Est. 880 rows, cost 3.959296e+04
+Projection Est. 1 rows, cost 2.256335e+04
+└─ Gather Exchange Est. 1 rows, cost 2.256327e+04
+   └─ Projection Est. 1 rows, cost 2.255527e+04
+      └─ Filter Est. 1 rows, cost 2.255520e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.249600e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 2.706255e+04
+└─ Gather Exchange Est. 1 rows, cost 2.706247e+04
+   └─ Projection Est. 1 rows, cost 2.705447e+04
+      └─ Filter Est. 1 rows, cost 2.705440e+04
+         └─ TableScan default.tb Est. 800 rows, cost 2.699520e+04
+Projection Est. 1 rows, cost 3.606095e+04
+└─ Gather Exchange Est. 1 rows, cost 3.606087e+04
+   └─ Projection Est. 1 rows, cost 3.605287e+04
+      └─ Filter Est. 1 rows, cost 3.605280e+04
+         └─ TableScan default.tb Est. 800 rows, cost 3.599360e+04
 tb	9	801
 tb.*		801						
 tb.id	UInt64	801	0	100	0	99	8	1
@@ -150,66 +150,66 @@ tb.old_date	Date	801	0	101	0	18252	2	1
 tb.old_date32	Date32	801	0	101	-25567	18252	4	1
 tb.old_datetime	DateTime	801	0	101	0	1577825990	4	1
 tb.old_datetime64	DateTime64(3)	801	0	101	0	1577825990	8	1
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 7 rows, cost 6.543300e+02
-└─ Gather Exchange Est. 7 rows, cost 6.538120e+02
-   └─ Projection Est. 7 rows, cost 6.525320e+02
-      └─ Filter Est. 7 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 7 rows, cost 6.543300e+02
-└─ Gather Exchange Est. 7 rows, cost 6.538120e+02
-   └─ Projection Est. 7 rows, cost 6.525320e+02
-      └─ Filter Est. 7 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 7 rows, cost 6.543300e+02
-└─ Gather Exchange Est. 7 rows, cost 6.538120e+02
-   └─ Projection Est. 7 rows, cost 6.525320e+02
-      └─ Filter Est. 7 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 7 rows, cost 6.543300e+02
-└─ Gather Exchange Est. 7 rows, cost 6.538120e+02
-   └─ Projection Est. 7 rows, cost 6.525320e+02
-      └─ Filter Est. 7 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
+Projection Est. 1 rows, cost 2.259154e+04
+└─ Gather Exchange Est. 1 rows, cost 2.259147e+04
+   └─ Projection Est. 1 rows, cost 2.258347e+04
+      └─ Filter Est. 1 rows, cost 2.258339e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.252412e+04
+Projection Est. 8 rows, cost 2.264858e+04
+└─ Gather Exchange Est. 8 rows, cost 2.264799e+04
+   └─ Projection Est. 8 rows, cost 2.258399e+04
+      └─ Filter Est. 8 rows, cost 2.258339e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.252412e+04
+Projection Est. 1 rows, cost 2.709637e+04
+└─ Gather Exchange Est. 1 rows, cost 2.709629e+04
+   └─ Projection Est. 1 rows, cost 2.708829e+04
+      └─ Filter Est. 1 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 8 rows, cost 2.715340e+04
+└─ Gather Exchange Est. 8 rows, cost 2.715281e+04
+   └─ Projection Est. 8 rows, cost 2.708881e+04
+      └─ Filter Est. 8 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 1 rows, cost 2.709637e+04
+└─ Gather Exchange Est. 1 rows, cost 2.709629e+04
+   └─ Projection Est. 1 rows, cost 2.708829e+04
+      └─ Filter Est. 1 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 8 rows, cost 2.715340e+04
+└─ Gather Exchange Est. 8 rows, cost 2.715281e+04
+   └─ Projection Est. 8 rows, cost 2.708881e+04
+      └─ Filter Est. 8 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 1 rows, cost 3.610601e+04
+└─ Gather Exchange Est. 1 rows, cost 3.610594e+04
+   └─ Projection Est. 1 rows, cost 3.609794e+04
+      └─ Filter Est. 1 rows, cost 3.609787e+04
+         └─ TableScan default.tb Est. 801 rows, cost 3.603859e+04
+Projection Est. 8 rows, cost 3.616305e+04
+└─ Gather Exchange Est. 8 rows, cost 3.616246e+04
+   └─ Projection Est. 8 rows, cost 3.609846e+04
+      └─ Filter Est. 8 rows, cost 3.609787e+04
+         └─ TableScan default.tb Est. 801 rows, cost 3.603859e+04
+Projection Est. 1 rows, cost 2.259154e+04
+└─ Gather Exchange Est. 1 rows, cost 2.259147e+04
+   └─ Projection Est. 1 rows, cost 2.258347e+04
+      └─ Filter Est. 1 rows, cost 2.258339e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.252412e+04
+Projection Est. 1 rows, cost 2.709637e+04
+└─ Gather Exchange Est. 1 rows, cost 2.709629e+04
+   └─ Projection Est. 1 rows, cost 2.708829e+04
+      └─ Filter Est. 1 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 1 rows, cost 2.709637e+04
+└─ Gather Exchange Est. 1 rows, cost 2.709629e+04
+   └─ Projection Est. 1 rows, cost 2.708829e+04
+      └─ Filter Est. 1 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 1 rows, cost 3.610601e+04
+└─ Gather Exchange Est. 1 rows, cost 3.610594e+04
+   └─ Projection Est. 1 rows, cost 3.609794e+04
+      └─ Filter Est. 1 rows, cost 3.609787e+04
+         └─ TableScan default.tb Est. 801 rows, cost 3.603859e+04
 tb.*		888						
 tb.id	UInt64	888	0	100	0	99	8	1
 tb.date	Date	888	0	111	0	19856.513888888891	2	1
@@ -220,63 +220,63 @@ tb.old_date	Date	888	0	101	0	18252	2	1
 tb.old_date32	Date32	888	0	101	-25567	18252	4	1
 tb.old_datetime	DateTime	888	0	101	0	1577825990	4	1
 tb.old_datetime64	DateTime64(3)	888	0	101	0	1577825990	8	1
-Projection Est. 43 rows, cost 7.337940e+02
-└─ Gather Exchange Est. 43 rows, cost 7.306120e+02
-   └─ Projection Est. 43 rows, cost 7.235720e+02
-      └─ Filter Est. 43 rows, cost 7.203900e+02
-         └─ TableScan default.tb Est. 885 rows, cost 6.549000e+02
-Projection Est. 7 rows, cost 7.227060e+02
-└─ Gather Exchange Est. 7 rows, cost 7.221880e+02
-   └─ Projection Est. 7 rows, cost 7.209080e+02
-      └─ Filter Est. 7 rows, cost 7.203900e+02
-         └─ TableScan default.tb Est. 885 rows, cost 6.549000e+02
-Projection Est. 43 rows, cost 7.337940e+02
-└─ Gather Exchange Est. 43 rows, cost 7.306120e+02
-   └─ Projection Est. 43 rows, cost 7.235720e+02
-      └─ Filter Est. 43 rows, cost 7.203900e+02
-         └─ TableScan default.tb Est. 885 rows, cost 6.549000e+02
-Projection Est. 7 rows, cost 7.227060e+02
-└─ Gather Exchange Est. 7 rows, cost 7.221880e+02
-   └─ Projection Est. 7 rows, cost 7.209080e+02
-      └─ Filter Est. 7 rows, cost 7.203900e+02
-         └─ TableScan default.tb Est. 885 rows, cost 6.549000e+02
-Projection Est. 42 rows, cost 7.359280e+02
-└─ Gather Exchange Est. 42 rows, cost 7.328200e+02
-   └─ Projection Est. 42 rows, cost 7.259400e+02
-      └─ Filter Est. 42 rows, cost 7.228320e+02
-         └─ TableScan default.tb Est. 888 rows, cost 6.571200e+02
-Projection Est. 7 rows, cost 7.251480e+02
-└─ Gather Exchange Est. 7 rows, cost 7.246300e+02
-   └─ Projection Est. 7 rows, cost 7.233500e+02
-      └─ Filter Est. 7 rows, cost 7.228320e+02
-         └─ TableScan default.tb Est. 888 rows, cost 6.571200e+02
-Projection Est. 42 rows, cost 7.359280e+02
-└─ Gather Exchange Est. 42 rows, cost 7.328200e+02
-   └─ Projection Est. 42 rows, cost 7.259400e+02
-      └─ Filter Est. 42 rows, cost 7.228320e+02
-         └─ TableScan default.tb Est. 888 rows, cost 6.571200e+02
-Projection Est. 7 rows, cost 7.251480e+02
-└─ Gather Exchange Est. 7 rows, cost 7.246300e+02
-   └─ Projection Est. 7 rows, cost 7.233500e+02
-      └─ Filter Est. 7 rows, cost 7.228320e+02
-         └─ TableScan default.tb Est. 888 rows, cost 6.571200e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
-Projection Est. 1 rows, cost 6.524820e+02
-└─ Gather Exchange Est. 1 rows, cost 6.524080e+02
-   └─ Projection Est. 1 rows, cost 6.520880e+02
-      └─ Filter Est. 1 rows, cost 6.520140e+02
-         └─ TableScan default.tb Est. 801 rows, cost 5.927400e+02
+Projection Est. 44 rows, cost 2.531020e+04
+└─ Gather Exchange Est. 44 rows, cost 2.530695e+04
+   └─ Projection Est. 44 rows, cost 2.495495e+04
+      └─ Filter Est. 44 rows, cost 2.495169e+04
+         └─ TableScan default.tb Est. 885 rows, cost 2.488620e+04
+Projection Est. 8 rows, cost 2.501687e+04
+└─ Gather Exchange Est. 8 rows, cost 2.501628e+04
+   └─ Projection Est. 8 rows, cost 2.495228e+04
+      └─ Filter Est. 8 rows, cost 2.495169e+04
+         └─ TableScan default.tb Est. 885 rows, cost 2.488620e+04
+Projection Est. 44 rows, cost 3.028744e+04
+└─ Gather Exchange Est. 44 rows, cost 3.028419e+04
+   └─ Projection Est. 44 rows, cost 2.993219e+04
+      └─ Filter Est. 44 rows, cost 2.992893e+04
+         └─ TableScan default.tb Est. 885 rows, cost 2.986344e+04
+Projection Est. 8 rows, cost 2.999411e+04
+└─ Gather Exchange Est. 8 rows, cost 2.999352e+04
+   └─ Projection Est. 8 rows, cost 2.992952e+04
+      └─ Filter Est. 8 rows, cost 2.992893e+04
+         └─ TableScan default.tb Est. 885 rows, cost 2.986344e+04
+Projection Est. 43 rows, cost 3.038075e+04
+└─ Gather Exchange Est. 43 rows, cost 3.037757e+04
+   └─ Projection Est. 43 rows, cost 3.003357e+04
+      └─ Filter Est. 43 rows, cost 3.003038e+04
+         └─ TableScan default.tb Est. 888 rows, cost 2.996467e+04
+Projection Est. 8 rows, cost 3.009557e+04
+└─ Gather Exchange Est. 8 rows, cost 3.009498e+04
+   └─ Projection Est. 8 rows, cost 3.003098e+04
+      └─ Filter Est. 8 rows, cost 3.003038e+04
+         └─ TableScan default.tb Est. 888 rows, cost 2.996467e+04
+Projection Est. 43 rows, cost 4.036897e+04
+└─ Gather Exchange Est. 43 rows, cost 4.036579e+04
+   └─ Projection Est. 43 rows, cost 4.002179e+04
+      └─ Filter Est. 43 rows, cost 4.001861e+04
+         └─ TableScan default.tb Est. 888 rows, cost 3.995290e+04
+Projection Est. 8 rows, cost 4.008379e+04
+└─ Gather Exchange Est. 8 rows, cost 4.008320e+04
+   └─ Projection Est. 8 rows, cost 4.001920e+04
+      └─ Filter Est. 8 rows, cost 4.001861e+04
+         └─ TableScan default.tb Est. 888 rows, cost 3.995290e+04
+Projection Est. 1 rows, cost 2.259154e+04
+└─ Gather Exchange Est. 1 rows, cost 2.259147e+04
+   └─ Projection Est. 1 rows, cost 2.258347e+04
+      └─ Filter Est. 1 rows, cost 2.258339e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.252412e+04
+Projection Est. 1 rows, cost 2.709637e+04
+└─ Gather Exchange Est. 1 rows, cost 2.709629e+04
+   └─ Projection Est. 1 rows, cost 2.708829e+04
+      └─ Filter Est. 1 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 1 rows, cost 2.709637e+04
+└─ Gather Exchange Est. 1 rows, cost 2.709629e+04
+   └─ Projection Est. 1 rows, cost 2.708829e+04
+      └─ Filter Est. 1 rows, cost 2.708822e+04
+         └─ TableScan default.tb Est. 801 rows, cost 2.702894e+04
+Projection Est. 1 rows, cost 3.610601e+04
+└─ Gather Exchange Est. 1 rows, cost 3.610594e+04
+   └─ Projection Est. 1 rows, cost 3.609794e+04
+      └─ Filter Est. 1 rows, cost 3.609787e+04
+         └─ TableScan default.tb Est. 801 rows, cost 3.603859e+04

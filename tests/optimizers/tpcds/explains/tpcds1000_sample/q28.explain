@@ -30,9 +30,9 @@ Projection Est. 1 rows
       │  │  │  │           └─ Aggregating Est. 1 rows
       │  │  │  │              │     Group by: {}
       │  │  │  │              │     Aggregates: expr#avg(ss_list_price)_1:=AggNull(avg)(ss_list_price_1), expr#count(ss_list_price)_1:=AggNull(count)(ss_list_price_1), expr#uniqExact(ss_list_price)_1:=AggNull(uniqExact)(ss_list_price_1)
-      │  │  │  │              └─ Projection Est. 34660279 rows
+      │  │  │  │              └─ Projection Est. 34660280 rows
       │  │  │  │                 │     Expressions: [ss_list_price_1]
-      │  │  │  │                 └─ Filter Est. 34660279 rows
+      │  │  │  │                 └─ Filter Est. 34660280 rows
       │  │  │  │                    │     Condition: (ss_quantity_1 >= 6) AND (ss_quantity_1 <= 10) AND (((ss_list_price_1 >= 90) AND (ss_list_price_1 <= cast(100, 'UInt16'))) OR ((ss_coupon_amt_1 >= 2323) AND (ss_coupon_amt_1 <= cast(3323, 'UInt32'))) OR ((ss_wholesale_cost_1 >= 31) AND (ss_wholesale_cost_1 <= cast(51, 'UInt16'))))
       │  │  │  │                    └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
       │  │  │  │                             Where: (ss_quantity >= 6) AND (ss_quantity <= 10) AND (((ss_list_price >= 90) AND (ss_list_price <= cast(100, 'UInt16'))) OR ((ss_coupon_amt >= 2323) AND (ss_coupon_amt <= cast(3323, 'UInt32'))) OR ((ss_wholesale_cost >= 31) AND (ss_wholesale_cost <= cast(51, 'UInt16'))))
@@ -69,9 +69,9 @@ Projection Est. 1 rows
       │           └─ Aggregating Est. 1 rows
       │              │     Group by: {}
       │              │     Aggregates: expr#avg(ss_list_price)_4:=AggNull(avg)(ss_list_price_4), expr#count(ss_list_price)_4:=AggNull(count)(ss_list_price_4), expr#uniqExact(ss_list_price)_4:=AggNull(uniqExact)(ss_list_price_4)
-      │              └─ Projection Est. 34611830 rows
+      │              └─ Projection Est. 34611831 rows
       │                 │     Expressions: [ss_list_price_4]
-      │                 └─ Filter Est. 34611830 rows
+      │                 └─ Filter Est. 34611831 rows
       │                    │     Condition: (ss_quantity_4 >= 21) AND (ss_quantity_4 <= 25) AND (((ss_list_price_4 >= 122) AND (ss_list_price_4 <= cast(132, 'UInt16'))) OR ((ss_coupon_amt_4 >= 836) AND (ss_coupon_amt_4 <= cast(1836, 'UInt32'))) OR ((ss_wholesale_cost_4 >= 17) AND (ss_wholesale_cost_4 <= cast(37, 'UInt16'))))
       │                    └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
       │                             Where: (ss_quantity >= 21) AND (ss_quantity <= 25) AND (((ss_list_price >= 122) AND (ss_list_price <= cast(132, 'UInt16'))) OR ((ss_coupon_amt >= 836) AND (ss_coupon_amt <= cast(1836, 'UInt32'))) OR ((ss_wholesale_cost >= 17) AND (ss_wholesale_cost <= cast(37, 'UInt16'))))
@@ -82,9 +82,9 @@ Projection Est. 1 rows
                └─ Aggregating Est. 1 rows
                   │     Group by: {}
                   │     Aggregates: expr#avg(ss_list_price)_5:=AggNull(avg)(ss_list_price_5), expr#count(ss_list_price)_5:=AggNull(count)(ss_list_price_5), expr#uniqExact(ss_list_price)_5:=AggNull(uniqExact)(ss_list_price_5)
-                  └─ Projection Est. 27586735 rows
+                  └─ Projection Est. 27586736 rows
                      │     Expressions: [ss_list_price_5]
-                     └─ Filter Est. 27586735 rows
+                     └─ Filter Est. 27586736 rows
                         │     Condition: (ss_quantity_5 >= 26) AND (ss_quantity_5 <= 30) AND (((ss_list_price_5 >= 154) AND (ss_list_price_5 <= cast(164, 'UInt16'))) OR ((ss_coupon_amt_5 >= 7326) AND (ss_coupon_amt_5 <= cast(8326, 'UInt32'))) OR ((ss_wholesale_cost_5 >= 7) AND (ss_wholesale_cost_5 <= cast(27, 'UInt16'))))
                         └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                                  Where: (ss_quantity >= 26) AND (ss_quantity <= 30) AND (((ss_list_price >= 154) AND (ss_list_price <= cast(164, 'UInt16'))) OR ((ss_coupon_amt >= 7326) AND (ss_coupon_amt <= cast(8326, 'UInt32'))) OR ((ss_wholesale_cost >= 7) AND (ss_wholesale_cost <= cast(27, 'UInt16'))))

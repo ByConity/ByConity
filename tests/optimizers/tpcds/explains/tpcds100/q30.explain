@@ -26,15 +26,12 @@ Projection Est. 100 rows
                │     └─ Inner Join Est. 113713 rows
                │        │     Condition: c_current_addr_sk == ca_address_sk_1
                │        │     Runtime Filters Builder: {ca_address_sk_1}
-               │        ├─ Repartition Exchange Est. 2000000 rows
-               │        │  │     Partition by: {c_current_addr_sk}
-               │        │  └─ Filter Est. 2000000 rows
-               │        │     │     Condition: Runtime Filters: {c_current_addr_sk}
-               │        │     └─ TableScan tpcds100.customer Est. 2000000 rows
-               │        │              Where: Runtime Filters: {c_current_addr_sk}
-               │        │              Outputs: [c_customer_sk, c_customer_id, c_current_addr_sk, c_salutation, c_first_name, c_last_name, c_preferred_cust_flag, c_birth_day, c_birth_month, c_birth_year, c_birth_country, c_login, c_email_address, c_last_review_date_sk]
-               │        └─ Repartition Exchange Est. 49289 rows
-               │           │     Partition by: {ca_address_sk_1}
+               │        ├─ Filter Est. 2000000 rows
+               │        │  │     Condition: Runtime Filters: {c_current_addr_sk}
+               │        │  └─ TableScan tpcds100.customer Est. 2000000 rows
+               │        │           Where: Runtime Filters: {c_current_addr_sk}
+               │        │           Outputs: [c_customer_sk, c_customer_id, c_current_addr_sk, c_salutation, c_first_name, c_last_name, c_preferred_cust_flag, c_birth_day, c_birth_month, c_birth_year, c_birth_country, c_login, c_email_address, c_last_review_date_sk]
+               │        └─ Broadcast Exchange Est. 49289 rows
                │           └─ Projection Est. 49289 rows
                │              │     Expressions: [ca_address_sk_1]
                │              └─ Filter Est. 49289 rows

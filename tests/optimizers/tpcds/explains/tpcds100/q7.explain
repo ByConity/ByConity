@@ -46,10 +46,10 @@ Projection Est. 100 rows
                         │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                         │  │                    Where: d_year = 2000
                         │  │                    Outputs: [d_date_sk, d_year]
-                        │  └─ Broadcast Exchange Est. 999 rows
-                        │     └─ Projection Est. 999 rows
+                        │  └─ Broadcast Exchange Est. 1000 rows
+                        │     └─ Projection Est. 1000 rows
                         │        │     Expressions: [p_promo_sk]
-                        │        └─ Filter Est. 999 rows
+                        │        └─ Filter Est. 1000 rows
                         │           │     Condition: (p_channel_email = 'N') OR (p_channel_event = 'N')
                         │           └─ TableScan tpcds100.promotion Est. 1000 rows
                         │                    Where: (p_channel_email = 'N') OR (p_channel_event = 'N')

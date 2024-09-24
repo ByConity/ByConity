@@ -5,16 +5,16 @@ Projection Est. 1 rows
       └─ Aggregating Est. 1 rows
          │     Group by: {}
          │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-         └─ Projection Est. 107164229 rows
+         └─ Projection Est. 107164230 rows
             │     Expressions: expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-            └─ Inner (PARALLEL_HASH) Join Est. 107164229 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 107164230 rows
                │     Condition: l_partkey == p_partkey
                │     Filter: ((p_brand = 'Brand#12') AND (p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')) AND (l_quantity >= 1) AND (l_quantity <= cast(11, 'UInt16')) AND (p_size <= 5)) OR ((p_brand = 'Brand#23') AND (p_container IN ('MED BAG', 'MED BOX', 'MED PKG', 'MED PACK')) AND (l_quantity >= 10) AND (l_quantity <= cast(20, 'UInt16')) AND (p_size <= 10)) OR ((p_brand = 'Brand#34') AND (p_container IN ('LG CASE', 'LG BOX', 'LG PACK', 'LG PKG')) AND (l_quantity >= 20) AND (l_quantity <= cast(30, 'UInt16')) AND (p_size <= 15))
-               ├─ Repartition Exchange Est. 214328458 rows
+               ├─ Repartition Exchange Est. 214328459 rows
                │  │     Partition by: {l_partkey}
-               │  └─ Projection Est. 214328458 rows
+               │  └─ Projection Est. 214328459 rows
                │     │     Expressions: [l_discount, l_extendedprice, l_partkey, l_quantity]
-               │     └─ Filter Est. 214328458 rows
+               │     └─ Filter Est. 214328459 rows
                │        │     Condition: (l_shipinstruct = 'DELIVER IN PERSON') AND (l_shipmode IN ('AIR', 'AIR REG'))
                │        └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                │                 Where: (l_shipinstruct = 'DELIVER IN PERSON') AND (l_shipmode IN ('AIR', 'AIR REG'))

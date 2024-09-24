@@ -17,7 +17,7 @@ Projection Est. 100 rows
                │  │     Runtime Filters Builder: {c_customer_sk}
                │  ├─ Repartition Exchange Est. 11842742 rows
                │  │  │     Partition by: {wr_returning_customer_sk_1}
-               │  │  └─ Filter Est. 2960685 rows
+               │  │  └─ Filter Est. 2960686 rows
                │  │     │     Condition: Runtime Filters: {wr_returning_customer_sk_1}
                │  │     └─ Buffer Est. 11842742 rows
                │  │        └─ CTERef[0] Est. 11842742 rows

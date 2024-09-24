@@ -7,9 +7,9 @@ Projection Est. 1 rows
          └─ Aggregating Est. 1 rows
             │     Group by: {}
             │     Aggregates: expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)):=AggNull(sum)(expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)), expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-            └─ Projection Est. 7732923 rows
+            └─ Projection Est. 7782406 rows
                │     Expressions: expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0):=multiIf(p_type LIKE 'PROMO%', l_extendedprice * (1 - l_discount), 0), expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-               └─ Inner (PARALLEL_HASH) Join Est. 7732923 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 7782406 rows
                   │     Condition: p_partkey == l_partkey
                   │     Runtime Filters Builder: {l_partkey}
                   ├─ Repartition Exchange Est. 20000000 rows
@@ -19,11 +19,11 @@ Projection Est. 1 rows
                   │     └─ TableScan tpch100.part Est. 20000000 rows
                   │              Where: Runtime Filters: {p_partkey}
                   │              Outputs: [p_partkey, p_type]
-                  └─ Repartition Exchange Est. 7732923 rows
+                  └─ Repartition Exchange Est. 7732924 rows
                      │     Partition by: {l_partkey}
-                     └─ Projection Est. 7732923 rows
+                     └─ Projection Est. 7732924 rows
                         │     Expressions: [l_discount, l_extendedprice, l_partkey]
-                        └─ Filter Est. 7732923 rows
+                        └─ Filter Est. 7732924 rows
                            │     Condition: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
                            └─ TableScan tpch100.lineitem Est. 600037902 rows
                                     Where: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))

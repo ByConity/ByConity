@@ -44,8 +44,8 @@ CTEDef [1]
    │     │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
    │     │  │           Where: Runtime Filters: {ws_ship_hdemo_sk, ws_web_page_sk}
    │     │  │           Outputs: [ws_sold_time_sk, ws_ship_hdemo_sk, ws_web_page_sk]
-   │     │  └─ Broadcast Exchange Est. 38 rows
-   │     │     └─ Filter Est. 38 rows
+   │     │  └─ Broadcast Exchange Est. 39 rows
+   │     │     └─ Filter Est. 39 rows
    │     │        │     Condition: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
    │     │        └─ TableScan tpcds100.web_page Est. 2040 rows
    │     │                 Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)

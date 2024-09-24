@@ -5,7 +5,7 @@ Projection
    └─ Gather Exchange
       └─ Sorting
          │     Order by: {w_warehouse_sk_1 ASC NULLS LAST, i_item_sk_1 ASC NULLS LAST, d_moy_1 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_1 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_1 ASC NULLS LAST, d_moy_2 ASC NULLS LAST, expr#avg(inv_quantity_on_hand)_2 ASC NULLS LAST, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_2 ASC NULLS LAST}
-         └─ Inner (PARALLEL_HASH) Join
+         └─ Inner Join
             │     Condition: i_item_sk_1 == i_item_sk_2, w_warehouse_sk_1 == w_warehouse_sk_2
             ├─ Filter
             │  │     Condition: d_moy_1 = 1

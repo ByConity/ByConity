@@ -1,18 +1,18 @@
-Projection Est. 16 rows
+Projection Est. 100 rows
 │     Expressions: [d_year], brand:=i_brand, brand_id:=i_brand_id, sum_agg:=`expr#sum(ss_ext_sales_price)`
-└─ Limit Est. 16 rows
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting Est. 16 rows
+   └─ Sorting Est. 100 rows
       │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 16 rows
-         └─ Sorting Est. 16 rows
+      └─ Gather Exchange Est. 845674 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 16 rows
-               └─ Repartition Exchange Est. 16 rows
+            └─ MergingAggregated Est. 845674 rows
+               └─ Repartition Exchange Est. 845674 rows
                   │     Partition by: {d_year, i_brand, i_brand_id}
-                  └─ Aggregating Est. 16 rows
+                  └─ Aggregating Est. 845674 rows
                      │     Group by: {d_year, i_brand, i_brand_id}
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                      └─ Inner Join Est. 845674 rows

@@ -46,6 +46,22 @@ UInt64 PlanNodeStatistics::getOutputSizeInBytes() const
     return row_size * row_count;
 }
 
+UInt64 PlanNodeStatistics::getColumnSize(Names symbols) const
+{
+    size_t row_size = 0;
+    for (const auto & symbol : symbols)
+        if (symbol_statistics.contains(symbol))
+        {
+            auto stats = symbol_statistics.at(symbol);
+            if (!stats->isUnknown())
+            {
+                row_size += stats->getOutputSizeInBytes();
+            }
+        }
+    return row_size;
+}
+
+
 String PlanNodeStatistics::toString() const
 {
     std::stringstream details;
@@ -54,7 +70,8 @@ String PlanNodeStatistics::toString() const
     details << "Symbol\\n";
     for (const auto & symbol : symbol_statistics)
     {
-        details << symbol.first << " NDV:" << std::to_string(symbol.second->getNdv()) << ", Min:" << std::to_string(symbol.second->getMin()) << ", Max:" << std::to_string(symbol.second->getMax())
+        details << symbol.first << " NDV:" << std::to_string(symbol.second->getNdv()) << ", Min:" << std::to_string(symbol.second->getMin()) 
+                << ", Max:" << std::to_string(symbol.second->getMax())
                 << (symbol.second->getDbTableColumn().empty() ? "" :", from:") << symbol.second->getDbTableColumn()
                 << ", Hist:" << symbol.second->getHistogram().getBuckets().size() << "\\n";
     }

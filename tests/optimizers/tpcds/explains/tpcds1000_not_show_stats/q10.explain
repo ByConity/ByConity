@@ -78,15 +78,12 @@ Projection
                                           └─ Inner Join
                                              │     Condition: cd_demo_sk == c_current_cdemo_sk
                                              │     Runtime Filters Builder: {c_current_cdemo_sk}
-                                             ├─ Repartition Exchange
-                                             │  │     Partition by: {cd_demo_sk}
-                                             │  └─ Filter
-                                             │     │     Condition: Runtime Filters: {cd_demo_sk}
-                                             │     └─ TableScan tpcds1000.customer_demographics
-                                             │              Where: Runtime Filters: {cd_demo_sk}
-                                             │              Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count]
-                                             └─ Repartition Exchange
-                                                │     Partition by: {c_current_cdemo_sk}
+                                             ├─ Filter
+                                             │  │     Condition: Runtime Filters: {cd_demo_sk}
+                                             │  └─ TableScan tpcds1000.customer_demographics
+                                             │           Where: Runtime Filters: {cd_demo_sk}
+                                             │           Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count]
+                                             └─ Broadcast Exchange
                                                 └─ Right Semi Join
                                                    │     Condition: ss_customer_sk == c_customer_sk
                                                    │     Runtime Filters Builder: {c_customer_sk}

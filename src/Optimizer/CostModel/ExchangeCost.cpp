@@ -41,7 +41,7 @@ PlanNodeCost ExchangeCost::calculate(const ExchangeStep & step, CostContext & co
     if (step.getSchema().getHandle() == Partitioning::Handle::FIXED_ARBITRARY)
         return PlanNodeCost::ZERO;
 
-    auto single_worker_cost = context.stats->getRowCount() + base_cost;
+    auto single_worker_cost = context.cost_model.isEnableUseByteSize() ? context.stats->getOutputSizeInBytes() : context.stats->getRowCount() + base_cost;
     return PlanNodeCost::netCost(
         step.getSchema().getHandle() == Partitioning::Handle::FIXED_BROADCAST ? single_worker_cost * context.worker_size
                                                                                           : single_worker_cost);

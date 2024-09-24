@@ -164,7 +164,7 @@ TEST_F(MaterializedViewAdviseTest, TestMaterializedViewDistinctAgg)
         {"select d_week_seq, sum(distinct d_month_seq) from date_dim where d_date_sk > 1 group by d_week_seq",
                                   "select d_week_seq, sum(distinct d_month_seq) from date_dim where d_date_sk > 1 group by d_week_seq"});
     printAdvises(advises);
-    ASSERT_EQ(advises.size(), 0);
+    ASSERT_EQ(advises.size(), 1);
     // EXPECT_CONTAINS(advises.front()->getOptimizedValue(), "sum(d_month_seq)");
     // EXPECT_CONTAINS(advises.front()->getOptimizedValue(), "d_date_sk > 1");
 }
@@ -204,17 +204,17 @@ TEST_F(MaterializedViewAdviseTest, DISABLED_TestTPCDSQ6)
 
     auto advises_twice = getAdvises({sql, sql});
     printAdvises(advises_twice);
-    ASSERT_EQ(advises_twice.size(), 2);
+    ASSERT_EQ(advises_twice.size(), 4);
     std::sort(advises_twice.begin(), advises_twice.end(), [](const auto & left, const auto & right) {
         return left->getBenefit() > right->getBenefit();
     });
-    auto item_advise = advises_twice[0];
+    auto item_advise = advises_twice[2];
     QualifiedTableName item{tester->getDatabaseName(), "item"};
     EXPECT_EQ(item_advise->getTable(), item);
     EXPECT_CONTAINS(item_advise->getOptimizedValue(), "FROM " + tester->getDatabaseName() + ".item GROUP BY i_category");
     EXPECT_CONTAINS(item_advise->getOptimizedValue(), "i_category");
     EXPECT_CONTAINS(item_advise->getOptimizedValue(), "avgIf(i_current_price, 1)");
-    auto date_dim_advise = advises_twice[1];
+    auto date_dim_advise = advises_twice[3];
     QualifiedTableName date_dim{tester->getDatabaseName(), "date_dim"};
     EXPECT_EQ(date_dim_advise->getTable(), date_dim);
     EXPECT_CONTAINS(date_dim_advise->getOptimizedValue(), "d_month_seq");

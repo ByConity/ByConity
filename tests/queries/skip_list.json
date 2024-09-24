@@ -657,15 +657,6 @@
         "02981_vertical_merges_memory_usage",
         "02981_vertical_merges_lc_memory_usage",
         /// Code: 57 -- Table xxx already exists.
-        "45005_memory_stats",
-        "45004_stats_star",
-        "45004_create_stats_sample_acc_ndv",
-        "45004_create_stats_sample_acc",
-        "45004_create_stats_sample",
-        "45007_ip_stats",
-        "45007_date_stats",
-        "45015_explain_stats_lowcard",
-        "45013_cache_policy",
         "40023_mv_with_topn_filtering",
         "01007_ttl_create_nullable_date_in_mysql",
         /// Code: 36 -- Dictionary xxx not found

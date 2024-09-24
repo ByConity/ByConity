@@ -63,6 +63,8 @@ std::optional<PlanNodeStatisticsPtr> CardinalityEstimator::estimate(
         .children_filter_selectivity = std::move(children_filter_selectivity),
         .inclusion_dependency = inclusion_dependency};
     auto stats = VisitorUtil::accept(step, visitor, cardinality_context);
+    if (stats)
+        stats->pruneSymbols(step->getOutputStream().header.getNameSet());
     return stats ? std::make_optional(stats) : std::nullopt;
 }
 
@@ -76,6 +78,8 @@ CardinalityEstimator::estimate(PlanNodeBase & node, CTEInfo & cte_info, ContextM
     PlanCardinalityVisitor visitor{cte_info};
     CardinalityContext cardinality_context{.context = context, .cte_info = cte_info, .children_stats = {}, .re_estimate = re_estimate};
     auto stats = VisitorUtil::accept(node, visitor, cardinality_context);
+    if (stats)
+        stats->pruneSymbols(node.getCurrentDataStream().header.getNameSet());
     return stats ? std::make_optional(stats) : std::nullopt;
 }
 

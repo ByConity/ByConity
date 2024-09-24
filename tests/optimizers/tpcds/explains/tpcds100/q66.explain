@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {w_warehouse_name_3 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 181062 rows
+      └─ Gather Exchange Est. 90531 rows
          └─ Sorting Est. 100 rows
             │     Order by: {w_warehouse_name_3 ASC NULLS LAST}
             │     Limit: 100
-            └─ Aggregating Est. 181062 rows
+            └─ Aggregating Est. 90531 rows
                │     Group by: {w_warehouse_name_3, w_warehouse_sq_ft_3, w_city_3, w_county_3, w_state_3, w_country_3, expr#concat('DHL', ',', 'BARIAN')_2, d_year_3}
                │     Aggregates: expr#sum(jan_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 1), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(feb_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 2), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(mar_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 3), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(apr_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 4), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(may_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 5), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(jun_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 6), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(jul_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 7), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(aug_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 8), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(sep_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 9), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(oct_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 10), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(nov_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 11), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(dec_sales):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 12), multiply(ws_ext_sales_price, ws_quantity), 0))_2), expr#sum(divide(jan_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(jan_sales, w_warehouse_sq_ft)), expr#sum(divide(feb_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(feb_sales, w_warehouse_sq_ft)), expr#sum(divide(mar_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(mar_sales, w_warehouse_sq_ft)), expr#sum(divide(apr_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(apr_sales, w_warehouse_sq_ft)), expr#sum(divide(may_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(may_sales, w_warehouse_sq_ft)), expr#sum(divide(jun_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(jun_sales, w_warehouse_sq_ft)), expr#sum(divide(jul_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(jul_sales, w_warehouse_sq_ft)), expr#sum(divide(aug_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(aug_sales, w_warehouse_sq_ft)), expr#sum(divide(sep_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(sep_sales, w_warehouse_sq_ft)), expr#sum(divide(oct_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(oct_sales, w_warehouse_sq_ft)), expr#sum(divide(nov_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(nov_sales, w_warehouse_sq_ft)), expr#sum(divide(dec_sales, w_warehouse_sq_ft)):=AggNull(sum)(expr#divide(dec_sales, w_warehouse_sq_ft)), expr#sum(jan_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 1), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(feb_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 2), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(mar_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 3), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(apr_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 4), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(may_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 5), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(jun_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 6), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(jul_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 7), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(aug_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 8), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(sep_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 9), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(oct_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 10), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(nov_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 11), multiply(ws_net_paid, ws_quantity), 0))_2), expr#sum(dec_net):=AggNull(sum)(expr#sum(multiIf(equals(d_moy, 12), multiply(ws_net_paid, ws_quantity), 0))_2)
                └─ Projection Est. 181062 rows
@@ -29,35 +29,32 @@ Projection Est. 100 rows
                      │              ├─ Inner Join Est. 479218 rows
                      │              │  │     Condition: ws_sold_time_sk == t_time_sk
                      │              │  │     Runtime Filters Builder: {t_time_sk}
-                     │              │  ├─ Repartition Exchange Est. 1437654 rows
-                     │              │  │  │     Partition by: {ws_sold_time_sk}
-                     │              │  │  └─ Inner Join Est. 1437654 rows
-                     │              │  │     │     Condition: ws_sold_date_sk == d_date_sk
-                     │              │  │     │     Runtime Filters Builder: {d_date_sk}
-                     │              │  │     ├─ Inner Join Est. 7200123 rows
-                     │              │  │     │  │     Condition: ws_ship_mode_sk == sm_ship_mode_sk
-                     │              │  │     │  │     Runtime Filters Builder: {sm_ship_mode_sk}
-                     │              │  │     │  ├─ Filter Est. 72001237 rows
-                     │              │  │     │  │  │     Condition: Runtime Filters: {ws_ship_mode_sk, ws_sold_date_sk, ws_sold_time_sk}
-                     │              │  │     │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                     │              │  │     │  │           Where: Runtime Filters: {ws_ship_mode_sk, ws_sold_date_sk, ws_sold_time_sk}
-                     │              │  │     │  │           Outputs: [ws_sold_date_sk, ws_sold_time_sk, ws_ship_mode_sk, ws_warehouse_sk, ws_quantity, ws_ext_sales_price, ws_net_paid]
-                     │              │  │     │  └─ Broadcast Exchange Est. 2 rows
-                     │              │  │     │     └─ Projection Est. 2 rows
-                     │              │  │     │        │     Expressions: [sm_ship_mode_sk]
-                     │              │  │     │        └─ Filter Est. 2 rows
-                     │              │  │     │           │     Condition: sm_carrier IN ('BARIAN', 'DHL')
-                     │              │  │     │           └─ TableScan tpcds100.ship_mode Est. 20 rows
-                     │              │  │     │                    Where: sm_carrier IN ('BARIAN', 'DHL')
-                     │              │  │     │                    Outputs: [sm_ship_mode_sk, sm_carrier]
-                     │              │  │     └─ Broadcast Exchange Est. 365 rows
-                     │              │  │        └─ Filter Est. 365 rows
-                     │              │  │           │     Condition: d_year = 2001
-                     │              │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │              │  │                    Where: d_year = 2001
-                     │              │  │                    Outputs: [d_date_sk, d_year, d_moy]
-                     │              │  └─ Repartition Exchange Est. 28800 rows
-                     │              │     │     Partition by: {t_time_sk}
+                     │              │  ├─ Inner Join Est. 1437654 rows
+                     │              │  │  │     Condition: ws_sold_date_sk == d_date_sk
+                     │              │  │  │     Runtime Filters Builder: {d_date_sk}
+                     │              │  │  ├─ Inner Join Est. 7200123 rows
+                     │              │  │  │  │     Condition: ws_ship_mode_sk == sm_ship_mode_sk
+                     │              │  │  │  │     Runtime Filters Builder: {sm_ship_mode_sk}
+                     │              │  │  │  ├─ Filter Est. 72001237 rows
+                     │              │  │  │  │  │     Condition: Runtime Filters: {ws_ship_mode_sk, ws_sold_date_sk, ws_sold_time_sk}
+                     │              │  │  │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                     │              │  │  │  │           Where: Runtime Filters: {ws_ship_mode_sk, ws_sold_date_sk, ws_sold_time_sk}
+                     │              │  │  │  │           Outputs: [ws_sold_date_sk, ws_sold_time_sk, ws_ship_mode_sk, ws_warehouse_sk, ws_quantity, ws_ext_sales_price, ws_net_paid]
+                     │              │  │  │  └─ Broadcast Exchange Est. 2 rows
+                     │              │  │  │     └─ Projection Est. 2 rows
+                     │              │  │  │        │     Expressions: [sm_ship_mode_sk]
+                     │              │  │  │        └─ Filter Est. 2 rows
+                     │              │  │  │           │     Condition: sm_carrier IN ('BARIAN', 'DHL')
+                     │              │  │  │           └─ TableScan tpcds100.ship_mode Est. 20 rows
+                     │              │  │  │                    Where: sm_carrier IN ('BARIAN', 'DHL')
+                     │              │  │  │                    Outputs: [sm_ship_mode_sk, sm_carrier]
+                     │              │  │  └─ Broadcast Exchange Est. 365 rows
+                     │              │  │     └─ Filter Est. 365 rows
+                     │              │  │        │     Condition: d_year = 2001
+                     │              │  │        └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │              │  │                 Where: d_year = 2001
+                     │              │  │                 Outputs: [d_date_sk, d_year, d_moy]
+                     │              │  └─ Broadcast Exchange Est. 28800 rows
                      │              │     └─ Projection Est. 28800 rows
                      │              │        │     Expressions: [t_time_sk]
                      │              │        └─ Filter Est. 28800 rows

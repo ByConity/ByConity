@@ -52,6 +52,7 @@ public:
     static String jsonLogicalPlan(
         QueryPlan & plan,
         std::optional<PlanNodeCost> plan_cost,
+        const CostModel & cost_model,
         const StepAggregatedOperatorProfiles & profiles = {},
         const PlanCostMap & costs = {},
         const QueryPlanSettings & settings = {});

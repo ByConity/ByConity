@@ -110,14 +110,14 @@ Projection Est. 0 rows, cost 0.000000e+00
    └─ ReadNothing Est. 0 rows, cost 0.000000e+00
 4
 3
-Projection Est. 1000 rows, cost 2.341600e+02
+Projection Est. 1000 rows, cost 7.400000e+01
 │     Expressions: [user_id]
-└─ Limit Est. 1000 rows, cost 1.601600e+02
+└─ Limit Est. 1000 rows, cost 0.000000e+00
    │     Limit: 1000
-   └─ Sorting Est. 1000 rows, cost 1.601600e+02
+   └─ Sorting Est. 1000 rows, cost 0.000000e+00
       │     Order by: {followed_counter_td DESC NULLS LAST}
       │     Limit: 1000
-      └─ Gather Exchange Est. 1000 rows, cost 1.601600e+02
+      └─ Gather Exchange Est. 1000 rows, cost 0.000000e+00
          └─ Sorting Est. 1000 rows, cost 0.000000e+00
             │     Order by: {followed_counter_td DESC NULLS LAST}
             │     Limit: 1000
@@ -128,26 +128,26 @@ Projection Est. 1000 rows, cost 2.341600e+02
                   └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
                            Where: date = cast(19551, \'Date\')
                            Outputs: [date, followed_counter_td, user_id]
-Projection Est. 1000 rows, cost 2.344800e+02
+Projection Est. 1000 rows, cost 7.600000e+01
 │     Expressions: [user_id]
-└─ Limit Est. 1000 rows, cost 1.604800e+02
+└─ Limit Est. 1000 rows, cost 2.000000e+00
    │     Limit: 1000
-   └─ Sorting Est. 1000 rows, cost 1.604800e+02
+   └─ Sorting Est. 1000 rows, cost 2.000000e+00
       │     Order by: {followed_counter_td DESC NULLS LAST}
       │     Limit: 1000
-      └─ Gather Exchange Est. 1000 rows, cost 1.604800e+02
-         └─ Sorting Est. 1000 rows, cost 3.200000e-01
+      └─ Gather Exchange Est. 1000 rows, cost 2.000000e+00
+         └─ Sorting Est. 1000 rows, cost 2.000000e+00
             │     Order by: {followed_counter_td DESC NULLS LAST}
             │     Limit: 1000
-            └─ Inner Join Est. ? rows, cost 3.200000e-01
+            └─ Inner Join Est. ? rows, cost 2.000000e+00
                │     Condition: date == expr#max(date)_1
                ├─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
                │        Outputs: [date, followed_counter_td, user_id]
-               └─ Broadcast Exchange Est. ? rows, cost 3.200000e-01
-                  └─ Projection Est. ? rows, cost 1.600000e-01
+               └─ Broadcast Exchange Est. ? rows, cost 2.000000e+00
+                  └─ Projection Est. ? rows, cost 1.000000e+00
                      │     Expressions: expr#max(date)_1:=cast(`expr#max(date)`, \'Nullable(Date)\')
-                     └─ MergingAggregated Est. ? rows, cost 1.600000e-01
-                        └─ Gather Exchange Est. ? rows, cost 1.600000e-01
+                     └─ MergingAggregated Est. ? rows, cost 1.000000e+00
+                        └─ Gather Exchange Est. ? rows, cost 1.000000e+00
                            └─ Aggregating Est. ? rows, cost 0.000000e+00
                               │     Group by: {}
                               │     Aggregates: expr#max(date):=AggNull(max)(date_1)

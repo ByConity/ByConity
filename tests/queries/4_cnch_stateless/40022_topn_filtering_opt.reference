@@ -1,55 +1,55 @@
-Projection Est. 10 rows, cost 1.276000e+01
+Projection Est. 10 rows, cost 8.740000e+01
 │     Expressions: count():=`expr#count()`, n:=number_3
-└─ Limit Est. 10 rows, cost 1.202000e+01
+└─ Limit Est. 10 rows, cost 8.666000e+01
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 1.202000e+01
+   └─ Sorting Est. 10 rows, cost 8.666000e+01
       │     Order by: {number_3 ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 1.202000e+01
-         └─ Sorting Est. 10 rows, cost 1.026000e+01
+      └─ Gather Exchange Est. 10 rows, cost 8.666000e+01
+         └─ Sorting Est. 10 rows, cost 6.660000e+00
             │     Order by: {number_3 ASC NULLS LAST}
             │     Limit: 10
-            └─ MergingAggregated Est. 21 rows, cost 1.026000e+01
-               └─ Repartition Exchange Est. 21 rows, cost 1.026000e+01
+            └─ MergingAggregated Est. 24 rows, cost 6.660000e+00
+               └─ Repartition Exchange Est. 24 rows, cost 6.660000e+00
                   │     Partition by: {number_3}
-                  └─ Union Est. 21 rows, cost 6.660000e+00
+                  └─ Union Est. 24 rows, cost 6.660000e+00
                      │     OutputToInputs: expr#count() = [expr#count(),expr#count(),expr#count()], number_3 = [number,number_1,number_2]
-                     ├─ Aggregating Est. 7 rows, cost 2.220000e+00
+                     ├─ Aggregating Est. 8 rows, cost 2.220000e+00
                      │  │     Group by: {number}
                      │  │     Aggregates: expr#count():=AggNull(count)()
-                     │  └─ TopNFiltering Est. 7 rows, cost 2.220000e+00
+                     │  └─ TopNFiltering Est. 8 rows, cost 2.220000e+00
                      │     │     Order by: {number ASC NULLS LAST}
                      │     │     Size: 10
                      │     │     Algorithm: Unspecified
-                     │     └─ Filter Est. 7 rows, cost 2.220000e+00
+                     │     └─ Filter Est. 8 rows, cost 2.220000e+00
                      │        │     Condition: (number % 2) = 0
                      │        └─ Limit Est. 30 rows, cost 0.000000e+00
                      │           │     Limit: 30
                      │           └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
                      │                    Limit: 30
                      │                    Outputs: [number]
-                     ├─ Aggregating Est. 7 rows, cost 2.220000e+00
+                     ├─ Aggregating Est. 8 rows, cost 2.220000e+00
                      │  │     Group by: {number_1}
                      │  │     Aggregates: expr#count():=AggNull(count)()
-                     │  └─ TopNFiltering Est. 7 rows, cost 2.220000e+00
+                     │  └─ TopNFiltering Est. 8 rows, cost 2.220000e+00
                      │     │     Order by: {number_1 ASC NULLS LAST}
                      │     │     Size: 10
                      │     │     Algorithm: Unspecified
-                     │     └─ Filter Est. 7 rows, cost 2.220000e+00
+                     │     └─ Filter Est. 8 rows, cost 2.220000e+00
                      │        │     Condition: (number_1 % 3) = 0
                      │        └─ Limit Est. 30 rows, cost 0.000000e+00
                      │           │     Limit: 30
                      │           └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
                      │                    Limit: 30
                      │                    Outputs: number_1:=number
-                     └─ Aggregating Est. 7 rows, cost 2.220000e+00
+                     └─ Aggregating Est. 8 rows, cost 2.220000e+00
                         │     Group by: {number_2}
                         │     Aggregates: expr#count():=AggNull(count)()
-                        └─ TopNFiltering Est. 7 rows, cost 2.220000e+00
+                        └─ TopNFiltering Est. 8 rows, cost 2.220000e+00
                            │     Order by: {number_2 ASC NULLS LAST}
                            │     Size: 10
                            │     Algorithm: Unspecified
-                           └─ Filter Est. 7 rows, cost 2.220000e+00
+                           └─ Filter Est. 8 rows, cost 2.220000e+00
                               │     Condition: (number_2 % 5) = 0
                               └─ Limit Est. 30 rows, cost 0.000000e+00
                                  │     Limit: 30
@@ -66,19 +66,19 @@ Projection Est. 10 rows, cost 1.276000e+01
 9	1
 10	2
 12	2
-Projection Est. 10 rows, cost 2.740000e+00
+Projection Est. 10 rows, cost 2.240000e+00
 │     Expressions: [block_number], gas_fee:=`expr#sum(multiply(gas, gas_price))`
-└─ Limit Est. 10 rows, cost 2.000000e+00
+└─ Limit Est. 10 rows, cost 1.500000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 2.000000e+00
+   └─ Sorting Est. 10 rows, cost 1.500000e+00
       │     Order by: {block_number ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 2.000000e+00
-         └─ Sorting Est. 10 rows, cost 2.400000e-01
+      └─ Gather Exchange Est. 10 rows, cost 1.500000e+00
+         └─ Sorting Est. 10 rows, cost 1.500000e+00
             │     Order by: {block_number ASC NULLS LAST}
             │     Limit: 10
-            └─ MergingAggregated Est. ? rows, cost 2.400000e-01
-               └─ Repartition Exchange Est. ? rows, cost 2.400000e-01
+            └─ MergingAggregated Est. ? rows, cost 1.500000e+00
+               └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                   │     Partition by: {block_number}
                   └─ Aggregating Est. ? rows, cost 0.000000e+00
                      │     Group by: {block_number}

@@ -24,7 +24,7 @@ private:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
-        return context->getSettingsRef().enable_share_common_plan_node;
+        return context->getSettingsRef().enable_share_common_plan_node && context->getSettingsRef().cte_mode != CTEMode::INLINED;
     }
 
     class Rewriter;

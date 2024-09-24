@@ -8,31 +8,31 @@ Projection Est. 40000 rows
          └─ Right Semi Join Est. 40000 rows
             │     Condition: l_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}
-            ├─ Repartition Exchange Est. 54967351 rows
+            ├─ Repartition Exchange Est. 13741836 rows
             │  │     Partition by: {l_suppkey}
-            │  └─ Left Semi (PARALLEL_HASH) Join Est. 54967351 rows
+            │  └─ Left Semi (PARALLEL_HASH) Join Est. 13741836 rows
             │     │     Condition: l_partkey == p_partkey
             │     │     Runtime Filters Builder: {p_partkey}
-            │     ├─ Repartition Exchange Est. 91612247 rows
+            │     ├─ Repartition Exchange Est. 91612248 rows
             │     │  │     Partition by: {l_partkey}
-            │     │  └─ Inner (PARALLEL_HASH) Join Est. 366448988 rows
+            │     │  └─ Inner (PARALLEL_HASH) Join Est. 366448992 rows
             │     │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
             │     │     │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)_1`)
-            │     │     ├─ MergingAggregated Est. 91029749 rows
-            │     │     │  └─ Repartition Exchange Est. 91029749 rows
-            │     │     │     │     Partition by: {l_partkey, l_suppkey}
-            │     │     │     └─ Aggregating Est. 91029749 rows
+            │     │     ├─ MergingAggregated Est. 91029750 rows
+            │     │     │  └─ Repartition Exchange Est. 91029750 rows
+            │     │     │     │     Partition by: {l_suppkey}
+            │     │     │     └─ Aggregating Est. 91029750 rows
             │     │     │        │     Group by: {l_partkey, l_suppkey}
             │     │     │        │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sumIf)(l_quantity,build_side_non_null_symbol)
-            │     │     │        └─ Projection Est. 91029749 rows
+            │     │     │        └─ Projection Est. 91029750 rows
             │     │     │           │     Expressions: [l_partkey, l_quantity, l_suppkey], build_side_non_null_symbol:=1
-            │     │     │           └─ Filter Est. 91029749 rows
+            │     │     │           └─ Filter Est. 91029750 rows
             │     │     │              │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) Runtime Filters: {l_partkey, l_suppkey}
             │     │     │              └─ TableScan tpch100.lineitem Est. 600037902 rows
             │     │     │                       Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) Runtime Filters: {l_partkey, l_suppkey}
             │     │     │                       Outputs: [l_partkey, l_suppkey, l_quantity, l_shipdate]
             │     │     └─ Repartition Exchange Est. 80000000 rows
-            │     │        │     Partition by: {ps_partkey, ps_suppkey}
+            │     │        │     Partition by: {ps_suppkey}
             │     │        └─ Filter Est. 80000000 rows
             │     │           │     Condition: Runtime Filters: {ps_partkey, ps_suppkey}
             │     │           └─ TableScan tpch100.partsupp Est. 80000000 rows

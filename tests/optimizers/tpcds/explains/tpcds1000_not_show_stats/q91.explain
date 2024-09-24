@@ -14,73 +14,67 @@ Projection
                      │     Group by: {cc_call_center_id, cc_name, cc_manager, cd_marital_status, cd_education_status}
                      │     Aggregates: expr#sum(cr_net_loss):=AggNull(sum)(cr_net_loss)
                      └─ Inner Join
-                        │     Condition: cr_call_center_sk == cc_call_center_sk
-                        ├─ Repartition Exchange
-                        │  │     Partition by: {cr_call_center_sk}
-                        │  └─ Inner Join
-                        │     │     Condition: cr_returned_date_sk == d_date_sk
-                        │     │     Runtime Filters Builder: {d_date_sk}
-                        │     ├─ Inner Join
-                        │     │  │     Condition: cr_returning_customer_sk == c_customer_sk
-                        │     │  │     Runtime Filters Builder: {c_customer_sk}
-                        │     │  ├─ Filter
-                        │     │  │  │     Condition: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
-                        │     │  │  └─ TableScan tpcds1000.catalog_returns
-                        │     │  │           Where: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
-                        │     │  │           Outputs: [cr_returned_date_sk, cr_returning_customer_sk, cr_call_center_sk, cr_net_loss]
-                        │     │  └─ Broadcast Exchange
-                        │     │     └─ Inner Join
-                        │     │        │     Condition: ca_address_sk == c_current_addr_sk
-                        │     │        │     Runtime Filters Builder: {c_current_addr_sk}
-                        │     │        ├─ Repartition Exchange
-                        │     │        │  │     Partition by: {ca_address_sk}
-                        │     │        │  └─ Projection
-                        │     │        │     │     Expressions: [ca_address_sk]
-                        │     │        │     └─ Filter
-                        │     │        │        │     Condition: ca_gmt_offset = -7. Runtime Filters: {ca_address_sk}
-                        │     │        │        └─ TableScan tpcds1000.customer_address
-                        │     │        │                 Where: ca_gmt_offset = -7. Runtime Filters: {ca_address_sk}
-                        │     │        │                 Outputs: [ca_address_sk, ca_gmt_offset]
-                        │     │        └─ Repartition Exchange
-                        │     │           │     Partition by: {c_current_addr_sk}
-                        │     │           └─ Inner Join
-                        │     │              │     Condition: c_current_cdemo_sk == cd_demo_sk
-                        │     │              │     Runtime Filters Builder: {cd_demo_sk}
-                        │     │              ├─ Repartition Exchange
-                        │     │              │  │     Partition by: {c_current_cdemo_sk}
-                        │     │              │  └─ Inner Join
-                        │     │              │     │     Condition: c_current_hdemo_sk == hd_demo_sk
-                        │     │              │     │     Runtime Filters Builder: {hd_demo_sk}
-                        │     │              │     ├─ Filter
-                        │     │              │     │  │     Condition: Runtime Filters: {c_current_cdemo_sk, c_current_hdemo_sk}
-                        │     │              │     │  └─ TableScan tpcds1000.customer
-                        │     │              │     │           Where: Runtime Filters: {c_current_cdemo_sk, c_current_hdemo_sk}
-                        │     │              │     │           Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk]
-                        │     │              │     └─ Broadcast Exchange
-                        │     │              │        └─ Projection
-                        │     │              │           │     Expressions: [hd_demo_sk]
-                        │     │              │           └─ Filter
-                        │     │              │              │     Condition: hd_buy_potential LIKE 'Unknown%'
-                        │     │              │              └─ TableScan tpcds1000.household_demographics
-                        │     │              │                       Where: hd_buy_potential LIKE 'Unknown%'
-                        │     │              │                       Outputs: [hd_demo_sk, hd_buy_potential]
-                        │     │              └─ Repartition Exchange
-                        │     │                 │     Partition by: {cd_demo_sk}
-                        │     │                 └─ Filter
-                        │     │                    │     Condition: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
-                        │     │                    └─ TableScan tpcds1000.customer_demographics
-                        │     │                             Where: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
-                        │     │                             Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
-                        │     └─ Broadcast Exchange
-                        │        └─ Projection
-                        │           │     Expressions: [d_date_sk]
-                        │           └─ Filter
-                        │              │     Condition: (d_moy = 11) AND (d_year = 1998)
-                        │              └─ TableScan tpcds1000.date_dim
-                        │                       Where: (d_moy = 11) AND (d_year = 1998)
-                        │                       Outputs: [d_date_sk, d_year, d_moy]
-                        └─ Repartition Exchange
-                           │     Partition by: {cc_call_center_sk}
-                           └─ TableScan tpcds1000.call_center
-                                    Outputs: [cc_call_center_sk, cc_call_center_id, cc_name, cc_manager]
+                        │     Condition: c_current_hdemo_sk == hd_demo_sk
+                        │     Runtime Filters Builder: {hd_demo_sk}
+                        ├─ Inner Join
+                        │  │     Condition: cr_call_center_sk == cc_call_center_sk
+                        │  ├─ Inner Join
+                        │  │  │     Condition: cr_returned_date_sk == d_date_sk
+                        │  │  │     Runtime Filters Builder: {d_date_sk}
+                        │  │  ├─ Inner Join
+                        │  │  │  │     Condition: cr_returning_customer_sk == c_customer_sk
+                        │  │  │  │     Runtime Filters Builder: {c_customer_sk}
+                        │  │  │  ├─ Filter
+                        │  │  │  │  │     Condition: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
+                        │  │  │  │  └─ TableScan tpcds1000.catalog_returns
+                        │  │  │  │           Where: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
+                        │  │  │  │           Outputs: [cr_returned_date_sk, cr_returning_customer_sk, cr_call_center_sk, cr_net_loss]
+                        │  │  │  └─ Broadcast Exchange
+                        │  │  │     └─ Inner Join
+                        │  │  │        │     Condition: ca_address_sk == c_current_addr_sk
+                        │  │  │        │     Runtime Filters Builder: {c_current_addr_sk}
+                        │  │  │        ├─ Repartition Exchange
+                        │  │  │        │  │     Partition by: {ca_address_sk}
+                        │  │  │        │  └─ Projection
+                        │  │  │        │     │     Expressions: [ca_address_sk]
+                        │  │  │        │     └─ Filter
+                        │  │  │        │        │     Condition: ca_gmt_offset = -7. Runtime Filters: {ca_address_sk}
+                        │  │  │        │        └─ TableScan tpcds1000.customer_address
+                        │  │  │        │                 Where: ca_gmt_offset = -7. Runtime Filters: {ca_address_sk}
+                        │  │  │        │                 Outputs: [ca_address_sk, ca_gmt_offset]
+                        │  │  │        └─ Repartition Exchange
+                        │  │  │           │     Partition by: {c_current_addr_sk}
+                        │  │  │           └─ Inner Join
+                        │  │  │              │     Condition: c_current_cdemo_sk == cd_demo_sk
+                        │  │  │              │     Runtime Filters Builder: {cd_demo_sk}
+                        │  │  │              ├─ Filter
+                        │  │  │              │  │     Condition: Runtime Filters: {c_current_cdemo_sk, c_current_hdemo_sk}
+                        │  │  │              │  └─ TableScan tpcds1000.customer
+                        │  │  │              │           Where: Runtime Filters: {c_current_cdemo_sk, c_current_hdemo_sk}
+                        │  │  │              │           Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk]
+                        │  │  │              └─ Broadcast Exchange
+                        │  │  │                 └─ Filter
+                        │  │  │                    │     Condition: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
+                        │  │  │                    └─ TableScan tpcds1000.customer_demographics
+                        │  │  │                             Where: ((cd_marital_status = 'M') OR (cd_marital_status = 'W')) AND ((cd_education_status = 'Unknown') OR (cd_marital_status = 'W')) AND ((cd_marital_status = 'M') OR (cd_education_status = 'Advanced Degree')) AND ((cd_education_status = 'Unknown') OR (cd_education_status = 'Advanced Degree'))
+                        │  │  │                             Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
+                        │  │  └─ Broadcast Exchange
+                        │  │     └─ Projection
+                        │  │        │     Expressions: [d_date_sk]
+                        │  │        └─ Filter
+                        │  │           │     Condition: (d_moy = 11) AND (d_year = 1998)
+                        │  │           └─ TableScan tpcds1000.date_dim
+                        │  │                    Where: (d_moy = 11) AND (d_year = 1998)
+                        │  │                    Outputs: [d_date_sk, d_year, d_moy]
+                        │  └─ Broadcast Exchange
+                        │     └─ TableScan tpcds1000.call_center
+                        │              Outputs: [cc_call_center_sk, cc_call_center_id, cc_name, cc_manager]
+                        └─ Broadcast Exchange
+                           └─ Projection
+                              │     Expressions: [hd_demo_sk]
+                              └─ Filter
+                                 │     Condition: hd_buy_potential LIKE 'Unknown%'
+                                 └─ TableScan tpcds1000.household_demographics
+                                          Where: hd_buy_potential LIKE 'Unknown%'
+                                          Outputs: [hd_demo_sk, hd_buy_potential]
 note: Runtime Filter is applied for 5 times.

@@ -1,27 +1,27 @@
-Projection Est. 5 rows, cost 8.362000e+00
+Projection Est. 5 rows, cost 2.019200e+01
 │     Expressions: res:=_in_subquery
-└─ Projection Est. 5 rows, cost 7.992000e+00
+└─ Projection Est. 5 rows, cost 1.982200e+01
    │     Expressions: _in_subquery:=if(isNull(number), NULL, multiIf(build_side_non_null_symbol = 1, 1, build_side_non_null_symbol = NULL, 0, 0))
-   └─ Limit Est. 5 rows, cost 7.622000e+00
+   └─ Limit Est. 5 rows, cost 1.945200e+01
       │     Limit: 5
-      └─ Gather Exchange Est. 5 rows, cost 7.622000e+00
-         └─ Limit Est. 5 rows, cost 6.662000e+00
+      └─ Gather Exchange Est. 5 rows, cost 1.945200e+01
+         └─ Limit Est. 5 rows, cost 1.945200e+01
             │     Limit: 5
-            └─ Left Join Est. ? rows, cost 6.662000e+00
+            └─ Left Join Est. ? rows, cost 1.945200e+01
                │     Condition: number == number_1
-               ├─ Limit Est. 5 rows, cost 2.400000e-01
+               ├─ Limit Est. 5 rows, cost 1.500000e+00
                │  │     Limit: 5
-               │  └─ Repartition Exchange Est. ? rows, cost 2.400000e-01
+               │  └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                │     │     Partition by: {number}
                │     └─ Limit Est. 5 rows, cost 0.000000e+00
                │        │     Limit: 5
                │        └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
                │                 Limit: 5
                │                 Outputs: [number]
-               └─ Projection Est. 3 rows, cost 9.420000e-01
+               └─ Projection Est. 3 rows, cost 2.220000e-01
                   │     Expressions: [number_1], build_side_non_null_symbol:=1
-                  └─ MergingAggregated Est. 3 rows, cost 7.200000e-01
-                     └─ Repartition Exchange Est. 3 rows, cost 7.200000e-01
+                  └─ MergingAggregated Est. 3 rows, cost 0.000000e+00
+                     └─ Repartition Exchange Est. 3 rows, cost 0.000000e+00
                         │     Partition by: {number_1}
                         └─ Aggregating Est. 3 rows, cost 0.000000e+00
                            │     Group by: {number_1}

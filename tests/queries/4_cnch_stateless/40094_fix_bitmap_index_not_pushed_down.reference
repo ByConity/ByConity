@@ -1,22 +1,22 @@
-Projection Est. 1000 rows, cost 3.086000e+02
+Projection Est. 1000 rows, cost 1.507500e+02
 │     Expressions: _1700031876736:=`expr#count()`, _1700031897102:=`expr#CAST(avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 30000), 1, 0)), \'Nullable(Float64)\')`, _1700046658469:=`expr#if(arraySetCheck(vids, \'8683112\'), \'8683112\', if(arraySetCheck(vids, \'8683113\'), \'8683113\', \'other\'))`, _1700047638968:=`expr#CAST(avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 60000), 1, 0)), \'Nullable(Float64)\')`, _avg_1700031876697_4700826bc6c9c490e9a7756937dd1f6e:=`expr#avg(mapElement(model_label, \'staytime\'))`, _countdistinct_1700031876715:=`expr#uniqExact(uid)`, _sum_1700046657800:=`expr#sum(multiIf(greater(arrayElement(label, 31), 0), 1, 0))`, _sum_1700046657811:=`expr#sum(multiIf(greaterOrEquals(arrayElement(label, 1), 1), 1, 0))`, _sum_1700046657910:=`expr#sum(arrayElement(label, 32))`
-└─ Projection Est. 1000 rows, cost 2.346000e+02
+└─ Projection Est. 1000 rows, cost 7.675000e+01
    │     Expressions: [expr#avg(mapElement(model_label, \'staytime\')), expr#count(), expr#if(arraySetCheck(vids, \'8683112\'), \'8683112\', if(arraySetCheck(vids, \'8683113\'), \'8683113\', \'other\')), expr#sum(arrayElement(label, 32)), expr#sum(multiIf(greater(arrayElement(label, 31), 0), 1, 0)), expr#sum(multiIf(greaterOrEquals(arrayElement(label, 1), 1), 1, 0)), expr#uniqExact(uid)], expr#CAST(avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 30000), 1, 0)), \'Nullable(Float64)\'):=CAST(`expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 30000), 1, 0))`, \'Nullable(Float64)\'), expr#CAST(avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 60000), 1, 0)), \'Nullable(Float64)\'):=CAST(`expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 60000), 1, 0))`, \'Nullable(Float64)\')
-   └─ Limit Est. 1000 rows, cost 1.606000e+02
+   └─ Limit Est. 1000 rows, cost 2.750000e+00
       │     Limit: 1000
-      └─ Gather Exchange Est. 1000 rows, cost 1.606000e+02
-         └─ Limit Est. 1000 rows, cost 4.400000e-01
+      └─ Gather Exchange Est. 1000 rows, cost 2.750000e+00
+         └─ Limit Est. 1000 rows, cost 2.750000e+00
             │     Limit: 1000
-            └─ MergingAggregated Est. ? rows, cost 4.400000e-01
-               └─ Repartition Exchange Est. ? rows, cost 4.400000e-01
+            └─ MergingAggregated Est. ? rows, cost 2.750000e+00
+               └─ Repartition Exchange Est. ? rows, cost 2.750000e+00
                   │     Partition by: {expr#if(arraySetCheck(vids, \'8683112\'), \'8683112\', if(arraySetCheck(vids, \'8683113\'), \'8683113\', \'other\'))}
-                  └─ Aggregating Est. ? rows, cost 2.000000e-01
+                  └─ Aggregating Est. ? rows, cost 1.250000e+00
                      │     Group by: {expr#if(arraySetCheck(vids, \'8683112\'), \'8683112\', if(arraySetCheck(vids, \'8683113\'), \'8683113\', \'other\'))}
                      │     Aggregates: expr#sum(multiIf(greater(arrayElement(label, 31), 0), 1, 0)):=AggNull(anyIf)(expr#sum(multiIf(greater(arrayElement(label, 31), 0), 1, 0)),group_id_mask), expr#sum(arrayElement(label, 32)):=AggNull(anyIf)(expr#sum(arrayElement(label, 32)),group_id_mask), expr#sum(multiIf(greaterOrEquals(arrayElement(label, 1), 1), 1, 0)):=AggNull(anyIf)(expr#sum(multiIf(greaterOrEquals(arrayElement(label, 1), 1), 1, 0)),group_id_mask), expr#count():=AggNull(anyIf)(expr#count(),group_id_mask), expr#uniqExact(uid):=AggNull(countIf)(uid,group_id_mask_1), expr#avg(mapElement(model_label, \'staytime\')):=AggNull(anyIf)(expr#avg(mapElement(model_label, \'staytime\')),group_id_mask), expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 30000), 1, 0)):=AggNull(anyIf)(expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 30000), 1, 0)),group_id_mask), expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 60000), 1, 0)):=AggNull(anyIf)(expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 60000), 1, 0)),group_id_mask)
-                     └─ Projection Est. ? rows, cost 2.000000e-01
+                     └─ Projection Est. ? rows, cost 1.250000e+00
                         │     Expressions: [expr#avg(mapElement(model_label, \'staytime\')), expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 30000), 1, 0)), expr#avg(multiIf(greaterOrEquals(mapElement(model_label, \'staytime\'), 60000), 1, 0)), expr#count(), expr#if(arraySetCheck(vids, \'8683112\'), \'8683112\', if(arraySetCheck(vids, \'8683113\'), \'8683113\', \'other\')), expr#sum(arrayElement(label, 32)), expr#sum(multiIf(greater(arrayElement(label, 31), 0), 1, 0)), expr#sum(multiIf(greaterOrEquals(arrayElement(label, 1), 1), 1, 0)), uid], group_id_mask:=group_id = 0, group_id_mask_1:=group_id = 1
-                        └─ MergingAggregated Est. ? rows, cost 2.000000e-01
-                           └─ Repartition Exchange Est. ? rows, cost 2.000000e-01
+                        └─ MergingAggregated Est. ? rows, cost 1.250000e+00
+                           └─ Repartition Exchange Est. ? rows, cost 1.250000e+00
                               │     Partition by: {expr#if(arraySetCheck(vids, \'8683112\'), \'8683112\', if(arraySetCheck(vids, \'8683113\'), \'8683113\', \'other\')), group_id, uid}
                               └─ Aggregating Est. ? rows, cost 0.000000e+00
                                  │     Group by: {expr#if(arraySetCheck(vids, \'8683112\'), \'8683112\', if(arraySetCheck(vids, \'8683113\'), \'8683113\', \'other\')), group_id, uid}

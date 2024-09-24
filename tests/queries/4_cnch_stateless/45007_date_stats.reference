@@ -4,66 +4,66 @@
 *** show stats all
 test_date_opt	7	3
 *** test id
-Projection Est. 1 rows, cost 2.836000e+00
+Projection Est. 1 rows, cost 4.626600e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 1 rows, cost 2.762000e+00
-   └─ Filter Est. 1 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 1 rows, cost 4.625860e+02
+   └─ Filter Est. 1 rows, cost 4.135860e+02
       │     Condition: id > 1
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: id > 1
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test date16
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: date32 = cast(19262, \'Date32\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: date32 = cast(19262, \'Date32\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test date32
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: date32 = cast(19262, \'Date32\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: date32 = cast(19262, \'Date32\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime32
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: datetime32 = cast(1664226000, \'DateTime\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: datetime32 = cast(1664226000, \'DateTime\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime64
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime without timezone
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test time
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: t = \'11:22:33\'
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: t = \'11:22:33\'
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 0	2022-09-27	2022-09-27	2022-09-27 00:00:00	2022-09-27 00:00:00.010	2022-09-27 00:00:00.010	11:22:33.000
@@ -72,65 +72,65 @@ Projection Est. 2 rows, cost 3.070000e+00
 *** show stats all
 test_date_opt	7	3
 *** test id
-Projection Est. 1 rows, cost 2.836000e+00
+Projection Est. 1 rows, cost 4.626600e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 1 rows, cost 2.762000e+00
-   └─ Filter Est. 1 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 1 rows, cost 4.625860e+02
+   └─ Filter Est. 1 rows, cost 4.135860e+02
       │     Condition: id > 1
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: id > 1
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test date16
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: date32 = cast(19262, \'Date32\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: date32 = cast(19262, \'Date32\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test date32
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: date32 = cast(19262, \'Date32\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: date32 = cast(19262, \'Date32\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime32
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: datetime32 = cast(1664226000, \'DateTime\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: datetime32 = cast(1664226000, \'DateTime\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime64
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: datetime64 = cast(\'1664226000.01\', \'DateTime64(3)\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test datetime without timezone
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: datetimewotz = cast(\'1664236800.01\', \'DateTime64(3, \\\'UTC\\\')\')
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
 *** test time
-Projection Est. 2 rows, cost 3.070000e+00
+Projection Est. 2 rows, cost 5.117340e+02
 │     Expressions: [date16, date32, datetime32, datetime64, datetimewotz, id, t]
-└─ Gather Exchange Est. 2 rows, cost 2.922000e+00
-   └─ Filter Est. 2 rows, cost 2.442000e+00
+└─ Gather Exchange Est. 2 rows, cost 5.115860e+02
+   └─ Filter Est. 2 rows, cost 4.135860e+02
       │     Condition: t = \'11:22:33\'
-      └─ TableScan default.test_date_opt Est. 3 rows, cost 2.220000e+00
+      └─ TableScan default.test_date_opt Est. 3 rows, cost 4.133640e+02
                Where: t = \'11:22:33\'
                Outputs: [id, date16, date32, datetime32, datetime64, datetimewotz, t]
