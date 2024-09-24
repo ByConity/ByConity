@@ -561,6 +561,7 @@ std::shared_ptr<TableScanStep> SymbolMapper::map(const TableScanStep & scan)
         scan.getQueryInfo(),
         scan.getMaxBlockSize(),
         scan.getTableAlias(),
+        scan.isBucketScan(),
         scan.getHints(),
         std::move(mapped_inline_expressions),
         std::move(mapped_aggregation),

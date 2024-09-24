@@ -180,6 +180,7 @@ size_t CacheParamBuilder::computeTableScanHash(std::shared_ptr<TableScanStep> ta
         new_info,
         table_step->getMaxBlockSize(),
         table_step->getTableAlias(),
+        table_step->isBucketScan(),
         table_step->getHints(),
         table_step->getInlineExpressions(),
         table_step->getPushdownAggregation(),

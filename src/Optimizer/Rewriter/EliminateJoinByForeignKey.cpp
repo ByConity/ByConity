@@ -1205,6 +1205,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
             tb_step->getQueryInfo(),
             tb_step->getMaxBlockSize(),
             tb_step->getTableAlias(),
+            tb_step->isBucketScan(),
             tb_step->getHints(),
             tb_step->getInlineExpressions(),
             tb_step->getPushdownAggregation(),

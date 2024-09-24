@@ -220,6 +220,7 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         reordered_query_info, // prewhere info
         step.getMaxBlockSize(),
         step.getTableAlias(), // alias
+        step.isBucketScan(),
         PlanHints{}, // hints set later
         inline_assignments,
         nullptr, // push down agg

@@ -138,7 +138,14 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, cons
             }
         }
 
-        return {partition_keys, ExpressionRewriter::rewrite(sharding_key, expression_map)};
+        auto result_ast = ExpressionRewriter::rewrite(sharding_key, expression_map);
+
+        if (auto * cluster_by_ast_element = result_ast->as<ASTClusterByElement>())
+        {
+            cluster_by_ast_element->children.pop_back();
+        }
+
+        return {partition_keys, result_ast};
     };
 
     ASTPtr ast;

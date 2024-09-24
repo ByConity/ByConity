@@ -781,6 +781,7 @@ TableScanStep::TableScanStep(
     const SelectQueryInfo & query_info_,
     size_t max_block_size_,
     String alias_,
+    bool bucket_scan_,
     PlanHints hints_,
     Assignments inline_expressions_,
     std::shared_ptr<AggregatingStep> aggregation_,
@@ -795,6 +796,7 @@ TableScanStep::TableScanStep(
     , pushdown_aggregation(std::move(aggregation_))
     , pushdown_projection(std::move(projection_))
     , pushdown_filter(std::move(filter_))
+    , bucket_scan(bucket_scan_)
     , alias(alias_)
     , log(&Poco::Logger::get("TableScanStep"))
 {
@@ -1729,6 +1731,7 @@ std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr) const
         copy_query_info,
         max_block_size,
         alias,
+        bucket_scan,
         hints,
         inline_expressions,
         pushdown_aggregation,

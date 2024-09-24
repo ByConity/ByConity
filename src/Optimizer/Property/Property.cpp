@@ -18,8 +18,10 @@
 #include <Functions/FunctionsHashing.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Optimizer/ExpressionRewriter.h>
 #include <Optimizer/Property/Constants.h>
 #include <Optimizer/Property/SymbolEquivalencesDeriver.h>
+#include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSerDerHelper.h>
@@ -109,7 +111,7 @@ bool Partitioning::isPartitionOn(const Partitioning & requirement, const Constan
     return true;
 }
 
-bool Partitioning::isExchangeSchema(bool support_bucket_shuffle) const
+bool Partitioning::isSimpleExchangeSchema(bool support_bucket_shuffle) const
 {
     if (handle == Handle::BUCKET_TABLE)
     {
@@ -155,6 +157,63 @@ bool Partitioning::isExchangeSchema(bool support_bucket_shuffle) const
     }
 
     return true;
+}
+
+bool Partitioning::isExchangeSchema(bool support_bucket_shuffle) const
+{
+    if (handle == Handle::BUCKET_TABLE)
+    {
+        if (support_bucket_shuffle && bucket_expr)
+        {
+            if (auto * cluster_by_ast_element = bucket_expr->as<ASTClusterByElement>())
+            {
+                if (SymbolsExtractor::extract(cluster_by_ast_element->getColumns()).size() != columns.size())
+                    return false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+ASTPtr Partitioning::getShuffleExpr() const
+{
+    auto replace_col = [&](ASTPtr ast) -> ASTPtr {
+        ConstASTMap expression_map;
+        size_t index = 0;
+        for (auto symbol : columns)
+        {
+            ASTPtr name = std::make_shared<ASTIdentifier>(symbol);
+            ASTPtr id = std::make_shared<ASTIdentifier>("$" + std::to_string(index));
+            expression_map[id] = ConstHashAST::make(name);
+            index++;
+        }
+
+        auto result_ast = ExpressionRewriter::rewrite(ast, expression_map);
+        return result_ast;
+    };
+
+    if (handle == Handle::BUCKET_TABLE)
+    {
+        if (bucket_expr)
+        {
+            if (auto * cluster_by_ast_element = bucket_expr->as<ASTClusterByElement>())
+            {
+                return replace_col(cluster_by_ast_element->getColumns());
+            }
+        }
+    }
+
+    return nullptr;
 }
 
 String Partitioning::getHashFunc(String default_func) const
@@ -318,10 +377,13 @@ String Partitioning::toString() const
                                   [](String a, const String & b) { return std::move(a) + ", " + b; })
                     + "]";
                 result += " " + queryToString(bucket_expr);
+                result += " " + std::to_string(buckets);
                 if (require_handle)
                     result += " H";
                 if (preferred)
                     result += " ?";
+                if (satisfy_worker)
+                    result += " SW";
                 return result;
             }
         case Handle::ARBITRARY:
