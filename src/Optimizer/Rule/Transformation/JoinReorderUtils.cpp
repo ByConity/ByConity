@@ -133,6 +133,7 @@ namespace JoinReorderUtils
             rule_context.context->getSettingsRef().optimize_read_in_order,
             join_keys.first,
             join_keys.second,
+            std::vector<bool>{},
             join_filter);
 
         return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(join_step), {left, right});

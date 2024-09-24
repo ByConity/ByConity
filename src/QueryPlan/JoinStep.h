@@ -59,6 +59,7 @@ public:
         bool keep_left_read_in_order_ = false,
         Names left_keys_ = {},
         Names right_keys_ = {},
+        std::vector<bool> key_ids_null_safe_ = {},
         ConstASTPtr filter_ = PredicateConst::TRUE_VALUE,
         bool has_using_ = false,
         std::optional<std::vector<bool>> require_right_keys_ = std::nullopt,
@@ -91,6 +92,9 @@ public:
 
     const Names & getLeftKeys() const { return left_keys; }
     const Names & getRightKeys() const { return right_keys; }
+    const std::vector<bool> & getKeyIdsNullSafe() const { return key_ids_null_safe; }
+    bool hasKeyIdNullSafe() const;
+    bool getKeyIdNullSafe(size_t key_index) const;
     const ConstASTPtr & getFilter() const { return filter; }
     bool isHasUsing() const { return has_using; }
     std::optional<std::vector<bool>> getRequireRightKeys() const { return require_right_keys; }
@@ -205,6 +209,7 @@ private:
 
     Names left_keys;
     Names right_keys;
+    std::vector<bool> key_ids_null_safe;
 
     /**
      * Non-equals predicate

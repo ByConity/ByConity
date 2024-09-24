@@ -89,9 +89,9 @@ JoinPtr JoinStep::makeJoin(
         }
         else
         {
-            table_join->addOnKeys(left, right, false);
-            // const String fn = null_safe_columns && (*null_safe_columns)[i] ? "bitEquals" : "equals";
-            const String fn = "equals";
+            bool null_safe = getKeyIdNullSafe(index);
+            table_join->addOnKeys(left, right, null_safe);
+            const String fn = null_safe ? "bitEquals" : "equals";
             on_ast_terms.emplace_back(makeASTFunction(fn, left, right));
         }
     }
@@ -251,6 +251,7 @@ JoinStep::JoinStep(
     bool keep_left_read_in_order_,
     Names left_keys_,
     Names right_keys_,
+    std::vector<bool> key_ids_null_safe_,
     ConstASTPtr filter_,
     bool has_using_,
     std::optional<std::vector<bool>> require_right_keys_,
@@ -268,6 +269,7 @@ JoinStep::JoinStep(
     , keep_left_read_in_order(keep_left_read_in_order_)
     , left_keys(std::move(left_keys_))
     , right_keys(std::move(right_keys_))
+    , key_ids_null_safe(std::move(key_ids_null_safe_))
     , filter(std::move(filter_))
     , has_using(has_using_)
     , require_right_keys(std::move(require_right_keys_))
@@ -287,6 +289,18 @@ JoinStep::JoinStep(
     input_streams = std::move(input_streams_);
     output_stream = std::move(output_stream_);
     hints = std::move(hints_);
+}
+
+bool JoinStep::hasKeyIdNullSafe() const
+{
+    return std::any_of(key_ids_null_safe.begin(), key_ids_null_safe.end(), [](auto x) { return x; });
+}
+
+bool JoinStep::getKeyIdNullSafe(size_t key_index) const
+{
+    if (key_index >= key_ids_null_safe.size())
+        return false;
+    return key_ids_null_safe.at(key_index);
 }
 
 void JoinStep::setInputStreams(const DataStreams & input_streams_)
@@ -399,6 +413,9 @@ bool JoinStep::supportReorder(bool support_filter, bool support_cross) const
     if (require_right_keys || has_using)
         return false;
 
+    if (hasKeyIdNullSafe())
+        return false;
+
     if (strictness != ASTTableJoin::Strictness::Unspecified && strictness != ASTTableJoin::Strictness::All)
         return false;
 
@@ -441,6 +458,8 @@ void JoinStep::toProto(Protos::JoinStep & proto, bool for_hash_equals) const
         proto.add_left_keys(element);
     for (const auto & element : right_keys)
         proto.add_right_keys(element);
+    for (bool element : key_ids_null_safe)
+        proto.add_key_ids_null_safe(element);
     serializeASTToProto(filter, *proto.mutable_filter());
     proto.set_has_using(has_using);
     proto.set_flag_require_right_keys(require_right_keys.has_value());
@@ -485,6 +504,9 @@ std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, Co
     std::vector<String> right_keys;
     for (const auto & element : proto.right_keys())
         right_keys.emplace_back(element);
+    std::vector<bool> key_ids_null_safe;
+    for (const auto & null_safe : proto.key_ids_null_safe())
+        key_ids_null_safe.emplace_back(null_safe);
     auto filter = deserializeASTFromProto(proto.filter());
     auto has_using = proto.has_using();
     std::optional<std::vector<bool>> require_right_keys;
@@ -512,6 +534,7 @@ std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, Co
         keep_left_read_in_order,
         left_keys,
         right_keys,
+        key_ids_null_safe,
         filter,
         has_using,
         require_right_keys,
@@ -585,6 +608,7 @@ std::shared_ptr<IQueryPlanStep> JoinStep::copy(ContextPtr) const
         keep_left_read_in_order,
         left_keys,
         right_keys,
+        std::move(key_ids_null_safe),
         filter,
         has_using,
         require_right_keys,

@@ -145,7 +145,8 @@ private:
     void planJoinUsing(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
     void planJoinOn(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
     std::pair<Names, Names> prepareJoinUsingKeys(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
-    std::pair<Names, Names> prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
+    std::tuple<Names, Names, std::vector<bool>>
+    prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
     static DataStream getJoinOutputStream(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder);
 
     RelationPlan planReadFromStorage(IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints, bool is_table_function = false);
@@ -659,6 +660,7 @@ void QueryPlannerVisitor::planJoinUsing(ASTTableJoin & table_join, PlanBuilder &
         context->getSettingsRef().optimize_read_in_order,
         left_keys,
         right_keys,
+        std::vector<bool>{},
         PredicateConst::TRUE_VALUE,
         true,
         use_ansi_semantic ? std::nullopt : std::make_optional(join_analysis.require_right_keys));
@@ -743,7 +745,7 @@ void QueryPlannerVisitor::planJoinOn(ASTTableJoin & table_join, PlanBuilder & le
     right_builder.withScope(joined_scope, joined_field_symbols);
 
     // 2. prepare join keys
-    auto [left_keys, right_keys] = prepareJoinOnKeys(table_join, left_builder, right_builder);
+    auto [left_keys, right_keys, key_ids_null_safe] = prepareJoinOnKeys(table_join, left_builder, right_builder);
 
     // 3. build join filter
     ASTPtr join_filter = PredicateConst::TRUE_VALUE;
@@ -784,6 +786,7 @@ void QueryPlannerVisitor::planJoinOn(ASTTableJoin & table_join, PlanBuilder & le
         context->getSettingsRef().optimize_read_in_order,
         left_keys,
         right_keys,
+        key_ids_null_safe,
         isNormalInnerJoin(table_join) ? PredicateConst::TRUE_VALUE : join_filter,
         false,
         std::nullopt,
@@ -857,13 +860,14 @@ QueryPlannerVisitor::prepareJoinUsingKeys(ASTTableJoin & table_join, PlanBuilder
     return {left_keys, right_keys};
 }
 
-std::pair<Names, Names>
+std::tuple<Names, Names, std::vector<bool>>
 QueryPlannerVisitor::prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder)
 {
     auto & join_analysis = analysis.getJoinOnAnalysis(table_join);
 
     ExpressionsAndTypes left_conditions;
     ExpressionsAndTypes right_conditions;
+    std::vector<bool> key_ids_null_safe;
 
     // for asof join, equality exprs & inequality exprs forms the join keys
     // for other joins, equality exprs forms the join keys, inequality exprs & complex exprs forms the join filter
@@ -871,6 +875,7 @@ QueryPlannerVisitor::prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & 
     {
         left_conditions.emplace_back(condition.left_ast, condition.left_coercion);
         right_conditions.emplace_back(condition.right_ast, condition.right_coercion);
+        key_ids_null_safe.emplace_back(condition.null_safe);
     }
 
     if (isAsofJoin(table_join))
@@ -886,7 +891,7 @@ QueryPlannerVisitor::prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & 
     Names left_symbols = left_builder.projectExpressionsWithCoercion(left_conditions);
     Names right_symbols = right_builder.projectExpressionsWithCoercion(right_conditions);
 
-    return {left_symbols, right_symbols};
+    return {left_symbols, right_symbols, key_ids_null_safe};
 }
 
 DataStream QueryPlannerVisitor::getJoinOutputStream(ASTTableJoin &, PlanBuilder & left_builder, PlanBuilder & right_builder)

@@ -1220,7 +1220,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
                     DataTypePtr right_coercion = nullptr;
 
                     // for non-ASOF join, inequality_conditions will be included in join filter, so don't have to do type coercion
-                    if (func->name == "equals" || isAsofJoin(table_join))
+                    if ((func->name == "equals" || func->name == "bitEquals") || isAsofJoin(table_join))
                     {
                         DataTypePtr left_type = analysis.getExpressionType(left_ast);
                         DataTypePtr right_type = analysis.getExpressionType(right_ast);
@@ -1255,8 +1255,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
                         }
                     }
 
-                    if (func->name == "equals")
-                        equality_conditions.emplace_back(left_ast, right_ast, left_coercion, right_coercion);
+                    if (func->name == "equals" || func->name == "bitEquals")
+                        equality_conditions.emplace_back(left_ast, right_ast, left_coercion, right_coercion, func->name == "bitEquals");
                     else
                         inequality_conditions.emplace_back(left_ast, right_ast, inequality, left_coercion, right_coercion);
 

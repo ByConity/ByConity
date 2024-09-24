@@ -271,6 +271,7 @@ message JoinStep {
   required bool is_magic = 17;
   required bool is_ordered = 18;
   repeated RuntimeFilterBuilders runtime_filter_builders = 19;
+  repeated bool key_ids_null_safe = 25;
 }
 
 message MergeSortingStep {
