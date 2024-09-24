@@ -1686,6 +1686,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join_without_top_join, false, "Whether to allow eliminate complicated join by fk pull through pass the multi-child node even if no top join", 0) \
     M(Bool, enable_filtered_pk_selectivity, 1, "Enable the selectivity of filtered pk table", 0) \
+    M(Bool, execute_subquery_in_lambda, true, "Whether to execute subquery in lambda", 0) \
+    M(Bool, early_execute_scalar_subquery, false, "Whether to early execute scalar subquery", 0) \
+    M(Bool, early_execute_in_subquery, false, "Whether to early execute in subquery", 0) \
     \
     /** remote disk cache*/ \
     M(Bool, use_local_cache_for_remote_storage, true, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \

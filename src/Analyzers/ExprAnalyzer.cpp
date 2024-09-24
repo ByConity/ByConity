@@ -36,6 +36,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/InternalFunctionRuntimeFilter.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/addTypeConversionToAST.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/join_common.h>
 #include <Interpreters/misc.h>
@@ -162,7 +163,7 @@ private:
     static String getFunctionColumnName(const String & func_name, const ColumnsWithTypeAndName & arguments);
 };
 
-DataTypePtr ExprAnalyzer::analyze(ASTPtr expression, ScopePtr scope, ContextPtr context, Analysis & analysis, ExprAnalyzerOptions options)
+DataTypePtr ExprAnalyzer::analyze(ASTPtr & expression, ScopePtr scope, ContextPtr context, Analysis & analysis, ExprAnalyzerOptions options)
 {
     ExprAnalyzerVisitor expr_visitor{context, analysis, scope, options};
     AnalyzeContext ac{.only_and = options.subquery_to_semi_anti};
@@ -306,6 +307,23 @@ analysis.subquery_support_semi_anti[quantified_comparison] = ac.only_and;
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, AnalyzeContext & ac)
 {
     auto type = handleSubquery(node, true);
+    // TODO: we should only execute uncorrelated subqueries
+    bool early_execute_subquery
+        = context->getSettingsRef().early_execute_scalar_subquery || (isInLambda() && context->getSettingsRef().execute_subquery_in_lambda);
+
+    if (early_execute_subquery)
+    {
+        const auto & block = analysis.getScalarSubqueryResult(node, context);
+        const auto & col_with_type = block.getByPosition(0);
+        auto lit = std::make_shared<ASTLiteral>(col_with_type.column->operator[](0));
+        lit->alias = node->tryGetAlias();
+        lit->prefer_alias_to_column_name = node->as<ASTSubquery &>().prefer_alias_to_column_name;
+        node = addTypeConversionToAST(std::move(lit), col_with_type.type->getName());
+        return {col_with_type.column, col_with_type.type, ""};
+    }
+
+    if (isInLambda())
+        throw Exception("Subquery in lambda is not supported by ApplyStep", ErrorCodes::SYNTAX_ERROR);
 
     // when a scalar subquery has 0 rows, it returns NULL, hence we change its type to Nullable type
     // note that this feature is not compatible with subquery with multiple output returning Tuple type
@@ -588,6 +606,10 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeExistsSubquery(ASTFunctionPtr 
     {
         handleSubquery(function->arguments->children[0], false);
     }
+
+    if (isInLambda())
+        throw Exception("Subquery in lambda is not supported by ApplyStep", ErrorCodes::SYNTAX_ERROR);
+
     analysis.exists_subqueries[options.select_query].push_back(function);
     analysis.subquery_support_semi_anti[function] = ac.only_and;
     return {nullptr, std::make_shared<DataTypeUInt8>(), function->getColumnName()};
@@ -598,6 +620,39 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
     AnalyzeContext ac{.only_and = false};
     auto lhs_type = process(lhs_ast, ac).type;
     auto rhs_type = handleSubquery(rhs_ast, false);
+    // TODO: we should only execute uncorrelated subqueries
+    // TODO: handle type mismatch
+    bool early_execute_subquery
+        = context->getSettingsRef().early_execute_in_subquery || (isInLambda() && context->getSettingsRef().execute_subquery_in_lambda);
+
+    if (early_execute_subquery)
+    {
+        auto set = analysis.getInSubqueryResult(rhs_ast, context);
+        auto set_columns = set->getSetElements();
+        Tuple coll;
+        for (size_t row_id = 0; row_id < set_columns[0]->size(); ++row_id)
+        {
+            if (set_columns.size() == 1)
+            {
+                coll.push_back(set_columns[0]->operator[](row_id));
+            }
+            else
+            {
+                Tuple nested_tuple;
+                for (const auto & set_column : set_columns)
+                    nested_tuple.push_back(set_column->operator[](row_id));
+                coll.push_back(std::move(nested_tuple));
+            }
+        }
+        // TODO: better handle empty set
+        if (coll.empty())
+            coll.push_back(Null{});
+        rhs_ast = std::make_shared<ASTLiteral>(std::move(coll));
+        return;
+    }
+
+    if (isInLambda())
+        throw Exception("Subquery in lambda is not supported by ApplyStep", ErrorCodes::SYNTAX_ERROR);
 
     if (!JoinCommon::isJoinCompatibleTypes(lhs_type, rhs_type))
     {
@@ -756,9 +811,6 @@ DataTypePtr ExprAnalyzerVisitor::handleSubquery(const ASTPtr & subquery, bool us
 
     if (!options.select_query)
         throw Exception("Provide query node if subquery is allowed", ErrorCodes::LOGICAL_ERROR);
-
-    if (isInLambda())
-        throw Exception("Subquery is not support in lambda", ErrorCodes::SYNTAX_ERROR);
 
     QueryAnalyzer::analyze(subquery->children[0], currentScope(), context, analysis);
     auto & output_columns = analysis.getOutputDescription(*subquery);
