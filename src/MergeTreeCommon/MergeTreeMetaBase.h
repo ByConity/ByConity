@@ -383,7 +383,7 @@ public:
 
     Block getSampleBlockWithVirtualColumns() const;
 
-    Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
+    Block getPartitionBlockWithVirtualColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
 
     /// Construct a block consisting only of possible virtual columns for part pruning.
     /// If one_part is true, fill in at most one part.

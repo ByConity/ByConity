@@ -28,6 +28,30 @@ SELECT k FROM t_alter_partition ORDER BY k;
 
 DROP TABLE t_alter_partition;
 
+-- where clause with `in` functions
+SELECT '------ DROP PARTITION WHERE ------';
+CREATE TABLE t_alter_partition(p Date, k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY (k, p) ORDER BY m;
+INSERT INTO t_alter_partition VALUES ('2024-01-01', 1, 1), ('2024-02-01', 1, 2), ('2024-03-01', 1, 3), ('2024-04-01', 2, 4), ('2024-05-01', 2, 5);
+
+SELECT '------ DROP PARTITION (1, 20240101) ------';
+ALTER TABLE t_alter_partition DROP PARTITION WHERE p IN ('2024-01-01') AND k = 1;
+SELECT * FROM t_alter_partition order by m;
+
+SELECT '------ DROP PARTITION (1, 20240201) ------';
+ALTER TABLE t_alter_partition DROP PARTITION WHERE p = '2024-02-01' AND k in (1);
+SELECT * FROM t_alter_partition order by m;
+
+SELECT '------ DROP PARTITION (2, 20240401) ------';
+ALTER TABLE t_alter_partition DROP PARTITION WHERE p in ('2024-04-01') AND k in (2);
+SELECT * FROM t_alter_partition order by m;
+
+SELECT '------ DROP PARTITION (1, 20240301) ------';
+ALTER TABLE t_alter_partition DROP PARTITION WHERE _partition_id = '1-20240301';
+SELECT * FROM t_alter_partition order by m;
+
+SELECT '------ DROP NON-EIXSTS PARTITION ------';
+ALTER TABLE t_alter_partition DROP PARTITION WHERE _partition_value = (1, '20240301');
+SELECT * FROM t_alter_partition order by m;
 
 SELECT '------ TRUNCATE PARTITION ------';
 CREATE TABLE t_truncate(k Int32, m Int32) ENGINE = CnchMergeTree PARTITION BY (k) ORDER BY m;
