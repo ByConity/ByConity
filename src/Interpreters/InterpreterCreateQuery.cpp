@@ -1686,7 +1686,8 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
 
     try
     {
-        res->checkMetadataValidity(properties.columns);
+        if (!create.attach)
+            res->checkMetadataValidity(properties.columns);
     }
     catch (...)
     {

@@ -135,33 +135,42 @@ static Array extractMapColumnKeys(const MergeTreeMetaBase & data, const MergeTre
             map_types[it->name] = it->type;
     }
 
+    phmap::flat_hash_set<String> implicit_column_files;
+
     LoggerPtr logger = nullptr;
     for (auto & part : parts)
     {
         for (auto & [file, _] : part->getChecksums()->files)
         {
-            if (!isMapImplicitKey(file) || isMapBaseFile(file))
-                continue;
-
-            String map_name = parseMapNameFromImplicitFileName(file);
-            if (!isMapImplicitDataFileNameNotBaseOfSpecialMapName(file, map_name))
-                continue;
-            String key_name = parseKeyNameFromImplicitFileName(file, map_name);
-
-            if (!map_types.count(map_name))
-            {
-                if (unlikely(logger == nullptr))
-                    logger = getLogger(data.getLogName() + " (ExtractMapKeys)");
-                LOG_WARNING(logger, "Can not find byte map column {} of implicit file {}", map_name, file);
-                continue;
-            }
-            auto type = map_types[map_name];
-            auto map_key_type = static_cast<const DataTypeMap *>(type.get())->getKeyType();
-            if (!map_keys.count(map_name))
-                map_keys[map_name] = IColumn::mutate(map_key_type->createColumn());
-
-            map_keys[map_name]->insert(map_key_type->stringToVisitorField(key_name));
+            /// Parsing map keys from file name is a little heavy, so we remove duplicate file names first.
+            if (isMapImplicitKey(file))
+                implicit_column_files.insert(file);
         }
+    }
+
+    for (const auto & file: implicit_column_files)
+    {
+        if (isMapBaseFile(file))
+            continue;
+
+        String map_name = parseMapNameFromImplicitFileName(file);
+        if (!isMapImplicitDataFileNameNotBaseOfSpecialMapName(file, map_name))
+            continue;
+        String key_name = parseKeyNameFromImplicitFileName(file, map_name);
+
+        if (!map_types.count(map_name))
+        {
+            if (unlikely(logger == nullptr))
+                logger = getLogger(data.getLogName() + " (ExtractMapKeys)");
+            LOG_WARNING(logger, "Can not find byte map column {} of implicit file {}", map_name, file);
+            continue;
+        }
+        auto type = map_types[map_name];
+        auto map_key_type = static_cast<const DataTypeMap *>(type.get())->getKeyType();
+        if (!map_keys.count(map_name))
+            map_keys[map_name] = IColumn::mutate(map_key_type->createColumn());
+
+        map_keys[map_name]->insert(map_key_type->stringToVisitorField(key_name));
     }
 
     for (auto & [map_name, column] : map_keys)
@@ -1613,6 +1622,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         column.name = "_map_column_keys";
         column.type = std::make_shared<DataTypeArray>(
             std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()}));
+
         column.column = column.type->createColumnConst(0, Field(extractMapColumnKeys(data, selected_parts_vector)));
 
         auto adding_column = ActionsDAG::makeAddingColumnActions(std::move(column));
