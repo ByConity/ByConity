@@ -88,7 +88,7 @@ TimePoint nowTimePoint()
 ExtendedDayNum convertToDate(DateTime64 time)
 {
     time_t ts = time.value / DecimalUtils::scaleMultiplier<time_t>(DataTypeDateTime64::default_scale);
-    auto date = DateLUT::instance().toDayNum(ts);
+    auto date = DateLUT::serverTimezoneInstance().toDayNum(ts);
     return date;
 }
 
@@ -109,7 +109,7 @@ std::optional<Time> getTimeFromString(const String & text)
     {
         return std::nullopt;
     }
-    return DateLUT::instance().toTime(DateLUT::instance().makeDateTime(1970, 1, 1, tmp.tm_hour, tmp.tm_min, 0));
+    return DateLUT::serverTimezoneInstance().toTime(DateLUT::serverTimezoneInstance().makeDateTime(1970, 1, 1, tmp.tm_hour, tmp.tm_min, 0));
 }
 
 
@@ -151,7 +151,7 @@ std::optional<double> calcPriority(const InternalConfig & cfg, UInt64 total_udi,
 String serializeToText(DateTime64 time)
 {
     WriteBufferFromOwnString buffer;
-    writeDateTimeText(time, DataTypeDateTime64::default_scale, buffer, DateLUT::instance());
+    writeDateTimeText(time, DataTypeDateTime64::default_scale, buffer, DateLUT::serverTimezoneInstance());
     return buffer.str();
 }
 

@@ -109,7 +109,7 @@ namespace
         {
             const auto * col_from = checkAndGetColumn<ColVecType>(column);
 
-            static const Int32 daynum_min_offset = -static_cast<Int32>(DateLUT::instance().getDayNumOffsetEpoch());
+            static const Int32 daynum_min_offset = -static_cast<Int32>(DateLUT::sessionInstance().getDayNumOffsetEpoch());
 
             MutableColumnPtr res = DataTypeDate32().createColumn();
             auto & res_data = dynamic_cast<ColumnVector<Int32> *>(res.get())->getData();
@@ -239,7 +239,7 @@ namespace
             if (col == nullptr)
                 throw Exception("Column type does not match to the data type", ErrorCodes::ILLEGAL_COLUMN);
 
-            const auto & timezone = DateLUT::instance();
+            const auto & timezone = DateLUT::sessionInstance();
             auto & data = col->getData();
             const auto row_size = data.size();
             res_data.resize(row_size);

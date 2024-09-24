@@ -274,7 +274,8 @@ RecvDataPacket MultiPathReceiver::recv(timespec timeout_ts)
     {
         bool collector_closed = collector->closed();
         String error_msg = "Try pop receive collector for " + name;
-        error_msg.append(collector_closed ? " interrupted" : " timeout at " + DateLUT::instance().timeToString(timeout_ts.tv_sec));
+        error_msg.append(
+            collector_closed ? " interrupted" : " timeout at " + DateLUT::serverTimezoneInstance().timeToString(timeout_ts.tv_sec));
 
         BroadcastStatus current_status
             = finish(collector_closed ? BroadcastStatusCode::RECV_UNKNOWN_ERROR : BroadcastStatusCode::RECV_TIMEOUT, error_msg);

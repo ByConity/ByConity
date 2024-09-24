@@ -54,7 +54,7 @@ void ViewRefreshTaskLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(view);
     columns[i++]->insert(status);
     columns[i++]->insert(refresh_type);
-    columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
+    columns[i++]->insert(DateLUT::serverTimezoneInstance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(event_time);
     columns[i++]->insert(partition_map);
     columns[i++]->insert(query_duration_ms);

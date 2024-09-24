@@ -1711,6 +1711,10 @@ public:
     };
     HybridPartAllocator getHybridPartAllocationAlgo() const;
 
+    // If session timezone is specified, some cache which involves creating table/storage can't be used.
+    // Because it may use wrong timezone for DateTime column, which leads to incorrect result.
+    bool hasSessionTimeZone() const;
+
     String getDefaultCnchPolicyName() const;
     String getCnchAuxilityPolicyName() const;
 

@@ -757,15 +757,15 @@ inline void writeDateText(const LocalDate & date, WriteBuffer & buf)
 }
 
 template <char delimiter = '-'>
-inline void writeDateText(DayNum date, WriteBuffer & buf)
+inline void writeDateText(DayNum date, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
 {
-    writeDateText<delimiter>(LocalDate(date), buf);
+    writeDateText<delimiter>(LocalDate(date, time_zone), buf);
 }
 
 template <char delimiter = '-'>
-inline void writeDateText(ExtendedDayNum date, WriteBuffer & buf)
+inline void writeDateText(ExtendedDayNum date, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
 {
-    writeDateText<delimiter>(LocalDate(date), buf);
+    writeDateText<delimiter>(LocalDate(date, time_zone), buf);
 }
 
 /// In the format YYYY-MM-DD HH:MM:SS
@@ -818,14 +818,19 @@ inline void writeDateTimeText(const LocalDateTime & datetime, WriteBuffer & buf)
 
 /// In the format YYYY-MM-DD HH:MM:SS, according to the specified time zone.
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
-inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
 {
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(datetime, time_zone), buf);
 }
 
 /// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN, according to the specified time zone.
-template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' ', char fractional_time_delimiter = '.'>
-inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+template <
+    char date_delimeter = '-',
+    char time_delimeter = ':',
+    char between_date_time_delimiter = ' ',
+    char fractional_time_delimiter = '.'>
+inline void
+writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
 {
     static constexpr UInt32 MaxScale = DecimalUtils::max_precision<DateTime64>;
     scale = scale > MaxScale ? MaxScale : scale;
@@ -892,7 +897,7 @@ inline void writeTimeText(Decimal64 time, UInt32 scale, WriteBuffer & buf)
 
 /// In the RFC 1123 format: "Tue, 03 Dec 2019 00:11:50 GMT". You must provide GMT DateLUT.
 /// This is needed for HTTP requests.
-inline void writeDateTimeTextRFC1123(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+inline void writeDateTimeTextRFC1123(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
 {
     const auto & values = time_zone.getValues(datetime);
 
@@ -996,8 +1001,10 @@ template <> inline void writeText<bool>(const bool & x, WriteBuffer & buf) { wri
 /// assumes here that `x` is a null-terminated string.
 inline void writeText(const char * x, WriteBuffer & buf) { writeCString(x, buf); }
 inline void writeText(const char * x, size_t size, WriteBuffer & buf) { writeString(x, size, buf); }
-
-inline void writeText(const DayNum & x, WriteBuffer & buf) { writeDateText(LocalDate(x), buf); }
+inline void writeText(const DayNum & x, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance())
+{
+    writeDateText(LocalDate(x, time_zone), buf);
+}
 inline void writeText(const LocalDate & x, WriteBuffer & buf) { writeDateText(x, buf); }
 inline void writeText(const LocalDateTime & x, WriteBuffer & buf) { writeDateTimeText(x, buf); }
 inline void writeText(const UUID & x, WriteBuffer & buf) { writeUUIDText(x, buf); }

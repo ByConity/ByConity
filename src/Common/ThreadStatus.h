@@ -313,6 +313,11 @@ public:
         return query_context.lock();
     }
 
+    ContextPtr getGlobalContext() const
+    {
+        return global_context.lock();
+    }
+
     /// Starts new query and create new thread group for it, current thread becomes master thread of the query
     void initializeQuery(MemoryTracker * memory_tracker_ = nullptr);
 

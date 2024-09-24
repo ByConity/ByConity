@@ -61,7 +61,7 @@ void OTELTraceLogElement::appendToBlock(MutableColumns & columns) const
     size_t i = 0;
 
     columns[i++]->insert(event_time);
-    columns[i++]->insert(DateLUT::instance().toDayNum(event_time / 1000000000).toUnderType());
+    columns[i++]->insert(DateLUT::serverTimezoneInstance().toDayNum(event_time / 1000000000).toUnderType());
     columns[i++]->insert(trace_id);
     columns[i++]->insert(span_id);
     columns[i++]->insert(parent_span_id);

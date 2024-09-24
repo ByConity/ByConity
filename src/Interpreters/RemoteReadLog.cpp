@@ -35,7 +35,7 @@ void RemoteReadLogElement::appendToBlock(MutableColumns & columns) const
 {
     size_t i = 0;
 
-    columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
+    columns[i++]->insert(DateLUT::sessionInstance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(event_time);
     columns[i++]->insert(request_time_microseconds);
     columns[i++]->insert(context);

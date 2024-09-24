@@ -67,7 +67,7 @@ void KafkaLogElement::appendToBlock(MutableColumns & columns) const
     size_t i = 0;
 
     columns[i++]->insert(UInt64(event_type));
-    columns[i++]->insert(UInt64(DateLUT::instance().toDayNum(event_time)));
+    columns[i++]->insert(UInt64(DateLUT::serverTimezoneInstance().toDayNum(event_time)));
     columns[i++]->insert(UInt64(event_time));
     columns[i++]->insert(UInt64(duration_ms));
 

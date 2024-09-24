@@ -101,7 +101,8 @@ namespace Protocol
                                       /// This is such an inverted logic, where server sends requests
                                       /// And client returns back response
             QueryMetrics = 14,        /// Query metrics in cnch worker side
-            MAX = QueryMetrics,
+            TimezoneUpdate = 15,
+            MAX = TimezoneUpdate,
 
         };
 
@@ -126,7 +127,8 @@ namespace Protocol
                 "TableColumns",
                 "PartUUIDs",
                 "ReadTaskRequest",
-                "QueryMetrics"
+                "QueryMetrics",
+                "TimezoneUpdate"
             };
             return packet <= MAX
                 ? data[packet]

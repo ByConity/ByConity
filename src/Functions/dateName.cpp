@@ -146,7 +146,7 @@ public:
         if (std::is_same_v<DataType, DataTypeDateTime64> || std::is_same_v<DataType, DataTypeDateTime>)
             time_zone_tmp = &extractTimeZoneFromFunctionArguments(arguments, 2, 1);
         else
-            time_zone_tmp = &DateLUT::instance();
+            time_zone_tmp = &DateLUT::sessionInstance();
 
         const auto & times_data = times->getData();
         const DateLUTImpl & time_zone = *time_zone_tmp;

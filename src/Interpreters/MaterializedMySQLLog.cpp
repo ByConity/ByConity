@@ -62,7 +62,7 @@ void MaterializedMySQLLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(nameset_2_array(tables));
 
     columns[i++]->insert(type);
-    columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
+    columns[i++]->insert(DateLUT::serverTimezoneInstance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(event_time);
     columns[i++]->insert(resync_table);
 

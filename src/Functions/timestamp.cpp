@@ -60,7 +60,7 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        const DateLUTImpl * local_time_zone = &DateLUT::instance();
+        const DateLUTImpl * local_time_zone = &DateLUT::sessionInstance();
 
         auto col_result = ColumnDateTime64::create(input_rows_count, DATETIME_SCALE);
         ColumnDateTime64::Container & vec_result = col_result->getData();

@@ -19,7 +19,9 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include "Common/CurrentThread.h"
 #include "ConnectionParameters.h"
+#include "Core/Protocol.h"
 #include "QueryFuzzer.h"
 #include "Storages/HDFS/HDFSCommon.h"
 #include "Suggest.h"
@@ -496,7 +498,7 @@ private:
         if (current_time % 3 != 0)
             return false;
 
-        auto days = DateLUT::instance().toDayNum(current_time).toUnderType();
+        auto days = DateLUT::sessionInstance().toDayNum(current_time).toUnderType();
         for (auto d : chineseNewYearIndicators)
         {
             /// Let's celebrate until Lantern Festival
@@ -591,11 +593,20 @@ private:
     int mainImpl()
     {
         UseSSL use_ssl;
+        MainThreadStatus::getInstance();
 
         setupSignalHandler();
         registerFormats();
         registerFunctions();
         registerAggregateFunctions();
+
+        {
+            // All that just to set DB::CurrentThread::get().getGlobalContext()
+            // which is required for client timezone (pushed from server) to work.
+            auto thread_group = std::make_shared<ThreadGroupStatus>();
+            const_cast<ContextWeakPtr&>(thread_group->global_context) = context;
+            CurrentThread::attachTo(thread_group);
+        }
 
         /// Batch mode is enabled if one of the following is true:
         /// - -e (--query) command line option is present.
@@ -652,7 +663,7 @@ private:
         connect();
 
         /// Initialize DateLUT here to avoid counting time spent here as query execution time.
-        const auto local_tz = DateLUT::instance().getTimeZone();
+        const auto local_tz = DateLUT::sessionInstance().getTimeZone();
 
         if (is_interactive)
         {
@@ -1726,12 +1737,28 @@ private:
                 context->applySettingsChanges(settings_ast.as<ASTSetQuery>()->changes);
             };
             const auto * insert = parsed_query->as<ASTInsertQuery>();
-            if (insert && insert->settings_ast)
+            if (const auto * select = parsed_query->as<ASTSelectQuery>(); select && select->settings())
+                apply_query_settings(*select->settings());
+            else if (const auto * select_with_union = parsed_query->as<ASTSelectWithUnionQuery>())
+            {
+                const ASTs & children = select_with_union->list_of_selects->children;
+                if (!children.empty())
+                {
+                    // On the client it is enough to apply settings only for the
+                    // last SELECT, since the only thing that is important to apply
+                    // on the client is format settings.
+                    const auto * last_select = children.back()->as<ASTSelectQuery>();
+                    if (last_select && last_select->settings())
+                    {
+                        apply_query_settings(*last_select->settings());
+                    }
+                }
+            }
+            else if (const auto * query_with_output = parsed_query->as<ASTQueryWithOutput>();
+                     query_with_output && query_with_output->settings_ast)
+                apply_query_settings(*query_with_output->settings_ast);
+            else if (insert && insert->settings_ast)
                 apply_query_settings(*insert->settings_ast);
-            /// FIXME: try to prettify this cast using `as<>()`
-            const auto * with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get());
-            if (with_output && with_output->settings_ast)
-                apply_query_settings(*with_output->settings_ast);
 
             if (!connection->checkConnected())
                 connect();
@@ -2206,6 +2233,10 @@ private:
             case Protocol::Server::QueryMetrics:
                 return true;
 
+            case Protocol::Server::TimezoneUpdate:
+                onTimezoneUpdate(packet.server_timezone);
+                return true;
+
             default:
                 throw Exception(
                     ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection->getDescription());
@@ -2238,9 +2269,13 @@ private:
                     columns_description = ColumnsDescription::parse(packet.multistring_message[1]);
                     return receiveSampleBlock(out, columns_description);
 
+                case Protocol::Server::TimezoneUpdate:
+                    onTimezoneUpdate(packet.server_timezone);
+                    break;
+
                 default:
                     throw NetException(
-                        "Unexpected packet from server (expected Data, Exception or Log, got "
+                        "Unexpected packet from server (expected Data, Exception or Log or TimezoneUpdate , got "
                             + String(Protocol::Server::toString(packet.type)) + ")",
                         ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER);
             }
@@ -2269,6 +2304,10 @@ private:
                     onLogData(packet.block);
                     break;
 
+                case Protocol::Server::TimezoneUpdate:
+                    onTimezoneUpdate(packet.server_timezone);
+                    break;
+
                 default:
                     throw NetException(
                         "Unexpected packet from server (expected Exception, EndOfStream or Log, got "
@@ -2283,7 +2322,7 @@ private:
     {
         auto packet_type = connection->checkPacket();
 
-        while (packet_type && *packet_type == Protocol::Server::Log)
+        while (packet_type && (*packet_type == Protocol::Server::Log || *packet_type == Protocol::Server::TimezoneUpdate))
         {
             receiveAndProcessPacket(false);
             packet_type = connection->checkPacket();
@@ -2549,6 +2588,11 @@ private:
             progress_indication.clearProgressOutput();
             std::cout << "Ok." << std::endl;
         }
+    }
+
+    void onTimezoneUpdate(const String & tz)
+    {
+        context->setSetting("session_timezone", tz);
     }
 
     static void showClientVersion()

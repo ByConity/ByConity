@@ -31,6 +31,7 @@
 #include <IO/Operators.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <regex>
+#include <cctz/time_zone.h>
 
 
 namespace DB
@@ -327,6 +328,24 @@ String SettingFieldEnumHelpers::readBinary(ReadBuffer & in)
     return str;
 }
 
+void SettingFieldTimezone::writeBinary(WriteBuffer & out) const
+{
+    writeStringBinary(value, out);
+}
+
+void SettingFieldTimezone::readBinary(ReadBuffer & in)
+{
+    String str;
+    readStringBinary(str, in);
+    *this = std::move(str);
+}
+
+void SettingFieldTimezone::validateTimezone(const std::string & tz_str)
+{
+    cctz::time_zone validated_tz;
+    if (!tz_str.empty() && !cctz::load_time_zone(tz_str, &validated_tz))
+        throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Invalid time zone: {}", tz_str);
+}
 
 String SettingFieldCustom::toString() const
 {

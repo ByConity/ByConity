@@ -100,7 +100,7 @@ AutoStatisticsManager::AutoStatisticsManager(ContextPtr context_)
 
 static String timeToString(Time time)
 {
-    auto & lut = DateLUT::instance();
+    auto & lut = DateLUT::serverTimezoneInstance();
     auto t = lut.toDateTimeComponents(time).time;
     return fmt::format("{:02d}:{:02d}", t.hour, t.minute);
 }
@@ -582,7 +582,7 @@ void AutoStatisticsManager::initialize(ContextMutablePtr context_, const Poco::U
 bool AutoStatisticsManager::isNowValidTimeRange()
 {
     auto current_time = time(nullptr);
-    auto current_time_point = DateLUT::instance().toTime(current_time);
+    auto current_time_point = DateLUT::serverTimezoneInstance().toTime(current_time);
 
     auto [begin_time, end_time] = parseTimeWindow(internal_config.collect_window());
     if (betweenTime(current_time_point, begin_time, end_time))

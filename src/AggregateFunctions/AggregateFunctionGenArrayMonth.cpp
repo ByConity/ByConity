@@ -35,7 +35,7 @@ AggregateFunctionPtr createAggregateFunctionGenArrayMonth(const std::string & na
     String date_start = parameters[1].safeGet<String>();
 
     // use local timezone on default
-    String timezone = DateLUT::instance().getTimeZone();
+    String timezone = DateLUT::sessionInstance().getTimeZone();
     if (parameters.size() == 3) {
         timezone = parameters[2].safeGet<String>();
     }

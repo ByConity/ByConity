@@ -81,10 +81,7 @@ private:
     }
 
 public:
-    explicit LocalDateTime(time_t time, const DateLUTImpl & time_zone = DateLUT::instance())
-    {
-        init(time, time_zone);
-    }
+    explicit LocalDateTime(time_t time, const DateLUTImpl & time_zone = DateLUT::serverTimezoneInstance()) { init(time, time_zone); }
 
     LocalDateTime(unsigned short year_, unsigned char month_, unsigned char day_,
         unsigned char hour_, unsigned char minute_, unsigned char second_)
@@ -115,9 +112,7 @@ public:
 
     operator time_t() const
     {
-        return m_year == 0
-            ? 0
-            : DateLUT::instance().makeDateTime(m_year, m_month, m_day, m_hour, m_minute, m_second);
+        return m_year == 0 ? 0 : DateLUT::serverTimezoneInstance().makeDateTime(m_year, m_month, m_day, m_hour, m_minute, m_second);
     }
 
     unsigned short year() const { return m_year; }

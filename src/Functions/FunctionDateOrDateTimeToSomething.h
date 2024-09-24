@@ -180,7 +180,7 @@ public:
         }
 
         /// This method is called only if the function has one argument. Therefore, we do not care about the non-local time zone.
-        const DateLUTImpl * date_lut = &DateLUT::instance();
+        const DateLUTImpl * date_lut = &DateLUT::sessionInstance();
         if (const auto * timezone = dynamic_cast<const TimezoneMixin *>(&type))
             date_lut = &timezone->getTimeZone();
         if (left.isNull() || right.isNull())
