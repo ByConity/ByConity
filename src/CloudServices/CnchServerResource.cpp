@@ -669,7 +669,7 @@ void CnchServerResource::allocateResource(
                     assigned_storage_worker_indexs.insert(host_ports);
 
                 if (!context->getSettingsRef().bsp_mode && context->getSettingsRef().enable_optimizer
-                    && context->getSettingsRef().enable_prune_empty_resource && empty && !bitengine_related_table)
+                    && context->getSettingsRef().enable_prune_source_plan_segment && empty && !bitengine_related_table)
                 {
                     LOG_TRACE(
                         log,

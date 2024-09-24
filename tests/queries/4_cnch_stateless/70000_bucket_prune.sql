@@ -1,8 +1,6 @@
 set enable_optimizer = 1;
 set optimize_skip_unused_shards = 1;
 set enable_prune_source_plan_segment = 1;
-set enable_prune_empty_resource = 1;
-set enable_prune_compute_plan_segment = 1;
 set query_with_linear_table_version = 1;
 
 drop table if exists bucket_prune;

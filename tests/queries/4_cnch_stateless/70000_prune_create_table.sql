@@ -7,8 +7,6 @@ CREATE TABLE p4_source_prune_70000 (`a` String, `b` String) ENGINE = CnchMergeTr
 
 set enable_optimizer=1;
 set enable_prune_source_plan_segment=1;
-set enable_prune_empty_resource=1;
-set enable_prune_compute_plan_segment=1;
 
 select 'union empty table';
 select * from p3_source_prune_70000 union select * from p4_source_prune_70000;

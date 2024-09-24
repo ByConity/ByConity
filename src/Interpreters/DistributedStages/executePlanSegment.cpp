@@ -160,7 +160,7 @@ void prepareQueryCommonBuf(
     query_common.set_initial_client_port(client_info.initial_address.port());
     any_plan_segment.getCoordinatorAddress().toProto(*query_common.mutable_coordinator_address());
     query_common.set_database(context->getCurrentDatabase());
-    query_common.set_check_session(!context->getSettingsRef().bsp_mode && !context->getSettingsRef().enable_prune_empty_resource);
+    query_common.set_check_session(!context->getSettingsRef().bsp_mode && !context->getSettingsRef().enable_prune_source_plan_segment);
     query_common.set_txn_id(context->getCurrentTransactionID().toUInt64());
     query_common.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
     auto query_expiration_ts = context->getQueryExpirationTimeStamp();
