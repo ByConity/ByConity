@@ -36,6 +36,7 @@ namespace ErrorCodes
     extern const int NO_SUCH_SERVICE;
     extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
     extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
+    extern const int WORKER_NODE_NOT_FOUND;
 }
 
 WorkerGroupHandle WorkerGroupHandleImpl::mockWorkerGroupHandle(const String & worker_id_prefix_, UInt64 worker_number_, const ContextPtr & context_)
@@ -76,6 +77,15 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     , metrics(metrics_)
     , worker_num(hosts.size())
 {
+    /// some allocation algorithm (such as jump consistent hash) work best when
+    /// 1) the index of existing workers don't change
+    /// 2) new workers are added to the end with larger index
+    /// we achieve this by
+    /// 1) let k8s assign sequential worker id "{WG_NAME}_{IDX}" to each worker
+    /// 2) make sure workers are sorted in worker id's order
+    /// TODO: sort in numeric order rather than lexicographic order
+    std::sort(hosts.begin(), hosts.end());
+
     auto current_context = getContext();
 
     const auto & settings = current_context->getSettingsRef();
@@ -117,7 +127,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
 
         shards_info.emplace_back(std::move(info));
     }
-    
+
     buildRing();
     LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
 }
@@ -240,6 +250,14 @@ CnchWorkerClientPtr WorkerGroupHandleImpl::doGetWorkerClient(const HostWithPorts
 {
     /// Get a cached client, or create a new one when cache miss or client is unhealthy.
     return getContext()->getCnchWorkerClientPools().getWorker(host_ports);
+}
+
+size_t WorkerGroupHandleImpl::getWorkerIndex(const String & worker_id) const
+{
+    for (size_t i = 0; i < hosts.size(); ++i)
+        if (worker_id == hosts[i].id)
+            return i;
+    throw Exception(ErrorCodes::WORKER_NODE_NOT_FOUND, "worker '{}' not found in worker group {}", worker_id, id);
 }
 
 bool WorkerGroupHandleImpl::isSame(const WorkerGroupData & data) const

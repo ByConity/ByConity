@@ -135,12 +135,12 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStealingCache
     return ret;
 }
 
+/// worker_ids should be sorted
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const DataPartsCnchVector & parts)
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(
+    const WorkerList & worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const DataPartsCnchVector & parts)
 {
     std::unordered_map<String, DataPartsCnchVector> ret;
-    /// we don't know the order of workers returned from consul so sort then explicitly now
-    sort(worker_ids.begin(), worker_ids.end());
     auto num_workers = worker_ids.size();
 
     for (const auto & part : parts)
@@ -324,6 +324,22 @@ void moveBucketTablePartsToAssignedParts(
         auto & assigned_parts = assigned_map[worker_id];
         std::move(bucket_assigned_parts.begin(), bucket_assigned_parts.end(), std::back_inserter(assigned_parts));
     }
+}
+
+BucketNumbersAssignmentMap assignBuckets(const std::set<Int64> & required_bucket_numbers, const WorkerList & workers, bool replicated)
+{
+    BucketNumbersAssignmentMap assignment;
+    if (replicated)
+    {
+        for (const auto & worker : workers)
+            assignment[worker] = required_bucket_numbers;
+    }
+    else
+    {
+        for (auto bucket : required_bucket_numbers)
+            assignment[workers[bucket % workers.size()]].insert(bucket);
+    }
+    return assignment;
 }
 
 BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(
