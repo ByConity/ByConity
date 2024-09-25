@@ -50,6 +50,7 @@ class MergeTreeMetaBase;
     M(UInt64, max_total_rows_to_merge, 2147483647, "", 0) \
 \
     M(UInt64, max_parts_to_break, MERGE_MAX_PARTS_TO_BREAK, "", 0) \
+    M(UInt64, max_ranges_in_result, 1000, "", 0) \
     /** skip allow() check for range [0, max_end) to ensure we can implement OPTIMIZE FINAL based on selector but not a separate logic. */ \
     M(Bool, final, false, "", 0) \
 \

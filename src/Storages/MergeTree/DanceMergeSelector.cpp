@@ -146,7 +146,12 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(PartsRanges & partit
 
     PartsRanges res;
     for (auto & range : range_vec)
+    {
+        /// Merge thread do not invalidate tasks in pending queue, so do not generate too many tasks in one round.
+        if (res.size() >= settings.max_ranges_in_result)
+            break;
         res.push_back(PartsRange(range->best_begin, range->best_end));
+    }
 
     for (const auto & range : single_part_ranges)
         res.push_back(range);
