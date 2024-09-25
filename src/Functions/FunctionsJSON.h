@@ -1197,6 +1197,20 @@ public:
         {
             value = static_cast<NumberType>(element.getBool());
         }
+        else if (element.isString())
+        {
+                auto rb = ReadBufferFromMemory{element.getString()};
+                if constexpr (std::is_floating_point_v<NumberType>)
+                {
+                    if (!tryReadFloatText(value, rb) || !rb.eof())
+                        return false;
+                }
+                else
+                {
+                    if (!tryReadIntText(value, rb) || !rb.eof())
+                        return false;
+                }
+        }
         else
             return false;
 
@@ -1510,7 +1524,12 @@ struct JSONExtractTree
                 converted = tryConvertToDecimal<DataTypeNumber<Int64>, DataTypeDecimal<DecimalType>>(element.getInt64(), type->getScale(), result);
             else if (element.isUInt64())
                 converted = tryConvertToDecimal<DataTypeNumber<UInt64>, DataTypeDecimal<DecimalType>>(element.getUInt64(), type->getScale(), result);
-
+            else if (element.isString()) 
+            {
+                    auto rb = ReadBufferFromMemory{element.getString()};
+                    if (!SerializationDecimal<DecimalType>::tryReadText(result, rb, DecimalUtils::max_precision<DecimalType>, type->getScale()))
+                        return false;
+                }
             if (converted)
                 assert_cast<ColumnDecimal<DecimalType> &>(dest).insert(result);
 
