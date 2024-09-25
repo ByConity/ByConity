@@ -1065,6 +1065,10 @@ PlanNodePtr ColumnPruningVisitor::visitExchangeNode(ExchangeNode & node, ColumnP
     {
         require.insert(step->getOutputStream().header.getByPosition(0).name);
     }
+    for (const auto & shuffle_key : step->getSchema().getColumns())
+    {
+        require.insert(shuffle_key);
+    }
 
     PlanNodes children;
     DataStreams input_streams;

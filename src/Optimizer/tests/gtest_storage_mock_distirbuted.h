@@ -48,7 +48,7 @@ protected:
     }
 };
 
-void registerStorageMockDistributedDistirubted(StorageFactory & factory)
+static void registerStorageMockDistributedDistirubted(StorageFactory & factory)
 {
     factory.registerStorage(
         StorageMockDistributed::ENGINE_NAME,

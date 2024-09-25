@@ -85,11 +85,11 @@ namespace
     }
 }
 
-String PlanPrinter::textPlanNode(PlanNodeBase & node, ContextPtr context)
+String PlanPrinter::textPlanNode(PlanNodeBase & node, ContextPtr context, const QueryPlanSettings & settings)
 {
     PlanCostMap costs;
     StepProfiles profiles;
-    TextPrinter printer{costs, context};
+    TextPrinter printer{costs, context, false, {}, settings};
     bool has_children = node.getChildren().empty();
     return printer.printLogicalPlan(node, TextPrinterIntent{0, has_children}, profiles);
 }
