@@ -7,6 +7,7 @@
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
 #include <Common/setThreadName.h>
+#include <Common/Configurations.h>
 
 namespace DB
 {
