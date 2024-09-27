@@ -51,7 +51,7 @@ protected:
 };
 
 brpc::Server RPCchannelPoolTest::server;
-BrpcExchangeReceiverRegistryService RPCchannelPoolTest::service_impl(73400320);
+BrpcExchangeReceiverRegistryService RPCchannelPoolTest::service_impl;
 
 void get_client(
     size_t loop,

@@ -13,6 +13,7 @@ message RegistryRequest {
   optional uint32 wait_timeout_ms = 5;
   optional uint64 query_unique_id = 6;
   optional uint64 parallel_index = 7;
+  optional uint64 stream_max_buf_size = 8;
 };
 
 message RegistryDiskSenderRequest {

@@ -68,7 +68,9 @@ void BrpcExchangeReceiverRegistryService::registry(
     /// this done_guard guarantee to call done->Run() in any situation
     brpc::ClosureGuard done_guard(done);
     auto accept_timeout_ms = request->wait_timeout_ms();
-    acceptStream(cntl, accept_timeout_ms, sender_proxy, request->query_id(), sender_stream_id);
+    auto stream_max_buf_size
+        = request->has_stream_max_buf_size() ? request->stream_max_buf_size() : context->getSettingsRef().exchange_stream_max_buf_size;
+    acceptStream(cntl, accept_timeout_ms, stream_max_buf_size, sender_proxy, request->query_id(), sender_stream_id);
 }
 
 void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
@@ -129,7 +131,9 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         /// this done_guard guarantee to call done->Run() in any situation
         brpc::ClosureGuard done_guard(done);
         auto accept_timeout_ms = request->registry().wait_timeout_ms();
-        acceptStream(cntl, accept_timeout_ms, sender_proxy, request->registry().query_id(), sender_stream_id);
+        auto stream_max_buf_size = request->registry().has_stream_max_buf_size() ? request->registry().stream_max_buf_size()
+                                                                                 : context->getSettingsRef().exchange_stream_max_buf_size;
+        acceptStream(cntl, accept_timeout_ms, stream_max_buf_size, sender_proxy, request->registry().query_id(), sender_stream_id);
     }
     catch (...)
     {
@@ -175,6 +179,7 @@ void BrpcExchangeReceiverRegistryService::registerSenderToProxy(
 void BrpcExchangeReceiverRegistryService::acceptStream(
     brpc::Controller * cntl,
     uint64_t accept_timeout_ms,
+    uint64_t max_buf_size,
     BroadcastSenderProxyPtr sender,
     const String & query_id,
     brpc::StreamId & sender_stream_id)

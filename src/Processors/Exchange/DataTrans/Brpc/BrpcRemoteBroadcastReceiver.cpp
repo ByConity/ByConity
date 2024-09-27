@@ -154,6 +154,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     request.set_parallel_id(trans_key->partition_id);
     request.set_parallel_index(trans_key->parallel_index);
     request.set_wait_timeout_ms(context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
+    request.set_stream_max_buf_size(context->getSettingsRef().exchange_stream_max_buf_size);
     sendRegisterRPC(stub, cntl, &request, &response, nullptr);
 
     // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
@@ -345,6 +346,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.request->set_parallel_id(exchange_key->partition_id);
     res.request->set_parallel_index(exchange_key->parallel_index);
     res.request->set_wait_timeout_ms(timeout_ms);
+    res.request->set_stream_max_buf_size(context->getSettingsRef().exchange_stream_max_buf_size);
     std::function<void(void)> func = [&, s_cp = s]() {
         if (enable_receiver_metrics)
             receiver_metrics.register_time_ms << s_cp.elapsedMilliseconds();

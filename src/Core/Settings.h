@@ -1698,6 +1698,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, exchange_remote_receiver_queue_size, 10, "Queue size for remote exchange receiver",0) \
     M(UInt64, exchange_multi_path_receiver_queue_size, 20, "Queue size for multi path exchange receiver", 0) \
     M(Bool, exchange_enable_block_compress, true, "Whether enable exchange block compress ", 0) \
+    M(UInt64, exchange_stream_back_pressure_max_wait_ms, 0, "Default 0, 0 means no control", 0) \
     M(UInt64, exchange_stream_max_buf_size, 20971520, "Default 20M, -1 means no limit", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_row, 65505, "The minimum row num when exchange will flush send buffer", 0) \
