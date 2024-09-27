@@ -677,5 +677,9 @@
         "10054_mv_refresh_where_sync",
         /// Code: 5030 -- Tables MergeMutateThread is not found on the server. Please check tables host server first.
         "01001_alter_delete"
+    ],
+
+    "cloudfs": [
+        "50001_test_query_cache_with_non_transactional_optimizer"
     ]
 }

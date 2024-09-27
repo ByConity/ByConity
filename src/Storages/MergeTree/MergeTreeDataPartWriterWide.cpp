@@ -324,13 +324,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                 delete_flag = delete_flag->permute(*permutation, 0);
             update_columns = update_columns->permute(*permutation, 0);
 
-            std::vector<size_t> dedup_sort_map;
-            dedup_sort_map.resize(rows);
-            for (size_t i = 0; i < rows; ++i)
-                dedup_sort_map[(*permutation)[i]] = i;
-
             auto mutable_dedup_sort = DataTypeFactory::instance().get("UInt64")->createColumn();
-            for (size_t idx: dedup_sort_map)
+            for (size_t idx: *permutation)
                 mutable_dedup_sort->insert(idx);
             dedup_sort = std::move(mutable_dedup_sort);
         }
