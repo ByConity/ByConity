@@ -1658,8 +1658,14 @@ void MetastoreProxy::multiDrop(const Strings & keys)
     metastore_ptr->adaptiveBatchWrite(batch_write);
 }
 
-bool MetastoreProxy::batchWrite(const BatchCommitRequest & request, BatchCommitResponse response)
+bool MetastoreProxy::batchWrite(const BatchCommitRequest & request, BatchCommitResponse & response)
 {
+    /// Early return if request is empty.
+    if (request.isEmpty())
+    {
+        response.reset();
+        return true;
+    }
     return metastore_ptr->batchWrite(request, response);
 }
 

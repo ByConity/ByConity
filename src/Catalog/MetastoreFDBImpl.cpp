@@ -165,6 +165,13 @@ MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByRange(const String & range_
 
 bool MetastoreFDBImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
+    /// Early return if request is empty.
+    if (req.isEmpty())
+    {
+        response.reset();
+        return true;
+    }
+
     for (auto & single_put : req.puts)
     {
         assertNotReadonly(single_put.key);

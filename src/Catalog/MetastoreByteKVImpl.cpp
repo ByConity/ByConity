@@ -186,6 +186,13 @@ std::vector<std::pair<String, UInt64>> MetastoreByteKVImpl::multiGet(const std::
 
 bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
+    /// Early return if request is empty.
+    if (req.isEmpty())
+    {
+        response.reset();
+        return true;
+    }
+
     auto timer = ProfileEventsTimer(ProfileEvents::KvRpcRequest, ProfileEvents::KvRpcElapsedMicroseconds);
     bytekv::sdk::WriteBatchRequest wb_req;
     bytekv::sdk::WriteBatchResponse wb_resp;

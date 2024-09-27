@@ -4081,6 +4081,8 @@ namespace Catalog
 
     void Catalog::clearUndoBuffersByKeys(const TxnTimestamp & txnID, const std::vector<String> & keys)
     {
+        if (keys.empty())
+            return;
         runWithMetricSupport(
             [&] {
                 const String undo_buffer_key_prefix = meta_proxy->undoBufferKeyPrefix(name_space, txnID, false);

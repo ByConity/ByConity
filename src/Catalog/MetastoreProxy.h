@@ -1212,7 +1212,7 @@ public:
 
     void multiDrop(const Strings & keys);
 
-    bool batchWrite(const BatchCommitRequest & request, BatchCommitResponse response);
+    bool batchWrite(const BatchCommitRequest & request, BatchCommitResponse & response);
     /// tmp api to help debug drop keys failed issue. remove this later.
     std::vector<String> multiDropAndCheck(const Strings & keys);
 
