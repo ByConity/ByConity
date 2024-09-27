@@ -94,7 +94,12 @@ template <> struct FunctionUnaryArithmeticMonotonicity<NameFactorial>
                 is_strict = true;
         }
 
-        return {true, true, true};
+        return {
+            .is_monotonic = true,
+            .is_positive = true,
+            .is_always_monotonic = true,
+            .is_strict = is_strict,
+        };
     }
 };
 

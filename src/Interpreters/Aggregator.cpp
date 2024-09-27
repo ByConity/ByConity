@@ -433,7 +433,6 @@ void Aggregator::compileAggregateFunctions()
         return;
 
     std::vector<AggregateFunctionWithOffset> functions_to_compile;
-    // size_t aggregate_instructions_size = 0;
     String functions_description;
 
     is_aggregate_function_compiled.resize(aggregate_functions.size());
@@ -461,7 +460,6 @@ void Aggregator::compileAggregateFunctions()
             functions_description += ' ';
         }
 
-        // ++aggregate_instructions_size;
         is_aggregate_function_compiled[i] = function->isCompilable();
     }
 
@@ -1020,7 +1018,7 @@ void Aggregator::prepareAggregateInstructions(Columns columns, AggregateColumns 
     {
         for (size_t j = 0; j < aggregate_columns[i].size(); ++j)
         {
-            if (params.aggregates[i].function && params.aggregates[i].function->mayAggStateVeryLarge()) 
+            if (params.aggregates[i].function && params.aggregates[i].function->mayAggStateVeryLarge())
             {
                 delta_bytes_of_large_midstate_agg_inputs += columns.at(params.aggregates[i].arguments[j])->byteSize();
             }
@@ -1167,7 +1165,7 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
         = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
         || (params.group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(params.group_by_two_level_threshold_bytes));
 
-    bool worth_convert_to_two_level = adaptive_spill_trigered || (result.isSmallKeys() && should_spill) || 
+    bool worth_convert_to_two_level = adaptive_spill_trigered || (result.isSmallKeys() && should_spill) ||
         (!result.isSmallKeys() && bigkeys_worth_convert_to_two_level);
 
     /** Converting to a two-level data structure. (Adaptive)
@@ -1190,7 +1188,7 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     if (result.isTwoLevel()
         &&  (spilled || adaptive_spill_trigered || (!params.enable_adaptive_spill && params.max_bytes_before_external_group_by && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)))
         && worth_convert_to_two_level
-        && (result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by 
+        && (result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by
             || delta_bytes_of_large_midstate_agg_inputs > params.spill_buffer_bytes_before_external_group_by * large_midstate_estimate_by_input_ratio))
     {
         size_t size = current_memory_usage + params.min_free_disk_space;
@@ -2537,7 +2535,7 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
         = (params.group_by_two_level_threshold && result_size >= params.group_by_two_level_threshold)
         || (params.group_by_two_level_threshold_bytes && result_size_bytes >= static_cast<Int64>(params.group_by_two_level_threshold_bytes));
 
-    bool worth_convert_to_two_level = adaptive_spill_trigered || (result.isSmallKeys() && should_spill) || 
+    bool worth_convert_to_two_level = adaptive_spill_trigered || (result.isSmallKeys() && should_spill) ||
         (!result.isSmallKeys() && bigkeys_worth_convert_to_two_level);
 
     /** Converting to a two-level data structure. (Adaptive)
@@ -2560,7 +2558,7 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
     if (result.isTwoLevel()
         &&  (spilled || adaptive_spill_trigered || (!params.enable_adaptive_spill && params.max_bytes_before_external_group_by && current_memory_usage > static_cast<Int64>(params.max_bytes_before_external_group_by)))
         && worth_convert_to_two_level
-        && (result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by 
+        && (result.getVariantsBufferSizeInBytes() > params.spill_buffer_bytes_before_external_group_by
             || delta_bytes_of_large_midstate_agg_inputs > params.spill_buffer_bytes_before_external_group_by * large_midstate_estimate_by_input_ratio))
     {
         size_t size = current_memory_usage + params.min_free_disk_space;

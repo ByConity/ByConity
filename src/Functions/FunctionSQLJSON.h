@@ -1428,9 +1428,6 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         //Only support Object JSON
-        bool has_nothing_argument = false;
-        for (const auto & arg : arguments)
-            has_nothing_argument |= isNothing(arg.type);
 
         if (arguments.empty())
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function {} requires at least one argument", Name::name);
@@ -1669,9 +1666,6 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         //Only support Object JSON
-        bool has_nothing_argument = false;
-        for (const auto & arg : arguments)
-            has_nothing_argument |= isNothing(arg.type);
 
         if (arguments.empty())
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function {} requires at least one argument", Name::name);

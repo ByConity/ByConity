@@ -109,7 +109,7 @@ public:
     bool hasInformationAboutMonotonicity() const override { return true; }
     Monotonicity getMonotonicityForRange(const IDataType & /*type*/, const Field & /*left*/, const Field & /*right*/) const override
     {
-        return Monotonicity(true, true, true);
+        return Monotonicity{.is_monotonic = true, .is_positive = true, .is_always_monotonic = true};
     }
 
 

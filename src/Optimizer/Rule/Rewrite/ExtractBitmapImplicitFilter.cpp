@@ -96,14 +96,12 @@ TransformResult ExtractBitmapImplicitFilter::transformImpl(PlanNodePtr node, con
     if (parameters_map.empty())
         return {};
 
-    size_t total_in_elems{0};
     ASTs functions;
     /// create in function for those parametered values
     for (const auto & parameter : parameters_map)
     {
         auto [in_ast, elem_size] = createInFunctionForBitMapParameter(parameter.first, parameter.second);
         functions.push_back(in_ast);
-        total_in_elems += elem_size;
     }
 
     auto implicit_filter = PredicateUtils::combineDisjunctsWithDefault<false>(functions, PredicateConst::TRUE_VALUE);

@@ -63,7 +63,11 @@ ASTIdentifier::ASTIdentifier(std::vector<String> && name_parts_, bool special, s
     semantic->legacy_compound = true;
     if (!name_params.empty())
     {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wunknown-warning-option"
+        #pragma clang diagnostic ignored "-Wunused-but-set-variable"
         size_t params = 0;
+        #pragma clang diagnostic pop
         for (const auto & part [[maybe_unused]] : name_parts)
         {
             if (part.empty())

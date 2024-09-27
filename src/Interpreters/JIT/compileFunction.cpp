@@ -194,7 +194,6 @@ static void compileFunction(llvm::Module & module, const IFunctionBase & functio
     auto * args = func->args().begin();
     llvm::Value * rows_count_arg = args++;
     llvm::Value * columns_arg = args++;
-    llvm::Value * result_column = nullptr;
     llvm::Value * result_column_ptr = nullptr;
 
     /// Initialize ColumnDataPlaceholder llvm representation of ColumnData
@@ -210,7 +209,6 @@ static void compileFunction(llvm::Module & module, const IFunctionBase & functio
         auto * data = b.CreateLoad(data_type, data_ptr);
         if (i == arg_types.size())
         {
-            result_column = data;
             result_column_ptr = data_ptr;
         }
         columns[i].null_init = type->isNullable() ? b.CreateExtractValue(data, {1}) : nullptr;

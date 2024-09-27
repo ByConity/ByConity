@@ -2927,7 +2927,7 @@ struct ToStringMonotonicity
 
     static IFunction::Monotonicity get(const IDataType & type, const Field & left, const Field & right)
     {
-        IFunction::Monotonicity positive(true, true);
+        IFunction::Monotonicity positive{.is_monotonic = true};
         IFunction::Monotonicity not_monotonic;
 
         const auto * type_ptr = &type;

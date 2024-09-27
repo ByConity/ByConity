@@ -327,7 +327,7 @@ size_t MergeTreeCloudData::loadFromServerPartsInPartition(const Strings & requir
         }
     }
 
-    auto visible_server_parts = CnchPartsHelper::calcVisibleParts(server_parts, false, CnchPartsHelper::LoggingOption::DisableLogging, true);
+    auto visible_server_parts = CnchPartsHelper::calcVisibleParts(server_parts, false, CnchPartsHelper::LoggingOption::DisableLogging);
 
     if (getInMemoryMetadataPtr()->hasUniqueKey() && !visible_server_parts.empty())
         getDeleteBitmapMetaForServerParts(visible_server_parts, delete_bitmaps);

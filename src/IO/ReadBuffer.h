@@ -102,6 +102,7 @@ public:
             next();
     }
 
+    ReadBuffer & operator=(ReadBuffer &) = default;
     virtual ~ReadBuffer() override = default;
 
 

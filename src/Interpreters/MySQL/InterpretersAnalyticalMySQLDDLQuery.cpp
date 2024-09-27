@@ -504,7 +504,7 @@ void InterpreterCreateAnalyticMySQLImpl::validate(const InterpreterCreateAnalyti
         }
     }
 
-    const auto & create_defines = create_query.columns_list->as<ASTColumns>();
+    auto * const create_defines = create_query.columns_list ? create_query.columns_list->as<ASTColumns>() : nullptr;
 
     if (!create_defines || !create_defines->columns || create_defines->columns->children.empty())
     {
@@ -520,7 +520,7 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
     auto query = create_query.transform();
     auto rewritten_query = query->as<ASTCreateQuery>();
 
-    const auto & create_defines = create_query.columns_list->as<ASTColumns>();
+    const auto & create_defines = create_query.columns_list ? create_query.columns_list->as<ASTColumns>() : nullptr;
     const auto & mysql_storage = create_query.storage->as<ASTStorageAnalyticalMySQL>();
     auto & storage = rewritten_query->storage;
     bool has_table_definition = create_defines && create_defines->columns && !create_defines->columns->children.empty();
@@ -570,7 +570,7 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
     }
 
     // table
-    if (has_table_definition)
+    if (has_table_definition && create_defines)
     {
         NamesAndTypesList columns_name_and_type = getColumnsList(create_defines->columns);
         const auto & [primary_keys, unique_keys, keys, cluster_keys] = getKeys(create_defines->columns, create_defines->mysql_indices, context, columns_name_and_type);
@@ -631,7 +631,8 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         bool has_partition_level_unique_keys_setting = false;
         bool has_enable_bucket_level_unique_keys = false;
         bool has_enable_bucket_for_distribute = context->getSettingsRef().enable_bucket_for_distribute;
-        if (auto *const mysql_settings = mysql_storage->settings->as<ASTSetQuery>())
+        auto *const mysql_settings = mysql_storage->settings ? mysql_storage->settings->as<ASTSetQuery>() : nullptr;
+        if (mysql_settings)
         {
             for (const auto & change: mysql_settings->changes)
             {
@@ -672,7 +673,7 @@ ASTPtr InterpreterCreateAnalyticMySQLImpl::getRewrittenQuery( const TQuery & cre
         if (!has_partition_level_unique_keys_setting)
             settings_ast->changes.push_back({"partition_level_unique_keys", 0});
 
-        if (const auto mysql_settings = mysql_storage->settings->as<ASTSetQuery>())
+        if (mysql_settings)
             settings_ast->changes.insert(settings_ast->changes.end(), mysql_settings->changes.begin(), mysql_settings->changes.end());
 
         storage->set(storage->settings, settings);

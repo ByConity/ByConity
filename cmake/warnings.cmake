@@ -105,6 +105,8 @@ if (COMPILER_CLANG)
         no_warning(unused-but-set-parameter)
         no_warning(deprecated-redundant-constexpr-static-def)
         no_warning(enum-constexpr-conversion)
+        no_warning(documentation-html)
+        no_warning(documentation)
 
         # XXX: libstdc++ has some of these for 3way compare
         if (NOT USE_LIBCXX)
