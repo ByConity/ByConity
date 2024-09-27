@@ -116,6 +116,10 @@ public:
     //
     // Safe for concurrent use by multiple threads.
     virtual Status Read(uint64_t offset, size_t n, Slice * result, char * scratch, bool * from_local) const = 0;
+
+    // After the iter call ends, we need to explicitly release the buffer, otherwise there may be too many open files due to remote handles.
+    // Safe for concurrent use by multiple threads.
+    virtual void releaseRemoteFD() const { }
 };
 
 // A file abstraction for sequential writing.  The implementation

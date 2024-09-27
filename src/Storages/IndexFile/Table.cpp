@@ -275,6 +275,11 @@ Iterator * Table::NewIterator(const ReadOptions & options) const
         rep_->options.comparator, rep_->index_block->NewIterator(rep_->options.comparator), rep_->filter, &Table::BlockReader, const_cast<Table *>(this), options);
 }
 
+void Table::releaseRemoteFD() const
+{
+    rep_->file->releaseRemoteFD();
+}
+
 Status Table::Get(const ReadOptions & options, const Slice & k, std::string * value)
 {
     Status notfound = Status::NotFound(Slice());
