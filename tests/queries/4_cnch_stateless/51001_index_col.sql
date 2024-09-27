@@ -19,7 +19,7 @@ insert into table test.multi_index_table  values ('2023-10-17 00:11:58.996', 'pr
 
 select message from test.multi_index_table where ts = '2023-10-17 00:11:58.996' and log like 'preload%';
 select message from test.multi_index_table where ts = '2023-10-17 00:11:58.996' and log like 'preload%';
-select sleepEachRow(3) from system.numbers limit 1 format Null;
+select sleepEachRow(3) from system.numbers limit 3 format Null;
 select message from test.multi_index_table where ts = '2023-10-17 00:11:58.996' and log like 'preload%' settings disk_cache_mode = 'FORCE_DISK_CACHE';
 
 select 'preload_multi_index_test';
