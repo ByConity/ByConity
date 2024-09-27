@@ -32,6 +32,7 @@
 #include <Common/HostWithPorts.h>
 #include <Common/RWLock.h>
 #include <Common/ScanWaitFreeMap.h>
+#include <Common/SimpleIncrement.h>
 
 namespace DB
 {
@@ -228,6 +229,9 @@ private:
     std::unordered_map<UUID, TableMetaEntryPtr> active_tables;
     CnchStorageCachePtr storageCachePtr;
 
+    /// Task id for data parts loading.
+    mutable SimpleIncrement load_task_increment;
+
     mutable std::mutex trashed_active_tables_mutex;
     /// Trashed TableMetaEntryPtr, will be cleaned in a background thread.
     std::list<TableMetaEntryPtr> trashed_active_tables;
@@ -332,6 +336,8 @@ private:
         CachePtr cache_ptr,
         GetKeyFunc func,
         const std::unordered_map<String, String> * extra_partition_info);
+
+    UInt64 getLoadTaskID() const;
 };
 
 using PartCacheManagerPtr = std::shared_ptr<PartCacheManager>;

@@ -36,7 +36,7 @@ namespace CacheStatus
 struct DataCacheStatus
 {
     std::atomic<UInt32> load_status = CacheStatus::UINIT;
-    std::atomic<UInt64> loading_thread_id = 0;
+    std::atomic<UInt64> loading_task_id = 0;
 
     bool isUnInit()
     {
@@ -50,26 +50,26 @@ struct DataCacheStatus
     {
         return load_status == CacheStatus::LOADING;
     }
-    bool isLoadingByCurrentThread()
+    bool isLoadingByCurrentThread(UInt64 expected_task_id)
     {
-        return load_status == CacheStatus::LOADING && loading_thread_id == getThreadId();
+        return load_status == CacheStatus::LOADING && loading_task_id == expected_task_id;
     }
 
     /// calls to setXXX should always be protected by partition write lock
-    void setToLoading()
+    void setToLoading(UInt64 task_id)
     {
         load_status = CacheStatus::LOADING;
-        loading_thread_id = getThreadId();
+        loading_task_id = task_id;
     }
     void setToLoaded()
     {
         load_status = CacheStatus::LOADED;
-        loading_thread_id = 0;
+        loading_task_id = 0;
     }
     void reset()
     {
         load_status = CacheStatus::UINIT;
-        loading_thread_id = 0;
+        loading_task_id = 0;
     }
 };
 

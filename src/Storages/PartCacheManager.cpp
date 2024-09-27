@@ -53,12 +53,78 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
+template <class T> struct DependentFalse : std::false_type {};
+/// A helper function for getting right CacheStatus.
+template <typename CachePtr>
+DataCacheStatus * getCacheStatus(const PartitionInfoPtr & partition_info_ptr)
+{
+    if (!partition_info_ptr)
+        throw Exception("Invailid partition info (nullptr) while getting cache status.", ErrorCodes::BAD_ARGUMENTS);
+
+    if constexpr (std::is_same_v<CachePtr, CnchDataPartCachePtr>)
+    {
+        return &partition_info_ptr->part_cache_status;
+    }
+    else if constexpr (std::is_same_v<CachePtr, CnchDeleteBitmapCachePtr>)
+    {
+        return &partition_info_ptr->delete_bitmap_cache_status;
+    }
+    else
+    {
+        static_assert(DependentFalse<CachePtr>::value, "invalid template type for CachePtr");
+    }
+}
+
+/***
+ * Helper class for reset cache status when fail to load data from metastore. Cache status will be reset
+ * if loading status has been set by current load task.
+ */
+template <typename CachePtr>
+class CacheStatusGuard
+{
+public:
+    CacheStatusGuard(const UUID & uuid_, const UInt64 task_id_, const CachePtr & cache_)
+        : uuid(uuid_), task_id(task_id_), cache(cache_)
+    {}
+
+    ~CacheStatusGuard()
+    {
+        try
+        {
+            for (auto & partition_info_ptr : partitions)
+            {
+                DataCacheStatus * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
+                auto lock = partition_info_ptr->writeLock();
+                if (cache_status->isLoadingByCurrentThread(task_id))
+                {
+                    cache_status->reset();
+                    // clear new inserted data during loading after reset cache status.
+                    cache->remove({uuid, partition_info_ptr->partition_id});
+                }
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException( __PRETTY_FUNCTION__);
+        }
+    }
+
+    void addPartition(const PartitionInfoPtr & p)
+    {
+        partitions.push_back(p);
+    }
+
+private:
+    const UUID uuid;
+    const UInt64 task_id;
+    CachePtr cache;
+    std::vector<PartitionInfoPtr> partitions;
+};
+
 /// Mock function for `getTimestamp`/`tryGetTimestamp`.
 static constexpr auto dummy_get_timestamp = []() -> UInt64 {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 };
-
-template <class T> struct DependentFalse : std::false_type {};
 
 PartCacheManager::PartCacheManager(ContextMutablePtr context_, const size_t memory_limit, const bool dummy_mode)
     : WithMutableContext(context_), dummy_mode(dummy_mode), table_partition_metrics(context_)
@@ -1106,27 +1172,6 @@ static void logPartsVector(const MergeTreeMetaBase & storage, const ServerDataPa
 }
 */
 
-/// A helper function for getting right CacheStatus.
-template <typename CachePtr>
-DataCacheStatus * getCacheStatus(const PartitionInfoPtr & partition_info_ptr)
-{
-    if (!partition_info_ptr)
-        throw Exception("Invailid partition info (nullptr) while getting cache status.", ErrorCodes::BAD_ARGUMENTS);
-
-    if constexpr (std::is_same_v<CachePtr, CnchDataPartCachePtr>)
-    {
-        return &partition_info_ptr->part_cache_status;
-    }
-    else if constexpr (std::is_same_v<CachePtr, CnchDeleteBitmapCachePtr>)
-    {
-        return &partition_info_ptr->delete_bitmap_cache_status;
-    }
-    else
-    {
-        static_assert(DependentFalse<CachePtr>::value, "invalid template type for CachePtr");
-    }
-}
-
 template <
     typename CachePtr,
     typename RetValue,
@@ -1190,12 +1235,6 @@ RetValueVec PartCacheManager::getDataInternal(
                       }
                   }
               }
-              if (!hit_cache)
-              {
-                  auto partition_write_lock = partition_info_ptr->writeLock();
-                  if (!cache_status->isLoading())
-                    cache_status->setToLoading();
-              }
           };
 
     RetValueVec res;
@@ -1247,31 +1286,28 @@ RetValueVec PartCacheManager::getDataInternal(
     }
 
     Strings partitions_not_cached;
+    const UInt64 current_loading_task_id = getLoadTaskID();
+    CacheStatusGuard<CachePtr> cache_status_guard(uuid, current_loading_task_id, cache_ptr);
+
     for (auto & [partition_id, hit_cache] : partitions_hit_cache)
     {
         if (!hit_cache)
+        {
+            auto & partition_info_ptr = meta_partitions[partition_id];
+            DataCacheStatus * cache_status = getCacheStatus<CachePtr>(partition_info_ptr);
+            auto partition_write_lock = partition_info_ptr->writeLock();
+            if (!cache_status->isLoading())
+            {
+                cache_status->setToLoading(current_loading_task_id);
+                /// make sure the cache status is reset when exit from the loading task.
+                cache_status_guard.addPartition(partition_info_ptr);
+            }
             partitions_not_cached.push_back(partition_id);
+        }
     }
 
     if (partitions_not_cached.empty())
         return res;
-
-    auto fallback_cache_status = [&partitions_not_cached, &meta_partitions, &cache_ptr, &uuid]() {
-        // reset partition data cache status to UINIT if loading failed.
-        for (auto & partition_id : partitions_not_cached)
-        {
-            auto & partition_info = meta_partitions[partition_id];
-            auto partition_write_lock = partition_info->writeLock();
-
-            DataCacheStatus * cache_status = getCacheStatus<CachePtr>(partition_info);
-            if (cache_status->isLoadingByCurrentThread())
-            {
-                cache_status->reset();
-                // clear new inserted data during loading after reset cache status.
-                cache_ptr->remove({uuid, partition_id});
-            }
-        }
-    };
 
     try
     {
@@ -1312,7 +1348,7 @@ RetValueVec PartCacheManager::getDataInternal(
                 /// Also, other task may success to fetch and change CacheStatus to LOADED before.
                 /// If so, no need to modify cache again.
                 /// If the loading thread has changed, do not update the cache.
-                if (!cache_status->isLoadingByCurrentThread())
+                if (!cache_status->isLoadingByCurrentThread(current_loading_task_id))
                     continue;
 
                 RetValueVec * parts_wrapper_vector;
@@ -1383,17 +1419,16 @@ RetValueVec PartCacheManager::getDataInternal(
         if (e.code() == ErrorCodes::TIMEOUT_EXCEEDED)
             meta_ptr->load_parts_by_partition = true;
 
-        fallback_cache_status();
         throw;
     }
     catch (...)
     {
-        fallback_cache_status();
         throw;
     }
 
     return res;
 }
+
 template <
         typename CachePtr,
         typename RetValue,
@@ -1431,6 +1466,7 @@ template <
         Stopwatch watch;
         UUID uuid = storage.getStorageUUID();
 
+        const UInt64 current_loading_task_id = getLoadTaskID();
         auto meta_partitions = meta_ptr->getPartitions(partitions);
 
         auto process_partition = [&](const String & partition_id, const PartitionInfoPtr & partition_info_ptr, RetValueVec & parts) {
@@ -1441,6 +1477,7 @@ template <
                 /// stop if fetch part time exceeds the query max execution time.
                 checkTimeLimit(watch);
 
+                CacheStatusGuard<CachePtr> cache_status_guard(uuid, current_loading_task_id, cache_ptr);
                 bool need_load_parts = false;
                 {
                     if (cache_status->isLoaded())
@@ -1468,7 +1505,8 @@ template <
                     /// Double check
                     if (!cache_status->isLoading())
                     {
-                        cache_status->setToLoading();
+                        cache_status->setToLoading(current_loading_task_id);
+                        cache_status_guard.addPartition(partition_info_ptr);
                         need_load_parts = true;
                     }
                 }
@@ -1482,18 +1520,11 @@ template <
                     {
                         std::map<String, Vec<FetchedValue>> partition_to_parts;
                         fetched = load_func({partition_id}, {partition_id});
-                        // FetchedValue fetched_data;
-                        // for (auto & ele : fetched)
-                        // {
-                        //     Adapter adapter(storage, ele);
-                        //     fetched_data.push_back(adapter.getData());
-                        //     // fetched_data.push_back(createPartWrapperFromModel(storage, std::move(*(ele->model)), std::move(ele->name)));
-                        // }
 
                         /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make
                         /// sure the cache contains all parts of the partition.
                         auto partition_write_lock = partition_info_ptr->writeLock();
-                        if (cache_status->isLoadingByCurrentThread())
+                        if (cache_status->isLoadingByCurrentThread(current_loading_task_id))
                         {
                             auto cached = cache_ptr->get({uuid, partition_id});
                             if (!cached)
@@ -1549,10 +1580,6 @@ template <
                     }
                     catch (...)
                     {
-                        /// change cache status to UINIT if exception occurs during fetch.
-                        auto partition_write_lock = partition_info_ptr->writeLock();
-                        cache_status->reset();
-                        cache_ptr->remove({uuid, partition_id});
                         throw;
                     }
                 }
@@ -1646,6 +1673,7 @@ template <
 
         return res;
     }
+
 void PartCacheManager::checkTimeLimit(Stopwatch & watch)
 {
     auto check_max_time = [this, &watch]()
@@ -2140,4 +2168,16 @@ void PartCacheManager::insertStagedPartsIntoCache(
         std::function<String(const DataModelPartWrapperPtr &)>, false>(
         table, parts_model, false, false, topology_version, part_cache_ptr, dataPartGetKeyFunc, nullptr);
 }
+
+
+UInt64 PartCacheManager::getLoadTaskID() const
+{
+    UInt64 next_id = 0;
+
+    while (!next_id)
+        next_id = load_task_increment.get();
+    
+    return next_id;
+}
+
 }
