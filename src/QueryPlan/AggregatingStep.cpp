@@ -205,14 +205,6 @@ AggregatingStep::createParams(Block header_before_aggregation, AggregateDescript
 
     for (auto & descr : aggregates)
     {
-        // tmp fix: For AggregateFunctionNothing, the argument types in `header_before_aggregation` may diff with
-        // the ones in `descr.function->argument_types`. In this case, reconstructing aggregate description will lead
-        // to a different result.
-        //
-        // example: SELECT count(in(NULL, []));
-        if (descr.function->getName() == "nothing")
-            continue;
-
         descr.arguments.clear();
         DataTypes argument_types;
         for (const auto & name : descr.argument_names)
@@ -227,6 +219,26 @@ AggregatingStep::createParams(Block header_before_aggregation, AggregateDescript
                 argument_types.emplace_back(header_before_aggregation.getDataTypes()[header_before_aggregation.getPositionByName(name)]);
             }
         }
+
+        // For AggregateFunctionNothing, the argument types in `header_before_aggregation` may diff with
+        // the ones in `descr.function->argument_types`. In this case, reconstructing aggregate description will lead
+        // to a different result.
+        //
+        // example: SELECT count(in(NULL, []));
+        // After the first call(see AggregateFunctionNull::transformAggregateFunction) to AggregateFunctionFactory::instance().get, count(Nullable(Nothing)) --> Nothing(UInt64).
+        // However, the new argument types below will be Nullable(Nothing).
+        // Nothing(Nullable(Nothing)) --after second AggregateFunctionFactory::instance().get--> Nothing(Nullable(Nothing)).
+        // As a result, the output will be Null instead of 0, but 0 was the expected result.
+        if (descr.function->getName() == "nothing")
+        {
+            bool is_before_argument_uint64 = descr.function->getArgumentTypes().size() == 1 && descr.function->getArgumentTypes()[0]->getTypeId() == TypeIndex::UInt64;
+            bool is_after_argument_only_null = argument_types.size() == 1 && argument_types[0]->onlyNull();
+            if (is_before_argument_uint64 && is_after_argument_only_null)
+            {
+                argument_types[0] = std::make_shared<DataTypeUInt64>();
+            }
+        }
+
         AggregateFunctionProperties properties;
         descr.function = AggregateFunctionFactory::instance().get(descr.function->getName(), argument_types, descr.parameters, properties);
     }
