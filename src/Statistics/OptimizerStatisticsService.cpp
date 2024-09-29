@@ -36,7 +36,6 @@ void OptimizerStatisticsService::refreshStatisticsCache(
     {
         auto context = getContext();
         using Mode = Protos::RefreshStatisticsCacheRequest::Mode;
-        auto catalog = createCatalogAdaptor(context);
         if (request->mode() == Mode::SyncTable)
         {
             // DO NOTHING
@@ -74,7 +73,6 @@ void OptimizerStatisticsService::fetchStatisticsSettings(
     try
     {
         auto context = getContext();
-        auto catalog = createCatalogAdaptor(context);
         (void)request;
         auto * manager = context->getAutoStatisticsManager();
 

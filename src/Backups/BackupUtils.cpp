@@ -7,6 +7,7 @@
 #include <Parsers/parseQuery.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Common/escapeForFileName.h>
+#include <Interpreters/executeSubQuery.h>
 
 namespace DB
 {
@@ -149,43 +150,5 @@ readTableHistoryFromBackup(const DatabaseAndTableName & table_name, const DiskPt
         previous_versions.emplace_back(parseQuery(create_parser, version, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH));
     }
     return previous_versions;
-}
-
-// Return a context copy with new transcation
-ContextMutablePtr getContextWithNewTransaction(const ContextPtr & context, bool read_only)
-{
-    ContextMutablePtr new_context;
-    if (context->hasSessionContext())
-    {
-        new_context = Context::createCopy(context->getSessionContext());
-    }
-    else
-    {
-        new_context = Context::createCopy(context->getGlobalContext());
-    }
-
-    new_context->setSettings(context->getSettings());
-
-    if (context->tryGetCurrentWorkerGroup())
-    {
-        new_context->setCurrentVW(context->getCurrentVW());
-        new_context->setCurrentWorkerGroup(context->getCurrentWorkerGroup());
-    }
-
-    auto txn = new_context->getCnchTransactionCoordinator().createTransaction(
-        CreateTransactionOption()
-            .setContext(new_context)
-            .setForceCleanByDM(context->getSettingsRef().force_clean_transaction_by_dm)
-            .setAsyncPostCommit(context->getSettingsRef().async_post_commit)
-            .setReadOnly(read_only));
-    if (txn)
-    {
-        new_context->setCurrentTransaction(txn);
-    }
-    else
-    {
-        throw Exception("Failed to create transaction", ErrorCodes::LOGICAL_ERROR);
-    }
-    return new_context;
 }
 }

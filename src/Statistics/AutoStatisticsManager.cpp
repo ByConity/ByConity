@@ -77,7 +77,6 @@ std::pair<Time, Time> parseTimeWindow(const String & text)
 
 void AutoStatisticsManager::prepareNewConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    auto context = getContext();
     // in xml, optimizer.statistics.auto_statistics.enable will be TRUE
     // only useful to stop auto stats at all
     // bool is_enabled = config.getBool(XmlConfig::is_enabled, true);
@@ -85,16 +84,17 @@ void AutoStatisticsManager::prepareNewConfig(const Poco::Util::AbstractConfigura
     xml_config_is_enable = settings_manager.getManagerSettings().enable_auto_stats();
 }
 
-AutoStatisticsManager::AutoStatisticsManager(ContextPtr context_)
-    : WithContext(context_)
+AutoStatisticsManager::AutoStatisticsManager(ContextMutablePtr auth_context_)
+    : auth_context(auth_context_) 
     , logger(getLogger("AutoStatisticsManager"))
-    , task_queue(context_, internal_config)
-    , settings_manager(context_)
+    , task_queue(auth_context_, internal_config)
+    , settings_manager(auth_context_)
     , schedule_lease(TimePoint{}) // just make compiler happy
 {
     // do scanning and udi flush the next interval
     last_time_udi_flush = nowTimePoint();
-    last_time_scan_all_tables = nowTimePoint();
+    // immediately scan all tables if possiable
+    last_time_scan_all_tables = TimePoint{};
     schedule_lease = nowTimePoint();
 }
 
@@ -230,7 +230,7 @@ void AutoStatisticsManager::scanAllTables()
 void AutoStatisticsManager::markCollectableCandidates(
     const std::vector<StatsTableIdentifier> & candidates, bool force_collect_if_failed_to_query_row_count)
 {
-    auto context = getContext();
+    auto context = getContextWithNewTransaction(getContext(), true, true);
     auto catalog = createCatalogAdaptor(context);
     UInt64 new_table_collecable = 0;
     UInt64 good_table = 0;
@@ -239,6 +239,13 @@ void AutoStatisticsManager::markCollectableCandidates(
         auto table_settings = settings_manager.getTableSettings(identifier);
         // check if identifier is valid
         if (!table_settings.enable_auto_stats)
+        {
+            continue;
+        }
+
+        auto storage = catalog->getStorageByTableId(identifier);
+        auto host_opt = getRemoteTargetServerIfHas(context, storage.get());
+        if (host_opt)
         {
             continue;
         }
@@ -415,7 +422,7 @@ std::optional<StatsTableIdentifier> normalizeTable(ContextPtr context, StatsTabl
     return catalog->getTableIdByUUID(table.getUUID());
 }
 
-static ContextMutablePtr createContextWithAuth(ContextPtr global_context)
+ContextMutablePtr createContextWithAuth(ContextPtr global_context)
 {
     // TODO: create context with auth
     auto context = Context::createCopy(global_context);
@@ -426,7 +433,7 @@ static ContextMutablePtr createContextWithAuth(ContextPtr global_context)
 
 bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & chosen_task)
 {
-    auto context = createContextWithAuth(getContext());
+    auto context = getContext();
     auto catalog = createCatalogAdaptor(context);
     auto unique_key = chosen_task->getTable().getUniqueKey();
 
@@ -481,7 +488,9 @@ bool AutoStatisticsManager::executeOneTask(const std::shared_ptr<TaskInfo> & cho
         }
 
         CollectTarget target(context, table, collector_settings, columns_name);
-        auto row_count_opt = collectStatsOnTarget(context, target);
+        // here we should create a context with auto stats info
+        auto query_context = getContextWithNewTransaction(context, false, true);
+        auto row_count_opt = collectStatsOnTarget(query_context, target);
 
         if (row_count_opt.has_value())
         {
@@ -567,7 +576,8 @@ void AutoStatisticsManager::initialize(ContextMutablePtr context_, const Poco::U
         throw Exception("AutoStatisticsManager should call initialize only once", ErrorCodes::LOGICAL_ERROR);
 
     {
-        auto the_instance = std::make_unique<AutoStatisticsManager>(context_);
+        auto auth_context = createContextWithAuth(context_);
+        auto the_instance = std::make_unique<AutoStatisticsManager>(std::move(auth_context));
         context_->setAutoStatisticsManager(std::move(the_instance));
     }
     auto * the_instance = context_->getAutoStatisticsManager();

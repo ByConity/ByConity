@@ -1698,7 +1698,6 @@ public:
 
     std::multimap<StorageID, MergeTreeMutationStatus> collectMutationStatusesByTables(std::unordered_set<UUID> table_uuids) const;
 
-    InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster() const;
 
     std::vector<std::pair<UInt64, CnchWorkerResourcePtr>> getAllWorkerResources() const;

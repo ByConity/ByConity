@@ -11,6 +11,7 @@ namespace DB
 {
 
 ContextMutablePtr createContextForSubQuery(ContextPtr context, String sub_query_tag = "");
+ContextMutablePtr getContextWithNewTransaction(const ContextPtr & context, bool read_only, bool with_auth = false);
 
 void executeSubQueryWithoutResult(const String & query, ContextMutablePtr query_context, bool internal = false);
 

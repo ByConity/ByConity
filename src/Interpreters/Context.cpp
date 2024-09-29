@@ -5831,7 +5831,11 @@ void Context::initCnchTransactionCoordinator()
 TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
 {
     auto lock = getLock(); // checked
-    return *shared->cnch_txn_coordinator;
+    if (auto * ptr = shared->cnch_txn_coordinator.get())
+    {
+        return *ptr;
+    }
+    throw Exception("CnchTransactionCoordinator is not initialized", ErrorCodes::SYSTEM_ERROR);
 }
 
 void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
@@ -5908,12 +5912,6 @@ TxnTimestamp Context::getCurrentCnchStartTime() const
     if (!current_cnch_txn)
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
     return current_cnch_txn->getStartTime();
-}
-
-InterserverCredentialsPtr Context::getCnchInterserverCredentials()
-{
-    /// FIXME: any special for cnch ?
-    return getInterserverCredentials();
 }
 
 // In CNCH, form a virtual cluster which include all servers.
