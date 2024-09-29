@@ -1,7 +1,9 @@
 #include <memory>
+#include <Disks/IVolume.h>
 #include <IO/HTTPCommon.h>
 #include <IO/S3Common.h>
 #include <aws/s3/model/CopyObjectRequest.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -1334,8 +1336,31 @@ namespace S3
         }
     }
 
-}
+    void S3LazyCleaner::push(const MutableMergeTreeDataPartCNCHPtr & part)
+    {
+        if (!part)
+            return;
+        if (auto disk = part->volume->getDisk(); disk)
+        {
+            String part_key = std::filesystem::path(disk->getPath()) / part->getFullRelativePath() / "data";
+            push(part_key);
+        }
+    }
 
+    void S3LazyCleaner::push(const DeleteBitmapMetaPtr & bitmap, const StoragePtr & storage)
+    {
+        if (!bitmap || !storage)
+            return;
+        if (auto path = bitmap->getFullRelativePath(); path.has_value())
+        {
+            if (DiskPtr disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk(); disk)
+            {
+                String bitmap_key = std::filesystem::path(disk->getPath()) / *path;
+                push(bitmap_key);
+            }
+        }
+    }
+}
 }
 
 #endif

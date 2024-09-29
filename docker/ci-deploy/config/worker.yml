@@ -61,6 +61,9 @@ storage_configuration:
         hdfs:
           default: hdfs_disk
           disk: hdfs_disk
+merge_tree:
+  old_parts_lifetime: 0
+  ttl_for_trash_items: 30
 cnch_kafka_log:
   database: cnch_system
   table: cnch_kafka_log

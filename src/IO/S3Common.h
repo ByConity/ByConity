@@ -21,6 +21,8 @@
 #    include <Common/Logger.h>
 #    include <Common/ThreadPool.h>
 #    include <common/types.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 namespace Aws::S3
 {
 class S3Client;
@@ -288,7 +290,9 @@ public:
         size_t batch_clean_size_ = S3_DEFAULT_BATCH_CLEAN_SIZE);
     ~S3LazyCleaner() noexcept;
 
-    void push(const String & key_);
+    void push(const String& key_);
+    void push(const MutableMergeTreeDataPartCNCHPtr & part);
+    void push(const DeleteBitmapMetaPtr & bitmap, const StoragePtr & storage);
     void finalize();
 
 private:

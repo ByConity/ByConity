@@ -55,6 +55,7 @@ struct ScanRequest
     std::string start_key;
     std::string end_key;
 
+    bool exclude_start_key = false;
     uint32_t row_limit = 0;
     fdb_bool_t reverse_order = 0;
 };

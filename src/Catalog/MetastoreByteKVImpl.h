@@ -106,7 +106,8 @@ public:
         const String & key_prefix,
         const size_t & limit = 0,
         uint32_t scan_batch_size = DEFAULT_SCAN_BATCH_COUNT,
-        const String & start_key = "") override;
+        const String & start_key = "",
+        bool exclude_start_key = false) override;
 
     IteratorPtr getByRange(const String & range_start, const String & range_end, const bool include_start, const bool include_end) override;
 

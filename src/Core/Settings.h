@@ -1767,6 +1767,7 @@ enum PreloadLevelSettings : UInt64
 \
     /** S3 Storage settings*/ \
     M(UInt64, s3_gc_inter_partition_parallelism, 4, "Partition level concurrency when gc s3 table", 0) \
+    M(UInt64, s3_gc_batch_size, 10000, "Batch size for each thread when gc s3 table", 0) \
     M(UInt64, s3_gc_intra_partition_parallelism, 16, "Part level concurrency when gc s3 table", 0) \
     \
     M(UInt64, \

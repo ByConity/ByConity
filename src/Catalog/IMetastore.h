@@ -98,7 +98,13 @@ public:
      * Range scan by specific prefix; limit the number of result
      * @param start_key If provided, it'll be used as the start key, and `key_prefix` will only be used to generate `end_key`.
      */
-    virtual IteratorPtr getByPrefix(const String & key_prefix, const size_t & limit = 0, uint32_t scan_batch_size = DEFAULT_SCAN_BATCH_COUNT, const String & start_key = "") = 0;
+    virtual IteratorPtr getByPrefix(
+        const String & key_prefix,
+        const size_t & limit = 0,
+        uint32_t scan_batch_size = DEFAULT_SCAN_BATCH_COUNT,
+        const String & start_key = "",
+        bool exclude_start_key = false)
+        = 0;
 
     /***
      * Scan a range of records by start and end key;

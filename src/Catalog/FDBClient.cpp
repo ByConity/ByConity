@@ -455,10 +455,33 @@ bool Iterator::Next(fdb_error_t & code)
         {
             if (iteration==1)
             {
-                batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(tr->transaction,
-                    FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(start_key_batch.c_str()), start_key_batch.size()),
-                    FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t*>(req.end_key.c_str()), req.end_key.size()),
-                    req.row_limit, 0, FDB_STREAMING_MODE_LARGE, iteration, 1, req.reverse_order));
+                if (req.exclude_start_key)
+                {
+                    batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(
+                        tr->transaction,
+                        FDB_KEYSEL_FIRST_GREATER_THAN(reinterpret_cast<const uint8_t *>(start_key_batch.c_str()), start_key_batch.size()),
+                        FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t *>(req.end_key.c_str()), req.end_key.size()),
+                        req.row_limit,
+                        0,
+                        FDB_STREAMING_MODE_LARGE,
+                        iteration,
+                        1,
+                        req.reverse_order));
+                }
+                else
+                {
+                    batch_future = std::make_shared<FDBFutureRAII>(fdb_transaction_get_range(
+                        tr->transaction,
+                        FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(
+                            reinterpret_cast<const uint8_t *>(start_key_batch.c_str()), start_key_batch.size()),
+                        FDB_KEYSEL_FIRST_GREATER_OR_EQUAL(reinterpret_cast<const uint8_t *>(req.end_key.c_str()), req.end_key.size()),
+                        req.row_limit,
+                        0,
+                        FDB_STREAMING_MODE_LARGE,
+                        iteration,
+                        1,
+                        req.reverse_order));
+                }
             }
             else
             {

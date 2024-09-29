@@ -61,3 +61,5 @@ storage_configuration:
           default: hdfs_disk
           disk: hdfs_disk
 cnch_config: /config/cnch-config.yml
+cnch_data_retention_time_in_sec: 0
+s3_gc_batch_size: 10

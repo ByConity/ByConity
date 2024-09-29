@@ -70,6 +70,9 @@ storage_configuration:
           disk: s3_disk
   # To avoid break hard-coded test cases.
   cnch_default_policy: cnch_default_hdfs
+merge_tree:
+  old_parts_lifetime: 0
+  ttl_for_trash_items: 30
 cnch_unique_table_log:
   database: cnch_system
   table: cnch_unique_table_log
