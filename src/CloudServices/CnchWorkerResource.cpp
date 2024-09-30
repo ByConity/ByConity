@@ -178,18 +178,25 @@ void CnchWorkerResource::executeCacheableCreateQuery(
     insertCloudTable({res_table_id.getDatabaseName(), res_table_id.getTableName()}, res, context, /*throw_if_exists=*/ false);
 }
 
-StoragePtr CnchWorkerResource::getTable(const StorageID & table_id) const
+StoragePtr CnchWorkerResource::tryGetTable(const StorageID & table_id, bool load_data_parts) const
 {
     String tenant_db = formatTenantDatabaseName(table_id.getDatabaseName());
-    auto lock = getLock();
+    StoragePtr res = {};
 
-    auto it = cloud_tables.find({tenant_db, table_id.getTableName()});
-    if (it != cloud_tables.end())
     {
-        return it->second;
+        auto lock = getLock();
+        auto it = cloud_tables.find({tenant_db, table_id.getTableName()});
+        if (it != cloud_tables.end())
+            res = it->second;
     }
 
-    return {};
+    if (load_data_parts)
+    {
+        if (auto cloud_table = dynamic_pointer_cast<StorageCloudMergeTree>(res))
+            cloud_table->prepareDataPartsForRead();
+    }
+    
+    return res;
 }
 
 DatabasePtr CnchWorkerResource::getDatabase(const String & database_name) const

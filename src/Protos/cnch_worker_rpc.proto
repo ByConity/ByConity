@@ -533,6 +533,7 @@ message SendResourcesReq
   // can coexist with `create_queries'
   repeated CacheableTableDefinition cacheable_create_queries = 10;
   optional string session_timezone = 11;
+  optional bool lazy_load_data_parts = 12;
 }
 
 message SendResourcesResp

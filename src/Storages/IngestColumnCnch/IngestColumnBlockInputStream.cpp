@@ -79,7 +79,7 @@ IngestColumnBlockInputStream::IngestColumnBlockInputStream(
       context(std::move(local_context)),
       log(getLogger(target_storage->getStorageID().getNameForLogs() + " (IngestColumn)"))
 {
-    source_storage = context->tryGetCnchWorkerResource()->getTable(StorageID{command.from_database, command.from_table});
+    source_storage = context->tryGetCnchWorkerResource()->tryGetTable(StorageID{command.from_database, command.from_table});
 
     ingest_column_names = command.column_names;
     target_cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(target_storage.get());

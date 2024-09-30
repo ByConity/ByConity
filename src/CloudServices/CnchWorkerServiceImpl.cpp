@@ -100,6 +100,7 @@ namespace ErrorCodes
     extern const int PREALLOCATE_QUERY_INTENT_NOT_FOUND;
     extern const int SESSION_NOT_FOUND;
     extern const int ABORTED;
+    extern const int WORKER_TABLE_NOT_FOUND;
 }
 
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
@@ -760,9 +761,19 @@ void CnchWorkerServiceImpl::sendResources(
             ProfileEvents::increment(ProfileEvents::QueryCreateTablesMicroseconds, create_timer.elapsedMicroseconds());
         }
 
+        bool lazy_load_parts = request->has_lazy_load_data_parts() && request->lazy_load_data_parts();
         for (const auto & data : request->data_parts())
         {
-            auto storage = DatabaseCatalog::instance().getTable({data.database(), data.table()}, query_context);
+            /// By default, calling getTable (from WorkerResource) will trigger loading data parts.
+            /// Here is the first time and happens before parts are ready. So don't trigger load data parts here.
+            StorageID storage_id = {data.database(), data.table()};
+            auto storage = worker_resource->tryGetTable(storage_id, /*load_data_parts*/false);
+            if (!storage)
+                throw Exception(ErrorCodes::WORKER_TABLE_NOT_FOUND, "Table {} not found in worker resource, it's a bug.", storage_id.getNameForLogs());
+
+            bool is_dict_table = false;
+            if (lazy_load_parts)
+                is_dict_table = !!dynamic_cast<StorageDictCloudMergeTree *>(storage.get());
 
             if (auto * cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(storage.get()))
             {
@@ -797,24 +808,13 @@ void CnchWorkerServiceImpl::sendResources(
                         }
                     }
 
-                    /// `loadDataParts` is an expensive action as it may involve remote read.
-                    /// The worker rpc thread pool may be blocked when there are many `sendResources` requests.
-                    /// Here we just pass the server_parts to storage. And it will do `loadDataParts` later (before reading).
-                    /// One exception is StorageDictCloudMergeTree as it use a different read logic rather than StorageCloudMergeTree::read.
-                    bool is_dict = false;
-                    if (auto * cloud_dict = dynamic_cast<StorageDictCloudMergeTree *>(storage.get()))
-                    {
-                        cloud_dict->loadDataParts(server_parts);
-                        is_dict = true;
-                    }
-                    else
-                        cloud_merge_tree->receiveDataParts(std::move(server_parts));
+                    cloud_merge_tree->receiveDataParts(std::move(server_parts));
 
                     LOG_DEBUG(
                         log,
-                        "Received {} parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}",
+                        "Received {} parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}, lazy_load_parts: {}",
                         server_parts_size, cloud_merge_tree->getStorageID().getNameForLogs(),
-                        request->txn_id(), request->disk_cache_mode(), is_dict);
+                        request->txn_id(), request->disk_cache_mode(), is_dict_table, lazy_load_parts);
                 }
 
                 if (!data.virtual_parts().empty())
@@ -839,20 +839,13 @@ void CnchWorkerServiceImpl::sendResources(
                         }
                     }
 
-                    bool is_dict = false;
-                    if (auto * cloud_dict = dynamic_cast<StorageDictCloudMergeTree *>(storage.get()))
-                    {
-                        cloud_dict->loadDataParts(virtual_parts);
-                        is_dict = true;
-                    }
-                    else
-                        cloud_merge_tree->receiveVirtualDataParts(std::move(virtual_parts));
+                    cloud_merge_tree->receiveVirtualDataParts(std::move(virtual_parts));
 
                     LOG_DEBUG(
                         log,
-                        "Received {} virtual parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}",
+                        "Received {} virtual parts for table {}(txn_id: {}), disk_cache_mode {}, is_dict: {}, lazy_load_parts: {}",
                         virtual_parts_size, cloud_merge_tree->getStorageID().getNameForLogs(),
-                        request->txn_id(), request->disk_cache_mode(), is_dict);
+                        request->txn_id(), request->disk_cache_mode(), is_dict_table, lazy_load_parts);
                 }
 
                 std::set<Int64> required_bucket_numbers;
@@ -865,6 +858,15 @@ void CnchWorkerServiceImpl::sendResources(
                 {
                     auto mutation_entry = CnchMergeTreeMutationEntry::parse(mutation_str);
                     cloud_merge_tree->addMutationEntry(mutation_entry);
+                }
+
+                /// prepareDataPartsForRead/loadDataParts is an expensive action as it may involve remote read.
+                /// The worker rpc thread pool may be blocked when there are many `sendResources` requests.
+                /// lazy_load_parts means the storage just receives server_parts in rpc. And it will call `prepareDataPartsForRead` later (before reading).
+                /// One exception is StorageDictCloudMergeTree as it use a different read logic rather than StorageCloudMergeTree::read.
+                if (!lazy_load_parts || is_dict_table)
+                {
+                    cloud_merge_tree->prepareDataPartsForRead();
                 }
             }
             else if (auto * hive_table = dynamic_cast<StorageCloudHive *>(storage.get()))

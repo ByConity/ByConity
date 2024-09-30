@@ -204,7 +204,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
 
                     mutable_context->setCurrentTransaction(worker_txn);
                 }
-                return mutable_context->getCnchWorkerResource()->getTable(query.table_id);
+                return mutable_context->getCnchWorkerResource()->tryGetTable(query.table_id);
             }
             else
             {
@@ -235,7 +235,7 @@ StoragePtr InterpreterInsertQuery::tryGetTableInWorkerResource(const StorageID &
     /// can only be found in worker_resource
     auto try_get_table_from_worker_resource = [&table_id](const auto & context) -> StoragePtr {
         if (auto worker_resource = context->tryGetCnchWorkerResource(); worker_resource)
-            return worker_resource->getTable(table_id);
+            return worker_resource->tryGetTable(table_id);
         else
             return nullptr;
     };

@@ -395,6 +395,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     request.set_timeout(recycle_timeout);
     if (!settings.session_timezone.value.empty())
         request.set_session_timezone(settings.session_timezone.value);
+    if (settings.enable_lazy_load_data_parts.value)
+        request.set_lazy_load_data_parts(true);
 
     bool require_worker_info = false;
     for (const auto & resource: resources_to_send)

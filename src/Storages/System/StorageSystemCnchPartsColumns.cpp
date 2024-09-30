@@ -106,7 +106,6 @@ void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, Conte
             throw Exception("Wrong storage type for parts columns request", ErrorCodes::BAD_ARGUMENTS);
 
         auto columns = storage->getInMemoryMetadataPtr()->getColumns().getAllPhysical();
-        cloud->prepareDataPartsForRead();
         auto parts = cloud->getDataPartsVector();
 
         LOG_DEBUG(log, "Target CloudMergeTree got {} parts" , parts.size());
