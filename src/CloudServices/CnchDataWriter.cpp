@@ -775,8 +775,8 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
 {
     const auto & settings = context->getSettingsRef();
 
-    if (!settings.parts_preload_level || !storage.getSettings()->parts_preload_level || !storage.getSettings()->enable_local_disk_cache
-        || !storage.getSettings()->enable_preload_parts)
+    if (!settings.parts_preload_level || (!storage.getSettings()->parts_preload_level && !storage.getSettings()->enable_preload_parts)
+        || !(storage.getSettings()->enable_local_disk_cache))
         return;
 
     try
