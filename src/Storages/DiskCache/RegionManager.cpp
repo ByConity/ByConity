@@ -18,6 +18,7 @@
 #include <Storages/DiskCache/Types.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/InjectPause.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <common/chrono_io.h>
@@ -185,6 +186,7 @@ void RegionManager::releaseCleanedupRegion(RegionId rid)
     {
         std::lock_guard<TimedMutex> guard{clean_regions_mutex};
         clean_regions.push_back(rid);
+        INJECT_PAUSE(pause_blockcache_clean_free_locked);
         if (clean_regions_cond.numWaiters() > 0)
             clean_regions_cond.notifyAll();
     }
@@ -246,6 +248,7 @@ std::pair<OpenStatus, std::unique_ptr<CondWaiter>> RegionManager::getCleanRegion
         {
             rid = clean_regions.back();
             clean_regions.pop_back();
+            INJECT_PAUSE(pause_blockcache_clean_alloc_locked);
             status = OpenStatus::Ready;
         }
         else
@@ -276,6 +279,7 @@ std::pair<OpenStatus, std::unique_ptr<CondWaiter>> RegionManager::getCleanRegion
         {
             std::lock_guard<TimedMutex> guard{clean_regions_mutex};
             clean_regions.push_back(rid);
+            INJECT_PAUSE(pause_blockcache_clean_free_locked);
             if (clean_regions_cond.numWaiters() > 0)
                 clean_regions_cond.notifyAll();
         }
@@ -316,6 +320,7 @@ void RegionManager::doFlush(RegionId rid, bool async)
 
 void RegionManager::doFlushInternal(RegionId rid)
 {
+    INJECT_PAUSE(pause_flush_begin);
     int retry_attempts = 0;
     while (retry_attempts < in_mem_buf_flush_retry_limit)
     {
@@ -342,13 +347,16 @@ void RegionManager::doFlushInternal(RegionId rid)
         // clean up the buffer.
         cleanupBufferOnFlushFailure(rid);
         releaseCleanedupRegion(rid);
+        INJECT_PAUSE(pause_flush_failure);
         return;
     }
 
+    INJECT_PAUSE(pause_flush_detach_buffer);
     detachBuffer(rid);
 
     // Flush completed, track the region
     track(rid);
+    INJECT_PAUSE(pause_flush_done);
 }
 
 void RegionManager::startReclaim()
@@ -359,6 +367,7 @@ void RegionManager::startReclaim()
 void RegionManager::doReclaim()
 {
     RegionId rid;
+    INJECT_PAUSE(pause_reclaim_begin);
     while (true)
     {
         rid = evict();
@@ -397,6 +406,7 @@ void RegionManager::doReclaim()
             doEviction(rid, buffer.view());
     }
     releaseEvictedRegion(rid, start_time);
+    INJECT_PAUSE(pause_reclaim_done);
 }
 
 RegionDescriptor RegionManager::openForRead(RegionId rid, UInt64 seq_number_)
@@ -433,6 +443,7 @@ void RegionManager::releaseEvictedRegion(RegionId rid, std::chrono::nanoseconds 
         std::lock_guard<TimedMutex> guard{clean_regions_mutex};
         reclaim_scheduled--;
         clean_regions.push_back(rid);
+        INJECT_PAUSE(pause_blockcache_clean_free_locked);
         if (clean_regions_cond.numWaiters() > 0)
             clean_regions_cond.notifyAll();
     }
@@ -442,6 +453,7 @@ void RegionManager::releaseEvictedRegion(RegionId rid, std::chrono::nanoseconds 
 
 void RegionManager::doEviction(RegionId rid, BufferView buffer) const
 {
+    INJECT_PAUSE(pause_do_eviction_start);
     if (buffer.isNull())
         LOG_ERROR(log, "Error reading region {} on reclamation", rid.index());
     else
@@ -452,6 +464,7 @@ void RegionManager::doEviction(RegionId rid, BufferView buffer) const
         LOG_DEBUG(log, "Evict region {} entries: {} us", rid.index(), evict_stop_watch.elapsedMicroseconds());
         ProfileEvents::increment(ProfileEvents::RegionManagerEvictionCount, num_evicted);
     }
+    INJECT_PAUSE(pause_do_eviction_done);
 }
 
 void RegionManager::persist(google::protobuf::io::CodedOutputStream * stream) const
@@ -570,7 +583,7 @@ Buffer RegionManager::read(const RegionDescriptor & desc, RelAddress addr, size_
     return device.read(physicalOffset(addr), size);
 }
 
-size_t RegionManager::read(const RegionDescriptor & desc, RelAddress addr, size_t size, char *to) const
+size_t RegionManager::read(const RegionDescriptor & desc, RelAddress addr, size_t size, char * to) const
 {
     auto rid = addr.rid();
     const auto & region = getRegion(rid);

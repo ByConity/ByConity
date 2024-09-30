@@ -24,6 +24,7 @@
 #include <Common/BitHelpers.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
+#include <Common/InjectPause.h>
 #include <Common/ProfileEvents.h>
 #include <Common/thread_local_rng.h>
 #include <common/bit_cast.h>
@@ -183,6 +184,8 @@ UInt32 BlockCache::serializedSize(UInt32 key_size, UInt32 value_size) const
 
 Status BlockCache::insert(HashedKey key, BufferView value)
 {
+    INJECT_PAUSE(pause_blockcache_insert_entry);
+
     UInt32 size = serializedSize(key.key().size, value.size());
     if (size > kMaxItemSize)
     {
@@ -227,6 +230,7 @@ Status BlockCache::insert(HashedKey key, BufferView value)
             CurrentMetrics::add(CurrentMetrics::BlockCacheUsedSizeBytes, new_obj_size - old_obj_size);
     }
     allocator.close(std::move(desc));
+    INJECT_PAUSE(pause_blockcache_insert_done);
     return status;
 }
 

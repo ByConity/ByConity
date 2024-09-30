@@ -25,6 +25,7 @@
 #include <Storages/DiskCache/tests/MockPolicy.h>
 #include <Storages/DiskCache/tests/SeqPoints.h>
 #include <Common/Exception.h>
+#include <Common/InjectPause.h>
 #include <common/logger_useful.h>
 
 namespace DB::HybridCache
@@ -755,6 +756,7 @@ TEST(BlockCache, ReadRegionDuringEviction)
             driver->insertAsync(e.getKey(), e.getValue());
             log.push_back(std::move(e));
             finishAllJobs(*ex_ptr);
+            driver->drain();
         }
     }
     driver->flush();
@@ -769,15 +771,25 @@ TEST(BlockCache, ReadRegionDuringEviction)
 
     sp.wait(0);
 
+    ENABLE_INJECT_PAUSE_IN_SCOPE();
+
+    injectPauseSet("pause_reclaim_begin");
+    injectPauseSet("pause_reclaim_done");
+
     CacheEntry e{bg.gen(8), bg.gen(1000)};
     EXPECT_EQ(0, ex_ptr->getQueueSize());
     driver->insertAsync(e.getKey(), e.getValue());
     EXPECT_TRUE(ex_ptr->runFirstIf("insert"));
 
+    EXPECT_TRUE(injectPauseWait("pause_reclaim_begin", 1 /* numThreads */, false /* wakeup */));
+
     Buffer value;
 
     EXPECT_EQ(Status::Ok, driver->lookup(log[2].getKey(), value));
     EXPECT_EQ(log[2].getValue(), value.view());
+
+    injectPauseClear("pause_reclaim_begin");
+    EXPECT_FALSE(injectPauseWait("pause_reclaim_done", 1, false, 5000));
 
     std::thread lookup_thread2([&driver, &log] {
         Buffer value2;
@@ -786,7 +798,11 @@ TEST(BlockCache, ReadRegionDuringEviction)
 
     EXPECT_EQ(Status::Ok, driver->remove(log[2].getKey()));
 
+    EXPECT_FALSE(injectPauseWait("pause_reclaim_done", 1, false, 5000));
+
     sp.reached(1);
+
+    EXPECT_TRUE(injectPauseWait("pause_reclaim_done", 1, true, 5000));
 
     finishAllJobs(*ex_ptr);
     driver->drain();
@@ -870,6 +886,33 @@ TEST(BlockCache, RegionLastOffset)
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
     auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
+
+
+    folly::fibers::TimedMutex mutex;
+    bool reclaim_started = false;
+    size_t num_clean_regions = 0;
+    ConditionVariable cv;
+    ENABLE_INJECT_PAUSE_IN_SCOPE();
+    injectPauseSet("pause_blockcache_clean_alloc_locked", [&]() {
+        std::unique_lock<folly::fibers::TimedMutex> lk(mutex);
+        EXPECT_GT(num_clean_regions, 0u);
+        num_clean_regions--;
+    });
+    injectPauseSet("pause_blockcache_clean_free_locked", [&]() {
+        std::unique_lock<folly::fibers::TimedMutex> lk(mutex);
+        if (num_clean_regions++ == 0u)
+        {
+            cv.notifyAll();
+        }
+        reclaim_started = true;
+    });
+    injectPauseSet("pause_blockcache_insert_entry", [&]() {
+        std::unique_lock<folly::fibers::TimedMutex> lk(mutex);
+        if (num_clean_regions == 0u && reclaim_started)
+        {
+            cv.wait(lk);
+        }
+    });
 
     BufferGen bg;
     std::vector<CacheEntry> log;
