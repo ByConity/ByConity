@@ -1,0 +1,51 @@
+TEST 1
+Equal
+1	('value11','value21','value31')
+hasToken
+0	('value10','value20','value30')
+Check info for Equal
+4	5
+Check info for hasToken
+4	5
+TEST 2
+Equal
+1	('value11','value21','value31')
+hasToken
+0	('value10','value20','value30')
+Check info for Equal
+4	5
+Check info for hasToken
+4	5
+TEST 3
+has0
+0	([('value0','value0','value0'),('value0','value0','value0')])
+has10
+1	([('value10','value10','value10'),('value10','value10','value10')])
+Check info for has0
+1	2
+Check info for has10
+1	2
+TEST 4 with complex json file
+complex_all_has
+0	([(['value11_1_0','value11_2_0','value11_3_0'],'value120','value130',[(['value4111_1_0','value4111_2_0','value4111_3_0'],'value41210','value41310'),(['value4112_1_0','value4112_2_0','value4112_3_0'],'value41220','value41320')]),(['value21_1_0','value21_2_0','value21_3_0'],'value22_0','value23_0',[(['value4213_1_0','value4213_2_0','value4213_3_0'],'value4223_0','value4233_0')])])
+Check info for complex_all_has
+9	10
+TEST 5 with complex json file
+complex_key_has_without_index
+0	([(['value11_1_0','value11_2_0','value11_3_0'],'value120','value130',[(['value4111_1_0','value4111_2_0','value4111_3_0'],'value41210','value41310'),(['value4112_1_0','value4112_2_0','value4112_3_0'],'value41220','value41320')]),(['value21_1_0','value21_2_0','value21_3_0'],'value22_0','value23_0',[(['value4213_1_0','value4213_2_0','value4213_3_0'],'value4223_0','value4233_0')])])
+Check info for complex_key_has_without_index
+0	0
+complex_key_has_with_index
+0	([(['value11_1_0','value11_2_0','value11_3_0'],'value120','value130',[(['value4111_1_0','value4111_2_0','value4111_3_0'],'value41210','value41310'),(['value4112_1_0','value4112_2_0','value4112_3_0'],'value41220','value41320')]),(['value21_1_0','value21_2_0','value21_3_0'],'value22_0','value23_0',[(['value4213_1_0','value4213_2_0','value4213_3_0'],'value4223_0','value4233_0')])])
+Check info for complex_key_has_with_index
+9	10
+TEST 6 with complex json file
+check hasTokens
+0	((((((('value10')))))),'value20','value30')
+Check info for complex_all_has_tokens_index
+9	10
+TEST 7 with complex json file
+check hasTokens
+0	((((((('value10')))))),'value20','value30')
+Check info for test_inverted_key1_complex_json
+9	10
