@@ -42,7 +42,7 @@ public:
         bool with_id_ = false,
         CTEInfo * cte_info = nullptr,
         PlanCostMap plan_cost_map_ = {},
-        StepAggregatedOperatorProfiles profiles_ = {})
+        StepProfiles profiles_ = {})
         : out(out_)
         , cte_helper(cte_info ? std::make_optional<SimpleCTEVisitHelper<void>>(*cte_info) : std::nullopt)
         , with_id(with_id_)
@@ -103,7 +103,7 @@ private:
     std::optional<SimpleCTEVisitHelper<void>> cte_helper;
     bool with_id;
     PlanCostMap plan_cost_map;
-    StepAggregatedOperatorProfiles profiles;
+    StepProfiles profiles;
     void printNode(const PlanNodeBase & node, const String & label, const String & details, const String & color, PrinterContext & context);
     Void visitChildren(PlanNodeBase &, PrinterContext &);
     void printHints(const PlanNodeBase & node);
@@ -256,7 +256,7 @@ public:
 
     static void printAST(const ASTPtr &, ContextMutablePtr & context, const String & visitor);
     static void printLogicalPlan(PlanNodeBase &, ContextMutablePtr &, const String & name);
-    static void printLogicalPlan(QueryPlan &, ContextMutablePtr &, const String & name, StepAggregatedOperatorProfiles profiles = {});
+    static void printLogicalPlan(QueryPlan &, ContextMutablePtr &, const String & name, StepProfiles profiles = {});
     static void printMemo(const Memo & memo, const ContextMutablePtr & context, const String & name);
     static void printMemo(const Memo & memo, GroupId root_id, const ContextMutablePtr & context, const String & name);
     static void printPlanSegment(const PlanSegmentTreePtr &, const ContextMutablePtr &);
@@ -269,7 +269,7 @@ private:
     static String printAST(ASTPtr);
     static void addID(ASTPtr & ast, std::unordered_map<ASTPtr, UInt16> & asts, std::shared_ptr<std::atomic<UInt16>> & max_node_id);
 
-    static String printLogicalPlan(PlanNodeBase &, CTEInfo * cte_info = nullptr, StepAggregatedOperatorProfiles profiles = {});
+    static String printLogicalPlan(PlanNodeBase &, CTEInfo * cte_info = nullptr, StepProfiles profiles = {});
     static String printPlanSegmentNodes(const PlanSegmentTreePtr &, const ContextMutablePtr &);
     static void appendPlanSegmentNodes(
         std::stringstream & out,

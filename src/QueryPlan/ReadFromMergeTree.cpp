@@ -1383,6 +1383,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         result.selected_marks,
         result.selected_ranges);
 
+    if (context->getSettingsRef().report_segment_profiles)
+        fillRuntimeAttributeDescriptions(result);
+
     ProfileEvents::increment(ProfileEvents::SelectedParts, result.selected_parts);
     ProfileEvents::increment(ProfileEvents::SelectedRanges, result.selected_ranges);
     ProfileEvents::increment(ProfileEvents::SelectedMarks, result.selected_marks);
@@ -1736,6 +1739,58 @@ void ReadFromMergeTree::describeIndexes(JSONBuilder::JSONMap & map) const
 std::shared_ptr<IQueryPlanStep> ReadFromMergeTree::copy(ContextPtr) const
 {
     throw Exception("ReadFromMergeTree can not copy", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void ReadFromMergeTree::fillRuntimeAttributeDescriptions(const ReadFromMergeTree::AnalysisResult & result)
+{
+    auto index_stats = result.index_stats;
+    if (!result.index_stats.empty())
+    {
+        RuntimeAttributeDescription index_desc;
+        for (size_t i = 0; i < index_stats.size(); ++i)
+        {
+            const auto & stat = index_stats[i];
+            if (stat.type == IndexType::None)
+                continue;
+            std::stringstream out;
+            out << "Type: " << indexTypeToString(stat.type) << ";";
+            if (!stat.name.empty())
+                out << " Name: " << stat.name << ";";
+            if (!stat.description.empty())
+                out << " Description: " << stat.description << ";";
+            if (!stat.used_keys.empty())
+            {
+                String keys = fmt::format("{}", fmt::join(stat.used_keys, ","));
+                out << " Keys: " << keys << ";";
+            }
+            if (!stat.condition.empty())
+                out << " Condition: " << stat.condition << ";";
+            out << " Parts: " << stat.num_parts_after;
+            if (i)
+                out << '/' << index_stats[i - 1].num_parts_after;
+            out << ";";
+            out << " Granules: " << stat.num_granules_after;
+            if (i)
+                out << '/' << index_stats[i - 1].num_granules_after;
+            out << ";";
+            index_desc.name_and_detail.emplace_back(indexTypeToString(stat.type), out.str());
+        }
+        index_desc.description = "Indexes";
+        attribute_descriptions.emplace(index_desc.description, std::move(index_desc));
+    }
+
+    RuntimeAttributeDescription parts_desc;
+    String selected_parts_info = fmt::format(
+        "Selected {}/{} parts by partition key, {} parts by primary key, {}/{} marks by primary key, {} marks to read from {} ranges",
+        result.parts_before_pk,
+        result.total_parts,
+        result.selected_parts,
+        result.selected_marks_pk,
+        result.total_marks_pk,
+        result.selected_marks,
+        result.selected_ranges);
+    parts_desc.description = selected_parts_info;
+    attribute_descriptions.emplace("SelectParts", std::move(parts_desc));
 }
 
 bool MergeTreeDataSelectAnalysisResult::error() const

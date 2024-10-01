@@ -27,6 +27,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/QueryLog.h>
+#include <Interpreters/profile/PlanSegmentProfile.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Executors/PipelineExecutor.h>
@@ -59,6 +60,7 @@ public:
         AddressInfo coordinator_address;
         RuntimeSegmentStatus runtime_segment_status;
         Protos::SenderMetrics sender_metrics;
+        PlanSegmentProfilePtr segment_profile;
     };
     std::optional<ExecutionResult> execute();
     BlockIO lazyExecute(bool add_output_processors = false);
@@ -86,6 +88,7 @@ private:
     SenderMetrics sender_metrics;
     Progress progress;
     Progress final_progress;
+    PlanSegmentProfilePtr segment_profile;
 
     Processors buildRepartitionExchangeSink(BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 

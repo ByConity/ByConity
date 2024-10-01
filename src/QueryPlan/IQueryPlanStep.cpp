@@ -64,6 +64,31 @@ void DataStream::fillFromProto(const Protos::DataStream & proto)
     sort_mode = DataStream::SortModeConverter::fromProto(proto.sort_mode());
 }
 
+void RuntimeAttributeDescription::fillFromProto(const Protos::RuntimeAttributeDescription & proto)
+{
+    description = proto.description();
+    for (const auto & proto_element : proto.details())
+    {
+        auto name = proto_element.name();
+        auto alias = proto_element.alias();
+        name_and_detail.emplace_back(name, alias);
+    }
+    if (proto.has_additional())
+        additional = proto.additional();
+}
+
+void RuntimeAttributeDescription::toProto(Protos::RuntimeAttributeDescription & proto) const
+{
+    proto.set_description(description);
+    for (const auto & [name, detail] : name_and_detail)
+    {
+        auto * proto_element = proto.add_details();
+        proto_element->set_name(name);
+        proto_element->set_alias(detail);
+    }
+    proto.set_additional(additional);
+}
+
 const DataStream & IQueryPlanStep::getOutputStream() const
 {
     if (!hasOutputStream())

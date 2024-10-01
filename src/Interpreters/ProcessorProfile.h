@@ -1,12 +1,17 @@
 #pragma once
 
-#include <Interpreters/SystemLog.h>
-#include <Core/NamesAndTypes.h>
 #include <Core/NamesAndAliases.h>
+#include <Core/NamesAndTypes.h>
+#include <Interpreters/SystemLog.h>
 #include <Processors/IProcessor.h>
+#include <Protos/plan_node_utils.pb.h>
+#include <bits/stdint-intn.h>
+#include <bits/stdint-uintn.h>
 
 #include <chrono>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace DB
 {
@@ -48,7 +53,13 @@ public:
 struct GroupedProcessorProfile;
 using GroupedProcessorProfilePtr = std::shared_ptr<GroupedProcessorProfile>;
 using GroupedProcessorProfiles = std::vector<GroupedProcessorProfilePtr>;
-using SegmentAndWorkerToGroupedProfile = std::unordered_map<size_t, std::unordered_map<String, GroupedProcessorProfilePtr>>;
+using SegIdAndAddrToPipelineProfile = std::unordered_map<size_t, std::unordered_map<String, GroupedProcessorProfilePtr>>;
+struct ProfileMetric;
+using ProfileMetricPtr = std::shared_ptr<ProfileMetric>;
+using ProfileMetrics = std::vector<ProfileMetricPtr>;
+using IdToProfileMetrics = std::unordered_map<size_t, ProfileMetrics>;
+using StepProfiles = std::unordered_map<size_t, ProfileMetricPtr>; // step_id -> aggregated profile
+using AddressToStepProfile = std::unordered_map<String, std::unordered_map<size_t, ProfileMetricPtr>>; // step_id -> aggregated profile
 
 struct GroupedProcessorProfile
 {
@@ -56,9 +67,9 @@ struct GroupedProcessorProfile
     String processor_name;
 
     int64_t step_id = -1;
-    UInt64 grouped_elapsed_us{};
-    UInt64 grouped_input_wait_elapsed_us{};
-    UInt64 grouped_output_wait_elapsed_us{};
+    UInt64 sum_grouped_elapsed_us{};
+    UInt64 sum_grouped_input_wait_elapsed_us{};
+    UInt64 sum_grouped_output_wait_elapsed_us{};
 
     UInt64 grouped_input_rows{};
     UInt64 grouped_input_bytes{};
@@ -86,64 +97,16 @@ public:
     static GroupedProcessorProfilePtr getOutputRoot(GroupedProcessorProfilePtr & input_root);
     void add(ProcessorId processor_id, const ProcessorProfilePtr & profile);
 
-    static SegmentAndWorkerToGroupedProfile aggregateProfileBetweenWorkers(SegmentAndWorkerToGroupedProfile & worker_grouped_profiles);
+    static SegIdAndAddrToPipelineProfile aggregatePipelineProfileBetweenWorkers(SegIdAndAddrToPipelineProfile & worker_grouped_profiles);
+    static UInt128 getPipelineProfilehash(GroupedProcessorProfilePtr & node);
     void addProfileRecursively(GroupedProcessorProfilePtr & profile);
 
+    static std::unordered_map<UInt64, ProfileMetricPtr> getProfileMetricsFromOutputRoot(GroupedProcessorProfilePtr & output_root);
+    static GroupedProcessorProfilePtr
+    getGroupedProfileFromMetrics(std::unordered_map<UInt64, ProfileMetricPtr> & profile_map, UInt64 root_id);
+
+    static StepProfiles aggregateOperatorProfileToStepLevel(GroupedProcessorProfilePtr & processor_profile_root);
     Poco::JSON::Object::Ptr getJsonProfiles();
-};
-
-
-struct StepOperatorProfile;
-using StepOperatorProfilePtr = std::shared_ptr<StepOperatorProfile>;
-using StepOperatorProfiles = std::vector<StepOperatorProfilePtr>;
-using StepsOperatorProfiles = std::unordered_map<size_t, StepOperatorProfiles>; // step_id -> step_operator_profile
-
-struct InputProfile
-{
-    UInt64 input_wait_elapsed_us; // sum_input_wait_elapsed_us in AggregatedStepOperatorProfile
-    UInt64 max_input_wait_elapsed_us{};
-    UInt64 min_input_wait_elapsed_us{UINT64_MAX};
-    UInt64 input_rows;
-    UInt64 input_bytes;
-};
-
-struct StepOperatorProfile
-{
-    int64_t step_id = -1;
-    UInt64 sum_elapsed_us{};
-
-    /// input step_id -> (input_wait_elapsed_us, input_rows, input_bytes)
-    std::unordered_map<int64_t, InputProfile> inputs_profile;
-
-    UInt64 output_wait_elapsed_us{};
-    UInt64 output_rows{};
-    UInt64 output_bytes{};
-
-    static StepsOperatorProfiles aggregateOperatorProfileToStepLevel(std::unordered_map<size_t, std::vector<GroupedProcessorProfilePtr>> & segment_profile_tree);
-};
-
-struct AggregatedStepOperatorProfile;
-using AggregatedStepOperatorProfilePtr = std::shared_ptr<AggregatedStepOperatorProfile>;
-using StepAggregatedOperatorProfiles = std::unordered_map<size_t, AggregatedStepOperatorProfilePtr>; // step_id -> aggregated profile
-
-struct AggregatedStepOperatorProfile
-{
-    size_t step_id{};
-    UInt64 max_elapsed_us{};
-    UInt64 min_elapsed_us{UINT64_MAX};
-    UInt64 sum_elapsed_us{};
-    UInt64 worker_cnt = 0;
-
-    std::unordered_map<int64_t, InputProfile> inputs_profile;
-
-    UInt64 max_output_wait_elapsed_us{};
-    UInt64 min_output_wait_elapsed_us{UINT64_MAX};
-    UInt64 sum_output_wait_elapsed_us{};
-    UInt64 output_rows{};
-    UInt64 output_bytes{};
-
-    static StepAggregatedOperatorProfiles aggregateStepOperatorProfileBetweenWorkers(StepsOperatorProfiles & steps_operator_profiles);
-    String toJSONString(size_t indent = 0) const;
 };
 
 }

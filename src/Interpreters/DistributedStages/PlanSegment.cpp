@@ -400,6 +400,7 @@ void PlanSegment::toProto(Protos::PlanSegment & plan_segment_proto)
 
     for (const auto & id : runtime_filters)
         plan_segment_proto.add_runtime_filter_id(id);
+    plan_segment_proto.set_profile_type(ReportProfileTypeConverter::toProto(profile_type));
 }
 
 void PlanSegment::fillFromProto(const Protos::PlanSegment & proto, ContextMutablePtr context_)
@@ -425,7 +426,10 @@ void PlanSegment::fillFromProto(const Protos::PlanSegment & proto, ContextMutabl
         runtime_filters.emplace(runtime_filter_id);
     }
 
+    if (proto.has_profile_type())
+        profile_type = ReportProfileTypeConverter::fromProto(proto.profile_type());
 }
+
 /**
  * update plansegemnt if
  * 1. a segment is deserialized
