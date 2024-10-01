@@ -20,6 +20,7 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include "QueryPlan/ExchangeStep.h"
 
 namespace DB
 {
@@ -255,6 +256,22 @@ Int64 getMinNumOfBuckets(const PlanSegmentInputs & inputs)
     return min_bucket_number;
 }
 
+bool hasBucketScan(const PlanSegment & plan_segment)
+{
+    bool has_bucket_scan = false;
+    for (const auto & node : plan_segment.getQueryPlan().getNodes())
+    {
+        if (auto table_scan_step = std::dynamic_pointer_cast<TableScanStep>(node.step))
+        {
+            if (!table_scan_step->isBucketScan())
+                return false;
+            else
+                has_bucket_scan = true;
+        }
+    }
+    return has_bucket_scan;
+}
+
 NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
@@ -346,6 +363,8 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
         if (min_num_of_buckets == kInvalidBucketNumber)
             is_bucket_valid = false;
 
+        is_bucket_valid = is_bucket_valid && hasBucketScan(*plan_segment_ptr);
+
         const auto & source_task_payload_map = query_context->getCnchServerResource()->getSourceTaskPayload();
         for (const auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
         {
@@ -374,7 +393,7 @@ NodeSelectorResult SourceNodeSelector::select(PlanSegment * plan_segment_ptr, Co
             }
         }
 
-        if (is_bucket_valid && !query_context->getSettingsRef().bsp_force_split_bucket_table_by_part)
+        if (is_bucket_valid)
             divideSourceTaskByBucket(payload_on_workers, rows_count, plan_segment_ptr->getParallelSize(), result);
         else
             old_func(payload_on_workers, rows_count, plan_segment_ptr->getParallelSize());
@@ -423,7 +442,7 @@ NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, C
     NodeSelectorResult result;
 
     auto local_address = getLocalAddress(*query_context);
-    if (dag_graph_ptr->source_pruner && query_context->getSettingsRef().enable_prune_compute_plan_segment
+    if (dag_graph_ptr->source_pruner && query_context->getSettingsRef().enable_prune_source_plan_segment
         && dag_graph_ptr->source_pruner->plan_segment_workers_map.contains(plan_segment_ptr->getPlanSegmentId()))
     {
         selectPrunedWorkers(dag_graph_ptr, plan_segment_ptr, result, local_address);

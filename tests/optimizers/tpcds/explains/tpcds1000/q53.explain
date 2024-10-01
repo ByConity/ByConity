@@ -1,29 +1,29 @@
-Projection Est. 1 rows
+Projection Est. 100 rows
 │     Expressions: [i_manufact_id], avg_quarterly_sales:=`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, sum_sales:=`expr#sum(ss_sales_price)`
-└─ Limit Est. 1 rows
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting Est. 1 rows
+   └─ Sorting Est. 100 rows
       │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST, i_manufact_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 1 rows
-         └─ Sorting Est. 1 rows
+      └─ Gather Exchange Est. 410 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST, i_manufact_id ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 1 rows
+            └─ Projection Est. 410 rows
                │     Expressions: [expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id), expr#sum(ss_sales_price), i_manufact_id]
-               └─ Filter Est. 1 rows
+               └─ Filter Est. 410 rows
                   │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, NULL) > 0.1
-                  └─ Window Est. 1 rows
-                     └─ MergingAggregated Est. 1 rows
-                        └─ Repartition Exchange Est. 1 rows
+                  └─ Window Est. 1641 rows
+                     └─ MergingAggregated Est. 1641 rows
+                        └─ Repartition Exchange Est. 1641 rows
                            │     Partition by: {i_manufact_id}
-                           └─ Aggregating Est. 1 rows
+                           └─ Aggregating Est. 1641 rows
                               │     Group by: {i_manufact_id, d_qoy}
                               │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                              └─ Inner Join Est. 915772 rows
+                              └─ Inner Join Est. 834750 rows
                                  │     Condition: ss_sold_date_sk == d_date_sk
                                  │     Runtime Filters Builder: {d_date_sk}
-                                 ├─ Inner Join Est. 4377594 rows
+                                 ├─ Inner Join Est. 4180632 rows
                                  │  │     Condition: ss_item_sk == i_item_sk
                                  │  │     Runtime Filters Builder: {i_item_sk}
                                  │  ├─ Projection Est. 2750415949 rows

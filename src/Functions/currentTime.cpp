@@ -130,7 +130,7 @@ public:
         }
         DateTime64 dt64 = DB::nowSubsecondDt64(scale);
         ToTimeTransform transformer(scale, scale);
-        Decimal64::NativeType t = transformer.execute(dt64, intExp10(scale), DateLUT::instance());
+        Decimal64::NativeType t = transformer.execute(dt64, intExp10(scale), DateLUT::sessionInstance());
         return std::make_unique<FunctionBaseCurrentTime>(t, scale, std::make_shared<DataTypeTime>(scale));
     }
 };

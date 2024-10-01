@@ -128,7 +128,6 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage, b
                 auto out = disk->writeFile(file_rel_path);
 
                 out->write(buf.data(), size);
-                out->sync();
                 out->finalize();
             }
             model->set_file_size(size);

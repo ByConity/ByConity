@@ -29,10 +29,10 @@ Projection Est. 10 rows
                         │     │  │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                         │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
                         │     │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_net_profit]
-                        │     │  └─ Broadcast Exchange Est. 90 rows
-                        │     │     └─ Projection Est. 90 rows
+                        │     │  └─ Broadcast Exchange Est. 91 rows
+                        │     │     └─ Projection Est. 91 rows
                         │     │        │     Expressions: [d_date_sk]
-                        │     │        └─ Filter Est. 90 rows
+                        │     │        └─ Filter Est. 91 rows
                         │     │           │     Condition: (d_year = 1998) AND (d_qoy = 2)
                         │     │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                         │     │                    Where: (d_year = 1998) AND (d_qoy = 2)
@@ -40,17 +40,17 @@ Projection Est. 10 rows
                         │     └─ Broadcast Exchange Est. 1002 rows
                         │        └─ TableScan tpcds1000_sample.store Est. 1002 rows
                         │                 Outputs: [s_store_sk, s_store_name, s_zip]
-                        └─ Broadcast Exchange Est. 1165 rows
-                           └─ Projection Est. 1165 rows
+                        └─ Broadcast Exchange Est. 2331 rows
+                           └─ Projection Est. 2331 rows
                               │     Expressions: substring(expr#substring(ca_zip, 1, 5)_2, 1, 2):=substring(`expr#substring(ca_zip, 1, 5)_2`, 1, 2)
-                              └─ Filter Est. 1165 rows
+                              └─ Filter Est. 2331 rows
                                  │     Condition: (count >= 1) AND (count_1 >= 1)
-                                 └─ MergingAggregated Est. 4660 rows
-                                    └─ Repartition Exchange Est. 4660 rows
+                                 └─ MergingAggregated Est. 9322 rows
+                                    └─ Repartition Exchange Est. 11652 rows
                                        │     Partition by: {expr#substring(ca_zip, 1, 5)_2}
-                                       └─ Union Est. 4660 rows
+                                       └─ Union Est. 11652 rows
                                           │     OutputToInputs: count_1 = [count_1,count_1], count = [count,count], expr#substring(ca_zip, 1, 5)_2 = [expr#substring(ca_zip, 1, 5),expr#substring(ca_zip, 1, 5)_1]
-                                          ├─ Aggregating Est. 2330 rows
+                                          ├─ Aggregating Est. 9322 rows
                                           │  │     Group by: {expr#substring(ca_zip, 1, 5)}
                                           │  │     Aggregates: count:=AggNull(sum)(marker_2), count_1:=AggNull(sum)(marker_3)
                                           │  └─ Projection Est. 1500000 rows
@@ -63,9 +63,9 @@ Projection Est. 10 rows
                                           └─ Aggregating Est. 2330 rows
                                              │     Group by: {expr#substring(ca_zip, 1, 5)_1}
                                              │     Aggregates: count:=AggNull(sum)(marker_4), count_1:=AggNull(sum)(marker_5)
-                                             └─ Projection Est. 2330 rows
+                                             └─ Projection Est. 2331 rows
                                                 │     Expressions: expr#substring(ca_zip, 1, 5)_1:=substring(ca_zip_1, 1, 5), marker_4:=0, marker_5:=1
-                                                └─ Filter Est. 2330 rows
+                                                └─ Filter Est. 2331 rows
                                                    │     Condition: `expr#count()` > 10
                                                    └─ MergingAggregated Est. 9322 rows
                                                       └─ Repartition Exchange Est. 9322 rows
@@ -75,14 +75,10 @@ Projection Est. 10 rows
                                                             │     Aggregates: expr#count():=AggNull(count)()
                                                             └─ Inner (PARALLEL_HASH) Join Est. 5675393 rows
                                                                │     Condition: ca_address_sk == c_current_addr_sk
-                                                               │     Runtime Filters Builder: {c_current_addr_sk}
                                                                ├─ Repartition Exchange Est. 6000000 rows
                                                                │  │     Partition by: {ca_address_sk}
-                                                               │  └─ Filter Est. 6000000 rows
-                                                               │     │     Condition: Runtime Filters: {ca_address_sk}
-                                                               │     └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
-                                                               │              Where: Runtime Filters: {ca_address_sk}
-                                                               │              Outputs: [ca_address_sk], ca_zip_1:=ca_zip
+                                                               │  └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
+                                                               │           Outputs: [ca_address_sk], ca_zip_1:=ca_zip
                                                                └─ Repartition Exchange Est. 5675393 rows
                                                                   │     Partition by: {c_current_addr_sk}
                                                                   └─ Projection Est. 5675393 rows
@@ -92,4 +88,4 @@ Projection Est. 10 rows
                                                                         └─ TableScan tpcds1000_sample.customer Est. 12000000 rows
                                                                                  Where: c_preferred_cust_flag = 'Y'
                                                                                  Outputs: [c_current_addr_sk, c_preferred_cust_flag]
-note: Runtime Filter is applied for 2 times.
+note: Runtime Filter is applied for 1 times.

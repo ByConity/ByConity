@@ -42,7 +42,7 @@ void MetricLogElement::appendToBlock(MutableColumns & columns) const
 {
     size_t column_idx = 0;
 
-    columns[column_idx++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
+    columns[column_idx++]->insert(DateLUT::serverTimezoneInstance().toDayNum(event_time).toUnderType());
     columns[column_idx++]->insert(event_time);
     columns[column_idx++]->insert(event_time_microseconds);
     columns[column_idx++]->insert(milliseconds);

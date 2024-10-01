@@ -23,7 +23,7 @@ PlanNodeCost TableScanCost::calculate(const TableScanStep &, CostContext & conte
 {
     if (!context.stats)
         return PlanNodeCost::ZERO;
-    return PlanNodeCost::cpuCost(context.stats->getRowCount()) * context.cost_model.getTableScanCostWeight();
+    return PlanNodeCost::cpuCost( context.cost_model.isEnableUseByteSize() ? context.stats->getOutputSizeInBytes() : context.stats->getRowCount()) * context.cost_model.getTableScanCostWeight();
 }
 
 }

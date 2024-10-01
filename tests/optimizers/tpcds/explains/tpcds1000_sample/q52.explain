@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 165 rows
+      └─ Gather Exchange Est. 549037 rows
          └─ Sorting Est. 100 rows
             │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 165 rows
-               └─ Repartition Exchange Est. 165 rows
+            └─ MergingAggregated Est. 549037 rows
+               └─ Repartition Exchange Est. 549037 rows
                   │     Partition by: {d_year, i_brand, i_brand_id}
-                  └─ Aggregating Est. 165 rows
+                  └─ Aggregating Est. 549037 rows
                      │     Group by: {d_year, i_brand, i_brand_id}
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                      └─ Inner Join Est. 1719424 rows

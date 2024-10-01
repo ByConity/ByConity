@@ -1,14 +1,14 @@
-Projection Est. 1 rows
+Projection Est. 5 rows
 │     Expressions: [o_orderpriority], order_count:=`expr#count()`
-└─ Sorting Est. 1 rows
+└─ Sorting Est. 5 rows
    │     Order by: {o_orderpriority ASC NULLS LAST}
-   └─ Gather Exchange Est. 1 rows
-      └─ Sorting Est. 1 rows
+   └─ Gather Exchange Est. 5 rows
+      └─ Sorting Est. 5 rows
          │     Order by: {o_orderpriority ASC NULLS LAST}
-         └─ MergingAggregated Est. 1 rows
-            └─ Repartition Exchange Est. 1 rows
+         └─ MergingAggregated Est. 5 rows
+            └─ Repartition Exchange Est. 5 rows
                │     Partition by: {o_orderpriority}
-               └─ Aggregating Est. 1 rows
+               └─ Aggregating Est. 5 rows
                   │     Group by: {o_orderpriority}
                   │     Aggregates: expr#count():=AggNull(count)()
                   └─ Right Semi (PARALLEL_HASH) Join Est. 57353820 rows

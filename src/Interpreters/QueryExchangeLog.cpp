@@ -85,7 +85,7 @@ void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
 {
     size_t i = 0;
     columns[i++]->insert(initial_query_id);
-    columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
+    columns[i++]->insert(DateLUT::serverTimezoneInstance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(event_time);
     columns[i++]->insertData(type.data(), type.size());
     columns[i++]->insert(exchange_id);

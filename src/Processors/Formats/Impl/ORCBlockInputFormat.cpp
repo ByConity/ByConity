@@ -141,12 +141,9 @@ std::vector<int> ORCBlockInputFormat::getColumnIndices(
 
 void ORCBlockInputFormat::prepareReader()
 {
-    auto arrow_file = asArrowFile(in);
-    auto reader_status = arrow::adapters::orc::ORCFileReader::Open(arrow_file, arrow::default_memory_pool()).Value(&file_reader);
-    if (!reader_status.ok())
-    {
-        throw Exception(reader_status.ToString(), ErrorCodes::BAD_ARGUMENTS);
-    }
+    std::atomic_int is_stopped = false;
+    auto arrow_file = asArrowFile(in, format_settings, is_stopped, "ORC", ORC_MAGIC_BYTES);
+    THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(arrow_file, ArrowMemoryPool::instance()).Value(&file_reader));
     stripe_total = file_reader->NumberOfStripes();
     stripe_current = 0;
 
@@ -179,7 +176,7 @@ IStorage::ColumnSizeByName ORCBlockInputFormat::getColumnSizes()
 {
     std::atomic_int is_stopped = false;
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
-                           asArrowFile(in, format_settings, is_stopped, "ORC", ORC_MAGIC_BYTES), arrow::default_memory_pool())
+                           asArrowFile(in, format_settings, is_stopped, "ORC", ORC_MAGIC_BYTES), ArrowMemoryPool::instance())
                            .Value(&file_reader));
     auto * orc_reader = file_reader->GetRawORCReader();
     if (!orc_reader)
@@ -204,20 +201,22 @@ void ORCBlockInputFormat::setQueryInfo([[maybe_unused]] const SelectQueryInfo & 
 
 void registerInputFormatProcessorORC(FormatFactory &factory)
 {
-    factory.registerInputFormatProcessor(
-            "ORC",
-            [](ReadBuffer &buf,
-                const Block &sample,
-                const RowInputFormatParams &,
-                const FormatSettings & settings)
-            {
-                InputFormatPtr res;
-                if (settings.orc.use_fast_decoder == 2)
-                    res = std::make_shared<LMNativeORCBlockInputFormat>(buf, sample, settings);
-                else
-                    res = std::make_shared<ORCBlockInputFormat>(buf, sample, settings);
-                return res;
-            });
+    factory.registerRandomAccessInputFormat(
+        "ORC",
+        [](ReadBuffer & buf,
+           const Block & sample,
+           const FormatSettings & settings,
+           const ReadSettings & /*read_settings*/,
+           bool /*is_remote_fs*/,
+           size_t max_download_threads,
+           size_t max_parsing_threads,
+           SharedParsingThreadPoolPtr parsing_thread_pool) -> InputFormatPtr {
+            if (settings.orc.use_fast_decoder >= 1)
+                return std::make_shared<LMNativeORCBlockInputFormat>(
+                    buf, sample, settings, max_download_threads, max_parsing_threads, parsing_thread_pool);
+            else
+                return std::make_shared<ORCBlockInputFormat>(buf, sample, settings);
+        });
     factory.markFormatAsColumnOriented("ORC");
 }
 }

@@ -20,13 +20,25 @@ namespace DB::HybridCache
 {
 namespace
 {
-    size_t byteIndex(size_t bit_index) { return bit_index >> 3u; }
+    size_t byteIndex(size_t bit_index)
+    {
+        return bit_index >> 3u;
+    }
 
-    UInt8 bitMask(size_t bit_index) { return static_cast<UInt8>(1u << (bit_index & 7u)); }
+    UInt8 bitMask(size_t bit_index)
+    {
+        return static_cast<UInt8>(1u << (bit_index & 7u));
+    }
 
-    void bitSet(UInt8 * ptr, size_t bit_index) { ptr[byteIndex(bit_index)] |= bitMask(bit_index); }
+    void bitSet(UInt8 * ptr, size_t bit_index)
+    {
+        ptr[byteIndex(bit_index)] |= bitMask(bit_index);
+    }
 
-    bool bitGet(const UInt8 * ptr, size_t bit_index) { return ptr[byteIndex(bit_index)] & bitMask(bit_index); }
+    bool bitGet(const UInt8 * ptr, size_t bit_index)
+    {
+        return ptr[byteIndex(bit_index)] & bitMask(bit_index);
+    }
 
     size_t bitsToBytes(size_t bits)
     {
@@ -69,7 +81,7 @@ BloomFilter::BloomFilter(UInt32 num_filters_, UInt32 num_hashes_, size_t hash_ta
     , bits{std::make_unique<UInt8[]>(getByteSize())}
 {
     if (num_filters_ == 0 || num_hashes_ == 0 || hash_table_bit_size_ == 0)
-        throwFromErrno("invalid bloom filter params", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("invalid bloom filter params", ErrorCodes::BAD_ARGUMENTS);
 
     for (size_t i = 0; i < seeds.size(); i++)
         seeds[i] = IntHash64Impl::apply(i);
@@ -165,7 +177,7 @@ void BloomFilter::recover(google::protobuf::io::CodedInputStream * stream)
     google::protobuf::util::ParseDelimitedFromCodedStream(&pb, stream, nullptr);
     if (filters_count != pb.num_filters() || hash_table_bit_size != pb.hash_table_bit_size() || filter_byte_size != pb.filter_byte_size()
         || kPersistFragmentSize != pb.fragment_size())
-        throwFromErrno(fmt::format("Invalid BloomFilter config."), ErrorCodes::INVALID_CONFIG_PARAMETER);
+        throw Exception("Invalid BloomFilter config.", ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     for (Int32 i = 0; i < pb.seeds_size(); i++)
         seeds[i] = pb.seeds(i);

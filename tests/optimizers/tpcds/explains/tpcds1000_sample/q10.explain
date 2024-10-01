@@ -1,18 +1,18 @@
-Projection Est. 4 rows
+Projection Est. 100 rows
 │     Expressions: [cd_credit_rating, cd_dep_college_count, cd_dep_count, cd_dep_employed_count, cd_education_status, cd_gender, cd_marital_status, cd_purchase_estimate], cnt1:=`expr#count()`, cnt2:=`expr#count()`, cnt3:=`expr#count()`, cnt4:=`expr#count()`, cnt5:=`expr#count()`, cnt6:=`expr#count()`
-└─ Limit Est. 4 rows
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting Est. 4 rows
+   └─ Sorting Est. 100 rows
       │     Order by: {cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_education_status ASC NULLS LAST, cd_purchase_estimate ASC NULLS LAST, cd_credit_rating ASC NULLS LAST, cd_dep_count ASC NULLS LAST, cd_dep_employed_count ASC NULLS LAST, cd_dep_college_count ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 4 rows
-         └─ Sorting Est. 4 rows
+      └─ Gather Exchange Est. 34154 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_education_status ASC NULLS LAST, cd_purchase_estimate ASC NULLS LAST, cd_credit_rating ASC NULLS LAST, cd_dep_count ASC NULLS LAST, cd_dep_employed_count ASC NULLS LAST, cd_dep_college_count ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 4 rows
-               └─ Repartition Exchange Est. 4 rows
+            └─ MergingAggregated Est. 34154 rows
+               └─ Repartition Exchange Est. 34154 rows
                   │     Partition by: {cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count}
-                  └─ Aggregating Est. 4 rows
+                  └─ Aggregating Est. 34154 rows
                      │     Group by: {cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count}
                      │     Aggregates: expr#count():=AggNull(count)()
                      └─ Projection Est. 34154 rows
@@ -78,15 +78,12 @@ Projection Est. 4 rows
                                           └─ Inner Join Est. 136616 rows
                                              │     Condition: cd_demo_sk == c_current_cdemo_sk
                                              │     Runtime Filters Builder: {c_current_cdemo_sk}
-                                             ├─ Repartition Exchange Est. 1920800 rows
-                                             │  │     Partition by: {cd_demo_sk}
-                                             │  └─ Filter Est. 1920800 rows
-                                             │     │     Condition: Runtime Filters: {cd_demo_sk}
-                                             │     └─ TableScan tpcds1000_sample.customer_demographics Est. 1920800 rows
-                                             │              Where: Runtime Filters: {cd_demo_sk}
-                                             │              Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count]
-                                             └─ Repartition Exchange Est. 136253 rows
-                                                │     Partition by: {c_current_cdemo_sk}
+                                             ├─ Filter Est. 1920800 rows
+                                             │  │     Condition: Runtime Filters: {cd_demo_sk}
+                                             │  └─ TableScan tpcds1000_sample.customer_demographics Est. 1920800 rows
+                                             │           Where: Runtime Filters: {cd_demo_sk}
+                                             │           Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count]
+                                             └─ Broadcast Exchange Est. 136253 rows
                                                 └─ Right Semi Join Est. 136253 rows
                                                    │     Condition: ss_customer_sk == c_customer_sk
                                                    │     Runtime Filters Builder: {c_customer_sk}

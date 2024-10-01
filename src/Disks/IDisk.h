@@ -268,6 +268,9 @@ public:
     /// Second bool param is a flag to remove (true) or keep (false) shared data on S3
     virtual void removeSharedFileIfExists(const String & path, bool) { removeFileIfExists(path); }
 
+    /// Remove CNCH MergeTreeDataPart, only used in ByteS3/ByteHDFS disks
+    virtual void removePart(const String &) { throw Exception("removePart is not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
     /// Set last modified time to file or directory at `path`.
     virtual void setLastModified(const String & path, const Poco::Timestamp & timestamp) = 0;
 
@@ -316,6 +319,12 @@ public:
     // Get table relative_data_path from disk
     virtual String getTableRelativePathOnDisk(const String & uuid){ return uuid;}
 
+    // A checker to prevent the cluster from writing when enable_cnch_write_remote_disk is disabled
+    void assertNotReadonly();
+
+    // Set whether the disk is writable
+    void setDiskWritable();
+
 protected:
     friend class DiskDecorator;
 
@@ -324,6 +333,7 @@ protected:
 
 private:
     std::unique_ptr<Executor> executor;
+    bool is_disk_writable = true;
 };
 
 using DiskPtr = std::shared_ptr<IDisk>;

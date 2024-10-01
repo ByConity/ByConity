@@ -57,32 +57,32 @@ Projection Est. 100 rows
                      │        │     Group by: {i_item_id}
                      │        │     Aggregates: expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity)
                      │        └─ Inner Join Est. 287519 rows
-                     │           │     Condition: sr_item_sk == i_item_sk
-                     │           ├─ Inner Join Est. 287519 rows
-                     │           │  │     Condition: sr_returned_date_sk == d_date_sk
-                     │           │  │     Runtime Filters Builder: {d_date_sk}
-                     │           │  ├─ Filter Est. 28795080 rows
-                     │           │  │  │     Condition: Runtime Filters: {sr_returned_date_sk}
-                     │           │  │  └─ TableScan tpcds100.store_returns Est. 28795080 rows
-                     │           │  │           Where: Runtime Filters: {sr_returned_date_sk}
-                     │           │  │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_return_quantity]
-                     │           │  └─ Broadcast Exchange Est. 20 rows
-                     │           │     └─ Left Semi Join Est. 20 rows
-                     │           │        │     Condition: d_date == d_date_1
-                     │           │        │     Runtime Filters Builder: {d_date_1}
-                     │           │        ├─ Filter Est. 73049 rows
-                     │           │        │  │     Condition: Runtime Filters: {d_date}
-                     │           │        │  └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │           │        │           Where: Runtime Filters: {d_date}
-                     │           │        │           Outputs: [d_date_sk, d_date]
-                     │           │        └─ Broadcast Exchange Est. 20 rows
-                     │           │           └─ Buffer Est. 20 rows
-                     │           │              └─ CTERef[1] Est. 20 rows
-                     │           └─ Filter Est. 204000 rows
-                     │              │     Condition: Runtime Filters: {i_item_id}
-                     │              └─ TableScan tpcds100.item Est. 204000 rows
-                     │                       Where: Runtime Filters: {i_item_id}
-                     │                       Outputs: [i_item_sk, i_item_id]
+                     │           │     Condition: i_item_sk == sr_item_sk
+                     │           ├─ Filter Est. 204000 rows
+                     │           │  │     Condition: Runtime Filters: {i_item_id}
+                     │           │  └─ TableScan tpcds100.item Est. 204000 rows
+                     │           │           Where: Runtime Filters: {i_item_id}
+                     │           │           Outputs: [i_item_sk, i_item_id]
+                     │           └─ Inner Join Est. 287519 rows
+                     │              │     Condition: sr_returned_date_sk == d_date_sk
+                     │              │     Runtime Filters Builder: {d_date_sk}
+                     │              ├─ Filter Est. 28795080 rows
+                     │              │  │     Condition: Runtime Filters: {sr_returned_date_sk}
+                     │              │  └─ TableScan tpcds100.store_returns Est. 28795080 rows
+                     │              │           Where: Runtime Filters: {sr_returned_date_sk}
+                     │              │           Outputs: [sr_returned_date_sk, sr_item_sk, sr_return_quantity]
+                     │              └─ Broadcast Exchange Est. 20 rows
+                     │                 └─ Left Semi Join Est. 20 rows
+                     │                    │     Condition: d_date == d_date_1
+                     │                    │     Runtime Filters Builder: {d_date_1}
+                     │                    ├─ Filter Est. 73049 rows
+                     │                    │  │     Condition: Runtime Filters: {d_date}
+                     │                    │  └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │                    │           Where: Runtime Filters: {d_date}
+                     │                    │           Outputs: [d_date_sk, d_date]
+                     │                    └─ Broadcast Exchange Est. 20 rows
+                     │                       └─ Buffer Est. 20 rows
+                     │                          └─ CTERef[1] Est. 20 rows
                      └─ MergingAggregated Est. 65882 rows
                         └─ Repartition Exchange Est. 66052 rows
                            │     Partition by: {i_item_id_2}

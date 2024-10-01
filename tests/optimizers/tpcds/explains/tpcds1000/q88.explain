@@ -97,25 +97,25 @@ CTEDef [1]
    Inner Join Est. 59781224 rows
    │     Condition: ss_sold_time_sk == t_time_sk
    ├─ Inner Join Est. 191116968 rows
-   │  │     Condition: ss_hdemo_sk == hd_demo_sk
-   │  ├─ Inner Join Est. 718559879 rows
-   │  │  │     Condition: ss_store_sk == s_store_sk
+   │  │     Condition: ss_store_sk == s_store_sk
+   │  ├─ Inner Join Est. 765996808 rows
+   │  │  │     Condition: ss_hdemo_sk == hd_demo_sk
    │  │  ├─ TableScan tpcds1000.store_sales Est. 2879987999 rows
    │  │  │        Outputs: [ss_sold_time_sk, ss_hdemo_sk, ss_store_sk]
-   │  │  └─ Broadcast Exchange Est. 125 rows
-   │  │     └─ Filter Est. 125 rows
-   │  │        │     Condition: s_store_name = 'ese'
-   │  │        └─ TableScan tpcds1000.store Est. 1002 rows
-   │  │                 Where: s_store_name = 'ese'
-   │  │                 Outputs: [s_store_sk, s_store_name]
-   │  └─ Broadcast Exchange Est. 1915 rows
-   │     └─ Filter Est. 1915 rows
-   │        │     Condition: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
-   │        └─ TableScan tpcds1000.household_demographics Est. 7200 rows
-   │                 Where: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
-   │                 Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
-   └─ Broadcast Exchange Est. 14639 rows
-      └─ Filter Est. 14639 rows
+   │  │  └─ Broadcast Exchange Est. 1915 rows
+   │  │     └─ Filter Est. 1915 rows
+   │  │        │     Condition: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
+   │  │        └─ TableScan tpcds1000.household_demographics Est. 7200 rows
+   │  │                 Where: ((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))
+   │  │                 Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
+   │  └─ Broadcast Exchange Est. 126 rows
+   │     └─ Filter Est. 126 rows
+   │        │     Condition: s_store_name = 'ese'
+   │        └─ TableScan tpcds1000.store Est. 1002 rows
+   │                 Where: s_store_name = 'ese'
+   │                 Outputs: [s_store_sk, s_store_name]
+   └─ Broadcast Exchange Est. 14640 rows
+      └─ Filter Est. 14640 rows
          │     Condition: ((t_hour = 8) AND (t_minute >= 30)) OR ((t_hour = 9) AND (t_minute < 30)) OR ((t_hour = 9) AND (t_minute >= 30)) OR ((t_hour = 10) AND (t_minute < 30)) OR ((t_hour = 10) AND (t_minute >= 30)) OR ((t_hour = 11) AND (t_minute < 30)) OR ((t_hour = 11) AND (t_minute >= 30)) OR ((t_hour = 12) AND (t_minute < 30))
          └─ TableScan tpcds1000.time_dim Est. 86400 rows
                   Where: ((t_hour = 8) AND (t_minute >= 30)) OR ((t_hour = 9) AND (t_minute < 30)) OR ((t_hour = 9) AND (t_minute >= 30)) OR ((t_hour = 10) AND (t_minute < 30)) OR ((t_hour = 10) AND (t_minute >= 30)) OR ((t_hour = 11) AND (t_minute < 30)) OR ((t_hour = 11) AND (t_minute >= 30)) OR ((t_hour = 12) AND (t_minute < 30))

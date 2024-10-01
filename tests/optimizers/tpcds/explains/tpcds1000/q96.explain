@@ -40,10 +40,10 @@ Projection Est. 1 rows
                   │           └─ TableScan tpcds1000.household_demographics Est. 7200 rows
                   │                    Where: hd_dep_count = 7
                   │                    Outputs: [hd_demo_sk, hd_dep_count]
-                  └─ Broadcast Exchange Est. 125 rows
-                     └─ Projection Est. 125 rows
+                  └─ Broadcast Exchange Est. 126 rows
+                     └─ Projection Est. 126 rows
                         │     Expressions: [s_store_sk]
-                        └─ Filter Est. 125 rows
+                        └─ Filter Est. 126 rows
                            │     Condition: s_store_name = 'ese'
                            └─ TableScan tpcds1000.store Est. 1002 rows
                                     Where: s_store_name = 'ese'

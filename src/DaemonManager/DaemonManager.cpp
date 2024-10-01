@@ -240,8 +240,7 @@ int DaemonManager::main(const std::vector<std::string> &)
 
     const Poco::Util::AbstractConfiguration & cnch_config = global_context->getCnchConfigRef();
     MetastoreConfig catalog_conf(cnch_config, CATALOG_SERVICE_CONFIGURE);
-    global_context->initCatalog(catalog_conf,
-        cnch_config.getString("catalog.name_space", "default"));
+    global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"), config().getBool("enable_cnch_write_remote_catalog", true));
     global_context->initServiceDiscoveryClient();
     global_context->initCnchServerClientPool(config().getString("service_discovery.server.psm", "data.cnch.server"));
     global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "data.cnch.tso"));

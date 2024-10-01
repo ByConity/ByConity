@@ -71,10 +71,13 @@ public:
 
     SymbolStatistics & operator+=(const SymbolStatistics & other)
     {
-        ndv += other.ndv;
+        if (db_table_column != other.db_table_column || db_table_column == "unknown")
+        {
+            ndv += other.ndv;
+            null_counts += other.null_counts;
+        }
         min = min < other.min ? min : other.min;
         max = max > other.max ? max : other.max;
-        null_counts += other.null_counts;
         histogram = histogram.createUnion(other.histogram);
         return *this;
     }
@@ -154,7 +157,7 @@ public:
     Poco::JSON::Object::Ptr toJson() const;
 
 private:
-        // number of distinct values
+    // number of distinct values
     UInt64 ndv;
 
     // minimum value

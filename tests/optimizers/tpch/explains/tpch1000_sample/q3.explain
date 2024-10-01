@@ -5,16 +5,16 @@ Projection Est. 10 rows
    └─ Sorting Est. 10 rows
       │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 2933756505 rows
+      └─ Gather Exchange Est. 792301033 rows
          └─ Sorting Est. 10 rows
             │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 10
-            └─ Aggregating Est. 2933756505 rows
+            └─ Aggregating Est. 792301033 rows
                │     Group by: {l_orderkey, o_orderdate, o_shippriority}
                │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-               └─ Projection Est. 2933756505 rows
+               └─ Projection Est. 792301033 rows
                   │     Expressions: [l_orderkey, o_orderdate, o_shippriority], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                  └─ Inner (PARALLEL_HASH) Join Est. 2933756505 rows
+                  └─ Inner (PARALLEL_HASH) Join Est. 792301033 rows
                      │     Condition: l_orderkey == o_orderkey
                      │     Runtime Filters Builder: {o_orderkey}
                      ├─ Repartition Exchange Est. 3236618778 rows
@@ -26,9 +26,9 @@ Projection Est. 10 rows
                      │        └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                      │                 Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
                      │                 Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
-                     └─ Repartition Exchange Est. 487728199 rows
+                     └─ Repartition Exchange Est. 236971971 rows
                         │     Partition by: {o_orderkey}
-                        └─ Inner (PARALLEL_HASH) Join Est. 487728199 rows
+                        └─ Inner (PARALLEL_HASH) Join Est. 236971971 rows
                            │     Condition: o_custkey == c_custkey
                            │     Runtime Filters Builder: {c_custkey}
                            ├─ Repartition Exchange Est. 728803385 rows
@@ -38,11 +38,11 @@ Projection Est. 10 rows
                            │     └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
                            │              Where: o_orderdate < cast(9204, 'Date') Runtime Filters: {o_custkey}
                            │              Outputs: [o_orderkey, o_custkey, o_orderdate, o_shippriority]
-                           └─ Repartition Exchange Est. 29989996 rows
+                           └─ Repartition Exchange Est. 29989997 rows
                               │     Partition by: {c_custkey}
-                              └─ Projection Est. 29989996 rows
+                              └─ Projection Est. 29989997 rows
                                  │     Expressions: [c_custkey]
-                                 └─ Filter Est. 29989996 rows
+                                 └─ Filter Est. 29989997 rows
                                     │     Condition: c_mktsegment = 'BUILDING'
                                     └─ TableScan tpch1000_sample.customer Est. 150000000 rows
                                              Where: c_mktsegment = 'BUILDING'

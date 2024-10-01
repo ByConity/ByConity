@@ -184,6 +184,8 @@ public:
         UInt32 mapping_bucket_size = 64;
         // LRU max weight
         TWeight max_weight;
+        // Cache entry's minimal ttl, disabled by default
+        UInt32 cache_ttl = 0;
 
         /// Customize evict handler, return a pair, first element indicate
         /// if this element should remove from cache, second element indicate
@@ -217,7 +219,7 @@ public:
                     key, *cell.value, cell.weight
                 );
 
-                TWeight weight;
+                TWeight weight {};
                 if (!should_remove)
                 {
                     weight = new_val == nullptr ? cell.weight : weighter(*new_val);
@@ -639,6 +641,7 @@ private:
     {
         std::optional<Cell> cell = container.get(key_, false);
         LRUQueueIterator iter;
+        TWeight increase_weight {};
         if (cell.has_value())
         {
             // Object already in cache, adjust lru list
@@ -662,6 +665,7 @@ private:
             iter = cell.value().queue_iterator;
 
             current_weight -= cell.value().weight;
+            increase_weight = weighter(*value_);
         }
         else
         {
@@ -672,6 +676,27 @@ private:
                     ErrorCodes::BAD_ARGUMENTS);
             }
 
+            // Check if there are enough space to insert new cache entry
+            increase_weight = weighter(*value_);
+            TWeight total_weight = current_weight;
+            total_weight += increase_weight;
+            size_t now = timestamp();
+            for (auto queue_iter = queue.begin(), end_iter = queue.end();
+                queue_iter != end_iter && !(total_weight < opts.max_weight); ++queue_iter)
+            {
+                std::optional<Cell> result = container.get(*queue_iter, false);
+                if (unlikely(!result.has_value()))
+                {
+                    LOG_ERROR(logger, "Entry found in queue but not in container");
+                    abort();
+                }
+                if (result.value().timestamp + opts.cache_ttl > now)
+                {
+                    return false;
+                }
+                total_weight -= result.value().weight;
+            }
+
             if (opts.insert_callback)
             {
                 opts.insert_callback(key_);
@@ -680,9 +705,8 @@ private:
             iter = queue.insert(queue.end(), key_);
         }
 
-        TWeight weight = weighter(*value_);
-        container.set(key_, Cell(timestamp(), iter, value_, weight));
-        current_weight += weight;
+        container.set(key_, Cell(timestamp(), iter, value_, increase_weight));
+        current_weight += increase_weight;
 
         evictIfNecessary(removed_elements_, updated_elements_);
 

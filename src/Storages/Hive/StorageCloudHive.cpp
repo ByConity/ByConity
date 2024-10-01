@@ -2,18 +2,19 @@
 #include <Storages/Hive/StorageCloudHive.h>
 #if USE_HIVE
 
-#include "DataTypes/DataTypeString.h"
+#include "common/logger_useful.h"
+#include "common/scope_guard_safe.h"
 #include "DataStreams/narrowBlockInputStreams.h"
+#include "DataTypes/DataTypeString.h"
 #include "Interpreters/ActionsDAG.h"
 #include "Interpreters/Context.h"
 #include "Interpreters/ExpressionActionsSettings.h"
 #include "Parsers/ASTCreateQuery.h"
 #include "Storages/Hive/CnchHiveSettings.h"
-#include "Storages/StorageInMemoryMetadata.h"
-#include "Storages/StorageFactory.h"
+#include "Storages/Hive/HiveVirtualColumns.h"
 #include "Storages/Hive/StorageHiveSource.h"
-#include "common/logger_useful.h"
-#include "common/scope_guard_safe.h"
+#include "Storages/StorageFactory.h"
+#include "Storages/StorageInMemoryMetadata.h"
 
 using DB::Context;
 
@@ -60,67 +61,64 @@ Pipe StorageCloudHive::read(
     SelectQueryInfo &  query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum  /*processed_stage*/,
-    [[maybe_unused]] size_t max_block_size,
-    unsigned num_streams)
+    size_t max_block_size,
+    unsigned num_streams_)
 {
-    bool need_path_colum = false;
-    bool need_file_column = false;
-
-    Names real_columns;
-    for (const auto & column : column_names)
-    {
-        if (column == "_path")
-            need_path_colum = true;
-        else if (column == "_file")
-            need_file_column = true;
-        else
-            real_columns.push_back(column);
-    }
+    const auto & settings_ref = local_context->getSettingsRef();
+    const size_t max_num_streams = std::min(static_cast<size_t>(num_streams_), static_cast<size_t>(settings_ref.max_threads));
+    size_t num_streams = max_num_streams;
+    const size_t max_threads = std::max(static_cast<size_t>(settings_ref.max_parsing_threads), max_num_streams);
 
     HiveFiles hive_files_before_filter = getHiveFiles();
     HiveFiles hive_files = filterHiveFilesByIntermediateResultCache(query_info, local_context, hive_files_before_filter);
-    selectFiles(local_context, storage_snapshot->metadata, query_info, hive_files, num_streams);
+
+    num_streams = std::min(static_cast<size_t>(num_streams), hive_files.size());
+
+    LOG_DEBUG(
+        log,
+        "Reading {} files in {} streams with {} threads, disk_cache mode {}",
+        hive_files.size(),
+        num_streams,
+        max_threads,
+        local_context->getSettingsRef().disk_cache_mode.toString());
 
     Pipes pipes;
+    pipes.reserve(num_streams);
+
+    auto shared_pool = std::make_shared<SharedParsingThreadPool>(max_threads, num_streams);
+
     auto block_info = std::make_shared<StorageHiveSource::BlockInfo>(
-        storage_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, storage_snapshot->metadata);
+        storage_snapshot->getSampleBlockForColumns(column_names), storage_snapshot->metadata);
     auto allocator = std::make_shared<StorageHiveSource::Allocator>(std::move(hive_files));
 
-    LOG_DEBUG(log, "read with {} streams, disk_cache mode {}", num_streams, local_context->getSettingsRef().disk_cache_mode.toString());
     auto query_info_ptr = std::make_shared<SelectQueryInfo>(query_info);
 
     for (size_t i = 0; i < num_streams; ++i)
     {
         pipes.emplace_back(std::make_shared<StorageHiveSource>(
             local_context,
+            max_block_size,
             block_info,
             allocator,
-            query_info_ptr
+            query_info_ptr,
+            shared_pool
         ));
     }
     auto pipe = Pipe::unitePipes(std::move(pipes));
     narrowPipe(pipe, num_streams);
     if (cache_holder)
         pipe.addCacheHolder(cache_holder);
-    return pipe;
-}
 
-void StorageCloudHive::selectFiles(
-    ContextPtr,
-    const StorageMetadataPtr &,
-    const SelectQueryInfo &,
-    HiveFiles & hive_files,
-    unsigned /*num_streams*/)
-{
-    LOG_DEBUG(log, "Selected {} hive files", hive_files.size());
+    size_t output_ports = pipe.numOutputPorts();
+    if (output_ports > 0 && output_ports < max_num_streams && !settings_ref.input_format_parquet_preserve_order)
+        pipe.resize(max_num_streams);
+
+    return pipe;
 }
 
 NamesAndTypesList StorageCloudHive::getVirtuals() const
 {
-    return NamesAndTypesList{
-        {"_path", std::make_shared<DataTypeString>()},
-        {"_file", std::make_shared<DataTypeString>()}
-    };
+    return getHiveVirtuals();
 }
 
 void StorageCloudHive::loadHiveFiles(const HiveFiles & hive_files)

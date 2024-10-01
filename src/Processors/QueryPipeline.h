@@ -200,6 +200,9 @@ public:
     /// Set lower limit for the number of threads
     void setMinThreads(size_t min_threads_) { min_threads = min_threads_; }
 
+    /// Try increase the min number of threads
+    void limitMinThreads(size_t min_threads_) { min_threads = std::max(min_threads_, min_threads); }
+
     /// Update upper limit for the recommend number of threads
     void limitMaxThreads(size_t max_threads_)
     {

@@ -5,53 +5,53 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {w_state ASC NULLS LAST, i_item_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 107195 rows
+      └─ Gather Exchange Est. 214928 rows
          └─ Sorting Est. 100 rows
             │     Order by: {w_state ASC NULLS LAST, i_item_id ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 107195 rows
-               └─ Repartition Exchange Est. 107195 rows
+            └─ MergingAggregated Est. 214928 rows
+               └─ Repartition Exchange Est. 214928 rows
                   │     Partition by: {w_state, i_item_id}
-                  └─ Aggregating Est. 107195 rows
+                  └─ Aggregating Est. 214928 rows
                      │     Group by: {w_state, i_item_id}
                      │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0))
                      └─ Projection Est. 2833349 rows
                         │     Expressions: [i_item_id, w_state], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0)
-                        └─ Right (PARALLEL_HASH) Join Est. 2833349 rows
-                           │     Condition: cr_item_sk == cs_item_sk, cr_order_number == cs_order_number
-                           │     Runtime Filters Builder: {cs_item_sk,cs_order_number}
-                           ├─ Filter Est. 143996756 rows
-                           │  │     Condition: Runtime Filters: {cr_item_sk, cr_order_number}
-                           │  └─ TableScan tpcds1000.catalog_returns Est. 143996756 rows
-                           │           Where: Runtime Filters: {cr_item_sk, cr_order_number}
-                           │           Outputs: [cr_item_sk, cr_order_number, cr_refunded_cash]
-                           └─ Inner Join Est. 2833349 rows
-                              │     Condition: cs_warehouse_sk == w_warehouse_sk
-                              ├─ Inner Join Est. 2833349 rows
-                              │  │     Condition: cs_item_sk == i_item_sk
-                              │  │     Runtime Filters Builder: {i_item_sk}
-                              │  ├─ Inner Join Est. 46273880 rows
-                              │  │  │     Condition: cs_sold_date_sk == d_date_sk
-                              │  │  │     Runtime Filters Builder: {d_date_sk}
-                              │  │  ├─ Filter Est. 1439980416 rows
-                              │  │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
-                              │  │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
-                              │  │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
-                              │  │  │           Outputs: [cs_sold_date_sk, cs_warehouse_sk, cs_item_sk, cs_order_number, cs_sales_price]
-                              │  │  └─ Broadcast Exchange Est. 60 rows
-                              │  │     └─ Filter Est. 60 rows
-                              │  │        │     Condition: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
-                              │  │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
-                              │  │                 Where: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
-                              │  │                 Outputs: [d_date_sk, d_date]
-                              │  └─ Projection Est. 18369 rows
-                              │     │     Expressions: [i_item_id, i_item_sk]
-                              │     └─ Filter Est. 18369 rows
-                              │        │     Condition: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
-                              │        └─ TableScan tpcds1000.item Est. 300000 rows
-                              │                 Where: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
-                              │                 Outputs: [i_item_sk, i_item_id, i_current_price]
-                              └─ Broadcast Exchange Est. 20 rows
-                                 └─ TableScan tpcds1000.warehouse Est. 20 rows
-                                          Outputs: [w_warehouse_sk, w_state]
+                        └─ Inner Join Est. 2833349 rows
+                           │     Condition: cs_warehouse_sk == w_warehouse_sk
+                           ├─ Right (PARALLEL_HASH) Join Est. 2833349 rows
+                           │  │     Condition: cr_item_sk == cs_item_sk, cr_order_number == cs_order_number
+                           │  │     Runtime Filters Builder: {cs_item_sk,cs_order_number}
+                           │  ├─ Filter Est. 143996756 rows
+                           │  │  │     Condition: Runtime Filters: {cr_item_sk, cr_order_number}
+                           │  │  └─ TableScan tpcds1000.catalog_returns Est. 143996756 rows
+                           │  │           Where: Runtime Filters: {cr_item_sk, cr_order_number}
+                           │  │           Outputs: [cr_item_sk, cr_order_number, cr_refunded_cash]
+                           │  └─ Inner Join Est. 2833349 rows
+                           │     │     Condition: cs_item_sk == i_item_sk
+                           │     │     Runtime Filters Builder: {i_item_sk}
+                           │     ├─ Inner Join Est. 46273880 rows
+                           │     │  │     Condition: cs_sold_date_sk == d_date_sk
+                           │     │  │     Runtime Filters Builder: {d_date_sk}
+                           │     │  ├─ Filter Est. 1439980416 rows
+                           │     │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                           │     │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
+                           │     │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                           │     │  │           Outputs: [cs_sold_date_sk, cs_warehouse_sk, cs_item_sk, cs_order_number, cs_sales_price]
+                           │     │  └─ Broadcast Exchange Est. 60 rows
+                           │     │     └─ Filter Est. 60 rows
+                           │     │        │     Condition: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
+                           │     │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
+                           │     │                 Where: (d_date >= cast(10997, 'Date32')) AND (d_date <= cast(11057, 'Date32'))
+                           │     │                 Outputs: [d_date_sk, d_date]
+                           │     └─ Projection Est. 18370 rows
+                           │        │     Expressions: [i_item_id, i_item_sk]
+                           │        └─ Filter Est. 18370 rows
+                           │           │     Condition: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
+                           │           └─ TableScan tpcds1000.item Est. 300000 rows
+                           │                    Where: (i_current_price >= '0.99') AND (i_current_price <= '1.49')
+                           │                    Outputs: [i_item_sk, i_item_id, i_current_price]
+                           └─ Broadcast Exchange Est. 20 rows
+                              └─ TableScan tpcds1000.warehouse Est. 20 rows
+                                       Outputs: [w_warehouse_sk, w_state]
 note: Runtime Filter is applied for 4 times.

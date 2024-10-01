@@ -35,6 +35,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_DISK_INDEX;
     extern const int UNKNOWN_ELEMENT_IN_CONFIG;
+    extern const int READONLY;
 }
 
 DiskPtr DiskByteHDFSReservation::getDisk(size_t i) const
@@ -88,6 +89,7 @@ DiskByteHDFS::DiskByteHDFS(const String & disk_name_, const String & hdfs_base_p
 {
     pread_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, true);
     read_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, false);
+    setDiskWritable();
 }
 
 const String & DiskByteHDFS::getName() const
@@ -127,16 +129,19 @@ size_t DiskByteHDFS::getFileSize(const String & path) const
 
 void DiskByteHDFS::createDirectory(const String & path)
 {
+    assertNotReadonly();
     hdfs_fs.createDirectory(absolutePath(path));
 }
 
 void DiskByteHDFS::createDirectories(const String & path)
 {
+    assertNotReadonly();
     hdfs_fs.createDirectories(absolutePath(path));
 }
 
 void DiskByteHDFS::clearDirectory(const String & path)
 {
+    assertNotReadonly();
     std::vector<String> file_names;
     std::vector<size_t> file_sizes;
     hdfs_fs.list(absolutePath(path), file_names, file_sizes);
@@ -148,6 +153,7 @@ void DiskByteHDFS::clearDirectory(const String & path)
 
 void DiskByteHDFS::moveDirectory(const String & from_path, const String & to_path)
 {
+    assertNotReadonly();
     hdfs_fs.renameTo(absolutePath(from_path), absolutePath(to_path));
 }
 
@@ -158,16 +164,19 @@ DiskDirectoryIteratorPtr DiskByteHDFS::iterateDirectory(const String & path)
 
 void DiskByteHDFS::createFile(const String & path)
 {
+    assertNotReadonly();
     hdfs_fs.createFile(absolutePath(path));
 }
 
 void DiskByteHDFS::moveFile(const String & from_path, const String & to_path)
 {
+    assertNotReadonly();
     hdfs_fs.renameTo(absolutePath(from_path), absolutePath(to_path));
 }
 
 void DiskByteHDFS::replaceFile(const String & from_path, const String & to_path)
 {
+    assertNotReadonly();
     String from_abs_path = absolutePath(from_path);
     String to_abs_path = absolutePath(to_path);
     if (hdfs_fs.exists(to_abs_path))
@@ -229,17 +238,20 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteHDFS::writeFile(const String & path, const WriteSettings & settings)
 {
+    assertNotReadonly();
     int write_mode = settings.mode == WriteMode::Append ? (O_APPEND | O_WRONLY) : O_WRONLY;
     return std::make_unique<WriteBufferFromHDFS>(absolutePath(path), hdfs_params, settings.buffer_size, write_mode);
 }
 
 void DiskByteHDFS::removeFile(const String & path)
 {
+    assertNotReadonly();
     hdfs_fs.remove(absolutePath(path), false);
 }
 
 void DiskByteHDFS::removeFileIfExists(const String & path)
 {
+    assertNotReadonly();
     String abs_path = absolutePath(path);
     if (hdfs_fs.exists(abs_path))
     {
@@ -249,12 +261,32 @@ void DiskByteHDFS::removeFileIfExists(const String & path)
 
 void DiskByteHDFS::removeDirectory(const String & path)
 {
+    assertNotReadonly();
     hdfs_fs.remove(absolutePath(path), false);
 }
 
 void DiskByteHDFS::removeRecursive(const String & path)
 {
+    assertNotReadonly();
     hdfs_fs.remove(absolutePath(path), true);
+}
+
+void DiskByteHDFS::removePart(const String & path)
+{
+    try
+    {
+        removeRecursive(path);
+    }
+    catch (Poco::FileException &e)
+    {
+        /// We don't know if this exception is caused by a non-existent path,
+        /// so we need to determine it manually
+        if (!exists(path)) {
+            /// the part has already been deleted, exit
+            return;
+        }
+        throw e;
+    }
 }
 
 void DiskByteHDFS::setLastModified(const String & path, const Poco::Timestamp & timestamp)

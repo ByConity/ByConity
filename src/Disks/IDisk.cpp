@@ -1,11 +1,13 @@
 #include "IDisk.h"
 #include "Disks/Executor.h"
+#include <Interpreters/Context.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/WriteBufferFromFileBase.h>
 #include <IO/copyData.h>
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
 #include <Common/setThreadName.h>
+#include <Common/Configurations.h>
 
 namespace DB
 {
@@ -14,6 +16,7 @@ namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
     extern const int BAD_FILE_TYPE;
+    extern const int READONLY;
 }
 
 std::atomic<UInt64> next_disk_id = 0;
@@ -103,6 +106,17 @@ void IDisk::copyFiles(const std::vector<std::pair<String, String>> & files_to_co
 void IDisk::truncateFile(const String &, size_t)
 {
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Truncate operation is not implemented for disk of type {}", getType());
+}
+
+void IDisk::assertNotReadonly(){
+    if(unlikely(!is_disk_writable)){
+        throw Exception("disk is not writable according to config 'enable_cnch_write_remote_disk' ", ErrorCodes::READONLY);
+    }
+}
+
+void IDisk::setDiskWritable(){
+    auto global_context = Context::getGlobalContextInstance();
+    is_disk_writable = global_context->getRootConfig().enable_cnch_write_remote_disk;
 }
 
 SyncGuardPtr IDisk::getDirectorySyncGuard(const String & /* path */) const

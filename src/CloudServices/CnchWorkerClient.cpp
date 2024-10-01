@@ -221,6 +221,7 @@ void CnchWorkerClient::sendCreateQueries(
     for (const auto & cnch_table_create_query : cnch_table_create_queries)
         *request.mutable_cnch_table_create_queries()->Add() = cnch_table_create_query;
 
+    cntl.set_timeout_ms(settings.send_plan_segment_timeout_ms.totalMilliseconds());
     stub->sendCreateQuery(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
@@ -375,6 +376,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     /// so it should be larger than max_execution_time to make sure the session is not to be destroyed in advance.
     UInt64 recycle_timeout = max_execution_time > 0 ? max_execution_time + 60UL : 3600;
     request.set_timeout(recycle_timeout);
+    if (!settings.session_timezone.value.empty())
+        request.set_session_timezone(settings.session_timezone.value);
 
     bool require_worker_info = false;
     for (const auto & resource: resources_to_send)
@@ -471,8 +474,9 @@ brpc::CallId CnchWorkerClient::sendResources(
     {
         auto current_wg = context->getCurrentWorkerGroup();
         auto * worker_info = request.mutable_worker_info();
-        // TODO: resource manager should gurantee the worker number and worker index are consistent
-        RPCHelpers::fillWorkerInfo(*worker_info, worker_id.id, current_wg->workerNum());
+        worker_info->set_worker_id(worker_id.id);
+        worker_info->set_index(current_wg->getWorkerIndex(worker_id.id));
+        worker_info->set_num_workers(current_wg->workerNum());
 
         // worker info validation
         if (worker_info->num_workers() <= worker_info->index())
@@ -482,7 +486,6 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
 
-    LOG_TRACE(log, "request : {}", request.ShortDebugString());
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
     /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms

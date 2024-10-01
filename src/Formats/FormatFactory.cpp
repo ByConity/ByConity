@@ -115,16 +115,15 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;
     format_settings.parquet.preserve_order = settings.input_format_parquet_preserve_order;
     format_settings.parquet.coalesce_read = settings.input_format_parquet_coalesce_read;
-    format_settings.parquet.use_lazy_io_cache = settings.input_format_parquet_use_lazy_io_cache;
     format_settings.parquet.import_nested = settings.input_format_parquet_import_nested;
     format_settings.parquet.case_insensitive_column_matching = settings.input_format_parquet_case_insensitive_column_matching;
     format_settings.parquet.max_block_size = settings.input_format_parquet_max_block_size;
-    // NOTE:: this is used for parallel parquet read. It's a temporary solution
-    format_settings.parquet.max_download_threads = settings.max_download_threads;
     format_settings.parquet.min_bytes_for_seek = settings.input_format_parquet_min_bytes_for_seek;
+    format_settings.parquet.max_buffer_size = settings.input_format_parquet_max_buffer_size;
     format_settings.parquet.filter_push_down = settings.input_format_parquet_filter_push_down;
     format_settings.parquet.use_footer_cache = settings.input_format_parquet_use_footer_cache;
     format_settings.parquet.use_native_reader = settings.input_format_parquet_use_native_reader;
+    format_settings.parquet.use_threads = settings.input_format_parquet_use_threads;
     format_settings.pretty.charset = settings.output_format_pretty_grid_charset.toString() == "ASCII" ? FormatSettings::Pretty::Charset::ASCII : FormatSettings::Pretty::Charset::UTF8;
     format_settings.pretty.color = settings.output_format_pretty_color;
     format_settings.pretty.max_column_pad_width = settings.output_format_pretty_max_column_pad_width;
@@ -196,20 +195,19 @@ InputFormatPtr FormatFactory::getInput(
     if (name == "Native")
         return std::make_shared<NativeInputFormatFromNativeBlockInputStream>(sample, buf);
 
+    const auto & creators = getCreators(name);
+    if (!creators.input_processor_creator && !creators.random_access_input_creator)
+        throw Exception(ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT, "Format {} is not suitable for input", name);
+
     auto format_settings = _format_settings
         ? *_format_settings : getFormatSettings(context);
-
-    if (!getCreators(name).input_processor_creator)
-    {
-        throw Exception("Format " + name + " is not suitable for input (with processors)", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
-    }
 
     const Settings & settings = context->getSettingsRef();
     const auto & file_segmentation_engine = getCreators(name).file_segmentation_engine;
 
     // Doesn't make sense to use parallel parsing with less than four threads
     // (segmentator + two parsers + reader).
-    bool parallel_parsing = settings.input_format_parallel_parsing && file_segmentation_engine && settings.max_threads >= 4;
+    bool parallel_parsing = settings.input_format_parallel_parsing && file_segmentation_engine && !creators.random_access_input_creator && settings.max_threads >= 4;
 
     if (settings.max_memory_usage && settings.min_chunk_bytes_for_parallel_parsing * settings.max_threads * 2 > settings.max_memory_usage)
         parallel_parsing = false;
@@ -326,18 +324,23 @@ InputFormatPtr FormatFactory::getInputFormat(
     const Block & sample,
     ContextPtr context,
     UInt64 max_block_size,
-    const std::optional<FormatSettings> & _format_settings) const
+    const std::optional<FormatSettings> & _format_settings,
+    std::optional<size_t> _max_parsing_threads,
+    std::optional<size_t> _max_download_threads,
+    bool is_remote_fs,
+    SharedParsingThreadPoolPtr parsing_thread_pool) const
 {
-    const auto & input_getter = getCreators(name).input_processor_creator;
-    if (!input_getter)
-        throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
+    const auto& creators = getCreators(name);
+    if (!creators.input_processor_creator && !creators.random_access_input_creator)
+        throw Exception(ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT, "Format {} is not suitable for input", name);
 
     const Settings & settings = context->getSettingsRef();
-
     if (context->hasQueryContext() && settings.log_queries)
         context->getQueryContext()->addQueryFactoriesInfo(Context::QueryLogFactories::Format, name);
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
+    size_t max_parsing_threads = _max_parsing_threads.value_or(settings.max_parsing_threads);
+    size_t max_download_threads = _max_download_threads.value_or(settings.max_download_threads);
 
     RowInputFormatParams params;
     params.max_block_size = max_block_size;
@@ -345,7 +348,28 @@ InputFormatPtr FormatFactory::getInputFormat(
     params.allow_errors_ratio = format_settings.input_allow_errors_ratio;
     params.max_execution_time = settings.max_execution_time;
     params.timeout_overflow_mode = settings.timeout_overflow_mode;
-    auto format = input_getter(buf, sample, params, format_settings);
+
+    InputFormatPtr format;
+    if (creators.input_processor_creator)
+    {
+        format = creators.input_processor_creator(buf, sample, params, format_settings);
+    }
+    else if (creators.random_access_input_creator)
+    {
+        format = creators.random_access_input_creator(
+            buf,
+            sample,
+            format_settings,
+            context->getReadSettings(),
+            is_remote_fs,
+            max_download_threads,
+            max_parsing_threads,
+            parsing_thread_pool);
+    }
+    else
+    {
+        UNREACHABLE();
+    }
 
     /// It's a kludge. Because I cannot remove context from values format.
     if (auto * values = typeid_cast<ValuesBlockInputFormat *>(format.get()))
@@ -574,6 +598,14 @@ void FormatFactory::registerInputFormatProcessor(const String & name, InputProce
         throw Exception("FormatFactory: Input format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(input_creator);
     registerFileExtension(name, name);
+}
+
+void FormatFactory::registerRandomAccessInputFormat(const String & name, RandomAccessInputCreator input_creator)
+{
+    auto & target = dict[name].random_access_input_creator;
+    if (target)
+        throw Exception("FormatFactory: Input format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
+    target = std::move(input_creator);
 }
 
 void FormatFactory::registerOutputFormatProcessor(const String & name, OutputProcessorCreator output_creator)

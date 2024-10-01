@@ -109,25 +109,8 @@ public:
     {
         bool loaded = false;
         std::shared_ptr<MergeTreeDataPartChecksums> part_checksums =
-            Base::getOrSet(key, [this, &key, &load, &loaded]() {
+            Base::getOrSet(key, [&load, &loaded]() {
                 loaded = true;
-                if (nvm_cache && nvm_cache->isEnabled())
-                {
-                    auto handle = nvm_cache->find<MergeTreeDataPartChecksums>(
-                        HybridCache::makeHashKey(key.c_str()),
-                        [](std::shared_ptr<void> ptr, HybridCache::Buffer buffer) {
-                            auto checksums = std::static_pointer_cast<MergeTreeDataPartChecksums>(ptr);
-                            auto read_buffer = buffer.asReadBuffer();
-                            checksums->read(read_buffer);
-                        },
-                        HybridCache::EngineTag::ChecksumCache);
-                    if (auto ptr = handle.get())
-                    {
-                        auto mapped = std::static_pointer_cast<MergeTreeDataPartChecksums>(ptr);
-                        if (!mapped->empty())
-                            return mapped;
-                    }
-                }
                 return load();
             });
         ProfileEvents::increment(loaded ? ProfileEvents::ChecksumsCacheMisses : ProfileEvents::ChecksumsCacheHits);
@@ -174,8 +157,6 @@ public:
         table_to_checksums_name.clear();
     }
 
-    void setNvmCache(std::shared_ptr<NvmCache> nvm_cache_) { nvm_cache = nvm_cache_; }
-
 private:
     void addMapping(const ChecksumsName& key)
     {
@@ -205,8 +186,6 @@ private:
     }
 
     std::unordered_map<String, std::unique_ptr<std::unordered_set<ChecksumsName>>> table_to_checksums_name;
-
-    std::shared_ptr<NvmCache> nvm_cache;
 };
 
 class ChecksumsCache
@@ -257,14 +236,6 @@ public:
         for (auto& shard : shards)
         {
             shard->reset();
-        }
-    }
-
-    void setNvmCache(std::shared_ptr<NvmCache> nvm_cache_)
-    {
-        for (auto& shard : shards)
-        {
-            shard->setNvmCache(nvm_cache_);
         }
     }
 

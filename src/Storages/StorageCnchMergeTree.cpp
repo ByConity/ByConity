@@ -371,33 +371,38 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     }
 
     String local_table_name = getCloudTableName(local_context);
+    auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
+    UInt64 table_version = 0;
+    ServerDataPartsWithDBM parts_with_dbm;
 
     if (getSettings()->enable_publish_version_on_commit && local_context->getSettingsRef().query_with_linear_table_version)
     {
         Stopwatch watch;
         TxnTimestamp ts = snapshot_ts ? TxnTimestamp{snapshot_ts} : local_context->getCurrentTransactionID();
-        UInt64 table_version = local_context->getCnchCatalog()->getCurrentTableVersion(getStorageUUID(), ts);
-        if (table_version)
+        table_version = local_context->getCnchCatalog()->getCurrentTableVersion(getStorageUUID(), ts);
+        ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
+
+        // fill bucket numbers in order to assign by bucket
+        if (bucket_numbers.empty() && isBucketTable())
         {
-            collectResourceWithTableVersion(local_context, table_version, local_table_name, storage_snapshot);
-            ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
-            return {std::move(local_table_name), {}, {}, {}};
+            Int64 total = metadata_snapshot->getBucketNumberFromClusterByKey();
+            for (Int64 i = 0; i < total; ++i)
+                bucket_numbers.insert(i);
         }
+        LOG_INFO(log, "Total {} buckets to read in version {}", bucket_numbers.size(), table_version);
     }
-
-    auto parts_with_dbm = selectPartsToReadWithDBM(column_names, local_context, query_info, snapshot_ts);
-    auto & parts = parts_with_dbm.first;
-    LOG_INFO(log, "Number of parts to read: {}", parts.size());
-
-    if (metadata_snapshot->hasUniqueKey() && !parts.empty())
+    else
     {
-        getDeleteBitmapMetaForServerParts(parts_with_dbm.first, parts_with_dbm.second);
+        parts_with_dbm = selectPartsToReadWithDBM(column_names, local_context, query_info, snapshot_ts);
+        if (metadata_snapshot->hasUniqueKey())
+        {
+            getDeleteBitmapMetaForServerParts(parts_with_dbm.first, parts_with_dbm.second);
+        }
+        LOG_INFO(log, "Total {} parts to read", parts_with_dbm.first.size());
     }
 
-    auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
-
-    collectResource(local_context, parts, local_table_name, bucket_numbers, storage_snapshot);
-
+    auto & parts = parts_with_dbm.first;
+    collectResource(local_context, table_version, parts, local_table_name, bucket_numbers, storage_snapshot);
     return {std::move(local_table_name), std::move(parts), {}, {}};
 }
 
@@ -577,7 +582,7 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 
     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
     {
-        const auto & date_lut = DateLUT::instance();
+        const auto & date_lut = DateLUT::serverTimezoneInstance();
         return date_lut.fromDayNum(DayNum(column_date->getElement(0)));
     }
     else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
@@ -1403,21 +1408,23 @@ void StorageCnchMergeTree::waitForStagedPartsToPublish(ContextPtr local_context)
         "There are still " + toString(staged_parts_cnt) + " staged parts to be published after " + toString(wait_timeout_seconds) + "s.");
 }
 
-void StorageCnchMergeTree::allocateParts(ContextPtr local_context, ServerDataPartsVector & parts)
+void StorageCnchMergeTree::allocateParts(ContextPtr local_context, const ServerDataPartsVector & parts)
 {
     String local_table_name = getCloudTableName(local_context);
-    collectResource(local_context, parts, local_table_name);
+    collectResource(local_context, /*table_version=*/0, parts, local_table_name);
 }
 
 void StorageCnchMergeTree::collectResource(
     ContextPtr local_context,
-    ServerDataPartsVector & parts,
+    UInt64 table_version,
+    const ServerDataPartsVector & parts,
     const String & local_table_name,
     const std::set<Int64> & required_bucket_numbers,
     const StorageSnapshotPtr & storage_snapshot,
     WorkerEngineType engine_type,
     bool replicated)
 {
+    auto storage_uuid = getStorageUUID();
     auto cnch_resource = local_context->getCnchServerResource();
     if (local_context->getSettingsRef().send_cacheable_table_definitions)
     {
@@ -1431,38 +1438,16 @@ void StorageCnchMergeTree::collectResource(
         cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
     }
 
-
-    // if (local_context.getSettingsRef().enable_virtual_part)
-    //     setVirtualPartSize(local_context, parts, worker_group->getReadWorkers().size());
-
-    cnch_resource->addDataParts(getStorageUUID(), parts, required_bucket_numbers);
+    if (table_version)
+        cnch_resource->setTableVersion(storage_uuid, table_version, required_bucket_numbers);
+    else
+        cnch_resource->addDataParts(storage_uuid, parts, required_bucket_numbers);
 
     if (storage_snapshot && !storage_snapshot->object_columns.empty())
-        cnch_resource->addDynamicObjectSchema(getStorageUUID(), storage_snapshot->object_columns);
+        cnch_resource->addDynamicObjectSchema(storage_uuid, storage_snapshot->object_columns);
 
     if (replicated)
-    {
-        cnch_resource->setResourceReplicated(getStorageUUID(), replicated);
-    }
-}
-
-void StorageCnchMergeTree::collectResourceWithTableVersion(
-        ContextPtr local_context,
-        const UInt64 & table_version,
-        const String & local_table_name,
-        const StorageSnapshotPtr & storage_snapshot,
-        WorkerEngineType engine_type)
-{
-    auto cnch_resource = local_context->getCnchServerResource();
-    auto create_table_query = getCreateQueryForCloudTable(
-        getCreateTableSql(), local_table_name, local_context, false, std::nullopt, {}, {}, engine_type);
-
-    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name, false);
-
-    cnch_resource->setTableVersion(getStorageUUID(), table_version);
-
-    if (storage_snapshot && !storage_snapshot->object_columns.empty())
-        cnch_resource->addDynamicObjectSchema(getStorageUUID(), storage_snapshot->object_columns);
+        cnch_resource->setResourceReplicated(storage_uuid, replicated);
 }
 
 void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level, UInt64 ts)
@@ -2918,12 +2903,15 @@ const String & StorageCnchMergeTree::getRelativeDataPath(StorageLocation locatio
 
 std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
 {
+    if (!isBucketTable())
+        return {};
+
     std::set<Int64> bucket_numbers;
-ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
+    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
     const Settings & settings = local_context->getSettingsRef();
     auto metadata_snapshot = getInMemoryMetadataPtr();
     // if number of bucket columns of this table > 1, skip optimisation
-    if (settings.optimize_skip_unused_shards && where_expression && isBucketTable()
+    if (settings.optimize_skip_unused_shards && where_expression
         && metadata_snapshot->getColumnsForClusterByKey().size() == 1)
     {
         // get constant actions of the expression
@@ -2997,8 +2985,8 @@ ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
     }
     return bucket_numbers;
 }
-StorageCnchMergeTree *
-StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table, ContextPtr local_context) const
+
+StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table, ContextPtr local_context) const
 {
     StorageCnchMergeTree * src_data = dynamic_cast<StorageCnchMergeTree *>(source_table.get());
     if (!src_data)
@@ -3202,7 +3190,7 @@ std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_c
         if (partition_list.empty())
             return 0;
         auto num_total_partition = partition_list.size();
-        
+
         filterPartitionByTTL(partition_list, query_context->tryGetCurrentTransactionID().toSecond());
         if (partition_list.empty())
             return 0;
@@ -3250,7 +3238,7 @@ std::optional<UInt64> StorageCnchMergeTree::totalRowsByPartitionPredicate(const 
     if (partition_column_valid)
     {
         auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
-        Block partition_block = getBlockWithVirtualPartitionColumns(partition_list);
+        Block partition_block = getPartitionBlockWithVirtualColumns(partition_list);
         ASTPtr expression_ast;
 
         /// Generate valid expressions for filtering

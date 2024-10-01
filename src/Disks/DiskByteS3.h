@@ -109,6 +109,9 @@ public:
 
     virtual void removeRecursive(const String & path) override;
 
+    /// For S3, only need to remove the data file
+    virtual void removePart(const String & path) override { removeFileIfExists(fs::path(path) / "data"); }
+
     virtual void setLastModified(const String & , const Poco::Timestamp & ) override { throw Exception("setLastModified is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
     virtual Poco::Timestamp getLastModified(const String & ) override { throw Exception("getLastModified is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }

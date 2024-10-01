@@ -22,11 +22,11 @@ Projection Est. 1 rows
                         │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
                         │              Where: Runtime Filters: {l_partkey}
                         │              Outputs: [l_partkey, l_quantity, l_extendedprice]
-                        └─ Repartition Exchange Est. 200140 rows
+                        └─ Repartition Exchange Est. 200141 rows
                            │     Partition by: {p_partkey}
-                           └─ Projection Est. 200140 rows
+                           └─ Projection Est. 200141 rows
                               │     Expressions: [p_partkey]
-                              └─ Filter Est. 200140 rows
+                              └─ Filter Est. 200141 rows
                                  │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
                                  └─ TableScan tpch1000.part Est. 200000000 rows
                                           Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')

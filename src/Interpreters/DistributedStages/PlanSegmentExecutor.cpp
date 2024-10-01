@@ -560,14 +560,20 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         throw Exception("PlanSegment has no output", ErrorCodes::LOGICAL_ERROR);
 
     size_t sink_num = 0;
+    auto max_output_size = std::max(context->getSettingsRef().max_threads.value / plan_segment_outputs.size(), 1UL);
+    auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size.value;
+    if (output_size > max_output_size)
+    {
+        LOG_DEBUG(logger, "Decrease plan_segment {} exchange output parallel size to {}", plan_segment->getPlanSegmentId(), max_output_size);
+        output_size = max_output_size;
+    }
+    pipeline->limitMinThreads(output_size * plan_segment_outputs.size());
     for (size_t i = 0; i < plan_segment_outputs.size(); ++i)
     {
         const auto &cur_plan_segment_output = plan_segment_outputs[i];
         const auto &current_exchange_senders = senders_list[i];
         ExchangeMode exchange_mode = cur_plan_segment_output->getExchangeMode();
         bool keep_order = cur_plan_segment_output->needKeepOrder() || context->getSettingsRef().exchange_enable_force_keep_order;
-
-        auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size;
 
         switch (exchange_mode)
         {
@@ -661,7 +667,6 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
                 bool keep_order = cur_plan_segment_output->needKeepOrder() || context->getSettingsRef().exchange_enable_force_keep_order;
                 const auto & header = segs_output_ports[i][0]->getHeader();
 
-                auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size;
                 if (!keep_order && output_size)
                 {
                     /*

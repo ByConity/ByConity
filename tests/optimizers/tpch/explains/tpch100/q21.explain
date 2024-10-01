@@ -5,32 +5,32 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#count() DESC NULLS LAST, s_name ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 250000 rows
+      └─ Gather Exchange Est. 1000000 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#count() DESC NULLS LAST, s_name ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 250000 rows
-               └─ Repartition Exchange Est. 250000 rows
+            └─ MergingAggregated Est. 1000000 rows
+               └─ Repartition Exchange Est. 1000000 rows
                   │     Partition by: {s_name}
-                  └─ Aggregating Est. 250000 rows
+                  └─ Aggregating Est. 1000000 rows
                      │     Group by: {s_name}
                      │     Aggregates: expr#count():=AggNull(count)()
-                     └─ Right Anti (PARALLEL_HASH) Join Est. 1753850 rows
+                     └─ Right Anti (PARALLEL_HASH) Join Est. 1753740 rows
                         │     Condition: l_orderkey_2 == o_orderkey
                         │     Filter: l_suppkey_2 != l_suppkey
                         │     Runtime Filters Builder: {o_orderkey}
-                        ├─ Repartition Exchange Est. 150009475 rows
+                        ├─ Repartition Exchange Est. 150009476 rows
                         │  │     Partition by: {l_orderkey_2}
-                        │  └─ Projection Est. 150009475 rows
+                        │  └─ Projection Est. 150009476 rows
                         │     │     Expressions: [l_orderkey_2, l_suppkey_2]
-                        │     └─ Filter Est. 150009475 rows
+                        │     └─ Filter Est. 150009476 rows
                         │        │     Condition: l_receiptdate_2 > l_commitdate_2 Runtime Filters: {l_orderkey_2}
                         │        └─ TableScan tpch100.lineitem Est. 600037902 rows
                         │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey}
                         │                 Outputs: l_orderkey_2:=l_orderkey, l_suppkey_2:=l_suppkey, l_commitdate_2:=l_commitdate, l_receiptdate_2:=l_receiptdate
-                        └─ Repartition Exchange Est. 2923084 rows
+                        └─ Repartition Exchange Est. 2922900 rows
                            │     Partition by: {o_orderkey}
-                           └─ Right Semi (PARALLEL_HASH) Join Est. 2923084 rows
+                           └─ Right Semi (PARALLEL_HASH) Join Est. 2922900 rows
                               │     Condition: l_orderkey_1 == o_orderkey
                               │     Filter: l_suppkey_1 != l_suppkey
                               │     Runtime Filters Builder: {o_orderkey}
@@ -39,7 +39,7 @@ Projection Est. 100 rows
                               │  └─ TableScan tpch100.lineitem Est. 600037902 rows
                               │           Where: Runtime Filters: {l_orderkey}
                               │           Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
-                              └─ Inner (PARALLEL_HASH) Join Est. 2923084 rows
+                              └─ Inner (PARALLEL_HASH) Join Est. 2922900 rows
                                  │     Condition: o_orderkey == l_orderkey
                                  │     Runtime Filters Builder: {l_orderkey}
                                  ├─ Projection Est. 73072502 rows
@@ -52,9 +52,9 @@ Projection Est. 100 rows
                                  └─ Inner Join Est. 6000379 rows
                                     │     Condition: l_suppkey == s_suppkey
                                     │     Runtime Filters Builder: {s_suppkey}
-                                    ├─ Projection Est. 150009475 rows
+                                    ├─ Projection Est. 150009476 rows
                                     │  │     Expressions: [l_orderkey, l_suppkey]
-                                    │  └─ Filter Est. 150009475 rows
+                                    │  └─ Filter Est. 150009476 rows
                                     │     │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
                                     │     └─ TableScan tpch100.lineitem Est. 600037902 rows
                                     │              Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}

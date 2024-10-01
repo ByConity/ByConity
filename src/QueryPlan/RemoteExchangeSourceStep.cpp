@@ -385,7 +385,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                                         const Block &) { return std::make_shared<DeserializeBufTransform>(header, enable_compress); });
     }
     LOG_DEBUG(logger, "Total exchange source : {}, keep_order: {}", source_num, keep_order);
-    pipeline.setMinThreads(source_num);
+    pipeline.limitMinThreads(source_num);
     for (const auto & processor : pipeline.getProcessors())
         processors.emplace_back(processor);
 }

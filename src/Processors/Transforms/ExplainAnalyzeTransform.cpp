@@ -73,7 +73,7 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
             if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
             {
                 auto plan_cost = CostCalculator::calculatePlanCost(*query_plan_ptr, *context);
-                explain = PlanPrinter::jsonLogicalPlan(*query_plan_ptr, plan_cost, step_agg_operator_profiles, costs, settings);
+                explain = PlanPrinter::jsonLogicalPlan(*query_plan_ptr, plan_cost, CostModel(*context), step_agg_operator_profiles, costs, settings);
             }
             else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
                 explain = PlanPrinter::jsonDistributedPlan(segment_descriptions, step_agg_operator_profiles);

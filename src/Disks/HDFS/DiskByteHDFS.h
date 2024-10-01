@@ -89,6 +89,8 @@ public:
 
     virtual void removeRecursive(const String & path) override;
 
+    virtual void removePart(const String & path) override;
+
     virtual void setLastModified(const String & path, const Poco::Timestamp & timestamp) override;
 
     virtual Poco::Timestamp getLastModified(const String & path) override;

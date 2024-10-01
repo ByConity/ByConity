@@ -27,6 +27,14 @@ cdw_1	1	n1	1
 cdw_2	2	n2	2
 \N	\N	n3	7
 \N	\N	n3	25
+cdw_1	0	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_3	3	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+\N	\N	n3	7
+\N	\N	n3	25
 sipHash
 cdw_1	1	n1	n1	1
 cdw_2	2	n2	n2	2
@@ -52,6 +60,15 @@ cdw_1	1	n1	n1	1
 cdw_2	2	n2	n2	2
 \N	\N	\N	n3	7
 \N	\N	\N	n3	25
+Projection Est. ? rows
+│     Expressions: [c, d], n.c:=c_1, n.d:=d_1
+└─ Gather Exchange Est. ? rows
+   └─ Left Join Est. ? rows
+      │     Condition: d == d_1
+      ├─ TableScan test.bucket_dtspartition Est. ? rows
+      │        Outputs: [c, d]
+      └─ TableScan test.bucket_dtspartition_bucket_2 Est. ? rows
+               Outputs: c_1:=c, d_1:=d
 disable bucket shuffle
 dtspartition
 cdw_1	1	n1	1
@@ -73,6 +90,14 @@ cdw_2	2	n2	2
 cdw_1	7	n3	7
 cdw_3	25	n3	25
 toUInt64
+cdw_1	0	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+cdw_3	3	\N	\N
+cdw_1	1	n1	1
+cdw_2	2	n2	2
+\N	\N	n3	7
+\N	\N	n3	25
 cdw_1	0	\N	\N
 cdw_1	1	n1	1
 cdw_2	2	n2	2

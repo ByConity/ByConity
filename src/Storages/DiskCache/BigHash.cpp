@@ -67,41 +67,30 @@ namespace DB::HybridCache
 BigHash::Config & BigHash::Config::validate()
 {
     if (cache_size < bucket_size)
-    {
-        throwFromErrno(
-            fmt::format("cache_size: {} cannot be smaller than bucket_size: {}", cache_size, bucket_size), ErrorCodes::BAD_ARGUMENTS);
-    }
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "cache_size: {} cannot be smaller than bucket_size: {}", cache_size, bucket_size);
 
     if (!powerof2(bucket_size))
-    {
-        throwFromErrno(fmt::format("invalid bucket_size: {}", bucket_size), ErrorCodes::BAD_ARGUMENTS);
-    }
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "invalid bucket_size: {}", bucket_size);
 
     if (cache_size > UInt64{bucket_size} << 32)
-    {
-        throwFromErrno(
-            fmt::format("Can't address big hash with 32 bits. cache_size: {}, bucket_size: {}", cache_size, bucket_size),
-            ErrorCodes::BAD_ARGUMENTS);
-    }
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS, "Can't address big hash with 32 bits. cache_size: {}, bucket_size: {}", cache_size, bucket_size);
 
     if (cache_start_offset % bucket_size != 0 || cache_size % bucket_size != 0)
     {
-        throwFromErrno(
-            fmt::format(
-                "cache_start_offset and cache size need to be multiple of bucket_size. cache_start_offset: {}, cache_size: {}, "
-                "bucket_size: {}",
-                cache_start_offset,
-                cache_size,
-                bucket_size),
-            ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "cache_start_offset and cache size need to be multiple of bucket_size. cache_start_offset: {}, cache_size: {}, "
+            "bucket_size: {}",
+            cache_start_offset,
+            cache_size,
+            bucket_size);
     }
 
     if (bloom_filters && bloom_filters->numFilters() != numBuckets())
-    {
-        throwFromErrno(
-            fmt::format("bloom filter #filters mismatch #bucket: {} vs {}", bloom_filters->numFilters(), numBuckets()),
-            ErrorCodes::BAD_ARGUMENTS);
-    }
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            fmt::format("bloom filter #filters mismatch #bucket: {} vs {}", bloom_filters->numFilters(), numBuckets()));
 
     return *this;
 }
@@ -204,14 +193,13 @@ bool BigHash::recover(google::protobuf::io::ZeroCopyInputStream * stream)
         google::protobuf::io::CodedInputStream istream(stream);
         google::protobuf::util::ParseDelimitedFromCodedStream(&pb, &istream, nullptr);
         if (pb.format_version() != kFormatVersion)
-            throwFromErrno(
-                fmt::format("Invalid format version {}, expected {}", pb.format_version(), kFormatVersion),
-                ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(
+                ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid format version {}, expected {}", pb.format_version(), kFormatVersion);
 
         auto config_validate
             = pb.bucket_size() == bucket_size && pb.cache_base_offset() == cache_base_offset && pb.num_buckets() == num_buckets;
         if (!config_validate)
-            throwFromErrno(fmt::format("Recovery config {}", pb.DebugString()), ErrorCodes::INVALID_CONFIG_PARAMETER);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Recovery config {}", pb.DebugString());
 
         generation_time = std::chrono::nanoseconds{pb.generation_time()};
         CurrentMetrics::set(CurrentMetrics::BigHashItemCount, pb.item_count());

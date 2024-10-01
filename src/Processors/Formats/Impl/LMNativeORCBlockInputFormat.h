@@ -26,7 +26,14 @@ class KeyCondition;
 class LMNativeORCBlockInputFormat : public ParallelDecodingBlockInputFormat
 {
 public:
-    LMNativeORCBlockInputFormat(ReadBuffer & in_, Block header_, const FormatSettings & format_settings_);
+    LMNativeORCBlockInputFormat(
+        ReadBuffer & in_,
+        const Block & header_,
+        const FormatSettings & format_settings_,
+        size_t max_download_threads,
+        size_t max_parsing_threads,
+        SharedParsingThreadPoolPtr parsing_thread_pool);
+
     ~LMNativeORCBlockInputFormat() override;
     String getName() const override { return "ORCBlockInputFormat"; }
 

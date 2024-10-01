@@ -3,6 +3,7 @@
 #include <Columns/IColumn.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Formats/FormatSettings.h>
+#include <Formats/SharedParsingThreadPool.h>
 #include <Interpreters/Context_fwd.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <common/types.h>
@@ -19,6 +20,7 @@ namespace DB
 class Block;
 struct Settings;
 struct FormatFactorySettings;
+struct ReadSettings;
 
 class ReadBuffer;
 class WriteBuffer;
@@ -88,6 +90,17 @@ private:
         ReadCallback callback,
         const FormatSettings & settings)>;
 
+    // Incompatible with FileSegmentationEngine.
+    using RandomAccessInputCreator = std::function<InputFormatPtr(
+            ReadBuffer & buf,
+            const Block & header,
+            const FormatSettings & settings,
+            const ReadSettings& read_settings,
+            bool is_remote_fs,
+            size_t max_download_threads,
+            size_t max_parsing_threads,
+            SharedParsingThreadPoolPtr parsing_thread_pool)>;
+
     using OutputCreator = std::function<BlockOutputStreamPtr(
         WriteBuffer & buf,
         const Block & sample,
@@ -111,6 +124,7 @@ private:
     struct Creators
     {
         InputCreator input_creator;
+        RandomAccessInputCreator random_access_input_creator;
         OutputCreator output_creator;
         InputProcessorCreator input_processor_creator;
         OutputProcessorCreator output_processor_creator;
@@ -159,7 +173,12 @@ public:
         const Block & sample,
         ContextPtr context,
         UInt64 max_block_size,
-        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
+        const std::optional<FormatSettings> & format_settings = std::nullopt,
+        std::optional<size_t> max_parsing_threads = std::nullopt,
+        std::optional<size_t> max_download_threads = std::nullopt,
+        // affects things like buffer sizes and parallel reading
+        bool is_remote_fs = false,
+        SharedParsingThreadPoolPtr shared_pool = nullptr) const;
 
     /// Checks all preconditions. Returns ordinary format if parallel formatting cannot be done
     /// For exporting into multiple files, ParallelFormat can't be used because of concurrency calculation
@@ -189,6 +208,7 @@ public:
 
     /// Register format by its name.
     void registerInputFormat(const String & name, InputCreator input_creator);
+    void registerRandomAccessInputFormat(const String & name, RandomAccessInputCreator input_creator);
     void registerOutputFormat(const String & name, OutputCreator output_creator);
     void registerFileSegmentationEngine(const String & name, FileSegmentationEngine file_segmentation_engine);
 

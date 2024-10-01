@@ -216,6 +216,7 @@ std::optional<PlanNodePtr> PushProjectionThroughJoin::pushProjectionThroughJoin(
         join_step.getKeepLeftReadInOrder(),
         join_step.getLeftKeys(),
         join_step.getRightKeys(),
+        join_step.getKeyIdsNullSafe(),
         join_step.getFilter(),
         join_step.isHasUsing(),
         join_step.getRequireRightKeys(),

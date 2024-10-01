@@ -20,6 +20,7 @@
  */
 
 #include "ParquetBlockInputFormat.h"
+#include <parquet/properties.h>
 #if USE_PARQUET
 
 #include <Formats/FormatFactory.h>
@@ -32,6 +33,8 @@
 #include <parquet/arrow/schema.h>
 #include <parquet/file_reader.h>
 #include <parquet/statistics.h>
+#include "Common/ProfileEvents.h"
+#include "Common/Stopwatch.h"
 #include <Common/setThreadName.h>
 #include <common/logger_useful.h>
 #include "ArrowBufferedStreams.h"
@@ -41,6 +44,8 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Common/FieldVisitorsAccurateComparison.h>
+#include <Common/LRUCache.h>
+#include "Common/threadPoolCallbackRunner.h"
 #include <Processors/Formats/Impl/ArrowColumnCache.h>
 #include <Processors/Formats/Impl/Parquet/ParquetRecordReader.h>
 
@@ -53,6 +58,7 @@ namespace CurrentMetrics
 namespace ProfileEvents
 {
     extern const int ParquetFileOpened;
+    extern const int ParquetReadRowGroups;
 }
 
 namespace DB
@@ -389,28 +395,36 @@ static std::vector<Range> getHyperrectangleForRowGroup(const parquet::FileMetaDa
     return hyperrectangle;
 }
 
-ParquetBlockInputFormat::ParquetBlockInputFormat(ReadBuffer & buf_, const Block & header_, const FormatSettings & format_settings_)
+ParquetBlockInputFormat::ParquetBlockInputFormat(
+    ReadBuffer & buf_,
+    const Block & header_,
+    const FormatSettings & format_settings_,
+    const ReadSettings & read_settings_,
+    bool is_remote_fs_,
+    size_t max_download_threads_,
+    size_t max_parsing_threads_,
+    SharedParsingThreadPoolPtr parsing_thread_pool)
     : ParallelDecodingBlockInputFormat(
         buf_,
         header_,
         format_settings_,
-        format_settings_.parquet.max_download_threads,
+        max_download_threads_,
+        max_parsing_threads_,
         format_settings_.parquet.preserve_order,
-        format_settings_.parquet.skip_row_groups)
+        format_settings_.parquet.skip_row_groups,
+        std::move(parsing_thread_pool))
+    , read_settings(read_settings_)
+    , is_remote_fs(is_remote_fs_)
 {
     if (format_settings.parquet.use_native_reader)
         LOG_TRACE(log, "Parquet use native reader");
+    else
+        LOG_TRACE(log, "Parquet use arrow reader");
 }
 
 ParquetBlockInputFormat::~ParquetBlockInputFormat()
 {
-    try
-    {
-        close();
-    }
-    catch (...)
-    {
-    }
+    close();
 }
 
 void ParquetBlockInputFormat::setQueryInfo(const SelectQueryInfo & query_info, ContextPtr query_context)
@@ -427,10 +441,12 @@ void ParquetBlockInputFormat::setQueryInfo(const SelectQueryInfo & query_info, C
 
 void ParquetBlockInputFormat::initializeFileReader()
 {
-    // Create arrow file adapter.
-    // TODO: Make the adapter do prefetching on IO threads, based on the full set of ranges that
-    //       we'll need to read (which we know in advance). Use max_download_threads for that.
-    arrow_file = asArrowFile(in, format_settings, is_stopped, "Parquet", PARQUET_MAGIC_BYTES, /* avoid_buffering */ true);
+    if (is_stopped)
+        return;
+
+    /// TODO: prefetch scheduler
+    ThreadPoolCallbackRunnerUnsafe<void> scheduler = nullptr;
+    arrow_file = asArrowFile(in, format_settings, is_stopped, "Parquet", PARQUET_MAGIC_BYTES, /* avoid_buffering */ true, scheduler);
 
     if (is_stopped)
         return;
@@ -497,23 +513,24 @@ void ParquetBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_group_
     if (std::exchange(row_group_reader.initialized, true))
         return;
 
+    ProfileEvents::increment(ProfileEvents::ParquetReadRowGroups);
     row_group_reader.read_column_indices = column_indices;
-
-    parquet::ArrowReaderProperties properties;
-    properties.set_use_threads(false);
-    properties.set_batch_size(format_settings.parquet.max_block_size);
+    parquet::ArrowReaderProperties arrow_properties;
+    parquet::ReaderProperties reader_properties(ArrowMemoryPool::instance());
+    arrow_properties.set_use_threads(format_settings.parquet.use_threads);
+    arrow_properties.set_batch_size(format_settings.parquet.max_block_size);
 
     if (format_settings.parquet.coalesce_read)
     {
         /// enable io coalesce read
-        properties.set_pre_buffer(true);
+        arrow_properties.set_pre_buffer(true);
         auto cache_options = arrow::io::CacheOptions{
             .hole_size_limit = static_cast<int64_t>(format_settings.parquet.min_bytes_for_seek),
             .range_size_limit = static_cast<int64_t>(format_settings.parquet.max_buffer_size),
-            .lazy = format_settings.parquet.use_lazy_io_cache,
+            .lazy = !(is_remote_fs ? read_settings.remote_fs_prefetch : read_settings.local_fs_prefetch),
         };
 
-        properties.set_cache_options(cache_options);
+        arrow_properties.set_cache_options(cache_options);
     }
 
     // Workaround for a workaround in the parquet library.
@@ -527,7 +544,7 @@ void ParquetBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_group_
     // other, failing an assert. So we disable pre-buffering in this case.
     // That version is >10 years old, so this is not very important.
     if (metadata->writer_version().VersionLt(parquet::ApplicationVersion::PARQUET_816_FIXED_VERSION()))
-        properties.set_pre_buffer(false);
+        arrow_properties.set_pre_buffer(false);
 
     if (format_settings.parquet.use_native_reader)
     {
@@ -538,13 +555,13 @@ void ParquetBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_group_
 #pragma clang diagnostic pop
 
         std::unique_ptr<parquet::ParquetFileReader> raw_file_reader
-            = parquet::ParquetFileReader::Open(arrow_file, parquet::default_reader_properties(), metadata);
+            = parquet::ParquetFileReader::Open(arrow_file, reader_properties, metadata);
 
         row_group_reader.native_record_reader = std::make_shared<ParquetRecordReader>(
             getPort().getHeader(),
             arrow_file,
             std::move(raw_file_reader),
-            properties,
+            arrow_properties,
             *field_util,
             format_settings,
             std::vector<int>{static_cast<int>(row_group_idx)},
@@ -554,9 +571,9 @@ void ParquetBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_group_
     {
         parquet::arrow::FileReaderBuilder builder;
         THROW_ARROW_NOT_OK(
-            builder.Open(arrow_file, /* not to be confused with ArrowReaderProperties */ parquet::default_reader_properties(), metadata));
-        builder.properties(properties);
-        // TODO: Pass custom memory_pool() to enable memory accounting with non-jemalloc allocators.
+            builder.Open(arrow_file, /* not to be confused with ArrowReaderProperties */ reader_properties, metadata));
+        builder.properties(arrow_properties);
+        builder.memory_pool(ArrowMemoryPool::instance());
         THROW_ARROW_NOT_OK(builder.Build(&row_group_reader.file_reader));
 
         THROW_ARROW_NOT_OK(
@@ -617,6 +634,13 @@ std::optional<ParallelDecodingBlockInputFormat::PendingChunk> ParquetBlockInputF
     }
 
     return res;
+}
+
+void ParquetBlockInputFormat::prefetchRowGroup(size_t row_group_idx)
+{
+    /// prebuffer will trigger async prefetch
+    /// see arrow/io/caching.cc
+    initializeRowGroupReaderIfNeeded(row_group_idx);
 }
 
 size_t ParquetBlockInputFormat::getNumberOfRowGroups()
@@ -687,11 +711,20 @@ NamesAndTypesList ParquetSchemaReader::readSchema()
 
 void registerInputFormatProcessorParquet(FormatFactory & factory)
 {
-    factory.registerInputFormatProcessor(
+    factory.registerRandomAccessInputFormat(
         "Parquet",
-        [](ReadBuffer & buf, const Block & sample, const RowInputFormatParams &, const FormatSettings & settings) -> InputFormatPtr {
-            return std::make_shared<ParquetBlockInputFormat>(buf, sample, settings);
+        [](ReadBuffer & buf,
+           const Block & sample,
+           const FormatSettings & settings,
+           const ReadSettings & read_settings,
+           bool is_remote_fs,
+           size_t max_download_threads,
+           size_t max_parsing_threads,
+           SharedParsingThreadPoolPtr parsing_thread_pool) {
+            return std::make_shared<ParquetBlockInputFormat>(buf, sample, settings, read_settings,
+                is_remote_fs, max_download_threads, max_parsing_threads, parsing_thread_pool);
         });
+
     factory.markFormatAsColumnOriented("Parquet");
 }
 

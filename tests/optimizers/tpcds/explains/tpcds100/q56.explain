@@ -5,71 +5,69 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#sum(total_sales) ASC NULLS LAST, i_item_id_6 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 8244 rows
+      └─ Gather Exchange Est. 5491 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#sum(total_sales) ASC NULLS LAST, i_item_id_6 ASC NULLS LAST}
             │     Limit: 100
-            └─ Aggregating Est. 8244 rows
+            └─ Aggregating Est. 5491 rows
                │     Group by: {i_item_id_6}
                │     Aggregates: expr#sum(total_sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)_1)
-               └─ Union Est. 8244 rows
+               └─ Union Est. 16473 rows
                   │     OutputToInputs: expr#sum(ss_ext_sales_price)_1 = [expr#sum(ss_ext_sales_price),expr#sum(cs_ext_sales_price),expr#sum(ws_ext_sales_price)], i_item_id_6 = [i_item_id,i_item_id_2,i_item_id_4]
-                  ├─ MergingAggregated Est. 2748 rows
-                  │  └─ Repartition Exchange Est. 2748 rows
+                  ├─ MergingAggregated Est. 5491 rows
+                  │  └─ Repartition Exchange Est. 5491 rows
                   │     │     Partition by: {i_item_id}
-                  │     └─ Aggregating Est. 2748 rows
+                  │     └─ Aggregating Est. 5491 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                   │        └─ Inner Join Est. 237959 rows
-                  │           │     Condition: ca_address_sk == ss_addr_sk
-                  │           │     Runtime Filters Builder: {ss_addr_sk}
-                  │           ├─ Repartition Exchange Est. 364761 rows
-                  │           │  │     Partition by: {ca_address_sk}
-                  │           │  └─ Projection Est. 364761 rows
-                  │           │     │     Expressions: [ca_address_sk]
-                  │           │     └─ Filter Est. 364761 rows
-                  │           │        │     Condition: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
-                  │           │        └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                  │           │                 Where: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
-                  │           │                 Outputs: [ca_address_sk, ca_gmt_offset]
-                  │           └─ Repartition Exchange Est. 237959 rows
-                  │              │     Partition by: {ss_addr_sk}
-                  │              └─ Inner Join Est. 237959 rows
-                  │                 │     Condition: ss_item_sk == i_item_sk
-                  │                 │     Runtime Filters Builder: {i_item_sk}
-                  │                 ├─ Inner Join Est. 4423432 rows
-                  │                 │  │     Condition: ss_sold_date_sk == d_date_sk
-                  │                 │  │     Runtime Filters Builder: {d_date_sk}
-                  │                 │  ├─ Filter Est. 287997024 rows
-                  │                 │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                  │                 │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
-                  │                 │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                  │                 │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_addr_sk, ss_ext_sales_price]
-                  │                 │  └─ Broadcast Exchange Est. 28 rows
-                  │                 │     └─ Projection Est. 28 rows
-                  │                 │        │     Expressions: [d_date_sk]
-                  │                 │        └─ Filter Est. 28 rows
-                  │                 │           │     Condition: (d_moy = 2) AND (d_year = 2001)
-                  │                 │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                  │                 │                    Where: (d_moy = 2) AND (d_year = 2001)
-                  │                 │                    Outputs: [d_date_sk, d_year, d_moy]
-                  │                 └─ Broadcast Exchange Est. 10971 rows
-                  │                    └─ Left Semi Join Est. 10971 rows
-                  │                       │     Condition: i_item_id == i_item_id_1
-                  │                       │     Runtime Filters Builder: {i_item_id_1}
-                  │                       ├─ Repartition Exchange Est. 204000 rows
-                  │                       │  │     Partition by: {i_item_id}
-                  │                       │  └─ Filter Est. 204000 rows
-                  │                       │     │     Condition: Runtime Filters: {i_item_id}
-                  │                       │     └─ TableScan tpcds100.item Est. 204000 rows
-                  │                       │              Where: Runtime Filters: {i_item_id}
-                  │                       │              Outputs: [i_item_sk, i_item_id]
-                  │                       └─ Buffer Est. 5491 rows
-                  │                          └─ CTERef[1] Est. 5491 rows
-                  ├─ MergingAggregated Est. 2748 rows
-                  │  └─ Repartition Exchange Est. 2748 rows
+                  │           │     Condition: ss_addr_sk == ca_address_sk
+                  │           │     Runtime Filters Builder: {ca_address_sk}
+                  │           ├─ Repartition Exchange Est. 237959 rows
+                  │           │  │     Partition by: {ss_addr_sk}
+                  │           │  └─ Inner Join Est. 237959 rows
+                  │           │     │     Condition: ss_item_sk == i_item_sk
+                  │           │     │     Runtime Filters Builder: {i_item_sk}
+                  │           │     ├─ Inner Join Est. 4423432 rows
+                  │           │     │  │     Condition: ss_sold_date_sk == d_date_sk
+                  │           │     │  │     Runtime Filters Builder: {d_date_sk}
+                  │           │     │  ├─ Filter Est. 287997024 rows
+                  │           │     │  │  │     Condition: Runtime Filters: {ss_addr_sk, ss_item_sk, ss_sold_date_sk}
+                  │           │     │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                  │           │     │  │           Where: Runtime Filters: {ss_addr_sk, ss_item_sk, ss_sold_date_sk}
+                  │           │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_addr_sk, ss_ext_sales_price]
+                  │           │     │  └─ Broadcast Exchange Est. 28 rows
+                  │           │     │     └─ Projection Est. 28 rows
+                  │           │     │        │     Expressions: [d_date_sk]
+                  │           │     │        └─ Filter Est. 28 rows
+                  │           │     │           │     Condition: (d_moy = 2) AND (d_year = 2001)
+                  │           │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+                  │           │     │                    Where: (d_moy = 2) AND (d_year = 2001)
+                  │           │     │                    Outputs: [d_date_sk, d_year, d_moy]
+                  │           │     └─ Left Semi Join Est. 10971 rows
+                  │           │        │     Condition: i_item_id == i_item_id_1
+                  │           │        │     Runtime Filters Builder: {i_item_id_1}
+                  │           │        ├─ Filter Est. 204000 rows
+                  │           │        │  │     Condition: Runtime Filters: {i_item_id}
+                  │           │        │  └─ TableScan tpcds100.item Est. 204000 rows
+                  │           │        │           Where: Runtime Filters: {i_item_id}
+                  │           │        │           Outputs: [i_item_sk, i_item_id]
+                  │           │        └─ Broadcast Exchange Est. 5491 rows
+                  │           │           └─ Buffer Est. 5491 rows
+                  │           │              └─ CTERef[1] Est. 5491 rows
+                  │           └─ Repartition Exchange Est. 364761 rows
+                  │              │     Partition by: {ca_address_sk}
+                  │              └─ Projection Est. 364761 rows
+                  │                 │     Expressions: [ca_address_sk]
+                  │                 └─ Filter Est. 364761 rows
+                  │                    │     Condition: ca_gmt_offset = -5.
+                  │                    └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                  │                             Where: ca_gmt_offset = -5.
+                  │                             Outputs: [ca_address_sk, ca_gmt_offset]
+                  ├─ MergingAggregated Est. 5491 rows
+                  │  └─ Repartition Exchange Est. 5491 rows
                   │     │     Partition by: {i_item_id_2}
-                  │     └─ Aggregating Est. 2748 rows
+                  │     └─ Aggregating Est. 5491 rows
                   │        │     Group by: {i_item_id_2}
                   │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
                   │        └─ Inner Join Est. 118136 rows
@@ -105,23 +103,21 @@ Projection Est. 100 rows
                   │                 │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │                 │                    Where: (d_year = 2001) AND (d_moy = 2)
                   │                 │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
-                  │                 └─ Broadcast Exchange Est. 10971 rows
-                  │                    └─ Left Semi Join Est. 10971 rows
-                  │                       │     Condition: i_item_id_2 == i_item_id_3
-                  │                       │     Runtime Filters Builder: {i_item_id_3}
-                  │                       ├─ Repartition Exchange Est. 204000 rows
-                  │                       │  │     Partition by: {i_item_id_2}
-                  │                       │  └─ Filter Est. 204000 rows
-                  │                       │     │     Condition: Runtime Filters: {i_item_id_2}
-                  │                       │     └─ TableScan tpcds100.item Est. 204000 rows
-                  │                       │              Where: Runtime Filters: {i_item_id}
-                  │                       │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
+                  │                 └─ Left Semi Join Est. 10971 rows
+                  │                    │     Condition: i_item_id_2 == i_item_id_3
+                  │                    │     Runtime Filters Builder: {i_item_id_3}
+                  │                    ├─ Filter Est. 204000 rows
+                  │                    │  │     Condition: Runtime Filters: {i_item_id_2}
+                  │                    │  └─ TableScan tpcds100.item Est. 204000 rows
+                  │                    │           Where: Runtime Filters: {i_item_id}
+                  │                    │           Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
+                  │                    └─ Broadcast Exchange Est. 5491 rows
                   │                       └─ Buffer Est. 5491 rows
                   │                          └─ CTERef[1] Est. 5491 rows
-                  └─ MergingAggregated Est. 2748 rows
-                     └─ Repartition Exchange Est. 2748 rows
+                  └─ MergingAggregated Est. 5491 rows
+                     └─ Repartition Exchange Est. 5491 rows
                         │     Partition by: {i_item_id_4}
-                        └─ Aggregating Est. 2748 rows
+                        └─ Aggregating Est. 5491 rows
                            │     Group by: {i_item_id_4}
                            │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
                            └─ Inner Join Est. 59491 rows
@@ -157,28 +153,24 @@ Projection Est. 100 rows
                                     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                                     │                    Where: (d_moy = 2) AND (d_year = 2001)
                                     │                    Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
-                                    └─ Broadcast Exchange Est. 10971 rows
-                                       └─ Left Semi Join Est. 10971 rows
-                                          │     Condition: i_item_id_4 == i_item_id_5
-                                          │     Runtime Filters Builder: {i_item_id_5}
-                                          ├─ Repartition Exchange Est. 204000 rows
-                                          │  │     Partition by: {i_item_id_4}
-                                          │  └─ Filter Est. 204000 rows
-                                          │     │     Condition: Runtime Filters: {i_item_id_4}
-                                          │     └─ TableScan tpcds100.item Est. 204000 rows
-                                          │              Where: Runtime Filters: {i_item_id}
-                                          │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
+                                    └─ Left Semi Join Est. 10971 rows
+                                       │     Condition: i_item_id_4 == i_item_id_5
+                                       │     Runtime Filters Builder: {i_item_id_5}
+                                       ├─ Filter Est. 204000 rows
+                                       │  │     Condition: Runtime Filters: {i_item_id_4}
+                                       │  └─ TableScan tpcds100.item Est. 204000 rows
+                                       │           Where: Runtime Filters: {i_item_id}
+                                       │           Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
+                                       └─ Broadcast Exchange Est. 5491 rows
                                           └─ Buffer Est. 5491 rows
                                              └─ CTERef[1] Est. 5491 rows
 CTEDef [1]
-   Repartition Exchange Est. 5491 rows
-   │     Partition by: {i_item_id_1}
-   └─ Projection Est. 5491 rows
-      │     Expressions: [i_item_id_1]
-      └─ Filter Est. 5491 rows
-         │     Condition: i_color IN ('blanched', 'burnished', 'slate')
-         └─ TableScan tpcds100.item Est. 204000 rows
-                  Where: i_color IN ('blanched', 'burnished', 'slate')
-                  Outputs: [i_color], i_item_id_1:=i_item_id
+   Projection Est. 5491 rows
+   │     Expressions: [i_item_id_1]
+   └─ Filter Est. 5491 rows
+      │     Condition: i_color IN ('blanched', 'burnished', 'slate')
+      └─ TableScan tpcds100.item Est. 204000 rows
+               Where: i_color IN ('blanched', 'burnished', 'slate')
+               Outputs: [i_color], i_item_id_1:=i_item_id
 note: Runtime Filter is applied for 12 times.
 note: CTE(Common Table Expression) is applied for 3 times.

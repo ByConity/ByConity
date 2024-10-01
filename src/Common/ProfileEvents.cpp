@@ -448,9 +448,15 @@
     M(DiskCacheDeviceReadIOLatency, "Latency of disk cache device read io") \
 \
     M(ParquetFileOpened, "Number of parquet file read") \
+    M(ParquetReadRowGroups, "Number of row groups read by parquet reader") \
     M(ParquetReadRows, "Number of rows read by parquet native reader") \
     M(ParquetPrewhereSkippedPageRows, "Number of rows skipped by page filter") \
     M(ParquetPrewhereSkippedRows, "Number of rows skipped by parquet prewhere") \
+    M(ParquetPrewhereSkippedPages, "Number of pages skipped by parquet prewhere") \
+    M(ParquetGetDataPageElapsedMicroseconds, "Total elapsed time spent on getting data page when reading parquet, this should include fs read and decompression time") \
+    M(ParquetDecodeColumnElapsedMicroseconds, "Total elapsed time spent on decoding columns when reading parquet") \
+    M(ParquetDegradeDictionaryElapsedMicroseconds, "Total elapsed time spent on casting column when reading parquet") \
+    M(ParquetColumnCastElapsedMicroseconds, "Total elapsed time spent on casting column when reading parquet") \
 \
     M(CnchTxnAborted, "Total number of aborted transactions (excludes preempting transactions)") \
     M(CnchTxnCommitted, "Total number of committed transactions") \

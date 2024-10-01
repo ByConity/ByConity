@@ -1,11 +1,11 @@
-Projection Est. 15973724 rows
+Projection Est. 15973725 rows
 │     Expressions: [ps_partkey], value:=`expr#sum(multiply(ps_supplycost, ps_availqty))`
-└─ Sorting Est. 15973724 rows
+└─ Sorting Est. 15973725 rows
    │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
-   └─ Gather Exchange Est. 15973724 rows
-      └─ Sorting Est. 15973724 rows
+   └─ Gather Exchange Est. 15973725 rows
+      └─ Sorting Est. 15973725 rows
          │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
-         └─ Inner Join Est. 15973724 rows
+         └─ Inner Join Est. 15973725 rows
             │     Condition: 
             │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')_1`
             ├─ MergingAggregated Est. 31947449 rows

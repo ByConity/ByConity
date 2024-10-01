@@ -1,14 +1,14 @@
-Projection Est. 328 rows
+Projection Est. 2368 rows
 │     Expressions: cust_nation:=n_name_1, l_year:=`expr#toYear(l_shipdate)`, revenue:=`expr#sum(volume)`, supp_nation:=n_name
-└─ Sorting Est. 328 rows
+└─ Sorting Est. 2368 rows
    │     Order by: {n_name ASC NULLS LAST, n_name_1 ASC NULLS LAST, expr#toYear(l_shipdate) ASC NULLS LAST}
-   └─ Gather Exchange Est. 328 rows
-      └─ Sorting Est. 328 rows
+   └─ Gather Exchange Est. 2368 rows
+      └─ Sorting Est. 2368 rows
          │     Order by: {n_name ASC NULLS LAST, n_name_1 ASC NULLS LAST, expr#toYear(l_shipdate) ASC NULLS LAST}
-         └─ MergingAggregated Est. 328 rows
-            └─ Repartition Exchange Est. 328 rows
+         └─ MergingAggregated Est. 2368 rows
+            └─ Repartition Exchange Est. 2368 rows
                │     Partition by: {n_name, n_name_1, expr#toYear(l_shipdate)}
-               └─ Aggregating Est. 328 rows
+               └─ Aggregating Est. 2368 rows
                   │     Group by: {n_name, n_name_1, expr#toYear(l_shipdate)}
                   │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                   └─ Projection Est. 8963186 rows
@@ -22,9 +22,9 @@ Projection Est. 328 rows
                         │  └─ Inner Join Est. 145533817 rows
                         │     │     Condition: l_suppkey == s_suppkey
                         │     │     Runtime Filters Builder: {s_suppkey}
-                        │     ├─ Repartition Exchange Est. 1819172714 rows
+                        │     ├─ Repartition Exchange Est. 1819172715 rows
                         │     │  │     Partition by: {l_suppkey}
-                        │     │  └─ Filter Est. 1819172714 rows
+                        │     │  └─ Filter Est. 1819172715 rows
                         │     │     │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}
                         │     │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                         │     │              Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}

@@ -1892,7 +1892,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
             String index_version_file_name = index_helper->getFileName() + ".idx";
             gin_part_helper = std::make_unique<GinDataCNCHPartHelper>(
                 part->getMvccDataPart(index_version_file_name),
-                DiskCacheFactory::instance().get(DiskCacheType::MergeTree));
+                DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache(), part->disk_cache_mode);
         }
         else
         {

@@ -17,11 +17,11 @@ Projection Est. 1 rows
                └─ Inner Join Est. 1 rows
                   │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2 == expr#max(total_revenue)_1
                   │     Runtime Filters Builder: {expr#max(total_revenue)_1}
-                  ├─ Filter Est. 37808 rows
+                  ├─ Filter Est. 1000000 rows
                   │  │     Condition: Runtime Filters: {`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2`}
-                  │  └─ Local Exchange Est. 37808 rows
-                  │     └─ Buffer Est. 37808 rows
-                  │        └─ CTERef[0] Est. 37808 rows
+                  │  └─ Local Exchange Est. 1000000 rows
+                  │     └─ Buffer Est. 1000000 rows
+                  │        └─ CTERef[0] Est. 1000000 rows
                   └─ Broadcast Exchange Est. 1 rows
                      └─ Projection Est. 1 rows
                         │     Expressions: expr#max(total_revenue)_1:=cast(`expr#max(total_revenue)`, 'Nullable(Decimal(38, 4))')
@@ -30,13 +30,13 @@ Projection Est. 1 rows
                               └─ Aggregating Est. 1 rows
                                  │     Group by: {}
                                  │     Aggregates: expr#max(total_revenue):=AggNull(max)(expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3)
-                                 └─ Buffer Est. 37808 rows
-                                    └─ CTERef[0] Est. 37808 rows
+                                 └─ Buffer Est. 1000000 rows
+                                    └─ CTERef[0] Est. 1000000 rows
 CTEDef [0]
-   MergingAggregated Est. 37808 rows
-   └─ Repartition Exchange Est. 37808 rows
+   MergingAggregated Est. 1000000 rows
+   └─ Repartition Exchange Est. 1000000 rows
       │     Partition by: {l_suppkey_1}
-      └─ Aggregating Est. 37808 rows
+      └─ Aggregating Est. 1000000 rows
          │     Group by: {l_suppkey_1}
          │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_1)
          └─ Projection Est. 22686557 rows

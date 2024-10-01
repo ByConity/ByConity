@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS tab;
 CREATE TABLE tab(e8 Enum8('hello' = -5, 'world' = 15), e16 Enum16('shark' = -999, 'eagle' = 9999)) ENGINE CnchMergeTree ORDER BY tuple();
 INSERT INTO TABLE tab VALUES ('hello', 'shark'), ('world', 'eagle');
-
+SET cte_mode = 'INLINED';
 SELECT '-- Positive offsets (slice from left)';
 WITH cte AS (SELECT number + 1 AS n FROM system.numbers LIMIT 6),
      permutations AS (SELECT c1.n AS offset, c2.n AS length FROM cte AS c1 CROSS JOIN cte AS c2)

@@ -1,14 +1,14 @@
-Projection Est. 99937 rows
+Projection Est. 320872 rows
 │     Expressions: [t_hour, t_minute], brand:=i_brand, brand_id:=i_brand_id, ext_price:=`expr#sum(ext_price)`
-└─ Sorting Est. 99937 rows
+└─ Sorting Est. 320872 rows
    │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
-   └─ Gather Exchange Est. 99937 rows
-      └─ Sorting Est. 99937 rows
+   └─ Gather Exchange Est. 320872 rows
+      └─ Sorting Est. 320872 rows
          │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
-         └─ MergingAggregated Est. 99937 rows
-            └─ Repartition Exchange Est. 99937 rows
+         └─ MergingAggregated Est. 320872 rows
+            └─ Repartition Exchange Est. 320872 rows
                │     Partition by: {i_brand, i_brand_id, t_hour, t_minute}
-               └─ Aggregating Est. 99937 rows
+               └─ Aggregating Est. 320872 rows
                   │     Group by: {i_brand, i_brand_id, t_hour, t_minute}
                   │     Aggregates: expr#sum(ext_price):=AggNull(sum)(ws_ext_sales_price_1)
                   └─ Inner Join Est. 320872 rows
@@ -38,10 +38,10 @@ Projection Est. 99937 rows
                      │     │  │     └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                      │     │  │              Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                      │     │  │              Outputs: [ss_sold_date_sk, ss_sold_time_sk, ss_item_sk, ss_ext_sales_price]
-                     │     │  └─ Broadcast Exchange Est. 29 rows
-                     │     │     └─ Projection Est. 29 rows
+                     │     │  └─ Broadcast Exchange Est. 30 rows
+                     │     │     └─ Projection Est. 30 rows
                      │     │        │     Expressions: [d_date_sk]
-                     │     │        └─ Filter Est. 29 rows
+                     │     │        └─ Filter Est. 30 rows
                      │     │           │     Condition: (d_year = 1999) AND (d_moy = 11)
                      │     │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
                      │     │                    Where: (d_year = 1999) AND (d_moy = 11)
@@ -53,11 +53,11 @@ Projection Est. 99937 rows
                      │           └─ TableScan tpcds1000_sample.item Est. 300000 rows
                      │                    Where: i_manager_id = 1
                      │                    Outputs: [i_item_sk, i_brand_id, i_brand, i_manager_id]
-                     └─ Repartition Exchange Est. 60479 rows
+                     └─ Repartition Exchange Est. 60480 rows
                         │     Partition by: {t_time_sk}
-                        └─ Projection Est. 60479 rows
+                        └─ Projection Est. 60480 rows
                            │     Expressions: [t_hour, t_minute, t_time_sk]
-                           └─ Filter Est. 60479 rows
+                           └─ Filter Est. 60480 rows
                               │     Condition: t_meal_time IN ('breakfast', 'dinner')
                               └─ TableScan tpcds1000_sample.time_dim Est. 86400 rows
                                        Where: t_meal_time IN ('breakfast', 'dinner')

@@ -23,9 +23,9 @@ Projection Est. 1 rows
                         │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                         │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                         │  │           Outputs: [cs_sold_date_sk, cs_item_sk, cs_ext_discount_amt]
-                        │  └─ Projection Est. 61 rows
+                        │  └─ Projection Est. 62 rows
                         │     │     Expressions: [i_item_sk]
-                        │     └─ Filter Est. 61 rows
+                        │     └─ Filter Est. 62 rows
                         │        │     Condition: i_manufact_id = 977
                         │        └─ TableScan tpcds100.item Est. 204000 rows
                         │                 Where: i_manufact_id = 977

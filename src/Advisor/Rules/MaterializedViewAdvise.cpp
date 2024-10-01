@@ -141,7 +141,7 @@ MaterializedViewAdvisor::calculateMaterializeBenefit(const PlanNodePtr & node, c
 
     // see TableScanCost.h
     PlanNodeCost scan_output_cost = PlanNodeCost::cpuCost(node_stats.value()->getRowCount()) * CostModel{*context}.getTableScanCostWeight();
-    double scaled_mv_scan_cost = MV_SCAN_COST_SCALE_UP * scan_output_cost.getCost();
+    double scaled_mv_scan_cost = MV_SCAN_COST_SCALE_UP * scan_output_cost.getCost(CostModel(*context));
     return original_cost - scaled_mv_scan_cost;
 }
 

@@ -430,8 +430,11 @@ namespace MySQLReplication
                         UInt32 i24 = 0;
                         payload.readStrict(reinterpret_cast<char *>(&i24), 3);
 
-                        const DayNum date_day_number(DateLUT::instance().makeDayNum(
-                            static_cast<int>((i24 >> 9) & 0x7fff), static_cast<int>((i24 >> 5) & 0xf), static_cast<int>(i24 & 0x1f)).toUnderType());
+                        const DayNum date_day_number(
+                            DateLUT::serverTimezoneInstance()
+                                .makeDayNum(
+                                    static_cast<int>((i24 >> 9) & 0x7fff), static_cast<int>((i24 >> 5) & 0xf), static_cast<int>(i24 & 0x1f))
+                                .toUnderType());
 
                         row.push_back(Field(date_day_number.toUnderType()));
                         break;
@@ -536,10 +539,13 @@ namespace MySQLReplication
                         readTimeFractionalPart(payload, fsp, meta);
 
                         UInt32 year_month = readBits(val, 1, 17, 40);
-                        time_t date_time = DateLUT::instance().makeDateTime(
-                            year_month / 13, year_month % 13, readBits(val, 18, 5, 40)
-                            , readBits(val, 23, 5, 40), readBits(val, 28, 6, 40), readBits(val, 34, 6, 40)
-                        );
+                        time_t date_time = DateLUT::serverTimezoneInstance().makeDateTime(
+                            year_month / 13,
+                            year_month % 13,
+                            readBits(val, 18, 5, 40),
+                            readBits(val, 23, 5, 40),
+                            readBits(val, 28, 6, 40),
+                            readBits(val, 34, 6, 40));
 
                         if (!meta)
                             // The max value of the 64 bit int flagged here exceeds the year value that is

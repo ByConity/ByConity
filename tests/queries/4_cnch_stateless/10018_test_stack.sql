@@ -20,11 +20,11 @@ drop table test_stack;
 SET enable_optimizer = 0; -- type tuple is not supported for hash in optimizer
 
 
-select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int8, Int8))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int8, Int8)) ) as a ) using a );
-select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int, Int))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int, Int)) ) as a ) using a );
-select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int64, Int64))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int64, Int64)) ) as a ) using a );
-select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int8, Int64))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int8, Int64)) ) as a ) using a );
-select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int8, Float32))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int8, Float32)) ) as a ) using a );
-select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int64, Float64))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int64, Float64)) ) as a ) using a );
+select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int8, Int8))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int8, Int8)) ) as a ) using a );  --skip_if_readonly_ci
+select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int, Int))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int, Int)) ) as a ) using a );  --skip_if_readonly_ci
+select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int64, Int64))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int64, Int64)) ) as a ) using a );  --skip_if_readonly_ci
+select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int8, Int64))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int8, Int64)) ) as a ) using a );  --skip_if_readonly_ci
+select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int8, Float32))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int8, Float32)) ) as a ) using a );  --skip_if_readonly_ci
+select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int64, Float64))) as a )full outer join (select cast([(1, 2), (2, 4)] as Array(Tuple(Int64, Float64)) ) as a ) using a );  --skip_if_readonly_ci
 select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int, Int))) as a )full outer join (select cast([(1, 2), (3, 4)] as Array(Tuple(Int, Int)) ) as a ) using a ); -- { serverError 36 }
 select MergeStreamStack(a) from( select a from (select cast([(1, 2), (2, 2)] as Array(Tuple(Int, Int))) as a )full outer join (select cast([(1, 2), (2, 4), (3, 4)] as Array(Tuple(Int, Int)) ) as a ) using a ); -- { serverError 190 }

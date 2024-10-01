@@ -1440,7 +1440,7 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     details << "JoinKeys\\n";
     for (int i = 0; i < static_cast<int>(left.size()); ++i)
     {
-        details << left.at(i) << "=" << right.at(i) << "\\n";
+        details << left.at(i) << "=" << right.at(i) << (step.getKeyIdNullSafe(i) ? "(null aware)" : "") << "\\n";
     }
     details << "|";
     if (!PredicateUtils::isTruePredicate(step.getFilter()))
@@ -2030,6 +2030,11 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     }
     details << "|";
 
+    if (step.isBucketScan())
+    {
+        details << "Bucket Scan |";
+    }
+
     details << "Inline Expressions: \\n";
     for (const auto & assigment : step.getInlineExpressions())
     {
@@ -2563,8 +2568,9 @@ String StepPrinter::printFilter(const ConstASTPtr & filter)
         buf << "\\nAND ";
         conjuncts[i]->format(settings);
     }
-
-    return buf.str();
+    auto result = buf.str();
+    boost::replace_all(result, "|", "!");
+    return result;
 }
 
 String StepPrinter::printExplainAnalyzeStep(const ExplainAnalyzeStep & step)

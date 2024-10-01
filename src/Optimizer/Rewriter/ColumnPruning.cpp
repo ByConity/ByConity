@@ -610,6 +610,7 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, Colum
         step->getQueryInfo(),
         step->getMaxBlockSize(),
         step->getTableAlias(),
+        step->isBucketScan(),
         step->getHints(),
         inline_expressions);
 
@@ -849,6 +850,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, ColumnPruningCo
         step->getKeepLeftReadInOrder(),
         step->getLeftKeys(),
         step->getRightKeys(),
+        step->getKeyIdsNullSafe(),
         step->getFilter(),
         step->isHasUsing(),
         step->getRequireRightKeys(),

@@ -433,6 +433,7 @@ struct ContextSharedPart
     mutable CnchTopologyMasterPtr topology_master;
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
+    mutable OnceFlag global_txn_committer_initialized;
     mutable GlobalTxnCommitterPtr global_txn_committer;
     mutable GlobalDataManagerPtr global_data_manager;
 
@@ -1787,7 +1788,7 @@ bool Context::isExternalDb(const std::string_view& database) const
         if (getOriginalDatabaseName(catalog_name.value()) != "cnch")
         {
             return true;
-        } 
+        }
         return false;
 }
 
@@ -1807,11 +1808,11 @@ std::string_view getDatabase([[maybe_unused]] const AccessFlags & args1, const s
 template <typename... Args>
 void Context::checkAccessImpl(const Args &... args) const
 {
-    if constexpr (sizeof...(Args) <= 1) 
+    if constexpr (sizeof...(Args) <= 1)
     {
         getAccess()->checkAccess(args...);
-    } 
-    else 
+    }
+    else
     {
         static_assert(sizeof...(Args) > 1, "Logical Error");
         using FirstType = typename std::tuple_element<0, std::tuple<Args...>>::type;
@@ -1833,11 +1834,11 @@ void Context::checkAccessImpl(const Args &... args) const
 template <typename... Args>
 bool Context::isGrantedImpl(const Args &... args) const
 {
-    if constexpr (sizeof...(Args) <= 1) 
+    if constexpr (sizeof...(Args) <= 1)
     {
         getAccess()->isGranted(args...);
-    } 
-    else 
+    }
+    else
     {
         static_assert(sizeof...(Args) > 1, "Logical Error");
         using FirstType = typename std::tuple_element<0, std::tuple<Args...>>::type;
@@ -1853,7 +1854,7 @@ bool Context::isGrantedImpl(const Args &... args) const
             return true;
         }
         return getAccess()->isGranted(args...);
-    } 
+    }
 }
 
 void Context::checkAccess(const AccessFlags & flags) const
@@ -2927,10 +2928,7 @@ void Context::setNvmCache(const Poco::Util::AbstractConfiguration &config)
     std::shared_ptr<HybridCache::AbstractCache> cache_ptr = std::move(cache);
 
     shared->nvm_cache = std::static_pointer_cast<NvmCache>(cache_ptr);
-    shared->mark_cache->setNvmCache(shared->nvm_cache);
     shared->uncompressed_cache->setNvmCache(shared->nvm_cache);
-    shared->checksums_cache->setNvmCache(shared->nvm_cache);
-    shared->primary_index_cache->setNvmCache(shared->nvm_cache);
 }
 
 NvmCachePtr Context::getNvmCache() const
@@ -5300,9 +5298,9 @@ PartCacheManagerPtr Context::getPartCacheManager() const
     return shared->cache_manager;
 }
 
-void Context::initCatalog(const MetastoreConfig & catalog_conf, const String & name_space)
+void Context::initCatalog(const MetastoreConfig & catalog_conf, const String & name_space, bool writable)
 {
-    shared->cnch_catalog = std::make_unique<Catalog::Catalog>(*this, catalog_conf, name_space);
+    shared->cnch_catalog = std::make_unique<Catalog::Catalog>(*this, catalog_conf, name_space, writable);
 }
 
 std::shared_ptr<Catalog::Catalog> Context::tryGetCnchCatalog() const
@@ -5380,9 +5378,9 @@ std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
 
 GlobalTxnCommitterPtr Context::getGlobalTxnCommitter() const
 {
-    auto lock = getLock(); // checked
-    if (!shared->global_txn_committer)
-        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(shared_from_this());
+    callOnce(shared->global_txn_committer_initialized, [&] {
+        shared->global_txn_committer = std::make_shared<GlobalTxnCommitter>(getGlobalContext());
+    });
     return shared->global_txn_committer;
 }
 
@@ -5959,6 +5957,11 @@ Context::HybridPartAllocator Context::getHybridPartAllocationAlgo() const
         case 4: return HybridPartAllocator::HYBRID_STRICT_RING_CONSISTENT_HASH_ONE_STAGE;
         default: return HybridPartAllocator::HYBRID_BOUNDED_LOAD_CONSISTENT_HASH;
     }
+}
+
+bool Context::hasSessionTimeZone() const
+{
+    return !settings.session_timezone.value.empty();
 }
 
 void Context::createPlanNodeIdAllocator(int max_id)

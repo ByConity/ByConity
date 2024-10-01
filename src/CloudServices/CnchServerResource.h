@@ -111,7 +111,15 @@ struct AssignedResource
     void addDataParts(const HiveFiles & parts);
     void addDataParts(const FileDataPartsCNCHVector & parts);
 
-    bool empty() const { return sent_create_query && server_parts.empty() && hive_parts.empty() && file_parts.empty(); }
+    bool empty() const
+    {
+        return sent_create_query
+            && table_version == 0
+            && server_parts.empty()
+            && virtual_parts.empty()
+            && hive_parts.empty()
+            && file_parts.empty();
+    }
 };
 
 // Send resources separately by UUID
@@ -152,7 +160,10 @@ public:
         WorkerEngineType engine_type,
         String underlying_dictionary_tables);
 
-    void setTableVersion(const UUID & storage_uuid, const UInt64 table_version);
+    void setTableVersion(
+        const UUID & storage_uuid,
+        UInt64 table_version,
+        const std::set<Int64> & required_bucket_numbers);
 
     void setAggregateWorker(HostWithPorts aggregate_worker_) { aggregate_worker = std::move(aggregate_worker_); }
 
@@ -165,14 +176,19 @@ public:
     void skipCleanWorker() { skip_clean_worker = true; }
 
     template <typename T>
-    void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & required_bucket_numbers = {})
+    void addDataParts(
+        const UUID & storage_id,
+        const std::vector<T> & data_parts,
+        const std::set<Int64> & required_bucket_numbers = {},
+        bool replicated = false)
     {
         std::lock_guard lock(mutex);
         auto & assigned_resource = assigned_table_resource.at(storage_id);
 
+        /// accumulate resources for a table
         assigned_resource.addDataParts(data_parts);
-        if (assigned_resource.bucket_numbers.empty() && !required_bucket_numbers.empty())
-            assigned_resource.bucket_numbers = required_bucket_numbers;
+        assigned_resource.replicated = assigned_resource.replicated | replicated;
+        assigned_resource.bucket_numbers.insert(required_bucket_numbers.begin(), required_bucket_numbers.end());
     }
 
     const WorkerInfoSet & getAssignedWorkers(const UUID & storage_uuid)

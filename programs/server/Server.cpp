@@ -711,8 +711,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         global_context->initVirtualWarehousePool();
         global_context->initServiceDiscoveryClient();
-        global_context->initCatalog(catalog_conf,
-            global_context->getCnchConfigRef().getString("catalog.name_space", "default"));
+        global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"), root_config.enable_cnch_write_remote_catalog);
         global_context->initTSOClientPool(root_config.service_discovery.tso_psm);
         global_context->initDaemonManagerClientPool(root_config.service_discovery.daemon_manager_psm);
         global_context->initCnchServerClientPool(root_config.service_discovery.server_psm);
@@ -909,8 +908,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize DateLUT early, to not interfere with running time of first query.
     LOG_DEBUG(log, "Initializing DateLUT.");
-    DateLUT::instance();
-    LOG_TRACE(log, "Initialized DateLUT with time zone '{}'.", DateLUT::instance().getTimeZone());
+    DateLUT::serverTimezoneInstance();
+    LOG_TRACE(log, "Initialized DateLUT with time zone '{}'.", DateLUT::serverTimezoneInstance().getTimeZone());
 
     /// Storage with temporary data for processing of heavy queries.
     {
@@ -1316,6 +1315,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ginindex_store_cache_settings.mapping_bucket_size = root_config.ginindex_store_cache_bucket;
     ginindex_store_cache_settings.cache_shard_num = root_config.ginindex_store_cache_shard;
     ginindex_store_cache_settings.lru_update_interval = root_config.ginindex_store_cache_lru_update_interval;
+    ginindex_store_cache_settings.cache_ttl = root_config.ginindex_store_cache_ttl;
     global_context->setGinIndexStoreFactory(ginindex_store_cache_settings);
 
     size_t compressed_data_index_cache_size = root_config.compressed_data_index_cache;

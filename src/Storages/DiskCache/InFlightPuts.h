@@ -1,5 +1,6 @@
 #pragma once
 
+#include <folly/container/F14Map.h>
 #include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/Buffer.h>
@@ -119,7 +120,7 @@ private:
         chassert(res == 1u);
     }
 
-    std::unordered_map<StringRef, bool> keys;
+    folly::F14FastMap<StringRef, bool> keys;
     TimedMutex mutex;
 };
 }

@@ -19,31 +19,33 @@ Projection
                         │     Condition: ss_sold_date_sk_1 == d_date_sk_3
                         ├─ Inner Join
                         │  │     Condition: ss_item_sk_1 == i_item_sk_3
+                        │  │     Runtime Filters Builder: {i_item_sk_3}
                         │  ├─ Union
                         │  │  │     OutputToInputs: ss_sold_date_sk_1 = [ss_sold_date_sk,ws_sold_date_sk,cs_sold_date_sk], ss_item_sk_1 = [ss_item_sk,ws_item_sk,cs_item_sk], ss_ext_sales_price_1 = [ss_ext_sales_price,ws_ext_sales_price,cs_ext_sales_price], expr#'ss_store_sk'_1 = [expr#'ss_store_sk',expr#'ws_ship_customer_sk',expr#'cs_ship_addr_sk'], expr#'store'_1 = [expr#'store',expr#'web',expr#'catalog']
                         │  │  ├─ Projection
                         │  │  │  │     Expressions: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk], expr#'ss_store_sk':='ss_store_sk', expr#'store':='store'
                         │  │  │  └─ Filter
-                        │  │  │     │     Condition: isNull(ss_store_sk) AND isNotNull(ss_sold_date_sk)
+                        │  │  │     │     Condition: isNull(ss_store_sk) AND isNotNull(ss_sold_date_sk) Runtime Filters: {ss_item_sk}
                         │  │  │     └─ TableScan tpcds1000.store_sales
-                        │  │  │              Where: isNull(ss_store_sk) AND isNotNull(ss_sold_date_sk)
+                        │  │  │              Where: isNull(ss_store_sk) AND isNotNull(ss_sold_date_sk) Runtime Filters: {ss_item_sk}
                         │  │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_ext_sales_price]
                         │  │  ├─ Projection
                         │  │  │  │     Expressions: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk], expr#'web':='web', expr#'ws_ship_customer_sk':='ws_ship_customer_sk'
                         │  │  │  └─ Filter
-                        │  │  │     │     Condition: isNull(ws_ship_customer_sk) AND isNotNull(ws_sold_date_sk)
+                        │  │  │     │     Condition: isNull(ws_ship_customer_sk) AND isNotNull(ws_sold_date_sk) Runtime Filters: {ws_item_sk}
                         │  │  │     └─ TableScan tpcds1000.web_sales
-                        │  │  │              Where: isNull(ws_ship_customer_sk) AND isNotNull(ws_sold_date_sk)
+                        │  │  │              Where: isNull(ws_ship_customer_sk) AND isNotNull(ws_sold_date_sk) Runtime Filters: {ws_item_sk}
                         │  │  │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_ship_customer_sk, ws_ext_sales_price]
                         │  │  └─ Projection
                         │  │     │     Expressions: [cs_ext_sales_price, cs_item_sk, cs_sold_date_sk], expr#'catalog':='catalog', expr#'cs_ship_addr_sk':='cs_ship_addr_sk'
                         │  │     └─ Filter
-                        │  │        │     Condition: isNull(cs_ship_addr_sk) AND isNotNull(cs_sold_date_sk)
+                        │  │        │     Condition: isNull(cs_ship_addr_sk) AND isNotNull(cs_sold_date_sk) Runtime Filters: {cs_item_sk}
                         │  │        └─ TableScan tpcds1000.catalog_sales
-                        │  │                 Where: isNull(cs_ship_addr_sk) AND isNotNull(cs_sold_date_sk)
+                        │  │                 Where: isNull(cs_ship_addr_sk) AND isNotNull(cs_sold_date_sk) Runtime Filters: {cs_item_sk}
                         │  │                 Outputs: [cs_sold_date_sk, cs_ship_addr_sk, cs_item_sk, cs_ext_sales_price]
                         │  └─ TableScan tpcds1000.item
                         │           Outputs: i_item_sk_3:=i_item_sk, i_category_4:=i_category
                         └─ Broadcast Exchange
                            └─ TableScan tpcds1000.date_dim
                                     Outputs: d_date_sk_3:=d_date_sk, d_year_4:=d_year, d_qoy_4:=d_qoy
+note: Runtime Filter is applied for 3 times.

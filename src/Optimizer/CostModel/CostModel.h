@@ -22,11 +22,15 @@ namespace DB
 class CostModel
 {
 public:
-    static constexpr double CPU_COST_RATIO = 0.74;
-    static constexpr double NET_COST_RATIO = 0.16;
-    static constexpr double MEM_COST_RATIO = 0.1;
+    // static constexpr double CPU_COST_RATIO = 0.74;
+    // static constexpr double NET_COST_RATIO = 0.16;
+    // static constexpr double MEM_COST_RATIO = 0.1;
 
     explicit CostModel(const Context & context) : context_settings(context.getSettingsRef()) { }
+
+    double getCPUCostWeight() const { return context_settings.cost_calculator_cpu_cost_ratio; }
+    double getMemCostWeight() const { return context_settings.cost_calculator_mem_cost_ratio; }
+    double getNetCostWeight() const { return context_settings.cost_calculator_net_cost_ratio; }
 
     double getAggregateCostWeight() const { return context_settings.cost_calculator_aggregating_weight; }
 
@@ -39,6 +43,12 @@ public:
     double getCTECostWeight() const { return context_settings.cost_calculator_cte_weight; }
 
     double getProjectionCostWeight() const { return context_settings.cost_calculator_projection_weight; }
+
+    bool isEnableUseByteSize() const { return context_settings.cost_calculator_use_size; }
+
+    bool isEnableUseByteSizeInJoin() const { return context_settings.cost_calculator_use_size_in_join; }
+
+    double getByteSizeWeight() const { return context_settings.cost_calculator_byte_size_weight; }
 
 private:
     const Settings & context_settings;

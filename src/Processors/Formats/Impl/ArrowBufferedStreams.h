@@ -2,9 +2,15 @@
 #include "config_formats.h"
 #if USE_ARROW || USE_ORC || USE_PARQUET
 
+#include <optional>
 #include <arrow/io/interfaces.h>
+#include <arrow/memory_pool.h>
+
+#include "Common/threadPoolCallbackRunner.h"
+#include "Common/ThreadPoolTaskTracker.h"
+
 #define ORC_MAGIC_BYTES "ORC"
-#define PARQUET_MAGIC_BYTES "PAR1"
+#define PARQUET_MAGIC_BYTES "PAR"
 #define ARROW_MAGIC_BYTES "ARROW1"
 
 #include <optional>
@@ -69,14 +75,15 @@ private:
     SeekableReadBuffer & in;
     std::optional<off_t> file_size;
     bool is_open = false;
-    bool avoid_buffering =false;
+    bool avoid_buffering = false;
+
     ARROW_DISALLOW_COPY_AND_ASSIGN(RandomAccessFileFromSeekableReadBuffer);
 };
 
 class RandomAccessFileFromRandomAccessReadBuffer : public arrow::io::RandomAccessFile
 {
 public:
-    explicit RandomAccessFileFromRandomAccessReadBuffer(SeekableReadBuffer & in_, size_t file_size_);
+    explicit RandomAccessFileFromRandomAccessReadBuffer(SeekableReadBuffer & in_, size_t file_size_, ThreadPoolCallbackRunnerUnsafe<void> scheduler);
 
     // These are thread safe.
     arrow::Result<int64_t> GetSize() override;
@@ -98,6 +105,7 @@ private:
     SeekableReadBuffer & in;
     size_t file_size;
     bool is_open = true;
+    std::unique_ptr<TaskTracker> task_tracker;
     ARROW_DISALLOW_COPY_AND_ASSIGN(RandomAccessFileFromRandomAccessReadBuffer);
 };
 
@@ -119,7 +127,26 @@ private:
     ARROW_DISALLOW_COPY_AND_ASSIGN(ArrowInputStreamFromReadBuffer);
 };
 
-std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(ReadBuffer & in);
+/// By default, arrow allocated memory using posix_memalign(), which is currently not equipped with
+/// clickhouse memory tracking. This adapter adds memory tracking.
+class ArrowMemoryPool : public arrow::MemoryPool
+{
+public:
+    static ArrowMemoryPool * instance();
+
+    arrow::Status Allocate(int64_t size, int64_t alignment, uint8_t ** out) override;
+    arrow::Status Reallocate(int64_t old_size, int64_t new_size, int64_t alignment, uint8_t ** ptr) override;
+    void Free(uint8_t * buffer, int64_t size, int64_t alignment) override;
+
+    std::string backend_name() const override { return "clickhouse"; }
+
+    int64_t bytes_allocated() const override { return 0; }
+    // int64_t total_bytes_allocated() const override { return 0; }
+    // int64_t num_allocations() const override { return 0; }
+
+private:
+    ArrowMemoryPool() = default;
+};
 
 std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(
     ReadBuffer & in,
@@ -132,7 +159,8 @@ std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(
     // read call will do a new HTTP request. Used in parquet pre-buffered reading mode, which makes
     // arrow do its own buffering and coalescing of reads.
     // (ReadBuffer is not a good abstraction in this case, but it works.)
-    bool avoid_buffering = false);
+    bool avoid_buffering = false,
+    ThreadPoolCallbackRunnerUnsafe<void> scheduler = nullptr);
 
 // Reads the whole file into a memory buffer, owned by the returned RandomAccessFile.
 std::shared_ptr<arrow::io::RandomAccessFile> asArrowFileLoadIntoMemory(

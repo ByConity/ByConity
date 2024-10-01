@@ -1,29 +1,29 @@
-Projection Est. 1 rows
+Projection Est. 100 rows
 │     Expressions: [i_manager_id], avg_monthly_sales:=`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`, sum_sales:=`expr#sum(ss_sales_price)`
-└─ Limit Est. 1 rows
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting Est. 1 rows
+   └─ Sorting Est. 100 rows
       │     Order by: {i_manager_id ASC NULLS LAST, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 1 rows
-         └─ Sorting Est. 1 rows
+      └─ Gather Exchange Est. 270 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {i_manager_id ASC NULLS LAST, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 1 rows
+            └─ Projection Est. 270 rows
                │     Expressions: [expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id), expr#sum(ss_sales_price), i_manager_id]
-               └─ Filter Est. 1 rows
+               └─ Filter Est. 270 rows
                   │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`, NULL) > 0.1
-                  └─ Window Est. 1 rows
-                     └─ MergingAggregated Est. 1 rows
-                        └─ Repartition Exchange Est. 1 rows
+                  └─ Window Est. 1079 rows
+                     └─ MergingAggregated Est. 1079 rows
+                        └─ Repartition Exchange Est. 1079 rows
                            │     Partition by: {i_manager_id}
-                           └─ Aggregating Est. 1 rows
+                           └─ Aggregating Est. 1079 rows
                               │     Group by: {i_manager_id, d_moy}
                               │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                              └─ Inner Join Est. 90346 rows
+                              └─ Inner Join Est. 82402 rows
                                  │     Condition: ss_sold_date_sk == d_date_sk
                                  │     Runtime Filters Builder: {d_date_sk}
-                                 ├─ Inner Join Est. 432123 rows
+                                 ├─ Inner Join Est. 412690 rows
                                  │  │     Condition: ss_item_sk == i_item_sk
                                  │  │     Runtime Filters Builder: {i_item_sk}
                                  │  ├─ Projection Est. 275046373 rows
@@ -33,17 +33,17 @@ Projection Est. 1 rows
                                  │  │     └─ TableScan tpcds100.store_sales Est. 287997024 rows
                                  │  │              Where: isNotNull(ss_store_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                                  │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
-                                 │  └─ Projection Est. 306 rows
+                                 │  └─ Projection Est. 307 rows
                                  │     │     Expressions: [i_item_sk, i_manager_id]
-                                 │     └─ Filter Est. 306 rows
+                                 │     └─ Filter Est. 307 rows
                                  │        │     Condition: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
                                  │        └─ TableScan tpcds100.item Est. 204000 rows
                                  │                 Where: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
                                  │                 Outputs: [i_item_sk, i_brand, i_class, i_category, i_manager_id]
-                                 └─ Broadcast Exchange Est. 365 rows
-                                    └─ Projection Est. 365 rows
+                                 └─ Broadcast Exchange Est. 366 rows
+                                    └─ Projection Est. 366 rows
                                        │     Expressions: [d_date_sk, d_moy]
-                                       └─ Filter Est. 365 rows
+                                       └─ Filter Est. 366 rows
                                           │     Condition: d_month_seq IN (1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211)
                                           └─ TableScan tpcds100.date_dim Est. 73049 rows
                                                    Where: d_month_seq IN (1200, 1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211)

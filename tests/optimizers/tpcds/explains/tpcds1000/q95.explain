@@ -22,7 +22,7 @@ Projection Est. 1 rows
                               └─ Right Semi Join Est. 99984 rows
                                  │     Condition: ws_order_number_6 == ws_order_number
                                  │     Runtime Filters Builder: {ws_order_number}
-                                 ├─ Inner (PARALLEL_HASH) Join Est. 7379484997 rows
+                                 ├─ Inner (PARALLEL_HASH) Join Est. 5211148755 rows
                                  │  │     Condition: ws_order_number_6 == ws_order_number_5
                                  │  │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
                                  │  ├─ Inner (PARALLEL_HASH) Join Est. 863369119 rows

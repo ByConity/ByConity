@@ -25,7 +25,7 @@ CnchExternalCatalogMgr::CnchExternalCatalogMgr(Context & _context, const Poco::U
     : context(_context), metastore_conf(mgr_conf, Mgr::configPrefix())
 {
     // TODO(ExterncalCatalog):: check whether to set FLAGS_consul_agent_addr here.
-    meta_proxy = std::make_shared<Catalog::MetastoreProxy>(metastore_conf);
+    meta_proxy = std::make_shared<Catalog::MetastoreProxy>(metastore_conf, mgr_conf.getBool("enable_cnch_write_remote_catalog", true));
     name_space = mgr_conf.getString(Mgr::configPrefix() + ".name_space", "default");
 }
 bool CnchExternalCatalogMgr::createCatalog(const std::string & catalog_name, PlainConfigs * catalog_meta, const TxnTimestamp & ts)

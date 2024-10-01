@@ -14,49 +14,49 @@ Projection Est. 54134 rows
                   └─ Projection Est. 4547880929 rows
                      │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
                      └─ Inner (PARALLEL_HASH) Join Est. 4547880929 rows
-                        │     Condition: l_orderkey == o_orderkey
-                        ├─ Repartition Exchange Est. 3075113647 rows
-                        │  │     Partition by: {l_orderkey}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 3075113647 rows
-                        │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-                        │     │     Runtime Filters Builder: {ps_partkey}
-                        │     ├─ Repartition Exchange Est. 5999989709 rows
-                        │     │  │     Partition by: {l_suppkey}
-                        │     │  └─ Filter Est. 5999989709 rows
-                        │     │     │     Condition: Runtime Filters: {l_partkey}
-                        │     │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
-                        │     │              Where: Runtime Filters: {l_partkey}
-                        │     │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
-                        │     └─ Inner (PARALLEL_HASH) Join Est. 119536939 rows
-                        │        │     Condition: ps_suppkey == s_suppkey
-                        │        ├─ Repartition Exchange Est. 119733566 rows
-                        │        │  │     Partition by: {ps_suppkey}
-                        │        │  └─ Inner (PARALLEL_HASH) Join Est. 119733566 rows
-                        │        │     │     Condition: ps_partkey == p_partkey
-                        │        │     │     Runtime Filters Builder: {p_partkey}
-                        │        │     ├─ Filter Est. 800000000 rows
-                        │        │     │  │     Condition: Runtime Filters: {ps_partkey}
-                        │        │     │  └─ TableScan tpch1000_sample.partsupp Est. 800000000 rows
-                        │        │     │           Where: Runtime Filters: {ps_partkey}
-                        │        │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-                        │        │     └─ Projection Est. 30000001 rows
-                        │        │        │     Expressions: [p_partkey]
-                        │        │        └─ Filter Est. 30000001 rows
-                        │        │           │     Condition: p_name LIKE '%green%'
-                        │        │           └─ TableScan tpch1000_sample.part Est. 200000000 rows
-                        │        │                    Where: p_name LIKE '%green%'
-                        │        │                    Outputs: [p_partkey, p_name]
-                        │        └─ Repartition Exchange Est. 10000000 rows
-                        │           │     Partition by: {s_suppkey}
-                        │           └─ Inner Join Est. 10000000 rows
-                        │              │     Condition: s_nationkey == n_nationkey
-                        │              ├─ TableScan tpch1000_sample.supplier Est. 10000000 rows
-                        │              │        Outputs: [s_suppkey, s_nationkey]
-                        │              └─ Broadcast Exchange Est. 25 rows
-                        │                 └─ TableScan tpch1000_sample.nation Est. 25 rows
-                        │                          Outputs: [n_nationkey, n_name]
-                        └─ Repartition Exchange Est. 1500000000 rows
-                           │     Partition by: {o_orderkey}
-                           └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
-                                    Outputs: [o_orderkey, o_orderdate]
-note: Runtime Filter is applied for 2 times.
+                        │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
+                        ├─ Repartition Exchange Est. 1462289073 rows
+                        │  │     Partition by: {l_suppkey}
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 1462289073 rows
+                        │     │     Condition: o_orderkey == l_orderkey
+                        │     ├─ Repartition Exchange Est. 1500000000 rows
+                        │     │  │     Partition by: {o_orderkey}
+                        │     │  └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
+                        │     │           Outputs: [o_orderkey, o_orderdate]
+                        │     └─ Repartition Exchange Est. 949718115 rows
+                        │        │     Partition by: {l_orderkey}
+                        │        └─ Inner (PARALLEL_HASH) Join Est. 949718115 rows
+                        │           │     Condition: l_partkey == p_partkey
+                        │           │     Runtime Filters Builder: {p_partkey}
+                        │           ├─ Repartition Exchange Est. 5999989709 rows
+                        │           │  │     Partition by: {l_partkey}
+                        │           │  └─ Filter Est. 5999989709 rows
+                        │           │     │     Condition: Runtime Filters: {l_partkey}
+                        │           │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
+                        │           │              Where: Runtime Filters: {l_partkey}
+                        │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
+                        │           └─ Repartition Exchange Est. 30000001 rows
+                        │              │     Partition by: {p_partkey}
+                        │              └─ Projection Est. 30000001 rows
+                        │                 │     Expressions: [p_partkey]
+                        │                 └─ Filter Est. 30000001 rows
+                        │                    │     Condition: p_name LIKE '%green%'
+                        │                    └─ TableScan tpch1000_sample.part Est. 200000000 rows
+                        │                             Where: p_name LIKE '%green%'
+                        │                             Outputs: [p_partkey, p_name]
+                        └─ Inner (PARALLEL_HASH) Join Est. 798686240 rows
+                           │     Condition: ps_suppkey == s_suppkey
+                           ├─ Repartition Exchange Est. 800000000 rows
+                           │  │     Partition by: {ps_suppkey}
+                           │  └─ TableScan tpch1000_sample.partsupp Est. 800000000 rows
+                           │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
+                           └─ Repartition Exchange Est. 10000000 rows
+                              │     Partition by: {s_suppkey}
+                              └─ Inner Join Est. 10000000 rows
+                                 │     Condition: s_nationkey == n_nationkey
+                                 ├─ TableScan tpch1000_sample.supplier Est. 10000000 rows
+                                 │        Outputs: [s_suppkey, s_nationkey]
+                                 └─ Broadcast Exchange Est. 25 rows
+                                    └─ TableScan tpch1000_sample.nation Est. 25 rows
+                                             Outputs: [n_nationkey, n_name]
+note: Runtime Filter is applied for 1 times.

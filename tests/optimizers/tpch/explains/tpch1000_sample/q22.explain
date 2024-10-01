@@ -39,9 +39,9 @@ Projection Est. 11250000 rows
                                        └─ Aggregating Est. 1 rows
                                           │     Group by: {}
                                           │     Aggregates: expr#avg(c_acctbal):=AggNull(avg)(c_acctbal_1)
-                                          └─ Projection Est. 34092255 rows
+                                          └─ Projection Est. 34092256 rows
                                              │     Expressions: [c_acctbal_1]
-                                             └─ Filter Est. 34092255 rows
+                                             └─ Filter Est. 34092256 rows
                                                 │     Condition: (c_acctbal_1 > 0.) AND (substring(c_phone_1, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))
                                                 └─ TableScan tpch1000_sample.customer Est. 150000000 rows
                                                          Where: (c_acctbal > 0.) AND (substring(c_phone, 1, 2) IN ('13', '17', '18', '23', '29', '30', '31'))

@@ -51,11 +51,10 @@ Device::Device(UInt64 size_, UInt32 io_align_size_, UInt32 max_write_size_)
     : size(size_), io_alignment_size(io_align_size_), max_write_size(max_write_size_)
 {
     if (io_align_size_ == 0)
-        throwFromErrno(fmt::format("Invalid io_align_size: {}", io_align_size_), ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid io_align_size: {}", io_align_size_);
 
     if (max_write_size % io_alignment_size != 0)
-        throwFromErrno(
-            fmt::format("Invalid max_write_size: {}, io_align_size: {}", max_write_size, io_alignment_size), ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid max_write_size: {}, io_align_size: {}", max_write_size, io_alignment_size);
 
     logger_ = &Poco::Logger::get("Device");
 }
@@ -222,8 +221,7 @@ namespace
     class AsyncIoContext : public IoContext
     {
     public:
-        AsyncIoContext(
-            std::unique_ptr<folly::AsyncBase> && async_base_, size_t id_, folly::EventBase * evb_, size_t capacity_, bool use_io_uring_);
+        AsyncIoContext(std::unique_ptr<folly::AsyncBase> && async_base_, size_t id_, folly::EventBase * evb_, size_t capacity_);
 
         ~AsyncIoContext() override = default;
 
@@ -268,8 +266,6 @@ namespace
         // Waiter list for enforcing the qdepth
         WaiterList wait_list;
         std::unique_ptr<CompletionHandler> comp_handler;
-        // Use io_uring or libaio
-        bool use_io_uring;
         size_t retry_limit = kRetryLimit;
 
         // The IO operations that have been submit but not completed yet.
@@ -590,9 +586,15 @@ namespace
         }
     }
 
-    ssize_t SyncIoContext::writeSync(int fd, UInt64 offset, UInt32 size, const void * value) { return ::pwrite(fd, value, size, offset); }
+    ssize_t SyncIoContext::writeSync(int fd, UInt64 offset, UInt32 size, const void * value)
+    {
+        return ::pwrite(fd, value, size, offset);
+    }
 
-    ssize_t SyncIoContext::readSync(int fd, UInt64 offset, UInt32 size, void * value) { return ::pread(fd, value, size, offset); }
+    ssize_t SyncIoContext::readSync(int fd, UInt64 offset, UInt32 size, void * value)
+    {
+        return ::pread(fd, value, size, offset);
+    }
 
     bool SyncIoContext::submitIo(IOOp & op)
     {
@@ -612,9 +614,8 @@ namespace
         return op.done(status);
     }
 
-    AsyncIoContext::AsyncIoContext(
-        std::unique_ptr<folly::AsyncBase> && async_base_, size_t id_, folly::EventBase * evb_, size_t capacity_, bool use_io_uring_)
-        : async_base(std::move(async_base_)), id(id_), q_depth(capacity_), use_io_uring(use_io_uring_)
+    AsyncIoContext::AsyncIoContext(std::unique_ptr<folly::AsyncBase> && async_base_, size_t id_, folly::EventBase * evb_, size_t capacity_)
+        : async_base(std::move(async_base_)), id(id_), q_depth(capacity_)
     {
         if (evb_)
         {
@@ -635,7 +636,7 @@ namespace
             getName(),
             q_depth,
             q_depth == 1 ? " (sync wait)" : "",
-            use_io_uring ? "io_uring" : "libaio");
+            "io_uring");
     }
 
     void AsyncIoContext::pollCompletion()
@@ -726,19 +727,11 @@ namespace
     {
         std::unique_ptr<folly::AsyncBaseOp> async_op;
         IOReq & req = op.parent;
-        if (use_io_uring)
-        {
 #if USE_LIBURING
-            async_op = std::make_unique<folly::IoUringOp>();
+        async_op = std::make_unique<folly::IoUringOp>();
 #else
-            throwFromErrno("iouring not supported", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("iouring not supported", ErrorCodes::NOT_IMPLEMENTED);
 #endif
-        }
-        else
-        {
-            throwFromErrno("libadio not supported", ErrorCodes::NOT_IMPLEMENTED);
-            // asyncOp = std::make_unique<folly::AsyncIOOp>();
-        }
 
         if (req.op_type == OpType::READ)
         {
@@ -776,10 +769,11 @@ namespace
             chassert(0u == stripe_size % block_size);
 
             if (file_size % stripe_size != 0)
-                throwFromErrno(
-                    fmt::format(
-                        "Invalid size because individual device size: {} is not aligned to stripe size: {}", file_size, stripe_size),
-                    ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "Invalid size because individual device size: {} is not aligned to stripe size: {}",
+                    file_size,
+                    stripe_size);
         }
 
         // Check qdepth configuration
@@ -838,9 +832,6 @@ namespace
                 return sync_io_context.get();
             }
 
-            // Create new context if on event base thread or useIoUring_ is enabled
-            bool use_io_uring = io_engine == IoEngine::IoUring;
-
             folly::EventBase * evb = nullptr;
             auto poll_mode = folly::AsyncBase::POLLABLE;
             if (on_fiber)
@@ -857,25 +848,16 @@ namespace
             }
 
             std::unique_ptr<folly::AsyncBase> async_base;
-            if (use_io_uring)
-            {
 #if USE_LIBURING
-                size_t uring_capacity = std::max(q_depth_per_context, 4u);
-                size_t uring_max_submit = std::max(q_depth_per_context, 4u);
-                async_base = std::make_unique<folly::IoUring>(uring_capacity, poll_mode, uring_max_submit);
+            size_t uring_capacity = std::max(q_depth_per_context, 4u);
+            size_t uring_max_submit = std::max(q_depth_per_context, 4u);
+            async_base = std::make_unique<folly::IoUring>(uring_capacity, poll_mode, uring_max_submit);
 #else
-                throwFromErrno("iouring not supported", ErrorCodes::NOT_IMPLEMENTED);
+            throw Exception("iouring not supported", ErrorCodes::NOT_IMPLEMENTED);
 #endif
-            }
-            else
-            {
-                chassert(io_engine == IoEngine::LibAio);
-                throwFromErrno("aio not supported", ErrorCodes::NOT_IMPLEMENTED);
-                // asyncBase = std::make_unique<folly::AsyncIO>(q_depth_per_context, pollMode);
-            }
 
             auto idx = incremental_idx++;
-            tl_context.reset(new AsyncIoContext(std::move(async_base), idx, evb, q_depth_per_context, use_io_uring));
+            tl_context.reset(new AsyncIoContext(std::move(async_base), idx, evb, q_depth_per_context));
         }
 
         return tl_context.get();

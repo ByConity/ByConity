@@ -781,6 +781,7 @@ TableScanStep::TableScanStep(
     const SelectQueryInfo & query_info_,
     size_t max_block_size_,
     String alias_,
+    bool bucket_scan_,
     PlanHints hints_,
     Assignments inline_expressions_,
     std::shared_ptr<AggregatingStep> aggregation_,
@@ -795,6 +796,7 @@ TableScanStep::TableScanStep(
     , pushdown_aggregation(std::move(aggregation_))
     , pushdown_projection(std::move(projection_))
     , pushdown_filter(std::move(filter_))
+    , bucket_scan(bucket_scan_)
     , alias(alias_)
     , log(&Poco::Logger::get("TableScanStep"))
 {
@@ -901,7 +903,7 @@ TableScanStep::TableScanStep(
         column_names.emplace_back(item.first);
     }
 
-    if (storage_id.empty() && context->getSettingsRef().enable_prune_empty_resource)
+    if (storage_id.empty() && context->getSettingsRef().enable_prune_source_plan_segment)
     {
         LOG_DEBUG(log, "Create tableScanStep without storage");
         is_null_source = true;
@@ -1655,7 +1657,7 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
 
 std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
 {
-    auto storage_id = context->getSettingsRef().enable_prune_empty_resource ? StorageID::tryFromProto(proto.storage_id(), context)
+    auto storage_id = context->getSettingsRef().enable_prune_source_plan_segment ? StorageID::tryFromProto(proto.storage_id(), context)
                                                                             : StorageID::fromProto(proto.storage_id(), context);
     NamesWithAliases column_alias;
     for (const auto & proto_element : proto.column_alias())
@@ -1729,6 +1731,7 @@ std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr) const
         copy_query_info,
         max_block_size,
         alias,
+        bucket_scan,
         hints,
         inline_expressions,
         pushdown_aggregation,

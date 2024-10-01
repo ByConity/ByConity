@@ -29,8 +29,8 @@
 #include <Optimizer/Rule/Rule.h>
 #include <QueryPlan/JoinStep.h>
 #include <common/logger_useful.h>
-#include "Interpreters/Context_fwd.h"
-#include "QueryPlan/IQueryPlanStep.h"
+#include <Interpreters/Context_fwd.h>
+#include <QueryPlan/IQueryPlanStep.h>
 
 #include <algorithm>
 
@@ -302,7 +302,7 @@ void OptimizeInput::execute()
                               children_stats,
                               *context->getOptimizerContext().getContext(),
                               context->getOptimizerContext().getWorkerSize())
-                              .getCost();
+                              .getCost(context->getOptimizerContext().getCostModel());
 
             group_expr->setCost(cost);
         }
@@ -666,7 +666,8 @@ bool OptimizeInput::checkJoinInputProperties(const PropertySet & requried_input_
             auto before_transformed_partition_cols = actual_input_props[actual_prop_index].getNodePartitioning().getColumns();
             auto translated_prop = actual_input_props[actual_prop_index].normalize(*right_equivalences);
             if (translated_prop.getNodePartitioning().getHandle() != first_handle
-                || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count
+                || (translated_prop.getNodePartitioning().getBuckets() != first_bucket_count && !(translated_prop.getNodePartitioning().isSatisfyWorker()
+                            && first_props.getNodePartitioning().isSatisfyWorker()))
                 || !ASTEquality::compareTree(translated_prop.getNodePartitioning().getBucketExpr(), first_sharding_expr))
             {
                 match = false;
@@ -743,7 +744,7 @@ void OptimizeInput::enforcePropertyAndUpdateWinner(
                           {group_stats},
                           *opt_context->getOptimizerContext().getContext(),
                           opt_context->getOptimizerContext().getWorkerSize())
-                          .getCost();
+                          .getCost(opt_context->getOptimizerContext().getCostModel());
     }
 
     if (!require.getStreamPartitioning().isPreferred()
@@ -767,7 +768,7 @@ void OptimizeInput::enforcePropertyAndUpdateWinner(
                           {group_stats},
                           *opt_context->getOptimizerContext().getContext(),
                           opt_context->getOptimizerContext().getWorkerSize())
-                          .getCost();
+                          .getCost(opt_context->getOptimizerContext().getCostModel());
     }
 
     // Merge cte actual props

@@ -50,6 +50,7 @@ public:
         char * buf = nullptr;
         Priority priority;
         size_t ignore = 0;
+        std::function<void()> on_finish;
     };
 
     struct Result

@@ -20,9 +20,9 @@ namespace DB
 {
 PlanNodeCost PlanNodeCost::ZERO(0.0, 0.0, 0.0);
 
-double PlanNodeCost::getCost() const
+double PlanNodeCost::getCost(const CostModel & cost_model) const
 {
-    return cpu_value * CostModel::CPU_COST_RATIO + mem_value * CostModel::MEM_COST_RATIO + net_value * CostModel::NET_COST_RATIO;
+    return cpu_value * cost_model.getCPUCostWeight() + mem_value * cost_model.getMemCostWeight() + net_value * cost_model.getNetCostWeight();
 }
 
 }

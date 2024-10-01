@@ -1,7 +1,7 @@
-Projection Est. 0 rows, cost 1.600000e-01
+Projection Est. 0 rows, cost 0.000000e+00
 │     Expressions: count():=`expr#count()`
-└─ MergingAggregated Est. 0 rows, cost 1.600000e-01
-   └─ Gather Exchange Est. 0 rows, cost 1.600000e-01
+└─ MergingAggregated Est. 0 rows, cost 0.000000e+00
+   └─ Gather Exchange Est. 0 rows, cost 0.000000e+00
       └─ Union Est. 0 rows, cost 0.000000e+00
          │     OutputToInputs: expr#count() = [expr#count(),expr#count(),expr#count()]
          ├─ ReadStorageRowCount Est. 0 rows, cost 0.000000e+00

@@ -163,7 +163,7 @@ String PlanPrinter::textLogicalPlan(
     return output;
 }
 
-String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, std::optional<PlanNodeCost> plan_cost, const StepAggregatedOperatorProfiles & profiles, const PlanCostMap & costs, const QueryPlanSettings & settings)
+String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, std::optional<PlanNodeCost> plan_cost, const CostModel & cost_model, const StepAggregatedOperatorProfiles & profiles, const PlanCostMap & costs, const QueryPlanSettings & settings)
 {
     std::ostringstream os;
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
@@ -172,7 +172,7 @@ String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, std::optional<PlanNodeCost
     if (plan_cost.has_value())
     {
         auto cost = plan_cost.value();
-        json->set("total_cost", cost.getCost());
+        json->set("total_cost", cost.getCost(cost_model));
         json->set("cpu_cost_value", cost.getCpuValue());
         json->set("net_cost_value", cost.getNetValue());
         json->set("men_cost_value", cost.getMenValue());
@@ -582,7 +582,7 @@ String PlanPrinter::TextPrinter::printStatistics(const PlanNodeBase & plan, cons
     std::stringstream out;
     const auto & stats = plan.getStatistics();
     out << "Est. " << (stats ? std::to_string(stats.value()->getRowCount()) : "?") << " rows";
-    if (costs.contains(plan.getId()))
+    if (settings.cost && costs.contains(plan.getId()))
         out << ", cost " << std::scientific << costs.at(plan.getId());
     return out.str();
 }
@@ -892,9 +892,11 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         const auto * join_step = dynamic_cast<const JoinStep *>(plan.get());
         out << intent.detailIntent() << "Condition: ";
         if (!join_step->getLeftKeys().empty())
-            out << join_step->getLeftKeys()[0] << " == " << join_step->getRightKeys()[0];
+            out << join_step->getLeftKeys()[0] << " == " << join_step->getRightKeys()[0]
+                << (join_step->getKeyIdNullSafe(0) ? "(null aware)" : "");
         for (size_t i = 1; i < join_step->getLeftKeys().size(); i++)
-            out << ", " << join_step->getLeftKeys()[i] << " == " << join_step->getRightKeys()[i];
+            out << ", " << join_step->getLeftKeys()[i] << " == " << join_step->getRightKeys()[i]
+                << (join_step->getKeyIdNullSafe(i) ? "(null aware)" : "");
 
         if (!ASTEquality::compareTree(join_step->getFilter(), PredicateConst::TRUE_VALUE))
         {

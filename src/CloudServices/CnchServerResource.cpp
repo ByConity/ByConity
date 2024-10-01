@@ -273,11 +273,16 @@ void CnchServerResource::addCacheableCreateQuery(
     };
 }
 
-void CnchServerResource::setTableVersion(const UUID & storage_uuid, const UInt64 table_version)
+void CnchServerResource::setTableVersion(
+    const UUID & storage_uuid, const UInt64 table_version, const std::set<Int64> & required_bucket_numbers)
 {
     std::lock_guard lock(mutex);
     auto & assigned_resource = assigned_table_resource.at(storage_uuid);
-    assigned_resource.table_version = table_version;
+    if (assigned_resource.table_version == 0)
+        assigned_resource.table_version = table_version;
+    else if (assigned_resource.table_version != table_version)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Inconsistent table version for table {}", UUIDHelpers::UUIDToString(storage_uuid));
+    assigned_resource.bucket_numbers.insert(required_bucket_numbers.begin(), required_bucket_numbers.end());
 }
 
 /// NOTE: Only used when optimizer is disabled.
@@ -506,15 +511,31 @@ void CnchServerResource::allocateResource(
             const auto & server_parts = resource.server_parts;
             const auto & required_bucket_numbers = resource.bucket_numbers;
             bool replicated = resource.replicated;
+            bool use_bucket_assignment = false;
+            BucketNumbersAssignmentMap assigned_bucket_map;
             ServerAssignmentMap assigned_map;
-            VirtualPartAssignmentMap virtual_part_assigned_map;
+            VirtualPartAssignmentMap assigned_virtual_part_map;
             HivePartsAssignMap assigned_hive_map;
             FilePartsAssignMap assigned_file_map;
             ServerDataPartsVector bucket_parts;
             ServerDataPartsVector leftover_server_parts;
+            auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+            // For function : arrayToBitmapWithEncode/EncodeBitmap
             bool bitengine_related_table = false;
 
-            if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+            if (resource.table_version > 0) // query with table version instead of parts
+            {
+                use_bucket_assignment = !required_bucket_numbers.empty();
+                if (use_bucket_assignment)
+                {
+                    assigned_bucket_map = assignBuckets(required_bucket_numbers, worker_group->getWorkerIDVec(), replicated);
+                }
+                else
+                {
+                    /// allocate table version to all workers
+                }
+            }
+            else if (cnch_table)
             {
                 // NOTE: server_parts maybe moved due to splitCnchParts and cannot be used again
                 std::tie(bucket_parts, leftover_server_parts) = splitCnchParts(context, *storage, server_parts);
@@ -539,7 +560,7 @@ void CnchServerResource::allocateResource(
                         min_rows_per_virtual_part = cnch_table->getSettings()->min_rows_per_virtual_part;
                     auto virtual_part_size
                         = computeVirtualPartSize(min_rows_per_virtual_part, cnch_table->getSettings()->index_granularity);
-                    std::tie(assigned_map, virtual_part_assigned_map)
+                    std::tie(assigned_map, assigned_virtual_part_map)
                         = assignCnchHybridParts(worker_group, leftover_server_parts, virtual_part_size, context);
                 }
                 else
@@ -576,78 +597,79 @@ void CnchServerResource::allocateResource(
             auto & assigned_storage_worker_indexs = assigned_storage_workers[storage->getStorageUUID()];
             for (const auto & host_ports : host_ports_vec)
             {
+                std::set<Int64> assigned_buckets;
                 ServerDataPartsVector assigned_parts;
                 ServerVirtualPartVector assigned_virtual_parts;
                 HiveFiles assigned_hive_parts;
                 FileDataPartsCNCHVector assigned_file_parts;
-                bool has_parts = false;
+
+                if (auto it = assigned_bucket_map.find(host_ports.id); it != assigned_bucket_map.end())
+                {
+                    assigned_buckets = std::move(it->second);
+                    LOG_TRACE(
+                        log,
+                        "Allocate {} buckets from table {} to {}",
+                        assigned_buckets.size(),
+                        storage->getStorageID().getNameForLogs(),
+                        host_ports.toDebugString());
+                }
+
                 if (auto it = assigned_map.find(host_ports.id); it != assigned_map.end())
                 {
                     assigned_parts = std::move(it->second);
-                    assigned_storage_worker_indexs.insert(host_ports);
-                    has_parts = true;
+                    CnchPartsHelper::flattenPartsVector(assigned_parts);
                     LOG_TRACE(
                         log,
-                        "SourcePrune Send {}.{} {}'s data part to worker {}",
-                        storage->getDatabaseName(),
-                        storage->getTableName(),
-                        toString(storage->getStorageUUID()),
+                        "Allocate {} parts from table {} to {}",
+                        assigned_parts.size(),
+                        storage->getStorageID().getNameForLogs(),
                         host_ports.toDebugString());
-
-                    CnchPartsHelper::flattenPartsVector(assigned_parts);
                 }
 
-                if (auto it = virtual_part_assigned_map.find(host_ports.id); it != virtual_part_assigned_map.end())
+                if (auto it = assigned_virtual_part_map.find(host_ports.id); it != assigned_virtual_part_map.end())
                 {
                     assigned_virtual_parts = getVirtualPartVector(leftover_server_parts, it->second);
-                    assigned_storage_worker_indexs.insert(host_ports);
                     LOG_TRACE(
                         log,
-                        "Send {} virtual data part (hybrid_allocation) to worker {} for table {}",
+                        "Allocate {} virtual parts from table {} to {}",
                         assigned_virtual_parts.size(),
-                        host_ports.toDebugString(),
-                        storage->getStorageID().getNameForLogs());
+                        storage->getStorageID().getNameForLogs(),
+                        host_ports.toDebugString());
                 }
 
                 if (auto it = assigned_hive_map.find(host_ports.id); it != assigned_hive_map.end())
                 {
                     assigned_hive_parts = std::move(it->second);
-                    assigned_storage_worker_indexs.insert(host_ports);
-                    has_parts = true;
                     LOG_TRACE(
                         log,
-                        "SourcePrune Send Hive {}.{} {}'s data part to worker {}",
-                        storage->getDatabaseName(),
-                        storage->getTableName(),
-                        toString(storage->getStorageUUID()),
+                        "Allocate {} hive parts from table {} to {}",
+                        assigned_hive_parts.size(),
+                        storage->getStorageID().getNameForLogs(),
                         host_ports.toDebugString());
                 }
-
 
                 if (auto it = assigned_file_map.find(host_ports.id); it != assigned_file_map.end())
                 {
                     assigned_file_parts = std::move(it->second);
-                    assigned_storage_worker_indexs.insert(host_ports);
-                    has_parts = true;
                     LOG_TRACE(
                         log,
-                        "SourcePrune Send File {}.{} {} data parts to works {}, size = {}",
-                        storage->getDatabaseName(),
-                        storage->getTableName(),
-                        toString(storage->getStorageUUID()),
-                        host_ports.toDebugString(),
-                        assigned_file_parts.size());
+                        "Allocate {} file parts from table {} to {}",
+                        assigned_file_parts.size(),
+                        storage->getStorageID().getNameForLogs(),
+                        host_ports.toDebugString());
                 }
-                LOG_TRACE(
-                    log,
-                    "Storage {} host {} prune_table {} has_parts {}",
-                    storage->getStorageID().getNameForLogs(),
-                    host_ports.toDebugString(),
-                    context->getSettingsRef().enable_prune_empty_resource,
-                    has_parts);
+
+                bool empty = (resource.table_version == 0 || (use_bucket_assignment && assigned_buckets.empty()))
+                        && assigned_parts.empty()
+                        && assigned_virtual_parts.empty()
+                        && assigned_hive_parts.empty()
+                        && assigned_file_parts.empty();
+
+                if (!empty)
+                    assigned_storage_worker_indexs.insert(host_ports);
 
                 if (!context->getSettingsRef().bsp_mode && context->getSettingsRef().enable_optimizer
-                    && context->getSettingsRef().enable_prune_empty_resource && !has_parts && !bitengine_related_table)
+                    && context->getSettingsRef().enable_prune_source_plan_segment && empty && !bitengine_related_table)
                 {
                     LOG_TRACE(
                         log,
@@ -670,6 +692,7 @@ void CnchServerResource::allocateResource(
                 worker_resource.addDataParts(std::move(assigned_virtual_parts));
                 worker_resource.addDataParts(assigned_hive_parts);
                 worker_resource.addDataParts(assigned_file_parts);
+                worker_resource.bucket_numbers = use_bucket_assignment ? assigned_buckets : required_bucket_numbers;
                 worker_resource.sent_create_query = resource.sent_create_query;
                 worker_resource.table_version = resource.table_version;
                 worker_resource.table_definition = resource.table_definition;

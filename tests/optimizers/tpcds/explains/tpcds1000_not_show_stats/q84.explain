@@ -23,26 +23,23 @@ Projection
                      └─ Inner Join
                         │     Condition: c_current_hdemo_sk == hd_demo_sk
                         │     Runtime Filters Builder: {hd_demo_sk}
-                        ├─ Repartition Exchange
-                        │  │     Partition by: {c_current_hdemo_sk}
-                        │  └─ Inner Join
-                        │     │     Condition: c_current_addr_sk == ca_address_sk
-                        │     │     Runtime Filters Builder: {ca_address_sk}
-                        │     ├─ Filter
-                        │     │  │     Condition: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
-                        │     │  └─ TableScan tpcds1000.customer
-                        │     │           Where: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
-                        │     │           Outputs: [c_customer_id, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_name, c_last_name]
-                        │     └─ Broadcast Exchange
-                        │        └─ Projection
-                        │           │     Expressions: [ca_address_sk]
-                        │           └─ Filter
-                        │              │     Condition: ca_city = 'Edgewood'
-                        │              └─ TableScan tpcds1000.customer_address
-                        │                       Where: ca_city = 'Edgewood'
-                        │                       Outputs: [ca_address_sk, ca_city]
-                        └─ Repartition Exchange
-                           │     Partition by: {hd_demo_sk}
+                        ├─ Inner Join
+                        │  │     Condition: c_current_addr_sk == ca_address_sk
+                        │  │     Runtime Filters Builder: {ca_address_sk}
+                        │  ├─ Filter
+                        │  │  │     Condition: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
+                        │  │  └─ TableScan tpcds1000.customer
+                        │  │           Where: isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk, c_current_hdemo_sk}
+                        │  │           Outputs: [c_customer_id, c_current_cdemo_sk, c_current_hdemo_sk, c_current_addr_sk, c_first_name, c_last_name]
+                        │  └─ Broadcast Exchange
+                        │     └─ Projection
+                        │        │     Expressions: [ca_address_sk]
+                        │        └─ Filter
+                        │           │     Condition: ca_city = 'Edgewood'
+                        │           └─ TableScan tpcds1000.customer_address
+                        │                    Where: ca_city = 'Edgewood'
+                        │                    Outputs: [ca_address_sk, ca_city]
+                        └─ Broadcast Exchange
                            └─ Inner Join
                               │     Condition: hd_income_band_sk == ib_income_band_sk
                               ├─ TableScan tpcds1000.household_demographics

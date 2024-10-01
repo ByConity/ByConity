@@ -8,10 +8,7 @@ class GlobalTxnCommitter : public WithContext
 {
 
 public:
-    explicit GlobalTxnCommitter(const ContextPtr & context_)
-        : WithContext(context_)
-    {
-    }
+    explicit GlobalTxnCommitter(const ContextPtr & context_);
 
     bool commit(const TransactionCnchPtr & txn);
 

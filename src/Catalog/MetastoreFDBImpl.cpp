@@ -36,6 +36,7 @@ MetastoreFDBImpl::MetastoreFDBImpl(const String & cluster_config_path) { fdb_cli
 
 void MetastoreFDBImpl::put(const String & key, const String & value, bool if_not_exists)
 {
+    assertNotReadonly(key);
     FDB::PutRequest put_req;
     put_req.key = StringRef(key);
     put_req.value = StringRef(value);
@@ -48,6 +49,7 @@ void MetastoreFDBImpl::put(const String & key, const String & value, bool if_not
 
 std::pair<bool, String> MetastoreFDBImpl::putCAS(const String & key, const String & value, const String & expected, bool with_old_value)
 {
+    assertNotReadonly(key);
     FDB::PutRequest put_req;
     put_req.key = StringRef(key);
     put_req.value = StringRef(value);
@@ -102,6 +104,7 @@ std::vector<std::pair<String, UInt64>> MetastoreFDBImpl::multiGet(const std::vec
 
 void MetastoreFDBImpl::drop(const String & key, [[maybe_unused]] const UInt64 & expected)
 {
+    assertNotReadonly(key);
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
     check_fdb_op(fdb_client->Delete(tr, key));
@@ -109,6 +112,7 @@ void MetastoreFDBImpl::drop(const String & key, [[maybe_unused]] const UInt64 & 
 
 void MetastoreFDBImpl::drop(const String & key, const String & expected_value)
 {
+    assertNotReadonly(key);
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
     check_fdb_op(fdb_client->Delete(tr, key, expected_value));
@@ -161,6 +165,16 @@ MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getByRange(const String & range_
 
 bool MetastoreFDBImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
+    for (auto & single_put : req.puts)
+    {
+        assertNotReadonly(single_put.key);
+    }
+
+    for (auto & single_delete : req.deletes)
+    {
+        assertNotReadonly(single_delete.key);
+    }
+
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
     fdb_error_t error_code = fdb_client->MultiWrite(tr, req, response);
@@ -172,6 +186,7 @@ bool MetastoreFDBImpl::batchWrite(const BatchCommitRequest & req, BatchCommitRes
 void MetastoreFDBImpl::clean(const String & prefix)
 {
     String end_key = getNextKey(prefix);
+    assertNotReadonly(end_key);
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
     check_fdb_op(fdb_client->Clear(tr, prefix, end_key));

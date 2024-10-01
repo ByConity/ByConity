@@ -14,7 +14,6 @@
  */
 
 #include <Optimizer/CostModel/AggregatingCost.h>
-
 #include <Optimizer/CostModel/CostCalculator.h>
 #include <QueryPlan/AggregatingStep.h>
 
@@ -31,7 +30,7 @@ PlanNodeCost AggregatingCost::calculate(const AggregatingStep & step, CostContex
     if (!stats || !children_stats)
         return PlanNodeCost::ZERO;
 
-    PlanNodeCost input_cost = PlanNodeCost::cpuCost(children_stats->getRowCount());
+    PlanNodeCost input_cost = PlanNodeCost::cpuCost(context.cost_model.isEnableUseByteSize() ? children_stats->getOutputSizeInBytes() : children_stats->getRowCount());
     PlanNodeCost build_cost = PlanNodeCost::cpuCost(stats->getRowCount()) * context.cost_model.getAggregateCostWeight();
 
     PlanNodeCost mem_cost = PlanNodeCost::memCost(stats->getRowCount() * step.getAggregates().size());

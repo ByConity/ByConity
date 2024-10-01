@@ -512,6 +512,7 @@ message SendResourcesReq
   optional WorkerInfo worker_info = 9;
   // can coexist with `create_queries'
   repeated CacheableTableDefinition cacheable_create_queries = 10;
+  optional string session_timezone = 11;
 }
 
 message SendResourcesResp

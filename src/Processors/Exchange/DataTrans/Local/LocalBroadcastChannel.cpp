@@ -85,7 +85,7 @@ RecvDataPacket LocalBroadcastChannel::recv(timespec timeout_ts)
 
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::RECV_TIMEOUT,
-        "Receive from channel " + name + " timeout after ms: " + DateLUT::instance().timeToString(timeout_ts.tv_sec));
+        "Receive from channel " + name + " timeout after ms: " + DateLUT::serverTimezoneInstance().timeToString(timeout_ts.tv_sec));
     if (enable_receiver_metrics)
         receiver_metrics.recv_time_ms << s.elapsedMilliseconds();
     return current_status;

@@ -1,19 +1,55 @@
-DROP TABLE IF EXISTS test.index_table;
+DROP TABLE IF EXISTS test.multi_index_table;
 
-CREATE TABLE test.index_table
+create table test.multi_index_table 
 (
     `ts` DateTime64(3),
     `message` String,
-    INDEX ts ts TYPE minmax GRANULARITY 4,
-    INDEX message message TYPE tokenbf_v1(32768, 2, 0) GRANULARITY 2
-)
+    `log` String,
+    `int_vid` Array(Int32) BitmapIndex,
+    INDEX ts_idx ts TYPE minmax GRANULARITY 4,
+    INDEX message_idx message TYPE tokenbf_v1(32768, 2, 0) GRANULARITY 2,
+    INDEX log_idx log TYPE inverted GRANULARITY 1
+ ) 
 ENGINE = CnchMergeTree
 PARTITION BY toStartOfInterval(ts, toIntervalHour(12))
 ORDER BY ts
 SETTINGS index_granularity = 8;
 
-INSERT INTO test.index_table VALUES ('2023-10-17 00:11:58.996', '2015-01-04'),('2023-10-17 00:12:58.996', '2016-01-04'),('2023-10-17 00:13:58.996', '2017-01-04'),('2023-10-17 00:14:58.996', '2018-01-04'),('2023-10-17 00:15:58.996', '2019-01-04'),('2023-10-17 00:16:58.996', '2020-01-04'),('2023-10-17 00:17:58.996', '2021-01-04'),('2023-10-17 00:18:58.996', '2024-01-04'),('2023-10-17 00:19:58.996', '2034-01-04'),('2023-10-17 00:20:58.996', '2044-01-04'),('2023-10-17 00:21:58.996', '2014-04-04'),('2023-10-17 00:31:58.996', '2014-05-04'),('2023-10-17 00:41:58.996', '2014-07-04'),('2023-10-17 00:51:58.996', '2014-08-04'),('2023-10-17 00:61:58.996', '2014-09-04'),('2023-10-17 00:71:58.996', '2014-01-01'),('2023-10-17 00:81:58.996', '2014-01-02'),('2023-10-17 00:91:58.996', '2014-01-03'),('2023-10-17 01:11:58.996', '2014-01-04'),('2023-10-17 02:11:58.996', '2014-01-04'),('2023-10-17 03:11:58.996', '2014-01-04'),('2023-10-17 04:11:58.996', '2014-01-05'),('2023-10-17 05:11:58.996', '2014-01-05'),('2023-10-17 06:11:58.996', '2014-01-03'),('2023-10-17 07:11:58.996', '2014-01-07'),('2023-10-17 08:11:58.996', '2014-01-02'),('2023-10-17 09:11:58.996', '2014-01-01'),('2023-10-17 10:11:58.996', '2014-01-08');
+insert into table test.multi_index_table  values ('2023-10-17 00:11:58.996', 'preload_test1', 'preload_test2', [1, 2, 3, 4, 5])
 
-select message from test.index_table where ts = '2023-10-17 00:11:58.996';
-select message from test.index_table where ts = '2023-10-17 00:11:58.996';
-select message from test.index_table where ts = '2023-10-17 00:11:58.996' settings disk_cache_mode = 'FORCE_DISK_CACHE';
+select message from test.multi_index_table where ts = '2023-10-17 00:11:58.996' and log like 'preload%';
+select message from test.multi_index_table where ts = '2023-10-17 00:11:58.996' and log like 'preload%';
+select sleepEachRow(3) from system.numbers limit 3 format Null;
+select message from test.multi_index_table where ts = '2023-10-17 00:11:58.996' and log like 'preload%' settings disk_cache_mode = 'FORCE_DISK_CACHE';
+
+select 'preload_multi_index_test';
+
+DROP TABLE IF EXISTS test.multi_index_table;
+create table test.multi_index_table 
+(
+    `ts` DateTime64(3),
+    `message` String,
+    `log` String,
+    `int_vid` Array(Int32) BitmapIndex,
+    INDEX ts_idx ts TYPE minmax GRANULARITY 4,
+    INDEX message_idx message TYPE tokenbf_v1(32768, 2, 0) GRANULARITY 2,
+    INDEX log_idx log TYPE inverted GRANULARITY 1
+ ) 
+ENGINE = CnchMergeTree
+PARTITION BY toStartOfInterval(ts, toIntervalHour(12))
+ORDER BY ts
+SETTINGS index_granularity = 8;
+
+insert into table test.multi_index_table  values ('2022-10-17 00:11:58.996', 'preload_test1', 'preload_test2', [1, 2, 3, 4, 5])
+
+alter table test.multi_index_table modify setting parts_preload_level = 3;
+alter table test.multi_index_table modify setting enable_parts_sync_preload = 1;
+alter disk cache preload table test.multi_index_table settings parts_preload_level = 3;
+select sleepEachRow(3) from system.numbers limit 3 format Null;
+select segments_map from cnch('vw_default', system.part_log) order by event_time desc limit 1;
+select message, log, int_vid from test.multi_index_table where ts = '2022-10-17 00:11:58.996' and log like 'preload%' settings disk_cache_mode = 'FORCE_DISK_CACHE';
+
+insert into table test.multi_index_table  values ('2024-10-17 00:11:58.996', 'preload_test3', 'preload_test4', [5, 6, 7, 8, 9]);
+select sleepEachRow(3) from system.numbers limit 3 format Null;
+select segments_map from cnch('vw_default', system.part_log) order by event_time desc limit 1;
+select message, log, int_vid from test.multi_index_table where ts = '2024-10-17 00:11:58.996' and log like 'preload%' settings disk_cache_mode = 'FORCE_DISK_CACHE';

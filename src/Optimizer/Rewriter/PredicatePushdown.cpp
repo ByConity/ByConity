@@ -195,9 +195,9 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
     std::pair<ConstASTPtr, ConstASTPtr> split_in_filter = FilterStep::splitLargeInValueList(step.getFilter(), limit);
 
     LOG_DEBUG(
-        &Poco::Logger::get("PredicateVisitor"), 
-        "filter node {}, split_in_filter.first : {}, split_in_filter.second : {}", 
-        node.getId(), 
+        &Poco::Logger::get("PredicateVisitor"),
+        "filter node {}, split_in_filter.first : {}, split_in_filter.second : {}",
+        node.getId(),
         split_in_filter.first->formatForErrorMessage(),
         split_in_filter.second->formatForErrorMessage()
         );
@@ -351,7 +351,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     auto step = node.getStep();
 
     // RequireRightKeys is clickhouse sql only, we don't process this kind of join.
-    if (step->getRequireRightKeys().has_value())
+    if (step->getRequireRightKeys().has_value() || step->hasKeyIdNullSafe())
     {
         return visitPlanNode(node, predicate_context);
     }
@@ -662,8 +662,9 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             ASTTableJoin::Strictness::All,
             step->getMaxStreams(),
             step->getKeepLeftReadInOrder(),
-            std::move(left_keys),
-            std::move(right_keys),
+            left_keys,
+            right_keys,
+            std::vector<bool>{},
             new_join_filter,
             step->isHasUsing(),
             step->getRequireRightKeys(),
@@ -685,8 +686,9 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             step->getStrictness(),
             step->getMaxStreams(),
             step->getKeepLeftReadInOrder(),
-            std::move(left_keys),
-            std::move(right_keys),
+            left_keys,
+            right_keys,
+            std::vector<bool>{},
             new_join_filter,
             step->isHasUsing(),
             step->getRequireRightKeys(),
@@ -718,6 +720,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             join_step->getKeepLeftReadInOrder(),
             join_step->getRightKeys(),
             join_step->getLeftKeys(),
+            join_step->getKeyIdsNullSafe(),
             join_step->getFilter(),
             join_step->isHasUsing(),
             join_step->getRequireRightKeys(),
@@ -1606,10 +1609,10 @@ ASTPtr EffectivePredicateVisitor::visitFilterNode(FilterNode & node, ContextMuta
     }
 
     /**
-     * Disable extract predicate with inconsistent type. 
-     * 
+     * Disable extract predicate with inconsistent type.
+     *
      * for predicate : expr#toDate('2023-06-29') = expr#'2023-06-29',
-     * left argument and right argument both ASTIdentifier, but they 
+     * left argument and right argument both ASTIdentifier, but they
      * have different type, left type is Date, right type is String.
      */
     const NameToType & name_types = step.getOutputStream().getNamesToTypes();

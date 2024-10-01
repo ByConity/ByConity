@@ -394,9 +394,9 @@ PropertySets DeterminerVisitor::visitIntersectOrExceptStep(const IntersectOrExce
     return {set};
 }
 
-PropertySets DeterminerVisitor::visitExchangeStep(const ExchangeStep & node, DeterminerContext & context)
+PropertySets DeterminerVisitor::visitExchangeStep(const ExchangeStep &, DeterminerContext &)
 {
-    return visitStep(node, context);
+    return {{Property{}}};
 }
 
 PropertySets DeterminerVisitor::visitRemoteExchangeSourceStep(const RemoteExchangeSourceStep & node, DeterminerContext & context)

@@ -14,7 +14,7 @@ Projection Est. 1 rows
             │     └─ Aggregating Est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#count():=AggNull(count)()
-            │        └─ Filter Est. 103266 rows
+            │        └─ Filter Est. 103267 rows
             │           │     Condition: (ws_sold_time_sk = t_time_sk) AND (ws_ship_hdemo_sk = hd_demo_sk) AND (ws_web_page_sk = wp_web_page_sk) AND (t_hour >= 8) AND (t_hour <= cast(9, 'UInt16')) AND (hd_dep_count = 6) AND (wp_char_count >= 5000) AND (wp_char_count <= 5200)
             │           └─ Buffer Est. 413066 rows
             │              └─ CTERef[1] Est. 413066 rows
@@ -24,44 +24,35 @@ Projection Est. 1 rows
                      └─ Aggregating Est. 1 rows
                         │     Group by: {}
                         │     Aggregates: expr#count()_1:=AggNull(count)()
-                        └─ Filter Est. 103266 rows
+                        └─ Filter Est. 103267 rows
                            │     Condition: (ws_sold_time_sk_1 = t_time_sk_1) AND (ws_ship_hdemo_sk_1 = hd_demo_sk_1) AND (ws_web_page_sk_1 = wp_web_page_sk_1) AND (t_hour_1 >= 19) AND (t_hour_1 <= cast(20, 'UInt16')) AND (hd_dep_count_1 = 6) AND (wp_char_count_1 >= 5000) AND (wp_char_count_1 <= 5200)
                            └─ Buffer Est. 413066 rows
                               └─ CTERef[1] Est. 413066 rows
 CTEDef [1]
    Inner Join Est. 413066 rows
    │     Condition: ws_sold_time_sk == t_time_sk
-   ├─ Repartition Exchange Est. 1440000 rows
-   │  │     Partition by: {ws_sold_time_sk}
-   │  └─ Inner Join Est. 1440000 rows
-   │     │     Condition: ws_ship_hdemo_sk == hd_demo_sk
-   │     │     Runtime Filters Builder: {hd_demo_sk}
-   │     ├─ Inner Join Est. 14400007 rows
-   │     │  │     Condition: ws_web_page_sk == wp_web_page_sk
-   │     │  │     Runtime Filters Builder: {wp_web_page_sk}
-   │     │  ├─ Filter Est. 720000376 rows
-   │     │  │  │     Condition: Runtime Filters: {ws_ship_hdemo_sk, ws_web_page_sk}
-   │     │  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
-   │     │  │           Where: Runtime Filters: {ws_ship_hdemo_sk, ws_web_page_sk}
-   │     │  │           Outputs: [ws_sold_time_sk, ws_ship_hdemo_sk, ws_web_page_sk]
-   │     │  └─ Broadcast Exchange Est. 60 rows
-   │     │     └─ Filter Est. 60 rows
-   │     │        │     Condition: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
-   │     │        └─ TableScan tpcds1000.web_page Est. 3000 rows
-   │     │                 Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
-   │     │                 Outputs: [wp_web_page_sk, wp_char_count]
-   │     └─ Broadcast Exchange Est. 720 rows
-   │        └─ Filter Est. 720 rows
-   │           │     Condition: hd_dep_count = 6
-   │           └─ TableScan tpcds1000.household_demographics Est. 7200 rows
-   │                    Where: hd_dep_count = 6
-   │                    Outputs: [hd_demo_sk, hd_dep_count]
-   └─ Repartition Exchange Est. 24784 rows
-      │     Partition by: {t_time_sk}
+   ├─ Inner Join Est. 1440000 rows
+   │  │     Condition: ws_ship_hdemo_sk == hd_demo_sk
+   │  ├─ Inner Join Est. 14400007 rows
+   │  │  │     Condition: ws_web_page_sk == wp_web_page_sk
+   │  │  ├─ TableScan tpcds1000.web_sales Est. 720000376 rows
+   │  │  │        Outputs: [ws_sold_time_sk, ws_ship_hdemo_sk, ws_web_page_sk]
+   │  │  └─ Broadcast Exchange Est. 61 rows
+   │  │     └─ Filter Est. 61 rows
+   │  │        │     Condition: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
+   │  │        └─ TableScan tpcds1000.web_page Est. 3000 rows
+   │  │                 Where: (wp_char_count >= 5000) AND (wp_char_count <= 5200)
+   │  │                 Outputs: [wp_web_page_sk, wp_char_count]
+   │  └─ Broadcast Exchange Est. 720 rows
+   │     └─ Filter Est. 720 rows
+   │        │     Condition: hd_dep_count = 6
+   │        └─ TableScan tpcds1000.household_demographics Est. 7200 rows
+   │                 Where: hd_dep_count = 6
+   │                 Outputs: [hd_demo_sk, hd_dep_count]
+   └─ Broadcast Exchange Est. 24784 rows
       └─ Filter Est. 24784 rows
          │     Condition: ((t_hour >= 8) OR (t_hour >= 19)) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour >= 19)) AND ((t_hour >= 8) OR (t_hour <= cast(20, 'UInt16'))) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour <= cast(20, 'UInt16')))
          └─ TableScan tpcds1000.time_dim Est. 86400 rows
                   Where: ((t_hour >= 8) OR (t_hour >= 19)) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour >= 19)) AND ((t_hour >= 8) OR (t_hour <= cast(20, 'UInt16'))) AND ((t_hour <= cast(9, 'UInt16')) OR (t_hour <= cast(20, 'UInt16')))
                   Outputs: [t_time_sk, t_hour]
-note: Runtime Filter is applied for 2 times.
 note: CTE(Common Table Expression) is applied for 2 times.

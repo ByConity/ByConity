@@ -12,7 +12,7 @@ using namespace DB;
 int main(int, char **)
 try
 {
-    const DateLUTImpl & local_time_zone = DateLUT::instance();
+    const DateLUTImpl & local_time_zone = DateLUT::serverTimezoneInstance();
     const DateLUTImpl & utc_time_zone = DateLUT::instance("UTC");
 
     ReadBufferFromFileDescriptor in(STDIN_FILENO);

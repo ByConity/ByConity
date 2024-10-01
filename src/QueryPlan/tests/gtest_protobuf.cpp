@@ -796,6 +796,9 @@ TEST_F(ProtobufTest, JoinStep)
         Names right_keys;
         for (int i = 0; i < 10; ++i)
             right_keys.emplace_back(fmt::format("text{}", eng() % 100));
+        std::vector<bool> key_ids_null_safe;
+        for (size_t i = 0; i < left_keys.size(); ++i)
+            key_ids_null_safe.emplace_back(eng() % 2 == 0);
         auto filter = generateAST(eng);
         auto has_using = eng() % 2 == 1;
         std::optional<std::vector<bool>> require_right_keys;
@@ -819,6 +822,7 @@ TEST_F(ProtobufTest, JoinStep)
             keep_left_read_in_order,
             left_keys,
             right_keys,
+            key_ids_null_safe,
             filter,
             has_using,
             require_right_keys,
@@ -1044,6 +1048,7 @@ TEST_F(ProtobufTest, TableScanStep)
             query_info,
             max_block_size,
             String{} /*alias*/,
+            false,
             PlanHints{},
             Assignments{},
             pushdown_aggregation,

@@ -18,6 +18,7 @@
 
 #include <Optimizer/Rewriter/RemoveApply.h>
 #include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
+#include <Optimizer/Rule/Rewrite/AddRepartitionColumn.h>
 #include <Optimizer/Rule/Rewrite/DistinctToAggregate.h>
 #include <Optimizer/Rule/Rewrite/EagerAggregation.h>
 #include <Optimizer/Rule/Rewrite/ExplainAnalyzeRules.h>
@@ -246,5 +247,9 @@ std::vector<RulePtr> Rules::pushUnionThroughJoin()
         std::make_shared<PushUnionThroughJoin>(), std::make_shared<PushUnionThroughProjection>()};
 }
 
+std::vector<RulePtr> Rules::addRepartitionColumn()
+{
+    return {std::make_shared<AddRepartitionColumn>()};
+}
 
 }

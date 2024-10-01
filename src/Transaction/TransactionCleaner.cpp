@@ -125,10 +125,11 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             auto rpc_address = host_port.getRPCAddress();
             if (!isLocalServer(rpc_address, std::to_string(global_context.getRPCPort())))
             {
-                // TODO: need to fix for multi-table txn
-                LOG_DEBUG(log, "Forward clean task for txn {} to server {}", txn_record.txnID().toUInt64(), rpc_address);
-                global_context.getCnchServerClientPool().get(rpc_address)->cleanTransaction(txn_record);
+
+                LOG_DEBUG(log, "(dry-run) Forward clean task for txn {} to server {}", txn_record.txnID().toUInt64(), rpc_address);
                 return;
+                // TODO: need to fix for multi-table txn
+                // global_context.getCnchServerClientPool().get(rpc_address)->cleanTransaction(txn_record);
             }
 
             UndoResourceNames names = integrateResources(resources);

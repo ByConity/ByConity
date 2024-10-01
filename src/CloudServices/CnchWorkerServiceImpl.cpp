@@ -144,7 +144,10 @@ CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
             RPCHelpers::handleException(response->mutable_exception()); \
         } \
     }; \
-    THREADPOOL_SCHEDULE(_func);
+    Stopwatch watch; \
+    THREADPOOL_SCHEDULE(_func); \
+    UInt64 milliseconds = watch.elapsedMilliseconds(); \
+    if (milliseconds > 100) LOG_DEBUG(log, "CnchWorkerService rpc request threadpool schedule cost : {} ", milliseconds);
 
 
 void CnchWorkerServiceImpl::executeSimpleQuery(
@@ -710,6 +713,10 @@ void CnchWorkerServiceImpl::sendResources(
         auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), request->timeout(), false);
         auto query_context = session->context;
         query_context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
+        if (request->has_session_timezone())
+            query_context->setSetting("session_timezone", request->session_timezone());
+
+        CurrentThread::QueryScope query_scope(query_context);
         auto worker_resource = query_context->getCnchWorkerResource();
 
         /// store cloud tables in cnch_session_resource.

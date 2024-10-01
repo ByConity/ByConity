@@ -27,25 +27,25 @@ create stats t4;
 
 select '';
 select '--- original catalog ---';
-explain verbose=0 select * from t1, t2, t3, t4 SETTINGS statistics_cache_policy='catalog';
+explain cost=0, verbose=0 select * from t1, t2, t3, t4 SETTINGS statistics_cache_policy='catalog';
 show stats all in catalog;
 
 select '';
 select '--- original cache ---';
 -- not loaded in cache, should be empty
-explain verbose=0 select * from t1, t2, t3, t4 SETTINGS statistics_cache_policy='cache';
+explain cost=0, verbose=0 select * from t1, t2, t3, t4 SETTINGS statistics_cache_policy='cache';
 show stats all in cache;
 
 select '';
 select '--- original normal ---';
 -- this will flush cache
-explain verbose=0 select * from t1, t2, t3, t4;
+explain cost=0, verbose=0 select * from t1, t2, t3, t4;
 -- so this won't be accurate
 show stats all; 
 
 select '';
 select '--- original cache ---';
-explain verbose=0 select * from t1, t2, t3, t4 SETTINGS statistics_cache_policy='cache';
+explain cost=0, verbose=0 select * from t1, t2, t3, t4 SETTINGS statistics_cache_policy='cache';
 show stats all in cache;
 
 select '';
@@ -70,21 +70,21 @@ set enable_optimizer=1;
 select '';
 select '--- cache ---';
 set statistics_cache_policy='cache';
-explain verbose=0 select * from t1, t2, t3, t4;
+explain cost=0, verbose=0 select * from t1, t2, t3, t4;
 show stats all in cache;
 
 select '';
 select '--- catalog ---';
 select sleep(3) FORMAT Null;
 set statistics_cache_policy='catalog';
-explain verbose=0 select * from t1, t2, t3, t4;
+explain cost=0, verbose=0 select * from t1, t2, t3, t4;
 show stats all in catalog;
 
 select '';
 select '--- normal ---';
 -- this will flush cache for t2
 set statistics_cache_policy='default';
-explain verbose=0 select * from t1, t2, t3, t4;
+explain cost=0, verbose=0 select * from t1, t2, t3, t4;
 -- so this won't be accurate
 show stats all; 
 

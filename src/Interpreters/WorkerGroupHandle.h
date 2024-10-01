@@ -119,6 +119,8 @@ public:
     CnchWorkerClientPtr getWorkerClient(const HostWithPorts & host_ports) const;
     CnchWorkerClientPtr doGetWorkerClient(const HostWithPorts & host_ports) const;
 
+    size_t getWorkerIndex(const String & worker_id) const;
+
     std::optional<size_t> indexOf(const HostWithPorts & host_ports) const
     {
         for (size_t i = 0, size = hosts.size(); i < size; i++)
@@ -145,11 +147,6 @@ public:
 
     static WorkerGroupHandle mockWorkerGroupHandle(const String & worker_id_prefix_, UInt64 worker_number_, const ContextPtr & context_);
 
-    void addHostWithPorts(const HostWithPorts & host_with_ports)
-    {
-        hosts.push_back(host_with_ports);
-        worker_num++;
-    }
 private:
     /// Note: updating mutable fields (like `metrics`) should be guarded with lock.
     mutable std::mutex state_mutex;

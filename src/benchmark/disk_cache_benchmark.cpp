@@ -162,7 +162,7 @@ public:
                             if (status != HybridCache::Status::Ok)
                                 printf("insert failed %d\n", status);
                         },
-                        HybridCache::EngineTag::MarkCache);
+                        HybridCache::EngineTag::UncompressedCache);
             };
 
             Stopwatch watch;
@@ -224,7 +224,7 @@ public:
                             if (status != HybridCache::Status::Ok)
                                 printf("insert faield %d\n", status);
                         },
-                        HybridCache::EngineTag::MarkCache);
+                        HybridCache::EngineTag::UncompressedCache);
             };
 
             auto lookup_workload = [&](UInt32 id) {
@@ -238,7 +238,7 @@ public:
                             if (status != HybridCache::Status::Ok)
                                 printf("lookup failed %d\n", status);
                         },
-                        HybridCache::EngineTag::MarkCache);
+                        HybridCache::EngineTag::UncompressedCache);
             };
 
             HybridCache::MultithreadTestUtil::runThreadUntilFinish(&pool, BenchmarkConfig::num_threads, insert_workload);
@@ -327,7 +327,7 @@ BENCHMARK_DEFINE_F(NvmCacheBenchmarkIoUring, SimpleInsert)(benchmark::State & st
     auto create_device = [](std::vector<File> & f_vec, const UInt64 cache_size) {
         return HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0, HybridCache::IoEngine::IoUring, 256);
     };
-    auto create_scheduler = [] { return HybridCache::createNavyRequestScheduler(1, 1, 256, 256, 0, 10); };
+    auto create_scheduler = [] { return HybridCache::createFiberRequestScheduler(1, 1, 256, 256, 0, 10); };
 
     simpleInsertBase(state, create_device, create_scheduler);
 }
@@ -349,7 +349,7 @@ BENCHMARK_DEFINE_F(NvmCacheBenchmarkIoUring, SimpleLookup)(benchmark::State & st
     auto create_device = [](std::vector<File> & f_vec, const UInt64 cache_size) {
         return HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0, HybridCache::IoEngine::IoUring, 256);
     };
-    auto create_scheduler = [] { return HybridCache::createNavyRequestScheduler(1, 1, 256, 256, 0, 10); };
+    auto create_scheduler = [] { return HybridCache::createFiberRequestScheduler(1, 1, 256, 256, 0, 10); };
 
     simpleLookupBase(state, create_device, create_scheduler);
 }

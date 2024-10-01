@@ -5,24 +5,24 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {d_year ASC NULLS LAST, ss_item_sk ASC NULLS LAST, ss_customer_sk ASC NULLS LAST, expr#sum(ss_quantity) DESC NULLS LAST, expr#sum(ss_wholesale_cost) DESC NULLS LAST, expr#sum(ss_sales_price) DESC NULLS LAST, expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)) ASC NULLS LAST, expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 1026338399452 rows
+      └─ Gather Exchange Est. 998987514 rows
          └─ Sorting Est. 100 rows
             │     Order by: {d_year ASC NULLS LAST, ss_item_sk ASC NULLS LAST, ss_customer_sk ASC NULLS LAST, expr#sum(ss_quantity) DESC NULLS LAST, expr#sum(ss_wholesale_cost) DESC NULLS LAST, expr#sum(ss_sales_price) DESC NULLS LAST, expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)) ASC NULLS LAST, expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)) ASC NULLS LAST, expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2) ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 1026338399452 rows
+            └─ Projection Est. 998987514 rows
                │     Expressions: [d_year, expr#sum(ss_quantity), expr#sum(ss_sales_price), expr#sum(ss_wholesale_cost), ss_customer_sk, ss_item_sk], expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)):=coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0), expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)):=coalesce(`expr#sum(ws_sales_price)`, 0) + coalesce(`expr#sum(cs_sales_price)`, 0), expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)):=coalesce(`expr#sum(ws_wholesale_cost)`, 0) + coalesce(`expr#sum(cs_wholesale_cost)`, 0), expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2):=round(`expr#sum(ss_quantity)` / (coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0)), 2)
-               └─ Filter Est. 1026338399452 rows
+               └─ Filter Est. 998987514 rows
                   │     Condition: (coalesce(`expr#sum(ws_quantity)`, 0) > 0) OR (coalesce(`expr#sum(cs_quantity)`, 0) > 0)
-                  └─ Left (PARALLEL_HASH) Join Est. 4105353597809 rows
+                  └─ Left (PARALLEL_HASH) Join Est. 3995950054 rows
                      │     Condition: d_year == d_year_2, ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
-                     ├─ Left (PARALLEL_HASH) Join Est. 42878440083 rows
+                     ├─ Left (PARALLEL_HASH) Join Est. 667772365 rows
                      │  │     Condition: d_year == d_year_1, ss_customer_sk == ws_bill_customer_sk, ss_item_sk == ws_item_sk
-                     │  ├─ Aggregating Est. 737665364 rows
+                     │  ├─ Aggregating Est. 184112858 rows
                      │  │  │     Group by: {d_year, ss_item_sk, ss_customer_sk}
                      │  │  │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity), expr#sum(ss_wholesale_cost):=AggNull(sum)(ss_wholesale_cost), expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                     │  │  └─ Projection Est. 184112858 rows
+                     │  │  └─ Projection Est. 184112859 rows
                      │  │     │     Expressions: [d_year, ss_customer_sk, ss_item_sk, ss_quantity, ss_sales_price, ss_wholesale_cost]
-                     │  │     └─ Filter Est. 184112858 rows
+                     │  │     └─ Filter Est. 184112859 rows
                      │  │        │     Condition: isNull(sr_ticket_number)
                      │  │        └─ Left (PARALLEL_HASH) Join Est. 736451434 rows
                      │  │           │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
@@ -42,7 +42,7 @@ Projection Est. 100 rows
                      │  │           │                 Outputs: [d_date_sk, d_year]
                      │  │           └─ TableScan tpcds1000_sample.store_returns Est. 287999764 rows
                      │  │                    Outputs: [sr_item_sk, sr_ticket_number]
-                     │  └─ Aggregating Est. 180056318 rows
+                     │  └─ Aggregating Est. 44940002 rows
                      │     │     Group by: {d_year_1, ws_item_sk, ws_bill_customer_sk}
                      │     │     Aggregates: expr#sum(ws_quantity):=AggNull(sum)(ws_quantity), expr#sum(ws_wholesale_cost):=AggNull(sum)(ws_wholesale_cost), expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
                      │     └─ Projection Est. 44940003 rows
@@ -67,7 +67,7 @@ Projection Est. 100 rows
                      │              │                 Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                      │              └─ TableScan tpcds1000_sample.web_returns Est. 71997522 rows
                      │                       Outputs: [wr_item_sk, wr_order_number]
-                     └─ Aggregating Est. 286270616 rows
+                     └─ Aggregating Est. 71567654 rows
                         │     Group by: {d_year_2, cs_item_sk, cs_bill_customer_sk}
                         │     Aggregates: expr#sum(cs_quantity):=AggNull(sum)(cs_quantity), expr#sum(cs_wholesale_cost):=AggNull(sum)(cs_wholesale_cost), expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
                         └─ Projection Est. 71567654 rows

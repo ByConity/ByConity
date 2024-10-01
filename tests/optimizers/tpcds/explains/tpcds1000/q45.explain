@@ -5,19 +5,19 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 515861 rows
+      └─ Gather Exchange Est. 8272342 rows
          └─ Sorting Est. 100 rows
             │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 515861 rows
-               └─ Repartition Exchange Est. 515861 rows
+            └─ MergingAggregated Est. 8272342 rows
+               └─ Repartition Exchange Est. 8272342 rows
                   │     Partition by: {ca_zip, ca_city}
-                  └─ Aggregating Est. 515861 rows
+                  └─ Aggregating Est. 8272342 rows
                      │     Group by: {ca_zip, ca_city}
                      │     Aggregates: expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
-                     └─ Projection Est. 8886455 rows
+                     └─ Projection Est. 8886456 rows
                         │     Expressions: [ca_city, ca_zip, ws_sales_price]
-                        └─ Filter Est. 8886455 rows
+                        └─ Filter Est. 8886456 rows
                            │     Condition: (substring(ca_zip, 1, 5) IN ('85669', '86197', '88274', '83405', '86475', '85392', '85460', '80348', '81792')) OR if(0, NULL, multiIf(build_side_non_null_symbol = 1, 1, 0))
                            └─ Left Join Est. 35545822 rows
                               │     Condition: i_item_id == i_item_id_1
@@ -35,10 +35,10 @@ Projection Est. 100 rows
                               │  │     │  │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
                               │  │     │  │           Where: Runtime Filters: {ws_sold_date_sk}
                               │  │     │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_customer_sk, ws_sales_price]
-                              │  │     │  └─ Broadcast Exchange Est. 90 rows
-                              │  │     │     └─ Projection Est. 90 rows
+                              │  │     │  └─ Broadcast Exchange Est. 91 rows
+                              │  │     │     └─ Projection Est. 91 rows
                               │  │     │        │     Expressions: [d_date_sk]
-                              │  │     │        └─ Filter Est. 90 rows
+                              │  │     │        └─ Filter Est. 91 rows
                               │  │     │           │     Condition: (d_qoy = 2) AND (d_year = 2001)
                               │  │     │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
                               │  │     │                    Where: (d_qoy = 2) AND (d_year = 2001)
@@ -57,13 +57,13 @@ Projection Est. 100 rows
                               │           │     Partition by: {ca_address_sk}
                               │           └─ TableScan tpcds1000.customer_address Est. 6000000 rows
                               │                    Outputs: [ca_address_sk, ca_city, ca_zip]
-                              └─ Broadcast Exchange Est. 5 rows
-                                 └─ Projection Est. 5 rows
+                              └─ Broadcast Exchange Est. 10 rows
+                                 └─ Projection Est. 10 rows
                                     │     Expressions: [i_item_id_1], build_side_non_null_symbol:=1
-                                    └─ MergingAggregated Est. 5 rows
-                                       └─ Repartition Exchange Est. 5 rows
+                                    └─ MergingAggregated Est. 10 rows
+                                       └─ Repartition Exchange Est. 10 rows
                                           │     Partition by: {i_item_id_1}
-                                          └─ Aggregating Est. 5 rows
+                                          └─ Aggregating Est. 10 rows
                                              │     Group by: {i_item_id_1}
                                              └─ Projection Est. 10 rows
                                                 │     Expressions: [i_item_id_1]

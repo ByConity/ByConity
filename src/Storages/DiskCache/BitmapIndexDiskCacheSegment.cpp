@@ -8,6 +8,7 @@
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/ReadSettings.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/DiskCache/IDiskCacheSegment.h>
 
 namespace DB
 {
@@ -16,7 +17,7 @@ BitmapIndexDiskCacheSegment::BitmapIndexDiskCacheSegment(
         IMergeTreeDataPartPtr data_part_,
         const String & stream_name_,
         const String & extension_)
-        : IDiskCacheSegment(0, 0)
+        : IDiskCacheSegment(0, 0, SegmentType::BITMAP_INDEX)
         , data_part(std::move(data_part_))
         , storage(data_part->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
         , uuid(UUIDHelpers::UUIDToString(data_part->get_uuid()))
@@ -61,7 +62,7 @@ void BitmapIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
         LimitReadBuffer index_value(*segment_file, index_size, false);
         disk_cache.set(index_key, index_value, index_size, false);
 
-        LOG_TRACE(log, "Init local cache for BitmapIndex bin of column " + stream_name);
+        LOG_TRACE(log, "Cached local cache for BitmapIndex {}#{}{} of column ", part_name, stream_name, extension);
     }
 
     /// try cache ird file
@@ -77,7 +78,7 @@ void BitmapIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
         LimitReadBuffer mark_value(*segment_file, mark_size, false);
         disk_cache.set(mark_key, mark_value, mark_size, false);
 
-        LOG_TRACE(log, "Init local cache for BitmapIndex mark of column " + stream_name);
+        LOG_TRACE(log, "Cached local cache for BitmapIndex {}#{}{} of column ", part_name, stream_name, BITMAP_IRK_EXTENSION);
     }
 }
 

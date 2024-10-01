@@ -10,83 +10,79 @@ Projection
             │     Order by: {c_last_name ASC NULLS LAST, ss_ticket_number ASC NULLS LAST}
             │     Limit: 100
             └─ Inner (PARALLEL_HASH) Join
-               │     Condition: ca_address_sk_1 == c_current_addr_sk
+               │     Condition: c_current_addr_sk == ca_address_sk_1
                │     Filter: ca_city_1 != ca_city
-               │     Runtime Filters Builder: {c_current_addr_sk}
                ├─ Repartition Exchange
-               │  │     Partition by: {ca_address_sk_1}
-               │  └─ Filter
-               │     │     Condition: Runtime Filters: {ca_address_sk_1}
-               │     └─ TableScan tpcds1000.customer_address
-               │              Where: Runtime Filters: {ca_address_sk}
-               │              Outputs: ca_address_sk_1:=ca_address_sk, ca_city_1:=ca_city
+               │  │     Partition by: {c_current_addr_sk}
+               │  └─ Inner (PARALLEL_HASH) Join
+               │     │     Condition: c_customer_sk == ss_customer_sk
+               │     │     Runtime Filters Builder: {ss_customer_sk}
+               │     ├─ Repartition Exchange
+               │     │  │     Partition by: {c_customer_sk}
+               │     │  └─ Filter
+               │     │     │     Condition: Runtime Filters: {c_customer_sk}
+               │     │     └─ TableScan tpcds1000.customer
+               │     │              Where: Runtime Filters: {c_customer_sk}
+               │     │              Outputs: [c_customer_sk, c_current_addr_sk, c_first_name, c_last_name]
+               │     └─ Repartition Exchange
+               │        │     Partition by: {ss_customer_sk}
+               │        └─ Projection
+               │           │     Expressions: [ca_city, expr#sum(ss_ext_list_price), expr#sum(ss_ext_sales_price), expr#sum(ss_ext_tax), ss_customer_sk, ss_ticket_number]
+               │           └─ Aggregating
+               │              │     Group by: {ss_ticket_number, ss_customer_sk, ss_addr_sk, ca_city}
+               │              │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_ext_list_price):=AggNull(sum)(ss_ext_list_price), expr#sum(ss_ext_tax):=AggNull(sum)(ss_ext_tax)
+               │              └─ Inner (PARALLEL_HASH) Join
+               │                 │     Condition: ca_address_sk == ss_addr_sk
+               │                 │     Runtime Filters Builder: {ss_addr_sk}
+               │                 ├─ Repartition Exchange
+               │                 │  │     Partition by: {ca_address_sk}
+               │                 │  └─ Filter
+               │                 │     │     Condition: Runtime Filters: {ca_address_sk}
+               │                 │     └─ TableScan tpcds1000.customer_address
+               │                 │              Where: Runtime Filters: {ca_address_sk}
+               │                 │              Outputs: [ca_address_sk, ca_city]
+               │                 └─ Repartition Exchange
+               │                    │     Partition by: {ss_addr_sk}
+               │                    └─ Inner Join
+               │                       │     Condition: ss_hdemo_sk == hd_demo_sk
+               │                       │     Runtime Filters Builder: {hd_demo_sk}
+               │                       ├─ Inner Join
+               │                       │  │     Condition: ss_store_sk == s_store_sk
+               │                       │  │     Runtime Filters Builder: {s_store_sk}
+               │                       │  ├─ Inner Join
+               │                       │  │  │     Condition: ss_sold_date_sk == d_date_sk
+               │                       │  │  │     Runtime Filters Builder: {d_date_sk}
+               │                       │  │  ├─ Filter
+               │                       │  │  │  │     Condition: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
+               │                       │  │  │  └─ TableScan tpcds1000.store_sales
+               │                       │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
+               │                       │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_ticket_number, ss_ext_sales_price, ss_ext_list_price, ss_ext_tax]
+               │                       │  │  └─ Broadcast Exchange
+               │                       │  │     └─ Projection
+               │                       │  │        │     Expressions: [d_date_sk]
+               │                       │  │        └─ Filter
+               │                       │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
+               │                       │  │           └─ TableScan tpcds1000.date_dim
+               │                       │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
+               │                       │  │                    Outputs: [d_date_sk, d_year, d_dom]
+               │                       │  └─ Broadcast Exchange
+               │                       │     └─ Projection
+               │                       │        │     Expressions: [s_store_sk]
+               │                       │        └─ Filter
+               │                       │           │     Condition: s_city IN ('Fairview', 'Midway')
+               │                       │           └─ TableScan tpcds1000.store
+               │                       │                    Where: s_city IN ('Fairview', 'Midway')
+               │                       │                    Outputs: [s_store_sk, s_city]
+               │                       └─ Broadcast Exchange
+               │                          └─ Projection
+               │                             │     Expressions: [hd_demo_sk]
+               │                             └─ Filter
+               │                                │     Condition: (hd_dep_count = 4) OR (hd_vehicle_count = 3)
+               │                                └─ TableScan tpcds1000.household_demographics
+               │                                         Where: (hd_dep_count = 4) OR (hd_vehicle_count = 3)
+               │                                         Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
                └─ Repartition Exchange
-                  │     Partition by: {c_current_addr_sk}
-                  └─ Inner (PARALLEL_HASH) Join
-                     │     Condition: c_customer_sk == ss_customer_sk
-                     │     Runtime Filters Builder: {ss_customer_sk}
-                     ├─ Repartition Exchange
-                     │  │     Partition by: {c_customer_sk}
-                     │  └─ Filter
-                     │     │     Condition: Runtime Filters: {c_customer_sk}
-                     │     └─ TableScan tpcds1000.customer
-                     │              Where: Runtime Filters: {c_customer_sk}
-                     │              Outputs: [c_customer_sk, c_current_addr_sk, c_first_name, c_last_name]
-                     └─ Repartition Exchange
-                        │     Partition by: {ss_customer_sk}
-                        └─ Projection
-                           │     Expressions: [ca_city, expr#sum(ss_ext_list_price), expr#sum(ss_ext_sales_price), expr#sum(ss_ext_tax), ss_customer_sk, ss_ticket_number]
-                           └─ Aggregating
-                              │     Group by: {ss_ticket_number, ss_customer_sk, ss_addr_sk, ca_city}
-                              │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_ext_list_price):=AggNull(sum)(ss_ext_list_price), expr#sum(ss_ext_tax):=AggNull(sum)(ss_ext_tax)
-                              └─ Inner (PARALLEL_HASH) Join
-                                 │     Condition: ca_address_sk == ss_addr_sk
-                                 │     Runtime Filters Builder: {ss_addr_sk}
-                                 ├─ Repartition Exchange
-                                 │  │     Partition by: {ca_address_sk}
-                                 │  └─ Filter
-                                 │     │     Condition: Runtime Filters: {ca_address_sk}
-                                 │     └─ TableScan tpcds1000.customer_address
-                                 │              Where: Runtime Filters: {ca_address_sk}
-                                 │              Outputs: [ca_address_sk, ca_city]
-                                 └─ Repartition Exchange
-                                    │     Partition by: {ss_addr_sk}
-                                    └─ Inner Join
-                                       │     Condition: ss_hdemo_sk == hd_demo_sk
-                                       │     Runtime Filters Builder: {hd_demo_sk}
-                                       ├─ Inner Join
-                                       │  │     Condition: ss_store_sk == s_store_sk
-                                       │  │     Runtime Filters Builder: {s_store_sk}
-                                       │  ├─ Inner Join
-                                       │  │  │     Condition: ss_sold_date_sk == d_date_sk
-                                       │  │  │     Runtime Filters Builder: {d_date_sk}
-                                       │  │  ├─ Filter
-                                       │  │  │  │     Condition: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
-                                       │  │  │  └─ TableScan tpcds1000.store_sales
-                                       │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
-                                       │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_ticket_number, ss_ext_sales_price, ss_ext_list_price, ss_ext_tax]
-                                       │  │  └─ Broadcast Exchange
-                                       │  │     └─ Projection
-                                       │  │        │     Expressions: [d_date_sk]
-                                       │  │        └─ Filter
-                                       │  │           │     Condition: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
-                                       │  │           └─ TableScan tpcds1000.date_dim
-                                       │  │                    Where: (d_year IN (1999, 2000, 2001)) AND (d_dom >= 1) AND (d_dom <= 2)
-                                       │  │                    Outputs: [d_date_sk, d_year, d_dom]
-                                       │  └─ Broadcast Exchange
-                                       │     └─ Projection
-                                       │        │     Expressions: [s_store_sk]
-                                       │        └─ Filter
-                                       │           │     Condition: s_city IN ('Fairview', 'Midway')
-                                       │           └─ TableScan tpcds1000.store
-                                       │                    Where: s_city IN ('Fairview', 'Midway')
-                                       │                    Outputs: [s_store_sk, s_city]
-                                       └─ Broadcast Exchange
-                                          └─ Projection
-                                             │     Expressions: [hd_demo_sk]
-                                             └─ Filter
-                                                │     Condition: (hd_dep_count = 4) OR (hd_vehicle_count = 3)
-                                                └─ TableScan tpcds1000.household_demographics
-                                                         Where: (hd_dep_count = 4) OR (hd_vehicle_count = 3)
-                                                         Outputs: [hd_demo_sk, hd_dep_count, hd_vehicle_count]
-note: Runtime Filter is applied for 6 times.
+                  │     Partition by: {ca_address_sk_1}
+                  └─ TableScan tpcds1000.customer_address
+                           Outputs: ca_address_sk_1:=ca_address_sk, ca_city_1:=ca_city
+note: Runtime Filter is applied for 5 times.

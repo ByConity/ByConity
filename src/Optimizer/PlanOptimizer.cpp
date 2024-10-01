@@ -41,6 +41,7 @@
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rewriter/UseSortingProperty.h>
+#include <Optimizer/Rewriter/UseNodeProperty.h>
 #include <Optimizer/Rule/Rules.h>
 #include <Optimizer/ShortCircuitPlanner.h>
 #include <QueryPlan/GraphvizPrinter.h>
@@ -141,6 +142,8 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
+        std::make_shared<UseNodeProperty>(),
+        std::make_shared<IterativeRewriter>(Rules::addRepartitionColumn(), "AddRepartitionColumn"),
         std::make_shared<AddCache>(),
 
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
@@ -321,6 +324,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
                                                   e.g. use a non-nullable column ptr for a nullable column */
         std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<ImplementJoinAlgorithmHints>(),
+        std::make_shared<UseNodeProperty>(),
+        std::make_shared<IterativeRewriter>(Rules::addRepartitionColumn(), "AddRepartitionColumn"),
         std::make_shared<AddCache>(),
 
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),

@@ -17,6 +17,7 @@
 
 #include <Optimizer/Cascades/GroupExpression.h>
 #include <Optimizer/Cascades/Memo.h>
+#include <Optimizer/CostModel/CostModel.h>
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <Optimizer/Rule/Rule.h>
@@ -93,6 +94,8 @@ public:
 
     size_t getMaxJoinSize() const { return max_join_size; }
 
+    const CostModel & getCostModel() const { return cost_model; }
+
 private:
     ContextMutablePtr context;
     CTEInfo & cte_info;
@@ -109,6 +112,7 @@ private:
     bool enable_trace;
     bool enable_cbo;
     size_t max_join_size;
+    CostModel cost_model;
 
     struct Metric
     {

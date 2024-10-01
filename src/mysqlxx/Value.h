@@ -144,7 +144,7 @@ private:
 
     time_t getDateTimeImpl() const
     {
-        const auto & date_lut = DateLUT::instance();
+        const auto & date_lut = DateLUT::serverTimezoneInstance();
 
         if (m_length == 10)
         {
@@ -172,7 +172,7 @@ private:
 
     time_t getDateImpl() const
     {
-        const auto & date_lut = DateLUT::instance();
+        const auto & date_lut = DateLUT::serverTimezoneInstance();
 
         if (m_length == 10 || m_length == 19)
         {
@@ -215,7 +215,7 @@ private:
             return getDateImpl();
         else
         {
-            const auto & date_lut = DateLUT::instance();
+            const auto & date_lut = DateLUT::serverTimezoneInstance();
             return date_lut.toDate(getIntImpl());
         }
     }

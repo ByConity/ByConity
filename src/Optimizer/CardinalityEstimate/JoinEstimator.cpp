@@ -95,7 +95,8 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
             }
         }
 
-        UInt64 filtered_row_count = res->getRowCount() * selectivity;
+        auto before_filter_row_count = res->getRowCount();
+        UInt64 filtered_row_count = std::round(res->getRowCount() * selectivity);
         // make row count at least 1.
         res->updateRowCount(filtered_row_count > 1 ? filtered_row_count : 1);
                 for (auto & symbol_statistics : res->getSymbolStatistics())
@@ -108,7 +109,7 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
             }
             else
             {
-                symbol_statistics.second = symbol_statistics.second->applySelectivity(selectivity);
+                symbol_statistics.second = symbol_statistics.second->applySelectivity(selectivity, symbol_statistics.second->getNdv() > before_filter_row_count * 0.8 ? selectivity : 1);
                 // NDV must less or equals to row count
                 symbol_statistics.second->setNdv(std::min(res->getRowCount(), symbol_statistics.second->getNdv()));
                 symbol_statistics.second->getHistogram().clear();
@@ -282,7 +283,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         }
 
         // case 4 : normal join cases, with histogram exist.
-        else if (!left_key_stats.getHistogram().getBuckets().empty() && !right_key_stats.getHistogram().getBuckets().empty())
+        else if (context.getSettingsRef().stats_estimator_join_use_histogram && !left_key_stats.getHistogram().getBuckets().empty() && !right_key_stats.getHistogram().getBuckets().empty())
         {
             pre_key_join_card = computeCardinalityByHistogram(
                 left_stats,

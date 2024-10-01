@@ -97,7 +97,7 @@ public:
 
     using MetastoreProxyPtr = std::shared_ptr<MetastoreProxy>;
 
-    Catalog(Context & _context, const MetastoreConfig & config, String _name_space = "default");
+    Catalog(Context & _context, const MetastoreConfig & config, String _name_space = "default", bool writable = true);
 
     ~Catalog() = default;
 
@@ -525,7 +525,7 @@ public:
     std::vector<TransactionRecord> getTransactionRecords(const std::vector<TxnTimestamp> & txn_ids, size_t batch_size = 0);
     /// clean zombie records. If the total transaction record number is too large, it may be impossible to get all of them. We can
     /// pass a max_result_number to only get part of them and clean zombie records repeatedlly
-    std::vector<TransactionRecord> getTransactionRecordsForGC(size_t max_result_number);
+    std::vector<TransactionRecord> getTransactionRecordsForGC(String & start_key, size_t max_result_number);
     TransactionRecords getTransactionRecords(const ServerDataPartsVector & parts, const DeleteBitmapMetaPtrVector & bitmaps);
 
     /// Clear intents written by zombie transaction.

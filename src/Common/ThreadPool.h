@@ -104,7 +104,7 @@ public:
     size_t getMaxThreads() const;
     size_t getMaxQueueSize() const;
     void finalize();
-        
+
 private:
     friend class DiskCacheTest;
 
@@ -297,3 +297,4 @@ inline std::function<void()> createExceptionHandledJob(std::function<void()> job
 
 /// Recommended thread pool for the case when multiple thread pools are created and destroyed.
 using ThreadPool = ThreadPoolImpl<ThreadFromGlobalPool>;
+using ThreadPoolPtr = std::shared_ptr<ThreadPool>;

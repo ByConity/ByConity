@@ -22,7 +22,7 @@ Projection Est. 16 rows
                               └─ Aggregating Est. 16 rows
                                  │     Group by: {s_state, s_county}
                                  │     Aggregates: expr#sum(ss_net_profit)_1:=AggNull(sum)(ss_net_profit)
-                                 └─ Inner Join Est. 10521449 rows
+                                 └─ Inner Join Est. 15782173 rows
                                     │     Condition: ss_store_sk == s_store_sk
                                     │     Runtime Filters Builder: {s_store_sk}
                                     ├─ Inner Join Est. 52607245 rows
@@ -41,15 +41,15 @@ Projection Est. 16 rows
                                     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                                     │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= cast(1211, 'UInt32'))
                                     │                    Outputs: [d_date_sk, d_month_seq]
-                                    └─ Broadcast Exchange Est. 80 rows
-                                       └─ Left Semi Join Est. 80 rows
+                                    └─ Broadcast Exchange Est. 120 rows
+                                       └─ Left Semi Join Est. 120 rows
                                           │     Condition: s_state == s_state_1
                                           ├─ TableScan tpcds100.store Est. 402 rows
                                           │        Outputs: [s_store_sk, s_county, s_state]
-                                          └─ Broadcast Exchange Est. 2 rows
-                                             └─ Projection Est. 2 rows
+                                          └─ Broadcast Exchange Est. 3 rows
+                                             └─ Projection Est. 3 rows
                                                 │     Expressions: [s_state_1]
-                                                └─ Filter Est. 2 rows
+                                                └─ Filter Est. 3 rows
                                                    │     Condition: `expr#rank() OVER (PARTITION BY s_state ORDER BY sum(ss_net_profit) DESC)` <= 5
                                                    └─ Window Est. 10 rows
                                                       └─ MergingAggregated Est. 10 rows

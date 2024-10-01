@@ -1,5 +1,7 @@
+#include <unordered_map>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
@@ -11,12 +13,36 @@
 #include <Interpreters/PartLog.h>
 #include <Interpreters/Context.h>
 
-#include "common/types.h"
+#include <common/types.h>
 #include <Common/CurrentThread.h>
 #include <Common/time.h>
+#include <Columns/ColumnMap.h>
 
 namespace DB
 {
+
+void dumpToMapColumn(const std::unordered_map<String, UInt64> & map, DB::IColumn * column)
+{
+    auto * column_map = column ? &typeid_cast<DB::ColumnMap &>(*column) : nullptr;
+    if (!column_map)
+        return;
+
+    auto & offsets = column_map->getOffsets();
+    auto & key_column = column_map->getKey();
+    auto & value_column = column_map->getValue();
+
+    size_t size = 0;
+    for (auto & entry : map)
+    {
+        UInt64 value = entry.second;
+
+        key_column.insertData(entry.first.c_str(), strlen(entry.first.c_str()));
+        value_column.insert(value);
+        size++;
+    }
+
+    offsets.push_back((offsets.size() == 0 ? 0 : offsets.back()) + size);
+}
 
 NamesAndTypesList PartLogElement::getNamesAndTypes()
 {
@@ -56,6 +82,7 @@ NamesAndTypesList PartLogElement::getNamesAndTypes()
 
         {"rows", std::make_shared<DataTypeUInt64>()},
         {"segments", std::make_shared<DataTypeUInt64>()},
+        {"segments_map", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"preload_level", std::make_shared<DataTypeUInt64>()},
         {"size_in_bytes", std::make_shared<DataTypeUInt64>()}, // On disk
 
@@ -78,7 +105,7 @@ void PartLogElement::appendToBlock(MutableColumns & columns) const
 
     columns[i++]->insert(query_id);
     columns[i++]->insert(event_type);
-    columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
+    columns[i++]->insert(DateLUT::serverTimezoneInstance().toDayNum(event_time).toUnderType());
     columns[i++]->insert(start_time);
     columns[i++]->insert(event_time);
     columns[i++]->insert(event_time_microseconds);
@@ -92,7 +119,14 @@ void PartLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(path_on_disk);
 
     columns[i++]->insert(rows);
-    columns[i++]->insert(segments);
+    columns[i++]->insert(segments_count);
+
+    auto * column = columns[i++].get();
+    if (segments.size() > 0)
+        dumpToMapColumn(segments, column);
+    else
+        column->insertDefault();
+
     columns[i++]->insert(preload_level);
     columns[i++]->insert(bytes_compressed_on_disk);
 
@@ -180,7 +214,7 @@ bool PartLog::addNewParts(
     return true;
 }
 
-PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, UInt64 elapsed_ns, const String & exception, UInt64 submit_ts, UInt64 segments, UInt64 preload_level)
+PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, UInt64 elapsed_ns, const String & exception, UInt64 submit_ts, UInt64 segments_count, std::unordered_map<String, UInt64> segments, UInt64 preload_level)
 {
     PartLogElement elem;
 
@@ -195,6 +229,7 @@ PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMe
     elem.part_name = part->name;
 
     elem.rows = part->rows_count;
+    elem.segments_count = segments_count;
     elem.segments = segments;
     elem.preload_level = preload_level;
     elem.bytes_compressed_on_disk = part->bytes_on_disk;

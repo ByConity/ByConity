@@ -949,7 +949,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
                     output_fields.push_back(scope->at(i));
                     if (make_nullable)
                         output_fields.back().type = JoinCommon::convertTypeToNullable(output_fields.back().type);
-                }     
+                }
             }
         };
 
@@ -963,7 +963,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(
         /// Step 1. resolve join key
         for (size_t i = 0, true_index = 0; i < expr_list.size(); ++i)
         {
-            const auto & join_key_ast = expr_list[i];
+            auto & join_key_ast = expr_list[i];
             String key_name = join_key_ast->getAliasOrColumnName();
 
             // see also 00702_join_with_using:
@@ -1115,7 +1115,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
                 return JoinCommon::convertTypeToNullable(type);
             return type;
         };
-    
+
         if (use_ansi_semantic)
         {
             for (const auto & f : left_scope->getFields())
@@ -1220,7 +1220,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
                     DataTypePtr right_coercion = nullptr;
 
                     // for non-ASOF join, inequality_conditions will be included in join filter, so don't have to do type coercion
-                    if (func->name == "equals" || isAsofJoin(table_join))
+                    if ((func->name == "equals" || func->name == "bitEquals") || isAsofJoin(table_join))
                     {
                         DataTypePtr left_type = analysis.getExpressionType(left_ast);
                         DataTypePtr right_type = analysis.getExpressionType(right_ast);
@@ -1255,8 +1255,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(
                         }
                     }
 
-                    if (func->name == "equals")
-                        equality_conditions.emplace_back(left_ast, right_ast, left_coercion, right_coercion);
+                    if (func->name == "equals" || func->name == "bitEquals")
+                        equality_conditions.emplace_back(left_ast, right_ast, left_coercion, right_coercion, func->name == "bitEquals");
                     else
                         inequality_conditions.emplace_back(left_ast, right_ast, inequality, left_coercion, right_coercion);
 
@@ -1304,7 +1304,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeArrayJoin(ASTArrayJoin & array_join, ASTSe
     ArrayJoinDescriptions array_join_descs;
     FieldDescriptions output_fields = source_scope->getFields();
     NameSet name_set;
-    for (const auto & array_join_expr : array_join_expression_list->children)
+    for (auto & array_join_expr : array_join_expression_list->children)
     {
         if (array_join_expr->tryGetAlias() == array_join_expr->getColumnName() && !array_join_expr->as<ASTIdentifier>())
             throw Exception("No alias for non-trivial value in ARRAY JOIN: " + array_join_expr->tryGetAlias(), ErrorCodes::ALIAS_REQUIRED);
@@ -1404,7 +1404,7 @@ void QueryAnalyzerVisitor::analyzeWhere(ASTSelectQuery & select_query, ScopePtr 
 
     ExprAnalyzerOptions expr_options{"WHERE expression"};
     expr_options.selectQuery(select_query).subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED).subqueryToSemiAnti(true);
-    auto filter_type = ExprAnalyzer::analyze(select_query.where(), source_scope, context, analysis, expr_options);
+    auto filter_type = ExprAnalyzer::analyze(select_query.refWhere(), source_scope, context, analysis, expr_options);
 
     if (auto inner_type = removeNullable(removeLowCardinality(filter_type)))
     {
@@ -1429,7 +1429,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
         .aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED)
         .windowSupport(ExprAnalyzerOptions::WindowSupport::ALLOWED);
 
-    auto add_select_expression = [&](const ASTPtr & expression) {
+    auto add_select_expression = [&](ASTPtr & expression) {
         auto expression_type = ExprAnalyzer::analyze(expression, source_scope, context, analysis, expr_options);
 
         auto get_output_name = [&](const ASTPtr & expr) -> String {
@@ -1477,7 +1477,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
             {
                 if (source_scope->at(field_index).substituted_by_asterisk)
                 {
-                    auto field_reference = std::make_shared<ASTFieldReference>(field_index);
+                    ASTPtr field_reference = std::make_shared<ASTFieldReference>(field_index);
                     add_select_expression(field_reference);
                 }
             }
@@ -1496,7 +1496,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
                 if (source_scope->at(field_index).substituted_by_asterisk && source_scope->at(field_index).prefix.hasSuffix(prefix))
                 {
                     matched = true;
-                    auto field_reference = std::make_shared<ASTFieldReference>(field_index);
+                    ASTPtr field_reference = std::make_shared<ASTFieldReference>(field_index);
                     add_select_expression(field_reference);
                 }
             }
@@ -1510,7 +1510,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
                 if (source_scope->at(field_index).substituted_by_asterisk
                     && asterisk_pattern->isColumnMatching(source_scope->at(field_index).name))
                 {
-                    auto field_reference = std::make_shared<ASTFieldReference>(field_index);
+                    ASTPtr field_reference = std::make_shared<ASTFieldReference>(field_index);
                     add_select_expression(field_reference);
                 }
             }
@@ -1535,7 +1535,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
             {
                 auto tuple_ast = function->arguments->children[0];
                 auto literal = std::make_shared<ASTLiteral>(UInt64(++tid));
-                auto func = makeASTFunction("tupleElement", tuple_ast, literal);
+                ASTPtr func = makeASTFunction("tupleElement", tuple_ast, literal);
                 add_select_expression(func);
             }
         }
@@ -1677,7 +1677,7 @@ void QueryAnalyzerVisitor::analyzeHaving(ASTSelectQuery & select_query, ScopePtr
     expr_options.selectQuery(select_query)
         .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED)
         .aggregateSupport(ExprAnalyzerOptions::AggregateSupport::ALLOWED);
-    ExprAnalyzer::analyze(select_query.having(), source_scope, context, analysis, expr_options);
+    ExprAnalyzer::analyze(select_query.refHaving(), source_scope, context, analysis, expr_options);
 }
 
 void QueryAnalyzerVisitor::analyzeOrderBy(ASTSelectQuery & select_query, ASTs & select_expressions, ScopePtr output_scope)

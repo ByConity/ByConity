@@ -1,14 +1,14 @@
-Projection Est. 2954 rows
+Projection Est. 23327 rows
 │     Expressions: [p_brand, p_size, p_type], supplier_cnt:=`expr#uniqExact(ps_suppkey)`
-└─ Sorting Est. 2954 rows
+└─ Sorting Est. 23327 rows
    │     Order by: {expr#uniqExact(ps_suppkey) DESC NULLS LAST, p_brand ASC NULLS LAST, p_type ASC NULLS LAST, p_size ASC NULLS LAST}
-   └─ Gather Exchange Est. 2954 rows
-      └─ Sorting Est. 2954 rows
+   └─ Gather Exchange Est. 23327 rows
+      └─ Sorting Est. 23327 rows
          │     Order by: {expr#uniqExact(ps_suppkey) DESC NULLS LAST, p_brand ASC NULLS LAST, p_type ASC NULLS LAST, p_size ASC NULLS LAST}
-         └─ MergingAggregated Est. 2954 rows
-            └─ Repartition Exchange Est. 2954 rows
+         └─ MergingAggregated Est. 23327 rows
+            └─ Repartition Exchange Est. 23327 rows
                │     Partition by: {p_brand, p_type, p_size}
-               └─ Aggregating Est. 2954 rows
+               └─ Aggregating Est. 23327 rows
                   │     Group by: {p_brand, p_type, p_size}
                   │     Aggregates: expr#uniqExact(ps_suppkey):=AggNull(count)(ps_suppkey)
                   └─ Aggregating Est. 62664060 rows

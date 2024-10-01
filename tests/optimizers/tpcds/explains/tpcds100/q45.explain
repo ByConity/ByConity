@@ -5,14 +5,14 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 429515 rows
+      └─ Gather Exchange Est. 888660 rows
          └─ Sorting Est. 100 rows
             │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
             │     Limit: 100
-            └─ MergingAggregated Est. 429515 rows
-               └─ Repartition Exchange Est. 429515 rows
+            └─ MergingAggregated Est. 888660 rows
+               └─ Repartition Exchange Est. 888660 rows
                   │     Partition by: {ca_zip, ca_city}
-                  └─ Aggregating Est. 429515 rows
+                  └─ Aggregating Est. 888660 rows
                      │     Group by: {ca_zip, ca_city}
                      │     Aggregates: expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
                      └─ Projection Est. 888660 rows
@@ -35,10 +35,10 @@ Projection Est. 100 rows
                               │  │     │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                               │  │     │  │           Where: Runtime Filters: {ws_sold_date_sk}
                               │  │     │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_customer_sk, ws_sales_price]
-                              │  │     │  └─ Broadcast Exchange Est. 90 rows
-                              │  │     │     └─ Projection Est. 90 rows
+                              │  │     │  └─ Broadcast Exchange Est. 91 rows
+                              │  │     │     └─ Projection Est. 91 rows
                               │  │     │        │     Expressions: [d_date_sk]
-                              │  │     │        └─ Filter Est. 90 rows
+                              │  │     │        └─ Filter Est. 91 rows
                               │  │     │           │     Condition: (d_qoy = 2) AND (d_year = 2001)
                               │  │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                               │  │     │                    Where: (d_qoy = 2) AND (d_year = 2001)
@@ -57,13 +57,13 @@ Projection Est. 100 rows
                               │           │     Partition by: {ca_address_sk}
                               │           └─ TableScan tpcds100.customer_address Est. 1000000 rows
                               │                    Outputs: [ca_address_sk, ca_city, ca_zip]
-                              └─ Broadcast Exchange Est. 5 rows
-                                 └─ Projection Est. 5 rows
+                              └─ Broadcast Exchange Est. 10 rows
+                                 └─ Projection Est. 10 rows
                                     │     Expressions: [i_item_id_1], build_side_non_null_symbol:=1
-                                    └─ MergingAggregated Est. 5 rows
-                                       └─ Repartition Exchange Est. 5 rows
+                                    └─ MergingAggregated Est. 10 rows
+                                       └─ Repartition Exchange Est. 10 rows
                                           │     Partition by: {i_item_id_1}
-                                          └─ Aggregating Est. 5 rows
+                                          └─ Aggregating Est. 10 rows
                                              │     Group by: {i_item_id_1}
                                              └─ Projection Est. 10 rows
                                                 │     Expressions: [i_item_id_1]

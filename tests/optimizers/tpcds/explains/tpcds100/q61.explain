@@ -15,79 +15,79 @@ Projection Est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
             │        └─ Inner Join Est. 55083 rows
-            │           │     Condition: ca_address_sk == c_current_addr_sk
-            │           │     Runtime Filters Builder: {c_current_addr_sk}
-            │           ├─ Repartition Exchange Est. 364761 rows
-            │           │  │     Partition by: {ca_address_sk}
-            │           │  └─ Projection Est. 364761 rows
-            │           │     │     Expressions: [ca_address_sk]
-            │           │     └─ Filter Est. 364761 rows
-            │           │        │     Condition: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
-            │           │        └─ TableScan tpcds100.customer_address Est. 1000000 rows
-            │           │                 Where: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
-            │           │                 Outputs: [ca_address_sk, ca_gmt_offset]
-            │           └─ Repartition Exchange Est. 130912 rows
-            │              │     Partition by: {c_current_addr_sk}
-            │              └─ Inner Join Est. 130912 rows
-            │                 │     Condition: c_customer_sk == ss_customer_sk
-            │                 │     Runtime Filters Builder: {ss_customer_sk}
-            │                 ├─ Repartition Exchange Est. 2000000 rows
-            │                 │  │     Partition by: {c_customer_sk}
-            │                 │  └─ Filter Est. 2000000 rows
-            │                 │     │     Condition: Runtime Filters: {c_customer_sk}
-            │                 │     └─ TableScan tpcds100.customer Est. 2000000 rows
-            │                 │              Where: Runtime Filters: {c_customer_sk}
-            │                 │              Outputs: [c_customer_sk, c_current_addr_sk]
-            │                 └─ Repartition Exchange Est. 130447 rows
-            │                    │     Partition by: {ss_customer_sk}
-            │                    └─ Inner Join Est. 130447 rows
-            │                       │     Condition: ss_store_sk == s_store_sk
-            │                       │     Runtime Filters Builder: {s_store_sk}
-            │                       ├─ Inner Join Est. 234107 rows
-            │                       │  │     Condition: ss_promo_sk == p_promo_sk
-            │                       │  │     Runtime Filters Builder: {p_promo_sk}
-            │                       │  ├─ Inner Join Est. 457242 rows
-            │                       │  │  │     Condition: ss_item_sk == i_item_sk
-            │                       │  │  │     Runtime Filters Builder: {i_item_sk}
-            │                       │  │  ├─ Inner Join Est. 4581411 rows
-            │                       │  │  │  │     Condition: ss_sold_date_sk == d_date_sk
-            │                       │  │  │  │     Runtime Filters Builder: {d_date_sk}
-            │                       │  │  │  ├─ Filter Est. 287997024 rows
-            │                       │  │  │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_promo_sk, ss_sold_date_sk, ss_store_sk}
-            │                       │  │  │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
-            │                       │  │  │  │           Where: Runtime Filters: {ss_item_sk, ss_promo_sk, ss_sold_date_sk, ss_store_sk}
-            │                       │  │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_promo_sk, ss_ext_sales_price]
-            │                       │  │  │  └─ Broadcast Exchange Est. 29 rows
-            │                       │  │  │     └─ Projection Est. 29 rows
-            │                       │  │  │        │     Expressions: [d_date_sk]
-            │                       │  │  │        └─ Filter Est. 29 rows
-            │                       │  │  │           │     Condition: (d_year = 1998) AND (d_moy = 11)
-            │                       │  │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-            │                       │  │  │                    Where: (d_year = 1998) AND (d_moy = 11)
-            │                       │  │  │                    Outputs: [d_date_sk, d_year, d_moy]
-            │                       │  │  └─ Projection Est. 20360 rows
-            │                       │  │     │     Expressions: [i_item_sk]
-            │                       │  │     └─ Filter Est. 20360 rows
-            │                       │  │        │     Condition: i_category = 'Jewelry'
-            │                       │  │        └─ TableScan tpcds100.item Est. 204000 rows
-            │                       │  │                 Where: i_category = 'Jewelry'
-            │                       │  │                 Outputs: [i_item_sk, i_category]
-            │                       │  └─ Broadcast Exchange Est. 512 rows
-            │                       │     └─ Projection Est. 512 rows
-            │                       │        │     Expressions: [p_promo_sk]
-            │                       │        └─ Filter Est. 512 rows
-            │                       │           │     Condition: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
-            │                       │           └─ TableScan tpcds100.promotion Est. 1000 rows
-            │                       │                    Where: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
-            │                       │                    Outputs: [p_promo_sk, p_channel_dmail, p_channel_email, p_channel_tv]
-            │                       └─ Broadcast Exchange Est. 224 rows
-            │                          └─ Projection Est. 224 rows
-            │                             │     Expressions: [s_store_sk]
-            │                             └─ Filter Est. 224 rows
-            │                                │     Condition: s_gmt_offset = -5.
-            │                                └─ TableScan tpcds100.store Est. 402 rows
-            │                                         Where: s_gmt_offset = -5.
-            │                                         Outputs: [s_store_sk, s_gmt_offset]
+            │           │     Condition: c_current_addr_sk == ca_address_sk
+            │           │     Runtime Filters Builder: {ca_address_sk}
+            │           ├─ Repartition Exchange Est. 130912 rows
+            │           │  │     Partition by: {c_current_addr_sk}
+            │           │  └─ Inner Join Est. 130912 rows
+            │           │     │     Condition: c_customer_sk == ss_customer_sk
+            │           │     │     Runtime Filters Builder: {ss_customer_sk}
+            │           │     ├─ Repartition Exchange Est. 2000000 rows
+            │           │     │  │     Partition by: {c_customer_sk}
+            │           │     │  └─ Filter Est. 2000000 rows
+            │           │     │     │     Condition: Runtime Filters: {c_current_addr_sk, c_customer_sk}
+            │           │     │     └─ TableScan tpcds100.customer Est. 2000000 rows
+            │           │     │              Where: Runtime Filters: {c_current_addr_sk, c_customer_sk}
+            │           │     │              Outputs: [c_customer_sk, c_current_addr_sk]
+            │           │     └─ Repartition Exchange Est. 130447 rows
+            │           │        │     Partition by: {ss_customer_sk}
+            │           │        └─ Inner Join Est. 130447 rows
+            │           │           │     Condition: ss_store_sk == s_store_sk
+            │           │           │     Runtime Filters Builder: {s_store_sk}
+            │           │           ├─ Inner Join Est. 234107 rows
+            │           │           │  │     Condition: ss_promo_sk == p_promo_sk
+            │           │           │  │     Runtime Filters Builder: {p_promo_sk}
+            │           │           │  ├─ Inner Join Est. 457242 rows
+            │           │           │  │  │     Condition: ss_item_sk == i_item_sk
+            │           │           │  │  │     Runtime Filters Builder: {i_item_sk}
+            │           │           │  │  ├─ Inner Join Est. 4581411 rows
+            │           │           │  │  │  │     Condition: ss_sold_date_sk == d_date_sk
+            │           │           │  │  │  │     Runtime Filters Builder: {d_date_sk}
+            │           │           │  │  │  ├─ Filter Est. 287997024 rows
+            │           │           │  │  │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_promo_sk, ss_sold_date_sk, ss_store_sk}
+            │           │           │  │  │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
+            │           │           │  │  │  │           Where: Runtime Filters: {ss_item_sk, ss_promo_sk, ss_sold_date_sk, ss_store_sk}
+            │           │           │  │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_customer_sk, ss_store_sk, ss_promo_sk, ss_ext_sales_price]
+            │           │           │  │  │  └─ Broadcast Exchange Est. 30 rows
+            │           │           │  │  │     └─ Projection Est. 30 rows
+            │           │           │  │  │        │     Expressions: [d_date_sk]
+            │           │           │  │  │        └─ Filter Est. 30 rows
+            │           │           │  │  │           │     Condition: (d_year = 1998) AND (d_moy = 11)
+            │           │           │  │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
+            │           │           │  │  │                    Where: (d_year = 1998) AND (d_moy = 11)
+            │           │           │  │  │                    Outputs: [d_date_sk, d_year, d_moy]
+            │           │           │  │  └─ Projection Est. 20360 rows
+            │           │           │  │     │     Expressions: [i_item_sk]
+            │           │           │  │     └─ Filter Est. 20360 rows
+            │           │           │  │        │     Condition: i_category = 'Jewelry'
+            │           │           │  │        └─ TableScan tpcds100.item Est. 204000 rows
+            │           │           │  │                 Where: i_category = 'Jewelry'
+            │           │           │  │                 Outputs: [i_item_sk, i_category]
+            │           │           │  └─ Broadcast Exchange Est. 512 rows
+            │           │           │     └─ Projection Est. 512 rows
+            │           │           │        │     Expressions: [p_promo_sk]
+            │           │           │        └─ Filter Est. 512 rows
+            │           │           │           │     Condition: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
+            │           │           │           └─ TableScan tpcds100.promotion Est. 1000 rows
+            │           │           │                    Where: (p_channel_dmail = 'Y') OR (p_channel_email = 'Y') OR (p_channel_tv = 'Y')
+            │           │           │                    Outputs: [p_promo_sk, p_channel_dmail, p_channel_email, p_channel_tv]
+            │           │           └─ Broadcast Exchange Est. 224 rows
+            │           │              └─ Projection Est. 224 rows
+            │           │                 │     Expressions: [s_store_sk]
+            │           │                 └─ Filter Est. 224 rows
+            │           │                    │     Condition: s_gmt_offset = -5.
+            │           │                    └─ TableScan tpcds100.store Est. 402 rows
+            │           │                             Where: s_gmt_offset = -5.
+            │           │                             Outputs: [s_store_sk, s_gmt_offset]
+            │           └─ Repartition Exchange Est. 364761 rows
+            │              │     Partition by: {ca_address_sk}
+            │              └─ Projection Est. 364761 rows
+            │                 │     Expressions: [ca_address_sk]
+            │                 └─ Filter Est. 364761 rows
+            │                    │     Condition: ca_gmt_offset = -5.
+            │                    └─ TableScan tpcds100.customer_address Est. 1000000 rows
+            │                             Where: ca_gmt_offset = -5.
+            │                             Outputs: [ca_address_sk, ca_gmt_offset]
             └─ Broadcast Exchange Est. 1 rows
                └─ MergingAggregated Est. 1 rows
                   └─ Gather Exchange Est. 1 rows
@@ -134,10 +134,10 @@ Projection Est. 1 rows
                                        │  │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                                        │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_store_sk}
                                        │  │  │           Outputs: ss_sold_date_sk_1:=ss_sold_date_sk, ss_item_sk_1:=ss_item_sk, ss_customer_sk_1:=ss_customer_sk, ss_store_sk_1:=ss_store_sk, ss_ext_sales_price_1:=ss_ext_sales_price
-                                       │  │  └─ Broadcast Exchange Est. 29 rows
-                                       │  │     └─ Projection Est. 29 rows
+                                       │  │  └─ Broadcast Exchange Est. 30 rows
+                                       │  │     └─ Projection Est. 30 rows
                                        │  │        │     Expressions: [d_date_sk_1]
-                                       │  │        └─ Filter Est. 29 rows
+                                       │  │        └─ Filter Est. 30 rows
                                        │  │           │     Condition: (d_moy_1 = 11) AND (d_year_1 = 1998)
                                        │  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                                        │  │                    Where: (d_moy = 11) AND (d_year = 1998)

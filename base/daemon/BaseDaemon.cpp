@@ -135,8 +135,6 @@ static bool checkProfEnv()
 
 static DB::PipeFDs signal_pipe;
 
-static constexpr size_t max_query_id_size = 127;
-
 #if USE_BREAKPAD
 static bool use_minidump = true;
 static std::shared_ptr<google_breakpad::MinidumpDescriptor> descriptor;
@@ -158,18 +156,15 @@ static bool dumpCallbackError(const google_breakpad::MinidumpDescriptor & descri
     char buf[buf_size];
     DB::WriteBufferFromFileDescriptorDiscardOnFailure out(signal_pipe.fds_rw[1], buf_size, buf);
 
-    StringRef query_id = DB::CurrentThread::getQueryId();   /// This is signal safe.
-    query_id.size = std::min(query_id.size, max_query_id_size);
-
-    std::string message = query_id.size ?
-        fmt::format("(query_id: {}) generate core minidump path: {}", query_id.toString(), descriptor.path()) :
-        fmt::format("(no query) generate core minidump path: {}", descriptor.path());
+    std::string message = descriptor.path();
 
     if (message.size() > buf_size - 16)
         message.resize(buf_size - 16);
 
     DB::writeBinary(-1, out);
+    DB::writeBinary(1, out);
     DB::writeBinary(UInt32(getThreadId()), out);
+    DB::writePODBinary(DB::current_thread, out);
     DB::writeBinary(message, out);
 
     out.next();
@@ -210,7 +205,6 @@ static const size_t signal_pipe_buf_size =
     + sizeof(ucontext_t)
     + sizeof(StackTrace)
     + sizeof(UInt32)
-    + max_query_id_size + 1    /// query_id + varint encoded length
     + sizeof(void*);
 
 
@@ -260,15 +254,11 @@ static void signalHandler(int sig, siginfo_t * info, void * context)
     const ucontext_t signal_context = *reinterpret_cast<ucontext_t *>(context);
     const StackTrace stack_trace(signal_context);
 
-    StringRef query_id = DB::CurrentThread::getQueryId();   /// This is signal safe.
-    query_id.size = std::min(query_id.size, max_query_id_size);
-
     DB::writeBinary(sig, out);
     DB::writePODBinary(*info, out);
     DB::writePODBinary(signal_context, out);
     DB::writePODBinary(stack_trace, out);
     DB::writeBinary(UInt32(getThreadId()), out);
-    DB::writeStringBinary(query_id, out);
     DB::writePODBinary(DB::current_thread, out);
 
     out.next();
@@ -302,6 +292,12 @@ public:
         StdTerminate = -1,
         StopThread = -2,
         SanitizerTrap = -3,
+    };
+
+    enum TerminateType : int
+    {
+        Normal = 0,
+        Breakpad = 1
     };
 
     explicit SignalListener(BaseDaemon & daemon_)
@@ -356,11 +352,31 @@ public:
             }
             else if (sig == Signals::StdTerminate)
             {
+                Int32 type;
                 UInt32 thread_num;
                 std::string message;
+                DB::readBinary(type, in);
+                if (type == TerminateType::Breakpad)
+                {
+                    DB::ThreadStatus * thread_ptr{};
+                    std::string path;
 
-                DB::readBinary(thread_num, in);
-                DB::readBinary(message, in);
+                    DB::readBinary(thread_num, in);
+                    DB::readPODBinary(thread_ptr, in);
+                    DB::readBinary(path, in);
+
+                    std::string query_id;
+                    if (thread_ptr)
+                        query_id = thread_ptr->getQueryId().toString();
+                    message = query_id.empty() ?
+                        fmt::format("(no query) generate core minidump path: {}", path) :
+                        fmt::format("(query_id: {}) generate core minidump path: {}", query_id, path);
+                }
+                else
+                {
+                    DB::readBinary(thread_num, in);
+                    DB::readBinary(message, in);
+                }
 
                 onTerminate(message, thread_num);
             }
@@ -374,7 +390,6 @@ public:
                 ucontext_t context{};
                 StackTrace stack_trace(NoCapture{});
                 UInt32 thread_num{};
-                std::string query_id;
                 DB::ThreadStatus * thread_ptr{};
 
                 if (sig != SanitizerTrap)
@@ -385,12 +400,11 @@ public:
 
                 DB::readPODBinary(stack_trace, in);
                 DB::readBinary(thread_num, in);
-                DB::readBinary(query_id, in);
                 DB::readPODBinary(thread_ptr, in);
 
                 /// This allows to receive more signals if failure happens inside onFault function.
                 /// Example: segfault while symbolizing stack trace.
-                std::thread([=, this] { onFault(sig, info, context, stack_trace, thread_num, query_id, thread_ptr); }).detach();
+                std::thread([=, this] { onFault(sig, info, context, stack_trace, thread_num, thread_ptr); }).detach();
             }
         }
     }
@@ -418,15 +432,17 @@ private:
         const ucontext_t & context,
         const StackTrace & stack_trace,
         UInt32 thread_num,
-        const std::string & query_id,
         DB::ThreadStatus * thread_ptr) const
     {
         DB::ThreadStatus thread_status;
+
+        DB::String query_id;
 
         /// Send logs from this thread to client if possible.
         /// It will allow client to see failure messages directly.
         if (thread_ptr)
         {
+            query_id = thread_ptr->getQueryId().toString();
             if (auto logs_queue = thread_ptr->getInternalTextLogsQueue())
                 DB::CurrentThread::attachInternalTextLogsQueue(logs_queue, DB::LogsLevel::trace);
         }
@@ -546,14 +562,10 @@ static void sanitizerDeathCallback()
 
     const StackTrace stack_trace;
 
-    StringRef query_id = DB::CurrentThread::getQueryId();
-    query_id.size = std::min(query_id.size, max_query_id_size);
-
     int sig = SignalListener::SanitizerTrap;
     DB::writeBinary(sig, out);
     DB::writePODBinary(stack_trace, out);
     DB::writeBinary(UInt32(getThreadId()), out);
-    DB::writeStringBinary(query_id, out);
     DB::writePODBinary(DB::current_thread, out);
 
     out.next();
@@ -595,6 +607,7 @@ static void sanitizerDeathCallback()
     DB::WriteBufferFromFileDescriptor out(signal_pipe.fds_rw[1], buf_size, buf);
 
     DB::writeBinary(static_cast<int>(SignalListener::StdTerminate), out);
+    DB::writeBinary(static_cast<int>(SignalListener::Normal), out);
     DB::writeBinary(UInt32(getThreadId()), out);
     DB::writeBinary(log_message, out);
     out.next();
@@ -1128,7 +1141,7 @@ void BaseDaemon::shouldSetupWatchdog(char * argv0_)
 void BaseDaemon::setupWatchdog()
 {
     /// Initialize in advance to avoid double initialization in forked processes.
-    DateLUT::instance();
+    DateLUT::serverTimezoneInstance();
 
     std::string original_process_name;
     if (argv0)

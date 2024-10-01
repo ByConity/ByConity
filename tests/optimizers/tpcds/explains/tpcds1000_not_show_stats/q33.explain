@@ -58,16 +58,14 @@ Projection
                   │              │     Partition by: {i_item_sk}
                   │              └─ Left Semi Join
                   │                 │     Condition: i_manufact_id == i_manufact_id_1
-                  │                 │     Runtime Filters Builder: {i_manufact_id_1}
                   │                 ├─ Repartition Exchange
                   │                 │  │     Partition by: {i_manufact_id}
-                  │                 │  └─ Filter
-                  │                 │     │     Condition: Runtime Filters: {i_manufact_id}
-                  │                 │     └─ TableScan tpcds1000.item
-                  │                 │              Where: Runtime Filters: {i_manufact_id}
-                  │                 │              Outputs: [i_item_sk, i_manufact_id]
-                  │                 └─ Buffer
-                  │                    └─ CTERef[1]
+                  │                 │  └─ TableScan tpcds1000.item
+                  │                 │           Outputs: [i_item_sk, i_manufact_id]
+                  │                 └─ Repartition Exchange
+                  │                    │     Partition by: {i_manufact_id_1}
+                  │                    └─ Buffer
+                  │                       └─ CTERef[1]
                   ├─ MergingAggregated
                   │  └─ Repartition Exchange
                   │     │     Partition by: {i_manufact_id_2}
@@ -112,16 +110,14 @@ Projection
                   │              │     Partition by: {i_item_sk_1}
                   │              └─ Left Semi Join
                   │                 │     Condition: i_manufact_id_2 == i_manufact_id_3
-                  │                 │     Runtime Filters Builder: {i_manufact_id_3}
                   │                 ├─ Repartition Exchange
                   │                 │  │     Partition by: {i_manufact_id_2}
-                  │                 │  └─ Filter
-                  │                 │     │     Condition: Runtime Filters: {i_manufact_id_2}
-                  │                 │     └─ TableScan tpcds1000.item
-                  │                 │              Where: Runtime Filters: {i_manufact_id}
-                  │                 │              Outputs: i_item_sk_1:=i_item_sk, i_manufact_id_2:=i_manufact_id
-                  │                 └─ Buffer
-                  │                    └─ CTERef[1]
+                  │                 │  └─ TableScan tpcds1000.item
+                  │                 │           Outputs: i_item_sk_1:=i_item_sk, i_manufact_id_2:=i_manufact_id
+                  │                 └─ Repartition Exchange
+                  │                    │     Partition by: {i_manufact_id_3}
+                  │                    └─ Buffer
+                  │                       └─ CTERef[1]
                   └─ MergingAggregated
                      └─ Repartition Exchange
                         │     Partition by: {i_manufact_id_4}
@@ -166,25 +162,21 @@ Projection
                                  │     Partition by: {i_item_sk_2}
                                  └─ Left Semi Join
                                     │     Condition: i_manufact_id_4 == i_manufact_id_5
-                                    │     Runtime Filters Builder: {i_manufact_id_5}
                                     ├─ Repartition Exchange
                                     │  │     Partition by: {i_manufact_id_4}
-                                    │  └─ Filter
-                                    │     │     Condition: Runtime Filters: {i_manufact_id_4}
-                                    │     └─ TableScan tpcds1000.item
-                                    │              Where: Runtime Filters: {i_manufact_id}
-                                    │              Outputs: i_item_sk_2:=i_item_sk, i_manufact_id_4:=i_manufact_id
-                                    └─ Buffer
-                                       └─ CTERef[1]
+                                    │  └─ TableScan tpcds1000.item
+                                    │           Outputs: i_item_sk_2:=i_item_sk, i_manufact_id_4:=i_manufact_id
+                                    └─ Repartition Exchange
+                                       │     Partition by: {i_manufact_id_5}
+                                       └─ Buffer
+                                          └─ CTERef[1]
 CTEDef [1]
-   Repartition Exchange
-   │     Partition by: {i_manufact_id_1}
-   └─ Projection
-      │     Expressions: [i_manufact_id_1]
-      └─ Filter
-         │     Condition: i_category = 'Electronics'
-         └─ TableScan tpcds1000.item
-                  Where: i_category = 'Electronics'
-                  Outputs: [i_category], i_manufact_id_1:=i_manufact_id
-note: Runtime Filter is applied for 9 times.
+   Projection
+   │     Expressions: [i_manufact_id_1]
+   └─ Filter
+      │     Condition: i_category = 'Electronics'
+      └─ TableScan tpcds1000.item
+               Where: i_category = 'Electronics'
+               Outputs: [i_category], i_manufact_id_1:=i_manufact_id
+note: Runtime Filter is applied for 6 times.
 note: CTE(Common Table Expression) is applied for 3 times.

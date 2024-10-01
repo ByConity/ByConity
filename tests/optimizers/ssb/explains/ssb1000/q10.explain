@@ -1,24 +1,24 @@
-Projection Est. 1947 rows
+Projection Est. 7795 rows
 │     Expressions: [C_CITY, S_CITY], d_year:=`expr#toYear(LO_ORDERDATE)`, revenue:=`expr#sum(LO_REVENUE)`
-└─ Sorting Est. 1947 rows
+└─ Sorting Est. 7795 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-   └─ Gather Exchange Est. 1947 rows
-      └─ Sorting Est. 1947 rows
+   └─ Gather Exchange Est. 7795 rows
+      └─ Sorting Est. 7795 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, expr#sum(LO_REVENUE) DESC NULLS LAST}
-         └─ MergingAggregated Est. 1947 rows
-            └─ Repartition Exchange Est. 1947 rows
+         └─ MergingAggregated Est. 7795 rows
+            └─ Repartition Exchange Est. 7795 rows
                │     Partition by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
-               └─ Aggregating Est. 1947 rows
+               └─ Aggregating Est. 7795 rows
                   │     Group by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 2354968 rows
+                  └─ Projection Est. 147185 rows
                      │     Expressions: [C_CITY, LO_REVENUE, S_CITY], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Inner Join Est. 2354968 rows
+                     └─ Inner Join Est. 147185 rows
                         │     Condition: LO_CUSTKEY == C_CUSTKEY
                         │     Runtime Filters Builder: {C_CUSTKEY}
-                        ├─ Repartition Exchange Est. 48679926 rows
+                        ├─ Repartition Exchange Est. 12169963 rows
                         │  │     Partition by: {LO_CUSTKEY}
-                        │  └─ Inner Join Est. 48679926 rows
+                        │  └─ Inner Join Est. 12169963 rows
                         │     │     Condition: LO_SUPPKEY == S_SUPPKEY
                         │     │     Runtime Filters Builder: {S_SUPPKEY}
                         │     ├─ Filter Est. 1499997453 rows
@@ -26,15 +26,15 @@ Projection Est. 1947 rows
                         │     │  └─ TableScan ssb1000.lineorder Est. 5999989813 rows
                         │     │           Where: toYYYYMM(LO_ORDERDATE) = 199712 Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │     │           Outputs: [LO_CUSTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
-                        │     └─ Broadcast Exchange Est. 16226 rows
-                        │        └─ Filter Est. 16226 rows
+                        │     └─ Broadcast Exchange Est. 16227 rows
+                        │        └─ Filter Est. 16227 rows
                         │           │     Condition: S_CITY IN ('UNITED KI1', 'UNITED KI5')
                         │           └─ TableScan ssb1000.supplier Est. 2000000 rows
                         │                    Where: S_CITY IN ('UNITED KI1', 'UNITED KI5')
                         │                    Outputs: [S_SUPPKEY, S_CITY]
-                        └─ Repartition Exchange Est. 240811 rows
+                        └─ Repartition Exchange Est. 240812 rows
                            │     Partition by: {C_CUSTKEY}
-                           └─ Filter Est. 240811 rows
+                           └─ Filter Est. 240812 rows
                               │     Condition: C_CITY IN ('UNITED KI1', 'UNITED KI5')
                               └─ TableScan ssb1000.customer Est. 30000000 rows
                                        Where: C_CITY IN ('UNITED KI1', 'UNITED KI5')

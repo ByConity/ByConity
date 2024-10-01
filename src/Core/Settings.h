@@ -90,11 +90,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_insert_squashing, true, "Squashing when insert", 0) \
     M(UInt64, max_final_threads, 16, "The maximum number of threads to read from table with FINAL.", 0) \
     M(MaxThreads, max_threads, 0, "The maximum number of threads to execute the request. By default, it is determined automatically.", 0) \
-    M(MaxThreads, \
-      max_alter_threads, \
-      0, \
-      "The maximum number of threads to execute the ALTER requests. By default, it is determined automatically.", \
-      0) \
+    M(MaxThreads, max_alter_threads, 0, "The maximum number of threads to execute the ALTER requests. By default, it is determined automatically.", 0) \
+    M(MaxThreads, max_download_threads, 4, "The maximum number of threads to download data (e.g. for Hive engine).", 0) \
+    M(MaxThreads, max_parsing_threads, 0, "The maximum number of threads to parse data in input formats that support parallel parsing.", 0) \
     M(UInt64, max_read_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to read from the filesystem.", 0) \
     M(UInt64, max_read_buffer_size_local_fs, 128*1024, "The maximum size of the buffer to read from local filesystem. If set to 0 then max_read_buffer_size will be used.", 0) \
     M(UInt64, max_read_buffer_size_remote_fs, 0, "The maximum size of the buffer to read from remote filesystem. If set to 0 then max_read_buffer_size will be used.", 0) \
@@ -461,46 +459,19 @@ enum PreloadLevelSettings : UInt64
     M(String, count_distinct_implementation, "uniqExact", "What aggregate function to use for implementation of count(DISTINCT ...)", 0) \
 \
     M(Bool, add_http_cors_header, false, "Write add http CORS header.", 0) \
-\
-    M(UInt64, \
-      max_http_get_redirects, \
-      0, \
-      "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server " \
-      "to redirect your requests to unexpected services.", \
-      0) \
-\
-    M(Bool, \
-      use_client_time_zone, \
-      false, \
-      "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", \
-      0) \
-\
-    M(Bool, \
-      send_progress_in_http_headers, \
-      false, \
-      "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python " \
-      "requests in particular), so it is disabled by default.", \
-      0) \
-\
-    M(UInt64, \
-      http_headers_progress_interval_ms, \
-      100, \
-      "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", \
-      0) \
-\
-    M(Bool, \
-      fsync_metadata, \
-      1, \
-      "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with " \
-      "high load of DDL queries and high load of disk subsystem.", \
-      0) \
-\
-    M(Bool, \
-      join_use_nulls, \
-      1, \
-      "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding " \
-      "columns data type.", \
-      IMPORTANT) \
+    \
+    M(UInt64, max_http_get_redirects, 0, "Max number of http GET redirects hops allowed. Make sure additional security measures are in place to prevent a malicious server to redirect your requests to unexpected services.", 0) \
+    \
+    M(Bool, use_client_time_zone, false, "Use client timezone for interpreting DateTime string values, instead of adopting server timezone.", 0) \
+    M(Timezone, session_timezone, "", "The default timezone for current session or query. The default value is server default timezone if empty.", 0) \
+    \
+    M(Bool, send_progress_in_http_headers, false, "Send progress notifications using X-ClickHouse-Progress headers. Some clients do not support high amount of HTTP headers (Python requests in particular), so it is disabled by default.", 0) \
+    \
+    M(UInt64, http_headers_progress_interval_ms, 100, "Do not send HTTP headers X-ClickHouse-Progress more frequently than at each specified interval.", 0) \
+    \
+    M(Bool, fsync_metadata, 1, "Do fsync after changing metadata for tables and databases (.sql files). Could be disabled in case of poor latency on server with high load of DDL queries and high load of disk subsystem.", 0) \
+    \
+    M(Bool, join_use_nulls, 1, "Use NULLs for non-joined rows of outer JOINs for types that can be inside Nullable. If false, use default value of corresponding columns data type.", IMPORTANT) \
     M(Bool, join_using_null_safe, 0, "Force null safe equal comparison for USING keys except the last key of ASOF join", 0) \
     \
     M(Bool, allow_return_nullable_array, 1, "For array related functions, if true, will return nullable(array)", 0) \
@@ -824,7 +795,7 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_profile_events, true, "Log query performance statistics into the query_log and query_thread_log.", 0) \
     M(Bool, log_query_settings, true, "Log query settings into the query_log.", 0) \
-    M(Bool, log_query_threads, true, "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", 0) \
+    M(Bool, log_query_threads, false, "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", 0) \
     M(Bool, log_query_exchange, false, "Log query exchange metric.", 0) \
     M(String, log_comment, "", "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", 0) \
     M(LogsLevel, send_logs_level, LogsLevel::fatal, "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'", 0) \
@@ -1417,9 +1388,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
     M(Bool, block_json_query_in_optimizer, true, "Whether block json query in optimizer", 0) \
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
-    M(Bool, enable_prune_empty_resource, false, "Whether prune resource sending", 0) \
-    M(Bool, enable_prune_compute_plan_segment, false, "Whether prune compute plan segment", 0) \
-    M(Bool, send_cacheable_table_definitions, false, "Whether to send cacheable table definitions to worker, which reduces parsing overhead and is particularly beneficial for high concurrency workload", 0) \
+    M(Bool, send_cacheable_table_definitions, true, "Whether to send cacheable table definitions to worker, which reduces parsing overhead and is particularly beneficial for high concurrency workload", 0) \
     M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
@@ -1464,6 +1433,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_unify_nullable_type, true, "Whether enable unify nullable type", 0) \
     M(Bool, enable_sorting_property, true, "Whether enable sorting property rule", 0) \
     M(Bool, enable_streaming_property, true, "Whether enable streaming property rule", 0) \
+    M(Bool, enable_use_node_property, true, "Whether enable node property rule", 0) \
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
     M(Bool, enable_cross_join_to_union, false, "Whether enable convert cross join to union", 0) \
     M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
@@ -1479,6 +1449,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_unwrap_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
+    M(Bool, enable_cbo_push_partial_agg, false, "Whether enable cost base push partial agg", 0) \
     M(Bool, enable_shuffle_before_state_func, true, "Whether shuffle when agg func is state func.", 0) \
     M(Bool, enable_share_common_plan_node, true, "Whether enable share common plan node using cte", 0) \
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
@@ -1495,7 +1466,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
     M(Bool, enable_remove_remove_unnecessary_buffer, false, "Whether to only add buffer for cte consumer that may cause deadlock", 0) \
-    M(Int64, max_buffer_size_for_deadlock_cte, 8000000000, "Inline CTE if buffer is oversized, set 0 to inline all cte, set -1 to buffer data for all cte even no stats", 0) \
+    M(Int64, max_buffer_size_for_deadlock_cte, 13000000000, "Inline CTE if buffer is oversized, set 0 to inline all cte, set -1 to buffer data for all cte even no stats", 0) \
     M(UInt64, max_prewhere_or_expression_size, 0, "Max depth of condition which can push down to prewhere", 0) \
     M(Bool, enable_add_exchange, true, "Whether to enable AddExchange rule", 0) \
     M(Bool, enable_bitmap_index_splitter, true, "Whether to enable BitMapIndexSplitter", 0) \
@@ -1620,7 +1591,10 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, statistics_max_partitions, 0, "Max partitions in total to collect partitioned stats, 0 for unlimited", 0) \
     M(Bool, statistics_query_cnch_parts_for_row_count, true, "Use cnch parts instead of count(*) for row count to speed up test", 0) \
     /** Optimizer relative settings, cost model and estimation */ \
-    M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_cpu_cost_ratio, 0.74, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_mem_cost_ratio, 0.16, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_net_cost_ratio, 1.0, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_table_scan_weight, 3.8, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
     M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
     M(Float, cost_calculator_join_build_weight, 1.5, "Join build side weight for cost calculator", 0) \
@@ -1628,7 +1602,11 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight_for_join_build_side, 1.3, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
+    M(Bool, cost_calculator_use_size, true, "Whether use byte size to calc cost", 0) \
+    M(Bool, cost_calculator_use_size_in_join, true, "Whether use byte size to calc cost in join", 0) \
+    M(Float, cost_calculator_byte_size_weight, 1, " Byte size weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 0.5, "Join filter selectivity", 0) \
+    M(Bool, stats_estimator_join_use_histogram, true, "Estimate join use histogram", 0) \
     M(Float, stats_estimator_anti_join_filter_coefficient, 0.6, "Anti Join filter coefficient", 0) \
     M(Float, stats_estimator_first_agg_key_filter_coefficient, 0.3, "First agg key coefficient", 0) \
     M(Float, stats_estimator_remaining_agg_keys_filter_coefficient, 1.5, "Remaining agg key coefficient", 0) \
@@ -1706,10 +1684,14 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join_without_top_join, false, "Whether to allow eliminate complicated join by fk pull through pass the multi-child node even if no top join", 0) \
     M(Bool, enable_filtered_pk_selectivity, 1, "Enable the selectivity of filtered pk table", 0) \
+    M(Bool, execute_subquery_in_lambda, true, "Whether to execute subquery in lambda", 0) \
+    M(Bool, early_execute_scalar_subquery, false, "Whether to early execute scalar subquery", 0) \
+    M(Bool, early_execute_in_subquery, false, "Whether to early execute in subquery", 0) \
     \
-    /** remote disk cache*/ \
-    M(Bool, use_local_cache_for_remote_storage, true, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
-    M(Bool, enable_parquert_orc_split, false, "Use local cache for remote storage like HDFS or S3, it's used for remote table engine only", 0) \
+    /** Hive settings */ \
+    M(Bool, hive_allow_missing_columns, true, "Allow missing columns while reading Hive tables", 0) \
+    M(Bool, hive_case_insensitive_column_matching, true, "Ignore case when matching Hive columns with CH columns.", 0) \
+    M(Bool, hive_use_native_reader, true, "Enable native reader for Parquet/ORC format", 0) \
     \
     /** Exchange settings */ \
     M(UInt64, min_compatible_brpc_minor_version, 4, "Min compatble version of inter server BRPC protocol", 0) \
@@ -1719,11 +1701,11 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, exchange_timeout_ms, 1000000, "Exchange request timeout ms",0) \
     M(UInt64, exchange_wait_accept_max_timeout_ms, 20000, "Exchange receiver wait accept max timeout ms",0) \
     M(UInt64, exchange_queue_bytes, 209715200, "Queue size(bytes) for exchange queue, 0 means disable", 0) \
-    M(UInt64, exchange_local_receiver_queue_size, 300, "Queue size for local exchange receiver",0) \
-    M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
-    M(UInt64, exchange_multi_path_receiver_queue_size, 200, "Queue size for multi path exchange receiver", 0) \
-    M(Bool, exchange_enable_block_compress, false, "Whether enable exchange block compress ", 0) \
-    M(UInt64, exchange_stream_max_buf_size, 209715200, "Default 200M, -1 means no limit", 0) \
+    M(UInt64, exchange_local_receiver_queue_size, 30, "Queue size for local exchange receiver",0) \
+    M(UInt64, exchange_remote_receiver_queue_size, 10, "Queue size for remote exchange receiver",0) \
+    M(UInt64, exchange_multi_path_receiver_queue_size, 20, "Queue size for multi path exchange receiver", 0) \
+    M(Bool, exchange_enable_block_compress, true, "Whether enable exchange block compress ", 0) \
+    M(UInt64, exchange_stream_max_buf_size, 20971520, "Default 20M, -1 means no limit", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_row, 65505, "The minimum row num when exchange will flush send buffer", 0) \
     M(UInt64, \
@@ -1851,7 +1833,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_bsp_selector_fallback, false, "If enabled, query will select nodes as mpp mode if anything is wrong. IT WILL BE REMOVED IN FUTURE", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, false, "Whether to compute locality preferences for reduce tasks", 0) \
-    M(Bool, bsp_force_split_bucket_table_by_part, false, "If enabled, bucket table will be split by part instead of by bucket", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
     M(UInt64, bsp_max_retry_num, 3, "max retry number for a task(plan segment instance) in bsp mode, does not include first execution(i.e. normal execution without retry)",0) \
     /*end of bulk synchronous parallel section*/ \
@@ -1964,14 +1945,14 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, output_format_pretty_color, true, "Use ANSI escape sequences to paint colors in Pretty formats", 0) \
     M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
-    M(UInt64, max_download_threads, 4, "The maximum number of threads to download data (Actually I should put it in common settings instead of format settings).", 0) \
     M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
     M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
     M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
     M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
-    M(UInt64, input_format_parquet_min_bytes_for_seek, 8192, "Min bytes for seek when reading parquet file", 0) \
+    M(UInt64, input_format_parquet_min_bytes_for_seek, DBMS_DEFAULT_BUFFER_SIZE, "Min bytes for seek when reading parquet file", 0) \
+    M(UInt64, input_format_parquet_max_buffer_size, 8 * DBMS_DEFAULT_BUFFER_SIZE, "Max buffer size for parquet read", 0) \
     M(Bool, input_format_parquet_filter_push_down, true, "When reading Parquet files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
     M(Bool, input_format_parquet_use_footer_cache, false, "Whether to use footer cache, cache footer data in memory", 0) \
     M(Bool, input_format_parquet_use_native_reader, false, "When reading Parquet files, to use native reader instead of arrow reader.", 0) \
@@ -1980,7 +1961,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_parquet_case_insensitive_column_matching, false, "Ignore case when matching Parquet columns with CH columns.", 0) \
     M(Bool, input_format_parquet_preserve_order, false, "Avoid reordering rows when reading from Parquet files. Usually makes it much slower.", 0) \
     M(Bool, input_format_parquet_coalesce_read, true, "Merge small IO ranges, See arrow::ReadRangeCache", 0) \
-    M(Bool, input_format_parquet_use_lazy_io_cache, true, "Lazy caching will trigger io requests when they are requested for the first time. See arrow::ReadRangeCache", 0) \
+    M(Bool, input_format_parquet_use_threads, false, "Use threads to decode columns in parallel", 0) \
     M(Bool, input_format_orc_filter_push_down, true, "When reading Orc files, skip whole row groups based on the WHERE/PREWHERE expressions and min/max statistics in the Parquet metadata.", 0) \
     M(DateTimeOverflowBehavior, date_time_overflow_behavior, "ignore", "Overflow mode for Date, Date32, DateTime, DateTime64 types. Possible values: 'ignore', 'throw', 'saturate'.", 0) \
     \

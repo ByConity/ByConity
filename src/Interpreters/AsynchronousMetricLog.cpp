@@ -44,7 +44,7 @@ void AsynchronousMetricLog::addValues(const AsynchronousMetricValues & values)
     const auto now = std::chrono::system_clock::now();
     element.event_time = time_in_seconds(now);
     element.event_time_microseconds = time_in_microseconds(now);
-    element.event_date = DateLUT::instance().toDayNum(element.event_time);
+    element.event_date = DateLUT::serverTimezoneInstance().toDayNum(element.event_time);
 
     for (const auto & [key, value] : values)
     {

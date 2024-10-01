@@ -272,7 +272,7 @@ Iterator * Table::BlockReader(void * arg, const ReadOptions & options, const Sli
 Iterator * Table::NewIterator(const ReadOptions & options) const
 {
     return NewTwoLevelIterator(
-        rep_->options.comparator, rep_->index_block->NewIterator(rep_->options.comparator), &Table::BlockReader, const_cast<Table *>(this), options);
+        rep_->options.comparator, rep_->index_block->NewIterator(rep_->options.comparator), rep_->filter, &Table::BlockReader, const_cast<Table *>(this), options);
 }
 
 Status Table::Get(const ReadOptions & options, const Slice & k, std::string * value)

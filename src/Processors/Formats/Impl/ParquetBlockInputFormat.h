@@ -76,7 +76,12 @@ public:
     ParquetBlockInputFormat(
         ReadBuffer & buf,
         const Block & header,
-        const FormatSettings & format_settings);
+        const FormatSettings & format_settings,
+        const ReadSettings & read_settings,
+        bool is_remote_fs,
+        size_t max_download_threads,
+        size_t max_parsing_threads,
+        SharedParsingThreadPoolPtr parsing_thread_pool);
 
     ~ParquetBlockInputFormat() override;
 
@@ -97,6 +102,8 @@ private:
     size_t getNumberOfRowGroups() override;
 
     std::optional<PendingChunk> readBatch(size_t row_group_idx) override;
+
+    void prefetchRowGroup(size_t row_group_idx) override;
 
     // Data layout in the file:
     //
@@ -211,6 +218,9 @@ private:
         }
     };
     std::vector<RowGroupReader> row_group_readers;
+
+    const ReadSettings read_settings;
+    bool is_remote_fs = false;
 
     // RandomAccessFile is thread safe, so we share it among threads.
     // FileReader is not, so each thread creates its own.

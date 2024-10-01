@@ -1,14 +1,14 @@
-Projection Est. 2954 rows
+Projection Est. 23327 rows
 │     Expressions: [p_brand, p_size, p_type], supplier_cnt:=`expr#uniqExact(ps_suppkey)`
-└─ Sorting Est. 2954 rows
+└─ Sorting Est. 23327 rows
    │     Order by: {expr#uniqExact(ps_suppkey) DESC NULLS LAST, p_brand ASC NULLS LAST, p_type ASC NULLS LAST, p_size ASC NULLS LAST}
-   └─ Gather Exchange Est. 2954 rows
-      └─ Sorting Est. 2954 rows
+   └─ Gather Exchange Est. 23327 rows
+      └─ Sorting Est. 23327 rows
          │     Order by: {expr#uniqExact(ps_suppkey) DESC NULLS LAST, p_brand ASC NULLS LAST, p_type ASC NULLS LAST, p_size ASC NULLS LAST}
-         └─ MergingAggregated Est. 2954 rows
-            └─ Repartition Exchange Est. 2954 rows
+         └─ MergingAggregated Est. 23327 rows
+            └─ Repartition Exchange Est. 23327 rows
                │     Partition by: {p_brand, p_type, p_size}
-               └─ Aggregating Est. 2954 rows
+               └─ Aggregating Est. 23327 rows
                   │     Group by: {p_brand, p_type, p_size}
                   │     Aggregates: expr#uniqExact(ps_suppkey):=AggNull(count)(ps_suppkey)
                   └─ Aggregating Est. 62529256 rows
@@ -25,7 +25,7 @@ Projection Est. 2954 rows
                         │     │  └─ TableScan tpch1000_sample.partsupp Est. 800000000 rows
                         │     │           Where: Runtime Filters: {ps_partkey}
                         │     │           Outputs: [ps_partkey, ps_suppkey]
-                        │     └─ Filter Est. 26111831 rows
+                        │     └─ Filter Est. 26111832 rows
                         │        │     Condition: (p_brand != 'Brand#45') AND (p_size IN (3, 9, 14, 19, 23, 36, 45, 49)) AND (p_type NOT LIKE 'MEDIUM POLISHED%')
                         │        └─ TableScan tpch1000_sample.part Est. 200000000 rows
                         │                 Where: (p_brand != 'Brand#45') AND (p_size IN (3, 9, 14, 19, 23, 36, 45, 49)) AND (p_type NOT LIKE 'MEDIUM POLISHED%')

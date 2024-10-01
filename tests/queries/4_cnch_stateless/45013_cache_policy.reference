@@ -4,18 +4,18 @@ t3	1	3
 t4	1	4
 
 --- original catalog ---
-Projection Est. 24 rows, cost 4.922600e+01
-└─ Gather Exchange Est. 24 rows, cost 4.745000e+01
-   └─ Inner Join Est. 24 rows, cost 4.345000e+01
-      ├─ Inner Join Est. 6 rows, cost 1.811000e+01
-      │  ├─ TableScan cache_policy_45013.t3 Est. 3 rows, cost 2.220000e+00
-      │  └─ Broadcast Exchange Est. 2 rows, cost 7.720000e+00
-      │     └─ Inner Join Est. 2 rows, cost 6.760000e+00
-      │        ├─ TableScan cache_policy_45013.t2 Est. 2 rows, cost 1.480000e+00
-      │        └─ Broadcast Exchange Est. 1 rows, cost 1.380000e+00
-      │           └─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
-      └─ Broadcast Exchange Est. 4 rows, cost 4.560000e+00
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows, cost 2.960000e+00
+Projection Est. 24 rows
+└─ Gather Exchange Est. 24 rows
+   └─ Inner Join Est. 24 rows
+      ├─ Inner Join Est. 6 rows
+      │  ├─ Inner Join Est. 2 rows
+      │  │  ├─ TableScan cache_policy_45013.t2 Est. 2 rows
+      │  │  └─ Broadcast Exchange Est. 1 rows
+      │  │     └─ TableScan cache_policy_45013.t1 Est. 1 rows
+      │  └─ Broadcast Exchange Est. 3 rows
+      │     └─ TableScan cache_policy_45013.t3 Est. 3 rows
+      └─ Broadcast Exchange Est. 4 rows
+         └─ TableScan cache_policy_45013.t4 Est. 4 rows
 t1.*		1						
 t1.x	UInt32	1	0	1	1	1	4	1
 t2.*		2						
@@ -40,18 +40,18 @@ Projection Est. ? rows
          └─ TableScan cache_policy_45013.t4 Est. ? rows
 
 --- original normal ---
-Projection Est. 24 rows, cost 4.922600e+01
-└─ Gather Exchange Est. 24 rows, cost 4.745000e+01
-   └─ Inner Join Est. 24 rows, cost 4.345000e+01
-      ├─ Inner Join Est. 6 rows, cost 1.811000e+01
-      │  ├─ TableScan cache_policy_45013.t3 Est. 3 rows, cost 2.220000e+00
-      │  └─ Broadcast Exchange Est. 2 rows, cost 7.720000e+00
-      │     └─ Inner Join Est. 2 rows, cost 6.760000e+00
-      │        ├─ TableScan cache_policy_45013.t2 Est. 2 rows, cost 1.480000e+00
-      │        └─ Broadcast Exchange Est. 1 rows, cost 1.380000e+00
-      │           └─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
-      └─ Broadcast Exchange Est. 4 rows, cost 4.560000e+00
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows, cost 2.960000e+00
+Projection Est. 24 rows
+└─ Gather Exchange Est. 24 rows
+   └─ Inner Join Est. 24 rows
+      ├─ Inner Join Est. 6 rows
+      │  ├─ Inner Join Est. 2 rows
+      │  │  ├─ TableScan cache_policy_45013.t2 Est. 2 rows
+      │  │  └─ Broadcast Exchange Est. 1 rows
+      │  │     └─ TableScan cache_policy_45013.t1 Est. 1 rows
+      │  └─ Broadcast Exchange Est. 3 rows
+      │     └─ TableScan cache_policy_45013.t3 Est. 3 rows
+      └─ Broadcast Exchange Est. 4 rows
+         └─ TableScan cache_policy_45013.t4 Est. 4 rows
 t1.*		1						
 t1.x	UInt32	1	0	1	1	1	4	1
 t2.*		2						
@@ -62,18 +62,18 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	4	1
 
 --- original cache ---
-Projection Est. 24 rows, cost 4.922600e+01
-└─ Gather Exchange Est. 24 rows, cost 4.745000e+01
-   └─ Inner Join Est. 24 rows, cost 4.345000e+01
-      ├─ Inner Join Est. 6 rows, cost 1.811000e+01
-      │  ├─ TableScan cache_policy_45013.t3 Est. 3 rows, cost 2.220000e+00
-      │  └─ Broadcast Exchange Est. 2 rows, cost 7.720000e+00
-      │     └─ Inner Join Est. 2 rows, cost 6.760000e+00
-      │        ├─ TableScan cache_policy_45013.t2 Est. 2 rows, cost 1.480000e+00
-      │        └─ Broadcast Exchange Est. 1 rows, cost 1.380000e+00
-      │           └─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
-      └─ Broadcast Exchange Est. 4 rows, cost 4.560000e+00
-         └─ TableScan cache_policy_45013.t4 Est. 4 rows, cost 2.960000e+00
+Projection Est. 24 rows
+└─ Gather Exchange Est. 24 rows
+   └─ Inner Join Est. 24 rows
+      ├─ Inner Join Est. 6 rows
+      │  ├─ Inner Join Est. 2 rows
+      │  │  ├─ TableScan cache_policy_45013.t2 Est. 2 rows
+      │  │  └─ Broadcast Exchange Est. 1 rows
+      │  │     └─ TableScan cache_policy_45013.t1 Est. 1 rows
+      │  └─ Broadcast Exchange Est. 3 rows
+      │     └─ TableScan cache_policy_45013.t3 Est. 3 rows
+      └─ Broadcast Exchange Est. 4 rows
+         └─ TableScan cache_policy_45013.t4 Est. 4 rows
 t1.*		1						
 t1.x	UInt32	1	0	1	1	1	4	1
 t2.*		2						

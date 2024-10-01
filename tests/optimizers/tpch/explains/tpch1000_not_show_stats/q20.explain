@@ -20,7 +20,7 @@ Projection
             │     │     │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)_1`)
             │     │     ├─ MergingAggregated
             │     │     │  └─ Repartition Exchange
-            │     │     │     │     Partition by: {l_partkey, l_suppkey}
+            │     │     │     │     Partition by: {l_suppkey}
             │     │     │     └─ Aggregating
             │     │     │        │     Group by: {l_partkey, l_suppkey}
             │     │     │        │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sumIf)(l_quantity,build_side_non_null_symbol)
@@ -32,7 +32,7 @@ Projection
             │     │     │                       Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) Runtime Filters: {l_partkey, l_suppkey}
             │     │     │                       Outputs: [l_partkey, l_suppkey, l_quantity, l_shipdate]
             │     │     └─ Repartition Exchange
-            │     │        │     Partition by: {ps_partkey, ps_suppkey}
+            │     │        │     Partition by: {ps_suppkey}
             │     │        └─ Filter
             │     │           │     Condition: Runtime Filters: {ps_partkey, ps_suppkey}
             │     │           └─ TableScan tpch1000.partsupp

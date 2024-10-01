@@ -11,7 +11,7 @@ Projection
             │     Limit: 100
             └─ Projection
                │     Expressions: [cc_name_2, d_moy_1, d_year_1, expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1, expr#sum(cs_sales_price)_1, expr#sum(cs_sales_price)_2, expr#sum(cs_sales_price)_3, i_brand_2, i_category_2], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(cs_sales_price)_1` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1`
-               └─ Inner Join
+               └─ Inner (PARALLEL_HASH) Join
                   │     Condition: cc_name_2 == cc_name_3, expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_1, 'Int128') == expr#cast(minus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_3, 1), 'Int128'), i_brand_2 == i_brand_3, i_category_2 == i_category_3
                   ├─ Projection
                   │  │     Expressions: [cc_name_2, d_moy_1, d_year_1, expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1, expr#sum(cs_sales_price)_1, expr#sum(cs_sales_price)_2, i_brand_2, i_category_2], expr#cast(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_1, 'Int128'):=cast(`plus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2, 1)`, 'Int128')
@@ -41,9 +41,9 @@ CTEDef [1]
                   │     Group by: {i_category, i_brand, cc_name, d_year, d_moy}
                   │     Aggregates: expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
                   └─ Inner Join
-                     │     Condition: cs_call_center_sk == cc_call_center_sk
+                     │     Condition: cs_item_sk == i_item_sk
                      ├─ Inner Join
-                     │  │     Condition: cs_item_sk == i_item_sk
+                     │  │     Condition: cs_call_center_sk == cc_call_center_sk
                      │  ├─ Inner Join
                      │  │  │     Condition: cs_sold_date_sk == d_date_sk
                      │  │  │     Runtime Filters Builder: {d_date_sk}
@@ -58,10 +58,10 @@ CTEDef [1]
                      │  │        └─ TableScan tpcds1000.date_dim
                      │  │                 Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
                      │  │                 Outputs: [d_date_sk, d_year, d_moy]
-                     │  └─ TableScan tpcds1000.item
-                     │           Outputs: [i_item_sk, i_brand, i_category]
-                     └─ Broadcast Exchange
-                        └─ TableScan tpcds1000.call_center
-                                 Outputs: [cc_call_center_sk, cc_name]
+                     │  └─ Broadcast Exchange
+                     │     └─ TableScan tpcds1000.call_center
+                     │              Outputs: [cc_call_center_sk, cc_name]
+                     └─ TableScan tpcds1000.item
+                              Outputs: [i_item_sk, i_brand, i_category]
 note: Runtime Filter is applied for 1 times.
 note: CTE(Common Table Expression) is applied for 3 times.

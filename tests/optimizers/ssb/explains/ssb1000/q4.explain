@@ -1,14 +1,14 @@
-Projection Est. 84450 rows
+Projection Est. 2165399 rows
 │     Expressions: [P_BRAND], d_year:=`expr#toYear(LO_ORDERDATE)`, sum(LO_REVENUE):=`expr#sum(LO_REVENUE)`
-└─ Sorting Est. 84450 rows
+└─ Sorting Est. 2165399 rows
    │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-   └─ Gather Exchange Est. 84450 rows
-      └─ Sorting Est. 84450 rows
+   └─ Gather Exchange Est. 2165399 rows
+      └─ Sorting Est. 2165399 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-         └─ MergingAggregated Est. 84450 rows
-            └─ Repartition Exchange Est. 84450 rows
+         └─ MergingAggregated Est. 2165399 rows
+            └─ Repartition Exchange Est. 2165399 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), P_BRAND}
-               └─ Aggregating Est. 84450 rows
+               └─ Aggregating Est. 2165399 rows
                   │     Group by: {expr#toYear(LO_ORDERDATE), P_BRAND}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
                   └─ Projection Est. 68200689 rows

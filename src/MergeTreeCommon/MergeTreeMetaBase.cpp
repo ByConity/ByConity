@@ -44,6 +44,7 @@
 #include <Parsers/ASTPartition.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ASTUtils.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
 #include <Storages/AlterCommands.h>
@@ -796,26 +797,31 @@ Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & 
     return block;
 }
 
-Block MergeTreeMetaBase::getBlockWithVirtualPartitionColumns(
+Block MergeTreeMetaBase::getPartitionBlockWithVirtualColumns(
     const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const
 {
+    auto block = getInMemoryMetadataPtr()->partition_key.sample_block;
     DataTypePtr partition_value_type = getPartitionValueType();
-    bool has_partition_value = typeid_cast<const DataTypeTuple *>(partition_value_type.get());
-    Block block{
-        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
-        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")};
-
+    block.insert(ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"));
+    block.insert(ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value"));
 
     MutableColumns columns = block.mutateColumns();
 
-    auto & partition_id_column = columns[0];
-    auto & partition_value_column = columns[1];
+    bool has_partition_value = typeid_cast<const DataTypeTuple *>(partition_value_type.get());
+    auto block_size = block.columns();
+
+    auto & partition_id_column = columns[block_size-2];
+    auto & partition_value_column = columns[block_size-1];
+
+    std::for_each(columns.begin(), columns.end(), [&](auto & column) { column->reserve(partition_list.size()); });
 
     for (const auto & partition : partition_list)
     {
         partition_id_column->insert(partition->getID(*this));
         if (has_partition_value)
         {
+            for (size_t i = 0; i < partition->value.size(); i++)
+                columns[i]->insert(partition->value[i]);
             Tuple tuple(partition->value.begin(), partition->value.end());
             partition_value_column->insert(std::move(tuple));
         }
@@ -2112,7 +2118,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
 
         if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
         {
-            const auto & date_lut = DateLUT::instance();
+            const auto & date_lut = DateLUT::serverTimezoneInstance();
             for (size_t index = 0; index < column->size(); index++)
             {
                 auto ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
@@ -2137,7 +2143,7 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
         //     time_t ttl_value = 0;
         //     if (const ColumnUInt16 * column_date = typeid_cast<const ColumnUInt16 *>(column))
         //     {
-        //         const auto & date_lut = DateLUT::instance();
+        //         const auto & date_lut = DateLUT::serverTimezoneInstance();
         //         ttl_value = date_lut.fromDayNum(DayNum(column_date->getElement(index)));
         //     }
         //     else if (const ColumnUInt32 * column_date_time = typeid_cast<const ColumnUInt32 *>(column))
@@ -2179,7 +2185,7 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
     const auto partition_key = MergeTreePartition::adjustPartitionKey(getInMemoryMetadataPtr(), local_context);
     const auto & partition_key_expr = partition_key.expression;
     const auto & partition_key_sample = partition_key.sample_block;
-    if (local_context->getSettingsRef().enable_partition_prune && partition_key_sample.columns() > 0)
+    if (partition_key_sample.columns() > 0)
     {
         /// (2) Prune partitions if there's a column in predicate that exactly match the partition key
         Names partition_key_columns;
@@ -2219,7 +2225,7 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
 
         if (has_partition_column && !partition_list.empty())
         {
-            Block partition_block = getBlockWithVirtualPartitionColumns(partition_list);
+            Block partition_block = getPartitionBlockWithVirtualColumns(partition_list);
             ASTPtr expression_ast;
 
             /// Generate valid expressions for filtering
@@ -2229,6 +2235,7 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
             NameSet partition_ids;
             if (expression_ast)
             {
+                replace_func_with_known_column(expression_ast, NameSet{partition_key_columns.begin(), partition_key_columns.end()});
                 VirtualColumnUtils::filterBlockWithQuery(query_info.query, partition_block, local_context, expression_ast);
                 partition_ids = VirtualColumnUtils::extractSingleValueFromBlock<String>(partition_block, "_partition_id");
                 /// Prunning

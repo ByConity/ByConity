@@ -2,6 +2,7 @@
 #include <optional>
 #include "AggregateFunctions/AggregateFunnelCommon.h"
 #include "Processors/Formats/Impl/OrcCommon.h"
+#include "Processors/Formats/Impl/ParallelDecodingBlockInputFormat.h"
 #if USE_ORC
 
 #    include <mutex>
@@ -62,30 +63,32 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-LMNativeORCBlockInputFormat::LMNativeORCBlockInputFormat(ReadBuffer & in_, Block header_, const FormatSettings & format_settings_)
+LMNativeORCBlockInputFormat::LMNativeORCBlockInputFormat(
+    ReadBuffer & in_,
+    const Block & header_,
+    const FormatSettings & format_settings_,
+    size_t max_download_threads_,
+    size_t max_parsing_threads_,
+    SharedParsingThreadPoolPtr parsing_thread_pool)
     : ParallelDecodingBlockInputFormat(
         in_,
-        std::move(header_),
+        header_,
         format_settings_,
-        format_settings_.parquet.max_download_threads,
+        max_download_threads_,
+        max_parsing_threads_,
         format_settings_.parquet.preserve_order,
-        format_settings_.orc.skip_stripes)
+        format_settings_.orc.skip_stripes,
+        std::move(parsing_thread_pool))
 {
     scan_params.header = header_;
     scan_params.in = &in;
     scan_params.format_settings = format_settings_;
     scan_params.chunk_size = format_settings_.orc.row_batch_size;
 }
+
 LMNativeORCBlockInputFormat::~LMNativeORCBlockInputFormat()
 {
-    try
-    {
-        close();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "thread pool dtor");
-    }
+    close();
 }
 
 void LMNativeORCBlockInputFormat::resetParser()

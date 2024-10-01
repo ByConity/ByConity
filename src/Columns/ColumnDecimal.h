@@ -232,12 +232,14 @@ protected:
 };
 
 template <class TCol>
-concept is_col_over_big_decimal = std::is_same_v<TCol, ColumnDecimal<typename TCol::ValueType>>
-    && is_decimal<typename TCol::ValueType> && is_over_big_int<typename TCol::NativeT>;
+concept is_col_decimal = std::is_same_v<TCol, ColumnDecimal<typename TCol::ValueType>>
+    && is_decimal<typename TCol::ValueType>;
 
 template <class TCol>
-concept is_col_int_decimal = std::is_same_v<TCol, ColumnDecimal<typename TCol::ValueType>>
-    && is_decimal<typename TCol::ValueType> && std::is_integral_v<typename TCol::NativeT>;
+concept is_col_over_big_decimal = is_col_decimal<TCol> && is_over_big_int<typename TCol::NativeT>;
+
+template <class TCol>
+concept is_col_int_decimal = is_col_decimal<TCol> && std::is_integral_v<typename TCol::NativeT>;
 
 template <class, bool> class ColumnVector;
 template <class T> struct ColumnVectorOrDecimalT { using Col = ColumnVector<T, false>; };
