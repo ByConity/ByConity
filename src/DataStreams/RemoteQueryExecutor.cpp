@@ -180,7 +180,7 @@ static Block adaptBlockStructure(const Block & block, const Block & header)
     return res;
 }
 
-void RemoteQueryExecutor::sendQuery()
+void RemoteQueryExecutor::sendQuery(ClientInfo::QueryKind query_kind)
 {
     if (sent_query)
         return;
@@ -210,7 +210,7 @@ void RemoteQueryExecutor::sendQuery()
 
     // change query kind to secondary query here
     if (!is_server_forwarding)
-        modified_client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
+        modified_client_info.query_kind = query_kind;
 
     if (CurrentThread::isInitialized())
     {

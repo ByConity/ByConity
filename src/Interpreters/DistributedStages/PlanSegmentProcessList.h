@@ -44,15 +44,33 @@ class PlanSegmentGroup
 {
 public:
     using Element = std::shared_ptr<ProcessListEntry>;
-    using Container = std::map<UInt32, Element>;
+    using Container = std::unordered_map<size_t, Element>;
 
-    PlanSegmentGroup(String coordinator_address_, Decimal64 initial_query_start_time_ms_, bool use_query_memory_tracker_, size_t queue_bytes_)
-        : coordinator_address(std::move(coordinator_address_))
+    PlanSegmentGroup(
+        String initial_query_id_,
+        String coordinator_address_,
+        Decimal64 initial_query_start_time_ms_,
+        bool use_query_memory_tracker_,
+        size_t queue_bytes_)
+        : initial_query_id(std::move(initial_query_id_))
+        , coordinator_address(std::move(coordinator_address_))
         , initial_query_start_time_ms(initial_query_start_time_ms_)
         , use_query_memory_tracker(use_query_memory_tracker_)
     {
         if (queue_bytes_ != 0)
             memory_controller = std::make_shared<MemoryController>(queue_bytes_);
+    }
+
+    ~PlanSegmentGroup()
+    {
+        if (use_query_memory_tracker)
+            memory_tracker.reset(); // prevent log twice when destruct
+
+        if (memory_controller)
+        {
+            memory_controller->logPeakMemoryUsage();
+            memory_controller.reset();
+        }
     }
 
     bool empty()
@@ -61,11 +79,30 @@ public:
         return segment_queries.empty();
     }
 
-    bool emplace(UInt32 segment_id, Element && element)
+    bool emplace_null(std::vector<size_t> segment_ids)
     {
         std::unique_lock lock(mutex);
-        const auto ret = segment_queries.insert_or_assign(segment_id, std::move(element));
-        return ret.second;
+        // for batch mode
+        if (segment_ids.size() != 1 && !segment_queries.empty())
+            return false;
+
+        for (const auto segment_id : segment_ids)
+        {
+            const auto ret = segment_queries.try_emplace(segment_id, nullptr);
+            if (!ret.second)
+                return false;
+        }
+        return true;
+    }
+
+    bool modify(size_t segment_id, Element && element)
+    {
+        std::unique_lock lock(mutex);
+        auto iter = segment_queries.find(segment_id);
+        if (iter == segment_queries.end())
+            return false;
+        iter->second = std::move(element);
+        return true;
     }
 
     void erase(UInt32 segment_id)
@@ -74,19 +111,13 @@ public:
         segment_queries.erase(segment_id);
     }
 
-    bool contains(UInt32 segment_id)
-    {
-        std::unique_lock lock(mutex);
-        return segment_queries.find(segment_id) != segment_queries.end();
-    }
-
     bool tryCancel(bool internal);
 
-    bool tryCancel(UInt32 segment_id, bool internal);
-
     mutable bthread::Mutex mutex;
+    String initial_query_id;
     String coordinator_address;
     Decimal64 initial_query_start_time_ms{0};
+    std::atomic_bool is_cancelling{false};
     Container segment_queries;
     // not for planSegment_0, because query_context of planSegment_0 create too early
     bool use_query_memory_tracker{true};
@@ -95,33 +126,35 @@ public:
     std::shared_ptr<MemoryController> memory_controller = nullptr;
 };
 
+using PlanSegmentGroupPtr = std::shared_ptr<PlanSegmentGroup>;
 class PlanSegmentProcessList;
 class PlanSegmentProcessListEntry
 {
 private:
-    using Element = std::shared_ptr<QueryStatus>;
     PlanSegmentProcessList & parent;
-    Element status;
+    PlanSegmentGroupPtr segment_group;
+    std::optional<CurrentThread::QueryScope> query_scope;
+    std::weak_ptr<QueryStatus> status;
     String initial_query_id;
     UInt32 segment_id;
     AddressInfo coordinator_address;
     std::shared_ptr<MemoryController> memory_controller;
 
 public:
-    PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, UInt32 segment_id_);
+    PlanSegmentProcessListEntry(
+        PlanSegmentProcessList & parent_, PlanSegmentGroupPtr segment_group_, String initial_query_id_, size_t segment_id_);
     ~PlanSegmentProcessListEntry();
-    Element operator->() { return status; }
-    const Element operator->() const { return status; }
-    QueryStatus & get() { return *status; }
-    const QueryStatus & get() const { return *status; }
-    void setCoordinatorAddress(const AddressInfo & coordinator_address_) {coordinator_address = coordinator_address_;}
-    AddressInfo getCoordinatorAddress() const {return coordinator_address;}
+
+    void setQueryStatus(std::shared_ptr<QueryStatus> status_) { status = std::move(status_); }
+    std::shared_ptr<QueryStatus> getQueryStatus() const { return status.lock(); }
+
     void setMemoryController(std::shared_ptr<MemoryController> & memory_controller_) {memory_controller = memory_controller_;}
     std::shared_ptr<MemoryController> getMemoryController() const {return memory_controller;}
-    UInt32 getSegmentId() const
-    {
-        return segment_id;
-    }
+
+    PlanSegmentGroupPtr getPlanSegmentGroup() const {return segment_group;}
+    size_t getSegmentId() const {return segment_id;}
+
+    void prepareQueryScope(ContextMutablePtr query_context);
 };
 
 /// List of currently executing query created from plan segment.
@@ -131,30 +164,30 @@ public:
     /// distributed query_id -> GroupIdToElement(s). There can be multiple queries with the same query_id as long as all queries except one are cancelled.
     using EntryPtr = std::shared_ptr<PlanSegmentProcessListEntry>;
 
-    using Element = std::shared_ptr<PlanSegmentGroup>;
-
     friend class PlanSegmentProcessListEntry;
 
-    Element insertGroup(const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
+    EntryPtr insertGroup(ContextMutablePtr query_context, size_t segment_id, bool force = false);
 
-    EntryPtr insertProcessList(const Element segment_group, const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
+    std::vector<EntryPtr> insertGroup(ContextMutablePtr query_context, std::vector<size_t> & segment_ids, bool force = false);
+
+    void insertProcessList(
+        EntryPtr plan_segment_process_entry, const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
 
     CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coordinator_address = "");
 
-    bool remove(const String & initial_query_id, UInt32 segment_id, bool before_execute = false);
+    bool remove(std::string initial_query_id, size_t segment_id);
+
+    size_t size() const { return initail_query_to_groups.size(); }
 
 private:
-    bool tryEraseGroup();
-    bool shouldEraseGroup();
-    mutable bthread::Mutex group_to_erase_mutex;
-    std::set<String> group_to_erase;
-    size_t group_to_erase_threshold{64};
-
-    using Container = phmap::parallel_flat_hash_map<std::string, Element,
-            phmap::priv::hash_default_hash<std::string>,
-            phmap::priv::hash_default_eq<std::string>,
-            std::allocator<std::pair<std::string, Element>>,
-            4, bthread::Mutex>;
+    using Container = phmap::parallel_flat_hash_map<
+        std::string,
+        PlanSegmentGroupPtr,
+        phmap::priv::hash_default_hash<std::string>,
+        phmap::priv::hash_default_eq<std::string>,
+        std::allocator<std::pair<std::string, PlanSegmentGroupPtr>>,
+        4,
+        bthread::Mutex>;
     Container initail_query_to_groups;
     mutable bthread::Mutex mutex;
     mutable bthread::ConditionVariable remove_group;

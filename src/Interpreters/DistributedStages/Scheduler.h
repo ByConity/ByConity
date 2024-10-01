@@ -100,7 +100,7 @@ class Scheduler
     using Queue = ConcurrentBoundedQueue<BatchTaskPtr>;
 
 public:
-    Scheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
+    Scheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_, bool batch_schedule_ = false)
         : query_id(query_id_)
         , query_context(query_context_)
         , query_unique_id(query_context->getCurrentTransactionID().toUInt64())
@@ -108,6 +108,7 @@ public:
         , cluster_nodes(query_context_)
         , node_selector(cluster_nodes, query_context, dag_graph_ptr)
         , local_address(getLocalAddress(*query_context))
+        , batch_schedule(batch_schedule_)
         , log(&Poco::Logger::get("Scheduler"))
     {
         cluster_nodes.all_workers.emplace_back(local_address, NodeType::Local, "");
@@ -146,14 +147,18 @@ protected:
     // Select nodes for tasks.
     NodeSelector node_selector;
     AddressInfo local_address;
-    Poco::Logger * log;
     bool time_to_handle_finish_task = false;
 
     String error_msg;
     std::atomic<bool> stopped{false};
 
+    bool batch_schedule = false;
+    BatchPlanSegmentHeaders batch_segment_headers;
+
+    Poco::Logger * log;
+
     void genTopology();
-    void genLeafTasks();
+    virtual void genTasks() = 0;
     bool getBatchTaskToSchedule(BatchTaskPtr & task);
     virtual void sendResources(PlanSegment * plan_segment_ptr)
     {
@@ -172,8 +177,9 @@ protected:
         execution_info.parallel_id = index;
         return execution_info;
     }
-    void dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
+    void dispatchOrSaveTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
+    void batchScheduleTasks();
     void prepareFinalTask();
     NodeSelectorResult selectNodes(PlanSegment * plan_segment_ptr, const SegmentTask & task)
     {

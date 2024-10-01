@@ -151,6 +151,22 @@ message SubmitPlanSegmentRequest {
   optional SourceTaskFilter source_task_filter = 11;
 }
 
+message PlanSegmentHeader {
+  required uint32 plan_segment_id = 1;
+  required uint32 parallel_id = 2;
+  required uint32 plan_segment_buf_size = 3;
+  optional uint32 retry_id = 4;
+  optional SourceTaskFilter source_task_filter = 5;
+}
+
+message SubmitPlanSegmentsRequest {
+  required uint32 brpc_protocol_major_revision = 1;
+  required AddressInfo execution_address = 2;
+  required uint32 query_common_buf_size = 3;
+  required uint32 query_settings_buf_size = 4;
+  repeated PlanSegmentHeader plan_segment_headers = 5;
+}
+
 message ExecutePlanSegmentResponse {
   optional string message = 1;
   optional WorkerNodeResourceData worker_resource_data = 2;
@@ -253,6 +269,8 @@ message SendProgressResponse {
 service PlanSegmentManagerService {
 
   rpc submitPlanSegment(SubmitPlanSegmentRequest) returns (ExecutePlanSegmentResponse);
+
+  rpc submitPlanSegments(SubmitPlanSegmentsRequest) returns (ExecutePlanSegmentResponse);
 
   rpc cancelQuery(CancelQueryRequest) returns (CancelQueryResponse);
 

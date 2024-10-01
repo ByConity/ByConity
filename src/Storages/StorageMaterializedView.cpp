@@ -514,6 +514,8 @@ void StorageMaterializedView::executeByDropInsert(AsyncRefreshParamPtr param, Co
         command_context->makeQueryContext();
         String query_id = fmt::format("{}_{}", command_context->getCurrentQueryId(), sub_id);
         command_context->setCurrentQueryId(query_id);
+        command_context->getClientInfo().query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        command_context->getClientInfo().initial_query_id = query_id;
         auto settings = local_context->getSettings();
         command_context->setSettings(settings);
         command_context->setSetting("enable_materialized_view_rewrite", false);
@@ -665,6 +667,8 @@ void StorageMaterializedView::executeByInsertOverwrite(AsyncRefreshParamPtr para
         command_context->makeQueryContext();
         String query_id = fmt::format("{}_{}", command_context->getCurrentQueryId(), sub_id);
         command_context->setCurrentQueryId(query_id);
+        command_context->getClientInfo().query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        command_context->getClientInfo().initial_query_id = query_id;
         auto settings = local_context->getSettings();
         command_context->setSettings(settings);
         command_context->setSetting("enable_materialized_view_rewrite", false);
@@ -807,8 +811,10 @@ void StorageMaterializedView::refreshCnchSyncImpl(const ASTPtr & partition, Cont
         command_context->setCurrentWorkerGroup(nullptr);
         command_context->setSessionContext(local_context);
         command_context->setQueryContext(command_context);
-        String query_id0 = fmt::format("{}_{}", command_context->getCurrentQueryId(), serializeAST(*partition));
-        command_context->setCurrentQueryId(query_id0);
+        String partition_query_id = fmt::format("{}_{}", command_context->getCurrentQueryId(), serializeAST(*partition));
+        command_context->setCurrentQueryId(partition_query_id);
+        command_context->getClientInfo().query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        command_context->getClientInfo().initial_query_id = partition_query_id;
         return command_context;
     };
 

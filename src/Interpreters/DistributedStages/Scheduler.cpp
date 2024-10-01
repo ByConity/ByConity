@@ -42,7 +42,7 @@ bool Scheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
         return queue.tryPop(task, query_expiration_ms - now);
 }
 
-void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
+void Scheduler::dispatchOrSaveTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx)
 {
     WorkerNode worker_node;
     NodeSelectorResult selector_info;
@@ -57,21 +57,27 @@ void Scheduler::dispatchTask(PlanSegment * plan_segment_ptr, const SegmentTask &
         std::unique_lock<std::mutex> lk(segment_bufs_mutex);
         plan_segment_buf_ptr = segment_bufs[task.task_id];
     }
-    if (worker_node.type == NodeType::Local)
+    AddressInfo address = local_address;
+    WorkerId worker_id;
+    if (worker_node.type != NodeType::Local)
     {
-        sendPlanSegmentToAddress(local_address, plan_segment_ptr, execution_info, query_context, dag_graph_ptr, plan_segment_buf_ptr);
+        address = worker_node.address;
+        const auto worker_group = query_context->tryGetCurrentWorkerGroup();
+        if (worker_group)
+            worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_node.id);
+    }
+    if (batch_schedule)
+    {
+        PlanSegmentHeader header
+            = {.instance_id = {static_cast<UInt32>(plan_segment_ptr->getPlanSegmentId()), execution_info.parallel_id},
+               .plan_segment_buf_size = plan_segment_buf_ptr->size(),
+               .plan_segment_buf_ptr = plan_segment_buf_ptr};
+        batch_segment_headers[{address, worker_id}].emplace_back(std::move(header));
     }
     else
     {
-        const auto worker_group = query_context->tryGetCurrentWorkerGroup();
-        sendPlanSegmentToAddress(
-            worker_node.address,
-            plan_segment_ptr,
-            execution_info,
-            query_context,
-            dag_graph_ptr,
-            plan_segment_buf_ptr,
-            worker_group ? WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_node.id) : WorkerId{});
+        // NodeType::Local can be optimize
+        sendPlanSegmentToAddress(address, plan_segment_ptr, execution_info, query_context, dag_graph_ptr, plan_segment_buf_ptr, worker_id);
     }
 
     if (const auto & id_to_addr_iter = dag_graph_ptr->id_to_address.find(task.task_id);
@@ -132,11 +138,18 @@ TaskResult Scheduler::scheduleTask(PlanSegment * plan_segment_ptr, const Segment
     return res;
 }
 
+void Scheduler::batchScheduleTasks()
+{
+    for (const auto & iter : batch_segment_headers)
+        sendPlanSegmentsToAddress(iter.first.address_info, iter.second, query_context, dag_graph_ptr, iter.first.worker_id);
+    batch_segment_headers.clear();
+}
+
 void Scheduler::schedule()
 {
     Stopwatch sw;
     genTopology();
-    genLeafTasks();
+    genTasks();
 
     /// Leave final segment alone.
     while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
@@ -179,28 +192,12 @@ void Scheduler::schedule()
                 onSegmentScheduled(task);
             }
         }
+        if (batch_schedule)
+            batchScheduleTasks();
     }
 
     dag_graph_ptr->joinAsyncRpcAtLast();
     LOG_DEBUG(log, "Scheduling takes {} ms", sw.elapsedMilliseconds());
-}
-
-void Scheduler::genLeafTasks()
-{
-    LOG_DEBUG(log, "Begin generate leaf tasks");
-    auto batch_task = std::make_shared<BatchTask>();
-    batch_task->reserve(dag_graph_ptr->leaf_segments.size());
-    for (auto leaf_id : dag_graph_ptr->leaf_segments)
-    {
-        LOG_TRACE(log, "Generate task for leaf segment {}", leaf_id);
-        if (leaf_id == dag_graph_ptr->final)
-            continue;
-
-        batch_task->emplace_back(leaf_id, true);
-        plansegment_topology.erase(leaf_id);
-        LOG_TRACE(log, "Task for leaf segment {} generated", leaf_id);
-    }
-    addBatchTask(std::move(batch_task));
 }
 
 void Scheduler::genTopology()

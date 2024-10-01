@@ -19,10 +19,11 @@
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <brpc/controller.h>
-#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 
 namespace butil
 {
@@ -116,9 +117,52 @@ struct AsyncContext
 
 using AsyncContextPtr = std::shared_ptr<AsyncContext>;
 
+struct PlanSegmentHeader
+{
+    PlanSegmentInstanceId instance_id;
+    size_t plan_segment_buf_size = 0;
+    std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
+    UInt32 retry_id = std::numeric_limits<UInt32>::max();
+    SourceTaskFilter source_task_filter;
+    void toProto(Protos::PlanSegmentHeader & proto) const
+    {
+        proto.set_plan_segment_id(instance_id.segment_id);
+        proto.set_parallel_id(instance_id.parallel_id);
+        proto.set_plan_segment_buf_size(plan_segment_buf_size);
+        proto.set_retry_id(retry_id);
+        if (source_task_filter.isValid())
+            *proto.mutable_source_task_filter() = source_task_filter.toProto();
+    }
+};
+
+struct AddressWithWorkerId
+{
+    AddressInfo address_info;
+    WorkerId worker_id;
+
+    inline bool operator==(AddressWithWorkerId const & rhs) const
+    {
+        return (this->address_info == rhs.address_info && this->worker_id == rhs.worker_id);
+    }
+    class Hash
+    {
+    public:
+        size_t operator()(const AddressWithWorkerId & key) const
+        {
+            return AddressInfo::Hash()(key.address_info);
+        }
+    };
+};
+using PlanSegmentHeaders = std::vector<PlanSegmentHeader>;
+using BatchPlanSegmentHeaders = std::unordered_map<AddressWithWorkerId, PlanSegmentHeaders, AddressWithWorkerId::Hash>;
+
 BlockIO lazyExecutePlanSegmentLocally(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context);
 
-void executePlanSegmentInternal(PlanSegmentInstancePtr plan_segment_instance, ContextMutablePtr context, bool async);
+void executePlanSegmentInternal(
+    PlanSegmentInstancePtr plan_segment_instance,
+    ContextMutablePtr context,
+    PlanSegmentProcessList::EntryPtr process_plan_segment_entry,
+    bool async);
 
 // void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context);
 
@@ -127,11 +171,20 @@ void cleanupExchangeDataForQuery(const AddressInfo & address, UInt64 & query_uni
 void prepareQueryCommonBuf(butil::IOBuf & common_buf, const PlanSegment & any_plan_segment, ContextPtr & context);
 
 void executePlanSegmentRemotelyWithPreparedBuf(
-    const PlanSegment & plan_segment,
+    size_t segment_id,
     PlanSegmentExecutionInfo execution_info,
     const butil::IOBuf & query_common_buf,
     const butil::IOBuf & query_settings_buf,
     const butil::IOBuf & plan_segment_buf,
+    AsyncContextPtr & async_context,
+    const Context & context,
+    const WorkerId & worker_id = WorkerId{});
+
+void executePlanSegmentsRemotely(
+    const AddressInfo & address_info,
+    const PlanSegmentHeaders & plan_segment_headers,
+    const butil::IOBuf & query_common_buf,
+    const butil::IOBuf & query_settings_buf,
     AsyncContextPtr & async_context,
     const Context & context,
     const WorkerId & worker_id = WorkerId{});

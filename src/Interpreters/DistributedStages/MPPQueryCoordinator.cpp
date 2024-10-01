@@ -198,6 +198,7 @@ BlockIO MPPQueryCoordinator::execute()
         RuntimeFilterManager::getInstance().registerQuery(query_id, *plan_segment_tree, query_context);
     }
 
+    query_context->setCoordinatorAddress(getLocalAddress(*query_context));
     query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{0, 0});
 
     /// set progress_callback before send plan segment

@@ -693,7 +693,8 @@ void SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_cont
         }
         else
         {
-            scheduler = std::make_shared<MPPScheduler>(query_id, query_context, dag_graph_ptr);
+            scheduler = std::make_shared<MPPScheduler>(
+                query_id, query_context, dag_graph_ptr, query_context->getSettingsRef().enable_batch_send_plan_segment);
         }
         scheduler->schedule();
     }

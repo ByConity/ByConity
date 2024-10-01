@@ -50,8 +50,15 @@ struct SenderMetrics
 class PlanSegmentExecutor : private boost::noncopyable
 {
 public:
-    explicit PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_);
-    explicit PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, ExchangeOptions options_);
+    explicit PlanSegmentExecutor(
+        PlanSegmentInstancePtr plan_segment_instance_,
+        ContextMutablePtr context_,
+        PlanSegmentProcessList::EntryPtr process_plan_segment_entry_ = nullptr);
+    explicit PlanSegmentExecutor(
+        PlanSegmentInstancePtr plan_segment_instance_,
+        ContextMutablePtr context_,
+        PlanSegmentProcessList::EntryPtr process_plan_segment_entry_,
+        ExchangeOptions options_);
 
     ~PlanSegmentExecutor() noexcept;
 
@@ -73,9 +80,7 @@ protected:
     void buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
 
 private:
-    // query_scope needs to be destructed before process_plan_segment_entry, because of memory_tracker
     PlanSegmentProcessList::EntryPtr process_plan_segment_entry;
-    std::optional<CurrentThread::QueryScope> query_scope;
 
     ContextMutablePtr context;
     PlanSegmentInstancePtr plan_segment_instance;

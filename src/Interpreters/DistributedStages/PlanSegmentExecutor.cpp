@@ -113,8 +113,10 @@ void PlanSegmentExecutor::prepareSegmentInfo() const
     query_log_element->query_start_time_microseconds = time_in_microseconds(current_time);
 }
 
-PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_)
-    : context(std::move(context_))
+PlanSegmentExecutor::PlanSegmentExecutor(
+    PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, PlanSegmentProcessList::EntryPtr process_plan_segment_entry_)
+    : process_plan_segment_entry(std::move(process_plan_segment_entry_))
+    , context(std::move(context_))
     , plan_segment_instance(std::move(plan_segment_instance_))
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
@@ -125,8 +127,13 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_ins
     prepareSegmentInfo();
 }
 
-PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, ExchangeOptions options_)
-    : context(std::move(context_))
+PlanSegmentExecutor::PlanSegmentExecutor(
+    PlanSegmentInstancePtr plan_segment_instance_,
+    ContextMutablePtr context_,
+    PlanSegmentProcessList::EntryPtr process_plan_segment_entry_,
+    ExchangeOptions options_)
+    : process_plan_segment_entry(std::move(process_plan_segment_entry_))
+    , context(std::move(context_))
     , plan_segment_instance(std::move(plan_segment_instance_))
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
@@ -238,17 +245,8 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
     if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
         throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
 
-    try
-    {
-        auto segment_group = context->getPlanSegmentProcessList().insertGroup(*plan_segment, context);
-        res.plan_segment_process_entry = context->getPlanSegmentProcessList().insertProcessList(std::move(segment_group), *plan_segment, context);
-    }
-    catch (Exception &)
-    {
-        auto segment_id = plan_segment_instance->plan_segment->getPlanSegmentId();
-        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), segment_id, true);
-        throw;
-    }
+    res.plan_segment_process_entry = context->getPlanSegmentProcessList().insertGroup(context, plan_segment->getPlanSegmentId());
+    context->getPlanSegmentProcessList().insertProcessList(res.plan_segment_process_entry, *plan_segment, context);
 
     // set entry before buildPipeline to control memory usage of exchange queue
     context->setPlanSegmentProcessListEntry(res.plan_segment_process_entry);
@@ -343,34 +341,11 @@ void fillPlanSegmentProfile(
 void PlanSegmentExecutor::doExecute()
 {
     SCOPE_EXIT_SAFE({
-        if (context->getSettingsRef().log_queries && process_plan_segment_entry)
-            collectSegmentQueryRuntimeMetric(&process_plan_segment_entry->get());
+        if (context->getSettingsRef().log_queries && process_plan_segment_entry->getQueryStatus())
+            collectSegmentQueryRuntimeMetric(process_plan_segment_entry->getQueryStatus().get());
     });
-    try
-    {
-        auto segment_group = context->getPlanSegmentProcessList().insertGroup(*plan_segment, context);
-        if (!CurrentThread::getGroup())
-        {
-            if (context->getSettingsRef().exchange_use_query_memory_tracker && !context->getSettingsRef().bsp_mode)
-                query_scope.emplace(context, &segment_group->memory_tracker); // Running as master query and not initialized
-            else
-                query_scope.emplace(context);
-        }
-        else
-        {
-            // Running as master query and already initialized
-            if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
-                throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
-        }
-        process_plan_segment_entry = context->getPlanSegmentProcessList().insertProcessList(std::move(segment_group), *plan_segment, context);
-    }
-    catch (Exception &)
-    {
-        query_scope.reset();
-        auto segment_id = plan_segment_instance->plan_segment->getPlanSegmentId();
-        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), segment_id, true);
-        throw;
-    }
+
+    context->getPlanSegmentProcessList().insertProcessList(process_plan_segment_entry, *plan_segment, context);
     context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
     if (context->getSettingsRef().bsp_mode)
@@ -391,7 +366,7 @@ void PlanSegmentExecutor::doExecute()
     }
 
     // set process list before building pipeline, or else TableWriteTransform's output stream can't set its process list properly
-    QueryStatus * query_status = &process_plan_segment_entry->get();
+    QueryStatus * query_status = process_plan_segment_entry->getQueryStatus().get();
     context->setProcessListElement(query_status);
 
     QueryPipelinePtr pipeline;
