@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Poco/JSON/Object.h>
+#include <common/types.h>
 
 #include <string>
 #include <unordered_map>
@@ -46,6 +47,7 @@ struct DumpSettings
         {"compress_directory", compress_directory},
         {"version", version},
     };
+    std::unordered_map<std::string, std::reference_wrapper<UInt64>> uint_settings = {};
 };
 }
 

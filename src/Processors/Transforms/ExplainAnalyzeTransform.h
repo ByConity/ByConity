@@ -26,7 +26,7 @@ protected:
     void transform(Chunk & chunk) override;
     ISimpleTransform::Status prepare() override;
 
-    static void getProcessorProfiles(ProcessorsSet & processors_set, ProcessorProfiles & profiles, const IProcessor * processor);
+    void getProcessorProfiles(ProcessorsSet & processors_set, ProcessorProfiles & profiles, const IProcessor * processor);
     void getRemoteProcessorProfiles(std::unordered_map<size_t, std::unordered_map<String, ProcessorProfiles>> & segment_profiles);
 private:
     ASTExplainQuery::ExplainKind kind;
@@ -35,5 +35,6 @@ private:
     PlanSegmentDescriptions segment_descriptions;
     bool has_final_transform = true;
     QueryPlanSettings settings;
+    String coordinator_address;
 };
 }

@@ -400,6 +400,7 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
     M(Bool, log_segment_profiles, false, "Log profile of each segment info including runtime and planning information.", 0) \
+    M(Bool, report_segment_profiles, false, "Report plan segment profile to coordinator.", 0)\
     M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0) \
     M(UInt64, report_processors_profiles_timeout_millseconds, 10, "Report processors profile to coordinator timeout millseconds.", 0) \
     M(DistributedProductMode, \

@@ -182,3 +182,11 @@ message TopNFilteringAlgorithm {
     Heap = 3;
   }
 }
+
+message ReportProfileType {
+  enum Enum {
+    Unspecified = 0;
+    QueryPlan = 1;
+    QueryPipeline = 2;
+  }
+}

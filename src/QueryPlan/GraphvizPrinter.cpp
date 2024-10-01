@@ -20,6 +20,7 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Interpreters/profile/PlanSegmentProfile.h>
 #include <Parsers/formatAST.h>
 #include <Processors/printPipeline.h>
 #include <QueryPlan/AggregatingStep.h>
@@ -580,15 +581,18 @@ void PlanNodePrinter::printNode(
         out << "Actual Stats \\n";
         out << "Output: " << PlanPrinter::TextPrinter::prettyNum(profile->output_rows) << " rows("
             << PlanPrinter::TextPrinter::prettyBytes(profile->output_bytes) << "). "
-            << " Wait Time: " << PlanPrinter::TextPrinter::prettySeconds(profile->max_output_wait_elapsed_us)
+            << " Wait Time: " << PlanPrinter::TextPrinter::prettySeconds(profile->output_wait_max_elapsed_us)
             << " Wall Time: " << PlanPrinter::TextPrinter::prettySeconds(profile->max_elapsed_us) << " \\n";
-        if (!node.getChildren().empty() && profile->inputs_profile.contains(node.getChildren()[0]->getId()))
+        if (!node.getChildren().empty() && profile->inputs.contains(node.getChildren()[0]->getId()))
         {
             if (node.getChildren().size() == 1)
             {
                 out << "Input: ";
-                out << PlanPrinter::TextPrinter::prettyNum(profile->inputs_profile[node.getChildren()[0]->getId()].input_rows)
-                    << " rows \\n";
+                out << PlanPrinter::TextPrinter::prettyNum(profile->inputs[node.getChildren()[0]->getId()].input_rows) << " rows("
+                    << PlanPrinter::TextPrinter::prettyBytes(profile->inputs[node.getChildren()[0]->getId()].input_bytes) << "). "
+                    << "Wait Time: "
+                    << PlanPrinter::TextPrinter::prettySeconds(profile->inputs[node.getChildren()[0]->getId()].input_wait_max_elapsed_us)
+                    << " \\n";
             }
             else
             {
@@ -596,9 +600,10 @@ void PlanNodePrinter::printNode(
                 out << "Input: \\n";
                 for (const auto & child : node.getChildren())
                 {
-                    auto input_profile = profile->inputs_profile[child->getId()];
-                    out << "source [" << num << "] : ";
-                    out << PlanPrinter::TextPrinter::prettyNum(input_profile.input_rows) << " rows \\n";
+                    auto input_profile = profile->inputs[child->getId()];
+                    out << "source [" << num << "] : " << PlanPrinter::TextPrinter::prettyNum(input_profile.input_rows) << " rows("
+                        << PlanPrinter::TextPrinter::prettyBytes(input_profile.input_bytes) << "). "
+                        << "Wait Time: " << PlanPrinter::TextPrinter::prettySeconds(input_profile.input_wait_max_elapsed_us) << " \\n";
                     ++num;
                 }
             }
@@ -2862,12 +2867,11 @@ void GraphvizPrinter::printLogicalPlan(PlanNodeBase & root, ContextMutablePtr & 
     }
 }
 
-void GraphvizPrinter::printLogicalPlan(
-    QueryPlan & plan, ContextMutablePtr & context, const String & name, StepAggregatedOperatorProfiles /*profiles*/)
+void GraphvizPrinter::printLogicalPlan(QueryPlan & plan, ContextMutablePtr & context, const String & name, StepProfiles profiles)
 {
     if (context->getSettingsRef().print_graphviz)
     {
-        auto const graphviz = GraphvizPrinter::printLogicalPlan(*plan.getPlanNode(), &plan.getCTEInfo());
+        auto const graphviz = GraphvizPrinter::printLogicalPlan(*plan.getPlanNode(), &plan.getCTEInfo(), profiles);
         cleanDotFiles(context);
 
         std::stringstream path;
@@ -2950,7 +2954,12 @@ String GraphvizPrinter::printPipeline(const Processors & processors, const Execu
                     buffer << "\\n"
                            << "input: " << input_rows << " rows";
                 }
-
+                buffer << "\\n"
+                       << "input wait time: " << node->processor->getInputWaitElapsedUs() << " us.";
+                buffer << "\\n"
+                       << "output wait time: " << node->processor->getOutputWaitElapsedUs() << " us.";
+                buffer << "\\n"
+                       << "elapsed time: " << node->processor->getElapsedUs() << " us.";
                 buffer << "\\n"
                        << "execution time: " << node->execution_time_ns / 1e9 << " sec.";
                 buffer << "\\n"
@@ -3471,7 +3480,7 @@ void GraphvizPrinter::addID(ASTPtr & ast, std::unordered_map<ASTPtr, UInt16> & a
     }
 }
 
-String GraphvizPrinter::printLogicalPlan(PlanNodeBase & node, CTEInfo * cte_info, StepAggregatedOperatorProfiles profiles)
+String GraphvizPrinter::printLogicalPlan(PlanNodeBase & node, CTEInfo * cte_info, StepProfiles profiles)
 {
     std::stringstream out;
     out << "digraph logical_plan {\n rankdir=\"BT\" \n";

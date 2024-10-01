@@ -348,3 +348,20 @@ message SettingChange {
 message SettingsChanges {
   repeated SettingChange settings_changes = 1;
 }
+
+message RuntimeAttributeDescription {
+  required string description = 1;
+  repeated NameWithAliasPair details = 2;
+
+  // If the attribute information is complex, can use json
+  optional string additional = 3;
+}
+
+message InputProfileMetric{
+  required uint64 id = 1;
+  required uint64 input_rows = 2;
+  required uint64 input_bytes = 3;
+  required uint32 input_wait_sum_elapsed_us = 4;
+  required uint32 input_wait_max_elapsed_us = 5;
+  required uint32 input_wait_min_elapsed_us = 6;
+}

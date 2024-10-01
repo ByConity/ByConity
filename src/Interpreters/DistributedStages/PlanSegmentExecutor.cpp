@@ -77,6 +77,7 @@
 #include <common/logger_useful.h>
 #include <common/scope_guard_safe.h>
 #include <common/types.h>
+#include "Interpreters/sendPlanSegment.h"
 
 namespace ProfileEvents
 {
@@ -174,7 +175,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
         query_log_element->event_time_microseconds = time_in_microseconds(finish_time);
 
         return convertSuccessPlanSegmentStatusToResult(
-            context, plan_segment_instance->info.execution_address, final_progress, sender_metrics, plan_segment_outputs);
+            context, plan_segment_instance->info.execution_address, final_progress, sender_metrics, plan_segment_outputs, segment_profile);
     }
     catch (...)
     {
@@ -275,17 +276,67 @@ void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * q
     query_log_element->query_tables = query_access_info.tables;
 }
 
-StepAggregatedOperatorProfiles collectStepRuntimeProfiles(int segment_id, const QueryPipelinePtr & pipeline)
+StepProfiles collectStepRuntimeProfiles(const QueryPipelinePtr & pipeline)
 {
     ProcessorProfiles profiles;
     for (const auto & processor : pipeline->getProcessors())
         profiles.push_back(std::make_shared<ProcessorProfile>(processor.get()));
     GroupedProcessorProfilePtr grouped_profiles = GroupedProcessorProfile::getGroupedProfiles(profiles);
+    auto step_profile = GroupedProcessorProfile::aggregateOperatorProfileToStepLevel(grouped_profiles);
+    AddressToStepProfile addr_to_step_profile;
+    addr_to_step_profile["localhost"] = step_profile;
+    return ProfileMetric::aggregateStepProfileBetweenWorkers(addr_to_step_profile);
+}
 
-    std::unordered_map<size_t, std::vector<GroupedProcessorProfilePtr>> segment_grouped_profile;
-    segment_grouped_profile[segment_id].emplace_back(grouped_profiles);
-    auto step_profile = StepOperatorProfile::aggregateOperatorProfileToStepLevel(segment_grouped_profile);
-    return AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(step_profile);
+void fillPlanSegmentProfile(
+    PlanSegmentProfilePtr & segment_profile,
+    const QueryPipelinePtr & pipeline,
+    ReportProfileType type,
+    const QueryStatus * query_status,
+    ContextPtr context,
+    PlanSegment * plan_segment)
+{
+    AddressInfo current_address = getLocalAddress(*context);
+    segment_profile->worker_address = extractExchangeHostPort(current_address);
+    if (query_status)
+    {
+        auto query_status_info = query_status->getInfo(true, context->getSettingsRef().log_profile_events);
+        segment_profile->read_bytes = query_status_info.read_bytes;
+        segment_profile->read_rows = query_status_info.read_rows;
+        segment_profile->query_duration_ms = query_status_info.elapsed_seconds * 1000;
+        segment_profile->io_wait_ms = query_status_info.max_io_time_thread_ms;
+    }
+
+    if (type == ReportProfileType::Unspecified)
+        return;
+    ProcessorProfiles profiles;
+    for (const auto & processor : pipeline->getProcessors())
+        profiles.push_back(std::make_shared<ProcessorProfile>(processor.get()));
+    GroupedProcessorProfilePtr grouped_profiles = GroupedProcessorProfile::getGroupedProfiles(profiles);
+    if (type == ReportProfileType::QueryPipeline)
+    {
+        auto output_root = GroupedProcessorProfile::getOutputRoot(grouped_profiles);
+        segment_profile->profile_root_id = output_root->id;
+        segment_profile->profiles = GroupedProcessorProfile::getProfileMetricsFromOutputRoot(output_root);
+    }
+    else if (type == ReportProfileType::QueryPlan)
+    {
+        auto step_profile = GroupedProcessorProfile::aggregateOperatorProfileToStepLevel(grouped_profiles);
+        for (auto & [step_id, profile] : step_profile)
+            segment_profile->profiles.emplace(step_id, profile);
+        auto & plan = plan_segment->getQueryPlan();
+        for (auto & node : plan.getNodes())
+        {
+            if (!node.step->getAttributeDescriptions().empty() && segment_profile->profiles.contains(node.id))
+            {
+                for (auto & att : node.step->getAttributeDescriptions())
+                {
+                    auto attribute_ptr = std::make_shared<RuntimeAttributeDescription>(att.second);
+                    segment_profile->profiles.at(node.id)->attributes.emplace(att.first, attribute_ptr);
+                }
+            }
+        }
+    }
 }
 
 void PlanSegmentExecutor::doExecute()
@@ -438,7 +489,13 @@ void PlanSegmentExecutor::doExecute()
         query_log_element->segment_profiles = std::make_shared<std::vector<String>>();
         query_log_element->segment_profiles->emplace_back(
             PlanSegmentDescription::getPlanSegmentDescription(plan_segment_instance->plan_segment, true)
-                ->jsonPlanSegmentDescriptionAsString(collectStepRuntimeProfiles(plan_segment->getPlanSegmentId(), pipeline)));
+                ->jsonPlanSegmentDescriptionAsString(collectStepRuntimeProfiles(pipeline)));
+    }
+    if (context->getSettingsRef().report_segment_profiles && plan_segment)
+    {
+        segment_profile = std::make_shared<PlanSegmentProfile>(query_log_element->client_info.initial_query_id, plan_segment->getPlanSegmentId());
+        fillPlanSegmentProfile(
+            segment_profile, pipeline, plan_segment->getProfileType(), &process_plan_segment_entry->get(), context, plan_segment);
     }
 
     if (context->getSettingsRef().log_processors_profiles)

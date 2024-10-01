@@ -899,12 +899,22 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitCTERefNode(CTERefNode 
 void ExplainAnalyzeVisitor::visitExplainAnalyzeNode(QueryPlan::Node * node, PlanSegmentTree::Nodes & nodes)
 {
     auto * explain = dynamic_cast<ExplainAnalyzeStep *>(node->step.get());
-    if (explain->getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze && explain->getKind() != ASTExplainQuery::ExplainKind::PipelineAnalyze)
-        return;
     PlanSegmentDescriptions plan_segment_descriptions;
     bool record_plan_detail = explain->getSetting().json && (explain->getKind() != ASTExplainQuery::ExplainKind::PipelineAnalyze);
     for (auto & segment_node : nodes)
-        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(segment_node.plan_segment, record_plan_detail));
+    {
+        if (explain->getKind() == ASTExplainQuery::ExplainKind::DistributedAnalyze
+            || explain->getKind() == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+            segment_node.plan_segment->setProfileType(ReportProfileType::QueryPlan);
+        else if (explain->getKind() == ASTExplainQuery::ExplainKind::PipelineAnalyze)
+            segment_node.plan_segment->setProfileType(ReportProfileType::QueryPipeline);
+
+        if (explain->getKind() == ASTExplainQuery::ExplainKind::DistributedAnalyze
+            || explain->getKind() == ASTExplainQuery::ExplainKind::PipelineAnalyze)
+            plan_segment_descriptions.emplace_back(
+                PlanSegmentDescription::getPlanSegmentDescription(segment_node.plan_segment, record_plan_detail));
+    }
+
     explain->setPlanSegmentDescriptions(plan_segment_descriptions);
 }
 

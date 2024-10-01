@@ -1,12 +1,13 @@
 #include <set>
-#include <Processors/Transforms/ExplainAnalyzeTransform.h>
 #include <DataTypes/DataTypeString.h>
 #include <Interpreters/InterpreterExplainQuery.h>
 #include <Interpreters/SegmentScheduler.h>
-#include <QueryPlan/PlanPrinter.h>
 #include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
 #include <Optimizer/CostModel/CostCalculator.h>
+#include <Processors/Transforms/ExplainAnalyzeTransform.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/PlanPrinter.h>
+#include "Interpreters/ProcessorProfile.h"
 
 namespace DB
 {
@@ -24,7 +25,9 @@ ExplainAnalyzeTransform::ExplainAnalyzeTransform(
     , query_plan_ptr(std::move(query_plan_ptr_))
     , segment_descriptions(segment_descriptions_)
     , settings(settings_)
-{}
+{
+    coordinator_address = extractExchangeHostPort(context->getQueryContext()->getCoordinatorAddress());
+}
 
 void ExplainAnalyzeTransform::transform(Chunk & chunk)
 {
@@ -32,69 +35,91 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
     if (!input.isFinished())
         return;
 
-    ///segment_id, worker_address -> profiles
-    std::unordered_map<size_t, std::unordered_map<String, ProcessorProfiles>> segment_profiles;
-
     // If the information of segment0 cannot be accepted
     ProcessorsSet processors_set;
     ProcessorProfiles profiles;
     getProcessorProfiles(processors_set, profiles, this);
-    for (auto & profile : profiles)
-        segment_profiles[profile->segment_id][profile->worker_address].push_back(profile);
+    auto segment0_profile = GroupedProcessorProfile::getGroupedProfiles(profiles);
 
-    getRemoteProcessorProfiles(segment_profiles);
-
-    ///segment_id -> grouped_profile_tree
-    std::unordered_map<size_t, std::vector<GroupedProcessorProfilePtr>> segment_grouped_profile;
-    SegmentAndWorkerToGroupedProfile worker_grouped_profiles;
-    for (auto & [segment_id, segment_profile_in_worker] : segment_profiles)
+    auto scheduler = context->getSegmentScheduler();
+    UInt64 time_out = context->getSettingsRef().operator_profile_receive_timeout;
+    auto time_start = std::chrono::system_clock::now();
+    while (!scheduler->alreadyReceivedAllSegmentStatus(context->getCurrentQueryId()))
     {
-        for (auto & [address, segment_profile] : segment_profile_in_worker)
-        {
-            auto input_profile_root = GroupedProcessorProfile::getGroupedProfiles(segment_profile);
-            auto output = GroupedProcessorProfile::getOutputRoot(input_profile_root);
-            if (kind == ASTExplainQuery::ExplainKind::PipelineAnalyze && !output->children.empty()) 
-                worker_grouped_profiles[segment_id][address] = output->children[0];
-            else
-                segment_grouped_profile[segment_id].emplace_back(output);
-        }
+        auto now = std::chrono::system_clock::now();
+        UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - time_start).count();
+        if (elapsed >= time_out)
+            break;
     }
 
+    auto profiles_map = scheduler->getSegmentsProfile(context->getCurrentQueryId());
     String explain;
-    if ((kind == ASTExplainQuery::ExplainKind::LogicalAnalyze || kind == ASTExplainQuery::ExplainKind::DistributedAnalyze) && !segment_grouped_profile.empty())
+    if ((kind == ASTExplainQuery::ExplainKind::LogicalAnalyze || kind == ASTExplainQuery::ExplainKind::DistributedAnalyze))
     {
-        auto steps_profiles = StepOperatorProfile::aggregateOperatorProfileToStepLevel(segment_grouped_profile);
-        auto step_agg_operator_profiles = AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(steps_profiles);
+        AddressToStepProfile addr_to_step_profile;
+        for (auto & [segment_id, segment_profiles] : profiles_map)
+        {
+            for (auto & segment_profile : segment_profiles)
+            {
+                for (auto & [step_id, profile] : segment_profile->profiles)
+                    addr_to_step_profile[segment_profile->worker_address][step_id] = profile;
+            }
+        }
+
+        auto segment0_steps_profiles = GroupedProcessorProfile::aggregateOperatorProfileToStepLevel(segment0_profile);
+        for (auto & [step_id, profile] : segment0_steps_profiles)
+            addr_to_step_profile[coordinator_address][step_id] = profile;
 
         CardinalityEstimator::estimate(*query_plan_ptr, context);
         std::unordered_map<PlanNodeId, double> costs = CostCalculator::calculate(*query_plan_ptr, *context);
-        if (settings.json)
+        auto step_agg_operator_profiles = ProfileMetric::aggregateStepProfileBetweenWorkers(addr_to_step_profile);
+        if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
         {
-            if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+            if (settings.json)
             {
                 auto plan_cost = CostCalculator::calculatePlanCost(*query_plan_ptr, *context);
                 explain = PlanPrinter::jsonLogicalPlan(*query_plan_ptr, plan_cost, step_agg_operator_profiles, costs, settings);
             }
-            else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
-                explain = PlanPrinter::jsonDistributedPlan(segment_descriptions, step_agg_operator_profiles);
-        }
-        else
-        {
-            if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+            else
                 explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, costs, step_agg_operator_profiles, settings);
-            else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
-                explain = PlanPrinter::textDistributedPlan(segment_descriptions, context, costs, step_agg_operator_profiles, *query_plan_ptr, settings);
+        }
+        else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
+        {
+            if (settings.json)
+                explain = PlanPrinter::jsonDistributedPlan(segment_descriptions, step_agg_operator_profiles);
+            else
+                explain = PlanPrinter::textDistributedPlan(
+                    segment_descriptions, context, costs, step_agg_operator_profiles, *query_plan_ptr, settings, profiles_map);
         }
         GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "5999_explain_analyze", step_agg_operator_profiles);
     }
-    else if (kind == ASTExplainQuery::ExplainKind::PipelineAnalyze && !worker_grouped_profiles.empty())
+    else if (kind == ASTExplainQuery::ExplainKind::PipelineAnalyze)
     {
+        SegIdAndAddrToPipelineProfile worker_grouped_profiles;
+        segment0_profile = GroupedProcessorProfile::getOutputRoot(segment0_profile);
+        if (segment0_profile->processor_name == "output_root" && !segment0_profile->children.empty())
+            segment0_profile = segment0_profile->children[0];
+        worker_grouped_profiles[0][coordinator_address] = segment0_profile;
+        for (auto & [segment_id, segment_profiles] : profiles_map)
+        {
+            for (auto & segment_profile : segment_profiles)
+            {
+                if (segment_profile->profiles.empty())
+                    continue;
+                auto profile
+                    = GroupedProcessorProfile::getGroupedProfileFromMetrics(segment_profile->profiles, segment_profile->profile_root_id);
+                if (profile->processor_name == "output_root" && !profile->children.empty())
+                    profile = profile->children[0];
+                worker_grouped_profiles[segment_profile->segment_id][segment_profile->worker_address] = std::move(profile);
+            }
+        }
+
         if (settings.aggregate_profiles)
-            worker_grouped_profiles = GroupedProcessorProfile::aggregateProfileBetweenWorkers(worker_grouped_profiles);
+            worker_grouped_profiles = GroupedProcessorProfile::aggregatePipelineProfileBetweenWorkers(worker_grouped_profiles);
         if (settings.json)
             explain = PlanPrinter::jsonPipelineProfile(segment_descriptions, worker_grouped_profiles);
         else
-            explain = PlanPrinter::textPipelineProfile(segment_descriptions, worker_grouped_profiles);
+            explain = PlanPrinter::textPipelineProfile(segment_descriptions, worker_grouped_profiles, settings, profiles_map);
     }
 
     MutableColumns cols(1);
@@ -244,7 +269,7 @@ void ExplainAnalyzeTransform::getProcessorProfiles(ProcessorsSet & processors_se
             child->input_bytes = from->getProcessorDataStats().input_bytes;
             child->output_rows = from->getProcessorDataStats().output_rows;
             child->output_bytes = from->getProcessorDataStats().output_bytes;
-            child->worker_address = "localhost:0";
+            child->worker_address = coordinator_address;
             processors_set.insert(from);
             profiles.emplace_back(child);
             getProcessorProfiles(processors_set, profiles, from);

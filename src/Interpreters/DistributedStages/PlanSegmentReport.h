@@ -23,10 +23,14 @@ PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     SenderMetrics sender_metrics = {},
     PlanSegmentOutputs plan_segment_outputs = {});
 
+
 PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     ContextPtr query_context,
     const AddressInfo & execution_address,
     Progress & final_progress,
     SenderMetrics & sender_metrics,
-    PlanSegmentOutputs & plan_segment_outputs);
+    PlanSegmentOutputs & plan_segment_outputs,
+    PlanSegmentProfilePtr & segment_profile);
+
+[[maybe_unused]] static void reportSuccessPlanSegmentProfile(const PlanSegmentExecutor::ExecutionResult & result);
 }
