@@ -22,7 +22,6 @@
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
 #include <common/getFQDNOrHostName.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
