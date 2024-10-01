@@ -469,9 +469,7 @@ void PlanSegmentManagerRpcService::executePlanSegment(
 {
     LOG_INFO(log, "execute plan segment: {}_{}, parallel index {}", query_common->query_id(), segment_id, execution_info.parallel_id);
 
-    auto parent_thread_ctx = opentelemetry::context::RuntimeContext::GetCurrent();
     ThreadFromGlobalPool async_thread([global_context = context,
-                                       parent_thread_ctx = std::move(parent_thread_ctx),
                                        query_common = std::move(query_common),
                                        settings_io_buf = std::move(settings_io_buf),
                                        remote_side_port = remote_side_port,
