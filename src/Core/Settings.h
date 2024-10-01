@@ -1142,7 +1142,7 @@ enum PreloadLevelSettings : UInt64
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not avaiable", 0) \
     M(BackupVWMode, backup_vw_mode, BackupVWMode::BACKUP, "backup vw mode. backup round_robin backup_only", 0) \
-    M(String, virtual_warehouse_write, "", "Deprecated, use virtual_warehouse instead", 0) \
+    M(String, virtual_warehouse_write, "", "When executing CREATE TABLE query, if this is set, the value will be treated as table setting `cnch_vw_write`", 0) \
     M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(TextCaseOption, text_case_option, TextCaseOption::MIXED, "Convert identifiers to lower case/upper case just like MySQL", 0) \

@@ -1147,6 +1147,23 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     if (create.storage && create.storage->unique_key && create.columns_list && create.columns_list->projections)
         throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 
+    /// If user execute 'CREATE TABLE' with query-level setting `virtual_warehouse_write`, we will pass the value to table setting cnch_vw_write if it's not set.
+    if (auto vw_in_query_settings = getContext()->getSettingsRef().virtual_warehouse_write.value; !vw_in_query_settings.empty())
+    {
+        auto * storage_settings = create.storage->settings;
+        if (!storage_settings)
+        {
+            ASTPtr single_setting = std::make_shared<ASTSetQuery>();
+            single_setting->as<ASTSetQuery &>().is_standalone = false;
+            single_setting->as<ASTSetQuery &>().changes.push_back({"cnch_vw_write", vw_in_query_settings}); 
+            create.storage->set(create.storage->settings, single_setting);
+        }
+        else if (!storage_settings->changes.tryGet("cnch_vw_write"))
+        {
+            storage_settings->changes.setSetting("cnch_vw_write", vw_in_query_settings);
+        }
+    }
+
     String current_database = getContext()->getCurrentDatabase();
     auto database_name = create.database.empty() ? current_database : create.database;
 
