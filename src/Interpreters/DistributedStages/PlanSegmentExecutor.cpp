@@ -470,8 +470,7 @@ void PlanSegmentExecutor::doExecute()
     if (context->getSettingsRef().report_segment_profiles && plan_segment)
     {
         segment_profile = std::make_shared<PlanSegmentProfile>(query_log_element->client_info.initial_query_id, plan_segment->getPlanSegmentId());
-        fillPlanSegmentProfile(
-            segment_profile, pipeline, plan_segment->getProfileType(), &process_plan_segment_entry->get(), context, plan_segment);
+        fillPlanSegmentProfile(segment_profile, pipeline, plan_segment->getProfileType(), query_status, context, plan_segment);
     }
 
     if (context->getSettingsRef().log_processors_profiles)
