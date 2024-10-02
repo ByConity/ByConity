@@ -50,11 +50,12 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-void UnifyNullableType::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool UnifyNullableType::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     UnifyNullableVisitor visitor{plan.getCTEInfo(), plan.getPlanNode()};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, context);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr UnifyNullableVisitor::visitPlanNode(PlanNodeBase & node, ContextMutablePtr & context)

@@ -1386,6 +1386,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
+    M(Bool, enable_legacy_optimizer, false, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
     M(Bool, block_json_query_in_optimizer, true, "Whether block json query in optimizer", 0) \
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
@@ -1540,6 +1541,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
     M(String, topn_filtering_algorithm_for_unsorted_stream, "SortAndLimit", "The default topn filtering algorithm for unsorted stream, can be one of: 'SortAndLimit', 'Heap'", 0) \
     M(Bool, enable_create_topn_filtering_for_aggregating, false, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
+    M(Bool, enable_push_sort_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_union, true, "Whether to enable PushTopNFilteringThroughUnion rules", 0) \

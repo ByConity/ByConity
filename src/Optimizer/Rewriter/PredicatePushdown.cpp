@@ -29,6 +29,7 @@
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/ProjectionPlanner.h>
+#include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/RuntimeFilterUtils.h>
 #include <Optimizer/SimplifyExpressions.h>
 #include <Optimizer/SymbolUtils.h>
@@ -46,7 +47,6 @@
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
 #include <Common/FieldVisitorConvertToNumber.h>
-#include <Parsers/ASTLiteral.h>
 
 namespace DB
 {
@@ -55,7 +55,7 @@ namespace ErrorCodes
     extern const int PLAN_BUILD_ERROR;
 }
 
-void PredicatePushdown::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool PredicatePushdown::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     auto cte_reference_counts = plan.getCTEInfo().collectCTEReferenceCounts(plan.getPlanNode());
     PredicateVisitor visitor{pushdown_filter_into_cte, simplify_common_filter, context, plan.getCTEInfo(), cte_reference_counts};
@@ -63,6 +63,7 @@ void PredicatePushdown::rewrite(QueryPlan & plan, ContextMutablePtr context) con
         .predicate = PredicateConst::TRUE_VALUE, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE, .context = context};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, predicate_context);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr PredicateVisitor::visitPlanNode(PlanNodeBase & node, PredicateContext & predicate_context)
@@ -199,8 +200,7 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
         "filter node {}, split_in_filter.first : {}, split_in_filter.second : {}",
         node.getId(),
         split_in_filter.first->formatForErrorMessage(),
-        split_in_filter.second->formatForErrorMessage()
-        );
+        split_in_filter.second->formatForErrorMessage());
 
     auto predicates = std::vector<ConstASTPtr>{split_in_filter.first, predicate_context.predicate};
     ConstASTPtr predicate = PredicateUtils::combineConjuncts(predicates);
@@ -210,7 +210,11 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
         predicate = CommonPredicatesRewriter::rewrite(predicate, context);
     }
 
-    LOG_DEBUG(&Poco::Logger::get("PredicateVisitor"), "filter node {}, pushdown_predicate : {}", node.getId(), predicate->formatForErrorMessage());
+    LOG_DEBUG(
+        &Poco::Logger::get("PredicateVisitor"),
+        "filter node {}, pushdown_predicate : {}",
+        node.getId(),
+        predicate->formatForErrorMessage());
 
     PredicateContext filter_context{
         .predicate = predicate,
@@ -347,7 +351,7 @@ PlanNodePtr PredicateVisitor::visitAggregatingNode(AggregatingNode & node, Predi
 
 PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & predicate_context)
 {
-    ConstASTPtr & inherited_predicate = predicate_context.predicate;
+    ConstASTPtr inherited_predicate = CommonPredicatesRewriter::rewrite(predicate_context.predicate, context, true);
     auto step = node.getStep();
 
     // RequireRightKeys is clickhouse sql only, we don't process this kind of join.
@@ -505,25 +509,37 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     ConstASTPtr left_implicit_filter = PredicateConst::TRUE_VALUE;
     ConstASTPtr right_implicit_filter = PredicateConst::TRUE_VALUE;
 
+    auto build_implicit_filter = [](const Names & join_keys) {
+        std::vector<ConstASTPtr> conjuncts;
+
+        for (const auto & key : join_keys)
+        {
+            conjuncts.push_back(makeASTFunction("isNotNull", std::make_shared<ASTIdentifier>(key)));
+        }
+
+        return PredicateUtils::combineConjuncts(conjuncts);
+    };
     // TODO: broaden this by consider SEMI JOIN & ANTI JOIN
     if (isRegularJoin(*step))
     {
-        auto build_implicit_filter = [](const Names & join_keys) {
-            std::vector<ConstASTPtr> conjuncts;
-
-            for (const auto & key : join_keys)
-            {
-                conjuncts.push_back(makeASTFunction("isNotNull", std::make_shared<ASTIdentifier>(key)));
-            }
-
-            return PredicateUtils::combineConjuncts(conjuncts);
-        };
-
         if (!isLeftOrFull(step->getKind()))
             left_implicit_filter = build_implicit_filter(step->getLeftKeys());
 
         if (!isRightOrFull(step->getKind()))
             right_implicit_filter = build_implicit_filter(step->getRightKeys());
+    }
+
+    if (kind == ASTTableJoin::Kind::Cross && !join_clauses.empty() /*inner join*/)
+    {
+        Names left_keys;
+        Names right_keys;
+        for (const auto & item : join_clauses)
+        {
+            left_keys.emplace_back(item.first);
+            right_keys.emplace_back(item.second);
+        }
+        left_implicit_filter = build_implicit_filter(left_keys);
+        right_implicit_filter = build_implicit_filter(right_keys);
     }
 
     // TODO: combine join implicit filter with inherited extra_predicate_for_simplify_outer_join
@@ -535,6 +551,13 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         .context = predicate_context.context};
     PlanNodePtr left_source;
     PlanNodePtr right_source;
+
+    LOG_DEBUG(
+        &Poco::Logger::get("PredicateVisitor"),
+        "join node {}, left context: {}, right context: {}",
+        node.getId(),
+        left_predicate->formatForErrorMessage(),
+        right_predicate->formatForErrorMessage());
 
     bool join_clauses_unmodified = PredicateUtils::isJoinClauseUnmodified(join_clauses, step->getLeftKeys(), step->getRightKeys());
     if (!join_clauses_unmodified)
@@ -591,15 +614,15 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
 
     auto left_header = left_data_stream.header;
     auto right_header = right_data_stream.header;
-    NamesAndTypes output;
-    for (const auto & item : left_header)
-    {
-        output.emplace_back(item.name, item.type);
-    }
-    for (const auto & item : right_header)
-    {
-        output.emplace_back(item.name, item.type);
-    }
+    NamesAndTypes output = step->getOutputStream().header.getNamesAndTypes();
+    // for (const auto & item : left_header)
+    // {
+    //     output.emplace_back(NameAndTypePair{item.name, item.type});
+    // }
+    // for (const auto & item : right_header)
+    // {
+    //     output.emplace_back(NameAndTypePair{item.name, item.type});
+    // }
 
     // cast extracted join keys to super type
     Names left_keys;

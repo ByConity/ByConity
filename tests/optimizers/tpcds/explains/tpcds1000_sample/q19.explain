@@ -57,9 +57,9 @@ Projection Est. 100 rows
                         │              │     └─ Projection Est. 30 rows
                         │              │        │     Expressions: [d_date_sk]
                         │              │        └─ Filter Est. 30 rows
-                        │              │           │     Condition: (d_moy = 11) AND (d_year = 1998)
+                        │              │           │     Condition: (d_year = 1998) AND (d_moy = 11)
                         │              │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                        │              │                    Where: (d_moy = 11) AND (d_year = 1998)
+                        │              │                    Where: (d_year = 1998) AND (d_moy = 11)
                         │              │                    Outputs: [d_date_sk, d_year, d_moy]
                         │              └─ Projection Est. 5427 rows
                         │                 │     Expressions: [i_brand, i_brand_id, i_item_sk, i_manufact, i_manufact_id]

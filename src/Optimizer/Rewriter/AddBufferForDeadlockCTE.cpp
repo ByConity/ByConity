@@ -345,12 +345,12 @@ namespace
     };
 }
 
-void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     static auto * logger = &Poco::Logger::get("AddBufferForDeadlockCTE");
 
     if (plan.getCTEInfo().empty())
-        return;
+        return false;
 
     std::unordered_set<PlanNodeId> deadlock_ctes;
 
@@ -370,7 +370,7 @@ void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr contex
     }
 
     if (deadlock_ctes.empty())
-        return;
+        return false;
 
     if (logger->debug())
     {
@@ -403,6 +403,7 @@ void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr contex
         for (auto & rewriter : rewriters)
             rewriter->rewritePlan(plan, context);
     }
+    return true;
 }
 
 }

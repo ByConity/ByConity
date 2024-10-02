@@ -19,7 +19,7 @@ public:
     String name() const override { return "GroupByKeysPruning"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_group_by_keys_pruning; }
     class Rewriter;
 };

@@ -28,21 +28,22 @@
 
 namespace DB
 {
-void SimpleReorderJoin::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool SimpleReorderJoin::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     if (context->getSettingsRef().heuristic_join_reorder_enumeration_times != 10)
-        return;
+        return false;
     if (!context->getSettingsRef().enable_join_reorder)
-        return;
+        return false;
 
     auto join_size = PlanPattern::maxJoinSize(plan, context);
     if (join_size <= context->getSettingsRef().max_graph_reorder_size)
-        return;
+        return false;
 
     SimpleReorderJoinVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr SimpleReorderJoinVisitor::visitJoinNode(JoinNode & node, Void & v)

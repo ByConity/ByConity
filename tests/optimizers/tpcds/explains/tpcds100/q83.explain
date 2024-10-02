@@ -13,14 +13,13 @@ Projection Est. 100 rows
                │     Limit: 100
                └─ Inner Join Est. 65882 rows
                   │     Condition: i_item_id_1 == i_item_id
-                  │     Runtime Filters Builder: {i_item_id}
                   ├─ MergingAggregated Est. 102098 rows
                   │  └─ Repartition Exchange Est. 102098 rows
                   │     │     Partition by: {i_item_id_1}
                   │     └─ Aggregating Est. 102098 rows
                   │        │     Group by: {i_item_id_1}
                   │        │     Aggregates: expr#sum(cr_return_quantity):=AggNull(sum)(cr_return_quantity)
-                  │        └─ Inner Join Est. 137224 rows
+                  │        └─ Inner Join Est. 136858 rows
                   │           │     Condition: i_item_sk_1 == cr_item_sk
                   │           ├─ Filter Est. 204000 rows
                   │           │  │     Condition: Runtime Filters: {i_item_id_1}
@@ -56,7 +55,7 @@ Projection Est. 100 rows
                      │     └─ Aggregating Est. 102098 rows
                      │        │     Group by: {i_item_id}
                      │        │     Aggregates: expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity)
-                     │        └─ Inner Join Est. 287519 rows
+                     │        └─ Inner Join Est. 286946 rows
                      │           │     Condition: i_item_sk == sr_item_sk
                      │           ├─ Filter Est. 204000 rows
                      │           │  │     Condition: Runtime Filters: {i_item_id}
@@ -84,12 +83,12 @@ Projection Est. 100 rows
                      │                       └─ Buffer Est. 20 rows
                      │                          └─ CTERef[1] Est. 20 rows
                      └─ MergingAggregated Est. 65882 rows
-                        └─ Repartition Exchange Est. 66052 rows
+                        └─ Repartition Exchange Est. 65882 rows
                            │     Partition by: {i_item_id_2}
-                           └─ Aggregating Est. 66052 rows
+                           └─ Aggregating Est. 65882 rows
                               │     Group by: {i_item_id_2}
                               │     Aggregates: expr#sum(wr_return_quantity):=AggNull(sum)(wr_return_quantity)
-                              └─ Inner Join Est. 66052 rows
+                              └─ Inner Join Est. 65882 rows
                                  │     Condition: i_item_sk_2 == wr_item_sk
                                  │     Runtime Filters Builder: {wr_item_sk}
                                  ├─ Filter Est. 204000 rows

@@ -31,6 +31,7 @@ struct NodeContext
     };
     Root root;
     ContextMutablePtr & context;
+    bool deep_rewrite = false;
 };
 
 /**
@@ -45,7 +46,7 @@ struct NodeContext
 class CommonPredicatesRewriter : public ConstASTVisitor<ConstASTPtr, NodeContext>
 {
 public:
-    static ConstASTPtr rewrite(const ConstASTPtr & predicate, ContextMutablePtr & context);
+    static ConstASTPtr rewrite(const ConstASTPtr & predicate, ContextMutablePtr & context, bool deep_rewrite = false);
     ConstASTPtr visitNode(const ConstASTPtr &, NodeContext &) override;
     ConstASTPtr visitASTFunction(const ConstASTPtr &, NodeContext &) override;
 

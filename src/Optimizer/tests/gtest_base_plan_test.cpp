@@ -382,6 +382,7 @@ std::unordered_map<String, Field> BasePlanTest::getDefaultOptimizerSettings()
     settings.emplace("enable_add_projection_to_pruning", true);
     settings.emplace("statistics_return_row_count_if_empty", false);
     settings.emplace("enable_positional_arguments", true);
+    settings.emplace("rewrite_complex_predicate_by_domain", true);
     return settings;
 }
 }

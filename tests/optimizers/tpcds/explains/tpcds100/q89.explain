@@ -5,29 +5,29 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#minus(sum_sales, avg_monthly_sales) ASC NULLS LAST, s_store_name ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 144791 rows
+      └─ Gather Exchange Est. 351192 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#minus(sum_sales, avg_monthly_sales) ASC NULLS LAST, s_store_name ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 144791 rows
+            └─ Projection Est. 351192 rows
                │     Expressions: [d_moy, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name), expr#sum(ss_sales_price), i_brand, i_category, i_class, s_company_name, s_store_name], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name)`
-               └─ Filter Est. 144791 rows
+               └─ Filter Est. 351192 rows
                   │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name)` != 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name)`, NULL) > 0.1
-                  └─ Window Est. 579162 rows
-                     └─ Repartition Exchange Est. 579162 rows
+                  └─ Window Est. 1404766 rows
+                     └─ Repartition Exchange Est. 1404766 rows
                         │     Partition by: {i_category, i_brand, s_store_name, s_company_name}
-                        └─ MergingAggregated Est. 579162 rows
-                           └─ Repartition Exchange Est. 579162 rows
+                        └─ MergingAggregated Est. 1404766 rows
+                           └─ Repartition Exchange Est. 1404766 rows
                               │     Partition by: {i_category, i_class, i_brand, s_store_name, s_company_name, d_moy}
-                              └─ Aggregating Est. 579162 rows
+                              └─ Aggregating Est. 1404766 rows
                                  │     Group by: {i_category, i_class, i_brand, s_store_name, s_company_name, d_moy}
                                  │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                                 └─ Inner Join Est. 579162 rows
+                                 └─ Inner Join Est. 1404766 rows
                                     │     Condition: ss_store_sk == s_store_sk
-                                    ├─ Inner Join Est. 579162 rows
+                                    ├─ Inner Join Est. 1404766 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk
                                     │  │     Runtime Filters Builder: {d_date_sk}
-                                    │  ├─ Inner Join Est. 2900587 rows
+                                    │  ├─ Inner Join Est. 7035408 rows
                                     │  │  │     Condition: ss_item_sk == i_item_sk
                                     │  │  │     Runtime Filters Builder: {i_item_sk}
                                     │  │  ├─ Filter Est. 287997024 rows
@@ -35,10 +35,10 @@ Projection Est. 100 rows
                                     │  │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                                     │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                                     │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
-                                    │  │  └─ Filter Est. 2055 rows
-                                    │  │     │     Condition: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
+                                    │  │  └─ Filter Est. 4984 rows
+                                    │  │     │     Condition: (i_class IN ('birdal', 'computers', 'dresses', 'football', 'shirts', 'stereo')) AND (i_category IN ('Books', 'Electronics', 'Jewelry', 'Men', 'Sports', 'Women')) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
                                     │  │     └─ TableScan tpcds100.item Est. 204000 rows
-                                    │  │              Where: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
+                                    │  │              Where: (i_class IN ('birdal', 'computers', 'dresses', 'football', 'shirts', 'stereo')) AND (i_category IN ('Books', 'Electronics', 'Jewelry', 'Men', 'Sports', 'Women')) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
                                     │  │              Outputs: [i_item_sk, i_brand, i_class, i_category]
                                     │  └─ Broadcast Exchange Est. 365 rows
                                     │     └─ Projection Est. 365 rows

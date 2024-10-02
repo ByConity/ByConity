@@ -3,15 +3,15 @@
 
 namespace DB
 {
-
 void Rewriter::rewritePlan(QueryPlan & plan, ContextMutablePtr context) const
 {
     Stopwatch watch{CLOCK_THREAD_CPUTIME_ID};
     watch.restart();
 
+    bool rewritten = false;
     if (isEnabled(context))
     {
-        rewrite(plan, context);
+        rewritten = rewrite(plan, context);
     }
 
     double duration = watch.elapsedMillisecondsAsDouble();
@@ -29,6 +29,15 @@ void Rewriter::rewritePlan(QueryPlan & plan, ContextMutablePtr context) const
     {
         GraphvizPrinter::printLogicalPlan(
             plan, context, std::to_string(context->getRuleId()) + "_" + name() + "_" + std::to_string(duration) + "ms");
+    }
+
+    if (rewritten)
+    {
+        for (const auto & after_rule : after_rules)
+        {
+            context->incRuleId();
+            after_rule->rewritePlan(plan, context);
+        }
     }
 }
 

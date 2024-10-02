@@ -32,6 +32,23 @@ public:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+class PushSortThroughProjection : public PushTopNThroughProjection
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_SORT_THROUGH_PROJECTION; }
+    String getName() const override { return "PUSH_SORT_THROUGH_PROJECTION"; }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_push_sort_through_projection;
+    }
+    ConstRefPatternPtr getPattern() const override
+    {
+        static auto pattern = Patterns::sorting().withSingle(Patterns::project()).result();
+        return pattern;
+    }
+
+};
+
 class PushTopNFilteringThroughProjection : public Rule
 {
 public:

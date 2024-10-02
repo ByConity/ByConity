@@ -18,7 +18,7 @@ public:
     String name() const override { return "UseNodeProperty"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_use_node_property; }
     class Rewriter;
     class ExchangeRewriter;

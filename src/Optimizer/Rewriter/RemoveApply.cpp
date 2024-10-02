@@ -89,12 +89,13 @@ static std::string printVector(const V & v, const String & sep = ",", const Stri
     return out.str();
 }
 
-void RemoveCorrelatedScalarSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveCorrelatedScalarSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     CorrelatedScalarSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
@@ -379,12 +380,13 @@ PlanNodePtr CorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     return expression_node;
 }
 
-void RemoveUnCorrelatedScalarSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveUnCorrelatedScalarSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     UnCorrelatedScalarSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
@@ -528,12 +530,13 @@ PlanNodePtr UnCorrelatedScalarSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     return std::make_shared<JoinNode>(context->nextNodeId(), std::move(join_step), PlanNodes{input_ptr, subquery_ptr});
 }
 
-void RemoveCorrelatedInSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveCorrelatedInSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     CorrelatedInSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
@@ -767,12 +770,13 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
     return multi_if_expression_node;
 }
 
-void RemoveUnCorrelatedInSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveUnCorrelatedInSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     UnCorrelatedInSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
@@ -1022,12 +1026,13 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
     return project_node;
 }
 
-void RemoveCorrelatedExistsSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveCorrelatedExistsSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     CorrelatedExistsSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
@@ -1382,12 +1387,13 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     return exists_node;
 }
 
-void RemoveUnCorrelatedExistsSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveUnCorrelatedExistsSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     UnCorrelatedExistsSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
@@ -1566,12 +1572,13 @@ PlanNodePtr UnCorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, 
     return join_node;
 }
 
-void RemoveUnCorrelatedQuantifiedComparisonSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveUnCorrelatedQuantifiedComparisonSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     UnCorrelatedQuantifiedComparisonSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)
@@ -1704,12 +1711,13 @@ PlanNodePtr UnCorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(Appl
     return project_node;
 }
 
-void RemoveCorrelatedQuantifiedComparisonSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveCorrelatedQuantifiedComparisonSubquery::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     CorrelatedQuantifiedComparisonSubqueryVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr CorrelatedQuantifiedComparisonSubqueryVisitor::visitApplyNode(ApplyNode & node, Void & v)

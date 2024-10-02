@@ -1,9 +1,9 @@
 test_explain_stats_lc	20	4
 Projection Est. 57 rows, cost 3.507020e+03
-│     Expressions: id:=id_19
+│     Expressions: id:=id_20
 └─ Gather Exchange Est. 57 rows, cost 3.502802e+03
    └─ Union Est. 57 rows, cost 3.046802e+03
-      │     OutputToInputs: id_19 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
+      │     OutputToInputs: id_20 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
       ├─ Projection Est. 3 rows, cost 1.017500e+02
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 1.015280e+02
@@ -139,10 +139,10 @@ Projection Est. 57 rows, cost 3.507020e+03
                      Outputs: [decimal128], id_18:=id
 test_explain_stats_lc	20	4
 Projection Est. 57 rows, cost 3.507020e+03
-│     Expressions: id:=id_19
+│     Expressions: id:=id_20
 └─ Gather Exchange Est. 57 rows, cost 3.502802e+03
    └─ Union Est. 57 rows, cost 3.046802e+03
-      │     OutputToInputs: id_19 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
+      │     OutputToInputs: id_20 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
       ├─ Projection Est. 3 rows, cost 1.017500e+02
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 1.015280e+02
@@ -278,10 +278,10 @@ Projection Est. 57 rows, cost 3.507020e+03
                      Outputs: [decimal128], id_18:=id
 test_explain_stats_lc	20	4
 Projection Est. 57 rows, cost 3.507020e+03
-│     Expressions: id:=id_19
+│     Expressions: id:=id_20
 └─ Gather Exchange Est. 57 rows, cost 3.502802e+03
    └─ Union Est. 57 rows, cost 3.046802e+03
-      │     OutputToInputs: id_19 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
+      │     OutputToInputs: id_20 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17,id_18]
       ├─ Projection Est. 3 rows, cost 1.017500e+02
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 1.015280e+02

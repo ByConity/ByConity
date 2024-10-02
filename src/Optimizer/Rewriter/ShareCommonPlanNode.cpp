@@ -88,7 +88,7 @@ PlanNodePtr ShareCommonPlanNode::createCTERefNode(
     return PlanNodeBase::createPlanNode(context->nextNodeId(), std::make_shared<CTERefStep>(output_stream, cte_id, output_columns, false));
 }
 
-void ShareCommonPlanNode::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool ShareCommonPlanNode::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     PlanSignatureProvider signature{plan.getCTEInfo(), context};
     PlanNodeToSignatures plan_node_to_signatures = signature.computeSignatures(plan.getPlanNode());
@@ -111,7 +111,7 @@ void ShareCommonPlanNode::rewrite(QueryPlan & plan, ContextMutablePtr context) c
     }
 
     if (reuseable.empty())
-        return;
+        return false;
 
     PlanSignatureOutputOrders plan_signature_output_orders;
     for (const auto & item : reuseable)
@@ -121,6 +121,7 @@ void ShareCommonPlanNode::rewrite(QueryPlan & plan, ContextMutablePtr context) c
     Void c;
     auto rewrite = VisitorUtil::accept(plan.getPlanNode(), rewriter, c);
     plan.update(rewrite);
+    return true;
 }
 
 }

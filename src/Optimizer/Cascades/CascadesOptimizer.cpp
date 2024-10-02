@@ -54,11 +54,28 @@ namespace ErrorCodes
     extern const int OPTIMIZER_TIMEOUT;
 }
 
-void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+
+static bool hasCBOType(const std::set<IQueryPlanStep::Type> & typs)
+{
+    static std::set<IQueryPlanStep::Type> CBO_STEP_TYPE
+        = {IQueryPlanStep::Type::Join, IQueryPlanStep::Type::Aggregating, IQueryPlanStep::Type::CTERef};
+    for (const auto & type : CBO_STEP_TYPE)
+    {
+        if (typs.find(type) != typs.end())
+            return true;
+    }
+    return false;
+}
+
+bool CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     int id = context->getRuleId();
     CascadesContext cascades_context{
-        context, plan.getCTEInfo(), WorkerSizeFinder::find(plan, *context), PlanPattern::maxJoinSize(plan, context), enable_cbo};
+        context,
+        plan.getCTEInfo(),
+        WorkerSizeFinder::find(plan, *context),
+        PlanPattern::maxJoinSize(plan, context),
+        enable_cbo && hasCBOType(PlanPattern::extractStepTypes(plan))};
 
     auto start = std::chrono::high_resolution_clock::now();
     auto root = cascades_context.initMemo(plan.getPlanNode());
@@ -101,6 +118,7 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     LOG_DEBUG(cascades_context.getLog(), "Cascades use {} ms", ms_int.count());
 
     plan.update(result);
+    return true;
 }
 
 WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & context, const Property & required_prop)
@@ -128,7 +146,8 @@ WinnerPtr CascadesOptimizer::optimize(GroupId root_group_id, CascadesContext & c
         if (context.getTaskStack().size() > 100000)
         {
             throw Exception(
-                "Cascades exhausted the task limit of " + std::to_string(100000) + ", there are " + std::to_string(context.getTaskStack().size()) + " tasks",
+                "Cascades exhausted the task limit of " + std::to_string(100000) + ", there are "
+                    + std::to_string(context.getTaskStack().size()) + " tasks",
                 ErrorCodes::OPTIMIZER_TIMEOUT);
         }
     }
@@ -258,8 +277,10 @@ CascadesContext::CascadesContext(
             transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
             transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
             if (context->getSettingsRef().heuristic_join_reorder_enumeration_times > 0)
-                transformation_rules.emplace_back(std::make_shared<CardinalityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
-            transformation_rules.emplace_back(std::make_shared<SelectivityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
+                transformation_rules.emplace_back(
+                    std::make_shared<CardinalityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
+            transformation_rules.emplace_back(
+                std::make_shared<SelectivityBasedJoinReorder>(context->getSettingsRef().max_graph_reorder_size));
             transformation_rules.emplace_back(std::make_shared<JoinToMultiJoin>());
         }
 

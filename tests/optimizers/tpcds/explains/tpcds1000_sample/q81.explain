@@ -9,7 +9,7 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, ca_street_number ASC NULLS LAST, ca_street_name ASC NULLS LAST, ca_street_type ASC NULLS LAST, ca_suite_number ASC NULLS LAST, ca_city ASC NULLS LAST, ca_county ASC NULLS LAST, ca_state_2 ASC NULLS LAST, ca_zip ASC NULLS LAST, ca_country ASC NULLS LAST, ca_gmt_offset ASC NULLS LAST, ca_location_type ASC NULLS LAST, expr#sum(cr_return_amt_inc_tax)_1 ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 676798 rows
+            └─ Inner Join Est. 694921 rows
                │     Condition: cr_returning_customer_sk_1 == c_customer_sk
                │     Runtime Filters Builder: {c_customer_sk}
                ├─ Repartition Exchange Est. 12321312 rows

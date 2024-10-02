@@ -65,7 +65,7 @@ public:
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_correlated_scalar_subquery; }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 /**
@@ -132,7 +132,7 @@ public:
     String name() const override { return "RemoveUnCorrelatedScalarSubquery"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
         return context->getSettingsRef().enable_remove_uncorrelated_scalar_subquery;
@@ -176,7 +176,7 @@ public:
     String name() const override { return "RemoveCorrelatedInSubquery"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_correlated_in_subquery; }
 };
 
@@ -219,7 +219,7 @@ public:
     String name() const override { return "RemoveUnCorrelatedInSubquery"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_uncorrelated_in_subquery; }
 };
 
@@ -242,7 +242,7 @@ public:
     String name() const override { return "RemoveCorrelatedExistsSubquery"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_correlated_exists_subquery; }
 };
 
@@ -265,7 +265,7 @@ public:
     String name() const override { return "RemoveUnCorrelatedExistsSubquery"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
         return context->getSettingsRef().enable_remove_uncorrelated_exists_subquery;
@@ -291,7 +291,7 @@ public:
     String name() const override { return "RemoveUnCorrelatedQuantifiedComparisonSubquery"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
         return context->getSettingsRef().enable_remove_uncorrelated_quantified_comparison_subquery;
@@ -321,7 +321,7 @@ public:
     String name() const override { return "RemoveCorrelatedQuantifiedComparisonSubquery"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
         return context->getSettingsRef().enable_remove_correlated_quantified_comparison_subquery;

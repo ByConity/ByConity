@@ -170,6 +170,30 @@ TransformResult SimplifyPredicateRewriteRule::transformImpl(PlanNodePtr node, co
     if (rewritten->getColumnName() == predicate->getColumnName())
         return {};
 
+    if (const auto * literal = rewritten->as<ASTLiteral>())
+    {
+        const auto & input_columns = step.getInputStreams()[0].header;
+        auto result = ExpressionInterpreter::evaluateConstantExpression(rewritten, input_columns.getNamesToTypes(), context);
+        if (result.has_value() && result->second.isNull())
+        {
+            auto null_step = std::make_unique<ReadNothingStep>(step.getOutputStream().header);
+            auto null_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(null_step));
+            return {null_node};
+        }
+
+        UInt64 value;
+        if (literal->value.tryGet(value) && value == 0)
+        {
+            auto null_step = std::make_unique<ReadNothingStep>(step.getOutputStream().header);
+            auto null_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(null_step));
+            return {null_node};
+        }
+        if (literal->value.tryGet(value) && value == 1)
+        {
+            return node->getChildren()[0];
+        }
+    }
+
     auto filter_step
         = std::make_shared<FilterStep>(node->getChildren()[0]->getStep()->getOutputStream(), rewritten, step.removesFilterColumn());
     auto filter_node = PlanNodeBase::createPlanNode(node->getId(), std::move(filter_step), PlanNodes{node->getChildren()[0]});
@@ -191,7 +215,7 @@ TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node
         return {};
 
     const auto & step = *old_filter_node->getStep();
-    auto predicate = step.getFilter();
+    const auto & predicate = step.getFilter();
 
     auto column_types = step.getOutputStream().header.getNamesToTypes();
     ASTPtr rewritten = unwrapCastInComparison(predicate, context, column_types);
@@ -215,8 +239,8 @@ TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node
 ConstRefPatternPtr SimplifyJoinFilterRewriteRule::getPattern() const
 {
     static auto pattern = Patterns::join()
-        .matchingStep<JoinStep>([](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); })
-        .result();
+                              .matchingStep<JoinStep>([](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); })
+                              .result();
     return pattern;
 }
 

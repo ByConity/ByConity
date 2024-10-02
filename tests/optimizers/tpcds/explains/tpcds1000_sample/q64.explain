@@ -24,13 +24,13 @@ CTEDef [0]
    Projection Est. 529693 rows
    │     Expressions: [ca_city, ca_city_1, ca_street_name, ca_street_name_1, ca_street_number, ca_street_number_1, ca_zip, ca_zip_1, d_year, expr#count(), expr#sum(ss_coupon_amt), expr#sum(ss_list_price), expr#sum(ss_wholesale_cost), i_product_name, s_store_name, s_zip], i_item_sk:=ss_item_sk
    └─ MergingAggregated Est. 529693 rows
-      └─ Repartition Exchange Est. 544335 rows
+      └─ Repartition Exchange Est. 529693 rows
          │     Partition by: {i_product_name, ss_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
-         └─ Aggregating Est. 544335 rows
+         └─ Aggregating Est. 529693 rows
             │     Group by: {i_product_name, ss_item_sk, s_store_name, s_zip, ca_street_number, ca_street_name, ca_city, ca_zip, ca_street_number_1, ca_street_name_1, ca_city_1, ca_zip_1, d_year, d_year_1, d_year_2}
             │     Group by keys not hashed: {i_product_name}
             │     Aggregates: expr#count():=AggNull(count)(), expr#sum(ss_wholesale_cost):=AggNull(sum)(ss_wholesale_cost), expr#sum(ss_list_price):=AggNull(sum)(ss_list_price), expr#sum(ss_coupon_amt):=AggNull(sum)(ss_coupon_amt)
-            └─ Inner Join Est. 544335 rows
+            └─ Inner Join Est. 529693 rows
                │     Condition: ca_address_sk_1 == c_current_addr_sk
                │     Runtime Filters Builder: {c_current_addr_sk}
                ├─ Repartition Exchange Est. 6000000 rows
@@ -42,7 +42,7 @@ CTEDef [0]
                │              Outputs: ca_address_sk_1:=ca_address_sk, ca_street_number_1:=ca_street_number, ca_street_name_1:=ca_street_name, ca_city_1:=ca_city, ca_zip_1:=ca_zip
                └─ Repartition Exchange Est. 544335 rows
                   │     Partition by: {c_current_addr_sk}
-                  └─ Inner Join Est. 540630 rows
+                  └─ Inner Join Est. 544335 rows
                      │     Condition: ca_address_sk == ss_addr_sk
                      │     Runtime Filters Builder: {ss_addr_sk}
                      ├─ Repartition Exchange Est. 6000000 rows

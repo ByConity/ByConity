@@ -143,7 +143,6 @@ Projection Est. 100 rows
                │              │     Expressions: [c_first_name, c_last_name], expr#multiply(cs_quantity, cs_list_price)_2:=cs_quantity_2 * cs_list_price_2
                │              └─ Inner Join Est. 1098322 rows
                │                 │     Condition: c_customer_sk_4 == cs_bill_customer_sk_2
-               │                 │     Runtime Filters Builder: {cs_bill_customer_sk_2}
                │                 ├─ Repartition Exchange Est. 2000000 rows
                │                 │  │     Partition by: {c_customer_sk_4}
                │                 │  └─ Filter Est. 2000000 rows
@@ -176,9 +175,9 @@ Projection Est. 100 rows
                │                    │           └─ Projection Est. 28 rows
                │                    │              │     Expressions: [d_date_sk_6]
                │                    │              └─ Filter Est. 28 rows
-               │                    │                 │     Condition: (d_moy_2 = 2) AND (d_year_6 = 2000)
+               │                    │                 │     Condition: (d_year_6 = 2000) AND (d_moy_2 = 2)
                │                    │                 └─ TableScan tpcds100.date_dim Est. 73049 rows
-               │                    │                          Where: (d_moy = 2) AND (d_year = 2000)
+               │                    │                          Where: (d_year = 2000) AND (d_moy = 2)
                │                    │                          Outputs: d_date_sk_6:=d_date_sk, d_year_6:=d_year, d_moy_2:=d_moy
                │                    └─ Buffer Est. 996434 rows
                │                       └─ CTERef[1] Est. 996434 rows
@@ -186,16 +185,15 @@ Projection Est. 100 rows
                   │     Order by: {c_last_name_1 ASC NULLS LAST, c_first_name_1 ASC NULLS LAST, expr#sum(multiply(ws_quantity, ws_list_price)) ASC NULLS LAST}
                   │     Limit: 100
                   └─ MergingAggregated Est. 996434 rows
-                     └─ Repartition Exchange Est. 999986 rows
+                     └─ Repartition Exchange Est. 996434 rows
                         │     Partition by: {c_last_name_1, c_first_name_1}
-                        └─ Aggregating Est. 999986 rows
+                        └─ Aggregating Est. 996434 rows
                            │     Group by: {c_last_name_1, c_first_name_1}
                            │     Aggregates: expr#sum(multiply(ws_quantity, ws_list_price)):=AggNull(sum)(expr#multiply(ws_quantity, ws_list_price)_1)
-                           └─ Projection Est. 999986 rows
+                           └─ Projection Est. 996434 rows
                               │     Expressions: [c_first_name_1, c_last_name_1], expr#multiply(ws_quantity, ws_list_price)_1:=ws_quantity_1 * ws_list_price_1
-                              └─ Inner Join Est. 999986 rows
+                              └─ Inner Join Est. 996434 rows
                                  │     Condition: c_customer_sk_8 == ws_bill_customer_sk_1
-                                 │     Runtime Filters Builder: {ws_bill_customer_sk_1}
                                  ├─ Repartition Exchange Est. 2000000 rows
                                  │  │     Partition by: {c_customer_sk_8}
                                  │  └─ Filter Est. 2000000 rows

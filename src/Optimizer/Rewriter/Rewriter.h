@@ -26,7 +26,7 @@ class Rewriter;
 
 using RewriterPtr = std::shared_ptr<Rewriter>;
 using Rewriters = std::vector<RewriterPtr>;
-class Rewriter
+class Rewriter : public std::enable_shared_from_this<Rewriter>
 {
 public:
     virtual ~Rewriter() = default;
@@ -34,9 +34,17 @@ public:
 
     void rewritePlan(QueryPlan & plan, ContextMutablePtr context) const;
 
+    RewriterPtr afterRules(Rewriters rewriters)
+    {
+        after_rules.insert(after_rules.end(), rewriters.begin(), rewriters.end());
+        return shared_from_this();
+    }
+
 private:
-    virtual void rewrite(QueryPlan & plan, ContextMutablePtr context) const = 0;
+    virtual bool rewrite(QueryPlan & plan, ContextMutablePtr context) const = 0;
     // every rewriter must set a setting to enable/disable it.
     virtual bool isEnabled(ContextMutablePtr context) const = 0;
+
+    Rewriters after_rules;
 };
 }

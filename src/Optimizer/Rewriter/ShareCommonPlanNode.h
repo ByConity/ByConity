@@ -21,7 +21,7 @@ public:
     createCTERefNode(CTEId cte_id, const DataStream & output_stream, const DataStream & cte_output_stream, ContextMutablePtr context);
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
         return context->getSettingsRef().enable_share_common_plan_node && context->getSettingsRef().cte_mode != CTEMode::INLINED;

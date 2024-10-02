@@ -53,9 +53,9 @@ Projection Est. 100 rows
                         │  │     │     └─ Projection Est. 30 rows
                         │  │     │        │     Expressions: [d_date_sk]
                         │  │     │        └─ Filter Est. 30 rows
-                        │  │     │           │     Condition: (d_moy = 4) AND (d_year = 2001)
+                        │  │     │           │     Condition: (d_year = 2001) AND (d_moy = 4)
                         │  │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │  │     │                    Where: (d_moy = 4) AND (d_year = 2001)
+                        │  │     │                    Where: (d_year = 2001) AND (d_moy = 4)
                         │  │     │                    Outputs: [d_date_sk, d_year, d_moy]
                         │  │     └─ Inner Join Est. 3062082 rows
                         │  │        │     Condition: sr_returned_date_sk == d_date_sk_1

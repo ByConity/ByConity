@@ -33,12 +33,13 @@ namespace DB
 const std::unordered_set<String> RedundantSortVisitor::order_dependent_agg{"groupUniqArray","groupArray","groupArraySample","argMax","argMin","topK","topKWeighted","any","anyLast","anyHeavy",
                                                                            "first_value","last_value","deltaSum","deltaSumTimestamp","groupArrayMovingSum","groupArrayMovingAvg", "groupConcat"};
 
-void RemoveRedundantSort::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveRedundantSort::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     RedundantSortVisitor visitor{context, plan.getCTEInfo()};
     RedundantSortContext sort_context{.context = context, .can_sort_be_removed = false};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, sort_context);
     plan.update(result);
+    return sort_context.can_sort_be_removed;
 }
 
 PlanNodePtr RedundantSortVisitor::visitPlanNode(PlanNodeBase & node, RedundantSortContext & sort_context)

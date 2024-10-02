@@ -63,7 +63,7 @@ class AddExchangeRewriter
 {
 public:
 
-    static void rewrite(QueryPlan & query_plan, ExchangeStepContext & exchange_context);
+    static bool rewrite(QueryPlan & query_plan, ExchangeStepContext & exchange_context);
 
 };
 

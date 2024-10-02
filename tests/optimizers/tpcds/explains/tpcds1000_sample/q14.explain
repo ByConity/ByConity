@@ -124,9 +124,9 @@ Projection Est. 100 rows
                                  │     └─ Aggregating Est. 123379 rows
                                  │        │     Group by: {i_brand_id_8, i_class_id_8, i_category_id_8}
                                  │        │     Aggregates: expr#sum(multiply(ws_quantity, ws_list_price)):=AggNull(sum)(expr#multiply(ws_quantity, ws_list_price)), expr#count()_2:=AggNull(count)()
-                                 │        └─ Projection Est. 11453653 rows
+                                 │        └─ Projection Est. 10992147 rows
                                  │           │     Expressions: [i_brand_id_8, i_category_id_8, i_class_id_8], expr#multiply(ws_quantity, ws_list_price):=ws_quantity_1 * ws_list_price_1
-                                 │           └─ Inner Join Est. 11453653 rows
+                                 │           └─ Inner Join Est. 10992147 rows
                                  │              │     Condition: ws_item_sk_1 == i_item_sk_8
                                  │              ├─ Left Semi (PARALLEL_HASH) Join Est. 11453653 rows
                                  │              │  │     Condition: ws_item_sk_1 == i_item_sk_9

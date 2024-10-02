@@ -9,11 +9,12 @@
 namespace DB
 {
 
-void HintsPropagator::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool HintsPropagator::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     HintsVisitor visitor{context, plan.getCTEInfo()};
     HintsVisitorContext hints_context;
     VisitorUtil::accept(plan.getPlanNode(), visitor, hints_context);
+    return true;
 }
 
 void HintsVisitor::attachPlanHints(PlanNodeBase & node, HintOptions & hint_options)

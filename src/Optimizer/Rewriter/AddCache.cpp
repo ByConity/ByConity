@@ -67,7 +67,7 @@ private:
     PlanSignatureProvider base_signature_provider;
 };
 
-void AddCache::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool AddCache::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     auto query_runtime_filters = CacheableChecker::RuntimeFilterCollector::collect(plan);
     auto base_signature_provider = PlanSignatureProvider::from(plan, context);
@@ -75,6 +75,7 @@ void AddCache::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     Void c{};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, c);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr AddCacheVisitor::visitAggregatingNode(AggregatingNode & node, Void & c)

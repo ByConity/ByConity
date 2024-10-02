@@ -20,7 +20,7 @@ Projection Est. 1 rows
    │  │  │  │  │  │  │        │     Group by: {}
    │  │  │  │  │  │  │        │     Aggregates: expr#count():=AggNull(count)()
    │  │  │  │  │  │  │        └─ Filter Est. 1639066 rows
-   │  │  │  │  │  │  │           │     Condition: (ss_sold_time_sk = t_time_sk) AND (ss_hdemo_sk = hd_demo_sk) AND (ss_store_sk = s_store_sk) AND (t_hour = 8) AND (t_minute >= 30) AND (((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16')))) AND (s_store_name = 'ese')
+   │  │  │  │  │  │  │           │     Condition: (s_store_name = 'ese') AND (ss_sold_time_sk = t_time_sk) AND (ss_hdemo_sk = hd_demo_sk) AND (ss_store_sk = s_store_sk) AND (t_hour = 8) AND (t_minute >= 30) AND (((hd_dep_count = 4) AND (hd_vehicle_count <= cast(6, 'UInt16'))) OR ((hd_dep_count = 2) AND (hd_vehicle_count <= cast(4, 'UInt16'))) OR ((hd_dep_count = 0) AND (hd_vehicle_count <= cast(2, 'UInt16'))))
    │  │  │  │  │  │  │           └─ Buffer Est. 6556264 rows
    │  │  │  │  │  │  │              └─ CTERef[1] Est. 6556264 rows
    │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
@@ -30,7 +30,7 @@ Projection Est. 1 rows
    │  │  │  │  │  │              │     Group by: {}
    │  │  │  │  │  │              │     Aggregates: expr#count()_1:=AggNull(count)()
    │  │  │  │  │  │              └─ Filter Est. 1639066 rows
-   │  │  │  │  │  │                 │     Condition: (ss_sold_time_sk_1 = t_time_sk_1) AND (ss_hdemo_sk_1 = hd_demo_sk_1) AND (ss_store_sk_1 = s_store_sk_1) AND (t_hour_1 = 9) AND (t_minute_1 < 30) AND (((hd_dep_count_1 = 4) AND (hd_vehicle_count_1 <= cast(6, 'UInt16'))) OR ((hd_dep_count_1 = 2) AND (hd_vehicle_count_1 <= cast(4, 'UInt16'))) OR ((hd_dep_count_1 = 0) AND (hd_vehicle_count_1 <= cast(2, 'UInt16')))) AND (s_store_name_1 = 'ese')
+   │  │  │  │  │  │                 │     Condition: (s_store_name_1 = 'ese') AND (ss_sold_time_sk_1 = t_time_sk_1) AND (ss_hdemo_sk_1 = hd_demo_sk_1) AND (ss_store_sk_1 = s_store_sk_1) AND (t_hour_1 = 9) AND (t_minute_1 < 30) AND (((hd_dep_count_1 = 4) AND (hd_vehicle_count_1 <= cast(6, 'UInt16'))) OR ((hd_dep_count_1 = 2) AND (hd_vehicle_count_1 <= cast(4, 'UInt16'))) OR ((hd_dep_count_1 = 0) AND (hd_vehicle_count_1 <= cast(2, 'UInt16'))))
    │  │  │  │  │  │                 └─ Buffer Est. 6556264 rows
    │  │  │  │  │  │                    └─ CTERef[1] Est. 6556264 rows
    │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
@@ -40,7 +40,7 @@ Projection Est. 1 rows
    │  │  │  │  │              │     Group by: {}
    │  │  │  │  │              │     Aggregates: expr#count()_2:=AggNull(count)()
    │  │  │  │  │              └─ Filter Est. 1639066 rows
-   │  │  │  │  │                 │     Condition: (ss_sold_time_sk_2 = t_time_sk_2) AND (ss_hdemo_sk_2 = hd_demo_sk_2) AND (ss_store_sk_2 = s_store_sk_2) AND (t_hour_2 = 9) AND (t_minute_2 >= 30) AND (((hd_dep_count_2 = 4) AND (hd_vehicle_count_2 <= cast(6, 'UInt16'))) OR ((hd_dep_count_2 = 2) AND (hd_vehicle_count_2 <= cast(4, 'UInt16'))) OR ((hd_dep_count_2 = 0) AND (hd_vehicle_count_2 <= cast(2, 'UInt16')))) AND (s_store_name_2 = 'ese')
+   │  │  │  │  │                 │     Condition: (s_store_name_2 = 'ese') AND (ss_sold_time_sk_2 = t_time_sk_2) AND (ss_hdemo_sk_2 = hd_demo_sk_2) AND (ss_store_sk_2 = s_store_sk_2) AND (t_hour_2 = 9) AND (t_minute_2 >= 30) AND (((hd_dep_count_2 = 4) AND (hd_vehicle_count_2 <= cast(6, 'UInt16'))) OR ((hd_dep_count_2 = 2) AND (hd_vehicle_count_2 <= cast(4, 'UInt16'))) OR ((hd_dep_count_2 = 0) AND (hd_vehicle_count_2 <= cast(2, 'UInt16'))))
    │  │  │  │  │                 └─ Buffer Est. 6556264 rows
    │  │  │  │  │                    └─ CTERef[1] Est. 6556264 rows
    │  │  │  │  └─ Broadcast Exchange Est. 1 rows
@@ -50,7 +50,7 @@ Projection Est. 1 rows
    │  │  │  │              │     Group by: {}
    │  │  │  │              │     Aggregates: expr#count()_3:=AggNull(count)()
    │  │  │  │              └─ Filter Est. 1639066 rows
-   │  │  │  │                 │     Condition: (ss_sold_time_sk_3 = t_time_sk_3) AND (ss_hdemo_sk_3 = hd_demo_sk_3) AND (ss_store_sk_3 = s_store_sk_3) AND (t_hour_3 = 10) AND (t_minute_3 < 30) AND (((hd_dep_count_3 = 4) AND (hd_vehicle_count_3 <= cast(6, 'UInt16'))) OR ((hd_dep_count_3 = 2) AND (hd_vehicle_count_3 <= cast(4, 'UInt16'))) OR ((hd_dep_count_3 = 0) AND (hd_vehicle_count_3 <= cast(2, 'UInt16')))) AND (s_store_name_3 = 'ese')
+   │  │  │  │                 │     Condition: (s_store_name_3 = 'ese') AND (ss_sold_time_sk_3 = t_time_sk_3) AND (ss_hdemo_sk_3 = hd_demo_sk_3) AND (ss_store_sk_3 = s_store_sk_3) AND (t_hour_3 = 10) AND (t_minute_3 < 30) AND (((hd_dep_count_3 = 4) AND (hd_vehicle_count_3 <= cast(6, 'UInt16'))) OR ((hd_dep_count_3 = 2) AND (hd_vehicle_count_3 <= cast(4, 'UInt16'))) OR ((hd_dep_count_3 = 0) AND (hd_vehicle_count_3 <= cast(2, 'UInt16'))))
    │  │  │  │                 └─ Buffer Est. 6556264 rows
    │  │  │  │                    └─ CTERef[1] Est. 6556264 rows
    │  │  │  └─ Broadcast Exchange Est. 1 rows
@@ -60,7 +60,7 @@ Projection Est. 1 rows
    │  │  │              │     Group by: {}
    │  │  │              │     Aggregates: expr#count()_4:=AggNull(count)()
    │  │  │              └─ Filter Est. 1639066 rows
-   │  │  │                 │     Condition: (ss_sold_time_sk_4 = t_time_sk_4) AND (ss_hdemo_sk_4 = hd_demo_sk_4) AND (ss_store_sk_4 = s_store_sk_4) AND (t_hour_4 = 10) AND (t_minute_4 >= 30) AND (((hd_dep_count_4 = 4) AND (hd_vehicle_count_4 <= cast(6, 'UInt16'))) OR ((hd_dep_count_4 = 2) AND (hd_vehicle_count_4 <= cast(4, 'UInt16'))) OR ((hd_dep_count_4 = 0) AND (hd_vehicle_count_4 <= cast(2, 'UInt16')))) AND (s_store_name_4 = 'ese')
+   │  │  │                 │     Condition: (s_store_name_4 = 'ese') AND (ss_sold_time_sk_4 = t_time_sk_4) AND (ss_hdemo_sk_4 = hd_demo_sk_4) AND (ss_store_sk_4 = s_store_sk_4) AND (t_hour_4 = 10) AND (t_minute_4 >= 30) AND (((hd_dep_count_4 = 4) AND (hd_vehicle_count_4 <= cast(6, 'UInt16'))) OR ((hd_dep_count_4 = 2) AND (hd_vehicle_count_4 <= cast(4, 'UInt16'))) OR ((hd_dep_count_4 = 0) AND (hd_vehicle_count_4 <= cast(2, 'UInt16'))))
    │  │  │                 └─ Buffer Est. 6556264 rows
    │  │  │                    └─ CTERef[1] Est. 6556264 rows
    │  │  └─ Broadcast Exchange Est. 1 rows
@@ -70,7 +70,7 @@ Projection Est. 1 rows
    │  │              │     Group by: {}
    │  │              │     Aggregates: expr#count()_5:=AggNull(count)()
    │  │              └─ Filter Est. 1639066 rows
-   │  │                 │     Condition: (ss_sold_time_sk_5 = t_time_sk_5) AND (ss_hdemo_sk_5 = hd_demo_sk_5) AND (ss_store_sk_5 = s_store_sk_5) AND (t_hour_5 = 11) AND (t_minute_5 < 30) AND (((hd_dep_count_5 = 4) AND (hd_vehicle_count_5 <= cast(6, 'UInt16'))) OR ((hd_dep_count_5 = 2) AND (hd_vehicle_count_5 <= cast(4, 'UInt16'))) OR ((hd_dep_count_5 = 0) AND (hd_vehicle_count_5 <= cast(2, 'UInt16')))) AND (s_store_name_5 = 'ese')
+   │  │                 │     Condition: (s_store_name_5 = 'ese') AND (ss_sold_time_sk_5 = t_time_sk_5) AND (ss_hdemo_sk_5 = hd_demo_sk_5) AND (ss_store_sk_5 = s_store_sk_5) AND (t_hour_5 = 11) AND (t_minute_5 < 30) AND (((hd_dep_count_5 = 4) AND (hd_vehicle_count_5 <= cast(6, 'UInt16'))) OR ((hd_dep_count_5 = 2) AND (hd_vehicle_count_5 <= cast(4, 'UInt16'))) OR ((hd_dep_count_5 = 0) AND (hd_vehicle_count_5 <= cast(2, 'UInt16'))))
    │  │                 └─ Buffer Est. 6556264 rows
    │  │                    └─ CTERef[1] Est. 6556264 rows
    │  └─ Broadcast Exchange Est. 1 rows
@@ -80,7 +80,7 @@ Projection Est. 1 rows
    │              │     Group by: {}
    │              │     Aggregates: expr#count()_6:=AggNull(count)()
    │              └─ Filter Est. 1639066 rows
-   │                 │     Condition: (ss_sold_time_sk_6 = t_time_sk_6) AND (ss_hdemo_sk_6 = hd_demo_sk_6) AND (ss_store_sk_6 = s_store_sk_6) AND (t_hour_6 = 11) AND (t_minute_6 >= 30) AND (((hd_dep_count_6 = 4) AND (hd_vehicle_count_6 <= cast(6, 'UInt16'))) OR ((hd_dep_count_6 = 2) AND (hd_vehicle_count_6 <= cast(4, 'UInt16'))) OR ((hd_dep_count_6 = 0) AND (hd_vehicle_count_6 <= cast(2, 'UInt16')))) AND (s_store_name_6 = 'ese')
+   │                 │     Condition: (s_store_name_6 = 'ese') AND (ss_sold_time_sk_6 = t_time_sk_6) AND (ss_hdemo_sk_6 = hd_demo_sk_6) AND (ss_store_sk_6 = s_store_sk_6) AND (t_hour_6 = 11) AND (t_minute_6 >= 30) AND (((hd_dep_count_6 = 4) AND (hd_vehicle_count_6 <= cast(6, 'UInt16'))) OR ((hd_dep_count_6 = 2) AND (hd_vehicle_count_6 <= cast(4, 'UInt16'))) OR ((hd_dep_count_6 = 0) AND (hd_vehicle_count_6 <= cast(2, 'UInt16'))))
    │                 └─ Buffer Est. 6556264 rows
    │                    └─ CTERef[1] Est. 6556264 rows
    └─ Broadcast Exchange Est. 1 rows
@@ -90,7 +90,7 @@ Projection Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#count()_7:=AggNull(count)()
                └─ Filter Est. 1639066 rows
-                  │     Condition: (ss_sold_time_sk_7 = t_time_sk_7) AND (ss_hdemo_sk_7 = hd_demo_sk_7) AND (ss_store_sk_7 = s_store_sk_7) AND (t_hour_7 = 12) AND (t_minute_7 < 30) AND (((hd_dep_count_7 = 4) AND (hd_vehicle_count_7 <= cast(6, 'UInt16'))) OR ((hd_dep_count_7 = 2) AND (hd_vehicle_count_7 <= cast(4, 'UInt16'))) OR ((hd_dep_count_7 = 0) AND (hd_vehicle_count_7 <= cast(2, 'UInt16')))) AND (s_store_name_7 = 'ese')
+                  │     Condition: (s_store_name_7 = 'ese') AND (ss_sold_time_sk_7 = t_time_sk_7) AND (ss_hdemo_sk_7 = hd_demo_sk_7) AND (ss_store_sk_7 = s_store_sk_7) AND (t_hour_7 = 12) AND (t_minute_7 < 30) AND (((hd_dep_count_7 = 4) AND (hd_vehicle_count_7 <= cast(6, 'UInt16'))) OR ((hd_dep_count_7 = 2) AND (hd_vehicle_count_7 <= cast(4, 'UInt16'))) OR ((hd_dep_count_7 = 0) AND (hd_vehicle_count_7 <= cast(2, 'UInt16'))))
                   └─ Buffer Est. 6556264 rows
                      └─ CTERef[1] Est. 6556264 rows
 CTEDef [1]

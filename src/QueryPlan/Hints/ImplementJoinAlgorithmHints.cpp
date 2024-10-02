@@ -6,11 +6,12 @@
 namespace DB
 {
 
-void ImplementJoinAlgorithmHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool ImplementJoinAlgorithmHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     JoinAlgorithmHintsVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     VisitorUtil::accept(*plan.getPlanNode(), visitor, v);
+    return true;
 }
 
 String ImplementJoinAlgorithmHints::name() const

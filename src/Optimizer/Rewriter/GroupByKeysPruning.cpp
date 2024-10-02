@@ -17,13 +17,14 @@
 
 namespace DB
 {
-void GroupByKeysPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool GroupByKeysPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     GroupByKeysPruning::Rewriter rewriter{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), rewriter, v);
 
     plan.update(result.plan);
+    return true;
 }
 
 PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitPlanNode(PlanNodeBase & node, Void &)

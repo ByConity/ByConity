@@ -10,11 +10,12 @@
 namespace DB
 {
 
-void ImplementJoinOperationHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool ImplementJoinOperationHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     JoinOperationHintsVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     VisitorUtil::accept(*plan.getPlanNode(), visitor, v);
+    return true;
 }
 
 void JoinOperationHintsVisitor::setStepOptions(JoinStepPtr & step, DistributionType distribution_type, bool isOrdered)

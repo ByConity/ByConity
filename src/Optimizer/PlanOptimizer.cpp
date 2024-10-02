@@ -151,7 +151,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
     return simple_rewrites;
 }
 
-const Rewriters & PlanOptimizer::getFullRewriters()
+const Rewriters & PlanOptimizer::getLegacyFullRewriters()
 {
     // the order of rules matters, DO NOT change.
     static Rewriters full_rewrites = {
@@ -334,6 +334,173 @@ const Rewriters & PlanOptimizer::getFullRewriters()
     return full_rewrites;
 }
 
+const Rewriters & PlanOptimizer::getFullRewriters()
+{
+    // the order of rules matters, DO NOT change.
+    static Rewriters full_rewrites = {
+        std::make_shared<HintsPropagator>(),
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<UnifyNullableType>(),
+
+        std::make_shared<IterativeRewriter>(Rules::sumIfToCountIf(), "SumIfToCountIf"),
+
+        // remove subquery rely on specific pattern
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+
+        // when correlated-subquery exists, we can't perform simplify expression actions, because
+        // type analyzer relay on input columns to resolve the data type of identifiers. for correlated
+        // symbols, it's unknown. after subquery removed, simplify expression is able to execute.
+        // Normalize expression, like, common predicate rewrite, swap predicate rewrite, these rules
+        // they don't need type analyzer.
+        // Simplify expression, like, expression interpret, unwrap cast. these rules require type analyzer.
+        std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
+        std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
+        std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        // removeRedundantRules may remove cte, so we need to remove unused cte after RemoveRedundant.
+        std::make_shared<RemoveUnusedCTE>(),
+
+        // rules for normalize Union/Except/Intersect
+        std::make_shared<IterativeRewriter>(Rules::mergeSetRules(), "MergeSetNode"),
+        std::make_shared<IterativeRewriter>(Rules::implementSetRules(), "ImplementSetNode"),
+
+        // rules for remove subquery, the order of subquery rules matters, DO NOT change !!!.
+        std::make_shared<IterativeRewriter>(Rules::pushApplyRules(), "PushApply"),
+        std::make_shared<IterativeRewriter>(Rules::unnestingSubqueryRules(), "UnnestingSubquery"),
+        std::make_shared<RemoveUnCorrelatedInSubquery>(),
+        std::make_shared<RemoveCorrelatedInSubquery>(),
+        std::make_shared<RemoveUnCorrelatedExistsSubquery>(),
+        std::make_shared<RemoveCorrelatedExistsSubquery>(),
+        std::make_shared<RemoveUnCorrelatedScalarSubquery>(),
+        std::make_shared<RemoveCorrelatedScalarSubquery>(),
+        std::make_shared<RemoveUnCorrelatedQuantifiedComparisonSubquery>(),
+        std::make_shared<RemoveCorrelatedQuantifiedComparisonSubquery>(),
+        // subquery remove may generate outer join, make sure data type is correct.
+        std::make_shared<UnifyNullableType>(),
+
+        std::make_shared<IterativeRewriter>(Rules::extractBitmapImplicitFilterRules(), "ExtractBitmapImplicitFilter"),
+
+        std::make_shared<BitmapIndexSplitter>(),
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        std::make_shared<IterativeRewriter>(Rules::pushDownBitmapProjection(), "PushDownBitMapProjection"),
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::pushIndexProjectionIntoTableScanRules(), "PushIndexProjectionIntoTableScan"),
+
+        std::make_shared<ColumnPruning>(),
+
+        // rules after subquery removed, DO NOT change !!!.
+        std::make_shared<ShareCommonPlanNode>(),
+        std::make_shared<RemoveRedundantSort>(),
+
+        // predicate push down
+        std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<PredicatePushdown>(true),
+        // predicate push down may convert outer-join to inner-join, make sure data type is correct.
+        std::make_shared<UnifyNullableType>(),
+
+        std::make_shared<IterativeRewriter>(Rules::crossJoinToUnion(), "CrossJoinToUnion"),
+
+        std::make_shared<WindowToSortPruning>(),
+
+        // simplify cross join
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        std::make_shared<SimplifyCrossJoin>(),
+
+        // add materialized view rewriter before distinct-aggregte rewrite
+        std::make_shared<MaterializedViewRewriter>(),
+
+        // push down limit & aggregate
+        std::make_shared<RemoveRedundantDistinct>(),
+        std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
+        std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
+        std::make_shared<DistinctToAggregatePruning>(),
+
+        std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin")
+            ->afterRules(
+                {std::make_shared<UnifyNullableType>(),
+                 std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+                 std::make_shared<PredicatePushdown>(),
+                 std::make_shared<ColumnPruning>()}),
+
+        std::make_shared<ImplementJoinOrderHints>(),
+
+        std::make_shared<GroupByKeysPruning>(),
+        std::make_shared<EliminateJoinByFK>()->afterRules(
+            {std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+             std::make_shared<PredicatePushdown>(),
+             std::make_shared<ColumnPruning>()}),
+
+
+        // prepare for cascades
+        std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::pushUnionThroughJoin(), "PushUnionThroughJoin"),
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
+        std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
+        std::make_shared<UnifyJoinOutputs>(),
+
+        // remove unused CTE before cascades
+        std::make_shared<RemoveUnusedCTE>(),
+
+        //add reorder adjacent windows
+        std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(), "SwapAdjacent"),
+
+        //
+        std::make_shared<ImplementJoinOperationHints>(),
+
+        /// topn filtering optimization
+        /// rules use novel operators should be placed after MaterializedViewRewriter, in case of MV matching failure
+        std::make_shared<IterativeRewriter>(Rules::pushDownTopNRules(), "PushDownTopNRules"),
+        std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "CreateTopNFiltering"),
+        std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "PushDownTopNFiltering"),
+
+        std::make_shared<BitEngineUseLocalDictionary>(),
+        std::make_shared<BitEngineNoShuffle>(),
+
+        std::make_shared<OptimizeTrivialCount>(),
+
+        // Cost-based optimizer
+        std::make_shared<CascadesOptimizer>(),
+        // final UnifyNullableType, make sure type is correct.
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<UnifyNullableType>(),
+
+        std::make_shared<RemoveUnusedCTE>(),
+        std::make_shared<AddBufferForDeadlockCTE>(),
+
+        // add runtime filters
+        std::make_shared<AddRuntimeFilters>(),
+
+        // push partial step through exchange
+        std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
+
+        std::make_shared<IterativeRewriter>(Rules::optimizeAggregateRules(), "OptimizeAggregate"),
+        std::make_shared<OptimizeTrivialCount>(),
+
+        // use property
+        std::make_shared<SortingOrderedSource>(),
+        std::make_shared<BitEngineInfoDeriver>(),
+
+        // push predicate into storage
+        std::make_shared<UnaliasSymbolReferences>(),
+        std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
+        std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
+        std::make_shared<ImplementJoinAlgorithmHints>(),
+        std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        // column pruned by add extra projection, DO NOT ADD RemoveRedundant rule after this rule !!!
+        std::make_shared<AddProjectionPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
+        std::make_shared<UseNodeProperty>(),
+        std::make_shared<IterativeRewriter>(Rules::addRepartitionColumn(), "AddRepartitionColumn"),
+        std::make_shared<AddCache>(),
+
+        std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
+    };
+
+    return full_rewrites;
+}
+
 const Rewriters & PlanOptimizer::getShortCircuitRewriters()
 {
     static Rewriters short_circuit_rewriters = {
@@ -363,13 +530,23 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
         optimize(plan, context, getShortCircuitRewriters());
         ShortCircuitPlanner::addExchangeIfNeeded(plan, context);
     }
-    else if (PlanPattern::isSimpleQuery(plan))
-    {
-        optimize(plan, context, getSimpleRewriters());
-    }
     else
     {
-        optimize(plan, context, getFullRewriters());
+        if (context->getSettingsRef().enable_legacy_optimizer)
+        {
+            if (PlanPattern::isSimpleQuery(plan))
+            {
+                optimize(plan, context, getSimpleRewriters());
+            }
+            else
+            {
+                optimize(plan, context, getLegacyFullRewriters());
+            }
+        }
+        else
+        {
+            optimize(plan, context, getFullRewriters());
+        }
     }
 
     // Check final plan to satisfy with :

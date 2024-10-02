@@ -23,7 +23,7 @@ Projection Est. 100 rows
                   │  │     └─ Aggregating Est. 149640 rows
                   │  │        │     Group by: {i_item_id_1}
                   │  │        │     Aggregates: expr#sum(cr_return_quantity):=AggNull(sum)(cr_return_quantity)
-                  │  │        └─ Inner Join Est. 1368790 rows
+                  │  │        └─ Inner Join Est. 1365545 rows
                   │  │           │     Condition: cr_item_sk == i_item_sk_1
                   │  │           ├─ Inner Join Est. 1368790 rows
                   │  │           │  │     Condition: cr_returned_date_sk == d_date_sk_1
@@ -56,7 +56,7 @@ Projection Est. 100 rows
                   │        └─ Aggregating Est. 149640 rows
                   │           │     Group by: {i_item_id}
                   │           │     Aggregates: expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity)
-                  │           └─ Inner Join Est. 2875684 rows
+                  │           └─ Inner Join Est. 2869952 rows
                   │              │     Condition: sr_item_sk == i_item_sk
                   │              ├─ Inner Join Est. 2875684 rows
                   │              │  │     Condition: sr_returned_date_sk == d_date_sk
@@ -89,7 +89,7 @@ Projection Est. 100 rows
                         └─ Aggregating Est. 149640 rows
                            │     Group by: {i_item_id_2}
                            │     Aggregates: expr#sum(wr_return_quantity):=AggNull(sum)(wr_return_quantity)
-                           └─ Inner Join Est. 659317 rows
+                           └─ Inner Join Est. 657811 rows
                               │     Condition: wr_item_sk == i_item_sk_2
                               ├─ Inner Join Est. 659317 rows
                               │  │     Condition: wr_returned_date_sk == d_date_sk_2

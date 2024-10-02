@@ -293,7 +293,7 @@ CTEDef [1]
    │     Partition by: {c_customer_id}
    └─ Inner Join Est. ? rows
       │     Condition: expr#cast(sk, \'Nullable(Int64)\') == expr#cast(sk_1, \'Nullable(Int64)\')
-      │     Filter: (price < 3001.) OR (price < 4001.) OR (c_customer_id = \'notmatch\')
+      │     Filter: (c_customer_id = \'notmatch\') OR (price < 3001.) OR (price < 4001.)
       ├─ Repartition Exchange Est. ? rows
       │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
       │  └─ Projection Est. ? rows
@@ -305,9 +305,9 @@ CTEDef [1]
          └─ Projection Est. ? rows
             │     Expressions: [price, sk_1], expr#cast(sk_1, \'Nullable(Int64)\'):=sk_1
             └─ Filter Est. ? rows
-               │     Condition: (price < 3001.) OR (price < 4001.) OR (price < 2001.)
+               │     Condition: (price < 2001.) OR (price < 3001.) OR (price < 4001.)
                └─ TableScan test.web Est. ? rows
-                        Where: (price < 3001.) OR (price < 4001.) OR (price < 2001.)
+                        Where: (price < 2001.) OR (price < 3001.) OR (price < 4001.)
                         Outputs: [price], sk_1:=sk
 note: CTE(Common Table Expression) is applied for 3 times.
 5

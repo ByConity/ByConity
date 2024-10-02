@@ -27,7 +27,7 @@ namespace ErrorCodes
 // #define TEST_RECORD_RULE_CALL_TIMES
 
 #ifdef TEST_RECORD_RULE_CALL_TIMES
-static std::map<std::underlying_type_t<RuleType>, size_t> rule_call_times {};
+static std::map<std::underlying_type_t<RuleType>, size_t> rule_call_times{};
 #endif
 
 std::map<std::underlying_type_t<RuleType>, size_t> IterativeRewriter::getRuleCallTimes()
@@ -53,7 +53,7 @@ IterativeRewriter::IterativeRewriter(const std::vector<RulePtr> & rules_, std::s
                 // for rules targeted to arbitrary type, copy them into each specific type's index
 #define ADD_RULE_TO_INDEX(ITEM) rules[IQueryPlanStep::Type::ITEM].emplace_back(rule);
 
-            APPLY_STEP_TYPES(ADD_RULE_TO_INDEX)
+                APPLY_STEP_TYPES(ADD_RULE_TO_INDEX)
 
 #undef ADD_RULE_TO_INDEX
             }
@@ -61,7 +61,7 @@ IterativeRewriter::IterativeRewriter(const std::vector<RulePtr> & rules_, std::s
     }
 }
 
-void IterativeRewriter::rewrite(QueryPlan & plan, ContextMutablePtr ctx) const
+bool IterativeRewriter::rewrite(QueryPlan & plan, ContextMutablePtr ctx) const
 {
     IterativeRewriterContext context{
         .globalContext = ctx,
@@ -69,9 +69,12 @@ void IterativeRewriter::rewrite(QueryPlan & plan, ContextMutablePtr ctx) const
         .optimizer_timeout = ctx->getSettingsRef().iterative_optimizer_timeout,
         .excluded_rules_map = &ctx->getExcludedRulesMap(),
         .plan = plan};
+
+    bool rewriten = false;
     for (auto & item : plan.getCTEInfo().getCTEs())
-        explorePlan(item.second, context);
-    explorePlan(plan.getPlanNode(), context);
+        rewriten |= explorePlan(item.second, context);
+    rewriten |= explorePlan(plan.getPlanNode(), context);
+    return rewriten;
 }
 
 bool IterativeRewriter::explorePlan(PlanNodePtr & plan, IterativeRewriterContext & ctx) const // NOLINT(misc-no-recursion)
@@ -140,8 +143,9 @@ bool IterativeRewriter::exploreNode(PlanNodePtr & node, IterativeRewriterContext
                             GraphvizPrinter::printLogicalPlan(
                                 ctx.plan,
                                 ctx.globalContext,
-                                std::to_string(ctx.globalContext->getRuleId()) + "_Iterative_" + name() + "_" + std::to_string(ctx.rule_apply_count++) + "_" + rule->getName() + "_"
-                                    + std::to_string(node_id) + "_" + std::to_string(node->getId()));
+                                std::to_string(ctx.globalContext->getRuleId()) + "_Iterative_" + name() + "_"
+                                    + std::to_string(ctx.rule_apply_count++) + "_" + rule->getName() + "_" + std::to_string(node_id) + "_"
+                                    + std::to_string(node->getId()));
                         }
                     }
                 }

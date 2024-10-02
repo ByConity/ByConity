@@ -1,12 +1,12 @@
 Projection Est. 414 rows
 │     Expressions: ca_county:=ca_county_5, d_year:=d_year_1, store_q1_q2_increase:=`expr#divide(ss2.store_sales, ss1.store_sales)`, store_q2_q3_increase:=`expr#divide(ss3.store_sales, ss2.store_sales)`, web_q1_q2_increase:=`expr#divide(ws2.web_sales, ws1.web_sales)`, web_q2_q3_increase:=`expr#divide(ws3.web_sales, ws2.web_sales)`
-└─ Sorting Est. 414 rows
-   │     Order by: {ca_county_5 ASC NULLS LAST}
-   └─ Gather Exchange Est. 414 rows
-      └─ Sorting Est. 414 rows
-         │     Order by: {ca_county_5 ASC NULLS LAST}
-         └─ Projection Est. 414 rows
-            │     Expressions: [ca_county_5, d_year_1], expr#divide(ss2.store_sales, ss1.store_sales):=`expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, expr#divide(ss3.store_sales, ss2.store_sales):=`expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, expr#divide(ws2.web_sales, ws1.web_sales):=`expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, expr#divide(ws3.web_sales, ws2.web_sales):=`expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`
+└─ Projection Est. 414 rows
+   │     Expressions: [ca_county_5, d_year_1], expr#divide(ss2.store_sales, ss1.store_sales):=`expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, expr#divide(ss3.store_sales, ss2.store_sales):=`expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, expr#divide(ws2.web_sales, ws1.web_sales):=`expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, expr#divide(ws3.web_sales, ws2.web_sales):=`expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`
+   └─ Sorting Est. 414 rows
+      │     Order by: {ca_county_5 ASC NULLS LAST}
+      └─ Gather Exchange Est. 414 rows
+         └─ Sorting Est. 414 rows
+            │     Order by: {ca_county_5 ASC NULLS LAST}
             └─ Inner Join Est. 414 rows
                │     Condition: ca_county_5 == ca_county_1
                │     Filter: multiIf(`expr#sum(ws_ext_sales_price)_1` > 0, `expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, NULL) > multiIf(`expr#sum(ss_ext_sales_price)_1` > 0, `expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, NULL)
@@ -30,7 +30,7 @@ Projection Est. 414 rows
                │     │  │  └─ Projection Est. 1246 rows
                │     │  │     │     Expressions: [ca_county_3, expr#sum(ss_ext_sales_price)_3]
                │     │  │     └─ Filter Est. 1246 rows
-               │     │  │        │     Condition: (d_year_3 = 2000) AND (d_qoy_3 = 3)
+               │     │  │        │     Condition: (d_qoy_3 = 3) AND (d_year_3 = 2000)
                │     │  │        └─ Buffer Est. 4984 rows
                │     │  │           └─ CTERef[0] Est. 4984 rows
                │     │  └─ Repartition Exchange Est. 1655 rows
@@ -38,7 +38,7 @@ Projection Est. 414 rows
                │     │     └─ Projection Est. 1246 rows
                │     │        │     Expressions: [ca_county_2, expr#sum(ss_ext_sales_price)_2]
                │     │        └─ Filter Est. 1246 rows
-               │     │           │     Condition: (d_qoy_2 = 2) AND (d_year_2 = 2000)
+               │     │           │     Condition: (d_year_2 = 2000) AND (d_qoy_2 = 2)
                │     │           └─ Buffer Est. 4984 rows
                │     │              └─ CTERef[0] Est. 4984 rows
                │     └─ Inner Join Est. 1655 rows

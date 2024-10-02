@@ -19,14 +19,15 @@
 namespace DB
 {
 
-void OptimizeTrivialCount::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool OptimizeTrivialCount::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (context->getSettingsRef().max_parallel_replicas > 1 )
-        return;
+    if (context->getSettingsRef().max_parallel_replicas > 1)
+        return false;
     TrivialCountVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr TrivialCountVisitor::visitAggregatingNode(AggregatingNode & node, Void & v)
