@@ -413,7 +413,7 @@ MultipleDistinctAggregationToExpandAggregate::nonDistinctAggWithMask(const Aggre
     DataTypes data_types = agg_desc.function->getArgumentTypes();
     data_types.emplace_back(std::make_shared<DataTypeUInt8>());
 
-    Array parameters = agg_desc.function->getParameters();
+    Array parameters;
     AggregateFunctionProperties properties;
 
     String fun = "anyIf";
@@ -434,10 +434,9 @@ MultipleDistinctAggregationToExpandAggregate::nonDistinctAggWithMask(const Aggre
 
     agg_with_mask.mask_column = mask_column;
     agg_with_mask.function = new_agg_fun;
-    agg_with_mask.parameters = agg_desc.parameters;
+    agg_with_mask.parameters = parameters;
     agg_with_mask.column_name = agg_desc.column_name;
     agg_with_mask.argument_names = argument_names;
-    agg_with_mask.parameters = agg_desc.parameters;
     agg_with_mask.arguments = agg_desc.arguments;
 
     return agg_with_mask;
