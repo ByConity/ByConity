@@ -179,6 +179,116 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
     }, CleanTaskPriority::LOW, txn_record.txnID(), CnchTransactionStatus::Finished);
 }
 
+UInt64 TransactionCleaner::cleanUndoBuffersWithDispatch(
+    const TransactionRecord & txn_record,
+    const bool callee,
+    bool & clean_fs_lock_by_scan,
+    std::vector<String> & deleted_keys,
+    bool & dispatched)
+{
+    const auto & global_context = *getContext();
+    auto catalog = global_context.getCnchCatalog();
+    auto undo_buffer = catalog->getUndoBuffersWithKeys(txn_record.txnID());
+    size_t task_cleaned_size = 0;
+
+    /// Only need one RPC call for each servers.
+    std::set<String> visit;
+
+    cppkafka::TopicPartitionList undo_tpl;
+    String consumer_group;
+
+    for (const auto & [uuid, resource_kv] : undo_buffer)
+    {
+        auto [keys, resources] = resource_kv;
+        LOG_DEBUG(log, "Get undo buffer of the table {}\n", uuid);
+
+        StoragePtr table = catalog->tryGetTableByUUID(global_context, uuid, TxnTimestamp::maxTS(), true);
+        if (!table)
+            continue;
+
+        auto host_port = global_context.getCnchTopologyMaster()->getTargetServer(uuid, table->getServerVwName(), false);
+        auto rpc_address = host_port.getRPCAddress();
+
+
+        if (!isLocalServer(rpc_address, std::to_string(global_context.getRPCPort())))
+        {
+            /// Skip dispatch a rpc request if we are callee or called this server before.
+            if (callee || visit.contains(rpc_address))
+                continue;
+            LOG_DEBUG(log, "Forward clean task for txn {} to server {} table_uuid: {}", txn_record.txnID().toUInt64(), rpc_address, uuid);
+            global_context.getCnchServerClientPool().get(rpc_address)->cleanUndoBuffers(txn_record);
+            /// We have dispatched a rpc call.
+            dispatched = true;
+            /// Mark this server visited.
+            visit.insert(rpc_address);
+            /// A caller, after dispatched a call, can skip the rest of the procedure.
+            continue;
+        }
+
+        UndoResourceNames names = integrateResources(resources);
+
+        /// Collect extra parts to update commit time
+        /// We don't want to add it into integrateResources since when clean aborted
+        /// transaction, we need some extra logic rather than just delete it from catalog
+        S3AttachMetaAction::collectUndoResourcesForCommit(resources, names);
+        /// Clean detach parts for s3 committed
+        S3DetachMetaAction::commitByUndoBuffer(global_context, table, resources);
+        /// Clean s3 meta file
+        S3AttachMetaFileAction::commitByUndoBuffer(global_context, resources);
+
+        /// Release directory lock if any
+        if (!names.kvfs_lock_keys.empty())
+        {
+            catalog->clearFilesysLocks({names.kvfs_lock_keys.begin(), names.kvfs_lock_keys.end()}, std::nullopt);
+            clean_fs_lock_by_scan = false;
+        }
+
+        auto intermediate_parts = catalog->getDataPartsByNames(names.parts, table, 0);
+        auto undo_bitmaps = catalog->getDeleteBitmapByKeys(table, names.bitmaps);
+        auto staged_parts = catalog->getStagedDataPartsByNames(names.staged_parts, table, 0);
+
+        catalog->setCommitTime(
+            table, Catalog::CommitItems{intermediate_parts, undo_bitmaps, staged_parts}, txn_record.commitTs(), txn_record.txnID());
+
+        // clean vfs if necessary
+        for (const auto & resource : resources)
+        {
+            resource.commit(global_context);
+        }
+
+        // These keys need to be deleted on current host.
+        deleted_keys.insert(deleted_keys.end(), keys.begin(), keys.end());
+
+    }
+
+    return task_cleaned_size;
+}
+
+void TransactionCleaner::cleanUndoBuffers(const TransactionRecord & txn_record)
+{
+    scheduleTask(
+        [this, txn_record, &global_context = *getContext()] {
+            LOG_DEBUG(log, "Start to clean the committed transaction (as callee) {}\n", txn_record.txnID().toUInt64());
+            auto catalog = global_context.getCnchCatalog();
+            bool clean_fs_lock_by_scan = global_context.getConfigRef().getBool("cnch_txn_clean_fs_lock_by_scan", true);
+
+            std::vector<String> deleted_keys;
+            bool dispatched = false;
+            TxnCleanTask & task = getCleanTask(txn_record.txnID());
+            task.undo_size.fetch_add(cleanUndoBuffersWithDispatch(txn_record, true, clean_fs_lock_by_scan, deleted_keys, dispatched));
+
+            /// A callee will never dispatch calls.
+            assert(dispatched == false);
+
+            catalog->clearUndoBuffersByKeys(txn_record.txnID(), deleted_keys);
+
+            LOG_DEBUG(log, "Finish cleaning the committed transaction (as callee) {}\n", txn_record.txnID().toUInt64());
+        },
+        CleanTaskPriority::HIGH,
+        txn_record.txnID(),
+        CnchTransactionStatus::Finished);
+}
+
 void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
 {
     scheduleTask([this, txn_record, &global_context = *getContext()]() {

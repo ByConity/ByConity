@@ -166,6 +166,12 @@ public:
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
     void cleanTransaction(const TransactionRecord & txn_record);
+    /**
+     * @brief Clean undo buffers with the given txn (only) on target server.
+     *
+     * @param txn_record The transaction to which the Undo Buffer belongs.
+     */
+    void cleanUndoBuffers(const TransactionRecord & txn_record);
     std::set<UUID> getDeletingTablesInGlobalGC();
     bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
 

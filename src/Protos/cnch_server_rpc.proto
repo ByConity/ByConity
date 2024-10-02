@@ -285,6 +285,13 @@ message CleanTransactionReq {
 
 message CleanTransactionResp { optional string exception = 1; }
 
+/// Called by CleanTransaction.
+message CleanUndoBuffersReq {
+  required DataModelTransactionRecord txn_record = 1;
+};
+
+message CleanUndoBuffersResp { optional string exception = 1; };
+
 message GetServerStartTimeReq {}
 
 message GetServerStartTimeResp
