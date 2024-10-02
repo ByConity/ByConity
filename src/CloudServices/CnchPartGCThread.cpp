@@ -448,10 +448,10 @@ void CnchPartGCThread::runDataRemoveTask()
         if (!istorage->is_dropped)
         {
             auto & storage = checkAndGetCnchTable(istorage);
-            size_t removed_size = doPhaseTwoGC(istorage, storage);
+            cleaned_items_in_a_round += doPhaseTwoGC(istorage, storage);
 
             auto storage_settings = storage.getSettings();
-            if (removed_size)
+            if (!phase_two_start_key.empty() || cleaned_items_in_a_round)
             {
                 sleep_ms
                     = std::uniform_int_distribution<UInt64>(0, storage_settings->cleanup_delay_period_random_add * 1000)(rng);
@@ -462,10 +462,12 @@ void CnchPartGCThread::runDataRemoveTask()
             {
                 round_removing_no_data++;
                 phase_two_continuous_hits = 0;
-                sleep_ms
-                    = std::min(storage_settings->cleanup_delay_period * 1000 * std::pow(1.4, round_removing_no_data), 5 * 60 * 1000.0);
+                sleep_ms = storage_settings->cleanup_delay_period_upper_bound * 1000;
                 LOG_TRACE(log, "[p2] Removed no data for {} round(s). Delay schedule for {} ms.", round_removing_no_data, sleep_ms);
             }
+
+            if (phase_two_start_key.empty())
+                cleaned_items_in_a_round = 0;
         }
     }
     catch (...)
@@ -532,9 +534,13 @@ size_t CnchPartGCThread::doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMe
         return false;
     };
 
-    size_t pool_size = std::min(
-        static_cast<size_t>(2 * std::pow(2.0, phase_two_continuous_hits)),
-        static_cast<size_t>(storage.getSettings()->gc_remove_part_thread_pool_size));
+    /// pool_size should be at least 1.
+    size_t pool_size = std::max(
+        std::min(
+            /// Avoid the number get too large.
+            static_cast<size_t>(2 * std::pow(2.0, std::min(phase_two_continuous_hits, 15ul))),
+            static_cast<size_t>(storage.getSettings()->gc_remove_part_thread_pool_size)),
+        1ul);
     /// If batch_size <= 1, then round-robin may never move forward.
     size_t batch_size = std::max(static_cast<size_t>(storage.getSettings()->gc_remove_part_batch_size), static_cast<size_t>(2));
     LOG_TRACE(
