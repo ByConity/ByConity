@@ -785,8 +785,8 @@ void CnchServerServiceImpl::fetchPartitions(
 
                 session_context->setTemporaryTransaction(
                     TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
-                auto required_partitions
-                    = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
+                auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(
+                    session_context, storage, query_info, column_names, request->has_ignore_ttl() && request->ignore_ttl());
 
                 response->set_total_size(required_partitions.total_partition_number);
                 auto & mutable_partitions = *response->mutable_partitions();
