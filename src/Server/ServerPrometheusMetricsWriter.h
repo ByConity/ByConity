@@ -44,9 +44,19 @@ namespace ProfileEvents
     const extern Event ReadBufferFromHdfsRead;
     const extern Event ReadBufferFromHdfsReadBytes;
     const extern Event ReadBufferFromHdfsReadFailed;
+    const extern Event ReadBufferFromFileDescriptorRead;
+    const extern Event ReadBufferFromFileDescriptorReadFailed;
+    const extern Event ReadBufferFromFileDescriptorReadBytes;
+
     const extern Event WriteBufferFromHdfsWrite;
     const extern Event WriteBufferFromHdfsWriteBytes;
     const extern Event WriteBufferFromHdfsWriteFailed;
+    const extern Event WriteBufferFromFileDescriptorWrite;
+    const extern Event WriteBufferFromFileDescriptorWriteFailed;
+    const extern Event WriteBufferFromFileDescriptorWriteBytes;
+
+    const extern Event DiskReadElapsedMicroseconds;
+    const extern Event DiskWriteElapsedMicroseconds;
 
     /// SD
     const extern Event SDRequest;
@@ -84,6 +94,8 @@ namespace ProfileEvents
     const extern Event TsCacheUpdateElapsedMilliseconds;
     extern const Event TSORequest;
     extern const Event TSOError;
+
+    /// Disk cache
     extern const Event DiskCacheGetMetaMicroSeconds;
     extern const Event DiskCacheGetTotalOps;
     extern const Event DiskCacheSetTotalOps;
@@ -1128,15 +1140,23 @@ private:
         ///About HDFS
         ProfileEvents::ReadBufferFromHdfsRead,
         ProfileEvents::ReadBufferFromHdfsReadFailed,
+        ProfileEvents::ReadBufferFromHdfsReadBytes,
+        ProfileEvents::ReadBufferFromFileDescriptorRead,
+        ProfileEvents::ReadBufferFromFileDescriptorReadFailed,
+        ProfileEvents::ReadBufferFromFileDescriptorReadBytes,
         ProfileEvents::WriteBufferFromHdfsWrite,
         ProfileEvents::WriteBufferFromHdfsWriteFailed,
+        ProfileEvents::WriteBufferFromHdfsWriteBytes,
+        ProfileEvents::WriteBufferFromFileDescriptorWrite,
+        ProfileEvents::WriteBufferFromFileDescriptorWriteFailed,
+        ProfileEvents::WriteBufferFromFileDescriptorWriteBytes,
         // ProfileEvents::CnchReadRowsFromDiskCache,
         // ProfileEvents::CnchReadRowsFromRemote,
-        ProfileEvents::ReadBufferFromHdfsReadBytes,
         ProfileEvents::HDFSReadElapsedMicroseconds,
         // ProfileEvents::HDFSReadElapsedCpuMilliseconds,
-        ProfileEvents::WriteBufferFromHdfsWriteBytes,
         ProfileEvents::HDFSWriteElapsedMicroseconds,
+        ProfileEvents::DiskReadElapsedMicroseconds,
+        ProfileEvents::DiskWriteElapsedMicroseconds,
         ///About SD
         ProfileEvents::SDRequest,
         ProfileEvents::SDRequestFailed,
@@ -1172,6 +1192,7 @@ private:
         ProfileEvents::TsCacheUpdateElapsedMilliseconds,
         ProfileEvents::TSORequest,
         ProfileEvents::TSOError,
+        /// About disk cache
         ProfileEvents::DiskCacheGetMetaMicroSeconds,
         ProfileEvents::DiskCacheGetTotalOps,
         ProfileEvents::DiskCacheSetTotalOps,
