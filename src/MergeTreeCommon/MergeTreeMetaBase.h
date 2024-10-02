@@ -419,7 +419,7 @@ public:
     Strings getPlainMutationEntries();
 
     MergeTreeSettingsPtr getChangedSettings(const ASTPtr new_settings) const;
-    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+    void checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
 
     virtual bool supportsOptimizer() const override { return true; }
 

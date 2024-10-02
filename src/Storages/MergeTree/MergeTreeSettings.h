@@ -496,8 +496,15 @@ enum StealingCacheMode : UInt64
     M(Seconds, check_duplicate_key_interval, 3600, "Interval of check duplicate key", 0) \
     M(Bool, duplicate_auto_repair, false, "Whether to automatically repair duplicate keys. This process is on the worker, but it may affect other writes as the lock is held.", 0) \
     M(Seconds, duplicate_repair_interval, 600, "Interval of check duplicate key", 0) \
-    /**Whether block the actual dedup progress, Attention: set this value to true only in ci **/               \
-    M(Bool, disable_dedup_parts, false, "", 0) \
+    M(Bool, enable_unique_partial_update, false, "Enable partial update", 0) \
+    M(Bool, enable_unique_row_store, false, "TODO: support further to enhance point query perf", 0) \
+    M(UInt64, partial_update_query_parts_thread_size, 8, "The thread size of query data parts.", 0) \
+    M(UInt64, partial_update_query_columns_thread_size, 1, "The thread size of query columns for each part.", 0) \
+    M(Bool, partial_update_enable_merge_map, true, "Map row will just replace the original one when it's false. Otherwise, it will merge row.", 0) \
+    /** CI settings || test settings **/               \
+    M(Bool, disable_dedup_parts, false, "Whether block the actual dedup progress.", 0) \
+    M(Bool, partial_update_detail_logging, false, "Whether print some detailed troubleshooting information, only used for test scenarios.", 0) \
+    M(Bool, pick_first_worker_to_dedup, false, "Whether always pick the first worker(for dedup stage) in vw for stress test.", 0) \
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \

@@ -415,6 +415,44 @@ public:
     virtual void gather(ColumnGathererStream & gatherer_stream) = 0;
 
     /**
+     * Return a new column that replace values at `indexes` with values in this column and `rhs`.
+     * Indexes has beed divided into two parts. All indexes belong to `rhs` has been added with the size of this column.
+     * For example, the size of this column is 6, row (1,3,5) should be replaced by row (0,2,4) of this column, row (1, 3) should be replaced by row (1, 0) of rhs.
+     * In this case, indexes will be (1, 3, 5, 7, 9), rhs_indexes will be (0, 2, 4, 1, 0) and the size of rhs will be 2.
+     * For the first part, column[indexes[i]] is replaced by (*this)[rhs_indexes[i]].
+     * For the second part, column[indexes[i]] is replaced by rhs[rhs_indexes[i]].
+     * The same target index to be replaced will appear multiple times in first part and at most once in second part.
+     *
+     * When `is_default_filter` is not null, the i-th element is not replaced when is_default_filter[i] is 0. If it's null, all data is default value.
+     * When `filter` is not null, the i-th element will be discard when filter[i] is 0.
+     */
+    virtual Ptr replaceFrom(
+        const PaddedPODArray<UInt32> & indexes,
+        const IColumn & rhs,
+        const PaddedPODArray<UInt32> & rhs_indexes,
+        const Filter * is_default_filter,
+        const Filter * filter,
+        bool enable_merge_map) const;
+
+    /**
+     * Try to replace the current value of current_pos with two parts. The same target index to be replaced will appear multiple times in first part and at most once in second part.
+     * The rules are as follow:
+     * 1. If the value of current_pos is not default value, just keep the origin value and return false.
+     * 2. Find the first non-default value in the first part(if exists), use it as new value and return true.
+     * 3. Use the value in the second part(if exists) and return true.
+     */
+    virtual bool replaceRow(
+        const PaddedPODArray<UInt32> & indexes,
+        const IColumn & rhs,
+        const PaddedPODArray<UInt32> & rhs_indexes,
+        const Filter * is_default_filter,
+        size_t current_pos,
+        size_t & first_part_pos,
+        size_t & second_part_pos,
+        MutablePtr & res,
+        bool) const;
+
+    /**
      * Replace values with specific position with default value.
      */
     virtual Ptr replaceWithDefaultValue(Filter & set_to_null_rows);

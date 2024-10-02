@@ -451,7 +451,8 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         }
 
         /// Unique Key Index
-        if (data.getInMemoryMetadataPtr()->hasUniqueKey() && new_part->rows_count > 0 && !new_part->isPartial())
+        if (data.getInMemoryMetadataPtr()->hasUniqueKey() && new_part->rows_count > 0 &&
+            ((!new_part->isPartial() && new_part->partial_update_state == PartialUpdateState::NotPartialUpdate) || (new_part->isPartial() && new_part->partial_update_state == PartialUpdateState::RWProcessFinished)))
         {
             uki_checksum.file_offset = meta_info_offset + meta_info_size;
             String file_rel_path = local_part->getFullRelativePath() + "unique_key.idx";

@@ -23,6 +23,7 @@
 #include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <WorkerTasks/ManipulationType.h>
+#include <CloudServices/CnchPartsHelper.h>
 
 namespace DB::ErrorCodes
 {
@@ -337,12 +338,24 @@ void acquireLockAndFillDedupTask(StorageCnchMergeTree & cnch_table, DedupTask & 
     for (auto & visible_part: visible_parts)
     {
         dedup_task.visible_parts.emplace_back(std::const_pointer_cast<MergeTreeDataPartCNCH>(visible_part));
+        IMergeTreeDataPartPtr prev_part = visible_part->tryGetPreviousPart();
+        while (prev_part)
+        {
+            dedup_task.visible_parts.emplace_back(std::dynamic_pointer_cast<MergeTreeDataPartCNCH>(std::const_pointer_cast<IMergeTreeDataPart>(prev_part)));
+            prev_part = prev_part->tryGetPreviousPart();
+        }
         for (const auto & bitmap_model : visible_part->delete_bitmap_metas)
             dedup_task.delete_bitmaps_for_visible_parts.emplace_back(createFromModel(cnch_table, *bitmap_model));
     }
     for (auto & staged_part: staged_parts)
     {
         dedup_task.staged_parts.emplace_back(std::const_pointer_cast<MergeTreeDataPartCNCH>(staged_part));
+        IMergeTreeDataPartPtr prev_part = staged_part->tryGetPreviousPart();
+        while (prev_part)
+        {
+            dedup_task.staged_parts.emplace_back(std::dynamic_pointer_cast<MergeTreeDataPartCNCH>(std::const_pointer_cast<IMergeTreeDataPart>(prev_part)));
+            prev_part = prev_part->tryGetPreviousPart();
+        }
         for (const auto & bitmap_model: staged_part->delete_bitmap_metas)
             dedup_task.delete_bitmaps_for_staged_parts.emplace_back(createFromModel(cnch_table, *bitmap_model));
     }
@@ -352,24 +365,92 @@ void acquireLockAndFillDedupTask(StorageCnchMergeTree & cnch_table, DedupTask & 
 void executeDedupTask(StorageCnchMergeTree & cnch_table, DedupTask & dedup_task, const TxnTimestamp & txn_id, ContextPtr local_context)
 {
     /// Precondition: parts already be sorted.
-    cnch_table.getDeleteBitmapMetaForCnchParts(dedup_task.visible_parts, dedup_task.delete_bitmaps_for_visible_parts, /*force_found=*/true);
+    /// The parts chain needs to be rebuilt
+    MergeTreeDataPartsCNCHVector visible_parts_from_task;
+    visible_parts_from_task.reserve(dedup_task.visible_parts.size());
+    for (auto & part : dedup_task.visible_parts)
+        visible_parts_from_task.emplace_back(part);
+    visible_parts_from_task = CnchPartsHelper::calcVisibleParts(visible_parts_from_task, /*collect_on_chain=*/false);
+
+    MergeTreeDataPartsCNCHVector staged_parts_from_task;
+    staged_parts_from_task.reserve(dedup_task.staged_parts.size());
+    for (auto & part : dedup_task.staged_parts)
+        staged_parts_from_task.emplace_back(part);
+    staged_parts_from_task = CnchPartsHelper::calcVisibleParts(staged_parts_from_task, /*collect_on_chain=*/false);
+
+    cnch_table.getDeleteBitmapMetaForCnchParts(visible_parts_from_task, dedup_task.delete_bitmaps_for_visible_parts, /*force_found=*/true);
+    cnch_table.getDeleteBitmapMetaForCnchParts(staged_parts_from_task, dedup_task.delete_bitmaps_for_staged_parts, /*force_found=*/false);
     cnch_table.getDeleteBitmapMetaForCnchParts(dedup_task.new_parts, dedup_task.delete_bitmaps_for_new_parts, /*force_found=*/false);
-    cnch_table.getDeleteBitmapMetaForCnchParts(dedup_task.staged_parts, dedup_task.delete_bitmaps_for_staged_parts, /*force_found=*/false);
     MergeTreeDataDeduper deduper(cnch_table, local_context, dedup_task.dedup_mode);
     LocalDeleteBitmaps bitmaps_to_dump = deduper.dedupParts(
         txn_id,
-        {dedup_task.visible_parts.begin(), dedup_task.visible_parts.end()},
-        {dedup_task.staged_parts.begin(), dedup_task.staged_parts.end()},
+        {visible_parts_from_task.begin(), visible_parts_from_task.end()},
+        {staged_parts_from_task.begin(), staged_parts_from_task.end()},
         {dedup_task.new_parts.begin(), dedup_task.new_parts.end()});
 
     Stopwatch watch;
     CnchDataWriter cnch_writer(cnch_table, local_context, ManipulationType::Insert);
-    cnch_writer.publishStagedParts({dedup_task.staged_parts.begin(), dedup_task.staged_parts.end()}, bitmaps_to_dump);
+    cnch_writer.publishStagedParts({staged_parts_from_task.begin(), staged_parts_from_task.end()}, bitmaps_to_dump);
     LOG_DEBUG(
         cnch_table.getLogger(),
         "Publish staged parts take {} ms, txn id: {}, dedup mode: {}",
         watch.elapsedMilliseconds(),
         txn_id.toUInt64(),
         typeToString(dedup_task.dedup_mode));
+}
+
+String parseAndConvertColumnsIntoIndices(MergeTreeMetaBase & storage, const NamesAndTypesList & columns, const String & columns_name)
+{
+    if (columns_name.empty())
+        return "";
+    size_t columns_size = columns.size();
+    size_t last_pos = 0, pos = 0, size = columns_name.size();
+    std::ostringstream res;
+    bool first = true;
+    while (pos < size)
+    {
+        last_pos = pos;
+        /// Here we will not handle special characters like space and not support regex
+        while (pos < size && columns_name[pos] != ',')
+            pos++;
+        String item = columns_name.substr(last_pos, pos - last_pos);
+        if (!item.empty())
+        {
+            auto index = columns.getPosByName(item);
+            if (index == columns_size)
+                LOG_WARNING(storage.getLogger(), "Column `{}` doesn't exist, ignore.", item);
+            else
+            {
+                if (first)
+                    first = false;
+                else
+                    res << ',';
+                res << index;
+            }
+        }
+        pos++;
+    }
+    return res.str();
+}
+
+void simplifyFunctionColumns(MergeTreeMetaBase & storage, const StorageMetadataPtr & metadata_snapshot, Block & block)
+{
+    if (!metadata_snapshot->hasUniqueKey())
+        return;
+
+    size_t block_size = block.rows();
+    auto columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
+
+    /// Currently only handle _update_columns_ which is only used by partial update feature
+    if (block.has(StorageInMemoryMetadata::UPDATE_COLUMNS))
+    {
+        auto & update_columns_with_type_and_name = block.getByName(StorageInMemoryMetadata::UPDATE_COLUMNS);
+        auto & update_columns = update_columns_with_type_and_name.column;
+        auto simplify_update_columns = update_columns_with_type_and_name.type->createColumn();
+        for (size_t i = 0 ; i < block_size; ++i)
+            /// TODO: convert parallel & consider all same update columns case
+            simplify_update_columns->insert(parseAndConvertColumnsIntoIndices(storage, columns, update_columns->getDataAt(i).toString()));
+        update_columns = std::move(simplify_update_columns);
+    }
 }
 }

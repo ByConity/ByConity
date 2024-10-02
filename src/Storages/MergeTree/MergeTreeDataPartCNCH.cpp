@@ -230,6 +230,7 @@ void MergeTreeDataPartCNCH::fromLocalPart(const IMergeTreeDataPart & local_part)
     delete_bitmap = local_part.delete_bitmap;
     delete_flag = local_part.delete_flag;
     low_priority = local_part.low_priority;
+    partial_update_state = local_part.partial_update_state;
     projection_parts = local_part.getProjectionParts();
     projection_parts_names = local_part.getProjectionPartsNames();
     ttl_infos = local_part.ttl_infos;
@@ -442,7 +443,7 @@ ImmutableDeleteBitmapPtr MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUnique
 
         if (!delete_bitmap)
         {
-            bool has_row_exists_column = hasRowExistsImplicitColumn();
+            bool has_row_exists_column = (partial_update_state != PartialUpdateState::NotPartialUpdate) ? false: hasRowExistsImplicitColumn();
             Int64 row_exists_mutation = has_row_exists_column ? getMutationOfRowExists() : 0;
             Stopwatch watch;
             auto cache = storage.getContext()->getDeleteBitmapCache();
@@ -734,6 +735,70 @@ void MergeTreeDataPartCNCH::loadIndex()
     }
 }
 
+ColumnPtr MergeTreeDataPartCNCH::loadDeleteFlag() const
+{
+    /// Load delete flag from remote disk
+    auto checksums = getChecksums();
+    if (!checksums->has("_delete_flag_"))
+    {
+        auto res = ColumnUInt8::create();
+        res->insertMany(0, rows_count);
+        return res;
+    }
+
+    auto [file_offset, file_size] = getFileOffsetAndSize(*this, "_delete_flag_");
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size, "_delete_flag_");
+    LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
+    auto type = DataTypeFactory::instance().get("UInt8");
+    auto delete_flag_columns = type->createColumn();
+    type->getDefaultSerialization()->deserializeBinaryBulk(*delete_flag_columns, buf, rows_count, 0, false, nullptr);
+    return std::move(delete_flag_columns);
+}
+
+ColumnPtr MergeTreeDataPartCNCH::loadUpdateColumns() const
+{
+    /// Load update columns from remote disk
+    auto checksums = getChecksums();
+    if (!checksums->has("_update_columns_"))
+    {
+        auto res = ColumnString::create();
+        res->insertMany("", rows_count);
+        return res;
+    }
+
+    auto [file_offset, file_size] = getFileOffsetAndSize(*this, "_update_columns_");
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size, "_update_columns_");
+    LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
+    auto type = DataTypeFactory::instance().get("String");
+    auto mutable_update_columns = type->createColumn();
+    type->getDefaultSerialization()->deserializeBinaryBulk(*mutable_update_columns, buf, rows_count, 0, false, nullptr);
+    return std::move(mutable_update_columns);
+}
+
+ColumnPtr MergeTreeDataPartCNCH::loadDedupSort() const
+{
+    /// Load dedup sort from remote disk
+    auto checksums = getChecksums();
+    if (!checksums->has("_dedup_sort_"))
+    {
+        auto res = ColumnUInt64::create();
+        for (size_t i = 0; i < rows_count; i++)
+            res->insertValue(i);
+        return res;
+    }
+
+    auto [file_offset, file_size] = getFileOffsetAndSize(*this, "_dedup_sort_");
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size, "_dedup_sort_");
+    LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
+    auto type = DataTypeFactory::instance().get("UInt64");
+    auto dedup_sort_columns = type->createColumn();
+    type->getDefaultSerialization()->deserializeBinaryBulk(*dedup_sort_columns, buf, rows_count, 0, false, nullptr);
+    return std::move(dedup_sort_columns);
+}
+
 IMergeTreeDataPart::IndexPtr MergeTreeDataPartCNCH::loadIndexFromStorage() const
 {
     ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::LoadPrimaryIndexMicroseconds);
@@ -879,7 +944,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(
 
     // For projections, we collect the projections' checkums into the head part
     // If a projection/column is deleted, a partial part with the denoted deleted checksums for the projection/column will be generated
-    if (!parent_part && isPartial() && follow_part_chain)
+    if (!parent_part && isPartial() && partial_update_state != PartialUpdateState::RWProcessFinished && follow_part_chain)
     {
         /// merge with previous checksums with current checksums
         const auto & prev_part = getPreviousPart();
@@ -943,17 +1008,19 @@ UniqueKeyIndexPtr MergeTreeDataPartCNCH::loadUniqueKeyIndex()
 
 IndexFile::RemoteFileInfo MergeTreeDataPartCNCH::getRemoteFileInfo()
 {
-    /// Get base part who contains unique key index
-    IMergeTreeDataPartPtr base_part = getBasePart();
+    /// Get part who contains unique key index
+    IMergeTreeDataPartPtr uki_index_part = shared_from_this();
+    while (uki_index_part && uki_index_part->isPartial() && uki_index_part->partial_update_state != PartialUpdateState::RWProcessFinished)
+        uki_index_part = tryGetPreviousPart();
 
-    String data_path = base_part->getFullPath() + "/data";
+    String data_path = uki_index_part->getFullPath() + "/data";
     off_t offset = 0;
     size_t size = 0;
-    getUniqueKeyIndexFilePosAndSize(base_part, offset, size);
+    getUniqueKeyIndexFilePosAndSize(uki_index_part, offset, size);
 
     IndexFile::RemoteFileInfo file;
     file.disk = volume->getDisk();
-    file.rel_path = base_part->getFullRelativePath() + "/data";
+    file.rel_path = uki_index_part->getFullRelativePath() + "/data";
     file.start_offset = offset;
     file.size = size;
     file.cache_key = toString(storage.getStorageUUID()) + "_" + info.getBlockName();

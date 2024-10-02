@@ -102,6 +102,14 @@ private:
     void closeTempUniqueKeyIndex();
     void writeFinalUniqueKeyIndexFile(IndexFile::IndexFileInfo & file_info);
 
+    void finishDeleteFlagSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
+    void finishUpdateColumnsSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
+    void finishDedupSortSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
+
+    ColumnPtr delete_flag;
+    ColumnPtr update_columns;
+    ColumnPtr dedup_sort;
+
     size_t rows_count = 0;
 
     /// If the part contains only one block (normal insert case), we generate the key index file

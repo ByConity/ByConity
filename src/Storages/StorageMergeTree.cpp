@@ -313,7 +313,7 @@ void StorageMergeTree::alter(
 
     commands.apply(new_metadata, local_context);
 
-    checkColumnsValidity(new_metadata.columns);
+    checkMetadataValidity(new_metadata.columns);
 
     /// This alter can be performed at new_metadata level only
     if (commands.isSettingsAlter())

@@ -79,6 +79,7 @@ private:
     {
         bool enable_staging_area = false;
         bool enable_append_mode = false; /// If it's true, we'll not dedup with existing parts, but it will dedup in block self.
+        bool enable_partial_update = false; /// If it's true, the write will be considered as a partial update one
     };
     DedupParameters dedup_parameters;
 };

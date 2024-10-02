@@ -30,9 +30,9 @@
 namespace DB
 {
 
-/** 
+/**
  * Column, that stores a nested Array(Tuple(key, value)) column.
- * Column, runtime ColumnMap is implicited stored as two implicit columns(key, value) and one offset column to count # k-v pair per row. 
+ * Column, runtime ColumnMap is implicited stored as two implicit columns(key, value) and one offset column to count # k-v pair per row.
  */
 class ColumnMap final : public COWHelper<IColumn, ColumnMap>
 {
@@ -47,6 +47,15 @@ private:
 
     ColumnMap(const ColumnMap &) = default;
 
+    /**
+     * For the feature of partial update, the row of map column will merge the values.
+     * The caller must make sure that those Fields already in row is the newest one.
+     *
+     * @param row result of this row
+     * @param n the row to be merged
+     */
+    void mergeRowValue(RowValue & row, size_t n) const;
+    
 public:
     /** Create immutable column using immutable arguments. This arguments may be shared with other columns.
       * Use IColumn::mutate in order to make mutable column and mutate shared nested columns.
@@ -82,10 +91,27 @@ public:
 
     void tryToFlushZeroCopyBuffer() const override
     {
-        
+
         if (nested)
             nested->tryToFlushZeroCopyBuffer();
     }
+
+    /**
+     * Try to replace the current value of current_pos with merging the value and those of two parts. The same target index will appear multiple times in first part and at most once in second part.
+     * For example, there are three data of the same row(current_pos) from old to new:
+     * {'a': 1, 'b': 2}, {'b': 3, 'c': 4}, {'a': 7,'c': 5, 'd': 6}
+     * After merging data, result row is {'a': 7, 'b': 3, 'c': 5, 'd': 6}
+     */
+    bool replaceRow(
+        const PaddedPODArray<UInt32> & indexes,
+        const IColumn & rhs,
+        const PaddedPODArray<UInt32> & rhs_indexes,
+        const Filter * is_default_filter,
+        size_t current_pos,
+        size_t & first_part_pos,
+        size_t & second_part_pos,
+        MutableColumnPtr & res,
+        bool enable_merge_map) const override;
 
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
@@ -177,7 +203,7 @@ public:
     void fillByExpandedColumns(const DataTypeMap &, const std::map<String, std::pair<size_t, const IColumn *>> &, size_t row);
 
     /**
-     * Remove data of map keys from the column. 
+     * Remove data of map keys from the column.
      * Note: currently, this mothod is only used in the case that handling command of "clear map key" and the type of part is in-memory. In other on-disk part type(compact and wide), it can directly handle the files.
      */
     void removeKeys(const NameSet & keys);

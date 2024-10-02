@@ -1282,7 +1282,10 @@ MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimesta
     MergeTreeDataPartsCNCHVector res;
     res.reserve(parts.size());
     for (auto & part : parts)
-        res.emplace_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part->getBasePart()->toCNCHDataPart(*this)));
+    {
+        /// It is necessary to ensure that the partial update part must have a unique index.
+        res.emplace_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part->toCNCHDataPart(*this)));
+    }
 
     getDeleteBitmapMetaForCnchParts(res, cnch_parts_with_dbm.second, force_bitmap);
     return res;
@@ -1564,7 +1567,7 @@ PrunedPartitions StorageCnchMergeTree::getPrunedPartitions(
     return pruned_partitions;
 }
 
-void StorageCnchMergeTree::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
+void StorageCnchMergeTree::checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
 {
     MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
 
@@ -1572,7 +1575,10 @@ void StorageCnchMergeTree::checkColumnsValidity(const ColumnsDescription & colum
     if (current_settings->enable_compact_map_data == true)
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Compact map is not supported in CnchMergeTree.");
 
-    MergeTreeMetaBase::checkColumnsValidity(columns);
+    if (current_settings->enable_unique_partial_update && !current_settings->partition_level_unique_keys)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Not support table level unique keys when enable unique partial update.");
+
+    MergeTreeMetaBase::checkMetadataValidity(columns);
 }
 
 ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
@@ -2155,7 +2161,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     alter_act.setMutationCommands(mutation_commands);
 
     commands.apply(new_metadata, local_context);
-    checkColumnsValidity(new_metadata.columns, new_metadata.settings_changes);
+    checkMetadataValidity(new_metadata.columns, new_metadata.settings_changes);
 
     {
         String create_table_query = getCreateTableSql();

@@ -1791,10 +1791,13 @@ MergeTreeSettingsPtr MergeTreeMetaBase::getChangedSettings(const ASTPtr new_sett
     return changed_settings;
 }
 
-void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
+void MergeTreeMetaBase::checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
 {
     NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
     MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
+
+    if (current_settings->enable_unique_partial_update && !current_settings->partition_level_unique_keys)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Not support table level unique keys when enable unique partial update.");
 
     auto columns_physical = columns.getAllPhysical();
     for (auto & column: columns_physical)

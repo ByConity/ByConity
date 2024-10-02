@@ -47,7 +47,8 @@ public:
         CompressionCodecPtr default_codec_,
         bool blocks_are_granules_size = false,
         bool optimize_map_column_serialization_ = false,
-        const BitmapBuildInfo & bitmap_build_info_ = {});
+        const BitmapBuildInfo & bitmap_build_info_ = {},
+        bool enable_partial_update = false);
 
     Block getHeader() const override { return metadata_snapshot->getSampleBlock(); }
 
