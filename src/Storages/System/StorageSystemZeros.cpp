@@ -1,3 +1,4 @@
+#include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemZeros.h>
 
 #include <Processors/Sources/SourceWithProgress.h>
@@ -8,6 +9,11 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int LIMIT_EXCEEDED;
+}
 
 namespace
 {
@@ -26,8 +32,8 @@ using ZerosStatePtr = std::shared_ptr<ZerosState>;
 class ZerosSource : public SourceWithProgress
 {
 public:
-    ZerosSource(UInt64 block_size, UInt64 limit_, ZerosStatePtr state_)
-            : SourceWithProgress(createHeader()), limit(limit_), state(std::move(state_))
+    ZerosSource(UInt64 block_size, UInt64 limit_, ZerosStatePtr state_, std::optional<int> hard_limit_)
+            : SourceWithProgress(createHeader()), limit(limit_), state(std::move(state_)), hard_limit(hard_limit_)
     {
         column = createColumn(block_size);
     }
@@ -39,6 +45,14 @@ protected:
     {
         auto column_ptr = column;
         size_t column_size = column_ptr->size();
+
+        if (hard_limit)
+        {
+            if (*hard_limit <= 0)
+                throw Exception("LIMIT must be less than 10000000", ErrorCodes::LIMIT_EXCEEDED);
+
+            *hard_limit -= column->size();
+        }
 
         if (state)
         {
@@ -63,6 +77,7 @@ private:
     UInt64 limit;
     ZerosStatePtr state;
     ColumnPtr column;
+    std::optional<int> hard_limit;
 
     static Block createHeader()
     {
@@ -94,7 +109,7 @@ Pipe StorageSystemZeros::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo &,
-    ContextPtr /*context*/,
+    ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
     unsigned num_streams)
@@ -121,7 +136,12 @@ Pipe StorageSystemZeros::read(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        auto source = std::make_shared<ZerosSource>(max_block_size, limit ? *limit : 0, state);
+        std::optional<int> hard_limit;
+
+        if (context && context->is_tenant_user())
+            hard_limit = (10000000 + num_streams - 1) / num_streams;
+
+        auto source = std::make_shared<ZerosSource>(max_block_size, limit ? *limit : 0, state, hard_limit);
 
         if (limit && i == 0)
             source->addTotalRowsApprox(*limit);

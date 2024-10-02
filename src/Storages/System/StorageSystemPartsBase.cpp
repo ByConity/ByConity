@@ -80,27 +80,49 @@ StoragesInfoStream::StoragesInfoStream(const SelectQueryInfo & query_info, Conte
     const auto access = context->getAccess();
     const bool check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES);
 
+    const String & tenant_id = context->getTenantId();
+
     {
         Databases databases = DatabaseCatalog::instance().getDatabases(context);
 
         /// Add column 'database'.
         MutableColumnPtr database_column_mut = ColumnString::create();
+        MutableColumnPtr stripped_db_column_mut = ColumnString::create();
         for (const auto & database : databases)
         {
             /// Check if database can contain MergeTree tables,
             /// if not it's unnecessary to load all tables of database just to filter all of them.
-            if (database.second->canContainMergeTreeTables())
-                database_column_mut->insert(database.first);
+            if (!database.second->canContainMergeTreeTables())
+                continue;
+
+            if (!tenant_id.empty())
+            {
+                if (database.first.size() <= tenant_id.size() + 1)
+                    continue;
+                if (database.first[tenant_id.size()] != '.')
+                    continue;
+                if (!startsWith(database.first, tenant_id))
+                    continue;
+                stripped_db_column_mut->insert(database.first.substr(tenant_id.size() + 1));
+            }
+            else
+            {
+                stripped_db_column_mut->insert(database.first);
+            }
+
+            database_column_mut->insert(database.first);
         }
         block_to_filter.insert(ColumnWithTypeAndName(
-            std::move(database_column_mut), std::make_shared<DataTypeString>(), "database"));
+            std::move(stripped_db_column_mut), std::make_shared<DataTypeString>(), "database"));
+        block_to_filter.insert(ColumnWithTypeAndName(
+            std::move(database_column_mut), std::make_shared<DataTypeString>(), "database_nonstripped"));
 
         /// Filter block_to_filter with column 'database'.
         VirtualColumnUtils::filterBlockWithQuery(query_info.query, block_to_filter, context);
         rows = block_to_filter.rows();
 
         /// Block contains new columns, update database_column.
-        ColumnPtr database_column_for_filter = block_to_filter.getByName("database").column;
+        ColumnPtr database_column_for_filter = block_to_filter.getByName("database_nonstripped").column;
 
         if (rows)
         {
@@ -169,7 +191,7 @@ StoragesInfoStream::StoragesInfoStream(const SelectQueryInfo & query_info, Conte
         rows = block_to_filter.rows();
     }
 
-    database_column = block_to_filter.getByName("database").column;
+    database_column = block_to_filter.getByName("database_nonstripped").column;
     table_column = block_to_filter.getByName("table").column;
     active_column = block_to_filter.getByName("active").column;
 
