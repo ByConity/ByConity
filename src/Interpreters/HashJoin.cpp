@@ -914,20 +914,20 @@ public:
     bool need_filter = false;
     IColumn::Filter filter;
 
-    void reserve(bool need_replicate)
+    void reserve(bool /*need_replicate*/)
     {
-        if (!max_joined_block_rows)
-            return;
+        // if (!max_joined_block_rows)
+        //     return;
 
-        /// Do not allow big allocations when user set max_joined_block_rows to huge value
-        size_t reserve_size = std::min<size_t>(max_joined_block_rows, kMaxAllowedJoinedBlockRows);
+        // /// Do not allow big allocations when user set max_joined_block_rows to huge value
+        // size_t reserve_size = std::min<size_t>(max_joined_block_rows, kMaxAllowedJoinedBlockRows);
 
-        if (need_replicate)
-            /// Reserve 10% more space for columns, because some rows can be repeated
-            reserve_size = static_cast<size_t>(1.1 * reserve_size);
+        // if (need_replicate)
+        //     /// Reserve 10% more space for columns, because some rows can be repeated
+        //     reserve_size = static_cast<size_t>(1.1 * reserve_size);
 
-        for (auto & column : columns)
-            column->reserve(reserve_size);
+        // for (auto & column : columns)
+        //     column->reserve(reserve_size);
     }
 
     VectorWithAlloc<std::pair<UInt64, size_t>> right_anti_index;
