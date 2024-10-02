@@ -70,6 +70,7 @@
 #include <Databases/IDatabase.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Disks/DiskRestartProxy.h>
+#include <Storages/HDFS/HDFSConfigManager.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/StorageS3.h>
@@ -585,6 +586,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::RELEASE_MEMORY_LOCK:
             releaseMemoryLock(query, table_id, system_context);
+            break;
+        case Type::TRIGGER_HDFS_CONFIG_UPDATE:
+            triggerHDFSConfigUpdate();
             break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
@@ -1275,7 +1279,7 @@ void InterpreterSystemQuery::executeCheckpoint(const ASTSystemQuery & )
     auto local_context = getContext();
     if (auto server_type = local_context->getServerType(); server_type != ServerType::cnch_server)
         throw Exception("SYSTEM CHECKPOINT is only available on CNCH server", ErrorCodes::NOT_IMPLEMENTED);
-    
+
     auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
     CnchManifestCheckpointThread checkpoint_thread(local_context, storage->getStorageID());
     checkpoint_thread.executeManually();
@@ -1839,6 +1843,53 @@ void InterpreterSystemQuery::releaseMemoryLock(const ASTSystemQuery & query, con
             throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
         LockManager::instance().releaseLocksForTable(storage->getCnchStorageID(), *local_context);
+    }
+}
+
+void InterpreterSystemQuery::triggerHDFSConfigUpdate()
+{
+    HDFSConfigManager::instance().updateAll(true);
+}
+
+void InterpreterSystemQuery::dropMemoryDictCache(ASTSystemQuery & query)
+{
+    auto local_context = getContext();
+
+    if (query.table_uuid != UUIDHelpers::Nil)
+    {
+        auto uuid = UUIDHelpers::UUIDToString(query.table_uuid);
+        local_context->dropMemoryDictCache(uuid);
+        return;
+    }
+
+    auto table = DatabaseCatalog::instance().tryGetTable(StorageID{query.database, query.table}, getContext());
+
+    if (table)
+    {
+        auto uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
+        local_context->dropMemoryDictCache(uuid);
+    }
+}
+
+void InterpreterSystemQuery::dropMemoryDictCacheInCnchServer(ASTSystemQuery & query)
+{
+    auto local_context = getContext();
+
+    StoragePtr table;
+    if (query.table_uuid != UUIDHelpers::Nil)
+        table = DatabaseCatalog::instance().tryGetByUUID(query.table_uuid, local_context).second;
+    else
+    {
+        auto database = query.database;
+        if (database.empty())
+            database = local_context->getCurrentDatabase();
+
+        table = DatabaseCatalog::instance().tryGetTable(StorageID{database, query.table}, local_context);
+    }
+
+    if (auto * storage_cnch = dynamic_cast<StorageCnchMergeTree *>(table.get()))
+    {
+        storage_cnch->dropMemoryDictCache(local_context);
     }
 }
 

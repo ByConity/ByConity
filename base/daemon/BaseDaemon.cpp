@@ -769,13 +769,14 @@ static void setup_jni_classpath_env(const Poco::Util::AbstractConfiguration & co
 
 static void setup_jni_hdfs_env(const Poco::Util::AbstractConfiguration & config)
 {
-    const auto hdfs_conf_dir = config.getString("jni.hdfs_conf_dir", "");
+    auto hdfs_conf_dir = config.getString("jni.hdfs_conf_dir", "");
     if (hdfs_conf_dir.empty())
-        return;
-
-    if (!fs::exists(hdfs_conf_dir) || !fs::is_directory(hdfs_conf_dir))
     {
-        return;
+        const String dir = config.getString("hdfs_conf_manager.dir", "");
+        if (!dir.empty())
+            hdfs_conf_dir = dir;
+        if (hdfs_conf_dir.empty())
+            return;
     }
 
     char * exist_hdfs_conf = std::getenv("HADOOP_CONF_DIR");

@@ -48,6 +48,7 @@ public:
         IMetaClientPtr meta_client,
         std::shared_ptr<CnchHiveSettings> settings_);
 
+    NamesAndTypesList getVirtuals() const override;
     ASTPtr applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr, PlanNodeStatisticsPtr) const override;
 
     void setHiveMetaClient(const IMetaClientPtr & client);

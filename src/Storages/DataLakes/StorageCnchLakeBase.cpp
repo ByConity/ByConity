@@ -174,11 +174,6 @@ std::optional<String> StorageCnchLakeBase::getVirtualWarehouseName(VirtualWareho
     return {};
 }
 
-NamesAndTypesList StorageCnchLakeBase::getVirtuals() const
-{
-    return NamesAndTypesList{{"_path", std::make_shared<DataTypeString>()}, {"_file", std::make_shared<DataTypeString>()}};
-}
-
 void StorageCnchLakeBase::checkAlterIsPossible(const AlterCommands & commands, ContextPtr) const
 {
     for (const auto & command : commands)

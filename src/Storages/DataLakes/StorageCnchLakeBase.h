@@ -55,8 +55,6 @@ public:
 
     std::optional<String> getVirtualWarehouseName(VirtualWarehouseType vw_type) const override final;
 
-    NamesAndTypesList getVirtuals() const override final;
-
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override final;
     void alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &) override final;
 

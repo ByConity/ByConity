@@ -248,6 +248,11 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     return result;
 }
 
+NamesAndTypesList StorageCnchHive::getVirtuals() const
+{
+    return getHiveVirtuals();
+}
+
 ASTPtr StorageCnchHive::applyFilter(
     ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr local_context, PlanNodeStatisticsPtr storage_statistics) const
 {

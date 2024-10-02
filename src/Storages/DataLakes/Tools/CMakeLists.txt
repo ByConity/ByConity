@@ -4,10 +4,7 @@ set_source_files_properties(mock_jvm.c PROPERTIES COMPILE_FLAGS "-shared")
 
 add_library(mockjvm SHARED mock_jvm.c)
 
-target_compile_options(mockjvm PRIVATE
-    -Wno-reserved-id-macro
-    -Wno-c2x-extensions
-)
+target_compile_options(mockjvm PRIVATE -w)
 
 # output as libjvm.so
 set_target_properties(mockjvm PROPERTIES OUTPUT_NAME "jvm")
