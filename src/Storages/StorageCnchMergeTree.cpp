@@ -2280,6 +2280,8 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
 
         "insertion_label_ttl",
         "enable_local_disk_cache",
+        /// "enable_cloudfs", // table level setting for cloudfs has not been supported well
+        "enable_nexus_fs",
         "enable_preload_parts",
         "enable_parts_sync_preload",
         "parts_preload_level",

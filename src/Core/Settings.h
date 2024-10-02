@@ -1844,6 +1844,8 @@ enum PreloadLevelSettings : UInt64
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
+    M(Bool, enable_cloudfs, false, "Enable cloudfs", 0) \
+    M(Bool, enable_nexus_fs, false, "Enable read from NexusFS", 0) \
     M(Bool, enable_implicit_column_prewhere_push, false, "Enable push implicit column(map column) to prewhere", 0) \
     \
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \

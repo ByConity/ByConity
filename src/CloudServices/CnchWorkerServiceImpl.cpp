@@ -566,13 +566,14 @@ void CnchWorkerServiceImpl::preloadDataParts(
         LOG_TRACE(
             log,
             "Receiving preload parts task level = {}, sync = {}, current table preload setting: parts_preload_level = {}, "
-            "enable_preload_parts = {}, enable_parts_sync_preload = {}, enable_local_disk_cache = {}",
+            "enable_preload_parts = {}, enable_parts_sync_preload = {}, enable_local_disk_cache = {}, enable_nexus_fs = {}",
             request->preload_level(),
             request->sync(),
             cloud_merge_tree.getSettings()->parts_preload_level.value,
             cloud_merge_tree.getSettings()->enable_preload_parts.value,
             cloud_merge_tree.getSettings()->enable_parts_sync_preload,
-            cloud_merge_tree.getSettings()->enable_local_disk_cache);
+            cloud_merge_tree.getSettings()->enable_local_disk_cache,
+            cloud_merge_tree.getSettings()->enable_nexus_fs);
 
         if (!request->preload_level()
             || (!cloud_merge_tree.getSettings()->parts_preload_level && !cloud_merge_tree.getSettings()->enable_preload_parts))

@@ -1791,6 +1791,8 @@ bool IMergeTreeDataPart::enableDiskCache() const
 {
     if (!storage.getContext()->getSettingsRef().enable_local_disk_cache)
         return false;
+    if (storage.getSettings()->enable_nexus_fs)
+        return false; // use NexusFS instead
     if (disk_cache_mode == DiskCacheMode::AUTO)
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)

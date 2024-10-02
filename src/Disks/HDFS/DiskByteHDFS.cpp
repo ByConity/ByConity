@@ -19,6 +19,11 @@
 #include <Disks/DiskType.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Disks/IO/AsynchronousBoundedReadBuffer.h>
+#include <IO/HDFSRemoteFSReader.h>
+#include <IO/PFRAWSReadBufferFromFS.h>
+#include <IO/ReadBufferFromFileWithNexusFS.h>
+#include <IO/Scheduler/IOScheduler.h>
+#include <IO/WSReadBufferFromFS.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <IO/Scheduler/IOScheduler.h>
@@ -224,6 +229,12 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
 
         impl = std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params, settings,
                 nullptr, 0, /* use_external_buffer */ settings.remote_fs_prefetch);
+        if (settings.enable_nexus_fs)
+        {
+            auto nexus_fs = Context::getGlobalContextInstance()->getNexusFS();
+            if (nexus_fs)
+                impl = std::make_unique<ReadBufferFromFileWithNexusFS>(nexus_fs->getSegmentSize(), std::move(impl), *nexus_fs);
+        }
 
         if (settings.remote_fs_prefetch)
         {

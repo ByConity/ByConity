@@ -122,6 +122,7 @@
 #include <Storages/DiskCache/KeyIndexFileCache.h>
 #include <Storages/DiskCache/NvmCacheConfig.h>
 #include <Storages/DiskCache/Types.h>
+#include <Storages/NexusFS/NexusFS.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/Hive/CnchHiveSettings.h>
@@ -523,6 +524,8 @@ struct ContextSharedPart
     mutable std::vector<std::unique_ptr<IOUringReader>> io_uring_reader;
 #endif
 
+    mutable NexusFSPtr nexus_fs;
+
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
     {
@@ -601,6 +604,9 @@ struct ContextSharedPart
 
         if (nvm_cache)
             nvm_cache->shutDown();
+
+        if (nexus_fs)
+            nexus_fs->shutDown();
 
         if (queue_manager)
             queue_manager->shutdown();
@@ -838,6 +844,8 @@ ReadSettings Context::getReadSettings() const
     res.remote_read_log = settings.enable_remote_read_log ? getRemoteReadLog().get() : nullptr;
     res.enable_io_scheduler = settings.enable_io_scheduler;
     res.enable_io_pfra = settings.enable_io_pfra;
+    res.enable_cloudfs = settings.enable_cloudfs;
+    res.enable_nexus_fs = settings.enable_nexus_fs;
     res.local_fs_buffer_size
         = settings.max_read_buffer_size_local_fs ? settings.max_read_buffer_size_local_fs : settings.max_read_buffer_size;
     res.remote_fs_buffer_size
@@ -6131,4 +6139,47 @@ IOUringReader & Context::getIOUringReader() const
     return *reader;
 }
 #endif
+
+void Context::initNexusFS(const Poco::Util::AbstractConfiguration & config)
+{
+    auto lock = getLock(); // checked
+
+    String config_name(NexusFSConfig::CONFIG_NAME);
+    bool enable = config.getBool(config_name + ".enable", false);
+    String policy_name = config.getString(config_name + ".policy", "default");
+    String volume_name = config.getString(config_name + ".volume", "local");
+
+    if (!enable)
+    {
+        shared->nexus_fs.reset();
+        return;
+    }
+    if (shared->nexus_fs)
+        throw Exception("NexusFS has been already initialized.", ErrorCodes::LOGICAL_ERROR);
+
+    NexusFSConfig conf;
+    auto disks = getStoragePolicy(policy_name)->getVolumeByName(volume_name, true)->getDisks();
+    for  (auto & disk : disks)
+    {
+        chassert(disk->getType() == DiskType::Type::Local);
+        conf.file_paths.push_back(std::filesystem::path(disk->getPath()) / NexusFSConfig::FILE_NAME);
+    }
+    conf.loadFromConfig(config);
+
+    shared->nexus_fs = std::make_unique<NexusFS>(std::move(conf));
+
+    if (shared->nexus_fs)
+    {
+        if (!shared->nexus_fs->recover())
+            LOG_WARNING(&Poco::Logger::get("NexusFS"), "No recovery data found. Setup with clean cache.");
+    }
+    else
+        LOG_ERROR(shared->log, "Fail to initialize NexusFS.");
+}
+
+NexusFSPtr Context::getNexusFS() const
+{
+    return shared->nexus_fs;
+}
+
 }

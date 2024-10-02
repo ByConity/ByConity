@@ -55,3 +55,30 @@ message BloomFilterPersistentData {
     required uint32 fragment_size = 4;
     repeated uint64 seeds = 5;
 }
+
+message NexusFSIndexEntry {
+    required uint32 key = 1;
+    required uint32 address_rid = 2;
+    required uint32 address_offset = 3;
+    optional uint32 size = 4;
+    optional uint32 total_hits = 5;
+    optional uint32 current_hits = 6;
+}
+
+message NexusFSIndexBucket {
+    required uint32 bucket_id = 1;
+    repeated NexusFSIndexEntry entries = 2;
+}
+
+message NexusFSConfig {
+    required uint64 version = 1;
+    required uint64 cache_size = 2;
+    required uint64 metadata_size = 3;
+    required uint32 alloc_align_size = 4;
+    required uint32 region_size = 5;
+    required uint32 segment_size = 6;
+    optional uint64 hole_count = 7;
+    optional uint64 hole_size_total = 8;
+    optional bool reinsertion_policy_enabled = 9;
+    optional uint64 used_size_bytes = 10;
+}

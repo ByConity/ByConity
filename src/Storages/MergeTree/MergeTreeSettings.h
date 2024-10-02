@@ -90,7 +90,8 @@ enum StealingCacheMode : UInt64
       "Whether to write blocks in Native format to write-ahead-log before creation in-memory part", \
       0) \
     M(UInt64, write_ahead_log_max_bytes, 1024 * 1024 * 1024, "Rotate WAL, if it exceeds that amount of bytes", 0) \
-\
+    M(Bool, reorganize_marks_data_layout, false, "Whether to use the data layout of concentrated marks for cnch part", 0) \
+    \
     /** Merge settings. */ \
     M(UInt64, merge_max_block_size, DEFAULT_MERGE_BLOCK_SIZE, "How many rows in blocks should be formed for merge operations, By default has the same value as `index_granularity`.", 0) \
     M(UInt64, merge_max_block_size_bytes, 10 * 1024 * 1024, "How many bytes in blocks should be formed for merge operations. By default has the same value as `index_granularity_bytes`.", 0) \
@@ -514,7 +515,9 @@ enum StealingCacheMode : UInt64
     /** Obsolete settings. Kept for backward compatibility only. */ \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
-    /*keep enable_preload_parts for compitable*/ \
+    M(Bool, enable_cloudfs, false, "CROSS feature for table level setting", 0) \
+    M(Bool, enable_nexus_fs, false, "Enable local NexusFS", 0) \
+    /*keep enable_preload_parts for compitable*/\
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     M(UInt64, parts_preload_level, 0, "0=close preload;1=preload meta;2=preload data;3=preload meta&data", 0) \
     M(Bool, enable_parts_sync_preload, 0, "Enable sync preload parts", 0) \

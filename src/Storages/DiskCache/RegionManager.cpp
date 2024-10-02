@@ -546,6 +546,13 @@ void RegionManager::write(RelAddress addr, Buffer buf)
     region.writeToBuffer(addr.offset(), buf.view());
 }
 
+void RegionManager::write(RelAddress addr, BufferView buf)
+{
+    auto rid = addr.rid();
+    auto & region = getRegion(rid);
+    region.writeToBuffer(addr.offset(), buf);
+}
+
 Buffer RegionManager::read(const RegionDescriptor & desc, RelAddress addr, size_t size) const
 {
     auto rid = addr.rid();
@@ -561,6 +568,26 @@ Buffer RegionManager::read(const RegionDescriptor & desc, RelAddress addr, size_
     chassert(isValidIORange(addr.offset(), size));
 
     return device.read(physicalOffset(addr), size);
+}
+
+size_t RegionManager::read(const RegionDescriptor & desc, RelAddress addr, size_t size, char *to) const
+{
+    auto rid = addr.rid();
+    const auto & region = getRegion(rid);
+    chassert(addr.offset() + size <= region.getLastEntryEndOffset());
+    if (!desc.isPhysReadMode())
+    {
+        auto buffer = Buffer(size);
+        chassert(region.hasBuffer());
+        region.readFromBuffer(addr.offset(), size, to);
+        return size;
+    }
+    chassert(isValidIORange(addr.offset(), size));
+
+    if (device.read(physicalOffset(addr), size, to))
+        return size;
+
+    return 0;
 }
 
 void RegionManager::drain()

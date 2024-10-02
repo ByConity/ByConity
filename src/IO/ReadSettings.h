@@ -104,6 +104,8 @@ struct ReadSettings
 
     bool enable_io_scheduler = false;
     bool enable_io_pfra = false;
+    bool enable_cloudfs = true;
+    bool enable_nexus_fs = true;
 
     size_t estimated_size = 0;
 

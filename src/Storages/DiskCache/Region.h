@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include <folly/fibers/TimedMutex.h>
 
@@ -117,6 +118,7 @@ public:
 
     // Reads from attached buffer from offset.
     void readFromBuffer(UInt32 from_offset, MutableBufferView out_buf) const;
+    void readFromBuffer(UInt32 from_offset, size_t size, char *to) const;
 
     // Attach buffer to the region.
     void attachBuffer(std::unique_ptr<Buffer> && buf)
@@ -181,6 +183,24 @@ public:
     // Returns the region id.
     RegionId id() const { return region_id; }
 
+    void addKey(UInt64 key)
+    {
+        std::lock_guard g{lock};
+        keys.push_back(key);
+    }
+
+    void resetKeys()
+    {
+        std::lock_guard g{lock};
+        keys.clear();
+    }
+
+    void getKeys(std::vector<UInt64> &keys_)
+    {
+        std::lock_guard g{lock};
+        keys_ = keys;
+    }
+
 private:
     UInt32 activeOpenLocked() const;
 
@@ -211,6 +231,8 @@ private:
     UInt32 last_entry_end_offset{0};
     UInt32 num_items{0};
     std::unique_ptr<Buffer> buffer{nullptr};
+
+    std::vector<UInt64> keys;
 
     mutable TimedMutex lock{TimedMutex::Options(false)};
     mutable ConditionVariable cond;
