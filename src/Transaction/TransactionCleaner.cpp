@@ -256,8 +256,8 @@ void TransactionCleaner::finalize()
         shutdown = true;
     }
 
-    server_thread_pool->wait();
-    dm_thread_pool->wait();
+    high_priority_pool->wait();
+    low_priority_pool->wait();
 }
 
 void TransactionCleaner::removeTask(const TxnTimestamp & txn_id)

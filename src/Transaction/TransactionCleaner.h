@@ -23,6 +23,7 @@
 #include <Common/ThreadPool.h>
 
 #include <atomic>
+#include <limits>
 #include <mutex>
 
 namespace DB
@@ -66,8 +67,8 @@ public:
     TransactionCleaner(
         const ContextPtr & global_context, size_t server_max_threads, size_t server_queue_size, size_t dm_max_threads, size_t dm_queue_size)
         : WithContext(global_context)
-        , server_thread_pool(std::make_unique<ThreadPool>(server_max_threads, server_max_threads, server_queue_size))
-        , dm_thread_pool(std::make_unique<ThreadPool>(dm_max_threads, dm_max_threads, dm_queue_size))
+        , high_priority_pool(std::make_unique<ThreadPool>(server_max_threads, server_max_threads, server_queue_size))
+        , low_priority_pool(std::make_unique<ThreadPool>(dm_max_threads, dm_max_threads, dm_queue_size))
     {
     }
 
@@ -88,9 +89,9 @@ public:
     void finalize();
 
 private:
-    // brpc client default timeout 3 seconds.
-    // Wait for maximum 2 seconds to enqueue tasks.
-    static constexpr uint64_t wait_for_schedule = 2000000; // in us = 2s
+    /// brpc client default timeout 3 seconds.
+    /// NOTE: don't wait a long time, it will block ServerService's rpc pool.
+    static constexpr uint64_t DEFAULT_WAIT_US = 20000; // 20 ms
 
     template <typename... Args>
     bool tryRegisterTask(const TxnTimestamp & txn_id, Args &&... args)
@@ -104,6 +105,12 @@ private:
 
     void removeTask(const TxnTimestamp & txn_id);
 
+    /// Older txn gets higher priority.
+    static inline int getPriority(TxnTimestamp txn_id)
+    {
+        return std::numeric_limits<int>::max() - static_cast<int>(txn_id.toUInt64() >> 32);
+    }
+
     template <typename F, typename... Args>
     void scheduleTask(F && f, CleanTaskPriority priority, TxnTimestamp txn_id, Args &&... args)
     {
@@ -114,7 +121,7 @@ private:
             return;
         }
 
-        auto & thread_pool = (priority == CleanTaskPriority::HIGH) ? *server_thread_pool : *dm_thread_pool;
+        auto & thread_pool = (priority == CleanTaskPriority::HIGH) ? *high_priority_pool : *low_priority_pool;
 
         bool res = thread_pool.trySchedule(
             [this, f = std::forward<F>(f), txn_id] {
@@ -127,8 +134,7 @@ private:
                     tryLogCurrentException(log, __PRETTY_FUNCTION__);
                 }
                 removeTask(txn_id);
-            },
-            wait_for_schedule);
+            }, /*priority*/getPriority(txn_id), /*wait_microseconds*/DEFAULT_WAIT_US);
 
         if (!res)
         {
@@ -140,8 +146,8 @@ private:
     }
 
 private:
-    std::unique_ptr<ThreadPool> server_thread_pool;
-    std::unique_ptr<ThreadPool> dm_thread_pool;
+    std::unique_ptr<ThreadPool> high_priority_pool;
+    std::unique_ptr<ThreadPool> low_priority_pool;
 
     mutable std::mutex mutex;
     TxnCleanTasksMap clean_tasks;
