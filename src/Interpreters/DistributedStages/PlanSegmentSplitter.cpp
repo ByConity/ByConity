@@ -25,8 +25,6 @@
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/ValuesStep.h>
-#include <Storages/Hive/StorageCnchHive.h>
-#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageMemory.h>

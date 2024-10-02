@@ -41,7 +41,7 @@
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/MultiJoinStep.h>
 #include <QueryPlan/PlanPattern.h>
-#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCnchMergeTree.h>
 
@@ -312,10 +312,10 @@ std::optional<size_t> WorkerSizeFinder::visitTableScanNode(TableScanNode & node,
 {
     const auto storage = node.getStep()->getStorage();
     const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-    const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
+    const auto * cnch_lake = dynamic_cast<StorageCnchLakeBase *>(storage.get());
     const auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get());
 
-    if (cnch_table || cnch_hive || cnch_file)
+    if (cnch_table || cnch_lake || cnch_file)
     {
         const auto & worker_group = context.getCurrentWorkerGroup();
         return worker_group->getShardsInfo().size();

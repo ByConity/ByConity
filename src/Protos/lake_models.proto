@@ -1,7 +1,7 @@
 syntax = "proto2";
 package DB.Protos;
 
-message HudiProperties {
+message LakeProperties {
   message KeyValue {
     optional string key = 1;
     optional string value = 2;
@@ -18,8 +18,8 @@ message ProtoHiveFile
     optional string storage = 4;
     optional string partition_id = 5;
 
-    /// hudi
-    optional HudiProperties properties = 6;
+    /// hudi & paimon
+    optional LakeProperties properties = 6;
     optional bytes input_split_bytes = 7;
 }
 
@@ -28,4 +28,3 @@ message ProtoHiveFiles
     repeated ProtoHiveFile files = 1;
     optional string sd_url = 2;
 }
-

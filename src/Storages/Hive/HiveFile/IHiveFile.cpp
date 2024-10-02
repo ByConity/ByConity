@@ -11,13 +11,14 @@
 #include "Storages/DiskCache/IDiskCache.h"
 #include "Storages/DataLakes/HiveFile/HiveHudiFile.h"
 #include "Storages/DataLakes/HiveFile/HiveInputSplitFile.h"
+#include "Storages/DataLakes/HiveFile/HivePaimonFile.h"
 #include "Storages/Hive/DirectoryLister.h"
 #include "Storages/Hive/HiveFile/HiveORCFile.h"
 #include "Storages/Hive/HiveFile/HiveParquetFile.h"
 #include "Storages/Hive/HivePartition.h"
 #include "Storages/StorageInMemoryMetadata.h"
 #include "Processors/Formats/IInputFormat.h"
-#include "Protos/hive_models.pb.h"
+#include "Protos/lake_models.pb.h"
 
 namespace DB
 {
@@ -34,6 +35,7 @@ IHiveFile::FileFormat IHiveFile::fromFormatName(const String & format_name)
         {"ORC", FileFormat::ORC},
         {"HUDI", FileFormat::HUDI},
         {"InputSplit", FileFormat::InputSplit},
+        {"Paimon", FileFormat::Paimon},
     };
 
     if (auto it = format_map.find(format_name); it != format_map.end())
@@ -44,7 +46,7 @@ IHiveFile::FileFormat IHiveFile::fromFormatName(const String & format_name)
 
 String IHiveFile::toString(IHiveFile::FileFormat format)
 {
-    constexpr static std::array format_names = {"Parquet", "ORC", "HUDI", "InputSplit"};
+    constexpr static std::array format_names = {"Parquet", "ORC", "HUDI", "InputSplit", "Paimon"};
     return format_names[static_cast<int>(format)];
 }
 
@@ -73,6 +75,10 @@ HiveFilePtr IHiveFile::create(
     else if (format == IHiveFile::FileFormat::InputSplit)
     {
         file = std::make_shared<HiveInputSplitFile>();
+    }
+    else if (format == IHiveFile::FileFormat::Paimon)
+    {
+        file = std::make_shared<HivePaimonFile>();
     }
 #endif
     else
@@ -184,6 +190,7 @@ HiveFiles deserialize(
 
     for (const auto & file_proto : proto.files())
     {
+        const auto format = static_cast<IHiveFile::FileFormat>(file_proto.format());
         /// TODO: {caoliu} hack here, this can be bad
         if (!disk && !proto.sd_url().empty())
             disk = HiveUtil::getDiskFromURI(proto.sd_url(), context, settings);
@@ -191,7 +198,7 @@ HiveFiles deserialize(
         HivePartitionPtr partition;
         if (auto it = partition_map.find(file_proto.partition_id()); it != partition_map.end())
             partition = it->second;
-        else if (metadata->hasPartitionKey())
+        else if (metadata->hasPartitionKey() && format != IHiveFile::FileFormat::Paimon)
         {
             partition = std::make_shared<HivePartition>();
             partition->load(file_proto.partition_id(), metadata->getPartitionKey());
@@ -199,7 +206,7 @@ HiveFiles deserialize(
         }
 
         auto hive_file = IHiveFile::create(
-            static_cast<IHiveFile::FileFormat>(file_proto.format()),
+            format,
             file_proto.file_path(),
             file_proto.file_size(),
             disk,

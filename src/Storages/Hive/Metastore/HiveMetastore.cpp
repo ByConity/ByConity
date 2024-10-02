@@ -66,11 +66,24 @@ void HiveMetastoreClient::tryCallHiveClient(std::function<void(ThriftHiveMetasto
         throw Exception(ErrorCodes::NO_HIVEMETASTORE, "Hive Metastore expired because {}", err_msg);
 }
 
+void HiveMetastoreClient::getConfigValue(std::string & value, const std::string & name, const std::string & defaultValue)
+{
+    tryCallHiveClient([&](auto & client) { client->get_config_value(value, name, defaultValue); });
+}
+
 Strings HiveMetastoreClient::getAllDatabases()
 {
     Strings databases;
     tryCallHiveClient([&](auto & client) { client->get_all_databases(databases); });
     return databases;
+}
+
+std::shared_ptr<ApacheHive::Database> HiveMetastoreClient::getDatabase(const String & db_name)
+{
+    auto database = std::make_shared<Apache::Hadoop::Hive::Database>();
+    auto client_call = [&](auto & client) { client->get_database(*database, db_name); };
+    tryCallHiveClient(client_call);
+    return database;
 }
 
 Strings HiveMetastoreClient::getAllTables(const String & db_name)

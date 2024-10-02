@@ -38,6 +38,7 @@ struct Settings;
     M(String, cnch_vw_default, "vw_default", "read vw", 0) \
     M(String, cnch_vw_read, "vw_read", "deprecated read settings, use cnch_vw_default instead", 0) \
     M(String, cnch_vw_write, "vw_write", "Not used for hive", 0) \
+    M(Bool, enable_schema_covert_fault_tolerance, true, "Whether simply ignore error when column type of lake talbe is not supported by native.", 0) \
     /** Parquet skip useless row group */ \
     M(Bool, enable_skip_row_group, false, "", 0) \
     /** allocate part policy**/ \
@@ -76,5 +77,7 @@ public:
     /// NOTE: will rewrite the AST to add immutable settings.
     void loadFromQuery(ASTStorage & storage_def);
 };
+
+using CnchHiveSettingsPtr = std::shared_ptr<CnchHiveSettings>;
 
 }

@@ -5,8 +5,8 @@ set -x
 PROJECT="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P  )"
 
 export PATH=`echo $PATH | sed -e 's/:\/opt\/tiger\/typhoon-blade//'`
-ENABLE_JAVA_EXTENSIONS="${ENABLE_JAVA_EXTENSIONS:-0}"
-JAVA_EXTENSIONS_VERSION="${JAVA_EXTENSIONS_VERSION:-1.0.0.3}"
+ENABLE_JAVA_EXTENSIONS="${ENABLE_JAVA_EXTENSIONS:-1}"
+JAVA_EXTENSIONS_VERSION="${JAVA_EXTENSIONS_VERSION:-1.0.0.34}"
 
 rm -rf output/
 mkdir -p output/bin
@@ -39,6 +39,19 @@ else
     export CC=/usr/bin/clang
     export CXX=/usr/bin/clang++
     cmake ../ ${CMAKE_FLAGS} && ninja
+fi
+
+if [[ $ENABLE_JAVA_EXTENSIONS -eq 1 ]]; then
+		mkdir -p ../output/lib/jar
+
+		JAR_URL="https://maven.byted.org/repository/releases/org/byconity/las/${JAVA_EXTENSIONS_VERSION}/las-${JAVA_EXTENSIONS_VERSION}-jar-with-dependencies.jar"
+		curl -o ../output/lib/jar/las-reader-jar-with-dependencies.jar $JAR_URL
+
+        JAR_URL="https://maven.byted.org/repository/releases/org/byconity/hudi/${JAVA_EXTENSIONS_VERSION}/hudi-${JAVA_EXTENSIONS_VERSION}-jar-with-dependencies.jar"
+		curl -o ../output/lib/jar/hudi-reader-jar-with-dependencies.jar $JAR_URL
+
+        JAR_URL="https://maven.byted.org/repository/releases/org/byconity/paimon/${JAVA_EXTENSIONS_VERSION}/paimon-${JAVA_EXTENSIONS_VERSION}-jar-with-dependencies.jar"
+		curl -o ../output/lib/jar/paimon-reader-jar-with-dependencies.jar $JAR_URL
 fi
 
 # create the `usr/bin` directory to keep it same with old version

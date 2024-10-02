@@ -29,6 +29,7 @@ public:
         ORC,
         HUDI,
         InputSplit,
+        Paimon,
     };
     static FileFormat fromHdfsInputFormatClass(const String & class_name);
     static FileFormat fromFormatName(const String & format_name);

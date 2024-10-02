@@ -3,12 +3,13 @@
 
 #include "Storages/DataLakes/HiveFile/JNIArrowSource.h"
 #include "jni/JNIArrowReader.h"
-#include <Protos/hive_models.pb.h>
+#include <Protos/lake_models.pb.h>
 #include <hudi.pb.h>
 
 namespace DB
 {
 
+static constexpr auto LAS_CLASS_FACTORY_CLASS = "org/byconity/las/LasClassFactory";
 static constexpr auto INPUT_SPLIT_ARROW_READER_CLASS = "org/byconity/las/reader/LasInputSplitArrowReaderBuilder";
 
 HiveInputSplitFile::HiveInputSplitFile(
@@ -71,7 +72,7 @@ SourcePtr HiveInputSplitFile::getReader(const Block & block, const std::shared_p
         auto * input_split_proto = params.mutable_input_split();
         input_split_proto->set_input_split_bytes(input_split_bytes);
     }
-    auto reader = std::make_unique<JNIArrowReader>(INPUT_SPLIT_ARROW_READER_CLASS, params.SerializeAsString());
+    auto reader = std::make_unique<JNIArrowReader>(LAS_CLASS_FACTORY_CLASS, INPUT_SPLIT_ARROW_READER_CLASS, params.SerializeAsString());
     return std::make_shared<JNIArrowSource>(block, std::move(reader));
 }
 

@@ -12,7 +12,7 @@
 #include <Storages/MaterializedView/ApplyPartitionFilterVisitor.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Storages/SelectQueryDescription.h>
-#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <Storages/Hive/HivePartition.h>
 #include <Common/Exception.h>
 #include <Common/typeid_cast.h>
@@ -92,7 +92,7 @@ String PartitionDiff::toString() const
     std::stringstream ss;
     if (!depend_storage_id.empty())
         ss << "depend_storage_id: " << depend_storage_id.getNameForLogs() << std::endl;
-        
+
     ss << "add_partitions: [";
     for (const auto & ver_part : add_partitions)
         ss << fmt::format("{}_{}", ver_part->partition(), ver_part->last_update_time()) << ", ";
@@ -118,7 +118,7 @@ BaseTableInfoPtr PartitionTransformer::getBaseTableInfo(const StorageID & base_t
     if (depend_base_tables.find(base_table_id) != depend_base_tables.end())
         return depend_base_tables[base_table_id];
     else
-        throw Exception(ErrorCodes::LOGICAL_ERROR, 
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
             fmt::format(" PartitionTransformer::getBaseTableInfo {} is not exist in base tables",base_table_id.getNameForLogs()));
 }
 
@@ -287,7 +287,7 @@ void PartitionTransformer::validate(ContextMutablePtr local_context, Materialize
         else
             ++it;
     }
-     
+
     if (depend_base_tables.empty() && enable_non_partition_throw)
             throw Exception(ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW, "materializd view query not support partition based async refresh");
     always_non_partition_based = depend_base_tables.empty();
@@ -301,7 +301,7 @@ static void updateVitrualWarehouseSetting(const StoragePtr & target_table, Conte
     auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(target_table.get());
     if (merge_tree && merge_tree->getSettings()->has("cnch_vw_write"))
         local_context->setSetting("virtual_warehouse",  merge_tree->getSettings()->getString("cnch_vw_write"));
-} 
+}
 
 AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
     PartMapRelations & part_map, PartitionDiffPtr & part_diff, bool combine_params, bool partition_refresh, ContextMutablePtr local_context)
@@ -318,7 +318,7 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
         insert_query->table_id = target_table_id;
         insert_query->select = query;
         insert_query->children.push_back(insert_query->select);
-    
+
         if (local_context->getSettingsRef().enable_mv_async_insert_overwrite)
         {
             auto target_current_parts = local_context->getCnchCatalog()->getLastModificationTimeHints(target_table);
@@ -351,7 +351,7 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
                 "ALTER TABLE {} {} DROP PARTITION WHERE {}", target_table_id.getFullTableName(), (cascading ? "CASCADING" : ""), "1");
             }
         }
-        else 
+        else
         {
             refresh_param->insert_select_query = queryToString(insert_query);
             refresh_param->drop_partition_query = fmt::format(
@@ -374,7 +374,7 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
             QueryRewriter{}.rewrite(query, local_context, false);
             bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
             bool insert_overwrite = local_context->getSettingsRef().enable_mv_async_insert_overwrite;
-          
+
             /// insert overwrite query
             if (insert_overwrite && !target_parts.empty())
             {
@@ -479,7 +479,7 @@ AsyncRefreshParamPtrs PartitionTransformer::constructRefreshParams(
 
         if (!param->insert_select_query.empty())
             LOG_DEBUG(log, "insert query-{}", param->insert_select_query);
-            
+
         if (!param->insert_overwrite_query.empty())
             LOG_DEBUG(log, "insert overwrite-{}", param->insert_overwrite_query);
     }
@@ -500,8 +500,8 @@ PartMapRelations PartitionTransformer::transform(
     StoragePtr depend_base_table = depend_base_tables[base_table_id]->storage;
     auto * target_meta_base = dynamic_cast<MergeTreeMetaBase *>(target_table.get());
     auto * source_meta_base = dynamic_cast<MergeTreeMetaBase *>(depend_base_table.get());
-    auto * source_hive_table = dynamic_cast<StorageCnchHive *>(depend_base_table.get());
-    if (!source_meta_base && !source_hive_table)
+    auto * source_lake_table = dynamic_cast<StorageCnchLakeBase *>(depend_base_table.get());
+    if (!source_meta_base && !source_lake_table)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported base table type, source tables only support MergeTree and Hive table");
     if (!target_meta_base)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "unsupported target table type, target table only support MergeTree");
@@ -551,10 +551,10 @@ PartMapRelations PartitionTransformer::transform(
             part_info->load(*source_meta_base, read_buffer);
             source_merge_tree_partition_infos.emplace_back(part_info);
         }
-        else if (source_hive_table)
+        else if (source_lake_table)
         {
             auto part_info = std::make_shared<HivePartition>();
-            part_info->loadFromBinary(read_buffer, source_hive_table->getInMemoryMetadataPtr()->getPartitionKey());
+            part_info->loadFromBinary(read_buffer, source_lake_table->getInMemoryMetadataPtr()->getPartitionKey());
             source_hive_partition_infos.emplace_back(part_info);
         }
     }
@@ -570,7 +570,7 @@ PartMapRelations PartitionTransformer::transform(
                 part_column->insert(info->value[i]);
         }
     }
-    else if (source_hive_table)
+    else if (source_lake_table)
     {
         for (size_t i = 0; i < columns.size(); ++i)
         {
@@ -609,8 +609,8 @@ PartMapRelations PartitionTransformer::transform(
         target_partition_infos[i]->serializeText(*target_meta_base, target_write_buffer, format_settings);
         if (source_meta_base)
             source_merge_tree_partition_infos[i]->serializeText(*source_meta_base, source_write_buffer, format_settings);
-        else if (source_hive_table)
-            source_hive_partition_infos[i]->serializeText(source_hive_table->getInMemoryMetadataPtr()->getPartitionKey(), source_write_buffer, format_settings);
+        else if (source_lake_table)
+            source_hive_partition_infos[i]->serializeText(source_lake_table->getInMemoryMetadataPtr()->getPartitionKey(), source_write_buffer, format_settings);
         String target_str = target_write_buffer.str();
         String source_str = source_write_buffer.str();
         target_to_source_map[target_str].insert(source_str);
@@ -642,10 +642,10 @@ String PartitionTransformer::parsePartitionKey(const StoragePtr & storage, Strin
         part_info->load(*meta_base, read_buffer);
         part_info->serializeText(*meta_base, write_buffer, format_settings);
     }
-    else if (auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get()))
+    else if (auto * cnch_lake = dynamic_cast<StorageCnchLakeBase *>(storage.get()))
     {
         ReadBufferFromString read_buffer(partition_key_binary);
-        StorageMetadataPtr metadata_snapshot = cnch_hive->getInMemoryMetadataPtr();
+        StorageMetadataPtr metadata_snapshot = cnch_lake->getInMemoryMetadataPtr();
         auto part_info = std::make_shared<HivePartition>();
         part_info->loadFromBinary(read_buffer, metadata_snapshot->getPartitionKey());
         part_info->serializeText(metadata_snapshot->getPartitionKey(), write_buffer, format_settings);

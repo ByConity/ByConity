@@ -2,7 +2,7 @@
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
 #include <jni/JNIMetaClient.h>
-#include <Protos/hive_models.pb.h>
+#include <Protos/lake_models.pb.h>
 #include "Common/StringUtils/StringUtils.h"
 #include "Storages/DataLakes/HiveFile/HiveHudiFile.h"
 #include "Storages/DataLakes/StorageCnchHudi.h"
@@ -19,6 +19,7 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
+static constexpr auto HUDI_CLASS_FACTORY_CLASS = "org/byconity/hudi/HudiClassFactory";
 static constexpr auto HUDI_CLIENT_CLASS = "org/byconity/hudi/HudiMetaClient";
 
 static String getRelativePartitionPath(const String & _base_path, const String & _partition_path)
@@ -52,7 +53,7 @@ HudiMorDirectoryLister::HudiMorDirectoryLister(const DiskPtr & disk_, const Stri
     };
     add_kv("base_path", basePath());
     params.PrintDebugString();
-    jni_client = std::make_shared<JNIMetaClient>(HUDI_CLIENT_CLASS, params.SerializeAsString());
+    jni_client = std::make_shared<JNIMetaClient>(HUDI_CLASS_FACTORY_CLASS, HUDI_CLIENT_CLASS, params.SerializeAsString());
 }
 
 HiveFiles HudiMorDirectoryLister::list(const HivePartitionPtr & partition)

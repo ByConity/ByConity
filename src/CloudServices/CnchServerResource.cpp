@@ -27,7 +27,7 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <Storages/Hive/HiveFile/IHiveFile.h>
-#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <brpc/controller.h>
 #include "Common/ProfileEvents.h"
 #include "common/logger_useful.h"
@@ -570,7 +570,7 @@ void CnchServerResource::allocateResource(
                 moveBucketTablePartsToAssignedParts(
                     assigned_map, bucket_parts, worker_group->getWorkerIDVec(), required_bucket_numbers, replicated);
             }
-            else if (auto * cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
+            else if (auto * cnch_lake = dynamic_cast<StorageCnchLakeBase *>(storage.get()))
             {
                 assigned_hive_map = assignCnchHiveParts(worker_group, resource.hive_parts);
             }

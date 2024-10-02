@@ -59,9 +59,6 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMemory.h>
 
-#if USE_HIVE
-#    include <Storages/Hive/StorageCnchHive.h>
-#endif
 #include <sstream>
 #include <unordered_map>
 #include <Access/ContextAccess.h>

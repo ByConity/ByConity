@@ -238,6 +238,7 @@ add_object_library(clickhouse_datatypes DataTypes)
 add_object_library(clickhouse_datatypes_serializations DataTypes/Serializations)
 add_object_library(clickhouse_databases Databases)
 add_object_library(clickhouse_databases_mysql Databases/MySQL)
+add_object_library(clickhouse_databases_lake Databases/DataLakes)
 add_object_library(clickhouse_disks Disks)
 add_object_library(clickhouse_interpreters Interpreters)
 add_object_library(clickhouse_interpreters_cache Interpreters/Cache)
@@ -688,6 +689,10 @@ endif()
 
 dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${PARALLEL_HASHMAP_INCLUDE_DIR})
 dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${MAGIC_ENUM_INCLUDE_DIR})
+
+if (USE_JAVA_EXTENSIONS)
+    add_subdirectory(Storages/DataLakes/Tools)
+endif()
 
 include ("${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake")
 

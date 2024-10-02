@@ -33,7 +33,6 @@
 #include <Statistics/StatsTableIdentifier.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
-#include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string/join.hpp>
 #include <common/logger_useful.h>
 #include "Storages/ColumnsDescription.h"
