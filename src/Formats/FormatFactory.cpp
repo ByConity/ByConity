@@ -104,12 +104,16 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.orc.case_insensitive_column_matching = settings.input_format_orc_case_insensitive_column_matching;
     format_settings.orc.use_footer_cache = settings.input_format_orc_use_footer_cache;
     format_settings.seekable_read = settings.input_format_allow_seeks;
+    format_settings.defaults_for_omitted_fields = settings.input_format_defaults_for_omitted_fields;
     format_settings.max_rows_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
     format_settings.max_bytes_to_read_for_schema_inference = settings.input_format_max_rows_to_read_for_schema_inference;
     format_settings.schema_inference_make_columns_nullable = settings.schema_inference_make_columns_nullable;
     format_settings.avoid_buffering = settings.input_format_arrow_avoid_buffering;
     format_settings.null_as_default = settings.input_format_null_as_default;
-    format_settings.parquet.row_group_size = settings.output_format_parquet_row_group_size;
+    format_settings.parquet.row_group_rows = settings.output_format_parquet_row_group_size;
+    format_settings.parquet.row_group_bytes = settings.output_format_parquet_row_group_size_bytes;
+    format_settings.parquet.output_version = settings.output_format_parquet_version;
+    format_settings.parquet.output_compression_method = settings.output_format_parquet_compression_method;
     format_settings.parquet.output_string_as_string = settings.output_format_parquet_string_as_string;
     format_settings.parquet.output_fixed_string_as_fixed_byte_array = settings.output_format_parquet_fixed_string_as_fixed_byte_array;
     format_settings.parquet.allow_missing_columns = settings.input_format_parquet_allow_missing_columns;

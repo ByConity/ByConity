@@ -1951,9 +1951,12 @@ enum PreloadLevelSettings : UInt64
     M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
     M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
     M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
-    M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
+    M(UInt64, output_format_parquet_row_group_size, 1000000, "Target row group size in rows.", 0) \
+    M(UInt64, output_format_parquet_row_group_size_bytes, 512 * 1024 * 1024, "Target row group size in bytes, before compression.", 0) \
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
+    M(ParquetVersion, output_format_parquet_version, "2.latest", "Parquet format version for output format. Supported versions: 1.0, 2.4, 2.6 and 2.latest (default)", 0) \
+    M(ParquetCompression, output_format_parquet_compression_method, "snappy", "Compression method for Parquet output format. Supported codecs: snappy, lz4, brotli, zstd, gzip, none (uncompressed)", 0) \
     M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
     M(UInt64, input_format_parquet_min_bytes_for_seek, DBMS_DEFAULT_BUFFER_SIZE, "Min bytes for seek when reading parquet file", 0) \
     M(UInt64, input_format_parquet_max_buffer_size, 8 * DBMS_DEFAULT_BUFFER_SIZE, "Max buffer size for parquet read", 0) \
