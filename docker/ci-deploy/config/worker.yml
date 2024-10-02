@@ -13,6 +13,13 @@ exchange_port: 47447
 exchange_status_port: 60611
 interserver_http_port: 30491
 listen_host: "0.0.0.0"
+prometheus:
+  endpoint: "/metrics"
+  port: 0
+  metrics: true
+  events: true
+  asynchronous_metrics: true
+  part_metrics: false
 cnch_type: worker
 max_connections: 4096
 keep_alive_timeout: 3
