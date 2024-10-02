@@ -151,6 +151,9 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitPlanNode(PlanNodeBase & 
 
 FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node, JoinInfo & join_info)
 {
+    if (node.getStep()->hasKeyIdNullSafe())
+        return {};
+
     std::vector<FPKeysAndOrdinaryKeys> input_keys;
 
     ForeignKeyOrPrimaryKeys old_common_fp_keys; // only for bottom join.
