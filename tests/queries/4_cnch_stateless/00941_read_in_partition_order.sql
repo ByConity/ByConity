@@ -47,6 +47,17 @@ select 'last 5',  * from porder4 where c1=5 and c2='a' order by ts desc limit 1;
 select 'last 6',  * from porder4 where c1=6 and c2='a' order by ts desc limit 1;
 drop table porder4;
 
+-- case: partition by tuple with monotonicity hint
+drop table if exists porder5;
+create table porder5 (ts DateTime, c1 Int64) engine = CnchMergeTree partition by (toDate(ts), toHour(ts)) order by (c1, ts) settings partition_by_monotonicity_hint=1;
+insert into porder5 values ('2024-07-01 01:00:00', 1);
+insert into porder5 values ('2024-07-01 02:00:00', 1);
+insert into porder5 values ('2024-07-01 03:00:00', 1);
+insert into porder5 values ('2024-07-02 01:00:00', 1);
+select 'porder5 first ts', * from porder5 where c1 = 1 order by ts limit 1;
+select 'porder5 last  ts', * from porder5 where c1 = 1 order by ts desc limit 1;
+drop table porder5;
+
 -- negative case: partition by non-atomic function
 drop table if exists norder1;
 create table norder1 (c1 Int64) engine = CnchMergeTree partition by c1 % 4 order by c1;
@@ -79,3 +90,10 @@ insert into norder4 select number, 1 from numbers(5);
 select * from norder4 order by c2; -- { serverError 277 }
 select * from norder4 where c1 < 2 order by c2; -- { serverError 277 }
 drop table norder4;
+
+-- negative case: partition by tuple wo/ monotonicity hint
+drop table if exists norder5;
+create table norder5 (ts DateTime, c1 Int64) engine = CnchMergeTree partition by (toHour(ts), toDate(ts)) order by (c1, ts);
+insert into norder5 select toDateTime('2024-06-01 00:00:00') + interval number hour, 1 from numbers(3);
+select * from norder5 where c1 = 1 order by ts limit 1; -- { serverError 277 }
+drop table norder5;

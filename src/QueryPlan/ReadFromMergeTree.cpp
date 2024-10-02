@@ -190,15 +190,16 @@ static bool isSamePartition(const RangesInDataPart & lhs, const RangesInDataPart
 static bool canReadInPartitionOrder(
     const StorageInMemoryMetadata & metadata,
     const InputOrderInfo & input_order_info,
-    const ASTSelectQuery & select)
+    const ASTSelectQuery & select,
+    int partition_by_monotonicity_hint)
 {
     if (!metadata.isPartitionKeyDefined() || !metadata.isSortingKeyDefined())
         return false;
 
     const auto & partition_key = metadata.getPartitionKey();
     Names minmax_columns = partition_key.expression->getRequiredColumns();
-    /// for simplicity, only support table with one partition key
-    if (partition_key.column_names.size() != 1 || minmax_columns.size() != 1)
+    /// only support partition by with single required column.
+    if (minmax_columns.size() != 1)
         return false;
 
     String partition_column = minmax_columns[0];
@@ -245,7 +246,14 @@ static bool canReadInPartitionOrder(
     if (partition_key.column_names.front() == *partition_column_it)
         return true;
 
-    /// Allow "partition by func(x) order by (x)" where func is monotonic nondecreasing
+    /// for multi-level partition like "(toDate(ts), toHour(ts))",
+    /// it's difficult to deduce the monotonicity of the partition function.
+    /// currently we rely on table hint `partition_by_monotonicity_hint` for it.
+    if (partition_key.column_names.size() > 1)
+        return partition_by_monotonicity_hint > 0;
+
+    /// for single-level partition like "partition by func(x) order by (x)",
+    /// deduce the monotonicity of partition func, allow when monotonic nondecreasing
     IFunction::Monotonicity monotonicity;
     for (const auto & action : partition_key.expression->getActions())
     {
@@ -612,8 +620,8 @@ struct PartitionValueComparator
 {
     bool operator()(const RangesInDataPart & lhs, const RangesInDataPart & rhs) const
     {
-        const auto & l = lhs.data_part->partition.value[0];
-        const auto & r = rhs.data_part->partition.value[0];
+        const auto & l = lhs.data_part->partition.value;
+        const auto & r = rhs.data_part->partition.value;
         if constexpr (ascend)
             return l < r;
         else
@@ -1461,7 +1469,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         auto sorting_key_prefix_expr = ExpressionAnalyzer(order_key_prefix_ast, syntax_result, context).getActionsDAG(false);
 
         can_read_in_partition_order = (settings.optimize_read_in_partition_order || settings.force_read_in_partition_order)
-            && canReadInPartitionOrder(*metadata_for_reading, *input_order_info, query_info.query->as<ASTSelectQuery &>());
+            && canReadInPartitionOrder(
+                *metadata_for_reading, *input_order_info, query_info.query->as<ASTSelectQuery &>(),
+                data.getSettings()->partition_by_monotonicity_hint);
 
         if (can_read_in_partition_order && result.selected_partitions > 1)
         {
