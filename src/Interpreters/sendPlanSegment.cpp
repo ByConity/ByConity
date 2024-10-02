@@ -34,14 +34,13 @@ void sendPlanSegmentToAddress(
     static auto * log = &Poco::Logger::get("SegmentScheduler::sendPlanSegment");
     LOG_TRACE(
         log,
-        "query id {} segment id {}, parallel index {}, address {}, plansegment {}",
+        "query id {} segment id {}, parallel index {}, address {}, addtional filters {}, plansegment {}",
         plan_segment_ptr->getQueryId(),
         plan_segment_ptr->getPlanSegmentId(),
         execution_info.parallel_id,
         address_info.toString(),
+        execution_info.source_task_filter.isValid() ? execution_info.source_task_filter.toString() : "Invalid",
         plan_segment_ptr->toString());
-    if (execution_info.source_task_filter.isValid())
-        LOG_TRACE(log, "send additional filter {}", execution_info.source_task_filter.toString());
     execution_info.execution_address = address_info;
 
     {

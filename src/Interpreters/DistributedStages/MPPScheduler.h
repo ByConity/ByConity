@@ -14,6 +14,9 @@ public:
     {
     }
 
+protected:
+    PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) override;
+
 private:
     void genTasks() override;
     void genBatchTasks();
@@ -21,6 +24,8 @@ private:
     // We do nothing.
     void onSegmentScheduled(const SegmentTask &) override {}
     void onSegmentFinished(const size_t &, bool, bool) override {}
+    void prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & task) override;
+    void prepareFinalTaskImpl(PlanSegment * final_plan_segment, const AddressInfo & addr) override;
 };
 
 using MPPSchedulerPtr = std::unique_ptr<MPPScheduler>;

@@ -149,6 +149,7 @@ message SubmitPlanSegmentRequest {
   optional uint32 source_task_count = 9; // obosolete
   optional uint32 retry_id = 10;
   optional SourceTaskFilter source_task_filter = 11;
+  repeated PlanSegmentMultiPartitionSource sources = 12;
 }
 
 message PlanSegmentHeader {

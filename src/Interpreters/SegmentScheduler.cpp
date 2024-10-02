@@ -20,6 +20,7 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/MPPScheduler.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/SegmentScheduler.h>
@@ -110,6 +111,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     //fast path for single node query
     if (plan_segments_ptr->getNodes().size() == 1)
     {
+        dag_ptr->plan_segment_status_ptr->final_execution_info = PlanSegmentExecutionInfo{.parallel_id = 0};
         return dag_ptr->plan_segment_status_ptr;
     }
     prepareQueryCommonBuf(dag_ptr->query_common_buf, *final_segment, query_context);
@@ -119,7 +121,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 
     if (!dag_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
-        scheduleV2(query_id, query_context, dag_ptr);
+        dag_ptr->plan_segment_status_ptr->final_execution_info = scheduleV2(query_id, query_context, dag_ptr);
     }
 
 #if defined(TASK_ASSIGN_DEBUG)
@@ -587,7 +589,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
             if (all_tables)
                 graph_ptr->leaf_segments.insert(plan_segment_ptr->getPlanSegmentId());
             if (any_tables)
-                graph_ptr->segments_has_table_scan.insert(plan_segment_ptr->getPlanSegmentId());
+                graph_ptr->table_scan_or_value_segments.insert(plan_segment_ptr->getPlanSegmentId());
         }
         // final stage
         if (plan_segment_ptr->getPlanSegmentOutput()->getPlanSegmentType() == PlanSegmentType::OUTPUT)
@@ -645,6 +647,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                 {
                     if (plan_segment_output->getExchangeId() != plan_segment_input_ptr->getExchangeId())
                         continue;
+                    graph_ptr->exchanges[plan_segment_input_ptr->getExchangeId()] = {plan_segment_input_ptr, plan_segment_output};
                     // if stage out is write to local:
                     // 1.the left table for broadcast join
                     // 2.the left table or right table for local join
@@ -679,9 +682,11 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
     }
 }
 
-void SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
+PlanSegmentExecutionInfo
+SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
     Stopwatch sw;
+    PlanSegmentExecutionInfo execution_info;
     try
     {
         std::shared_ptr<Scheduler> scheduler;
@@ -696,7 +701,7 @@ void SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_cont
             scheduler = std::make_shared<MPPScheduler>(
                 query_id, query_context, dag_graph_ptr, query_context->getSettingsRef().enable_batch_send_plan_segment);
         }
-        scheduler->schedule();
+        execution_info = scheduler->schedule();
     }
     catch (const Exception & e)
     {
@@ -717,6 +722,7 @@ void SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_cont
     }
     sw.stop();
     ProfileEvents::increment(ProfileEvents::ScheduleTimeMilliseconds, sw.elapsedMilliseconds());
+    return execution_info;
 }
 
 PlanSegmentSet SegmentScheduler::getIOPlanSegmentInstanceIDs(const String & query_id) const
@@ -727,7 +733,7 @@ PlanSegmentSet SegmentScheduler::getIOPlanSegmentInstanceIDs(const String & quer
         throw Exception("query_id-" + query_id + " does not exist in scheduler query map", ErrorCodes::LOGICAL_ERROR);
     const auto & dag_ptr = iter->second;
     PlanSegmentSet res;
-    for (auto && segment_id : dag_ptr->segments_has_table_scan)
+    for (auto && segment_id : dag_ptr->table_scan_or_value_segments)
     {
         /// wont wait for final segment, because it is already logged in progress_callback
         if (segment_id != dag_ptr->final)

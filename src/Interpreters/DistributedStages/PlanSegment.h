@@ -146,10 +146,6 @@ public:
 
     PlanSegmentInput() = default;
 
-    AddressInfos & getSourceAddresses() { return source_addresses; }
-
-    void clearSourceAddresses() { source_addresses.clear(); }
-
     void insertSourceAddress(const AddressInfo & address_info) { source_addresses.push_back(address_info); }
 
     void insertSourceAddresses(AddressInfos & address_infos)
@@ -340,6 +336,24 @@ public:
     void setProfileType(const ReportProfileType & type) { profile_type = type; }
 
     ReportProfileType getProfileType() const { return profile_type; }
+
+    void setHasLocalInput(bool has_local_input_)
+    {
+        has_local_input = has_local_input_;
+    }
+    bool hasLocalInput() const
+    {
+        return has_local_input;
+    }
+    void setHasLocalOutput(bool has_local_output_)
+    {
+        has_local_output = has_local_output_;
+    }
+    bool hasLocalOutput() const
+    {
+        return has_local_output;
+    }
+
 private:
     size_t segment_id;
     String query_id;
@@ -357,6 +371,9 @@ private:
     std::unordered_set<RuntimeFilterId> runtime_filters;
 
     ReportProfileType profile_type = ReportProfileType::Unspecified;
+
+    bool has_local_input = false;
+    bool has_local_output = false;
 };
 
 class PlanSegmentTree

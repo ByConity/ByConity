@@ -50,4 +50,9 @@ String exchangeModeToString(const ExchangeMode & exchange_mode)
 
     return ostr.str();
 }
+
+bool isLocalExchange(ExchangeMode mode)
+{
+    return mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION || mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION;
+}
 }

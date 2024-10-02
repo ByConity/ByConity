@@ -27,6 +27,7 @@ struct PlanSegmentsStatus
     std::atomic<bool> is_cancel{false};
     Int32 error_code;
     String exception;
+    PlanSegmentExecutionInfo final_execution_info;
 };
 
 using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
@@ -76,14 +77,15 @@ struct DAGGraph
         source_pruner = std::make_shared<SourcePruner>(plan_segments_ptr, log);
         return source_pruner;
     }
-    
-    /// all segments containing only table scan
+
+    /// all segments containing only table scan/value
     SegmentIds leaf_segments;
-    /// all segments contain at least table scan
-    SegmentIds segments_has_table_scan;
+    /// all segments contain at least table scan/value
+    SegmentIds table_scan_or_value_segments;
     size_t final = std::numeric_limits<size_t>::max();
     std::set<size_t> scheduled_segments;
     std::unordered_map<size_t, PlanSegment *> id_to_segment;
+    std::unordered_map<size_t, std::pair<std::shared_ptr<PlanSegmentInput>, std::shared_ptr<PlanSegmentOutput>>> exchanges;
     std::unordered_map<size_t, AddressInfos> id_to_address;
     /// final worker address where task is successfully executed
     mutable std::mutex finished_address_mutex;

@@ -1,4 +1,5 @@
 #include <atomic>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <CloudServices/CnchServerResource.h>
@@ -8,6 +9,8 @@
 #include <common/logger_useful.h>
 
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/ExchangeMode.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
@@ -50,7 +53,7 @@ void BSPScheduler::genLeafTasks()
         if (leaf_id == dag_graph_ptr->final)
             continue;
 
-        batch_task->emplace_back(leaf_id, true);
+        batch_task->emplace_back(leaf_id, true, dag_graph_ptr->table_scan_or_value_segments.contains(leaf_id));
         plansegment_topology.erase(leaf_id);
         LOG_TRACE(log, "Task for leaf segment {} generated", leaf_id);
     }
@@ -63,20 +66,20 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
     NodeSelectorResult selector_info;
     {
         std::unique_lock<std::mutex> lock(node_selector_result_mutex);
-        selector_info = node_selector_result[task.task_id];
+        selector_info = node_selector_result[task.segment_id];
     }
-    LOG_INFO(log, "Submit {} tasks for segment {}", selector_info.worker_nodes.size(), task.task_id);
+    LOG_INFO(log, "Submit {} tasks for segment {}", selector_info.worker_nodes.size(), task.segment_id);
     for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
         // Is it solid to check empty address via hostname?
         if (selector_info.worker_nodes[i].address.getHostName().empty())
         {
-            pending_task_instances.no_prefs.emplace(task.task_id, i);
+            pending_task_instances.no_prefs.emplace(task.segment_id, i);
         }
         else
         {
-            pending_task_instances.for_nodes[selector_info.worker_nodes[i].address].emplace(task.task_id, i);
+            pending_task_instances.for_nodes[selector_info.worker_nodes[i].address].emplace(task.segment_id, i);
         }
     }
 
@@ -87,7 +90,7 @@ void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed,
 {
     if (is_succeed)
     {
-        removeDepsAndEnqueueTask(SegmentTask{segment_id});
+        removeDepsAndEnqueueTask(segment_id);
     }
     // on exception
     if (!is_succeed)
@@ -237,9 +240,9 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
     }
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        if (dag_graph_ptr->segments_has_table_scan.contains(segment_id) ||
+        if (dag_graph_ptr->table_scan_or_value_segments.contains(segment_id) ||
             // for local no repartion and local may no repartition, schedule to original node
-            NodeSelector::tryGetLocalInput(dag_graph_ptr->getPlanSegmentPtr(segment_id)) ||
+            dag_graph_ptr->getPlanSegmentPtr(segment_id)->hasLocalInput() ||
             // in case all workers except servers are occupied, simply retry at last node
             failed_segment_to_workers[segment_id].size() == cluster_nodes.all_workers.size())
         {
@@ -304,6 +307,7 @@ const AddressInfo & BSPScheduler::getSegmentParallelLocation(PlanSegmentInstance
 
 std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const AddressInfo & worker)
 {
+    std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
     if (pending_task_instances.for_nodes.contains(worker))
     {
         // Skip task on worker with more taint.
@@ -314,7 +318,7 @@ std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const A
                  instance != pending_task_instances.for_nodes[worker].end();)
             {
                 // If the target node does not fit specified taint level, skip it.
-                if (isTaintNode(instance->task_id, worker, level))
+                if (isTaintNode(instance->segment_id, worker, level))
                 {
                     instance++;
                     continue;
@@ -338,7 +342,7 @@ std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const A
             {
                 TaintLevel level = static_cast<TaintLevel>(level_iter);
                 // If the target node does not fit specified taint level, skip it.
-                if (isTaintNode(no_pref->task_id, worker, level))
+                if (isTaintNode(no_pref->segment_id, worker, level))
                 {
                     no_pref++;
                     continue;
@@ -360,37 +364,28 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
     for (const auto & worker : available_workers)
     {
         const auto & address = worker.address;
-        std::optional<SegmentTaskInstance> task_instance;
+        const auto & [has_result, task_instance] = getInstanceToSchedule(address);
+        if (has_result)
         {
-            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            const auto & [has_result, result] = getInstanceToSchedule(address);
-            if (!has_result)
             {
-                continue;
+                std::unique_lock<std::mutex> res_lk(node_selector_result_mutex);
+                WorkerNode & worker_node = node_selector_result[task_instance.segment_id].worker_nodes[task_instance.parallel_index];
+                if (worker_node.address.getHostName().empty())
+                    worker_node.address = address;
             }
-            task_instance.emplace(result);
-        }
+            {
+                // TODO(wangtao.vip): this should be handled with dispatch failure.
+                std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+                running_segment_to_workers[task_instance.segment_id].insert(address);
+                worker_to_running_instances[address].insert(
+                    PlanSegmentInstanceId{static_cast<UInt32>(task_instance.segment_id), static_cast<UInt32>(task_instance.parallel_index)});
+                segment_parallel_locations[task_instance.segment_id][task_instance.parallel_index] = address;
+                failed_segment_to_workers[task_instance.segment_id].insert(
+                    local_address); /// init with server addr, as we wont schedule to server
+            }
 
-        {
-            std::unique_lock<std::mutex> res_lk(node_selector_result_mutex);
-            WorkerNode & worker_node = node_selector_result[task_instance->task_id].worker_nodes[task_instance->parallel_index];
-            if (worker_node.address.getHostName().empty())
-                worker_node.address = address;
+            dispatchOrSaveTask(dag_graph_ptr->getPlanSegmentPtr(task_instance.segment_id), task_instance);
         }
-
-        {
-            // TODO(wangtao.vip): this should be handled with dispatch failure.
-            std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            running_segment_to_workers[task_instance->task_id].insert(address);
-            worker_to_running_instances[address].insert(
-                PlanSegmentInstanceId{static_cast<UInt32>(task_instance->task_id), static_cast<UInt32>(task_instance->parallel_index)});
-            segment_parallel_locations[task_instance->task_id][task_instance->parallel_index] = address;
-            failed_segment_to_workers[task_instance->task_id].insert(
-                local_address); /// init with server addr, as we wont schedule to server
-        }
-
-        dispatchOrSaveTask(
-            dag_graph_ptr->getPlanSegmentPtr(task_instance->task_id), SegmentTask{task_instance->task_id}, task_instance->parallel_index);
     }
 }
 
@@ -422,7 +417,7 @@ void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResul
         query_context->getExchangeDataTracker()->registerExchange(
             query_context->getCurrentQueryId(), output->getExchangeId(), selector_info.worker_nodes.size());
     }
-    if (task.has_table_scan)
+    if (task.has_table_scan_or_value)
     {
         if (!selector_info.buckets_on_workers.empty())
         {
@@ -431,7 +426,7 @@ void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResul
             {
                 const auto & addr = selector_info.worker_nodes[i].address;
                 size_t idx = source_task_index_on_workers[addr];
-                source_task_buckets.emplace(SegmentTaskInstance{task.task_id, i}, selector_info.buckets_on_workers[addr][idx]);
+                source_task_buckets.emplace(SegmentTaskInstance{task.segment_id, i}, selector_info.buckets_on_workers[addr][idx]);
                 source_task_index_on_workers[addr]++;
             }
         }
@@ -442,7 +437,7 @@ void BSPScheduler::prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResul
             {
                 const auto & addr = selector_info.worker_nodes[i].address;
                 source_task_idx.emplace(
-                    SegmentTaskInstance{task.task_id, i},
+                    SegmentTaskInstance{task.segment_id, i},
                     std::make_pair(source_task_index_on_workers[addr], selector_info.source_task_count_on_workers[addr]));
                 source_task_index_on_workers[addr]++;
             }
@@ -468,7 +463,25 @@ PlanSegmentExecutionInfo BSPScheduler::generateExecutionInfo(size_t task_id, siz
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
         execution_info.retry_id = (segment_instance_retry_cnt[{static_cast<UInt32>(task_id), static_cast<UInt32>(index)}]);
     }
+    {
+        std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+        for (const auto & source :
+             node_selector_result[task_id].sources[PlanSegmentInstanceId{static_cast<UInt32>(task_id), static_cast<UInt32>(index)}])
+        {
+            execution_info.sources[source.exchange_id].emplace_back(source);
+        }
+    }
     return execution_info;
+}
+
+void BSPScheduler::prepareFinalTaskImpl(PlanSegment * final_plan_segment, const AddressInfo & addr)
+{
+    auto read_partitions = node_selector.splitReadPartitions(final_plan_segment);
+    NodeSelectorResult result{.worker_nodes = {WorkerNode(addr, NodeType::Local)}};
+    node_selector.setSources(final_plan_segment, &result, read_partitions);
+    LOG_DEBUG(log, "Set address {} for final segment, node_selector_result is {}", addr.toShortString(), result.toString());
+    std::unique_lock<std::mutex> lock(node_selector_result_mutex);
+    node_selector_result[0] = std::move(result);
 }
 
 bool BSPScheduler::isUnrecoverableStatus(const RuntimeSegmentStatus & status)

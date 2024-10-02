@@ -352,3 +352,46 @@ TEST(NodeSelectorTest, divideTaskByPartTestCase5)
 
     checkDistributePartsResultMap(expected_result, result, hosts);
 }
+
+std::string printPartitionCoalescingExpectedResult(const std::map<DB::PlanSegmentInstanceId, std::vector<UInt32>> & result)
+{
+    std::stringstream ss;
+    for (const auto & iter : result)
+    {
+        ss << iter.first.toString() << ":["
+           << boost::join(iter.second | boost::adaptors::transformed([](UInt32 b) { return std::to_string(b); }), ",") << "]"
+           << "\t";
+    }
+    return ss.str();
+}
+
+// 2, 3, 4 ===coalesced to==> 5, 4
+TEST(NodeSelectorTest, PartitionCoalescingTestCase1)
+{
+    UInt32 segment_id = 1;
+    size_t disk_shuffle_advisory_partition_size = 3;
+    std::vector<size_t> normal_partitions = {2, 3, 4};
+    size_t broadcast_partition = 0;
+    auto result
+        = DB::NodeSelector::coalescePartitions(segment_id, disk_shuffle_advisory_partition_size, broadcast_partition, normal_partitions);
+    ASSERT_EQ(result.size(), 2) << printPartitionCoalescingExpectedResult(result);
+    std::map<DB::PlanSegmentInstanceId, std::vector<UInt32>> expected_result
+        = {{DB::PlanSegmentInstanceId{1, 0}, {0, 1}}, {DB::PlanSegmentInstanceId{1, 1}, {2}}};
+    EXPECT_THAT(result, ::testing::ContainerEq(expected_result));
+}
+
+// 1, 1, 2, 2 ===coalesced to==> 2, 2, 2
+// broadcast partition when coalesced will only read once
+TEST(NodeSelectorTest, PartitionCoalescingTestCase2)
+{
+    UInt32 segment_id = 1;
+    size_t disk_shuffle_advisory_partition_size = 3;
+    std::vector<size_t> normal_partitions = {1, 1, 2, 2};
+    size_t broadcast_partition = 1;
+    auto result
+        = DB::NodeSelector::coalescePartitions(segment_id, disk_shuffle_advisory_partition_size, broadcast_partition, normal_partitions);
+    ASSERT_EQ(result.size(), 3) << printPartitionCoalescingExpectedResult(result);
+    std::map<DB::PlanSegmentInstanceId, std::vector<UInt32>> expected_result
+        = {{DB::PlanSegmentInstanceId{1, 0}, {0, 1}}, {DB::PlanSegmentInstanceId{1, 1}, {2}}, {DB::PlanSegmentInstanceId{1, 2}, {3}}};
+    EXPECT_THAT(result, ::testing::ContainerEq(expected_result));
+}

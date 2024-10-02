@@ -564,6 +564,16 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         if (request->has_retry_id())
             execution_info.retry_id = request->retry_id();
 
+        if (request->sources_size() != 0)
+        {
+            for (const auto & s : request->sources())
+            {
+                PlanSegmentMultiPartitionSource source;
+                source.fillFromProto(s);
+                execution_info.sources[source.exchange_id].emplace_back(std::move(source));
+            }
+        }
+
         butil::IOBuf plan_segment_buf;
         auto plan_segment_buf_size = cntl->request_attachment().cutn(&plan_segment_buf, request->plan_segment_buf_size());
         if (plan_segment_buf_size != request->plan_segment_buf_size())

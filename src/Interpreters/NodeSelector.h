@@ -13,6 +13,7 @@
 #include <Interpreters/DAGGraph.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/SourceTask.h>
 #include <Interpreters/sendPlanSegment.h>
 #include <Parsers/queryToString.h>
@@ -96,31 +97,15 @@ void divideSourceTaskByPart(
 
 struct NodeSelectorResult
 {
-    struct SourceAddressInfo
-    {
-        SourceAddressInfo(const AddressInfos & addresses_) : addresses(addresses_) { }
-
-        // = 0 when the exchange mode to the source is LOCAL_XX_NEED_REPARTITION. Otherwise keep it empty.
-        std::optional<size_t> parallel_index;
-        AddressInfos addresses;
-        String toString() const
-        {
-            fmt::memory_buffer buf;
-            for (const auto & address : addresses)
-            {
-                fmt::format_to(buf, "source address : {}\t", address.toString());
-            }
-            return fmt::to_string(buf);
-        }
-    };
-
     WorkerNodes worker_nodes;
     std::vector<size_t> indexes;
     std::unordered_map<AddressInfo, size_t, AddressInfo::Hash> source_task_count_on_workers;
     std::unordered_map<AddressInfo, std::vector<std::set<Int64>>, AddressInfo::Hash> buckets_on_workers;
 
-    //input plansegment id => source address
-    std::unordered_map<size_t, SourceAddressInfo> source_addresses;
+    //input plansegment id => source address and partition ids, ordered by parallel index, used by bsp mode
+    std::map<PlanSegmentInstanceId, std::vector<PlanSegmentMultiPartitionSource>> sources;
+    //exchange_id => source_address, used by mpp mode
+    std::unordered_map<size_t, std::vector<std::shared_ptr<AddressInfo>>> source_addresses;
 
     AddressInfos getAddress() const
     {
@@ -237,7 +222,18 @@ public:
     }
 
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, bool has_table_scan);
-    void setParallelIndexAndSourceAddrs(PlanSegment * plan_segment_ptr, NodeSelectorResult * result);
+    void setSources(
+        PlanSegment * plan_segment_ptr,
+        NodeSelectorResult * result,
+        std::map<PlanSegmentInstanceId, std::vector<UInt32>> & read_partitions);
+    /// this method would generate a mapping of instance_id => [exchange_id, partition ids],
+    /// partition ids contain all partition a plan segment instance should read from.
+    std::map<PlanSegmentInstanceId, std::vector<UInt32>> splitReadPartitions(PlanSegment * plan_segment_ptr);
+    static std::map<PlanSegmentInstanceId, std::vector<UInt32>> coalescePartitions(
+        UInt32 segment_id,
+        size_t disk_shuffle_advisory_partition_size,
+        size_t broadcast_partition,
+        std::vector<size_t> & normal_partitions);
     static PlanSegmentInputPtr tryGetLocalInput(PlanSegment * plan_segment_ptr);
 
 private:

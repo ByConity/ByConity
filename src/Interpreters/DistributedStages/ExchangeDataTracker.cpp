@@ -72,7 +72,7 @@ void ExchangeStatusTracker::registerExchangeStatus(
     iter->second.addStatus(parallel_index, status);
 }
 
-ExchangeStatuses & ExchangeStatusTracker::getExchangeStatusesRef(const String & query_id, UInt64 exchange_id)
+const ExchangeStatuses & ExchangeStatusTracker::getExchangeStatusesRef(const String & query_id, UInt64 exchange_id) const
 {
     auto iter = exchange_statuses.find(ExchangeKey{query_id, exchange_id});
     if (iter == exchange_statuses.end())
@@ -102,6 +102,20 @@ bool ExchangeStatusTracker::checkQueryAlive(const String & query_id)
     std::lock_guard<std::mutex> g(exchange_status_mutex);
     auto iter = query_exchange_ids.find(query_id);
     return iter != query_exchange_ids.end();
+}
+
+size_t ExchangeStatusTracker::getExchangeDataSize(const String & query_id, UInt64 exchange_id) const
+{
+    const auto & statuses = getExchangeStatusesRef(query_id, exchange_id);
+    size_t sum = 0;
+    for (const auto & status : statuses.getStatusesRef())
+    {
+        for (const auto & bytes : status.status)
+        {
+            sum += bytes;
+        }
+    }
+    return sum;
 }
 
 std::vector<AddressInfo> ExchangeStatusTracker::getExchangeDataAddrs(

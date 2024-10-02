@@ -39,6 +39,7 @@ void DAGGraph::joinAsyncRpcAtLast()
         joinAsyncRpcWithThrow();
 }
 
+/// return addresses order by parallel id
 AddressInfos DAGGraph::getAddressInfos(size_t segment_id)
 {
     /// for bsp_mode we need get worker addresses from finished_address, because retry might happen

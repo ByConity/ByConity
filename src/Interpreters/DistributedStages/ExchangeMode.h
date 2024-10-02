@@ -34,5 +34,5 @@ ENUM_WITH_PROTO_CONVERTER(
     (BUCKET_REPARTITION, 6));
 
 String exchangeModeToString(const ExchangeMode & exchange_mode);
-
+bool isLocalExchange(ExchangeMode mode);
 }

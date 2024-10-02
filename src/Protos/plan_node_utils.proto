@@ -252,6 +252,12 @@ message IPlanSegment {
   repeated string shuffle_keys = 8;
 }
 
+message PlanSegmentMultiPartitionSource {
+  required uint64 exchange_id = 1;
+  required AddressInfo address = 2;
+  repeated uint32 partition_ids = 3;
+}
+
 message PlanSegmentInput {
   required IPlanSegment base_plan_segment = 1;
   required uint64 parallel_index = 2;

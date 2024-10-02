@@ -23,15 +23,17 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Parsers/IAST.h>
 #include <Parsers/queryToString.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/PlanSerDerHelper.h>
-#include <QueryPlan/RemoteExchangeSourceStep.h>
-#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/RemoteExchangeSourceStep.h>
+#include <boost/algorithm/string/join.hpp>
 
 #include <sstream>
 
@@ -438,6 +440,12 @@ void PlanSegment::fillFromProto(const Protos::PlanSegment & proto, ContextMutabl
 void PlanSegment::update(ContextPtr context)
 {
     setPlanSegmentToQueryPlan(query_plan.getRoot(), context);
+    has_local_input
+        = std::find_if(inputs.begin(), inputs.end(), [](const auto & input) { return isLocalExchange(input->getExchangeMode()); })
+        != inputs.end();
+    has_local_output
+        = std::find_if(outputs.begin(), outputs.end(), [](const auto & output) { return isLocalExchange(output->getExchangeMode()); })
+        != outputs.end();
 }
 
 PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextMutablePtr context)

@@ -185,74 +185,120 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         else if (exchange_mode == ExchangeMode::BROADCAST)
             exchange_parallel_size = 1;
         size_t partition_id_start = parallel_id * exchange_parallel_size;
+        LocalChannelOptions local_options{
+            .queue_size = local_queue_size, .max_timeout_ts = options.exchange_timeout_ts, .enable_metrics = enable_metrics};
+        auto iter = settings.sources.find(exchange_id);
+        if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explain && iter == settings.sources.end())
+            throw Exception(
+                fmt::format(
+                    "No source address for segment {}'s input segment {}, parallel id is {}",
+                    context->getPlanSegmentInstanceId().segment_id,
+                    write_plan_segment_id,
+                    context->getPlanSegmentInstanceId().parallel_id),
+                ErrorCodes::LOGICAL_ERROR);
+        bool enable_block_compress = context->getSettingsRef().exchange_enable_block_compress;
+        BroadcastReceiverPtrs receivers;
+        MultiPathQueuePtr collector = nullptr;
         if (context->getSettingsRef().exchange_enable_multipath_reciever && !keep_order)
+            collector = std::make_shared<MultiPathBoundedQueue>(multi_path_queue_size, memory_controller);
+        bool is_final_plan_segment = plan_segment_id == 0;
+        size_t input_index = 0;
+        if (context->getSettingsRef().bsp_mode && iter != settings.sources.end())
         {
-            LocalChannelOptions local_options{
-                .queue_size = local_queue_size,
-                .max_timeout_ts = options.exchange_timeout_ts,
-                .enable_metrics = enable_metrics};
-            if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explain)
-                throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
-            bool enable_block_compress = context->getSettingsRef().exchange_enable_block_compress;
-            BroadcastReceiverPtrs receivers;
-            MultiPathQueuePtr collector = std::make_shared<MultiPathBoundedQueue>(multi_path_queue_size, memory_controller);
-            bool is_final_plan_segment = plan_segment_id == 0;
-            size_t input_index = 0;
-            for (const auto & source_address : input->getSourceAddress())
+            for (const auto & source : iter->second)
             {
-                auto write_address = extractExchangeHostPort(source_address);
-                for (size_t i = 0; i < exchange_parallel_size; ++i)
+                auto write_address = extractExchangeHostPort(*source.address);
+                for (auto p : source.partition_ids)
                 {
-                    UInt32 partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key;
-                    if (context->getSettingsRef().bsp_mode)
+                    auto partition_id_begin = p * exchange_parallel_size;
+                    for (auto partition_id = partition_id_begin; partition_id < partition_id_begin + exchange_parallel_size; partition_id++)
                     {
-                        if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
-                            || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                        UInt32 data_key_parallel_id;
+                        if (isLocalExchange(exchange_mode))
+                            data_key_parallel_id = context->getPlanSegmentInstanceId().parallel_id;
+                        else
+                            data_key_parallel_id = input_index;
+                        ExchangeDataKeyPtr data_key
+                            = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, data_key_parallel_id);
+                        bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, *source.address);
+                        BroadcastReceiverPtr receiver = createReceiver(
+                            disk_exchange_mgr,
+                            is_local_exchange,
+                            local_options,
+                            write_plan_segment_id,
+                            exchange_id,
+                            partition_id,
+                            data_key,
+                            exchange_header,
+                            keep_order,
+                            enable_metrics,
+                            write_address,
+                            collector,
+                            register_mode,
+                            query_exchange_log);
+                        receivers.emplace_back(std::move(receiver));
+                    }
+                }
+                input_index++;
+            }
+        }
+        for (const auto & source_address : input->getSourceAddress())
+        {
+            auto write_address = extractExchangeHostPort(source_address);
+            for (size_t i = 0; i < exchange_parallel_size; ++i)
+            {
+                UInt32 partition_id = partition_id_start + i;
+                ExchangeDataKeyPtr data_key;
+                if (context->getSettingsRef().bsp_mode)
+                {
+                    if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                        || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                    {
+                        if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
                         {
-                            if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
-                            {
-                                data_key = std::make_shared<ExchangeDataKey>(
-                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
-                            }
-                            else
-                            {
-                                if (input_index == context->getPlanSegmentInstanceId().parallel_id)
-                                    data_key = std::make_shared<ExchangeDataKey>(
-                                        current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
-                                else
-                                    break;
-                            }
+                            data_key = std::make_shared<ExchangeDataKey>(
+                                current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
                         }
                         else
                         {
-                            data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index);
+                            if (input_index == context->getPlanSegmentInstanceId().parallel_id)
+                                data_key = std::make_shared<ExchangeDataKey>(
+                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                            else
+                                break;
                         }
                     }
                     else
                     {
-                        data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                        data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index);
                     }
-                    bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
-                    BroadcastReceiverPtr receiver = createReceiver(
-                        disk_exchange_mgr,
-                        is_local_exchange,
-                        local_options,
-                        write_plan_segment_id,
-                        exchange_id,
-                        partition_id,
-                        data_key,
-                        exchange_header,
-                        keep_order,
-                        enable_metrics,
-                        write_address,
-                        collector,
-                        register_mode,
-                        query_exchange_log);
-                    receivers.emplace_back(std::move(receiver));
                 }
-                input_index++;
+                else
+                {
+                    data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
+                }
+                bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
+                BroadcastReceiverPtr receiver = createReceiver(
+                    disk_exchange_mgr,
+                    is_local_exchange,
+                    local_options,
+                    write_plan_segment_id,
+                    exchange_id,
+                    partition_id,
+                    data_key,
+                    exchange_header,
+                    keep_order,
+                    enable_metrics,
+                    write_address,
+                    collector,
+                    register_mode,
+                    query_exchange_log);
+                receivers.emplace_back(std::move(receiver));
             }
+            input_index++;
+        }
+        if (context->getSettingsRef().exchange_enable_multipath_reciever && !keep_order)
+        {
             if (settings.distributed_settings.is_explain)
             {
                 ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id_start);
@@ -287,71 +333,6 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         }
         else
         {
-            LocalChannelOptions local_options{
-                .queue_size = local_queue_size,
-                .max_timeout_ts = options.exchange_timeout_ts,
-                .enable_metrics = enable_metrics};
-            if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explain)
-                throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
-            bool is_final_plan_segment = plan_segment_id == 0;
-            size_t input_index = 0;
-            for (const auto & source_address : input->getSourceAddress())
-            {
-                auto write_address = extractExchangeHostPort(source_address);
-                for (size_t i = 0; i < exchange_parallel_size; ++i)
-                {
-                    size_t partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key;
-                    if (context->getSettingsRef().bsp_mode)
-                    {
-                        if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION
-                            || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
-                        {
-                            if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
-                            {
-                                data_key = std::make_shared<ExchangeDataKey>(
-                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
-                            }
-                            else
-                            {
-                                if (input_index == context->getPlanSegmentInstanceId().parallel_id)
-                                    data_key = std::make_shared<ExchangeDataKey>(
-                                        current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
-                                else
-                                    break;
-                            }
-                        }
-                        else
-                        {
-                            data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id, input_index);
-                        }
-                    }
-                    else
-                    {
-                        data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
-                    }
-                    bool is_local_exchange = ExchangeUtils::isLocalExchange(read_address_info, source_address);
-                    BroadcastReceiverPtr receiver = createReceiver(
-                        disk_exchange_mgr,
-                        is_local_exchange,
-                        local_options,
-                        write_plan_segment_id,
-                        exchange_id,
-                        partition_id,
-                        data_key,
-                        exchange_header,
-                        keep_order,
-                        enable_metrics,
-                        write_address,
-                        nullptr,
-                        register_mode,
-                        query_exchange_log);
-                    auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment);
-                    pipe.addSource(std::move(source));
-                    source_num++;
-                }
-                input_index++;
-            }
             if (settings.distributed_settings.is_explain)
             {
                 ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id_start);
@@ -367,6 +348,12 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     std::make_shared<MultiPathBoundedQueue>(remote_queue_size, memory_controller));
                 BroadcastReceiverPtr receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
                 auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment, totals_source, extremes_source);
+                pipe.addSource(std::move(source));
+                source_num++;
+            }
+            for (auto & receiver : receivers)
+            {
+                auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment);
                 pipe.addSource(std::move(source));
                 source_num++;
             }
