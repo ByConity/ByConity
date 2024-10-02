@@ -489,6 +489,7 @@ public:
      * @brief get Undo Buffers with there keys (in metastore). These keys can be further used to manipulate the data.
      *
      * @param txnID Transaction ID.
+     * @return map<table_uuid, ([keys in metastore of each undo buffer], [undo buffers])>
      */
     std::unordered_map<String, std::pair<std::vector<String>, UndoResources>> getUndoBuffersWithKeys(const TxnTimestamp & txnID);
     /// return storage uuid -> undo resources

@@ -83,10 +83,8 @@ public:
      * @brief Clean undo buffers on current server (will not dispatch another RPC).
      * This Method must be execute synchronously since we want to
      * guarantee undo buffers are cleaned before txn record is cleaned.
-     *
-     * @return Cleaned size.
      */
-    UInt64 cleanUndoBuffers(const TransactionRecord & txn_record, bool & clean_fs_lock_by_scan);
+    void cleanUndoBuffers(const TransactionRecord & txn_record);
 
     using TxnCleanTasksMap = std::unordered_map<UInt64, TxnCleanTask>;
     const TxnCleanTasksMap & getAllTasksUnLocked() const {return clean_tasks;}
@@ -116,10 +114,12 @@ private:
     /// │ KV │                      │ Server2(cleanUndoBuffersWithDispatch) │
     /// └────┘                      └───────────────────────────────────────┘
     ///
-    /// - DM will scan KV to get txns that need be cleaned.
-    /// - In most cases, a single server can delete all undo buffer for the txn. (like server 1)
-    /// - If a txn involves multiple tables, each table need to set commit time for parts (in cache).
+    /// 1. DM will scan KV to get txns that need to be cleaned.
+    /// 2. In most cases, a single server can delete all undo buffer for the txn. (like server 1)
+    /// 3. If a txn involves multiple tables, each table need to set commit time for parts (in cache).
     ///   Thus server will dispatch additional RPC call to target server. (like server 2)
+    ///
+    /// - Dispatches from Servers are async to avoid occuping the GRPC threads.
 
     /**
      * @brief Clean committed transaction.

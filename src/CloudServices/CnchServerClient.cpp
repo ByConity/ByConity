@@ -767,7 +767,7 @@ void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
     RPCHelpers::checkResponse(response);
 }
 
-UInt64 CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record, bool & clean_fs_lock_by_scan)
+void CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record)
 {
     brpc::Controller cntl;
     Protos::CleanUndoBuffersReq request;
@@ -780,9 +780,6 @@ UInt64 CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record, 
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);
-
-    clean_fs_lock_by_scan &= response.clean_fs_lock_by_scan();
-    return response.clean_size();
 }
 
 void CnchServerClient::acquireLock(const LockInfoPtr & lock)

@@ -287,12 +287,7 @@ message CleanUndoBuffersReq {
   required DataModelTransactionRecord txn_record = 1;
 };
 
-message CleanUndoBuffersResp {
-  required bool clean_fs_lock_by_scan = 1;
-  /// Undo buffer size. (for statistics)
-  required uint64 clean_size = 2;
-  optional string exception = 3;
-};
+message CleanUndoBuffersResp { optional string exception = 1; };
 
 message GetServerStartTimeReq {}
 

@@ -951,10 +951,7 @@ void CnchServerServiceImpl::cleanUndoBuffers(
 
         try
         {
-            /// Will be re-init in side the `cleanUndoBuffers`.
-            bool clean_fs_lock_by_scan = false;
-            response->set_clean_size(txn_cleaner.cleanUndoBuffers(txn_record, clean_fs_lock_by_scan));
-            response->set_clean_fs_lock_by_scan(clean_fs_lock_by_scan) ;
+            txn_cleaner.cleanUndoBuffers(txn_record );
         }
         catch (...)
         {
