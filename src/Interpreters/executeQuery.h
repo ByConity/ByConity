@@ -122,5 +122,4 @@ void updateAsyncQueryStatus(
 
 void interpretSettings(ASTPtr ast, ContextMutablePtr context);
 
-void adjustAccessTablesIfNeeded(ContextMutablePtr & context);
 }

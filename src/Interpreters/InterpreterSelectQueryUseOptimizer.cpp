@@ -626,6 +626,9 @@ void InterpreterSelectQueryUseOptimizer::fillContextQueryAccessInfo(ContextPtr c
         {
             Names required_columns;
             auto storage_id = storage_analysis.storage->getStorageID();
+            // check aeolus access
+            if (context->getServerType() == ServerType::cnch_server)
+                context->checkAeolusTableAccess(storage_id.database_name, storage_id.table_name);
             if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
             {
                 for (const auto & column : it->second)

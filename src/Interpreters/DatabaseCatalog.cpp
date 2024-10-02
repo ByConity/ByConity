@@ -302,18 +302,6 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         }
     }
 
-    auto aeolus_check = [&table_id, &context_](const StoragePtr & storage)
-    {
-        // check aeolus table access before return required storage.
-        if (context_->getServerType() != ServerType::cnch_server)
-            return;
-
-        if (!storage || storage->getName() == "MaterializedView")
-            return;
-
-        context_->checkAeolusTableAccess(table_id.database_name, table_id.table_name);
-    };
-
     if (table_id.hasUUID() && table_id.database_name == TEMPORARY_DATABASE)
     {
         /// Shortcut for tables which have persistent UUID
@@ -343,7 +331,6 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         }
 #endif
 
-        aeolus_check(db_and_table.second);
         return db_and_table;
     }
 
@@ -405,7 +392,6 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
             cnch_table->resetObjectColumns(context_);
     }
 
-    aeolus_check(table);
     return {database, table};
 }
 

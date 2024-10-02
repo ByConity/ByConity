@@ -282,6 +282,10 @@ static void checkAccessRightsForSelect(
     const StorageMetadataPtr & table_metadata,
     const TreeRewriterResult & syntax_analyzer_result)
 {
+    // firstly, check aeolus access
+    if (context->getServerType() == ServerType::cnch_server)
+        context->checkAeolusTableAccess(table_id.database_name, table_id.table_name);
+
     if (!syntax_analyzer_result.has_explicit_columns && table_metadata && !table_metadata->getColumns().empty())
     {
         /// For a trivial query like "SELECT count() FROM table" access is granted if at least
