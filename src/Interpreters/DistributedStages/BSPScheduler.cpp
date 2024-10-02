@@ -33,10 +33,30 @@ namespace ErrorCodes
     extern const int WORKER_RESTARTED;
 }
 
-const size_t MIN_MAJOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 2;
-const size_t MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE = 3;
-
 /// BSP scheduler logic
+void BSPScheduler::genTasks()
+{
+    genLeafTasks();
+}
+
+void BSPScheduler::genLeafTasks()
+{
+    LOG_DEBUG(log, "Begin generate leaf tasks");
+    auto batch_task = std::make_shared<BatchTask>();
+    batch_task->reserve(dag_graph_ptr->leaf_segments.size());
+    for (auto leaf_id : dag_graph_ptr->leaf_segments)
+    {
+        LOG_TRACE(log, "Generate task for leaf segment {}", leaf_id);
+        if (leaf_id == dag_graph_ptr->final)
+            continue;
+
+        batch_task->emplace_back(leaf_id, true);
+        plansegment_topology.erase(leaf_id);
+        LOG_TRACE(log, "Task for leaf segment {} generated", leaf_id);
+    }
+    addBatchTask(std::move(batch_task));
+}
+
 void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     (void)plan_segment_ptr;
@@ -188,23 +208,6 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
         }
         else if (node.step->getType() == IQueryPlanStep::Type::TableFinish)
             return false;
-    }
-    auto major = query_context->getClientInfo().brpc_protocol_major_version;
-    auto effective_minor = std::min(
-        query_context->getSettingsRef().min_compatible_brpc_minor_version.value, static_cast<uint64_t>(DBMS_BRPC_PROTOCOL_MINOR_VERSION));
-    if (major == MIN_MAJOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE && effective_minor < MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE)
-    {
-        if (is_table_write)
-        {
-            LOG_ERROR(
-                log,
-                "Current brpc protocol version is {}.{}(expected at least {}.{}), does not support retry for table write segment",
-                major,
-                effective_minor,
-                major,
-                MIN_MINOR_VERSION_ENABLE_RETRY_NORMAL_TABLE_WRITE);
-            return false;
-        }
     }
 
     LOG_INFO(
@@ -386,7 +389,7 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
                 local_address); /// init with server addr, as we wont schedule to server
         }
 
-        dispatchTask(
+        dispatchOrSaveTask(
             dag_graph_ptr->getPlanSegmentPtr(task_instance->task_id), SegmentTask{task_instance->task_id}, task_instance->parallel_index);
     }
 }

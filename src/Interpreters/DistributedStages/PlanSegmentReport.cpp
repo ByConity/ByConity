@@ -17,6 +17,8 @@ void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) 
     static auto * logger = &Poco::Logger::get("PlanSegmentExecutor");
     try
     {
+        if (result.segment_profile)
+            reportSuccessPlanSegmentProfile(result);
         auto address = extractExchangeHostPort(result.coordinator_address);
         const auto & status = result.runtime_segment_status;
 
@@ -122,7 +124,8 @@ PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     const PlanSegmentExecutionInfo & execution_info,
     Progress & final_progress,
     SenderMetrics & sender_metrics,
-    PlanSegmentOutputs & plan_segment_outputs)
+    PlanSegmentOutputs & plan_segment_outputs,
+    PlanSegmentProfilePtr & segment_profile)
 {
     PlanSegmentExecutor::ExecutionResult result;
 
@@ -137,8 +140,34 @@ PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     result.runtime_segment_status.message = "execute success";
     result.runtime_segment_status.metrics.final_progress = final_progress.toProto();
     result.sender_metrics = senderMetricsToProto(plan_segment_outputs, sender_metrics, execution_info.execution_address);
+    if (query_context->getSettingsRef().report_segment_profiles && segment_profile)
+        result.segment_profile = segment_profile;
 
     return result;
 }
 
+void reportSuccessPlanSegmentProfile(const PlanSegmentExecutor::ExecutionResult & result)
+{
+    static auto * logger = &Poco::Logger::get("PlanSegmentExecutor");
+    try
+    {
+        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(
+            extractExchangeHostPort(result.coordinator_address), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
+        Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
+        brpc::Controller cntl;
+        Protos::PlanSegmentProfileRequest request;
+        Protos::PlanSegmentProfileResponse response;
+        result.segment_profile->is_succeed = true;
+        result.segment_profile->toProto(request);
+
+        manager.sendPlanSegmentProfile(&cntl, &request, &response, nullptr);
+        rpc_client->assertController(cntl);
+        LOG_TRACE(
+            logger, "PlanSegment-{} send profile to coordinator successfully, query id-{}.", request.segment_id(), request.query_id());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+}
 }

@@ -138,6 +138,8 @@ public:
     void describeIndexes(JSONBuilder::JSONMap & map) const override;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
 
+    void fillRuntimeAttributeDescriptions(const ReadFromMergeTree::AnalysisResult & result);
+
     StorageID getStorageID() const { return data.getStorageID(); }
     UInt64 getSelectedParts() const { return selected_parts; }
     UInt64 getSelectedRows() const { return selected_rows; }

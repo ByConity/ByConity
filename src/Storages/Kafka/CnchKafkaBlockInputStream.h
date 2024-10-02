@@ -59,6 +59,7 @@ private:
     std::vector<int> used_column;
     MutableColumns virtual_columns;
 
+    InputFormatPtr input_format_ptr = nullptr;
     BufferPtr delimited_buffer;
     bool broken = true, claimed = false;
 

@@ -27,6 +27,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/QueryLog.h>
+#include <Interpreters/profile/PlanSegmentProfile.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Executors/PipelineExecutor.h>
@@ -49,8 +50,15 @@ struct SenderMetrics
 class PlanSegmentExecutor : private boost::noncopyable
 {
 public:
-    explicit PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_);
-    explicit PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, ExchangeOptions options_);
+    explicit PlanSegmentExecutor(
+        PlanSegmentInstancePtr plan_segment_instance_,
+        ContextMutablePtr context_,
+        PlanSegmentProcessList::EntryPtr process_plan_segment_entry_ = nullptr);
+    explicit PlanSegmentExecutor(
+        PlanSegmentInstancePtr plan_segment_instance_,
+        ContextMutablePtr context_,
+        PlanSegmentProcessList::EntryPtr process_plan_segment_entry_,
+        ExchangeOptions options_);
 
     ~PlanSegmentExecutor() noexcept;
 
@@ -59,6 +67,7 @@ public:
         AddressInfo coordinator_address;
         RuntimeSegmentStatus runtime_segment_status;
         Protos::SenderMetrics sender_metrics;
+        PlanSegmentProfilePtr segment_profile;
     };
     std::optional<ExecutionResult> execute();
     BlockIO lazyExecute(bool add_output_processors = false);
@@ -71,9 +80,7 @@ protected:
     void buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
 
 private:
-    // query_scope needs to be destructed before process_plan_segment_entry, because of memory_tracker
     PlanSegmentProcessList::EntryPtr process_plan_segment_entry;
-    std::optional<CurrentThread::QueryScope> query_scope;
 
     ContextMutablePtr context;
     PlanSegmentInstancePtr plan_segment_instance;
@@ -86,6 +93,7 @@ private:
     SenderMetrics sender_metrics;
     Progress progress;
     Progress final_progress;
+    PlanSegmentProfilePtr segment_profile;
 
     Processors buildRepartitionExchangeSink(BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 

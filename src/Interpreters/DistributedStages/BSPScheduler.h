@@ -28,7 +28,7 @@ enum TaintLevel
 //
 // Scheduler::genTopology -> Scheduler::scheduleTask -> BSPScheduler::submitTasks
 //                                                                  |
-//                                                        Scheduler::dispatchTask -rpc-> Worker node
+//                                                        Scheduler::dispatchOrSaveTask -rpc-> Worker node
 //                                                                  |                       | rpc
 //                                                                  <--------- BSPScheduler::onSegmentFinished
 class BSPScheduler : public Scheduler
@@ -53,7 +53,6 @@ public:
         }
     }
 
-    void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
     // We do nothing on task scheduled.
     void onSegmentScheduled(const SegmentTask & task) override
     {
@@ -83,7 +82,10 @@ private:
     void triggerDispatch(const std::vector<WorkerNode> & available_workers);
     void sendResources(PlanSegment * plan_segment_ptr) override;
     void prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & task) override;
+    void genTasks() override;
+    void genLeafTasks();
     PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) override;
+    void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
 
     bool isUnrecoverableStatus(const RuntimeSegmentStatus & status);
     bool isOutdated(const RuntimeSegmentStatus & status);

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -312,6 +313,221 @@ void PlanSegmentManagerRpcService::sendProgress(
     }
 }
 
+void PlanSegmentManagerRpcService::prepareCommonParams(
+    UInt32 major_revision,
+    UInt32 query_common_buf_size,
+    UInt32 query_settings_buf_size,
+    brpc::Controller * cntl,
+    std::shared_ptr<Protos::QueryCommon> & query_common,
+    std::shared_ptr<butil::IOBuf> & settings_io_buf)
+{
+    if (major_revision != DBMS_BRPC_PROTOCOL_MAJOR_VERSION)
+        throw Exception(
+            "brpc protocol major version different - current is " + std::to_string(major_revision) + "remote is "
+                + std::to_string(DBMS_BRPC_PROTOCOL_MAJOR_VERSION) + ", plan segment is not compatible",
+            ErrorCodes::BRPC_PROTOCOL_VERSION_UNSUPPORT);
+    /// Prepare query_common.
+    butil::IOBuf query_common_buf;
+    auto query_common_buf_size_act = cntl->request_attachment().cutn(&query_common_buf, query_common_buf_size);
+    if (query_common_buf_size_act != query_common_buf_size)
+    {
+        throw Exception(
+            "Impossible query_common_buf_size_act: " + std::to_string(query_common_buf_size_act)
+                + "expected: " + std::to_string(query_common_buf_size),
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    butil::IOBufAsZeroCopyInputStream wrapper(query_common_buf);
+    bool res = query_common->ParseFromZeroCopyStream(&wrapper);
+    if (!res)
+        throw Exception("Fail to parse Protos::QueryCommon!", ErrorCodes::LOGICAL_ERROR);
+
+    /// Prepare settings.
+    butil::IOBuf settings_common_buf;
+    if (query_settings_buf_size > 0)
+    {
+        auto query_settings_buf_size_act = cntl->request_attachment().cutn(&settings_common_buf, query_settings_buf_size);
+        if (query_settings_buf_size_act != query_settings_buf_size)
+        {
+            throw Exception(
+                "Impossible query_settings_buf_size_act: " + std::to_string(query_settings_buf_size_act)
+                    + "expected: " + std::to_string(query_settings_buf_size),
+                ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    settings_io_buf = std::make_shared<butil::IOBuf>(settings_common_buf.movable());
+}
+
+ContextMutablePtr PlanSegmentManagerRpcService::createQueryContext(
+    ContextMutablePtr global_context,
+    std::shared_ptr<Protos::QueryCommon> & query_common,
+    std::shared_ptr<butil::IOBuf> & settings_io_buf,
+    UInt16 remote_side_port,
+    PlanSegmentInstanceId instance_id,
+    const AddressInfo & execution_address)
+{
+    /// Create context.
+    ContextMutablePtr query_context;
+    UInt64 txn_id = query_common->txn_id();
+    UInt64 primary_txn_id = query_common->primary_txn_id();
+    /// Create session context for worker
+    if (global_context->getServerType() == ServerType::cnch_worker)
+    {
+        size_t max_execution_time_ms = 0;
+        if (query_common->has_query_expiration_timestamp())
+        {
+            auto duration_ms = duration_ms_from_now(query_common->query_expiration_timestamp());
+            if (!duration_ms)
+                throw Exception(
+                    ErrorCodes::TIMEOUT_EXCEEDED,
+                    "Max execution time exceeded before submit plan segment, try increase max_execution_time, current timestamp:{} "
+                    "expires at:{}",
+                    time_in_milliseconds(std::chrono::system_clock::now()),
+                    query_common->query_expiration_timestamp());
+            max_execution_time_ms = duration_ms.value();
+        }
+        auto named_session
+            = global_context->acquireNamedCnchSession(txn_id, (max_execution_time_ms / 1000) + 1, query_common->check_session());
+        query_context = Context::createCopy(named_session->context);
+        query_context->setSessionContext(query_context);
+        query_context->setTemporaryTransaction(txn_id, primary_txn_id);
+    }
+    /// execute plan semgent instance in server
+    else
+    {
+        query_context = Context::createCopy(global_context);
+        query_context->setTemporaryTransaction(txn_id, primary_txn_id, false);
+    }
+    query_context->setCoordinatorAddress(query_common->coordinator_address());
+    query_context->setPlanSegmentInstanceId(instance_id);
+
+    /// Authentication
+    Poco::Net::SocketAddress initial_socket_address(query_common->initial_client_host(), query_common->initial_client_port());
+    Poco::Net::SocketAddress current_socket_address(query_common->coordinator_address().host_name(), remote_side_port);
+    Decimal64 initial_query_start_time_microseconds{query_common->initial_query_start_time()};
+
+    /// Set client info.
+    ClientInfo & client_info = query_context->getClientInfo();
+    client_info.brpc_protocol_minor_version = query_common->brpc_protocol_minor_revision();
+    client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
+    client_info.interface = ClientInfo::Interface::BRPC;
+    client_info.initial_query_start_time = initial_query_start_time_microseconds / 1000000;
+    client_info.initial_query_start_time_microseconds = initial_query_start_time_microseconds;
+    client_info.initial_user = query_common->initial_user();
+    client_info.initial_query_id = query_common->query_id();
+    client_info.initial_address = std::move(initial_socket_address);
+    client_info.current_query_id = client_info.initial_query_id + "_" + std::to_string(instance_id.segment_id);
+    client_info.current_address = std::move(current_socket_address);
+    client_info.rpc_port = query_common->coordinator_address().exchange_port();
+
+    /// Authentication
+    const auto & current_user = execution_address.getUser();
+    query_context->setUser(current_user, execution_address.getPassword(), query_context->getClientInfo().current_address);
+
+    if (!settings_io_buf->empty())
+    {
+        ReadBufferFromBrpcBuf settings_read_buf(*settings_io_buf);
+        /// Sets an extra row policy based on `client_info.initial_user`
+        // query_context->setInitialRowPolicy();
+        /// apply settings changed
+        const size_t MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS = 4;
+        if (query_common->brpc_protocol_minor_revision() >= MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS)
+            const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::STRINGS_WITH_FLAGS);
+        else
+            const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
+    }
+
+    /// Disable function name normalization when it's a secondary query, because queries are either
+    /// already normalized on initiator node, or not normalized and should remain unnormalized for
+    /// compatibility.
+    query_context->setSetting("normalize_function_names", Field(0));
+
+    if (query_context->getServerType() == ServerType::cnch_worker)
+        query_context->grantAllAccess();
+
+    /// Set quota
+    if (query_common->has_quota())
+        query_context->setQuotaKey(query_common->quota());
+
+    if (!query_context->hasQueryContext())
+        query_context->makeQueryContext();
+
+    query_context->setQueryExpirationTimeStamp();
+
+    return query_context;
+}
+
+void PlanSegmentManagerRpcService::executePlanSegment(
+    std::shared_ptr<Protos::QueryCommon> query_common,
+    std::shared_ptr<butil::IOBuf> settings_io_buf,
+    UInt16 remote_side_port,
+    UInt32 segment_id,
+    PlanSegmentExecutionInfo & execution_info,
+    std::shared_ptr<butil::IOBuf> plan_segment_buf,
+    PlanSegmentProcessList::EntryPtr process_plan_segment_entry,
+    ContextMutablePtr query_context)
+{
+    LOG_INFO(log, "execute plan segment: {}_{}, parallel index {}", query_common->query_id(), segment_id, execution_info.parallel_id);
+
+    ThreadFromGlobalPool async_thread([global_context = context,
+                                       query_common = std::move(query_common),
+                                       settings_io_buf = std::move(settings_io_buf),
+                                       remote_side_port = remote_side_port,
+                                       segment_id = segment_id,
+                                       execution_info = std::move(execution_info),
+                                       plan_segment_buf = std::move(plan_segment_buf),
+                                       process_plan_segment_entry = std::move(process_plan_segment_entry),
+                                       query_context = std::move(query_context)]() mutable {
+        bool before_execute = true;
+        try
+        {
+            if (!query_context)
+                query_context = createQueryContext(
+                    global_context,
+                    query_common,
+                    settings_io_buf,
+                    remote_side_port,
+                    {segment_id, execution_info.parallel_id},
+                    execution_info.execution_address);
+
+            if (!process_plan_segment_entry)
+                process_plan_segment_entry = query_context->getPlanSegmentProcessList().insertGroup(query_context, segment_id);
+
+            /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
+            butil::IOBufAsZeroCopyInputStream plansegment_buf_wrapper(*plan_segment_buf);
+            Protos::PlanSegment plan_segment_proto;
+            plan_segment_proto.ParseFromZeroCopyStream(&plansegment_buf_wrapper);
+            // copy some commnon field from query_common;
+            plan_segment_proto.set_query_id(query_common->query_id());
+            plan_segment_proto.set_segment_id(segment_id);
+            plan_segment_proto.mutable_coordinator_address()->CopyFrom(query_common->coordinator_address());
+            auto plan_segment = std::make_unique<PlanSegment>();
+            plan_segment->fillFromProto(plan_segment_proto, query_context);
+            plan_segment->update(query_context);
+            auto segment_instance = std::make_unique<PlanSegmentInstance>();
+
+            before_execute = false;
+            segment_instance->info = std::move(execution_info);
+            segment_instance->plan_segment = std::move(plan_segment);
+            // keep query_context for log query_id when exception
+            executePlanSegmentInternal(std::move(segment_instance), query_context, std::move(process_plan_segment_entry), false);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__, query_context ? query_context->getCurrentQueryId() : "");
+            if (before_execute)
+            {
+                int exception_code = getCurrentExceptionCode();
+                auto exception_message = getCurrentExceptionMessage(false);
+
+                auto result = convertFailurePlanSegmentStatusToResult(query_context, execution_info, exception_code, exception_message);
+                reportExecutionResult(result);
+            }
+        }
+    });
+    async_thread.detach();
+}
+
 void PlanSegmentManagerRpcService::submitPlanSegment(
     ::google::protobuf::RpcController * controller,
     const ::DB::Protos::SubmitPlanSegmentRequest * request,
@@ -322,77 +538,17 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
-        if (request->brpc_protocol_major_revision() != DBMS_BRPC_PROTOCOL_MAJOR_VERSION)
-            throw Exception(
-                "brpc protocol major version different - current is " + std::to_string(request->brpc_protocol_major_revision())
-                    + "remote is " + std::to_string(DBMS_BRPC_PROTOCOL_MAJOR_VERSION) + ", plan segment is not compatible",
-                ErrorCodes::BRPC_PROTOCOL_VERSION_UNSUPPORT);
-
-        butil::IOBuf attachment(cntl->request_attachment().movable());
-
-        butil::IOBuf query_common_buf;
-        auto query_common_buf_size = attachment.cutn(&query_common_buf, request->query_common_buf_size());
-        if (query_common_buf_size != request->query_common_buf_size())
-        {
-            throw Exception(
-                "Impossible query_common_buf_size: " + std::to_string(query_common_buf_size)
-                    + "expected: " + std::to_string(request->query_common_buf_size()),
-                ErrorCodes::LOGICAL_ERROR);
-        }
-
-        butil::IOBufAsZeroCopyInputStream wrapper(query_common_buf);
         auto query_common = std::make_shared<Protos::QueryCommon>();
-        bool res = query_common->ParseFromZeroCopyStream(&wrapper);
-
-        if (!res)
-            throw Exception("Fail to parse Protos::QueryCommon! ", ErrorCodes::LOGICAL_ERROR);
-
-        LOG_INFO(
-            log,
-            "execute plan segment: {}_{}, parallel index {}",
-            query_common->query_id(),
-            request->plan_segment_id(),
-            request->parallel_id());
-
-        /// Create context.
-        ContextMutablePtr query_context;
-        UInt64 txn_id = query_common->txn_id();
-        UInt64 primary_txn_id = query_common->primary_txn_id();
-        /// Create session context for worker
-        if (context->getServerType() == ServerType::cnch_worker)
-        {
-            size_t max_execution_time_ms = 0;
-            if (query_common->has_query_expiration_timestamp())
-            {
-                auto duration_ms = duration_ms_from_now(query_common->query_expiration_timestamp());
-                if (!duration_ms)
-                    throw Exception(
-                        ErrorCodes::TIMEOUT_EXCEEDED,
-                        "Max execution time exceeded before submit plan segment, try increase max_execution_time, current timestamp:{} "
-                        "expires at:{}",
-                        time_in_milliseconds(std::chrono::system_clock::now()),
-                        query_common->query_expiration_timestamp());
-                max_execution_time_ms = duration_ms.value();
-            }
-            auto named_session
-                = context->acquireNamedCnchSession(txn_id, (max_execution_time_ms / 1000) + 1, query_common->check_session());
-            query_context = Context::createCopy(named_session->context);
-            query_context->setSessionContext(query_context);
-            query_context->setTemporaryTransaction(txn_id, primary_txn_id);
-        }
-        /// execute plan semgent instance in server
-        else
-        {
-            query_context = Context::createCopy(context);
-            query_context->setTemporaryTransaction(txn_id, primary_txn_id, false);
-        }
-        query_context->setCoordinatorAddress(query_common->coordinator_address());
-
-        /// Authentication
-        Poco::Net::SocketAddress current_socket_address(query_common->coordinator_address().host_name(), cntl->remote_side().port);
+        std::shared_ptr<butil::IOBuf> settings_io_buf;
+        prepareCommonParams(
+            request->brpc_protocol_major_revision(),
+            request->query_common_buf_size(),
+            request->query_settings_buf_size(),
+            cntl,
+            query_common,
+            settings_io_buf);
 
         PlanSegmentExecutionInfo execution_info;
-
         execution_info.parallel_id = request->parallel_id();
         execution_info.execution_address = AddressInfo(request->execution_address());
         // TODO source_task_index && source_task_count will be removed in future @lianxuechao
@@ -407,50 +563,9 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         }
         if (request->has_retry_id())
             execution_info.retry_id = request->retry_id();
-        query_context->setPlanSegmentInstanceId(PlanSegmentInstanceId{request->plan_segment_id(), request->parallel_id()});
-
-        /// Set client info.
-        ClientInfo & client_info = query_context->getClientInfo();
-        Poco::Net::SocketAddress initial_socket_address(query_common->initial_client_host(), query_common->initial_client_port());
-
-        client_info.rpc_port = query_common->mutable_coordinator_address()->exchange_port();
-        client_info.brpc_protocol_major_version = request->brpc_protocol_major_revision();
-        client_info.brpc_protocol_minor_version = query_common->brpc_protocol_minor_revision();
-        client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
-        client_info.interface = ClientInfo::Interface::BRPC;
-        Decimal64 initial_query_start_time_microseconds {query_common->initial_query_start_time()};
-        client_info.initial_query_start_time = initial_query_start_time_microseconds / 1000000;
-        client_info.initial_query_start_time_microseconds = initial_query_start_time_microseconds;
-
-        client_info.initial_user = std::move(*query_common->mutable_initial_user());
-        client_info.initial_query_id = query_common->query_id();
-
-        client_info.initial_address = std::move(initial_socket_address);
-
-        client_info.current_query_id = client_info.initial_query_id + "_" + std::to_string(request->plan_segment_id());
-        client_info.current_address = std::move(current_socket_address);
-
-        client_info.rpc_port = query_common->coordinator_address().exchange_port();
-
-        /// Prepare settings.
-        butil::IOBuf settings_io_buf;
-        if (request->query_settings_buf_size() > 0)
-        {
-            auto query_settings_buf_size = attachment.cutn(&settings_io_buf, request->query_settings_buf_size());
-            if (query_settings_buf_size != request->query_settings_buf_size())
-            {
-                throw Exception(
-                    "Impossible query_settings_buf_size: " + std::to_string(query_settings_buf_size)
-                        + "expected: " + std::to_string(request->query_settings_buf_size()),
-                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-
-        report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
-        LOG_TRACE(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
 
         butil::IOBuf plan_segment_buf;
-        auto plan_segment_buf_size = attachment.cutn(&plan_segment_buf, request->plan_segment_buf_size());
+        auto plan_segment_buf_size = cntl->request_attachment().cutn(&plan_segment_buf, request->plan_segment_buf_size());
         if (plan_segment_buf_size != request->plan_segment_buf_size())
         {
             throw Exception(
@@ -458,83 +573,17 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
                     + "expected: " + std::to_string(request->plan_segment_buf_size()),
                 ErrorCodes::LOGICAL_ERROR);
         }
-        ThreadFromGlobalPool async_thread([query_context = std::move(query_context),
-                                           execution_info = std::move(execution_info),
-                                           query_common = std::move(query_common),
-                                           segment_id = request->plan_segment_id(),
-                                           plan_segment_buf = std::make_shared<butil::IOBuf>(plan_segment_buf.movable()),
-                                           settings_io_buf = std::make_shared<butil::IOBuf>(settings_io_buf.movable())]() {
-            bool before_execute = true;
-            try
-            {
-                /// Authentication
-                const auto & current_user = execution_info.execution_address.getUser();
-                query_context->setUser(
-                    current_user, execution_info.execution_address.getPassword(), query_context->getClientInfo().current_address);
 
-                if (!settings_io_buf->empty())
-                {
-                    ReadBufferFromBrpcBuf settings_read_buf(*settings_io_buf);
-                    /// Sets an extra row policy based on `client_info.initial_user`, problematic for now
-                    // query_context->setInitialRowPolicy();
-                    /// apply settings changed
-                    const size_t MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS = 4;
-                    if (query_common->brpc_protocol_minor_revision() >= MIN_MINOR_VERSION_ENABLE_STRINGS_WITH_FLAGS)
-                        const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::STRINGS_WITH_FLAGS);
-                    else
-                        const_cast<Settings &>(query_context->getSettingsRef()).read(settings_read_buf, SettingsWriteFormat::BINARY);
-                }
+        executePlanSegment(
+            std::move(query_common),
+            std::move(settings_io_buf),
+            cntl->remote_side().port,
+            request->plan_segment_id(),
+            execution_info,
+            std::make_shared<butil::IOBuf>(plan_segment_buf.movable()));
 
-                /// Disable function name normalization when it's a secondary query, because queries are either
-                /// already normalized on initiator node, or not normalized and should remain unnormalized for
-                /// compatibility.
-                query_context->setSetting("normalize_function_names", Field(0));
-
-                if (query_context->getServerType() == ServerType::cnch_worker)
-                    query_context->grantAllAccess();
-
-                /// Set quota
-                if (query_common->has_quota())
-                    query_context->setQuotaKey(query_common->quota());
-
-                if (!query_context->hasQueryContext())
-                    query_context->makeQueryContext();
-
-                query_context->setQueryExpirationTimeStamp();
-
-                /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
-                butil::IOBufAsZeroCopyInputStream plansegment_buf_wrapper(*plan_segment_buf);
-                Protos::PlanSegment plan_segment_proto;
-                plan_segment_proto.ParseFromZeroCopyStream(&plansegment_buf_wrapper);
-                // copy some commnon field from query_common;
-                plan_segment_proto.set_allocated_query_id(query_common->release_query_id());
-                plan_segment_proto.set_segment_id(segment_id);
-                plan_segment_proto.set_allocated_coordinator_address(query_common->release_coordinator_address());
-                auto plan_segment = std::make_unique<PlanSegment>();
-                plan_segment->fillFromProto(plan_segment_proto, query_context);
-                plan_segment->update(query_context);
-                auto segment_instance = std::make_unique<PlanSegmentInstance>();
-
-                before_execute = false;
-                segment_instance->info = std::move(execution_info);
-                segment_instance->plan_segment = std::move(plan_segment);
-                executePlanSegmentInternal(std::move(segment_instance), std::move(query_context), false);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(__PRETTY_FUNCTION__);
-
-                if (before_execute)
-                {
-                    int exception_code = getCurrentExceptionCode();
-                    auto exception_message = getCurrentExceptionMessage(false);
-
-                    auto result = convertFailurePlanSegmentStatusToResult(query_context, execution_info, exception_code, exception_message);
-                    reportExecutionResult(result);
-                }
-            }
-        });
-        async_thread.detach();
+        report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
+        LOG_TRACE(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
     }
     catch (...)
     {
@@ -542,5 +591,97 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         cntl->SetFailed(error_msg);
         LOG_ERROR(log, "executeQuery failed: {}", error_msg);
     }
+}
+
+void PlanSegmentManagerRpcService::submitPlanSegments(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::SubmitPlanSegmentsRequest * request,
+    ::DB::Protos::ExecutePlanSegmentResponse * response,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+    try
+    {
+        auto query_common = std::make_shared<Protos::QueryCommon>();
+        std::shared_ptr<butil::IOBuf> settings_io_buf;
+        prepareCommonParams(
+            request->brpc_protocol_major_revision(),
+            request->query_common_buf_size(),
+            request->query_settings_buf_size(),
+            cntl,
+            query_common,
+            settings_io_buf);
+
+        // prepare segmentGroup
+        std::vector<size_t> segment_ids;
+        std::optional<PlanSegmentInstanceId> first_instance_id;
+        for (const auto & header : request->plan_segment_headers())
+        {
+            segment_ids.emplace_back(header.plan_segment_id());
+            if (!first_instance_id)
+                first_instance_id = {header.plan_segment_id(), header.parallel_id()};
+        }
+
+        const auto execution_address = AddressInfo(request->execution_address());
+        auto first_query_context
+            = createQueryContext(context, query_common, settings_io_buf, cntl->remote_side().port, *first_instance_id, execution_address);
+        auto process_plan_segment_entries = first_query_context->getPlanSegmentProcessList().insertGroup(first_query_context, segment_ids);
+
+        const auto & headers = request->plan_segment_headers();
+        size_t header_size = headers.size();
+        for (size_t i = 0; i < header_size; ++i)
+        {
+            const auto & header = headers[i];
+            PlanSegmentExecutionInfo execution_info;
+            execution_info.parallel_id = header.parallel_id();
+            execution_info.execution_address = execution_address;
+            if (header.has_retry_id())
+                execution_info.retry_id = header.retry_id();
+            if (header.has_source_task_filter())
+                execution_info.source_task_filter.fromProto(header.source_task_filter());
+
+            butil::IOBuf plan_segment_buf;
+            auto plan_segment_buf_size = cntl->request_attachment().cutn(&plan_segment_buf, header.plan_segment_buf_size());
+            if (plan_segment_buf_size != header.plan_segment_buf_size())
+            {
+                throw Exception(
+                    "Impossible plan_segment_buf_size: " + std::to_string(plan_segment_buf_size)
+                        + "expected: " + std::to_string(header.plan_segment_buf_size()),
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+
+            executePlanSegment(
+                query_common,
+                settings_io_buf,
+                cntl->remote_side().port,
+                header.plan_segment_id(),
+                execution_info,
+                std::make_shared<butil::IOBuf>(plan_segment_buf.movable()),
+                std::move(process_plan_segment_entries[i]),
+                (i == 0) ? first_query_context : nullptr);
+        }
+
+        report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
+        LOG_TRACE(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
+    }
+    catch (...)
+    {
+        auto error_msg = getCurrentExceptionMessage(true);
+        cntl->SetFailed(error_msg);
+        LOG_ERROR(log, "executeQuery failed: {}", error_msg);
+    }
+}
+
+void PlanSegmentManagerRpcService::sendPlanSegmentProfile(
+    ::google::protobuf::RpcController * /*controller*/,
+    const ::DB::Protos::PlanSegmentProfileRequest * request,
+    ::DB::Protos::PlanSegmentProfileResponse * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    PlanSegmentProfilePtr profile = PlanSegmentProfile::fromProto(*request);
+    const SegmentSchedulerPtr & scheduler = context->getSegmentScheduler();
+    scheduler->updateSegmentProfile(profile);
 }
 }

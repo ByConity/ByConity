@@ -54,11 +54,16 @@ struct ExceptionWithCode
 };
 
 using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentStatus>;
+struct PlanSegmentProfile;
+using PlanSegmentProfilePtr = std::shared_ptr<PlanSegmentProfile>;
+using PlanSegmentProfiles = std::vector<PlanSegmentProfilePtr>;
+using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 // <query_id, <segment_id, set of segment's received status for each instance >>
 using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, std::unordered_set<UInt64>>;
 // <query_id, <segment_id, status>>
 using SegmentStatusMap = std::unordered_map<String, std::unordered_map<size_t, RuntimeSegmentsStatusPtr>>;
+using SegmentProfilesMap = std::unordered_map<String, std::unordered_map<size_t, PlanSegmentProfiles>>;
 using BspSchedulerMap = std::unordered_map<String, std::shared_ptr<BSPScheduler>>;
 enum class OverflowMode;
 
@@ -96,10 +101,14 @@ public:
     void updateSegmentStatus(const RuntimeSegmentStatus & segment_status);
     void updateQueryStatus(const RuntimeSegmentStatus & segment_status);
 
+    void updateSegmentProfile(PlanSegmentProfilePtr & segment_profile);
+    std::unordered_map<size_t, PlanSegmentProfiles> getSegmentsProfile(const String & query_id);
+
     void updateReceivedSegmentStatusCounter(
         const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentStatus & status);
     // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
+    bool alreadyReceivedAllSegmentStatus(const String & query_id);
     void onSegmentFinished(const RuntimeSegmentStatus & status);
     std::shared_ptr<BSPScheduler> getBSPScheduler(const String & query_id);
 
@@ -114,7 +123,9 @@ private:
 
     // Protect maps below.
     mutable bthread::Mutex segment_status_mutex;
+    mutable bthread::Mutex segment_profile_mutex;
     mutable SegmentStatusMap segment_status_map;
+    mutable SegmentProfilesMap segment_profile_map;
     mutable std::unordered_map<String, RuntimeSegmentsStatusPtr> query_status_map;
     // record exception when exception occurred
     ConcurrentShardMap<String, ExceptionWithCode> query_to_exception_with_code;

@@ -36,5 +36,11 @@ explain analyze verbose = 0, profile = 0, stats = 0 insert into t48028 (*) selec
 
 select count() from t48028;
 
+explain analyze distributed segment_id = 1, profile = 0, verbose = 0, stats = 0 select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a format Null;
+
+EXPLAIN ANALYZE distributed segment_profile = 1, profile = 0, verbose = 0, stats = 0, indexes = 1  select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a format Null;
+
+EXPLAIN ANALYZE distributed selected_parts=1, profile = 0, verbose = 0, stats = 0, indexes = 1  select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a format Null;
+
 DROP TABLE IF EXISTS t48028;
 DROP TABLE IF EXISTS t480282;

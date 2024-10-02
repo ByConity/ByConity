@@ -136,10 +136,9 @@ CnchKafkaBlockInputStream::~CnchKafkaBlockInputStream()
             }
 
             IRowInputFormat * row_input = nullptr;
-             if (!children.empty())
+             if (input_format_ptr != nullptr)
              {
-                 if (auto *input_stream = dynamic_cast<InputStreamFromInputFormat *>(children.back().get()))
-                     row_input = dynamic_cast<IRowInputFormat *>(input_stream->getInputFormatPtr().get());
+                row_input = dynamic_cast<IRowInputFormat *>(input_format_ptr.get());
              }
 
             if (row_input && row_input->getNumErrors() > 0)
@@ -211,10 +210,10 @@ void CnchKafkaBlockInputStream::readPrefixImpl()
         };
     }
 
-    auto child = FormatFactory::instance().getInput(storage.settings.format.value,
+    input_format_ptr = FormatFactory::instance().getInput(storage.settings.format.value,
                                                  *delimited_buffer, non_virtual_header, context, max_block_size);
 
-    if (auto *row_input = dynamic_cast<IRowInputFormat*>(child.get()))
+    if (auto *row_input = dynamic_cast<IRowInputFormat*>(input_format_ptr.get()))
     {
         row_input->setReadCallBack(read_callback);
         row_input->setCallbackOnError( [sub_buffer] (auto & e)
@@ -231,14 +230,14 @@ void CnchKafkaBlockInputStream::readPrefixImpl()
                                        });
     }
     else
-        throw Exception("An input format based on IRowInputFormat is expected, but provided: " + child->getName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("An input format based on IRowInputFormat is expected, but provided: " + input_format_ptr->getName(), ErrorCodes::LOGICAL_ERROR);
 
     if (context->getSettingsRef().insert_null_as_default && need_add_defaults)
     {
-        Pipe pipe(child);
+        Pipe pipe(input_format_ptr);
         pipe.addSimpleTransform([&](const Block & header)
         {
-            return std::make_shared<AddingDefaultsTransform>(header, metadata_snapshot->getColumns(), *child, context);
+            return std::make_shared<AddingDefaultsTransform>(header, metadata_snapshot->getColumns(), *input_format_ptr, context);
         });
         QueryPipeline pipeline;
         pipeline.init(std::move(pipe));
@@ -247,7 +246,7 @@ void CnchKafkaBlockInputStream::readPrefixImpl()
         addChild(adding_default_stream);
     }
     else {
-        BlockInputStreamPtr stream = std::make_shared<InputStreamFromInputFormat>(std::move(child));
+        BlockInputStreamPtr stream = std::make_shared<InputStreamFromInputFormat>(input_format_ptr);
         addChild(stream);
     }
 

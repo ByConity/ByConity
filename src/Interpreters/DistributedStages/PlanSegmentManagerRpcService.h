@@ -86,6 +86,13 @@ public:
         ::DB::Protos::ExecutePlanSegmentResponse * response,
         ::google::protobuf::Closure * done) override;
 
+    /// execute queries described by plan segments
+    void submitPlanSegments(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::SubmitPlanSegmentsRequest * request,
+        ::DB::Protos::ExecutePlanSegmentResponse * response,
+        ::google::protobuf::Closure * done) override;
+
     /// receive exception report send terminate query (coordinate host ---> segment executor host)
     void cancelQuery(
         ::google::protobuf::RpcController * /*controller*/,
@@ -125,8 +132,39 @@ public:
         ::DB::Protos::SendProgressResponse * response,
         ::google::protobuf::Closure * done) override;
 
+    void sendPlanSegmentProfile(
+        ::google::protobuf::RpcController * /*controller*/,
+        const ::DB::Protos::PlanSegmentProfileRequest * request,
+        ::DB::Protos::PlanSegmentProfileResponse * /*response*/,
+        ::google::protobuf::Closure * done) override;
 
 private:
+    void prepareCommonParams(
+        UInt32 major_revision,
+        UInt32 query_common_buf_size,
+        UInt32 query_settings_buf_size,
+        brpc::Controller * cntl,
+        std::shared_ptr<Protos::QueryCommon> & query_common,
+        std::shared_ptr<butil::IOBuf> & settings_io_buf);
+
+    static ContextMutablePtr createQueryContext(
+        ContextMutablePtr global_context,
+        std::shared_ptr<Protos::QueryCommon> & query_common,
+        std::shared_ptr<butil::IOBuf> & settings_io_buf,
+        UInt16 remote_side_port,
+        PlanSegmentInstanceId instance_id,
+        const AddressInfo & execution_address);
+
+    void executePlanSegment(
+        std::shared_ptr<Protos::QueryCommon> query_common,
+        std::shared_ptr<butil::IOBuf> settings_io_buf,
+        UInt16 remote_side_port,
+        UInt32 segment_id,
+        PlanSegmentExecutionInfo & execution_info,
+        std::shared_ptr<butil::IOBuf> plan_segment_buf,
+        PlanSegmentProcessList::EntryPtr process_plan_segment_entry = nullptr,
+        ContextMutablePtr query_context = nullptr);
+
     ContextMutablePtr context;
     std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;
     Poco::Logger * log;

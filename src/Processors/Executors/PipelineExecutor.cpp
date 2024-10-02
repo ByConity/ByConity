@@ -580,47 +580,29 @@ void reportToCoordinator(
 
 void PipelineExecutor::reportProcessorProfileOnCancel(const Processors & processors_) const
 {
-    String query_id;
-    size_t segment_id = 0;
-    AddressInfo coordinator_address;
-    AddressInfo current_address;
     if (process_list_element)
     {
-        query_id = process_list_element->getClientInfo().initial_query_id;
+        const auto & query_id = process_list_element->getClientInfo().initial_query_id;
         auto context = process_list_element->getContext();
-        auto weak_segment_process_list_entry = context->getPlanSegmentProcessListEntry().lock();
-        if (weak_segment_process_list_entry)
-        {
-            PlanSegmentProcessList::EntryPtr segment_process_list_entry = std::move(weak_segment_process_list_entry);
-            segment_id = segment_process_list_entry->getSegmentId();
-            coordinator_address = segment_process_list_entry->getCoordinatorAddress();
-            current_address = getLocalAddress(*context);
-        }
+        size_t segment_id = context->getPlanSegmentInstanceId().segment_id;
+        const auto & coordinator_address = context->getCoordinatorAddress();
+        const auto & current_address = getLocalAddress(*context);
 
-        auto finish_time = std::chrono::system_clock::now();
         if (segment_id > 0)
-            reportToCoordinator(log, coordinator_address, current_address, processors_, query_id, finish_time, segment_id);
+            reportToCoordinator(
+                log, coordinator_address, current_address, processors_, query_id, std::chrono::system_clock::now(), segment_id);
     }
 }
 
 void PipelineExecutor::reportProcessorProfile(const IProcessor * processor) const
 {
-    String query_id;
-    size_t segment_id = 0;
-    AddressInfo coordinator_address;
-    AddressInfo current_address;
     if (process_list_element)
     {
-        query_id = process_list_element->getClientInfo().initial_query_id;
+        const auto & query_id = process_list_element->getClientInfo().initial_query_id;
         auto context = process_list_element->getContext();
-        auto weak_segment_process_list_entry = context->getPlanSegmentProcessListEntry().lock();
-        if (weak_segment_process_list_entry)
-        {
-            PlanSegmentProcessList::EntryPtr segment_process_list_entry = std::move(weak_segment_process_list_entry);
-            segment_id = segment_process_list_entry->getSegmentId();
-            coordinator_address = segment_process_list_entry->getCoordinatorAddress();
-            current_address = getLocalAddress(*context);
-        }
+        size_t segment_id = context->getPlanSegmentInstanceId().segment_id;
+        const auto & coordinator_address = context->getCoordinatorAddress();
+        const auto & current_address = getLocalAddress(*context);
 
         if (segment_id > 0)
             reportToCoordinator(log, coordinator_address, current_address, processor, query_id, std::chrono::system_clock::now(), segment_id);

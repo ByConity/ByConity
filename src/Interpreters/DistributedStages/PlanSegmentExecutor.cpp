@@ -77,6 +77,7 @@
 #include <common/logger_useful.h>
 #include <common/scope_guard_safe.h>
 #include <common/types.h>
+#include "Interpreters/sendPlanSegment.h"
 
 namespace ProfileEvents
 {
@@ -112,8 +113,10 @@ void PlanSegmentExecutor::prepareSegmentInfo() const
     query_log_element->query_start_time_microseconds = time_in_microseconds(current_time);
 }
 
-PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_)
-    : context(std::move(context_))
+PlanSegmentExecutor::PlanSegmentExecutor(
+    PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, PlanSegmentProcessList::EntryPtr process_plan_segment_entry_)
+    : process_plan_segment_entry(std::move(process_plan_segment_entry_))
+    , context(std::move(context_))
     , plan_segment_instance(std::move(plan_segment_instance_))
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
@@ -124,8 +127,13 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_ins
     prepareSegmentInfo();
 }
 
-PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentInstancePtr plan_segment_instance_, ContextMutablePtr context_, ExchangeOptions options_)
-    : context(std::move(context_))
+PlanSegmentExecutor::PlanSegmentExecutor(
+    PlanSegmentInstancePtr plan_segment_instance_,
+    ContextMutablePtr context_,
+    PlanSegmentProcessList::EntryPtr process_plan_segment_entry_,
+    ExchangeOptions options_)
+    : process_plan_segment_entry(std::move(process_plan_segment_entry_))
+    , context(std::move(context_))
     , plan_segment_instance(std::move(plan_segment_instance_))
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
@@ -175,7 +183,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
         query_log_element->event_time_microseconds = time_in_microseconds(finish_time);
 
         return convertSuccessPlanSegmentStatusToResult(
-            context, plan_segment_instance->info, final_progress, sender_metrics, plan_segment_outputs);
+            context, plan_segment_instance->info, final_progress, sender_metrics, plan_segment_outputs, segment_profile);
     }
     catch (...)
     {
@@ -237,17 +245,8 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
     if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
         throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
 
-    try
-    {
-        auto segment_group = context->getPlanSegmentProcessList().insertGroup(*plan_segment, context);
-        res.plan_segment_process_entry = context->getPlanSegmentProcessList().insertProcessList(std::move(segment_group), *plan_segment, context);
-    }
-    catch (Exception &)
-    {
-        auto segment_id = plan_segment_instance->plan_segment->getPlanSegmentId();
-        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), segment_id, true);
-        throw;
-    }
+    res.plan_segment_process_entry = context->getPlanSegmentProcessList().insertGroup(context, plan_segment->getPlanSegmentId());
+    context->getPlanSegmentProcessList().insertProcessList(res.plan_segment_process_entry, *plan_segment, context);
 
     // set entry before buildPipeline to control memory usage of exchange queue
     context->setPlanSegmentProcessListEntry(res.plan_segment_process_entry);
@@ -276,50 +275,77 @@ void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * q
     query_log_element->query_tables = query_access_info.tables;
 }
 
-StepAggregatedOperatorProfiles collectStepRuntimeProfiles(int segment_id, const QueryPipelinePtr & pipeline)
+StepProfiles collectStepRuntimeProfiles(const QueryPipelinePtr & pipeline)
 {
     ProcessorProfiles profiles;
     for (const auto & processor : pipeline->getProcessors())
         profiles.push_back(std::make_shared<ProcessorProfile>(processor.get()));
     GroupedProcessorProfilePtr grouped_profiles = GroupedProcessorProfile::getGroupedProfiles(profiles);
+    auto step_profile = GroupedProcessorProfile::aggregateOperatorProfileToStepLevel(grouped_profiles);
+    AddressToStepProfile addr_to_step_profile;
+    addr_to_step_profile["localhost"] = step_profile;
+    return ProfileMetric::aggregateStepProfileBetweenWorkers(addr_to_step_profile);
+}
 
-    std::unordered_map<size_t, std::vector<GroupedProcessorProfilePtr>> segment_grouped_profile;
-    segment_grouped_profile[segment_id].emplace_back(grouped_profiles);
-    auto step_profile = StepOperatorProfile::aggregateOperatorProfileToStepLevel(segment_grouped_profile);
-    return AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(step_profile);
+void fillPlanSegmentProfile(
+    PlanSegmentProfilePtr & segment_profile,
+    const QueryPipelinePtr & pipeline,
+    ReportProfileType type,
+    const QueryStatus * query_status,
+    ContextPtr context,
+    PlanSegment * plan_segment)
+{
+    AddressInfo current_address = getLocalAddress(*context);
+    segment_profile->worker_address = extractExchangeHostPort(current_address);
+    if (query_status)
+    {
+        auto query_status_info = query_status->getInfo(true, context->getSettingsRef().log_profile_events);
+        segment_profile->read_bytes = query_status_info.read_bytes;
+        segment_profile->read_rows = query_status_info.read_rows;
+        segment_profile->query_duration_ms = query_status_info.elapsed_seconds * 1000;
+        segment_profile->io_wait_ms = query_status_info.max_io_time_thread_ms;
+    }
+
+    if (type == ReportProfileType::Unspecified)
+        return;
+    ProcessorProfiles profiles;
+    for (const auto & processor : pipeline->getProcessors())
+        profiles.push_back(std::make_shared<ProcessorProfile>(processor.get()));
+    GroupedProcessorProfilePtr grouped_profiles = GroupedProcessorProfile::getGroupedProfiles(profiles);
+    if (type == ReportProfileType::QueryPipeline)
+    {
+        auto output_root = GroupedProcessorProfile::getOutputRoot(grouped_profiles);
+        segment_profile->profile_root_id = output_root->id;
+        segment_profile->profiles = GroupedProcessorProfile::getProfileMetricsFromOutputRoot(output_root);
+    }
+    else if (type == ReportProfileType::QueryPlan)
+    {
+        auto step_profile = GroupedProcessorProfile::aggregateOperatorProfileToStepLevel(grouped_profiles);
+        for (auto & [step_id, profile] : step_profile)
+            segment_profile->profiles.emplace(step_id, profile);
+        auto & plan = plan_segment->getQueryPlan();
+        for (auto & node : plan.getNodes())
+        {
+            if (!node.step->getAttributeDescriptions().empty() && segment_profile->profiles.contains(node.id))
+            {
+                for (auto & att : node.step->getAttributeDescriptions())
+                {
+                    auto attribute_ptr = std::make_shared<RuntimeAttributeDescription>(att.second);
+                    segment_profile->profiles.at(node.id)->attributes.emplace(att.first, attribute_ptr);
+                }
+            }
+        }
+    }
 }
 
 void PlanSegmentExecutor::doExecute()
 {
     SCOPE_EXIT_SAFE({
-        if (context->getSettingsRef().log_queries && process_plan_segment_entry)
-            collectSegmentQueryRuntimeMetric(&process_plan_segment_entry->get());
+        if (context->getSettingsRef().log_queries && process_plan_segment_entry->getQueryStatus())
+            collectSegmentQueryRuntimeMetric(process_plan_segment_entry->getQueryStatus().get());
     });
-    try
-    {
-        auto segment_group = context->getPlanSegmentProcessList().insertGroup(*plan_segment, context);
-        if (!CurrentThread::getGroup())
-        {
-            if (context->getSettingsRef().exchange_use_query_memory_tracker && !context->getSettingsRef().bsp_mode)
-                query_scope.emplace(context, &segment_group->memory_tracker); // Running as master query and not initialized
-            else
-                query_scope.emplace(context);
-        }
-        else
-        {
-            // Running as master query and already initialized
-            if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
-                throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
-        }
-        process_plan_segment_entry = context->getPlanSegmentProcessList().insertProcessList(std::move(segment_group), *plan_segment, context);
-    }
-    catch (Exception &)
-    {
-        query_scope.reset();
-        auto segment_id = plan_segment_instance->plan_segment->getPlanSegmentId();
-        context->getPlanSegmentProcessList().remove(plan_segment->getQueryId(), segment_id, true);
-        throw;
-    }
+
+    context->getPlanSegmentProcessList().insertProcessList(process_plan_segment_entry, *plan_segment, context);
     context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
     if (context->getSettingsRef().bsp_mode)
@@ -340,7 +366,7 @@ void PlanSegmentExecutor::doExecute()
     }
 
     // set process list before building pipeline, or else TableWriteTransform's output stream can't set its process list properly
-    QueryStatus * query_status = &process_plan_segment_entry->get();
+    QueryStatus * query_status = process_plan_segment_entry->getQueryStatus().get();
     context->setProcessListElement(query_status);
 
     QueryPipelinePtr pipeline;
@@ -439,7 +465,12 @@ void PlanSegmentExecutor::doExecute()
         query_log_element->segment_profiles = std::make_shared<std::vector<String>>();
         query_log_element->segment_profiles->emplace_back(
             PlanSegmentDescription::getPlanSegmentDescription(plan_segment_instance->plan_segment, true)
-                ->jsonPlanSegmentDescriptionAsString(collectStepRuntimeProfiles(plan_segment->getPlanSegmentId(), pipeline)));
+                ->jsonPlanSegmentDescriptionAsString(collectStepRuntimeProfiles(pipeline)));
+    }
+    if (context->getSettingsRef().report_segment_profiles && plan_segment)
+    {
+        segment_profile = std::make_shared<PlanSegmentProfile>(query_log_element->client_info.initial_query_id, plan_segment->getPlanSegmentId());
+        fillPlanSegmentProfile(segment_profile, pipeline, plan_segment->getProfileType(), query_status, context, plan_segment);
     }
 
     if (context->getSettingsRef().log_processors_profiles)

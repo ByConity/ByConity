@@ -399,6 +399,7 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
     M(Bool, log_segment_profiles, false, "Log profile of each segment info including runtime and planning information.", 0) \
+    M(Bool, report_segment_profiles, false, "Report plan segment profile to coordinator.", 0)\
     M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0) \
     M(UInt64, report_processors_profiles_timeout_millseconds, 10, "Report processors profile to coordinator timeout millseconds.", 0) \
     M(DistributedProductMode, \
@@ -1141,7 +1142,7 @@ enum PreloadLevelSettings : UInt64
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not avaiable", 0) \
     M(BackupVWMode, backup_vw_mode, BackupVWMode::BACKUP, "backup vw mode. backup round_robin backup_only", 0) \
-    M(String, virtual_warehouse_write, "", "Deprecated, use virtual_warehouse instead", 0) \
+    M(String, virtual_warehouse_write, "", "When executing CREATE TABLE query, if this is set, the value will be treated as table setting `cnch_vw_write`", 0) \
     M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(TextCaseOption, text_case_option, TextCaseOption::MIXED, "Convert identifiers to lower case/upper case just like MySQL", 0) \
@@ -1721,6 +1722,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_enable_node_stable_hash, false, "Force exchange use buffer as possible", 0) \
     M(Bool, exchange_use_query_memory_tracker, true, "Use query-level memory tracker", 0) \
     M(String, exchange_shuffle_method_name, "cityHash64V2", "Shuffle method name used in exchange", 0) \
+    M(Bool, enable_batch_send_plan_segment, true, "Whether enable combined sending plan segments to reduce rpc calls", 0) \
     M(UInt64, wait_for_post_processing_timeout_ms, 1000, "Timeout for waiting post processing rpc from workers.", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 2000,"Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \

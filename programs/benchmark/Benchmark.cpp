@@ -19,44 +19,44 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <unistd.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <time.h>
-#include <iostream>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <random>
-#include <pcg_random.hpp>
-#include <Poco/Util/Application.h>
-#include <Common/Stopwatch.h>
-#include <Common/ThreadPool.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 #include <AggregateFunctions/ReservoirSampler.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <boost/program_options.hpp>
-#include <Common/ConcurrentBoundedQueue.h>
-#include <Common/Exception.h>
-#include <Common/randomSeed.h>
-#include <Common/clearPasswordFromCommandLine.h>
+#include <Client/Connection.h>
 #include <Core/Types.h>
-#include <IO/ReadBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFile.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <IO/Operators.h>
+#include <DataStreams/RemoteQueryExecutor.h>
 #include <IO/ConnectionTimeouts.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <IO/Operators.h>
+#include <IO/ReadBufferFromFileDescriptor.h>
+#include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
-#include <DataStreams/RemoteBlockInputStream.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Client/Connection.h>
-#include <Common/InterruptListener.h>
+#include <boost/program_options.hpp>
+#include <pcg_random.hpp>
+#include <Poco/Util/Application.h>
+#include <Common/ConcurrentBoundedQueue.h>
 #include <Common/Config/configReadClient.h>
-#include <Common/TerminalSize.h>
+#include <Common/Exception.h>
+#include <Common/InterruptListener.h>
+#include <Common/Stopwatch.h>
 #include <Common/StudentTTest.h>
-#include <filesystem>
+#include <Common/TerminalSize.h>
+#include <Common/ThreadPool.h>
+#include <Common/clearPasswordFromCommandLine.h>
+#include <Common/randomSeed.h>
 
 
 namespace fs = std::filesystem;
@@ -474,20 +474,20 @@ private:
         if (reconnect)
             connection.disconnect();
 
-        RemoteBlockInputStream stream(
-            connection, query, {}, global_context, nullptr, Scalars(), Tables(), query_processing_stage);
+        RemoteQueryExecutor executor(connection, query, {}, global_context, nullptr, Scalars(), Tables(), query_processing_stage);
         if (!query_id.empty())
-            stream.setQueryId(query_id);
+            executor.setQueryId(query_id);
 
         Progress progress;
-        stream.setProgressCallback([&progress](const Progress & value) { progress.incrementPiecewiseAtomically(value); });
+        executor.setProgressCallback([&progress](const Progress & value) { progress.incrementPiecewiseAtomically(value); });
 
-        stream.readPrefix();
-        while (Block block = stream.read());
+        executor.sendQuery(ClientInfo::QueryKind::INITIAL_QUERY);
 
-        stream.readSuffix();
+        BlockStreamProfileInfo info;
+        while (Block block = executor.read())
+            info.update(block);
 
-        const BlockStreamProfileInfo & info = stream.getProfileInfo();
+        executor.finish();
 
         double seconds = watch.elapsedSeconds();
 

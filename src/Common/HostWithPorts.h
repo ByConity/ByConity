@@ -212,7 +212,7 @@ public:
     uint16_t getHTTPPort() const { return http_port; }
     uint16_t getRPCPort() const { return rpc_port; }
     std::string toDebugString() const;
-    void replaceId(const String & id_) { id = id_; } 
+    void replaceId(const String & id_) { id = id_; }
     String getId() const { return id; }
     void setRealId(const String & id_) { real_id = id_; }
 

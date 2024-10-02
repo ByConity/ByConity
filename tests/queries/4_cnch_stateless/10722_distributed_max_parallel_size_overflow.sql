@@ -1,4 +1,4 @@
-use test;
+drop table if exists distributed_max_parallel_size_overflow;
 
 CREATE TABLE distributed_max_parallel_size_overflow
 (

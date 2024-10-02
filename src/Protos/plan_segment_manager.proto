@@ -1,9 +1,11 @@
 syntax = "proto2";
+
 package DB.Protos;
 
 import "data_models.proto";
 import "plan_node_utils.proto";
 import "plan_node.proto";
+import "enum.proto";
 
 option cc_generic_services = true;
 
@@ -17,6 +19,7 @@ message PlanSegment {
   optional uint32 segment_id = 7;
   optional string query_id = 8;
   optional AddressInfo coordinator_address = 9;
+  optional ReportProfileType.Enum profile_type = 10;
 }
 
 message CancelQueryRequest {
@@ -148,6 +151,22 @@ message SubmitPlanSegmentRequest {
   optional SourceTaskFilter source_task_filter = 11;
 }
 
+message PlanSegmentHeader {
+  required uint32 plan_segment_id = 1;
+  required uint32 parallel_id = 2;
+  required uint32 plan_segment_buf_size = 3;
+  optional uint32 retry_id = 4;
+  optional SourceTaskFilter source_task_filter = 5;
+}
+
+message SubmitPlanSegmentsRequest {
+  required uint32 brpc_protocol_major_revision = 1;
+  required AddressInfo execution_address = 2;
+  required uint32 query_common_buf_size = 3;
+  required uint32 query_settings_buf_size = 4;
+  repeated PlanSegmentHeader plan_segment_headers = 5;
+}
+
 message ExecutePlanSegmentResponse {
   optional string message = 1;
   optional WorkerNodeResourceData worker_resource_data = 2;
@@ -201,6 +220,48 @@ message SendProgressRequest {
   optional Progress progress = 4;
 }
 
+message ProfileMetric {
+  required uint64 id = 1;
+  required string name = 2;
+  repeated uint64 children_ids = 3;
+  required uint32 parallel_size = 4;
+
+  required uint32 sum_elapsed_us = 5;
+  required uint32 max_elapsed_us = 6;
+  required uint32 min_elapsed_us = 7;
+
+  required uint64 output_rows = 8;
+  required uint64 output_bytes = 9;
+  required uint32 output_wait_sum_elapsed_us = 10;
+  required uint32 output_wait_max_elapsed_us = 11;
+  required uint32 output_wait_min_elapsed_us = 12;
+
+  repeated InputProfileMetric inputs = 13;
+
+  map<string, RuntimeAttributeDescription> attributes = 14;
+}
+
+message PlanSegmentProfileRequest{
+  required string query_id = 1;
+  required uint32 segment_id = 2;
+  required bool is_succeed = 3;
+  required string worker_address = 4;
+
+  optional uint64 profile_root_id = 6;
+  map<uint64, ProfileMetric> profiles = 7;
+
+  optional uint64 read_rows = 8;
+  optional uint64 read_bytes = 9;
+  optional uint64 total_cpu_ms = 10;
+  optional uint64 query_duration_ms = 11;
+  optional uint64 io_wait_ms = 12;
+  optional string error_message = 13;
+}
+
+message PlanSegmentProfileResponse {
+  optional string message = 1;
+}
+
 message SendProgressResponse {
   optional string message = 1;
 }
@@ -208,6 +269,8 @@ message SendProgressResponse {
 service PlanSegmentManagerService {
 
   rpc submitPlanSegment(SubmitPlanSegmentRequest) returns (ExecutePlanSegmentResponse);
+
+  rpc submitPlanSegments(SubmitPlanSegmentsRequest) returns (ExecutePlanSegmentResponse);
 
   rpc cancelQuery(CancelQueryRequest) returns (CancelQueryResponse);
 
@@ -220,4 +283,6 @@ service PlanSegmentManagerService {
   rpc batchReportProcessorProfileMetrics(BatchReportProcessorProfileMetricRequest) returns (ReportProcessorProfileMetricResponse);
 
   rpc sendProgress(SendProgressRequest) returns (SendProgressResponse);
+
+  rpc sendPlanSegmentProfile(PlanSegmentProfileRequest) returns (PlanSegmentProfileResponse);
 };

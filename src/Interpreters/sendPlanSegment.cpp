@@ -23,7 +23,7 @@ AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_c
 }
 
 void sendPlanSegmentToAddress(
-    const AddressInfo & addressinfo,
+    const AddressInfo & address_info,
     PlanSegment * plan_segment_ptr,
     PlanSegmentExecutionInfo & execution_info,
     ContextPtr query_context,
@@ -38,14 +38,19 @@ void sendPlanSegmentToAddress(
         plan_segment_ptr->getQueryId(),
         plan_segment_ptr->getPlanSegmentId(),
         execution_info.parallel_id,
-        addressinfo.toString(),
+        address_info.toString(),
         plan_segment_ptr->toString());
     if (execution_info.source_task_filter.isValid())
         LOG_TRACE(log, "send additional filter {}", execution_info.source_task_filter.toString());
-    execution_info.execution_address = addressinfo;
+    execution_info.execution_address = address_info;
+
+    {
+        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
+        dag_graph_ptr->plan_send_addresses.emplace(address_info);
+    }
 
     executePlanSegmentRemotelyWithPreparedBuf(
-        *plan_segment_ptr,
+        plan_segment_ptr->getPlanSegmentId(),
         std::move(execution_info),
         dag_graph_ptr->query_common_buf,
         dag_graph_ptr->query_settings_buf,
@@ -53,9 +58,28 @@ void sendPlanSegmentToAddress(
         dag_graph_ptr->async_context,
         *query_context.get(),
         worker_id);
+}
 
-    std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-    dag_graph_ptr->plan_send_addresses.emplace(addressinfo);
+void sendPlanSegmentsToAddress(
+    const AddressInfo & address_info,
+    const PlanSegmentHeaders & plan_segment_headers,
+    ContextPtr query_context,
+    std::shared_ptr<DAGGraph> dag_graph_ptr,
+    const WorkerId & worker_id)
+{
+    {
+        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
+        dag_graph_ptr->plan_send_addresses.emplace(address_info);
+    }
+
+    executePlanSegmentsRemotely(
+        address_info,
+        plan_segment_headers,
+        dag_graph_ptr->query_common_buf,
+        dag_graph_ptr->query_settings_buf,
+        dag_graph_ptr->async_context,
+        *query_context.get(),
+        worker_id);
 }
 
 } // namespace DB
