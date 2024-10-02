@@ -24,7 +24,7 @@ static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* 
     {/// Number of event dispatcher
      {"event_dispatcher_num", "2"},
      /// Max unwritten bytes in each socket, if the limit is reached
-     {"socket_max_unwritten_bytes", "1073741824"},
+     {"socket_max_unwritten_bytes", "2147483648"},
      /// Set the recv buffer size of socket if this value is positive
      {"socket_recv_buffer_size", ""},
      /// Set send buffer size of sockets if this value is positive
@@ -36,7 +36,7 @@ static std::unordered_map<std::string, std::string> configurable_brpc_gflags /* 
      /// values <= 0 disables this feature
      {"free_memory_to_system_interval", ""},
      /// Maximum size of a single message body in all protocols
-     {"max_body_size", "671088640"},
+     {"max_body_size", "3221225472"},
      /// Print Controller.ErrorText() when server is about to respond a failed RPC
      {"log_error_text", ""},
      {"bvar_enable_sampling", "true"},
