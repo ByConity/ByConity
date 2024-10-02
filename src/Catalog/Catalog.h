@@ -359,7 +359,7 @@ public:
 
     Strings getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context);
 
-    PrunedPartitions getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return);
+    PrunedPartitions getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return, const bool & ignore_ttl);
     /// dictionary related APIs
 
     void createDictionary(const StorageID & storage_id, const String & create_query);

@@ -1507,7 +1507,7 @@ void StorageMaterializedView::refreshWhere(ASTPtr partition_expr, ContextMutable
 
     SelectQueryInfo query_info = buildSelectQueryInfoForQuery(select_query, local_context);
 
-    auto required_partitions = cnch_select_table->getPrunedPartitions(query_info, column_names_to_return, local_context).partitions;
+    auto required_partitions = cnch_select_table->getPrunedPartitions(query_info, column_names_to_return, local_context, false).partitions;
 
     if (local_context->getSettingsRef().max_threads_to_refresh_by_partition > 1)
     {

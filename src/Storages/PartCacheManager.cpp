@@ -760,7 +760,7 @@ void PartCacheManager::invalidDeleteBitmapCache(const UUID & uuid, const DeleteB
     invalidDataCache<DeleteBitmapMetaPtrVector, DeleteBitmapAdapter>(uuid, parts);
 }
 
-template <typename Adapter, typename InputValueVec, typename ValueVec, typename CachePtr, typename CacheValueMap, typename GetKeyFunc>
+template <typename Adapter, typename InputValueVec, typename ValueVec, typename CachePtr, typename CacheValueMap, typename GetKeyFunc, bool insert_into_cache>
 void PartCacheManager::insertDataIntoCache(
     const IStorage & table,
     const InputValueVec & parts_model,
@@ -857,6 +857,9 @@ void PartCacheManager::insertDataIntoCache(
             meta_partitions.emplace(partition_id, *it);
         }
     }
+
+    if (!insert_into_cache)
+        return;
 
     for (auto & [partition_id, data_wrapper_vector] : partitionid_to_data_list)
     {
@@ -2091,5 +2094,18 @@ void PartCacheManager::insertDataPartsIntoCache(
         DataPartModelsMap,
         std::function<String(const DataModelPartWrapperPtr &)>>(
         table, parts_model, is_merged_parts, should_update_metrics, topology_version, part_cache_ptr, dataPartGetKeyFunc, nullptr);
+}
+
+void PartCacheManager::insertStagedPartsIntoCache(
+    const IStorage & table, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const PairInt64 & topology_version)
+{
+    insertDataIntoCache<
+        ServerDataPartAdapter,
+        pb::RepeatedPtrField<Protos::DataModelPart>,
+        DataModelPartWrapperVector,
+        CnchDataPartCachePtr,
+        DataPartModelsMap,
+        std::function<String(const DataModelPartWrapperPtr &)>, false>(
+        table, parts_model, false, false, topology_version, part_cache_ptr, dataPartGetKeyFunc, nullptr);
 }
 }

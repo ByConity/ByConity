@@ -1193,7 +1193,7 @@ ServerDataPartsWithDBM StorageCnchMergeTree::getAllPartsInPartitionsWithDBM(
         Stopwatch watch;
 
         /// ignoring snapshot because partition infos are not cleaned right now
-        auto pruned_res = getPrunedPartitions(query_info, column_names_to_return, local_context);
+        auto pruned_res = getPrunedPartitions(query_info, column_names_to_return, local_context, staging_area);
         Strings & pruned_partitions = pruned_res.partitions;
         UInt64 total_partition_number = pruned_res.total_partition_number;
 
@@ -1543,11 +1543,11 @@ void StorageCnchMergeTree::sendDropDiskCacheTasks(ContextPtr local_context, cons
 }
 
 PrunedPartitions StorageCnchMergeTree::getPrunedPartitions(
-    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const
+    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context, const bool & ignore_ttl) const
 {
     PrunedPartitions pruned_partitions;
     if (local_context->getCnchCatalog())
-        pruned_partitions = local_context->getCnchCatalog()->getPartitionsByPredicate(local_context, shared_from_this(), query_info, column_names_to_return);
+        pruned_partitions = local_context->getCnchCatalog()->getPartitionsByPredicate(local_context, shared_from_this(), query_info, column_names_to_return, ignore_ttl);
     return pruned_partitions;
 }
 

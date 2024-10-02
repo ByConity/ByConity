@@ -204,7 +204,7 @@ public:
     void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload = true, UInt64 parts_preload_level = 0, UInt64 ts = {});
     void sendDropDiskCacheTasks(ContextPtr local_context, const ServerDataPartsVector & parts, bool sync = false, bool drop_vw_disk_cache = false);
 
-    PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
+    PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context, const bool & ignore_ttl) const ;
 
     void resetObjectColumns(ContextPtr query_context);
 

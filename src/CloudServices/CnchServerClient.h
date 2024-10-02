@@ -89,7 +89,8 @@ public:
         const ConstStoragePtr & table,
         const SelectQueryInfo & query_info,
         const Names & column_names,
-        const TxnTimestamp & txn_id);
+        const TxnTimestamp & txn_id,
+        const bool & ignore_ttl);
 
     void redirectCommitParts(
         const StoragePtr & table,

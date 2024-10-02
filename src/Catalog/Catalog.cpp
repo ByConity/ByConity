@@ -2802,7 +2802,12 @@ namespace Catalog
         return partition_ids;
     }
 
-    PrunedPartitions Catalog::getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return)
+    PrunedPartitions Catalog::getPartitionsByPredicate(
+        ContextPtr session_context,
+        const ConstStoragePtr & storage,
+        const SelectQueryInfo & query_info,
+        const Names & column_names_to_return,
+        const bool & ignore_ttl)
     {
         PrunedPartitions pruned_partitions;
         auto getPartitionsLocally = [&]()
@@ -2812,7 +2817,7 @@ namespace Catalog
                 return;
             auto all_partitions = getPartitionList(storage, nullptr);
             pruned_partitions.total_partition_number = all_partitions.size();
-            pruned_partitions.partitions = cnch_mergetree->selectPartitionsByPredicate(query_info, all_partitions, column_names_to_return, session_context);
+            pruned_partitions.partitions = cnch_mergetree->selectPartitionsByPredicate(query_info, all_partitions, column_names_to_return, session_context, ignore_ttl);
         };
         const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
             UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
@@ -2823,7 +2828,7 @@ namespace Catalog
             try
             {
                 auto host_with_rpc = host_port.getRPCAddress();
-                pruned_partitions = context.getCnchServerClientPool().get(host_with_rpc)->fetchPartitions(host_with_rpc, storage, query_info, column_names_to_return, session_context->getCurrentTransactionID());
+                pruned_partitions = context.getCnchServerClientPool().get(host_with_rpc)->fetchPartitions(host_with_rpc, storage, query_info, column_names_to_return, session_context->getCurrentTransactionID(), ignore_ttl);
                 LOG_TRACE(log, "Fetched {}/{} partitions from remote host {}", pruned_partitions.partitions.size(), pruned_partitions.total_partition_number, host_port.toDebugString());
             }
             catch (...)
@@ -3522,6 +3527,8 @@ namespace Catalog
                     if (!part_models.parts().empty())
                         context.getPartCacheManager()->insertDataPartsIntoCache(
                             *table, part_models.parts(), is_merged_parts, false, host_port.topology_version);
+                    if (!staged_part_models.parts().empty())
+                        context.getPartCacheManager()->insertStagedPartsIntoCache(*table, staged_part_models.parts(), host_port.topology_version);
                     if (!commit_data.delete_bitmaps.empty())
                     {
                         context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
