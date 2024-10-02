@@ -142,11 +142,59 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use.") \
     M(UInt64, async_query_status_ttl, "", 86400, ConfigFlag::Default, "TTL for async query status stored in catalog, in seconds.") \
     M(UInt64, async_query_expire_time, "", 3600, ConfigFlag::Default, "Expire time for async query, in seconds.") \
-    M(UInt64, async_query_status_check_period, "", 15 * 60, ConfigFlag::Default, "Cycle for checking expired async query status stored in catalog, in seconds.") \
+    M(UInt64, \
+      async_query_status_check_period, \
+      "", \
+      15 * 60, \
+      ConfigFlag::Default, \
+      "Cycle for checking expired async query status stored in catalog, in seconds.") \
+    M(Bool, enable_cnch_write_remote_catalog, "", true, ConfigFlag::Default, "Set to false to disable writing catalog") \
+    M(Bool, enable_cnch_write_remote_disk, "", true, ConfigFlag::Default, "set to false to disable writing data") \
+    /**
+     * Memory caches */ \
+    M(UInt64, bitengine_memory_cache_size, "", 50UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, checksum_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, checksum_cache_bucket, "", 5000, ConfigFlag::Default, "") \
+    M(UInt64, checksum_cache_shard, "", 8, ConfigFlag::Default, "") \
+    M(UInt64, checksum_cache_lru_update_interval, "", 60, ConfigFlag::Default, "In seconds") \
+    M(UInt64, cnch_checksums_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") /* Checksums cache configs in cnch 1.4 */ \
+    M(UInt64, cnch_primary_index_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, compiled_expression_cache_size, "", 128UL * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, compressed_data_index_cache, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, delete_bitmap_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, footer_cache_size, "", 3UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, geometry_primary_index_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, gin_index_filter_result_cache, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, ginindex_store_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, ginindex_store_cache_bucket, "", 5000, ConfigFlag::Default, "") \
+    M(UInt64, ginindex_store_cache_shard, "", 2, ConfigFlag::Default, "") \
+    M(UInt64, ginindex_store_cache_ttl, "", 60, ConfigFlag::Default, "") \
+    M(UInt64, ginindex_store_cache_lru_update_interval, "", 60, ConfigFlag::Default, "In seconds") \
+    M(UInt64, intermediate_result_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, mark_cache_size, "", 5UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, mmap_cache_size, "", 1000, ConfigFlag::Default, "") \
+    M(UInt64, unique_key_index_data_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, unique_key_index_meta_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, uncompressed_cache_size, "", 0, ConfigFlag::Default, "") \
+    /**
+     * Cache default size max ratio */ \
+    M(Float32, bitengine_memory_cache_size_default_max_ratio, "", 0.15, ConfigFlag::Default, "") \
+    M(Float32, checksum_cache_size_default_max_ratio, "", 0.05, ConfigFlag::Default, "") \
+    M(Float32, cnch_primary_index_cache_size_default_max_ratio, "", 0.05, ConfigFlag::Default, "") \
+    M(Float32, compiled_expression_cache_size_default_max_ratio, "", 0.001, ConfigFlag::Default, "") \
+    M(Float32, compressed_data_index_cache_default_max_ratio, "", 0.025, ConfigFlag::Default, "") \
+    M(Float32, delete_bitmap_cache_size_default_max_ratio, "", 0.005, ConfigFlag::Default, "") \
+    M(Float32, footer_cache_size_default_max_ratio, "", 0.015, ConfigFlag::Default, "") \
+    M(Float32, gin_index_filter_result_cache_default_max_ratio, "", 0.025, ConfigFlag::Default, "") \
+    M(Float32, ginindex_store_cache_size_default_max_ratio, "", 0.025, ConfigFlag::Default, "") \
+    M(Float32, intermediate_result_cache_size_default_max_ratio, "", 0.005, ConfigFlag::Default, "") \
+    M(Float32, mark_cache_size_default_max_ratio, "", 0.05, ConfigFlag::Default, "") \
+    M(Float32, unique_key_index_data_cache_size_default_max_ratio, "", 0.005, ConfigFlag::Default, "") \
+    M(Float32, unique_key_index_meta_cache_size_default_max_ratio, "", 0.01, ConfigFlag::Default, "") \
     /**
      * Mutable */ \
     M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \
-    M(MutableFloat32, max_server_memory_usage_to_ram_ratio, "", 0.8, ConfigFlag::Default, "") \
+    M(MutableFloat32, max_server_memory_usage_to_ram_ratio, "", 0.9, ConfigFlag::Default, "") \
     M(MutableUInt64, kafka_max_partition_fetch_bytes, "", 1048576, ConfigFlag::Default, "") \
     M(MutableUInt64, stream_poll_timeout_ms, "", 500, ConfigFlag::Default, "") \
     M(MutableUInt64, debug_disable_merge_mutate_thread, "", false, ConfigFlag::Default, "") \
