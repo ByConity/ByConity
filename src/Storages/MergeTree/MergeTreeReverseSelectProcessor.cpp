@@ -37,11 +37,17 @@ namespace ErrorCodes
 bool MergeTreeReverseSelectProcessor::getNewTask()
 try
 {
+    if (is_first_task && mark_ranges_filter_callback)
+    {
+        part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
+            part_detail.ranges);
+    }
     if ((chunks.empty() && part_detail.ranges.empty()) || total_marks_count == 0)
     {
         finish();
         return false;
     }
+    is_first_task = false;
 
     /// We have some blocks to return in buffer.
     /// Return true to continue reading, but actually don't create a task.
