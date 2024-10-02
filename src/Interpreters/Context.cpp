@@ -40,6 +40,7 @@
 #include <Access/SettingsProfile.h>
 #include <Access/SettingsProfilesInfo.h>
 #include <Access/User.h>
+#include <Access/AeolusAccessUtil.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchBGThreadsMap.h>
 #include <CloudServices/CnchMergeMutateThread.h>
@@ -1941,21 +1942,12 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
 
 void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
 {
-    String table_names = getSettingsRef().access_table_names;
-    if (table_names.empty())
-    {
-        table_names = getSettingsRef().accessible_table_names;
-        if (table_names.empty())
-            return;
-    }
-    std::vector<String> tables;
-    boost::split(tables, table_names, boost::is_any_of(" ,"));
-    /// avoid check temporary table.
-    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
+    /// avoid check temporary and system table.
+    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE || database_name == DatabaseCatalog::SYSTEM_DATABASE)
         return;
 
     String full_table_name = database_name.empty() ? table_name : database_name+"."+table_name;
-    if (std::find(tables.begin(), tables.end(), full_table_name) == tables.end())
+    if (!aeolusCheck(*this, full_table_name))
     {
         throw Exception("Access denied to " + full_table_name , ErrorCodes::DATABASE_ACCESS_DENIED);
     }
