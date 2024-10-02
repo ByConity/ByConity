@@ -1774,7 +1774,21 @@ BlockIO InterpreterCreateQuery::execute()
         return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
     }
 
-    getContext()->checkAccess(getRequiredAccess());
+    auto context = getContext();
+    context->checkAccess(getRequiredAccess());
+    if (create.is_dictionary && context->is_tenant_user())
+    {
+        if (create.dictionary)
+        {
+            auto& refresh_query = create.dictionary->clickhouse_query;
+            auto& invalidate_query = create.dictionary->clickhouse_invalidate_query;
+            if (!refresh_query.empty())
+                executeQuery("explain " + refresh_query, context, true);
+            if (!invalidate_query.empty())
+                executeQuery(invalidate_query, context, true);
+        }
+        
+    }
 
     ASTQueryWithOutput::resetOutputASTIfExist(create);
 
@@ -1806,6 +1820,17 @@ AccessRightsElements InterpreterCreateQuery::getRequiredAccess() const
     else if (create.is_dictionary)
     {
         required_access.emplace_back(AccessType::CREATE_DICTIONARY, create.database, create.table);
+        if (create.dictionary)
+        {
+            auto & db = create.dictionary->clickhouse_db;
+            auto & tb = create.dictionary->clickhouse_tb;
+            if (!db.empty() && !tb.empty())
+            {
+                auto context = getContext();
+                if (context->is_tenant_user())
+                    required_access.emplace_back(AccessType::SELECT, db, tb);
+            }   
+        }
     }
     else if (create.isView())
     {

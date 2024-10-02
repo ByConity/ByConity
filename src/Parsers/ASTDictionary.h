@@ -133,6 +133,12 @@ public:
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+
+    String clickhouse_db;
+    String clickhouse_tb;
+    String clickhouse_query;
+    String clickhouse_invalidate_query;
+
 };
 
 }

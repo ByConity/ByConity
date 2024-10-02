@@ -77,6 +77,7 @@ namespace
         "columns",
         "mutations",
         "users",
+        "dictionaries",
 
         /// Specific to the current session
         "settings",

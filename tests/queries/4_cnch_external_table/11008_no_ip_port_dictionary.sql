@@ -14,7 +14,10 @@ INSERT INTO test_rd01238.interger_col VALUES (1), (2), (3), (4), (5), (6);
 DROP DICTIONARY IF EXISTS test_rd01238.dict_flat_no_ip_port;
 CREATE DICTIONARY test_rd01238.dict_flat_no_ip_port(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(USER 'default' TABLE 'table_for_no_ip_port_dict' PASSWORD '' DB 'test_rd01238')) LIFETIME(MIN 3 MAX 3) LAYOUT(FLAT());
 
-SELECT status FROM system.dictionaries where (database = '${TENANT_DB_PREFIX}test_rd01238') AND (name = 'dict_flat_no_ip_port');
+DROP DICTIONARY IF EXISTS test.dict_flat_no_ip_port;
+CREATE DICTIONARY test.dict_flat_no_ip_port(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(USER 'default' TABLE 'table_for_no_ip_port_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 3 MAX 3) LAYOUT(FLAT());
+
+SELECT status FROM system.dictionaries where (database = 'test') AND (name = 'dict_flat_no_ip_port');
 
 SELECT '-- select from table column b';
 SELECT id, dictGetInt32('test_rd01238.dict_flat_no_ip_port', 'b', id) from test_rd01238.interger_col ORDER BY id;
@@ -23,13 +26,13 @@ SELECT id, dictGetUInt64('test_rd01238.dict_flat_no_ip_port', 'a', id) from test
 SELECT '-- select from table column c';
 SELECT id, dictGetString('test_rd01238.dict_flat_no_ip_port', 'c', id) from test_rd01238.interger_col ORDER BY id;
 
-SELECT dictGetInt32('test_rd01238.dict_flat_no_ip_port', 'b', toUInt64(1));
-SELECT dictGetInt32('test_rd01238.dict_flat_no_ip_port', 'b', toUInt64(4));
-SELECT dictGetUInt64('test_rd01238.dict_flat_no_ip_port', 'a', toUInt64(5));
-SELECT dictGetUInt64('test_rd01238.dict_flat_no_ip_port', 'a', toUInt64(6));
-SELECT dictGetString('test_rd01238.dict_flat_no_ip_port', 'c', toUInt64(2));
-SELECT dictGetString('test_rd01238.dict_flat_no_ip_port', 'c', toUInt64(3));
-SELECT status FROM system.dictionaries where (database = '${TENANT_DB_PREFIX}test_rd01238') AND (name = 'dict_flat_no_ip_port');
+SELECT dictGetInt32('test.dict_flat_no_ip_port', 'b', toUInt64(1));
+SELECT dictGetInt32('test.dict_flat_no_ip_port', 'b', toUInt64(4));
+SELECT dictGetUInt64('test.dict_flat_no_ip_port', 'a', toUInt64(5));
+SELECT dictGetUInt64('test.dict_flat_no_ip_port', 'a', toUInt64(6));
+SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(2));
+SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(3));
+SELECT status FROM system.dictionaries where (database = 'test') AND (name = 'dict_flat_no_ip_port');
 
 INSERT INTO test_rd01238.table_for_no_ip_port_dict VALUES (3000, 100, -100, 'key3000');
 SELECT sleepEachRow(3) FROM numbers(5) FORMAT Null;
