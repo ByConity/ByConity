@@ -208,11 +208,30 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr ast_range;
     ASTPtr ast_settings;
 
+    String db_name;
+    String tb_name;
+    String refresh_query;
+    String invalidate_query;
+
     /// Primary is required to be the first in dictionary definition
     if (primary_key_keyword.ignore(pos) && !expression_list_p.parse(pos, primary_key, expected))
         return false;
 
     /// Loop is used to avoid strict order of dictionary properties
+    auto get_value = [](ASTPair* kv_pair)
+    {
+        auto tb = kv_pair->second->as<ASTLiteral>();
+        auto tb_identifier = kv_pair->second->as<ASTIdentifier>();
+        if (!tb)
+        {
+            if (tb_identifier)
+                return tb_identifier->name();
+        }
+        else
+            return tb->value.get<String>();
+        return String();
+    };
+
     while (true)
     {
         if (!ast_source && source_keyword.ignore(pos, expected))
@@ -232,7 +251,7 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                 for (auto &kv : ele->children)
                 {
                     auto kv_pair = kv->as<ASTPair>();
-                    if (kv_pair->first == "user")
+                    if (kv_pair->first == "user" || kv_pair->first == "USER")
                     {
                         String user_name;
                         auto user = kv_pair->second->as<ASTLiteral>();
@@ -255,6 +274,24 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                             user->value = user_name;
                         else if (user_identifier)
                             user_identifier->setShortName(user_name);
+                    }
+                    else if (kv_pair->first == "db" || kv_pair->first == "DB")
+                    {
+                        auto db = get_value(kv_pair);
+                        if (!db.empty())
+                            db_name = formatTenantEntityName(db);
+                    }
+                    else if (kv_pair->first == "table" || kv_pair->first == "TABLE")
+                    {
+                        tb_name = get_value(kv_pair);
+                    }
+                    else if (kv_pair->first == "query" || kv_pair->first == "QUERY")
+                    {
+                        refresh_query = get_value(kv_pair);
+                    }
+                    else if (kv_pair->first == "invalidate_query" || kv_pair->first == "INVALIDATE_QUERY")
+                    {
+                        invalidate_query = get_value(kv_pair);
                     }
                 }
             }
@@ -326,6 +363,10 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     auto query = std::make_shared<ASTDictionary>();
     node = query;
+    query->clickhouse_db = db_name;
+    query->clickhouse_tb = tb_name;
+    query->clickhouse_query = refresh_query;
+    query->clickhouse_invalidate_query = invalidate_query;
     if (primary_key)
         query->set(query->primary_key, primary_key);
 
