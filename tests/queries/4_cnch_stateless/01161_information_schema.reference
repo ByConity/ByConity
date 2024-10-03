@@ -156,11 +156,8 @@ CnchCollapsingMergeTree	\N	\N	\N	\N	\N	CnchCollapsingMergeTree	\N	\N	\N	\N	\N	Cn
 CnchGraphiteMergeTree	\N	\N	\N	\N	\N	CnchGraphiteMergeTree	\N	\N	\N	\N	\N	CnchGraphiteMergeTree
 CnchHDFS	\N	\N	\N	\N	\N	CnchHDFS	\N	\N	\N	\N	\N	CnchHDFS
 CnchHive	\N	\N	\N	\N	\N	CnchHive	\N	\N	\N	\N	\N	CnchHive
-CnchHudi	\N	\N	\N	\N	\N	CnchHudi	\N	\N	\N	\N	\N	CnchHudi
 CnchKafka	\N	\N	\N	\N	\N	CnchKafka	\N	\N	\N	\N	\N	CnchKafka
-CnchLas	\N	\N	\N	\N	\N	CnchLas	\N	\N	\N	\N	\N	CnchLas
 CnchMergeTree	\N	\N	\N	\N	\N	CnchMergeTree	\N	\N	\N	\N	\N	CnchMergeTree
-CnchPaimon	\N	\N	\N	\N	\N	CnchPaimon	\N	\N	\N	\N	\N	CnchPaimon
 CnchReplacingMergeTree	\N	\N	\N	\N	\N	CnchReplacingMergeTree	\N	\N	\N	\N	\N	CnchReplacingMergeTree
 CnchS3	\N	\N	\N	\N	\N	CnchS3	\N	\N	\N	\N	\N	CnchS3
 CnchSummingMergeTree	\N	\N	\N	\N	\N	CnchSummingMergeTree	\N	\N	\N	\N	\N	CnchSummingMergeTree
