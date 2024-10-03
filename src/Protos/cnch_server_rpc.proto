@@ -591,6 +591,7 @@ service CnchServerService {
       returns(CommitWorkerRPCByKeyResp);
 
   rpc cleanTransaction(CleanTransactionReq) returns(CleanTransactionResp);
+  rpc cleanUndoBuffers(CleanUndoBuffersReq) returns(CleanUndoBuffersResp);
 
   rpc acquireLock(AcquireLockReq) returns(AcquireLockResp);
 

@@ -286,6 +286,10 @@ namespace ProfileEvents
     extern const Event GetAllUndoBufferFailed;
     extern const Event GetUndoBufferIteratorSuccess;
     extern const Event GetUndoBufferIteratorFailed;
+    extern const Event GetUndoBuffersWithKeysSuccess;
+    extern const Event GetUndoBuffersWithKeysFailed;
+    extern const Event ClearUndoBuffersByKeysSuccess;
+    extern const Event ClearUndoBuffersByKeysFailed;
     extern const Event GetTransactionRecordsSuccess;
     extern const Event GetTransactionRecordsFailed;
     extern const Event GetTransactionRecordsTxnIdsSuccess;
@@ -524,6 +528,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_MASKING_POLICY_NAME;
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
     extern const int ACCESS_ENTITY_ALREADY_EXISTS;
+    extern const int METASTORE_ERROR_KEY;
 }
 
 namespace Catalog
@@ -3930,6 +3935,53 @@ namespace Catalog
             ProfileEvents::ClearUndoBufferFailed);
     }
 
+    void Catalog::clearUndoBuffersByKeys(const TxnTimestamp & txnID, const std::vector<String> & keys)
+    {
+        runWithMetricSupport(
+            [&] {
+                const String undo_buffer_key_prefix = meta_proxy->undoBufferKeyPrefix(name_space, txnID, false);
+                const String undo_buffer_key_prefix_rev = meta_proxy->undoBufferKeyPrefix(name_space, txnID, true);
+
+                BatchCommitRequest batch_writes;
+                for (const auto & key : keys)
+                {
+                    if (!key.starts_with(undo_buffer_key_prefix) && !key.starts_with(undo_buffer_key_prefix_rev))
+                    {
+                        throw Exception(ErrorCodes::METASTORE_ERROR_KEY, "Expected key {} but receive {}", undo_buffer_key_prefix, key);
+                    }
+                    batch_writes.AddDelete(key);
+                }
+
+                BatchCommitResponse resp;
+                meta_proxy->batchWrite(batch_writes, resp);
+            },
+            ProfileEvents::ClearUndoBuffersByKeysSuccess,
+            ProfileEvents::ClearUndoBuffersByKeysFailed);
+    }
+
+    std::unordered_map<String, std::pair<std::vector<String>, UndoResources>> Catalog::getUndoBuffersWithKeys(const TxnTimestamp & txnID)
+    {
+        std::unordered_map<String, std::pair<std::vector<String>, UndoResources>> res;
+        runWithMetricSupport(
+            [&] {
+                auto get_func = [&](bool write_undo_buffer_new_key) {
+                    auto it = meta_proxy->getUndoBuffer(name_space, txnID.toUInt64(), write_undo_buffer_new_key);
+                    while (it->next())
+                    {
+                        UndoResource resource = UndoResource::deserialize(it->value());
+                        resource.txn_id = txnID;
+                        res[resource.uuid()].first.emplace_back(it->key());
+                        res[resource.uuid()].second.emplace_back(std::move(resource));
+                    }
+                };
+                /// Get both old and new undo buffer keys;
+                get_func(true);
+                get_func(false);
+            },
+            ProfileEvents::GetUndoBuffersWithKeysSuccess,
+            ProfileEvents::GetUndoBuffersWithKeysFailed);
+        return res;
+    }
     std::unordered_map<String, UndoResources> Catalog::getUndoBuffer(const TxnTimestamp & txnID)
     {
         std::unordered_map<String, UndoResources> res;
