@@ -18,7 +18,6 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Storages/HDFS/HDFSConfigManager.h>
 #include <Storages/Hive/Metastore/HiveMetastore.h>
 #include <consul/bridge.h>
 #include <Common/CurrentThread.h>
@@ -182,8 +181,9 @@ PaimonHDFSCatalogClient::PaimonHDFSCatalogClient(
     : PaimonCatalogClient(context_, storage_settings_), warehouse(warehouse_)
 
 {
-    HDFSConfigManager::instance().tryUpdate(warehouse);
-    LOG_DEBUG(log, "warehouse: {}", warehouse);
+    // only for internal use
+    // HDFSConfigManager::instance().tryUpdate(warehouse);
+    // LOG_DEBUG(log, "warehouse: {}", warehouse);
 }
 
 Poco::JSON::Object PaimonHDFSCatalogClient::buildCatalogParams()

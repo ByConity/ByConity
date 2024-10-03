@@ -237,21 +237,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
     {
         ReadSettings modified_settings{settings};
         modified_settings.for_disk_s3 = true;
-<<<<<<< HEAD
-=======
         std::unique_ptr<ReadBufferFromFileBase> impl;
-        // TODO(@max.chenxi): enable_cloudfs should pass as rpc parameter)
-        if (cfs != nullptr && cfs->isAvailable() && settings.enable_cloudfs)
-        {
-#if USE_CLOUDFS
-            impl = std::make_unique<ReadBufferFromCFS>(
-                std::dynamic_pointer_cast<CloudFS>(cfs),
-                "/" + object_key,
-                settings.remote_fs_prefetch,
-                modified_settings.remote_fs_buffer_size);
-#endif
-        }
-        else
         {
             impl = std::make_unique<ReadBufferFromS3>(
                 s3_util.getClient(), s3_util.getBucket(), object_key, modified_settings, 3, false, settings.remote_fs_prefetch);
@@ -264,7 +250,6 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
                 impl = std::make_unique<ReadBufferFromFileWithNexusFS>(nexus_fs->getSegmentSize(), std::move(impl), *nexus_fs);
         }
 
->>>>>>> d89db5d4ec (Merge branch 'zichun_add_nexusfs_p1' into 'cnch-dev')
         if (settings.remote_fs_prefetch)
         {
             auto impl = std::make_unique<ReadBufferFromS3>(s3_util.getClient(),

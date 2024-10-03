@@ -54,7 +54,6 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         blocks_are_granules_size,
         optimize_map_column_serialization,
         /* enable_disk_based_key_index = */ metadata_snapshot->hasUniqueKey() && !enable_partial_update, /// TODO: optimize here
-        /*skip_bitengine_encode_=*/ false,
         /*enable_partial_update_=*/ enable_partial_update);
 
     if (!part_path.empty())

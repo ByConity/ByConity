@@ -850,9 +850,6 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPartialUpdat
     if (!data.getSettings()->enable_segment_bitmap_index)
         bitmap_build_info.build_all_segment_bitmap_index = false;
 
-    BitEngineEncodeSettings bitengine_settings;
-    bitengine_settings.skip_bitengine_encode = context->getSettingsRef().skip_bitengine_encode;
-
     MergedBlockOutputStream out(
         new_data_part,
         metadata_snapshot,
@@ -861,8 +858,8 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPartialUpdat
         compression_codec,
         /* blocks_are_granules_size(default) */ false,
         context->getSettingsRef().optimize_map_column_serialization,
-        bitmap_build_info,
-        bitengine_settings);
+        bitmap_build_info);
+
     bool sync_on_insert = data.getSettings()->fsync_after_insert;
 
     // pre-handle low-cardinality fall-back

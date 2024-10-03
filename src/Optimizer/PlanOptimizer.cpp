@@ -454,9 +454,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::createTopNFilteringRules(), "CreateTopNFiltering"),
         std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "PushDownTopNFiltering"),
 
-        std::make_shared<BitEngineUseLocalDictionary>(),
-        std::make_shared<BitEngineNoShuffle>(),
-
         std::make_shared<OptimizeTrivialCount>(),
 
         // Cost-based optimizer
@@ -479,7 +476,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // use property
         std::make_shared<SortingOrderedSource>(),
-        std::make_shared<BitEngineInfoDeriver>(),
 
         // push predicate into storage
         std::make_shared<UnaliasSymbolReferences>(),

@@ -490,7 +490,7 @@ public:
      *
      * @param txnID Transaction ID.
      * @return map<table_uuid, ([keys in metastore of each undo buffer], [undo buffers])>
-     */src/CloudServices/CnchServerClient.cpp
+     */
     std::unordered_map<String, std::pair<std::vector<String>, UndoResources>> getUndoBuffersWithKeys(const TxnTimestamp & txnID);
     /// return storage uuid -> undo resources
     std::unordered_map<String, UndoResources> getUndoBuffer(const TxnTimestamp & txnID);
