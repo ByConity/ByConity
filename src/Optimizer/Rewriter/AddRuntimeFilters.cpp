@@ -23,7 +23,7 @@
 
 namespace DB
 {
-void AddRuntimeFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool AddRuntimeFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     Stopwatch rule_watch;
     auto print_graphviz = [&](const String & hint) {
@@ -35,6 +35,9 @@ void AddRuntimeFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 
     AddRuntimeFilterRewriter add_runtime_filter_rewriter(context, plan.getCTEInfo());
     add_runtime_filter_rewriter.rewrite(plan);
+
+    if (add_runtime_filter_rewriter.getId() == 0)
+        return false;
 
     print_graphviz("-AddRuntimeFilterRewriter");
 
@@ -70,6 +73,7 @@ void AddRuntimeFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) con
         print_graphviz("-AddExchange");
     }
     plan.update(rewrite);
+    return true;
 }
 
 PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitPlanNode(PlanNodeBase & node, Void & c)
@@ -247,11 +251,12 @@ PlanPropEquivalences AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(
         equivalences};
 }
 
-void AddRuntimeFilters::AddRuntimeFilterRewriter::rewrite(QueryPlan & plan)
+bool AddRuntimeFilters::AddRuntimeFilterRewriter::rewrite(QueryPlan & plan)
 {
     Void c;
     auto result = VisitorUtil::accept(plan.getPlanNode(), *this, c);
     plan.update(result.plan);
+    return true;
 }
 
 

@@ -138,7 +138,12 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use.") \
     M(UInt64, async_query_status_ttl, "", 86400, ConfigFlag::Default, "TTL for async query status stored in catalog, in seconds.") \
     M(UInt64, async_query_expire_time, "", 3600, ConfigFlag::Default, "Expire time for async query, in seconds.") \
-    M(UInt64, async_query_status_check_period, "", 15 * 60, ConfigFlag::Default, "Cycle for checking expired async query status stored in catalog, in seconds.") \
+    M(UInt64, \
+      async_query_status_check_period, \
+      "", \
+      15 * 60, \
+      ConfigFlag::Default, \
+      "Cycle for checking expired async query status stored in catalog, in seconds.") \
     M(Bool, enable_cnch_write_remote_catalog, "", true, ConfigFlag::Default, "Set to false to disable writing catalog") \
     M(Bool, enable_cnch_write_remote_disk, "", true, ConfigFlag::Default, "set to false to disable writing data") \
     /**
@@ -185,7 +190,7 @@ struct BSPConfiguration final : public BSPConfigurationData
     /**
      * Mutable */ \
     M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \
-    M(MutableFloat32, max_server_memory_usage_to_ram_ratio, "", 0.8, ConfigFlag::Default, "") \
+    M(MutableFloat32, max_server_memory_usage_to_ram_ratio, "", 0.9, ConfigFlag::Default, "") \
     M(MutableUInt64, kafka_max_partition_fetch_bytes, "", 1048576, ConfigFlag::Default, "") \
     M(MutableUInt64, stream_poll_timeout_ms, "", 500, ConfigFlag::Default, "") \
     M(MutableUInt64, debug_disable_merge_mutate_thread, "", false, ConfigFlag::Default, "") \

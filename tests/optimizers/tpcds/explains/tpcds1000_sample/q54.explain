@@ -36,7 +36,7 @@ Projection Est. 100 rows
                                        │  │           Where: Runtime Filters: {ss_customer_sk}
                                        │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_ext_sales_price]
                                        │  └─ Broadcast Exchange Est. 4532 rows
-                                       │     └─ Inner Join Est. 47538 rows
+                                       │     └─ Inner Join Est. 4532 rows
                                        │        │     Condition: ca_address_sk == c_current_addr_sk
                                        │        │     Runtime Filters Builder: {c_current_addr_sk}
                                        │        ├─ Repartition Exchange Est. 561950 rows

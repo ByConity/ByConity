@@ -145,9 +145,9 @@ Projection Est. 100 rows
                               │     │        └─ Projection Est. 31 rows
                               │     │           │     Expressions: [d_date_sk_2]
                               │     │           └─ Filter Est. 31 rows
-                              │     │              │     Condition: (d_moy_2 = 5) AND (d_year_2 = 1998)
+                              │     │              │     Condition: (d_year_2 = 1998) AND (d_moy_2 = 5)
                               │     │              └─ TableScan tpcds100.date_dim Est. 73049 rows
-                              │     │                       Where: (d_moy = 5) AND (d_year = 1998)
+                              │     │                       Where: (d_year = 1998) AND (d_moy = 5)
                               │     │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
                               │     └─ Repartition Exchange Est. 364761 rows
                               │        │     Partition by: {ca_address_sk_2}

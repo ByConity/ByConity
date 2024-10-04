@@ -180,7 +180,7 @@ void ExchangeStepVisitor::addGather(QueryPlan & query_plan, ExchangeStepContext 
     }
 }
 
-void AddExchangeRewriter::rewrite(QueryPlan & query_plan, ExchangeStepContext & exchange_context)
+bool AddExchangeRewriter::rewrite(QueryPlan & query_plan, ExchangeStepContext & exchange_context)
 {
     ExchangeStepVisitor visitor{};
     ExchangeStepResult result_node = VisitorUtil::accept(query_plan.getRoot(), visitor, exchange_context);
@@ -188,6 +188,7 @@ void AddExchangeRewriter::rewrite(QueryPlan & query_plan, ExchangeStepContext & 
         query_plan.setRoot(result_node);
 
     visitor.addGather(query_plan, exchange_context);
+    return true;
 }
 
 

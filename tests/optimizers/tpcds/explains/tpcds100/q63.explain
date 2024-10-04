@@ -20,10 +20,10 @@ Projection Est. 100 rows
                            └─ Aggregating Est. 1079 rows
                               │     Group by: {i_manager_id, d_moy}
                               │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                              └─ Inner Join Est. 82402 rows
+                              └─ Inner Join Est. 81863 rows
                                  │     Condition: ss_sold_date_sk == d_date_sk
                                  │     Runtime Filters Builder: {d_date_sk}
-                                 ├─ Inner Join Est. 412690 rows
+                                 ├─ Inner Join Est. 409993 rows
                                  │  │     Condition: ss_item_sk == i_item_sk
                                  │  │     Runtime Filters Builder: {i_item_sk}
                                  │  ├─ Projection Est. 275046373 rows
@@ -33,12 +33,12 @@ Projection Est. 100 rows
                                  │  │     └─ TableScan tpcds100.store_sales Est. 287997024 rows
                                  │  │              Where: isNotNull(ss_store_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                                  │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
-                                 │  └─ Projection Est. 307 rows
+                                 │  └─ Projection Est. 305 rows
                                  │     │     Expressions: [i_item_sk, i_manager_id]
-                                 │     └─ Filter Est. 307 rows
-                                 │        │     Condition: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
+                                 │     └─ Filter Est. 305 rows
+                                 │        │     Condition: (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'exportiunivamalg #9', 'importoamalg #1', 'scholaramalgamalg #14', 'scholaramalgamalg #7', 'scholaramalgamalg #9')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants', 'personal', 'portable', 'reference', 'self-help')) AND (i_category IN ('Books', 'Children', 'Electronics', 'Men', 'Music', 'Women')) AND (((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1'))))
                                  │        └─ TableScan tpcds100.item Est. 204000 rows
-                                 │                 Where: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
+                                 │                 Where: (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'exportiunivamalg #9', 'importoamalg #1', 'scholaramalgamalg #14', 'scholaramalgamalg #7', 'scholaramalgamalg #9')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants', 'personal', 'portable', 'reference', 'self-help')) AND (i_category IN ('Books', 'Children', 'Electronics', 'Men', 'Music', 'Women')) AND (((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1'))))
                                  │                 Outputs: [i_item_sk, i_brand, i_class, i_category, i_manager_id]
                                  └─ Broadcast Exchange Est. 366 rows
                                     └─ Projection Est. 366 rows

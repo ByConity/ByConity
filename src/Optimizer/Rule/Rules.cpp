@@ -42,11 +42,9 @@
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/Rule/Rewrite/SingleDistinctAggregationToGroupBy.h>
+#include <Optimizer/Rule/Rewrite/SumIfToCountIf.h>
 #include <Optimizer/Rule/Rewrite/SwapAdjacentRules.h>
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
-#include <Optimizer/Rule/Rewrite/EagerAggregation.h>
-#include <Optimizer/Rule/Rewrite/CrossJoinToUnion.h>
-#include <Optimizer/Rule/Rewrite/SumIfToCountIf.h>
 
 namespace DB
 {
@@ -125,7 +123,7 @@ std::vector<RulePtr> Rules::removeRedundantRules()
         // std::make_shared<RemoveRedundantOuterJoin>()
         std::make_shared<RemoveRedundantTwoApply>(),
         std::make_shared<RemoveRedundantAggregateWithReadNothing>(),
-        };
+    };
 }
 
 std::vector<RulePtr> Rules::pushAggRules()
@@ -144,6 +142,7 @@ std::vector<RulePtr> Rules::pushDownLimitRules()
         std::make_shared<PushLimitThroughUnion>(),
         std::make_shared<PushdownLimitIntoWindow>(),
         std::make_shared<PushTopNThroughProjection>(),
+        std::make_shared<PushSortThroughProjection>(),
         std::make_shared<PushLimitIntoSorting>()};
 }
 
@@ -202,7 +201,7 @@ std::vector<RulePtr> Rules::explainAnalyzeRules()
 
 std::vector<RulePtr> Rules::pushDownTopNRules()
 {
-    return {std::make_shared<PushTopNThroughProjection>()};
+    return {std::make_shared<PushTopNThroughProjection>(), std::make_shared<PushSortThroughProjection>()};
 }
 
 std::vector<RulePtr> Rules::createTopNFilteringRules()
@@ -243,8 +242,7 @@ std::vector<RulePtr> Rules::extractBitmapImplicitFilterRules()
 
 std::vector<RulePtr> Rules::pushUnionThroughJoin()
 {
-    return {
-        std::make_shared<PushUnionThroughJoin>(), std::make_shared<PushUnionThroughProjection>()};
+    return {std::make_shared<PushUnionThroughJoin>(), std::make_shared<PushUnionThroughProjection>()};
 }
 
 std::vector<RulePtr> Rules::addRepartitionColumn()

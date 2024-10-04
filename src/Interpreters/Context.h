@@ -333,6 +333,9 @@ using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
 
 class IOUringReader;
 
+class NexusFS;
+using NexusFSPtr = std::shared_ptr<NexusFS>;
+
 class GinIndexStoreFactory;
 struct GinIndexStoreCacheSettings;
 
@@ -1750,6 +1753,9 @@ public:
 #if USE_LIBURING
     IOUringReader & getIOUringReader() const;
 #endif
+
+    void initNexusFS(const Poco::Util::AbstractConfiguration & config);
+    NexusFSPtr getNexusFS() const;
 
     void setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager);
     PreparedStatementManager * getPreparedStatementManager();

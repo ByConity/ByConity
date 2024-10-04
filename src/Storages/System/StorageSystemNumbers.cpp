@@ -2,6 +2,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemNumbers.h>
 
 #include <Processors/Sources/SourceWithProgress.h>
@@ -11,14 +12,19 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int LIMIT_EXCEEDED;
+}
+
 namespace
 {
 
 class NumbersSource : public SourceWithProgress
 {
 public:
-    NumbersSource(UInt64 block_size_, UInt64 offset_, UInt64 step_)
-        : SourceWithProgress(createHeader()), block_size(block_size_), next(offset_), step(step_) {}
+    NumbersSource(UInt64 block_size_, UInt64 offset_, UInt64 step_, std::optional<int> hard_limit_)
+        : SourceWithProgress(createHeader()), block_size(block_size_), next(offset_), step(step_), hard_limit(hard_limit_) {}
 
     String getName() const override { return "Numbers"; }
 
@@ -27,6 +33,14 @@ protected:
     {
         auto column = ColumnUInt64::create(block_size);
         ColumnUInt64::Container & vec = column->getData();
+
+        if (hard_limit)
+        {
+            if (*hard_limit <= 0)
+                throw Exception("LIMIT must be less than 10000000", ErrorCodes::LIMIT_EXCEEDED);
+
+            *hard_limit -= block_size;
+        }
 
         size_t curr = next;     /// The local variable for some reason works faster (>20%) than member of class.
         UInt64 * pos = vec.data(); /// This also accelerates the code.
@@ -45,6 +59,7 @@ private:
     UInt64 block_size;
     UInt64 next;
     UInt64 step;
+    std::optional<int> hard_limit;
 
     static Block createHeader()
     {
@@ -126,7 +141,7 @@ Pipe StorageSystemNumbers::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
     SelectQueryInfo &,
-    ContextPtr /*context*/,
+    ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
     unsigned num_streams)
@@ -146,6 +161,9 @@ Pipe StorageSystemNumbers::read(
 
     if (num_streams > 1 && !even_distribution && limit)
     {
+        if (context && context->is_tenant_user() && *limit > 10000000)
+            throw Exception("LIMIT must be less than 100000", ErrorCodes::LIMIT_EXCEEDED);
+
         auto state = std::make_shared<NumbersMultiThreadedState>(offset);
         UInt64 max_counter = offset + *limit;
 
@@ -157,7 +175,12 @@ Pipe StorageSystemNumbers::read(
 
     for (size_t i = 0; i < num_streams; ++i)
     {
-        auto source = std::make_shared<NumbersSource>(max_block_size, offset + i * max_block_size, num_streams * max_block_size);
+        std::optional<int> hard_limit;
+
+        if (context && context->is_tenant_user())
+            hard_limit = (10000000 + num_streams - 1) / num_streams;
+
+        auto source = std::make_shared<NumbersSource>(max_block_size, offset + i * max_block_size, num_streams * max_block_size, hard_limit);
 
         if (limit && i == 0)
             source->addTotalRowsApprox(*limit);

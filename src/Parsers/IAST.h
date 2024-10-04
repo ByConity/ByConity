@@ -174,6 +174,20 @@ enum class ASTType : UInt8
 
 #undef ENUM_TYPE
 
+inline String toString(ASTType type)
+{
+    switch (type)
+    {
+#define ENUM_TYPE(ITEM) \
+    case ASTType::ITEM: \
+        return #ITEM;
+        APPLY_AST_TYPES(ENUM_TYPE)
+#undef ENUM_TYPE
+        default:
+            return "UNDEFINED";
+    }
+}
+
 using StringPair = std::pair<String, String>;
 using StringPairs = std::vector<StringPair>;
 
@@ -450,7 +464,7 @@ public:
 
     // A simple way to add some user-readable context to an error message.
     String formatWithHiddenSecrets(size_t max_length = 0,
-                                   bool one_line = true,  
+                                   bool one_line = true,
                                    bool no_alias = false,
                                    DialectType dialect = DialectType::CLICKHOUSE) const;
     String formatForLogging(size_t max_length = 0) const { return formatWithHiddenSecrets(max_length, true); }

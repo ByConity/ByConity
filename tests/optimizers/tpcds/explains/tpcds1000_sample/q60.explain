@@ -20,7 +20,7 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 30004 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                  │        └─ Inner (PARALLEL_HASH) Join Est. 7178201 rows
+                  │        └─ Inner (PARALLEL_HASH) Join Est. 3306347 rows
                   │           │     Condition: ss_addr_sk == ca_address_sk
                   │           │     Runtime Filters Builder: {ca_address_sk}
                   │           ├─ Repartition Exchange Est. 19943464 rows
@@ -72,7 +72,7 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 30004 rows
                   │        │     Group by: {i_item_id_2}
                   │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
-                  │        └─ Inner (PARALLEL_HASH) Join Est. 2189169 rows
+                  │        └─ Inner (PARALLEL_HASH) Join Est. 1641452 rows
                   │           │     Condition: cs_bill_addr_sk == ca_address_sk_1
                   │           │     Runtime Filters Builder: {ca_address_sk_1}
                   │           ├─ Repartition Exchange Est. 5784990 rows
@@ -92,9 +92,9 @@ Projection Est. 100 rows
                   │           │     │     └─ Projection Est. 30 rows
                   │           │     │        │     Expressions: [d_date_sk_1]
                   │           │     │        └─ Filter Est. 30 rows
-                  │           │     │           │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 9)
+                  │           │     │           │     Condition: (d_moy_1 = 9) AND (d_year_1 = 1998)
                   │           │     │           └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
-                  │           │     │                    Where: (d_year = 1998) AND (d_moy = 9)
+                  │           │     │                    Where: (d_moy = 9) AND (d_year = 1998)
                   │           │     │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                   │           │     └─ Broadcast Exchange Est. 60152 rows
                   │           │        └─ Left Semi Join Est. 60152 rows
@@ -124,7 +124,7 @@ Projection Est. 100 rows
                         └─ Aggregating Est. 30004 rows
                            │     Group by: {i_item_id_4}
                            │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                           └─ Inner (PARALLEL_HASH) Join Est. 2189169 rows
+                           └─ Inner (PARALLEL_HASH) Join Est. 795144 rows
                               │     Condition: ws_bill_addr_sk == ca_address_sk_2
                               │     Runtime Filters Builder: {ca_address_sk_2}
                               ├─ Repartition Exchange Est. 2297866 rows

@@ -37,12 +37,24 @@ namespace DB::DaemonManager
 
 bool DaemonJobTxnGC::executeImpl()
 {
-
     const Context & context = *getContext();
     String last_start_key = start_key;
+    size_t wanted_txn_number = context.getConfigRef().getInt("cnch_txn_clean_batch_size", 100000);
+    /// Normally, older transaction get higher priority to be cleaned,
+    /// so we will always scan from the start.
+    /// In some (rare) cases, we want to clean transactions in the middle of the transaction lists,
+    /// that's where `cnch_txn_clean_round_robin` works.
+    /// Please note that "round robin" might not work as you expected,
+    /// as transactions inserted fast at the end of the lists, "another round"
+    /// might never come.
+    bool round_robin = context.getConfigRef().getBool("cnch_txn_clean_round_robin", false);
+    if (!round_robin)
+        start_key = "";
     auto txn_records = context.getCnchCatalog()->getTransactionRecordsForGC(
-        start_key, context.getConfigRef().getInt("cnch_txn_clean_batch_size", 200000));
-    LOG_DEBUG(log, "start_key changed from: {} to {}", last_start_key, start_key);
+        start_key, wanted_txn_number);
+
+    LOG_DEBUG(
+        log, "start_key changed from: {} to {} (wanted {}, get {})", last_start_key, start_key, wanted_txn_number, txn_records.size());
     if (!txn_records.empty())
     {
         cleanTxnRecords(txn_records);

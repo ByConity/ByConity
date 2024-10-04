@@ -21,7 +21,7 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 149640 rows
                   │        │     Group by: {i_item_id_2}
                   │        │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                  │        └─ Inner Join Est. 2369721 rows
+                  │        └─ Inner Join Est. 2364533 rows
                   │           │     Condition: ws_item_sk == i_item_sk_2
                   │           ├─ Inner Join Est. 2369721 rows
                   │           │  │     Condition: ws_sold_date_sk == d_date_sk_2
@@ -58,7 +58,7 @@ Projection Est. 100 rows
                      │     └─ Aggregating Est. 149640 rows
                      │        │     Group by: {i_item_id_1}
                      │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
-                     │        └─ Inner Join Est. 4705818 rows
+                     │        └─ Inner Join Est. 4695588 rows
                      │           │     Condition: cs_item_sk == i_item_sk_1
                      │           ├─ Inner Join Est. 4705818 rows
                      │           │  │     Condition: cs_sold_date_sk == d_date_sk_1
@@ -91,7 +91,7 @@ Projection Est. 100 rows
                            └─ Aggregating Est. 149640 rows
                               │     Group by: {i_item_id}
                               │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                              └─ Inner Join Est. 9478841 rows
+                              └─ Inner Join Est. 9458088 rows
                                  │     Condition: ss_item_sk == i_item_sk
                                  ├─ Inner Join Est. 9478841 rows
                                  │  │     Condition: ss_sold_date_sk == d_date_sk

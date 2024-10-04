@@ -236,7 +236,7 @@ BlockIO MPPQueryCoordinator::execute()
     LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
 
     auto final_segment_instance = std::make_unique<PlanSegmentInstance>();
-    final_segment_instance->info = PlanSegmentExecutionInfo{.parallel_id = 0};
+    final_segment_instance->info = scheduler_status->final_execution_info;
     final_segment_instance->info.execution_address = getLocalAddress(*query_context);
     final_segment_instance->plan_segment = std::make_unique<PlanSegment>(std::move(*final_segment));
 

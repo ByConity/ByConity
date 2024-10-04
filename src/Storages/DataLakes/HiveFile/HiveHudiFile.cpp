@@ -1,7 +1,7 @@
 #include "Storages/DataLakes/HiveFile/HiveHudiFile.h"
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
-#include <Protos/hive_models.pb.h>
+#include <Protos/lake_models.pb.h>
 #include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 #include "Storages/DataLakes/HiveFile/JNIArrowSource.h"
 #include "jni/JNIArrowReader.h"
@@ -11,6 +11,7 @@
 namespace DB
 {
 
+static constexpr auto HUDI_CLASS_FACTORY_CLASS = "org/byconity/hudi/HudiClassFactory";
 static constexpr auto HUDI_ARROW_READER_CLASS = "org/byconity/hudi/reader/HudiFileSliceArrowReaderBuilder";
 
 HiveHudiFile::HiveHudiFile(
@@ -69,7 +70,7 @@ SourcePtr HiveHudiFile::getReader(const Block & block, const std::shared_ptr<Rea
         prop->set_key("required_fields");
         prop->set_value(fmt::format("{}", fmt::join(block.getNames(), ",")));
     }
-    auto reader = std::make_unique<JNIArrowReader>(HUDI_ARROW_READER_CLASS, proto.SerializeAsString());
+    auto reader = std::make_unique<JNIArrowReader>(HUDI_CLASS_FACTORY_CLASS, HUDI_ARROW_READER_CLASS, proto.SerializeAsString());
     return std::make_shared<JNIArrowSource>(block, std::move(reader));
 }
 

@@ -358,3 +358,6 @@
 [submodule "contrib/libevent"]
 	path = contrib/libevent
 	url = https://github.com/ByConity/libevent.git
+[submodule "contrib/java-extensions"]
+	path = contrib/java-extensions
+	url = https://github.com/ByConity/clickhouse-java-extensions.git

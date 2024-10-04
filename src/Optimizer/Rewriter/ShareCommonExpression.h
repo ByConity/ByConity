@@ -18,7 +18,7 @@ private:
     {
         return context->getSettingsRef().enable_common_expression_sharing;
     }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     static PlanNodePtr rewriteImpl(PlanNodePtr root, ContextMutablePtr context);
 };
 }

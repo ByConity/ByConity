@@ -9,7 +9,7 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_customer_id ASC NULLS LAST}
             │     Limit: 100
-            └─ Inner Join Est. 587377 rows
+            └─ Inner Join Est. 589471 rows
                │     Condition: c_customer_sk == sr_customer_sk_1
                │     Runtime Filters Builder: {sr_customer_sk_1}
                ├─ Repartition Exchange Est. 2000000 rows

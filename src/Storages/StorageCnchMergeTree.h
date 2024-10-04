@@ -205,14 +205,14 @@ public:
     void sendDropDiskCacheTasks(ContextPtr local_context, const ServerDataPartsVector & parts, bool sync = false, bool drop_vw_disk_cache = false);
     void sendDropManifestDiskCacheTasks(ContextPtr local_context, String version = "", bool sync = false);
 
-    PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
+    PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context, const bool & ignore_ttl) const ;
 
     void resetObjectColumns(ContextPtr query_context);
 
     void appendObjectPartialSchema(const TxnTimestamp & txn_id, ObjectPartialSchema partial_schema);
     void resetObjectSchemas(const ObjectAssembledSchema & assembled_schema, const ObjectPartialSchemas & partial_schemas);
     void refreshAssembledSchema(const ObjectAssembledSchema & assembled_schema,  std::vector<TxnTimestamp> txn_ids);
-    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+    void checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
 
     /// parse bucket number set from where clause, only works for single-key cluster by
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;

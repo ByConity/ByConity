@@ -50,8 +50,7 @@ std::unique_ptr<ReadBuffer> StorageCloudS3::FileBufferClient::createReadBuffer(c
             std::move(impl), *reader, read_settings);
 
         async_buffer->setReadUntilEnd();
-        if (read_settings.remote_fs_prefetch)
-            async_buffer->prefetch(Priority{});
+        async_buffer->prefetch(Priority{});
 
         return async_buffer;
     }

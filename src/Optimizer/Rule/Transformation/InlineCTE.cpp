@@ -19,6 +19,7 @@
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
+#include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/CTEInfo.h>
@@ -76,7 +77,8 @@ PlanNodePtr InlineCTE::reoptimize(CTEId cte_id, const PlanNodePtr & node, CTEInf
            std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
            std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
            std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
-           std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant")};
+           std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+           std::make_shared<UnifyJoinOutputs>()};
 
     QueryPlan sub_plan{node, cte_info, context->getPlanNodeIdAllocator()};
     for (auto & rewriter : rewriters)

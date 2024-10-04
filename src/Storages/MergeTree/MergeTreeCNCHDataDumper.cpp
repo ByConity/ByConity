@@ -85,6 +85,8 @@ MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
     , magic_code(magic_code_)
     , version(version_)
 {
+    if (data.getSettings()->reorganize_marks_data_layout)
+        version = MERGE_TREE_CHCH_DATA_STORAGTE_CONCENTRATED_MARK_LAYOUT_VERSION;
 }
 
 void MergeTreeCNCHDataDumper::writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part) const
@@ -260,6 +262,17 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
         std::unordered_set<String> key_streams;
         ISerialization::SubstreamPath path;
+
+        // for concentrated mark layout, find all .mrk files first
+        if (version == MERGE_TREE_CHCH_DATA_STORAGTE_CONCENTRATED_MARK_LAYOUT_VERSION)
+        {
+            for (auto & file : checksums_files)
+            {
+                if (!file.second.is_deleted && endsWith(file.first, MARKS_FILE_EXTENSION))
+                    reordered_checksums.push_back(&file);
+            }
+        }
+
         for (const auto & k_it : getKeyColumns())
         {
             const auto & column_name = k_it.name;
@@ -269,6 +282,8 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                     String stream_name = ISerialization::getFileNameForStream(column_name, substream_path);
                     for (const auto & extension : EXTENSION_LIST_FOR_TEMP_PART)
                     {
+                        if (version == MERGE_TREE_CHCH_DATA_STORAGTE_CONCENTRATED_MARK_LAYOUT_VERSION && extension == MARKS_FILE_EXTENSION)
+                            continue;
                         if (auto it = checksums_files.find(stream_name + extension); it != checksums_files.end() && !it->second.is_deleted)
                         {
                             reordered_checksums.push_back(&*it);
@@ -282,7 +297,11 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         {
             // do not add the projection directory here
             if (!file.second.is_deleted && !key_streams.count(file.first) && !endsWith(file.first, ".proj"))
+            {
+                if (version == MERGE_TREE_CHCH_DATA_STORAGTE_CONCENTRATED_MARK_LAYOUT_VERSION && endsWith(file.first, MARKS_FILE_EXTENSION))
+                    continue;
                 reordered_checksums.push_back(&file);
+            }
         }
 
         for (auto & file : reordered_checksums)
@@ -451,7 +470,8 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         }
 
         /// Unique Key Index
-        if (data.getInMemoryMetadataPtr()->hasUniqueKey() && new_part->rows_count > 0 && !new_part->isPartial())
+        if (data.getInMemoryMetadataPtr()->hasUniqueKey() && new_part->rows_count > 0 &&
+            ((!new_part->isPartial() && new_part->partial_update_state == PartialUpdateState::NotPartialUpdate) || (new_part->isPartial() && new_part->partial_update_state == PartialUpdateState::RWProcessFinished)))
         {
             uki_checksum.file_offset = meta_info_offset + meta_info_size;
             String file_rel_path = local_part->getFullRelativePath() + "unique_key.idx";

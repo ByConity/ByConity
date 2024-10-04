@@ -74,6 +74,6 @@ public:
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_buffer_for_deadlock_cte; }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 }

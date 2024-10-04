@@ -1230,12 +1230,13 @@ using ASTToStringMap = EqualityASTMap<String>;
 class CostBasedMaterializedViewRewriter : public SimplePlanRewriter<Void>
 {
 public:
-    static void rewrite(QueryPlan & plan, ContextMutablePtr context_, std::unordered_map<PlanNodePtr, RewriterCandidates> & match_results)
+    static bool rewrite(QueryPlan & plan, ContextMutablePtr context_, std::unordered_map<PlanNodePtr, RewriterCandidates> & match_results)
     {
         Void c;
         CostBasedMaterializedViewRewriter rewriter(context_, plan.getCTEInfo(), match_results);
         auto rewrite = VisitorUtil::accept(plan.getPlanNode(), rewriter, c);
         plan.update(rewrite);
+        return true;
     }
 
 protected:
@@ -1723,7 +1724,7 @@ private:
 };
 }
 
-void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     bool enforce = context->getSettingsRef().enforce_materialized_view_rewrite;
     bool verbose = context->getSettingsRef().enable_materialized_view_rewrite_verbose_log;
@@ -1733,7 +1734,7 @@ void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr conte
     {
         if (enforce)
             throw Exception("no related materialized views", ErrorCodes::NO_AVAILABLE_MATERIALIZED_VIEW);
-        return;
+        return false;
     }
 
     auto candidates = CandidatesExplorer::explore(plan, context, materialized_views, verbose);
@@ -1741,7 +1742,7 @@ void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr conte
     {
         if (enforce)
             throw Exception("no materialized view candidates", ErrorCodes::NO_AVAILABLE_MATERIALIZED_VIEW);
-        return;
+        return false;
     }
 
     CostBasedMaterializedViewRewriter::rewrite(plan, context, candidates);
@@ -1751,6 +1752,7 @@ void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr conte
     predicate_push_down.rewritePlan(plan, context);
     auto res = PlanSymbolReallocator::reallocate(plan.getPlanNode(), context);
     plan.update(res.plan_node);
+    return true;
 }
 
 LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult> MaterializedViewRewriter::getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context) const

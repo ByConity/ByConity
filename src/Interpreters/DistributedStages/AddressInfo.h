@@ -25,6 +25,7 @@ namespace DB
 namespace Protos
 {
     class AddressInfo;
+    class PlanSegmentMultiPartitionSource;
 }
 
     class WriteBuffer;
@@ -84,5 +85,13 @@ namespace Protos
     inline String extractHostPort(const AddressInfo & address) { return createHostPortString(address.getHostName(), address.getPort()); }
     inline String extractExchangeHostPort(const AddressInfo & address) {return createHostPortString(address.getHostName(), toString(address.getExchangePort())); }
 
-
+    struct PlanSegmentMultiPartitionSource
+    {
+        UInt64 exchange_id;
+        std::shared_ptr<AddressInfo> address;
+        std::vector<UInt32> partition_ids;
+        void toProto(Protos::PlanSegmentMultiPartitionSource & proto) const;
+        void fillFromProto(const Protos::PlanSegmentMultiPartitionSource & proto);
+        String toString() const;
+    };
 }

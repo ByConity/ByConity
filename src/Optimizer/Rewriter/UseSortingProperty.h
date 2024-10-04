@@ -27,7 +27,7 @@ class SortingOrderedSource : public Rewriter
 public:
     String name() const override { return "SortingOrderedSource"; }
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
         return context->getSettingsRef().enable_sorting_property;

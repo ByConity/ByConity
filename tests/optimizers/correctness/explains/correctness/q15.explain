@@ -1,5 +1,12 @@
-Projection Est. ? rows
-│     Expressions: a:=a_2, b:=b_2
-└─ Gather Exchange Est. ? rows
-   └─ TableScan correctness.q15_t1 Est. ? rows
-            Outputs: a_2:=a, b_2:=b
+Projection Est. 0 rows
+│     Expressions: a:=a_4, b:=b_4
+└─ Union Est. 0 rows
+   │     OutputToInputs: b_4 = [b_1,b_2,b_3], a_4 = [a_1,a_2,a_3]
+   ├─ CTERef[0] Est. 0 rows
+   ├─ Gather Exchange Est. ? rows
+   │  └─ TableScan correctness.q15_t1 Est. ? rows
+   │           Outputs: a_2:=a, b_2:=b
+   └─ CTERef[0] Est. 0 rows
+CTEDef [0]
+   ReadNothing Est. 0 rows
+note: CTE(Common Table Expression) is applied for 2 times.

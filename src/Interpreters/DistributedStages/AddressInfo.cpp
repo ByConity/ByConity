@@ -13,9 +13,11 @@
  * limitations under the License.
  */
 
+#include <string>
 #include <IO/ReadHelpers.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Protos/plan_node_utils.pb.h>
+#include <boost/algorithm/string/join.hpp>
 
 
 namespace DB
@@ -72,7 +74,6 @@ void AddressInfo::fillFromProto(const Protos::AddressInfo & proto)
     exchange_port = proto.exchange_port();
 }
 
-
 String AddressInfo::toString() const
 {
     return fmt::format("host_name: {}, port: {}, exchange_port: {} user: {}", host_name, port, exchange_port, user);
@@ -81,6 +82,35 @@ String AddressInfo::toString() const
 String AddressInfo::toShortString() const
 {
     return fmt::format("{}:{}/{}", host_name, port, exchange_port);
+}
+
+void PlanSegmentMultiPartitionSource::toProto(Protos::PlanSegmentMultiPartitionSource & proto) const
+{
+    proto.set_exchange_id(exchange_id);
+    address->toProto(*proto.mutable_address());
+    for (auto p_id : partition_ids)
+        proto.add_partition_ids(p_id);
+}
+
+void PlanSegmentMultiPartitionSource::fillFromProto(const Protos::PlanSegmentMultiPartitionSource & proto)
+{
+    exchange_id = proto.exchange_id();
+    address = std::make_shared<AddressInfo>();
+    address->fillFromProto(proto.address());
+    partition_ids.reserve(proto.partition_ids().size());
+    for (auto p_id : proto.partition_ids())
+    {
+        partition_ids.emplace_back(p_id);
+    }
+}
+
+String PlanSegmentMultiPartitionSource::toString() const
+{
+    return fmt::format(
+        "source[{} - partition_ids:{} - exchange_id:{}]",
+        address->toShortString(),
+        boost::algorithm::join(partition_ids | boost::adaptors::transformed([](UInt32 id) { return std::to_string(id); }), ","),
+        exchange_id);
 }
 }
 

@@ -173,4 +173,13 @@ void Region::readFromBuffer(UInt32 from_offset, MutableBufferView out_buf) const
     chassert(from_offset + out_buf.size() <= buffer->size());
     memcpy(out_buf.data(), buffer->data() + from_offset, out_buf.size());
 }
+
+void Region::readFromBuffer(UInt32 from_offset, size_t size, char *to) const
+{
+    std::lock_guard g{lock};
+    chassert(buffer != nullptr);
+    chassert(from_offset + size <= buffer->size());
+    memcpy(to, buffer->data() + from_offset, size);
+}
+
 }

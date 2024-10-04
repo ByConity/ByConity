@@ -52,6 +52,14 @@ size_t PlanPattern::maxJoinSize(QueryPlan & plan, ContextMutablePtr & context)
     return visitor.getMaxSize();
 }
 
+std::set<IQueryPlanStep::Type> PlanPattern::extractStepTypes(QueryPlan & plan)
+{
+    ExtractTypesVisitor visitor{plan.getCTEInfo()};
+    Void v;
+    VisitorUtil::accept(plan.getPlanNode(), visitor, v);
+    return visitor.getTypes();
+}
+
 Void SimpleQueryPlanPatternVisitor::visitJoinNode(JoinNode &, Void &)
 {
     simple_query = false;

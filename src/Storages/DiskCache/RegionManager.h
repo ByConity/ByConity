@@ -110,9 +110,11 @@ public:
 
     // Writes buffer at addr.
     void write(RelAddress addr, Buffer buf);
+    void write(RelAddress addr, BufferView buf);
 
     // Retruns a buffer with data read from the device.
     Buffer read(const RegionDescriptor & desc, RelAddress addr, size_t size) const;
+    size_t read(const RegionDescriptor & desc, RelAddress addr, size_t size, char *to) const;
 
     // Flushes all in memory buffers to the device.
     void flush();

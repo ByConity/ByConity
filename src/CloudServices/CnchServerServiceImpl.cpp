@@ -785,8 +785,8 @@ void CnchServerServiceImpl::fetchPartitions(
 
                 session_context->setTemporaryTransaction(
                     TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
-                auto required_partitions
-                    = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
+                auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(
+                    session_context, storage, query_info, column_names, request->has_ignore_ttl() && request->ignore_ttl());
 
                 response->set_total_size(required_partitions.total_partition_number);
                 auto & mutable_partitions = *response->mutable_partitions();
@@ -969,6 +969,30 @@ void CnchServerServiceImpl::cleanTransaction(
             }
         }
     );
+}
+void CnchServerServiceImpl::cleanUndoBuffers(
+    google::protobuf::RpcController *,
+    const Protos::CleanUndoBuffersReq * request,
+    Protos::CleanUndoBuffersResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request, response, done, gc = getContext(), this] {
+        brpc::ClosureGuard done_guard(done);
+
+        auto & txn_cleaner = gc->getCnchTransactionCoordinator().getTxnCleaner();
+        TransactionRecord txn_record{request->txn_record()};
+
+        try
+        {
+            txn_cleaner.cleanUndoBuffers(txn_record );
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Clean txn record {} failed.", txn_record.toString());
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 void CnchServerServiceImpl::acquireLock(
     google::protobuf::RpcController * cntl,

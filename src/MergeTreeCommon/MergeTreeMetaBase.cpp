@@ -1791,10 +1791,13 @@ MergeTreeSettingsPtr MergeTreeMetaBase::getChangedSettings(const ASTPtr new_sett
     return changed_settings;
 }
 
-void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
+void MergeTreeMetaBase::checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
 {
     NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
     MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
+
+    if (current_settings->enable_unique_partial_update && !current_settings->partition_level_unique_keys)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Not support table level unique keys when enable unique partial update.");
 
     auto columns_physical = columns.getAllPhysical();
     for (auto & column: columns_physical)
@@ -2167,7 +2170,8 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
     const SelectQueryInfo & query_info,
     std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
     const Names & column_names_to_return,
-    ContextPtr local_context) const
+    ContextPtr local_context,
+    const bool & ignore_ttl) const
 {
     /// Coarse grained partition pruner: filter out the partition which will definitely not satisfy the query predicate. The benefit
     /// is 2-folded: (1) we can prune data parts and (2) we can reduce numbers of calls to catalog to get parts 's metadata.
@@ -2180,7 +2184,8 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
     /// (3) `_partition_id` or `_partition_value` if they're in predicate
 
     /// (1) Prune partition by partition level TTL
-    filterPartitionByTTL(partition_list, local_context->tryGetCurrentTransactionID().toSecond());
+    if (!ignore_ttl)
+        filterPartitionByTTL(partition_list, local_context->tryGetCurrentTransactionID().toSecond());
 
     const auto partition_key = MergeTreePartition::adjustPartitionKey(getInMemoryMetadataPtr(), local_context);
     const auto & partition_key_expr = partition_key.expression;

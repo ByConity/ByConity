@@ -7,6 +7,7 @@
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Core/Block.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/StorageInMemoryMetadata.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Functions/IFunctionAdaptors.h>
 #include <Functions/materialize.h>
@@ -14,6 +15,21 @@
 
 namespace DB
 {
+
+static String constructUpdateColumns(Names names)
+{
+    std::ostringstream res;
+    bool first = true;
+    for (auto & name: names)
+    {
+        if (first)
+            first = false;
+        else
+            res << ',';
+        res << name;
+    }
+    return res.str();
+}
 
 ActionsDAGPtr addMissingDefaults(
     const Block & header,
@@ -75,7 +91,12 @@ ActionsDAGPtr addMissingDefaults(
         /** It is necessary to turn a constant column into a full column, since in part of blocks (from other parts),
         *  it can be full (or the interpreter may decide that it is constant everywhere).
         */
-        auto new_column = column.type->createColumnConstWithDefaultValue(0);
+        ColumnPtr new_column;
+        /// Fill update_columns with input header column names
+        if (column.name == StorageInMemoryMetadata::UPDATE_COLUMNS)
+            new_column = column.type->createColumnConst(0, constructUpdateColumns(header.getNames()));
+        else
+            new_column = column.type->createColumnConstWithDefaultValue(0);
         const auto * col = &actions->addColumn({std::move(new_column), column.type, column.name});
         index.push_back(&actions->materializeNode(*col));
     }

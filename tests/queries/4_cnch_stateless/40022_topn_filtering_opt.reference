@@ -1,61 +1,58 @@
-Projection Est. 10 rows, cost 8.740000e+01
+Projection Est. 6 rows, cost 5.244000e+01
 │     Expressions: count():=`expr#count()`, n:=number_3
-└─ Limit Est. 10 rows, cost 8.666000e+01
+└─ Limit Est. 6 rows, cost 5.199600e+01
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 8.666000e+01
+   └─ Sorting Est. 6 rows, cost 5.199600e+01
       │     Order by: {number_3 ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 10 rows, cost 8.666000e+01
-         └─ Sorting Est. 10 rows, cost 6.660000e+00
+      └─ Gather Exchange Est. 6 rows, cost 5.199600e+01
+         └─ Sorting Est. 6 rows, cost 3.996000e+00
             │     Order by: {number_3 ASC NULLS LAST}
             │     Limit: 10
-            └─ MergingAggregated Est. 24 rows, cost 6.660000e+00
-               └─ Repartition Exchange Est. 24 rows, cost 6.660000e+00
+            └─ MergingAggregated Est. 6 rows, cost 3.996000e+00
+               └─ Repartition Exchange Est. 6 rows, cost 3.996000e+00
                   │     Partition by: {number_3}
-                  └─ Union Est. 24 rows, cost 6.660000e+00
+                  └─ Union Est. 6 rows, cost 3.996000e+00
                      │     OutputToInputs: expr#count() = [expr#count(),expr#count(),expr#count()], number_3 = [number,number_1,number_2]
-                     ├─ Aggregating Est. 8 rows, cost 2.220000e+00
+                     ├─ Aggregating Est. 2 rows, cost 5.920000e-01
                      │  │     Group by: {number}
                      │  │     Aggregates: expr#count():=AggNull(count)()
-                     │  └─ TopNFiltering Est. 8 rows, cost 2.220000e+00
+                     │  └─ TopNFiltering Est. 2 rows, cost 5.920000e-01
                      │     │     Order by: {number ASC NULLS LAST}
                      │     │     Size: 10
                      │     │     Algorithm: Unspecified
-                     │     └─ Filter Est. 8 rows, cost 2.220000e+00
+                     │     └─ Filter Est. 2 rows, cost 5.920000e-01
                      │        │     Condition: (number % 2) = 0
-                     │        └─ Limit Est. 30 rows, cost 0.000000e+00
-                     │           │     Limit: 30
-                     │           └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
-                     │                    Limit: 30
-                     │                    Outputs: [number]
-                     ├─ Aggregating Est. 8 rows, cost 2.220000e+00
+                     │        └─ CTERef[1] Est. 8 rows, cost 0.000000e+00
+                     ├─ Aggregating Est. 2 rows, cost 5.920000e-01
                      │  │     Group by: {number_1}
                      │  │     Aggregates: expr#count():=AggNull(count)()
-                     │  └─ TopNFiltering Est. 8 rows, cost 2.220000e+00
+                     │  └─ TopNFiltering Est. 2 rows, cost 5.920000e-01
                      │     │     Order by: {number_1 ASC NULLS LAST}
                      │     │     Size: 10
                      │     │     Algorithm: Unspecified
-                     │     └─ Filter Est. 8 rows, cost 2.220000e+00
+                     │     └─ Filter Est. 2 rows, cost 5.920000e-01
                      │        │     Condition: (number_1 % 3) = 0
-                     │        └─ Limit Est. 30 rows, cost 0.000000e+00
-                     │           │     Limit: 30
-                     │           └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
-                     │                    Limit: 30
-                     │                    Outputs: number_1:=number
-                     └─ Aggregating Est. 8 rows, cost 2.220000e+00
+                     │        └─ CTERef[1] Est. 8 rows, cost 0.000000e+00
+                     └─ Aggregating Est. 2 rows, cost 5.920000e-01
                         │     Group by: {number_2}
                         │     Aggregates: expr#count():=AggNull(count)()
-                        └─ TopNFiltering Est. 8 rows, cost 2.220000e+00
+                        └─ TopNFiltering Est. 2 rows, cost 5.920000e-01
                            │     Order by: {number_2 ASC NULLS LAST}
                            │     Size: 10
                            │     Algorithm: Unspecified
-                           └─ Filter Est. 8 rows, cost 2.220000e+00
+                           └─ Filter Est. 2 rows, cost 5.920000e-01
                               │     Condition: (number_2 % 5) = 0
-                              └─ Limit Est. 30 rows, cost 0.000000e+00
-                                 │     Limit: 30
-                                 └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
-                                          Limit: 30
-                                          Outputs: number_2:=number
+                              └─ CTERef[1] Est. 8 rows, cost 0.000000e+00
+CTEDef [1]
+   Filter Est. 8 rows, cost 2.220000e+00
+   │     Condition: ((number % 2) = 0) OR ((number % 3) = 0) OR ((number % 5) = 0)
+   └─ Limit Est. 30 rows, cost 0.000000e+00
+      │     Limit: 30
+      └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
+               Limit: 30
+               Outputs: [number]
+note: CTE(Common Table Expression) is applied for 3 times.
 0	3
 2	1
 3	1

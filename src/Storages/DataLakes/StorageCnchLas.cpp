@@ -6,7 +6,7 @@
 #include "Interpreters/evaluateConstantExpression.h"
 #include "Parsers/ASTCreateQuery.h"
 #include "Parsers/ASTLiteral.h"
-#include <Protos/hive_models.pb.h>
+#include <Protos/lake_models.pb.h>
 #include "Storages/Hive/CnchHiveSettings.h"
 #include "Storages/Hive/HivePartition.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
@@ -23,6 +23,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
+static constexpr auto LAS_CLASS_FACTORY_CLASS = "org/byconity/las/LasClassFactory";
 static constexpr auto LAS_CLASS = "org/byconity/las/LasMetaClient";
 
 StorageCnchLas::StorageCnchLas(
@@ -55,7 +56,7 @@ StorageCnchLas::StorageCnchLas(
         proto_kv->set_value(kv.second);
     }
 
-    auto metaclient = std::make_shared<JNIMetaClient>(LAS_CLASS, req.SerializeAsString());
+    auto metaclient = std::make_shared<JNIMetaClient>(LAS_CLASS_FACTORY_CLASS, LAS_CLASS, req.SerializeAsString());
     if (!client)
     {
         auto cli = std::make_shared<JNIHiveMetastoreClient>(std::move(metaclient), std::move(params));
@@ -114,22 +115,14 @@ PrepareContextResult StorageCnchLas::prepareReadContext(
     return result;
 }
 
-StorageID StorageCnchLas::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
-{
-    auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context, 1);
-    StorageID storage_id = getStorageID();
-    storage_id.table_name = prepare_result.local_table_name;
-    return storage_id;
-}
-
 std::optional<TableStatistics> StorageCnchLas::getTableStats([[maybe_unused]] const Strings & columns, [[maybe_unused]] ContextPtr local_context)
 {
-    /// TODO:
-    return {};
+    return std::nullopt;
 }
 
 void StorageCnchLas::serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
 {
+    // TODO can it just use the LakeBase's implementation?
     for (const auto & hive_file : hive_files)
     {
         auto * proto_file = proto.add_files();

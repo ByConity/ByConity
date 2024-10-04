@@ -1,0 +1,64 @@
+Projection Est. 8 rows, cost 4.097320e+02
+│     Expressions: a:=`expr#toInt64(plus(b, 1))_3`
+└─ Sorting Est. 8 rows, cost 4.091400e+02
+   │     Order by: {expr#toInt64(plus(b, 1))_3 ASC NULLS LAST}
+   └─ Gather Exchange Est. 8 rows, cost 4.091400e+02
+      └─ Sorting Est. 24 rows, cost 3.451400e+02
+         │     Order by: {expr#toInt64(plus(b, 1))_3 ASC NULLS LAST}
+         └─ Union Est. 24 rows, cost 3.451400e+02
+            │     OutputToInputs: expr#toInt64(plus(b, 1))_3 = [expr#toInt64(plus(b, 1))_1,expr#toInt64(plus(b, 1))_2,a_3]
+            ├─ Sorting Est. 8 rows, cost 3.040000e+01
+            │  │     Order by: {expr#toInt64(plus(b, 1))_1 ASC NULLS LAST}
+            │  └─ CTERef[0] Est. 2 rows, cost 3.040000e+01
+            ├─ Sorting Est. 8 rows, cost 3.040000e+01
+            │  │     Order by: {expr#toInt64(plus(b, 1))_2 ASC NULLS LAST}
+            │  └─ CTERef[0] Est. 2 rows, cost 3.040000e+01
+            └─ Sorting Est. 8 rows, cost 4.528800e+01
+               │     Order by: {a_3 ASC NULLS LAST}
+               └─ Projection Est. 4 rows, cost 4.528800e+01
+                  │     Expressions: a_3:=cast(a_2, \'Int64\')
+                  └─ TableScan default.10725_t2 Est. 4 rows, cost 4.499200e+01
+                           Outputs: a_2:=a
+CTEDef [0]
+   MergingAggregated Est. 2 rows, cost 2.390520e+02
+   └─ Repartition Exchange Est. 2 rows, cost 2.390520e+02
+      │     Partition by: {expr#toInt64(plus(b, 1))}
+      └─ Aggregating Est. 2 rows, cost 2.230520e+02
+         │     Group by: {expr#toInt64(plus(b, 1))}
+         └─ Projection Est. 2 rows, cost 2.230520e+02
+            │     Expressions: expr#toInt64(plus(b, 1)):=toInt64(`expr#count()` + 1)
+            └─ Aggregating Est. 2 rows, cost 2.229040e+02
+               │     Group by: {a}
+               │     Aggregates: expr#count():=AggNull(count)()
+               └─ Inner Join Est. 8 rows, cost 1.885440e+02
+                  │     Condition: a == a_1
+                  ├─ Repartition Exchange Est. 4 rows, cost 6.099200e+01
+                  │  │     Partition by: {a}
+                  │  └─ TableScan default.10725_t1 Est. 4 rows, cost 4.499200e+01
+                  │           Outputs: [a]
+                  └─ Repartition Exchange Est. 4 rows, cost 6.099200e+01
+                     │     Partition by: {a_1}
+                     └─ TableScan default.10725_t1 Est. 4 rows, cost 4.499200e+01
+                              Outputs: a_1:=a
+note: CTE(Common Table Expression) is applied for 2 times.
+--------coalescing--------
+0
+0
+1
+1
+5
+5
+--------no coalescing--------
+0
+0
+1
+1
+5
+5
+--------enfored no coalescing--------
+0
+0
+1
+1
+5
+5

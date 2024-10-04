@@ -76,16 +76,18 @@ static void removeUnusedCTEFromCTEInfo(CTEInfo & cte_info, std::unordered_map<CT
     }
 }
 
-void RemoveUnusedCTE::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveUnusedCTE::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     auto & cte_info = plan.getCTEInfo();
     if (cte_info.empty())
-        return;
+        return false;
+
     auto cte_reference_counts = cte_info.collectCTEReferenceCounts(plan.getPlanNode());
     Rewriter rewriter(context, cte_info, cte_reference_counts);
     Void c;
     auto result = VisitorUtil::accept(plan.getPlanNode(), rewriter, c);
     removeUnusedCTEFromCTEInfo(cte_info, cte_reference_counts);
     plan.update(result);
+    return true;
 }
 }

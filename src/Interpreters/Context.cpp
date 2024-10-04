@@ -40,6 +40,7 @@
 #include <Access/SettingsProfile.h>
 #include <Access/SettingsProfilesInfo.h>
 #include <Access/User.h>
+#include <Access/AeolusAccessUtil.h>
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchBGThreadsMap.h>
 #include <CloudServices/CnchMergeMutateThread.h>
@@ -121,6 +122,7 @@
 #include <Storages/DiskCache/KeyIndexFileCache.h>
 #include <Storages/DiskCache/NvmCacheConfig.h>
 #include <Storages/DiskCache/Types.h>
+#include <Storages/NexusFS/NexusFS.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/Hive/CnchHiveSettings.h>
@@ -522,6 +524,8 @@ struct ContextSharedPart
     mutable std::vector<std::unique_ptr<IOUringReader>> io_uring_reader;
 #endif
 
+    mutable NexusFSPtr nexus_fs;
+
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
     {
@@ -600,6 +604,9 @@ struct ContextSharedPart
 
         if (nvm_cache)
             nvm_cache->shutDown();
+
+        if (nexus_fs)
+            nexus_fs->shutDown();
 
         if (queue_manager)
             queue_manager->shutdown();
@@ -837,6 +844,8 @@ ReadSettings Context::getReadSettings() const
     res.remote_read_log = settings.enable_remote_read_log ? getRemoteReadLog().get() : nullptr;
     res.enable_io_scheduler = settings.enable_io_scheduler;
     res.enable_io_pfra = settings.enable_io_pfra;
+    res.enable_cloudfs = settings.enable_cloudfs;
+    res.enable_nexus_fs = settings.enable_nexus_fs;
     res.local_fs_buffer_size
         = settings.max_read_buffer_size_local_fs ? settings.max_read_buffer_size_local_fs : settings.max_read_buffer_size;
     res.remote_fs_buffer_size
@@ -1941,21 +1950,12 @@ std::shared_ptr<const ContextAccess> Context::getAccess() const
 
 void Context::checkAeolusTableAccess(const String & database_name, const String & table_name) const
 {
-    String table_names = getSettingsRef().access_table_names;
-    if (table_names.empty())
-    {
-        table_names = getSettingsRef().accessible_table_names;
-        if (table_names.empty())
-            return;
-    }
-    std::vector<String> tables;
-    boost::split(tables, table_names, boost::is_any_of(" ,"));
-    /// avoid check temporary table.
-    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE)
+    /// avoid check temporary and system table.
+    if (database_name == DatabaseCatalog::TEMPORARY_DATABASE || database_name == DatabaseCatalog::SYSTEM_DATABASE)
         return;
 
     String full_table_name = database_name.empty() ? table_name : database_name+"."+table_name;
-    if (std::find(tables.begin(), tables.end(), full_table_name) == tables.end())
+    if (!aeolusCheck(*this, full_table_name))
     {
         throw Exception("Access denied to " + full_table_name , ErrorCodes::DATABASE_ACCESS_DENIED);
     }
@@ -6139,4 +6139,47 @@ IOUringReader & Context::getIOUringReader() const
     return *reader;
 }
 #endif
+
+void Context::initNexusFS(const Poco::Util::AbstractConfiguration & config)
+{
+    auto lock = getLock(); // checked
+
+    String config_name(NexusFSConfig::CONFIG_NAME);
+    bool enable = config.getBool(config_name + ".enable", false);
+    String policy_name = config.getString(config_name + ".policy", "default");
+    String volume_name = config.getString(config_name + ".volume", "local");
+
+    if (!enable)
+    {
+        shared->nexus_fs.reset();
+        return;
+    }
+    if (shared->nexus_fs)
+        throw Exception("NexusFS has been already initialized.", ErrorCodes::LOGICAL_ERROR);
+
+    NexusFSConfig conf;
+    auto disks = getStoragePolicy(policy_name)->getVolumeByName(volume_name, true)->getDisks();
+    for  (auto & disk : disks)
+    {
+        chassert(disk->getType() == DiskType::Type::Local);
+        conf.file_paths.push_back(std::filesystem::path(disk->getPath()) / NexusFSConfig::FILE_NAME);
+    }
+    conf.loadFromConfig(config);
+
+    shared->nexus_fs = std::make_unique<NexusFS>(std::move(conf));
+
+    if (shared->nexus_fs)
+    {
+        if (!shared->nexus_fs->recover())
+            LOG_WARNING(&Poco::Logger::get("NexusFS"), "No recovery data found. Setup with clean cache.");
+    }
+    else
+        LOG_ERROR(shared->log, "Fail to initialize NexusFS.");
+}
+
+NexusFSPtr Context::getNexusFS() const
+{
+    return shared->nexus_fs;
+}
+
 }

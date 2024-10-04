@@ -26,7 +26,7 @@
 
 namespace DB
 {
-void AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ExchangeVisitor visitor{};
     Property required{Partitioning{Partitioning::Handle::SINGLE}};
@@ -51,6 +51,7 @@ void AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     if (context->getSettingsRef().offloading_with_query_plan)
         node = PropertyEnforcer::enforceOffloadingGatherNode(node, *context);
     plan.update(node);
+    return true;
 }
 
 ExchangeResult ExchangeVisitor::visitPlanNode(PlanNodeBase & node, ExchangeContext & cxt)

@@ -47,7 +47,7 @@
 #include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
-#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/DataLakes/StorageCnchLakeBase.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
@@ -624,6 +624,9 @@ void InterpreterSelectQueryUseOptimizer::fillContextQueryAccessInfo(ContextPtr c
         {
             Names required_columns;
             auto storage_id = storage_analysis.storage->getStorageID();
+            // check aeolus access
+            if (context->getServerType() == ServerType::cnch_server)
+                context->checkAeolusTableAccess(storage_id.database_name, storage_id.table_name);
             if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
             {
                 for (const auto & column : it->second)
@@ -832,10 +835,10 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
 {
     auto source_step = node.getStep();
     const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(source_step->getStorage().get());
-    const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(source_step->getStorage().get());
+    const auto * cnch_lake = dynamic_cast<StorageCnchLakeBase *>(source_step->getStorage().get());
     const auto * cnch_file = dynamic_cast<IStorageCnchFile *>(source_step->getStorage().get());
 
-    if (cnch_table || cnch_hive || cnch_file)
+    if (cnch_table || cnch_lake || cnch_file)
     {
         const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
         auto worker_group_status_ptr = cluster_info_context.context->getWorkerGroupStatusPtr();
@@ -864,10 +867,10 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableWriteNode(TableWr
     auto source_step = node.getStep();
     auto storage = source_step->getTarget()->getStorage();
     const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-    const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
+    const auto * cnch_lake = dynamic_cast<StorageCnchLakeBase *>(storage.get());
     const auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get());
 
-    if (cnch_table || cnch_hive || cnch_file)
+    if (cnch_table || cnch_lake || cnch_file)
     {
         const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
         auto worker_group_status_ptr = cluster_info_context.context->getWorkerGroupStatusPtr();

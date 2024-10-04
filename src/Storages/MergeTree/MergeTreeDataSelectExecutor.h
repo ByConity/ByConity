@@ -21,12 +21,15 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <Core/QueryProcessingStage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <QueryPlan/ReadFromMergeTree.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeIndices.h>
 
 namespace DB
 {
@@ -213,6 +216,7 @@ public:
         Poco::Logger * log,
         size_t num_streams,
         ReadFromMergeTree::IndexStats & index_stats,
+        DelayedSkipIndex & delayed_indices_,
         bool use_skip_indexes,
         const MergeTreeMetaBase & data_,
         bool use_sampling,
@@ -256,6 +260,14 @@ public:
         const MergeTreeMetaBase & data,
         const RangesInDataParts & parts_with_ranges,
         const ContextPtr & context);
+
+    static bool shouldFilterMarkRangesAtPipelineExec(const Settings& settings,
+        const InputOrderInfoPtr& input_order);
+
+    static MarkRanges filterMarkRangesForPartByInvertedIndex(
+        const MergeTreeData::DataPartPtr& part, const MarkRanges& mark_ranges,
+        const std::shared_ptr<DelayedSkipIndex>& delayed_index,
+        const ContextPtr& context, const MergeTreeReaderSettings& reader_settings);
 };
 
 struct IndexTimeWatcher

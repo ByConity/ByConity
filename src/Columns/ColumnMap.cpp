@@ -420,6 +420,58 @@ ColumnPtr ColumnMap::compress() const
     });
 }
 
+bool ColumnMap::replaceRow(
+    const PaddedPODArray<UInt32> & indexes,
+    const IColumn & rhs,
+    const PaddedPODArray<UInt32> & rhs_indexes,
+    const Filter * is_default_filter,
+    size_t current_pos,
+    size_t & first_part_pos,
+    size_t & second_part_pos,
+    MutableColumnPtr & res,
+    bool enable_merge_map) const
+{
+    if (!enable_merge_map)
+        return IColumn::replaceRow(indexes, rhs, rhs_indexes, is_default_filter, current_pos, first_part_pos, second_part_pos, res, enable_merge_map);
+
+    const auto & rhs_map_column = static_cast<const ColumnMap &>(rhs);
+    RowValue row;
+    mergeRowValue(row, current_pos);
+    while (first_part_pos < indexes.size() && indexes[first_part_pos] == current_pos)
+    {
+        if (rhs_indexes[first_part_pos] >= size())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "rhs_index {} is out of this column size {}", rhs_indexes[first_part_pos], size());
+        mergeRowValue(row, rhs_indexes[first_part_pos]);
+        first_part_pos++;
+    }
+    if (second_part_pos < indexes.size() && indexes[second_part_pos] - size() == current_pos)
+    {
+        if (rhs_indexes[second_part_pos] >= rhs.size())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR, "rhs_index {} is out of rhs column size {}", rhs_indexes[second_part_pos], rhs.size());
+        rhs_map_column.mergeRowValue(row, rhs_indexes[second_part_pos]);
+    }
+    Map row_field;
+    row_field.reserve(row.size());
+    for (auto & [key, val] : row)
+        row_field.emplace_back(key, val);
+    res->insert(row_field);
+    return true;
+}
+
+void ColumnMap::mergeRowValue(RowValue & row, size_t n) const
+{
+    size_t offset = offsetAt(n);
+    size_t size = sizeAt(n);
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        Field key = getKey()[offset + i];
+        if (!row.count(key))
+            row[key] = getValue()[offset + i];
+    }
+}
+
 double ColumnMap::getRatioOfDefaultRows(double sample_ratio) const
 {
     return getRatioOfDefaultRowsImpl<ColumnMap>(sample_ratio);
@@ -693,7 +745,7 @@ void ColumnMap::removeKeys(const NameSet & keys)
 /**
  * Insert implicit map column from outside, only when the current ColumnMap has the same size with implicit columns.
  * Currently, this method works for ingestion column feature.
- * 
+ *
  * @param implicit_columns it should has the same type with return value of ColumnMap::getValueColumnByKey. Otherwise, throw exception.
  */
 void ColumnMap::insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns)

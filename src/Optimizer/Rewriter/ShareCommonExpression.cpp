@@ -616,7 +616,7 @@ PlanNodePtr ShareCommonExpression::rewriteImpl(PlanNodePtr root, ContextMutableP
     return root;
 }
 
-void ShareCommonExpression::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool ShareCommonExpression::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     auto & cte_info = plan.getCTEInfo();
 
@@ -624,5 +624,6 @@ void ShareCommonExpression::rewrite(QueryPlan & plan, ContextMutablePtr context)
         cte_info.update(cte.first, rewriteImpl(cte.second, context));
 
     plan.update(rewriteImpl(plan.getPlanNode(), context));
+    return true;
 }
 }

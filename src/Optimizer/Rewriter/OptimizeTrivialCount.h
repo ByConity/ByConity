@@ -45,7 +45,7 @@ public:
     String name() const override { return "OptimizeTrivialCount"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().optimize_trivial_count_query; }
 };
 

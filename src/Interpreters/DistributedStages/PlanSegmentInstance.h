@@ -42,6 +42,7 @@ struct PlanSegmentExecutionInfo
     AddressInfo execution_address;
     SourceTaskFilter source_task_filter;
     UInt32 retry_id = std::numeric_limits<UInt32>::max();
+    std::unordered_map<UInt64, std::vector<PlanSegmentMultiPartitionSource>> sources;
 };
 
 struct PlanSegmentInstance

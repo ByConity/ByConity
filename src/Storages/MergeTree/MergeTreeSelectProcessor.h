@@ -48,7 +48,7 @@ public:
         bool check_columns_,
         const MergeTreeStreamSettings & stream_settings_,
         const Names & virt_column_names_ = {},
-        bool quiet = false);
+        const MarkRangesFilterCallback& range_filter_callback_ = {});
 
     ~MergeTreeSelectProcessor() override;
 
@@ -77,6 +77,8 @@ protected:
     /// Lazy init, need to use getDeleteBitmap() interface rather than use delete_bitmap directly
     ImmutableDeleteBitmapPtr delete_bitmap;
     bool delete_bitmap_initialized = false;
+
+    MarkRangesFilterCallback mark_ranges_filter_callback;
 
     /// Total number of marks we should read
     size_t total_marks_count = 0;

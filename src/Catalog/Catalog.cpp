@@ -286,6 +286,10 @@ namespace ProfileEvents
     extern const Event GetAllUndoBufferFailed;
     extern const Event GetUndoBufferIteratorSuccess;
     extern const Event GetUndoBufferIteratorFailed;
+    extern const Event GetUndoBuffersWithKeysSuccess;
+    extern const Event GetUndoBuffersWithKeysFailed;
+    extern const Event ClearUndoBuffersByKeysSuccess;
+    extern const Event ClearUndoBuffersByKeysFailed;
     extern const Event GetTransactionRecordsSuccess;
     extern const Event GetTransactionRecordsFailed;
     extern const Event GetTransactionRecordsTxnIdsSuccess;
@@ -524,6 +528,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_MASKING_POLICY_NAME;
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
     extern const int ACCESS_ENTITY_ALREADY_EXISTS;
+    extern const int METASTORE_ERROR_KEY;
 }
 
 namespace Catalog
@@ -2797,7 +2802,12 @@ namespace Catalog
         return partition_ids;
     }
 
-    PrunedPartitions Catalog::getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return)
+    PrunedPartitions Catalog::getPartitionsByPredicate(
+        ContextPtr session_context,
+        const ConstStoragePtr & storage,
+        const SelectQueryInfo & query_info,
+        const Names & column_names_to_return,
+        const bool & ignore_ttl)
     {
         PrunedPartitions pruned_partitions;
         auto getPartitionsLocally = [&]()
@@ -2807,7 +2817,7 @@ namespace Catalog
                 return;
             auto all_partitions = getPartitionList(storage, nullptr);
             pruned_partitions.total_partition_number = all_partitions.size();
-            pruned_partitions.partitions = cnch_mergetree->selectPartitionsByPredicate(query_info, all_partitions, column_names_to_return, session_context);
+            pruned_partitions.partitions = cnch_mergetree->selectPartitionsByPredicate(query_info, all_partitions, column_names_to_return, session_context, ignore_ttl);
         };
         const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
             UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
@@ -2818,7 +2828,7 @@ namespace Catalog
             try
             {
                 auto host_with_rpc = host_port.getRPCAddress();
-                pruned_partitions = context.getCnchServerClientPool().get(host_with_rpc)->fetchPartitions(host_with_rpc, storage, query_info, column_names_to_return, session_context->getCurrentTransactionID());
+                pruned_partitions = context.getCnchServerClientPool().get(host_with_rpc)->fetchPartitions(host_with_rpc, storage, query_info, column_names_to_return, session_context->getCurrentTransactionID(), ignore_ttl);
                 LOG_TRACE(log, "Fetched {}/{} partitions from remote host {}", pruned_partitions.partitions.size(), pruned_partitions.total_partition_number, host_port.toDebugString());
             }
             catch (...)
@@ -3517,6 +3527,8 @@ namespace Catalog
                     if (!part_models.parts().empty())
                         context.getPartCacheManager()->insertDataPartsIntoCache(
                             *table, part_models.parts(), is_merged_parts, false, host_port.topology_version);
+                    if (!staged_part_models.parts().empty())
+                        context.getPartCacheManager()->insertStagedPartsIntoCache(*table, staged_part_models.parts(), host_port.topology_version);
                     if (!commit_data.delete_bitmaps.empty())
                     {
                         context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
@@ -3923,6 +3935,53 @@ namespace Catalog
             ProfileEvents::ClearUndoBufferFailed);
     }
 
+    void Catalog::clearUndoBuffersByKeys(const TxnTimestamp & txnID, const std::vector<String> & keys)
+    {
+        runWithMetricSupport(
+            [&] {
+                const String undo_buffer_key_prefix = meta_proxy->undoBufferKeyPrefix(name_space, txnID, false);
+                const String undo_buffer_key_prefix_rev = meta_proxy->undoBufferKeyPrefix(name_space, txnID, true);
+
+                BatchCommitRequest batch_writes;
+                for (const auto & key : keys)
+                {
+                    if (!key.starts_with(undo_buffer_key_prefix) && !key.starts_with(undo_buffer_key_prefix_rev))
+                    {
+                        throw Exception(ErrorCodes::METASTORE_ERROR_KEY, "Expected key {} but receive {}", undo_buffer_key_prefix, key);
+                    }
+                    batch_writes.AddDelete(key);
+                }
+
+                BatchCommitResponse resp;
+                meta_proxy->batchWrite(batch_writes, resp);
+            },
+            ProfileEvents::ClearUndoBuffersByKeysSuccess,
+            ProfileEvents::ClearUndoBuffersByKeysFailed);
+    }
+
+    std::unordered_map<String, std::pair<std::vector<String>, UndoResources>> Catalog::getUndoBuffersWithKeys(const TxnTimestamp & txnID)
+    {
+        std::unordered_map<String, std::pair<std::vector<String>, UndoResources>> res;
+        runWithMetricSupport(
+            [&] {
+                auto get_func = [&](bool write_undo_buffer_new_key) {
+                    auto it = meta_proxy->getUndoBuffer(name_space, txnID.toUInt64(), write_undo_buffer_new_key);
+                    while (it->next())
+                    {
+                        UndoResource resource = UndoResource::deserialize(it->value());
+                        resource.txn_id = txnID;
+                        res[resource.uuid()].first.emplace_back(it->key());
+                        res[resource.uuid()].second.emplace_back(std::move(resource));
+                    }
+                };
+                /// Get both old and new undo buffer keys;
+                get_func(true);
+                get_func(false);
+            },
+            ProfileEvents::GetUndoBuffersWithKeysSuccess,
+            ProfileEvents::GetUndoBuffersWithKeysFailed);
+        return res;
+    }
     std::unordered_map<String, UndoResources> Catalog::getUndoBuffer(const TxnTimestamp & txnID)
     {
         std::unordered_map<String, UndoResources> res;

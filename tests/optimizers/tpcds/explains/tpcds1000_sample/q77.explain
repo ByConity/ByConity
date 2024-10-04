@@ -15,12 +15,12 @@ Projection Est. 100 rows
                   └─ Repartition Exchange Est. 3186 rows
                      │     Partition by: {expr#'store channel'_1, s_store_sk_3, __grouping_set}
                      └─ Union Est. 3186 rows
-                        │     OutputToInputs: expr#sum(profit) = [expr#sum(profit),expr#sum(profit),expr#sum(profit)], expr#sum(returns) = [expr#sum(returns),expr#sum(returns),expr#sum(returns)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], s_store_sk_3 = [ss_store_sk,cs_call_center_sk_1,ws_web_page_sk], expr#'store channel'_1 = [expr#'store channel',expr#'catalog channel',expr#'web channel'], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
+                        │     OutputToInputs: expr#sum(profit) = [expr#sum(profit),expr#sum(profit),expr#sum(profit)], expr#sum(returns) = [expr#sum(returns),expr#sum(returns),expr#sum(returns)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], s_store_sk_3 = [s_store_sk_2,cs_call_center_sk_1,wp_web_page_sk_2], expr#'store channel'_1 = [expr#'store channel',expr#'catalog channel',expr#'web channel'], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
                         ├─ Aggregating Est. 450 rows
-                        │  │     Group by: {expr#'store channel', ss_store_sk}
+                        │  │     Group by: {expr#'store channel', s_store_sk_2}
                         │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)), expr#sum(returns):=AggNull(sum)(expr#coalesce(returns, 0)_2), expr#sum(profit):=AggNull(sum)(expr#minus(profit, coalesce(profit_loss, 0)))
                         │  └─ Projection Est. 501 rows
-                        │     │     Expressions: [expr#sum(ss_ext_sales_price), ss_store_sk], expr#'store channel':='store channel', expr#coalesce(returns, 0)_2:=cast(coalesce(`expr#sum(sr_return_amt)`, 0), 'Nullable(Float64)'), expr#minus(profit, coalesce(profit_loss, 0)):=`expr#sum(ss_net_profit)` - coalesce(`expr#sum(sr_net_loss)`, 0)
+                        │     │     Expressions: [expr#sum(ss_ext_sales_price)], expr#'store channel':='store channel', expr#coalesce(returns, 0)_2:=cast(coalesce(`expr#sum(sr_return_amt)`, 0), 'Nullable(Float64)'), expr#minus(profit, coalesce(profit_loss, 0)):=`expr#sum(ss_net_profit)` - coalesce(`expr#sum(sr_net_loss)`, 0), s_store_sk_2:=cast(ss_store_sk, 'Nullable(Int16)')
                         │     └─ Left Join Est. 501 rows
                         │        │     Condition: ss_store_sk == sr_store_sk
                         │        ├─ MergingAggregated Est. 501 rows
@@ -120,10 +120,10 @@ Projection Est. 100 rows
                         │                                         Where: (d_date >= cast(11192, 'Date32')) AND (d_date <= cast(11222, 'Date32'))
                         │                                         Outputs: d_date_sk_2:=d_date_sk, d_date_2:=d_date
                         └─ Aggregating Est. 2699 rows
-                           │     Group by: {expr#'web channel', ws_web_page_sk}
+                           │     Group by: {expr#'web channel', wp_web_page_sk_2}
                            │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(ws_ext_sales_price)), expr#sum(returns):=AggNull(sum)(expr#coalesce(returns, 0)_3), expr#sum(profit):=AggNull(sum)(expr#minus(profit, coalesce(profit_loss, 0))_2)
                            └─ Projection Est. 3000 rows
-                              │     Expressions: [expr#sum(ws_ext_sales_price), ws_web_page_sk], expr#'web channel':='web channel', expr#coalesce(returns, 0)_3:=cast(coalesce(`expr#sum(wr_return_amt)`, 0), 'Nullable(Float64)'), expr#minus(profit, coalesce(profit_loss, 0))_2:=cast(`expr#sum(ws_net_profit)` - coalesce(`expr#sum(wr_net_loss)`, 0), 'Nullable(Float64)')
+                              │     Expressions: [expr#sum(ws_ext_sales_price)], expr#'web channel':='web channel', expr#coalesce(returns, 0)_3:=cast(coalesce(`expr#sum(wr_return_amt)`, 0), 'Nullable(Float64)'), expr#minus(profit, coalesce(profit_loss, 0))_2:=cast(`expr#sum(ws_net_profit)` - coalesce(`expr#sum(wr_net_loss)`, 0), 'Nullable(Float64)'), wp_web_page_sk_2:=cast(ws_web_page_sk, 'Nullable(Int16)')
                               └─ Right Join Est. 3000 rows
                                  │     Condition: wr_web_page_sk == ws_web_page_sk
                                  ├─ MergingAggregated Est. 3000 rows

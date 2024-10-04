@@ -974,7 +974,8 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
     params.columns_commit_time = future_task.calcColumnsCommitTime();
 
     const auto & settings = local_context->getSettingsRef();
-    if (settings.parts_preload_level && storage.getSettings()->enable_local_disk_cache)
+    if (settings.parts_preload_level
+        && (storage.getSettings()->enable_local_disk_cache || storage.getSettings()->enable_nexus_fs))
     {
         params.parts_preload_level
             = storage.getSettings()->enable_preload_parts ? PreloadLevelSettings::AllPreload : storage.getSettings()->parts_preload_level;

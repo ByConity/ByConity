@@ -50,7 +50,7 @@
 
 namespace DB
 {
-void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ColumnPruningVisitor visitor{
         context,
@@ -65,9 +65,10 @@ void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     ColumnPruningContext column_pruning_context{.name_set = require};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, column_pruning_context);
     plan.update(result);
+    return true;
 }
 
-void AddProjectionPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool AddProjectionPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ColumnPruningVisitor visitor{
         context,
@@ -82,9 +83,10 @@ void AddProjectionPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) 
     ColumnPruningContext column_pruning_context{.name_set = require};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, column_pruning_context);
     plan.update(result);
+    return true;
 }
 
-void DistinctToAggregatePruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool DistinctToAggregatePruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ColumnPruningVisitor visitor{
         context,
@@ -99,9 +101,10 @@ void DistinctToAggregatePruning::rewrite(QueryPlan & plan, ContextMutablePtr con
     ColumnPruningContext column_pruning_context{.name_set = require};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, column_pruning_context);
     plan.update(result);
+    return true;
 }
 
-void WindowToSortPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool WindowToSortPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ColumnPruningVisitor visitor{
         context,
@@ -116,6 +119,7 @@ void WindowToSortPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) c
     ColumnPruningContext column_pruning_context{.name_set = require};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, column_pruning_context);
     plan.update(result);
+    return true;
 }
 
 template <bool require_all>

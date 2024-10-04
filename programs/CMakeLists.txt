@@ -281,6 +281,8 @@ if (ENABLE_CLICKHOUSE_LIBRARY_BRIDGE)
     add_subdirectory (library-bridge)
 endif ()
 
+set (JAVA_EXTENSIONS_JVM_SEARCH_PATH "/usr/lib/jvm/default-java/lib:/usr/lib/jvm/default-java/lib/server:/usr/lib/jvm/default-java/jre/lib/amd64:/usr/lib/jvm/default-java/jre/lib/amd64/server:/usr/lib/jvm/java-8-byteopenjdk-amd64/jre/lib/amd64:/usr/lib/jvm/java-8-byteopenjdk-amd64/jre/lib/amd64/server" CACHE STRING "Runtime search path for libjvm.so")
+
 if (CLICKHOUSE_ONE_SHARED)
   add_library(clickhouse-lib SHARED
     ${CLICKHOUSE_SERVER_SOURCES}
@@ -369,6 +371,12 @@ if (CLICKHOUSE_SPLIT_BINARY)
     endif ()
 
     set_target_properties(${CLICKHOUSE_ALL_TARGETS} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ..)
+    set(RPATH "$ORIGIN/../../lib")
+    if (USE_JAVA_EXTENSIONS)
+        # jvm search must be placed ahead of other rpaths
+        set(RPATH "${JAVA_EXTENSIONS_JVM_SEARCH_PATH}:${RPATH}")
+    endif()
+    set_target_properties(${CLICKHOUSE_ALL_TARGETS} PROPERTIES LINK_FLAGS "-Wl,-rpath,'${RPATH}'")
 
     add_custom_target (clickhouse-bundle ALL DEPENDS ${CLICKHOUSE_ALL_TARGETS})
     add_custom_target (clickhouse ALL DEPENDS clickhouse-bundle)
@@ -384,6 +392,12 @@ else ()
 
     target_link_libraries (clickhouse PRIVATE clickhouse_common_io string_utils ${HARMFUL_LIB})
     target_include_directories (clickhouse PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    set(RPATH "$ORIGIN/../../lib")
+    if (USE_JAVA_EXTENSIONS)
+        # jvm search must be placed ahead of other rpaths
+        set(RPATH "${JAVA_EXTENSIONS_JVM_SEARCH_PATH}:${RPATH}")
+    endif()
+    set_target_properties(clickhouse PROPERTIES LINK_FLAGS "-Wl,-rpath,'${RPATH}'")
 
     if (ENABLE_CLICKHOUSE_SERVER)
         clickhouse_target_link_split_lib(clickhouse server)

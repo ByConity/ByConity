@@ -208,7 +208,7 @@ String parseMapNameFromImplicitFileName(const String & implicit_file_name)
     auto location_base = implicit_file_name.find("_base.", getMapSeparator().size());
     if (location_base == String::npos)
     {
-        /// Due to map column name meets the constraint in MergeTreeMetaBase::checkColumnsValidity, so we can find second separator directly.
+        /// Due to map column name meets the constraint in MergeTreeMetaBase::checkMetadataValidity, so we can find second separator directly.
         auto location = unescape_file_name.find(getMapSeparator(), getMapSeparator().size());
         if (location == String::npos)
             throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column name: {}", implicit_file_name);
@@ -238,7 +238,7 @@ String parseMapNameFromImplicitColName(const String & implicit_column_name)
     if (!startsWith(implicit_column_name, getMapSeparator()))
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column name: {}", implicit_column_name);
 
-    /// Due to map column name meets the constraint in MergeTreeMetaBase::checkColumnsValidity, so we can find second separator directly.
+    /// Due to map column name meets the constraint in MergeTreeMetaBase::checkMetadataValidity, so we can find second separator directly.
     auto location = implicit_column_name.find(getMapSeparator(), getMapSeparator().size());
     if (location == String::npos)
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implicit column name: {}", implicit_column_name);

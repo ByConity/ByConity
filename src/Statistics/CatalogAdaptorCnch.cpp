@@ -23,7 +23,6 @@
 #include <Statistics/StatsUdiCounter.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
-#include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/regex.hpp>

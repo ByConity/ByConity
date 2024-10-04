@@ -127,6 +127,7 @@ PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractC
     mergetree_settings.set("min_rows_for_compact_part", 0);
     mergetree_settings.set("min_bytes_for_compact_part", 0);
     mergetree_settings.set("enable_local_disk_cache", 0);
+    mergetree_settings.set("enable_nexus_fs", 0);
     settings.set("input_format_skip_unknown_fields", true);
     settings.set("skip_nullinput_notnull_col", true);
 

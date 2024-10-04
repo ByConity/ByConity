@@ -359,7 +359,7 @@ public:
 
     Strings getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context);
 
-    PrunedPartitions getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return);
+    PrunedPartitions getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return, const bool & ignore_ttl);
     /// dictionary related APIs
 
     void createDictionary(const StorageID & storage_id, const String & create_query);
@@ -477,6 +477,21 @@ public:
     /// clear undo buffer
     void clearUndoBuffer(const TxnTimestamp & txnID, const String & rpc_address, PlanSegmentInstanceId instance_id);
 
+    /**
+     * @brief Clean all undo buffers with given keys (in the same table).
+     *
+     * @param txnID Currently, this will be used to verify if the undo buffers are in the same table.
+     * @param keys Keys of the undo buffers.
+     */
+    void clearUndoBuffersByKeys(const TxnTimestamp & txnID, const std::vector<String> & keys);
+
+    /**
+     * @brief get Undo Buffers with there keys (in metastore). These keys can be further used to manipulate the data.
+     *
+     * @param txnID Transaction ID.
+     * @return map<table_uuid, ([keys in metastore of each undo buffer], [undo buffers])>
+     */
+    std::unordered_map<String, std::pair<std::vector<String>, UndoResources>> getUndoBuffersWithKeys(const TxnTimestamp & txnID);
     /// return storage uuid -> undo resources
     std::unordered_map<String, UndoResources> getUndoBuffer(const TxnTimestamp & txnID);
     std::unordered_map<String, UndoResources>

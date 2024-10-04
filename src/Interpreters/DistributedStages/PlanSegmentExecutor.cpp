@@ -449,13 +449,13 @@ void PlanSegmentExecutor::doExecute()
             {
                 const auto & key = sender_proxy->getDataKey();
                 sender_metrics.bytes_sent[key->exchange_id].emplace_back(
-                    key->partition_id, sender_proxy->getSenderMetrics().send_uncompressed_bytes.get_value());
+                    key->partition_id, sender_proxy->getSenderMetrics().send_bytes.get_value());
             }
             else if (const auto writer = dynamic_pointer_cast<DiskPartitionWriter>(sender))
             {
                 const auto & key = writer->getKey();
                 sender_metrics.bytes_sent[key->exchange_id].emplace_back(
-                    key->partition_id, writer->getSenderMetrics().send_uncompressed_bytes.get_value());
+                    key->partition_id, writer->getSenderMetrics().send_bytes.get_value());
             }
         }
     }

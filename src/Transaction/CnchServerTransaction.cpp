@@ -315,6 +315,8 @@ void CnchServerTransaction::executeDedupStage()
         /// 2. Random pick one worker to execute dedup task
         auto vw_handle = getContext()->getVirtualWarehousePool().get(cnch_table->getSettings()->cnch_vw_write);
         auto worker_client = vw_handle->getWorker();
+        if (cnch_table->getSettings()->pick_first_worker_to_dedup)
+            worker_client = vw_handle->getAllWorkers()[0];
         LOG_DEBUG(log, "Choose worker: {} to execute dedup task for txn {}", worker_client->getHostWithPorts().toDebugString(), txn_id.toUInt64());
 
         /// 3. Execute dedup task and wait result

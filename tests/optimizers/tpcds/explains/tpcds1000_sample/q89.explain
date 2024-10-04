@@ -22,12 +22,12 @@ Projection Est. 100 rows
                               └─ Aggregating Est. 2018058 rows
                                  │     Group by: {i_category, i_class, i_brand, s_store_name, s_company_name, d_moy}
                                  │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                                 └─ Inner Join Est. 12060138 rows
+                                 └─ Inner Join Est. 29243131 rows
                                     │     Condition: ss_store_sk == s_store_sk
-                                    ├─ Inner Join Est. 12060138 rows
+                                    ├─ Inner Join Est. 29243131 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk
                                     │  │     Runtime Filters Builder: {d_date_sk}
-                                    │  ├─ Inner Join Est. 60400089 rows
+                                    │  ├─ Inner Join Est. 146456670 rows
                                     │  │  │     Condition: ss_item_sk == i_item_sk
                                     │  │  │     Runtime Filters Builder: {i_item_sk}
                                     │  │  ├─ Filter Est. 2879987999 rows
@@ -35,10 +35,10 @@ Projection Est. 100 rows
                                     │  │  │  └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                                     │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                                     │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
-                                    │  │  └─ Filter Est. 3022 rows
-                                    │  │     │     Condition: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
+                                    │  │  └─ Filter Est. 7327 rows
+                                    │  │     │     Condition: (i_class IN ('birdal', 'computers', 'dresses', 'football', 'shirts', 'stereo')) AND (i_category IN ('Books', 'Electronics', 'Jewelry', 'Men', 'Sports', 'Women')) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
                                     │  │     └─ TableScan tpcds1000_sample.item Est. 300000 rows
-                                    │  │              Where: ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses'))) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
+                                    │  │              Where: (i_class IN ('birdal', 'computers', 'dresses', 'football', 'shirts', 'stereo')) AND (i_category IN ('Books', 'Electronics', 'Jewelry', 'Men', 'Sports', 'Women')) AND ((i_class IN ('computers', 'stereo', 'football')) OR (i_category IN ('Men', 'Jewelry', 'Women'))) AND ((i_category IN ('Books', 'Electronics', 'Sports')) OR (i_class IN ('shirts', 'birdal', 'dresses')))
                                     │  │              Outputs: [i_item_sk, i_brand, i_class, i_category]
                                     │  └─ Broadcast Exchange Est. 365 rows
                                     │     └─ Projection Est. 365 rows

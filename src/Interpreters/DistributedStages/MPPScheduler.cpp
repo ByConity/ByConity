@@ -1,4 +1,6 @@
 #include "MPPScheduler.h"
+#include <unordered_map>
+#include "Interpreters/DistributedStages/PlanSegment.h"
 
 namespace DB
 {
@@ -27,7 +29,7 @@ void MPPScheduler::genBatchTasks()
             if (source_set.erase(leaf_id))
                 LOG_TRACE(log, "Find source id {} for target plansegment: {}", leaf_id, target_id);
         }
-        batch_task->emplace_back(leaf_id, true);
+        batch_task->emplace_back(leaf_id, true, dag_graph_ptr->table_scan_or_value_segments.contains(leaf_id));
         plansegment_topology.erase(leaf_id);
         LOG_TRACE(log, "Task for leaf segment {} generated", leaf_id);
     }
@@ -53,7 +55,7 @@ void MPPScheduler::genBatchTasks()
                     LOG_TRACE(log, "Find source id {} for target plansegment: {}", target_id, next_target_id);
             }
             plansegment_topology.erase(target_id);
-            batch_task->emplace_back(target_id, false);
+            batch_task->emplace_back(target_id, false, dag_graph_ptr->table_scan_or_value_segments.contains(target_id));
         }
     }
     addBatchTask(std::move(batch_task));
@@ -63,11 +65,42 @@ void MPPScheduler::genBatchTasks()
 /// MPP schduler logic
 void MPPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
-    const auto & selector_info = node_selector_result[task.task_id];
+    const auto & selector_info = node_selector_result[task.segment_id];
     for (size_t idx = 0; idx < selector_info.worker_nodes.size(); idx++)
     {
-        dispatchOrSaveTask(plan_segment_ptr, task, idx);
+        dispatchOrSaveTask(plan_segment_ptr, {task.segment_id, idx});
     }
 }
 
+PlanSegmentExecutionInfo MPPScheduler::generateExecutionInfo(size_t /*task_id*/, size_t index)
+{
+    PlanSegmentExecutionInfo execution_info;
+    execution_info.parallel_id = index;
+    return execution_info;
+}
+
+void MPPScheduler::prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & /*task*/)
+{
+    for (const auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+    {
+        if (auto iter = selector_info.source_addresses.find(plan_segment_input->getExchangeId());
+            iter != selector_info.source_addresses.end())
+        {
+            for (const auto & addr : iter->second)
+            {
+                plan_segment_input->insertSourceAddress(*addr);
+            }
+        }
+    }
+}
+
+void MPPScheduler::prepareFinalTaskImpl(PlanSegment * final_plan_segment, const AddressInfo & addr)
+{
+    NodeSelectorResult result{.worker_nodes = {WorkerNode(addr, NodeType::Local)}};
+    std::map<PlanSegmentInstanceId, std::vector<UInt32>> read_partitions;
+    node_selector.setSources(final_plan_segment, &result, read_partitions);
+    LOG_DEBUG(log, "Set address {} for final segment, node_selector_result is {}", addr.toShortString(), result.toString());
+    SegmentTask final_task(0, dag_graph_ptr->leaf_segments.contains(0), dag_graph_ptr->table_scan_or_value_segments.contains(0));
+    prepareTask(final_plan_segment, result, final_task);
+}
 }

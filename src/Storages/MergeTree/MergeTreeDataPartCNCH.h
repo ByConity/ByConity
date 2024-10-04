@@ -104,6 +104,12 @@ public:
     /// and we combine the original delete bitmap and _row_exists when data processing.
     ImmutableDeleteBitmapPtr getDeleteBitmap(bool allow_null = false) const override;
 
+    /// For partial update mode, load column generated during the write phase.
+    /// If the corresponding checksum does not exist, a default column is generated.
+    ColumnPtr loadDeleteFlag() const;
+    ColumnPtr loadUpdateColumns() const;
+    ColumnPtr loadDedupSort() const;
+
     /// it's a no-op because in CNCH, projection parts are uploaded to parent part's data file
     virtual void projectionRemove(const String &, bool) const override { }
 

@@ -125,14 +125,10 @@ Projection Est. ? rows
       │        │     Group by: {expr#trimBoth(substring(lower(s), 1, 4))}
       │        │     Aggregates: expr#count():=AggNull(count)()
       │        └─ Projection Est. ? rows
-      │           │     Expressions: expr#trimBoth(substring(lower(s), 1, 4)):=`expr#trimBoth(substring(lower(s), 1, 4))_3`
+      │           │     Expressions: expr#trimBoth(substring(lower(s), 1, 4)):=trimBoth(substring(lower(s), 1, 4))
       │           └─ Filter Est. ? rows
-      │              │     Condition: `expr#modulo(multiply(plus(a, 1), 3), 7)` <= 3
-      │              └─ TableScan test.ut40066_comexp_x Est. ? rows
-      │                       Where: ((((a + 1) * 3) % 7) <= 3) AND multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
-      │                       Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
-      │                       Inline expressions: [expr#modulo(multiply(plus(a, 1), 3), 7):=((a + 1) * 3) % 7, expr#trimBoth(substring(lower(s), 1, 4))_3:=trimBoth(substring(lower(s), 1, 4))]
-      │                       Outputs: 
+      │              │     Condition: (((a + 1) * 3) % 7) <= 3
+      │              └─ CTERef[1] Est. ? rows
       └─ MergingAggregated Est. ? rows
          └─ Repartition Exchange Est. ? rows
             │     Partition by: {expr#trimBoth(substring(lower(s), 1, 4))_1}
@@ -140,14 +136,21 @@ Projection Est. ? rows
                │     Group by: {expr#trimBoth(substring(lower(s), 1, 4))_1}
                │     Aggregates: expr#count()_1:=AggNull(count)()
                └─ Projection Est. ? rows
-                  │     Expressions: expr#trimBoth(substring(lower(s), 1, 4))_1:=`expr#trimBoth(substring(lower(s), 1, 4))_4`
+                  │     Expressions: expr#trimBoth(substring(lower(s), 1, 4))_1:=trimBoth(substring(lower(s_1), 1, 4))
                   └─ Filter Est. ? rows
-                     │     Condition: `expr#modulo(multiply(plus(a, 1), 3), 7)_1` > 3
-                     └─ TableScan test.ut40066_comexp_x Est. ? rows
-                              Where: ((((a + 1) * 3) % 7) > 3) AND multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
-                              Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
-                              Inline expressions: [expr#modulo(multiply(plus(a, 1), 3), 7)_1:=((a + 1) * 3) % 7, expr#trimBoth(substring(lower(s), 1, 4))_4:=trimBoth(substring(lower(s), 1, 4))]
-                              Outputs: 
+                     │     Condition: (((a_1 + 1) * 3) % 7) > 3
+                     └─ CTERef[1] Est. ? rows
+CTEDef [1]
+   Projection Est. ? rows
+   │     Expressions: [a, s]
+   └─ Filter Est. ? rows
+      │     Condition: isNotNull(`expr#modulo(multiply(plus(a, 1), 3), 7)`)
+      └─ TableScan test.ut40066_comexp_x Est. ? rows
+               Where: isNotNull(((a + 1) * 3) % 7) AND multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
+               Prewhere: multiIf(length(trimBoth(substring(lower(s), 1, 4))) = 4, 1, ((((a + 1) * 3) % 7) / 2) = 1, 0, 1)
+               Inline expressions: [expr#modulo(multiply(plus(a, 1), 3), 7):=((a + 1) * 3) % 7]
+               Outputs: [a, s]
+note: CTE(Common Table Expression) is applied for 2 times.
 SELECT *
 FROM (
     SELECT trim(substring(lower(s), 1, 4)) as key, count() as cnt

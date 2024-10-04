@@ -221,6 +221,7 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
     settings_replacements.emplace_back("NET_WRITE_TIMEOUT", "send_timeout");
     settings_replacements.emplace_back("NET_READ_TIMEOUT", "receive_timeout");
     settings_replacements.emplace_back("CHARACTER SET utf8", "SQL_CHARSET='utf8mb4'");
+    settings_replacements.emplace_back("SESSION TRANSACTION READ ONLY", "SQL_TXN_READ_ONLY=1");
     settings_replacements.emplace_back("AUTOCOMMIT", "SQL_AUTOCOMMIT");
     settings_replacements.emplace_back("PROFILING", "SQL_PROFILING");
 }

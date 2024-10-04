@@ -36,6 +36,7 @@
 #include <Common/FieldVisitorToString.h>
 #include <Common/Slice.h>
 #include <Common/escapeForFileName.h>
+#include <Storages/StorageInMemoryMetadata.h>
 
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 
@@ -306,6 +307,35 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
 
     writeUniqueKeyIndex(unique_key_block);
 
+    if (settings.enable_partial_update)
+    {
+        if (block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
+            delete_flag = std::move(block.getByName(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME).column);
+
+        if (!block.has(StorageInMemoryMetadata::UPDATE_COLUMNS))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find update columns in partial update mode");
+
+        update_columns = std::move(block.getByName(StorageInMemoryMetadata::UPDATE_COLUMNS).column);
+
+        /// permute _delete_flag_, _update_columns_ and generate _dedup_sort_ columns if needed
+        if (permutation)
+        {
+            if (delete_flag)
+                delete_flag = delete_flag->permute(*permutation, 0);
+            update_columns = update_columns->permute(*permutation, 0);
+
+            std::vector<size_t> dedup_sort_map;
+            dedup_sort_map.resize(rows);
+            for (size_t i = 0; i < rows; ++i)
+                dedup_sort_map[(*permutation)[i]] = i;
+
+            auto mutable_dedup_sort = DataTypeFactory::instance().get("UInt64")->createColumn();
+            for (size_t idx: dedup_sort_map)
+                mutable_dedup_sort->insert(idx);
+            dedup_sort = std::move(mutable_dedup_sort);
+        }
+    }
+
     rows_count += rows;
 }
 
@@ -509,6 +539,60 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
     status = index_writer.Finish(&file_info);
     if (!status.ok())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", unique_key_index_file, status.ToString());
+}
+
+void MergeTreeDataPartWriterWide::finishDeleteFlagSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync)
+{
+    if (!delete_flag)
+        return;
+
+    auto delete_flag_file_stream = data_part->volume->getDisk()->writeFile(part_path + "_delete_flag_", {.mode = WriteMode::Rewrite});
+    auto delete_flags_stream = std::make_unique<HashingWriteBuffer>(*delete_flag_file_stream);
+    DataTypeFactory::instance().get("UInt8")->getDefaultSerialization()->serializeBinaryBulk(
+        *delete_flag, *delete_flags_stream, 0, rows_count);
+    delete_flags_stream->next();
+    checksums.files["_delete_flag_"].file_size = delete_flags_stream->count();
+    checksums.files["_delete_flag_"].file_hash = delete_flags_stream->getHash();
+    delete_flag_file_stream->finalize();
+    if (sync)
+        delete_flag_file_stream->sync();
+    delete_flags_stream = nullptr;
+}
+
+void MergeTreeDataPartWriterWide::finishUpdateColumnsSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync)
+{
+    if (!update_columns)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not get update columns in partial update mode");
+
+    auto update_columns_file_stream = data_part->volume->getDisk()->writeFile(part_path + "_update_columns_", {.mode = WriteMode::Rewrite});
+    auto update_columns_stream = std::make_unique<HashingWriteBuffer>(*update_columns_file_stream);
+    DataTypeFactory::instance().get("String")->getDefaultSerialization()->serializeBinaryBulk(
+        *update_columns, *update_columns_stream, 0, rows_count);
+    update_columns_stream->next();
+    checksums.files["_update_columns_"].file_size = update_columns_stream->count();
+    checksums.files["_update_columns_"].file_hash = update_columns_stream->getHash();
+    update_columns_file_stream->finalize();
+    if (sync)
+        update_columns_file_stream->sync();
+    update_columns_stream = nullptr;
+}
+
+void MergeTreeDataPartWriterWide::finishDedupSortSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync)
+{
+    if (!dedup_sort)
+        return;
+
+    auto dedup_sort_file_stream = data_part->volume->getDisk()->writeFile(part_path + "_dedup_sort_", {.mode = WriteMode::Rewrite});
+    auto dedup_sorts_stream = std::make_unique<HashingWriteBuffer>(*dedup_sort_file_stream);
+    DataTypeFactory::instance().get("UInt64")->getDefaultSerialization()->serializeBinaryBulk(
+        *dedup_sort, *dedup_sorts_stream, 0, rows_count);
+    dedup_sorts_stream->next();
+    checksums.files["_dedup_sort_"].file_size = dedup_sorts_stream->count();
+    checksums.files["_dedup_sort_"].file_hash = dedup_sorts_stream->getHash();
+    dedup_sort_file_stream->finalize();
+    if (sync)
+        dedup_sort_file_stream->sync();
+    dedup_sorts_stream = nullptr;
 }
 
 void MergeTreeDataPartWriterWide::closeTempUniqueKeyIndex()
@@ -772,6 +856,13 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
 
     if (settings.rewrite_primary_key)
         finishPrimaryIndexSerialization(checksums, sync);
+
+    if (settings.enable_partial_update)
+    {
+        finishDeleteFlagSerialization(checksums, sync);
+        finishUpdateColumnsSerialization(checksums, sync);
+        finishDedupSortSerialization(checksums, sync);
+    }
 
     finishSkipIndicesSerialization(checksums, sync);
 

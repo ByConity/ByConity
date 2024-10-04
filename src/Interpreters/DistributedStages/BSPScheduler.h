@@ -86,6 +86,7 @@ private:
     void genLeafTasks();
     PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) override;
     void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) override;
+    void prepareFinalTaskImpl(PlanSegment * final_plan_segment, const AddressInfo & addr) override;
 
     bool isUnrecoverableStatus(const RuntimeSegmentStatus & status);
     bool isOutdated(const RuntimeSegmentStatus & status);

@@ -10,8 +10,10 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/SourceTask.h>
 #include <Interpreters/NodeSelector.h>
+#include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <bthread/mutex.h>
@@ -20,7 +22,6 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include "QueryPlan/ExchangeStep.h"
 
 namespace DB
 {
@@ -35,88 +36,252 @@ bool isLocal(PlanSegment * plan_segment_ptr)
     return plan_segment_ptr->getParallelSize() == 0 || plan_segment_ptr->getClusterName().empty();
 }
 
-void NodeSelector::setParallelIndexAndSourceAddrs(PlanSegment * plan_segment_ptr, NodeSelectorResult * result)
+void NodeSelector::setSources(
+    PlanSegment * plan_segment_ptr, NodeSelectorResult * result, std::map<PlanSegmentInstanceId, std::vector<UInt32>> & read_partitions)
 {
-    LOG_TRACE(log, "Set parallel index for segment id {}", plan_segment_ptr->getPlanSegmentId());
-    //set parallel index
-    for (size_t parallel_index_id_index = 0; parallel_index_id_index < result->worker_nodes.size(); parallel_index_id_index++)
-        result->indexes.emplace_back(parallel_index_id_index);
+    LOG_TRACE(log, "Set sources for segment id {}", plan_segment_ptr->getPlanSegmentId());
+    UInt32 segment_id = plan_segment_ptr->getPlanSegmentId();
+    bool contains_table_scan_or_value = dag_graph_ptr->table_scan_or_value_segments.contains(segment_id);
 
-    //set input source addresses
-    bool first_local_input = true;
+    /// for bsp_mode, as two local input might be dispatched to different nodes,
+    /// we only enforce the first
+    bool enable_local_input = true;
+    size_t current_parallel_size = result->worker_nodes.size();
+    bool bsp_mode = query_context->getSettingsRef().bsp_mode;
+    /// 1. Under bsp_mode, for cases where a source plan segment contains LOCAL_NO_NEED_REPARTITION input,
+    /// as its inputs might not be scheduled according to order specified by cluster nodes(bsp mode will schedule tasks to nodes available currently)
+    /// we will convert it into non-local input
+    /// 2. For segment 0, under cases where it has a local input, as segment 0 must be scheduled to server
+    /// LOCAL_NO_NEED_REPARTITION is disabled
+    if ((bsp_mode && contains_table_scan_or_value) || segment_id == 0)
+        enable_local_input = false;
     for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
     {
-        auto plan_segment_input_id = plan_segment_input->getPlanSegmentId();
+        auto input_plan_segment_id = plan_segment_input->getPlanSegmentId();
+        auto exchange_id = plan_segment_input->getExchangeId();
         if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
         {
             continue;
         }
 
-        auto source_iter = result->source_addresses.end();
-
-        // if input mode is local, set parallel index
-        if (auto it = dag_graph_ptr->id_to_segment.find(plan_segment_input_id); it != dag_graph_ptr->id_to_segment.end())
+        if (auto it = dag_graph_ptr->id_to_segment.find(input_plan_segment_id); it != dag_graph_ptr->id_to_segment.end())
         {
-            for (auto & plan_segment_output : it->second->getPlanSegmentOutputs())
+            auto mode = plan_segment_input->getExchangeMode();
+            // if data is write to local, so no need to shuffle data
+            if (isLocalExchange(mode))
             {
-                if (plan_segment_output->getExchangeId() != plan_segment_input->getExchangeId())
-                    continue;
-                // if data is write to local, so no need to shuffle data
-                if ((plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
-                     || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
-                    && first_local_input)
+                if (enable_local_input)
                 {
-                    LOG_TRACE(log, "Local plan segment plan_segment_input_id:{}", plan_segment_input_id);
-                    source_iter
-                        = result->source_addresses.emplace(plan_segment_input_id, AddressInfos{AddressInfo("localhost", 0, "", "")}).first;
-                    source_iter->second.parallel_index = 0;
-                    if (query_context->getSettingsRef().bsp_mode)
-                        first_local_input = false;
+                    LOG_TRACE(log, "Local plan segment input, id:{}", input_plan_segment_id);
+                    std::shared_ptr<AddressInfo> local_addr = std::make_shared<AddressInfo>("localhost", 0, "", "");
+                    result->source_addresses[exchange_id].emplace_back(local_addr);
+                    for (UInt32 parallel_id = 0; parallel_id < result->worker_nodes.size(); parallel_id++)
+                    {
+                        PlanSegmentMultiPartitionSource source = {.exchange_id = exchange_id, .address = local_addr, .partition_ids = {0}};
+                        result->sources[PlanSegmentInstanceId{segment_id, parallel_id}].emplace_back(source);
+                    }
                 }
                 else
                 {
-                    LOG_TRACE(log, "Non-local plan segment plan_segment_input_id:{}", plan_segment_input_id);
-                    source_iter
-                        = result->source_addresses.emplace(plan_segment_input_id, dag_graph_ptr->getAddressInfos(plan_segment_input_id))
-                              .first;
+                    /// local is converted to non-local
+                    LOG_TRACE(log, "Local plan segment input is converted to non-local, id:{}", input_plan_segment_id);
+                    const auto & addresses = dag_graph_ptr->getAddressInfos(input_plan_segment_id);
+                    std::vector<PlanSegmentMultiPartitionSource> sources;
+                    UInt32 parallel_id = 0;
+                    for (const auto & addr : addresses)
+                    {
+                        PlanSegmentMultiPartitionSource source
+                            = {.exchange_id = exchange_id,
+                               .address = std::make_shared<AddressInfo>(addr.getHostName(), addr.getPort(), "", "", addr.getExchangePort()),
+                               .partition_ids = {0}};
+                        result->sources[PlanSegmentInstanceId{segment_id, parallel_id++}].emplace_back(source);
+                        result->source_addresses[exchange_id].emplace_back(source.address);
+                    }
                 }
+                if (bsp_mode)
+                    enable_local_input = false;
             }
-            // collect status, useful for debug
-#if defined(TASK_ASSIGN_DEBUG)
-            size_t parallel_index_id = 0;
-            for (const auto & worker_node : result->worker_nodes)
+            else if (mode == ExchangeMode::BROADCAST)
             {
-                if (dag_graph_ptr->exchange_data_assign_node_mappings.find(plan_segment_input_id)
-                    == dag_graph_ptr->exchange_data_assign_node_mappings.end())
+                LOG_TRACE(log, "Broadcast plan segment input, id:{}", input_plan_segment_id);
+                const auto & addresses = dag_graph_ptr->getAddressInfos(input_plan_segment_id);
+                for (const auto & addr : addresses)
                 {
-                    dag_graph_ptr->exchange_data_assign_node_mappings.emplace(
-                        std::make_pair(plan_segment_input_id, std::vector<std::pair<size_t, AddressInfo>>{}));
+                    result->source_addresses[exchange_id].emplace_back(
+                        std::make_shared<AddressInfo>(addr.getHostName(), addr.getPort(), "", "", addr.getExchangePort()));
                 }
-                auto current_parallel_index_id
-                    = source_iter->second.parallel_index ? *source_iter->second.parallel_index : parallel_index_id;
-                dag_graph_ptr->exchange_data_assign_node_mappings.find(plan_segment_input_id)
-                    ->second.emplace_back(std::make_pair(current_parallel_index_id, worker_node.address));
-
-                parallel_index_id++;
+                /// broadcast will read same partition for each source addresses
+                for (UInt32 parallel_id = 0; parallel_id < current_parallel_size; parallel_id += 1)
+                {
+                    for (auto & addr : result->source_addresses[exchange_id])
+                    {
+                        auto source = PlanSegmentMultiPartitionSource{.exchange_id = exchange_id, .address = addr, .partition_ids = {}};
+                        source.partition_ids.clear();
+                        source.partition_ids = {parallel_id};
+                        result->sources[PlanSegmentInstanceId{segment_id, parallel_id}].emplace_back(source);
+                    }
+                }
             }
-#endif
+            else
+            {
+                LOG_TRACE(log, "Non-local plan segment input, id:{}", input_plan_segment_id);
+                const auto & addresses = dag_graph_ptr->getAddressInfos(input_plan_segment_id);
+                for (const auto & addr : addresses)
+                {
+                    result->source_addresses[exchange_id].emplace_back(
+                        std::make_shared<AddressInfo>(addr.getHostName(), addr.getPort(), "", "", addr.getExchangePort()));
+                }
+                for (UInt32 parallel_id = 0; parallel_id < current_parallel_size; parallel_id++)
+                {
+                    for (const auto & addr : result->source_addresses[exchange_id])
+                    {
+                        PlanSegmentMultiPartitionSource source
+                            = {.exchange_id = exchange_id,
+                               .address = addr,
+                               .partition_ids = read_partitions[PlanSegmentInstanceId{segment_id, parallel_id}]};
+                        result->sources[PlanSegmentInstanceId{segment_id, parallel_id}].emplace_back(std::move(source));
+                    }
+                }
+            }
         }
     }
-    // set prallel size to 1 for those local output
-    for (auto & plan_segment_output : plan_segment_ptr->getPlanSegmentOutputs())
+}
+
+/// This method will try to coalesce small partitions (with size less than disk_shuffle_advisory_partition_size)
+/// into one new partition. For example, if we have 5 partitions like [2, 2, 1, 2, 4] and disk_shuffle_advisory_partition_size=3,
+/// then after coalescing, we will get 3 new partitions [{2,2}, {1, 2}, {4}]. For broadcast partition, it will only be read once in newly-coalesced partition,
+/// thus, when calculating the new partition, it is only added once.
+std::map<PlanSegmentInstanceId, std::vector<UInt32>> NodeSelector::coalescePartitions(
+    UInt32 segment_id, size_t disk_shuffle_advisory_partition_size, size_t broadcast_partition, std::vector<size_t> & normal_partitions)
+{
+    std::map<PlanSegmentInstanceId, std::vector<UInt32>> result;
+    UInt32 parallel_id = 0;
+    size_t partition_id = 0;
+    size_t current_size = 0;
+    while (partition_id < normal_partitions.size())
     {
-        auto plan_segment_output_id = plan_segment_output->getPlanSegmentId();
-        if (auto it = dag_graph_ptr->id_to_segment.find(plan_segment_output_id);
-            it != dag_graph_ptr->id_to_segment.end() && isLocal(it->second))
+        if (!result.contains({segment_id, parallel_id}))
+            current_size += broadcast_partition;
+        result[{segment_id, parallel_id}].emplace_back(partition_id);
+        current_size += normal_partitions[partition_id];
+        if (current_size >= disk_shuffle_advisory_partition_size)
         {
-            LOG_TRACE(
-                log,
-                "Set parallel size of output segment {} to 1 for segment id {}",
-                plan_segment_output_id,
-                plan_segment_ptr->getPlanSegmentId());
-            plan_segment_output->setParallelSize(1);
+            current_size = 0;
+            parallel_id++;
+        }
+        partition_id++;
+    }
+    return result;
+}
+
+std::map<PlanSegmentInstanceId, std::vector<UInt32>> NodeSelector::splitReadPartitions(PlanSegment * plan_segment_ptr)
+{
+    std::map<PlanSegmentInstanceId, std::vector<UInt32>> result;
+    UInt32 segment_id = plan_segment_ptr->getPlanSegmentId();
+    const auto & query_id = plan_segment_ptr->getQueryId();
+    /// Partition coalescing will be disabled for:
+    /// 1. CTE's input and output segment(i.e. segment with intput/output exchange mode LOCAL_NO_NEED_REPARTITION)
+    /// 2. gather segment
+    size_t disk_shuffle_advisory_partition_size = query_context->getSettingsRef().disk_shuffle_advisory_partition_size;
+    auto & plan_segment = *dag_graph_ptr->id_to_segment[segment_id];
+    if (query_context->getSettingsRef().enable_disk_shuffle_partition_coalescing && !dag_graph_ptr->leaf_segments.contains(segment_id)
+        && !dag_graph_ptr->table_scan_or_value_segments.contains(segment_id) && !plan_segment.hasLocalInput()
+        && !plan_segment.hasLocalOutput())
+    {
+        /// each partition's size
+        std::vector<size_t> normal_partitions;
+        size_t broadcast_partition = 0;
+        for (const auto & plan_segment_input : plan_segment.getPlanSegmentInputs())
+        {
+            auto exchange_id = plan_segment_input->getExchangeId();
+            const auto & exchange_data_statuses = query_context->getExchangeDataTracker()->getExchangeStatusesRef(query_id, exchange_id);
+            auto exchange_mode = plan_segment_input->getExchangeMode();
+            for (const auto & sink_status : exchange_data_statuses.sink_statuses)
+            {
+                if (normal_partitions.empty())
+                {
+                    normal_partitions.resize(sink_status.status.size());
+                    std::fill_n(normal_partitions.begin(), sink_status.status.size(), 0);
+                }
+                for (UInt32 partition_id = 0; partition_id < sink_status.status.size(); partition_id++)
+                {
+                    /// broadcase exchange should not be repeatedly added
+                    if (exchange_mode == ExchangeMode::BROADCAST)
+                    {
+                        broadcast_partition += sink_status.status[partition_id];
+                        break;
+                    }
+                    else
+                    {
+                        if (normal_partitions.size() != sink_status.status.size())
+                            throw Exception(
+                                ErrorCodes::LOGICAL_ERROR,
+                                "Exchange(id:{}) sink statuses' partition size do not match, actual:{} expected:{}",
+                                exchange_id,
+                                normal_partitions.size(),
+                                sink_status.status.size());
+                        normal_partitions[partition_id] += sink_status.status[partition_id];
+                    }
+                }
+            }
+        }
+
+        result = coalescePartitions(segment_id, disk_shuffle_advisory_partition_size, broadcast_partition, normal_partitions);
+
+        LOG_DEBUG(
+            log,
+            "Plan segment {} is coalesced from {} to {}",
+            plan_segment.getPlanSegmentId(),
+            plan_segment.getParallelSize(),
+            result.size());
+    }
+    else
+    {
+        size_t current_parallel_size = plan_segment_ptr->getParallelSize();
+        for (UInt32 parallel_id = 0; parallel_id < current_parallel_size; parallel_id++)
+            result[PlanSegmentInstanceId{segment_id, parallel_id}] = {};
+        for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+        {
+            auto exchange_id = plan_segment_input->getExchangeId();
+            auto input_plan_segment_id = plan_segment_input->getPlanSegmentId();
+            if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
+            {
+                continue;
+            }
+
+            if (auto it = dag_graph_ptr->id_to_segment.find(input_plan_segment_id); it != dag_graph_ptr->id_to_segment.end())
+            {
+                auto mode = plan_segment_input->getExchangeMode();
+                size_t exchange_parallel_size = query_context->getSettingsRef().exchange_parallel_size;
+                if (mode == ExchangeMode::BROADCAST)
+                    exchange_parallel_size = 1;
+                auto input_parallel_size = exchange_parallel_size == 0
+                    ? dag_graph_ptr->exchanges[exchange_id].second->getParallelSize()
+                    : dag_graph_ptr->exchanges[exchange_id].second->getParallelSize() * exchange_parallel_size;
+                // if data is write to local, so no need to shuffle data
+                if (!isLocalExchange(mode) && mode != ExchangeMode::BROADCAST)
+                {
+                    auto step = std::max(1UL, input_parallel_size / current_parallel_size);
+                    /// If we have exchange_parallel_size=1, input_parallel_size=4, current_parallel_size=2, two physical nodes(i.e. 2 different addresses) then we have:
+                    ///     plan_segment_instance_0: source{addr1, partition_ids:[0,1]}, source{addr1, partition_ids:[0,1]}, source{addr2, partition_ids:[0,1]}, source{addr2, partition_ids:[0,1]}
+                    ///     plan_segment_instance_1: source{addr1, partition_ids:[2,3]}, source{addr1, partition_ids:[2,3]}, source{addr2, partition_ids:[2,3]}, source{addr2, partition_ids:[2,3]}
+                    for (UInt32 partition_id = 0; partition_id < input_parallel_size; partition_id += step)
+                    {
+                        std::vector<UInt32> partition_ids;
+                        for (size_t diff = 0; diff < step && partition_id + diff < input_parallel_size; diff++)
+                        {
+                            partition_ids.emplace_back(partition_id + diff);
+                        }
+                        UInt32 parallel_id = partition_id / exchange_parallel_size;
+                        result[PlanSegmentInstanceId{segment_id, parallel_id}] = partition_ids;
+                    }
+                    break;
+                }
+            }
         }
     }
+
+    return result;
 }
 
 NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_context)
@@ -124,7 +289,6 @@ NodeSelectorResult LocalNodeSelector::select(PlanSegment *, ContextPtr query_con
     NodeSelectorResult result;
     auto local_address = getLocalAddress(*query_context);
     result.worker_nodes.emplace_back(local_address, NodeType::Local);
-    result.indexes.emplace_back(0);
     return result;
 }
 
@@ -524,22 +688,37 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
     return result;
 }
 
-NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool has_table_scan)
+NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool has_table_scan_or_value)
 {
     NodeSelectorResult result;
     auto segment_id = plan_segment_ptr->getPlanSegmentId();
-    LOG_TRACE(log, "Begin to select nodes for segment, id: {}, has table scan: {}", segment_id, has_table_scan);
-    if (isLocal(plan_segment_ptr))
+    LOG_TRACE(log, "Begin to select nodes for segment, id: {}, has table scan/value: {}", segment_id, has_table_scan_or_value);
+
+    if (!query_context->getSettingsRef().bsp_mode)
     {
-        result = local_node_selector.select(plan_segment_ptr, query_context);
-    }
-    else if (has_table_scan)
-    {
-        result = source_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
+        if (isLocal(plan_segment_ptr))
+            result = local_node_selector.select(plan_segment_ptr, query_context);
+        else if (has_table_scan_or_value)
+            result = source_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
+        else
+            result = compute_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
+        std::map<PlanSegmentInstanceId, std::vector<UInt32>> read_partitions;
+        setSources(plan_segment_ptr, &result, read_partitions);
     }
     else
     {
-        if (query_context->getSettingsRef().bsp_mode)
+        auto read_partitions = splitReadPartitions(plan_segment_ptr);
+        plan_segment_ptr->setParallelSize(read_partitions.size());
+
+        if (isLocal(plan_segment_ptr))
+        {
+            result = local_node_selector.select(plan_segment_ptr, query_context);
+        }
+        else if (has_table_scan_or_value)
+        {
+            result = source_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
+        }
+        else
         {
             result = locality_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
             if (result.worker_nodes.empty() || result.worker_nodes.size() != plan_segment_ptr->getParallelSize())
@@ -565,17 +744,26 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool has
                 }
             }
         }
-        else
+        auto it = dag_graph_ptr->id_to_segment.find(segment_id);
+        if (it == dag_graph_ptr->id_to_segment.end())
+            throw Exception("Logical error: plan segment segment can not be found", ErrorCodes::LOGICAL_ERROR);
+        setSources(plan_segment_ptr, &result, read_partitions);
+    }
+    // set prallel size to 1 for those local output
+    for (auto & plan_segment_output : plan_segment_ptr->getPlanSegmentOutputs())
+    {
+        auto plan_segment_output_id = plan_segment_output->getPlanSegmentId();
+        if (auto it = dag_graph_ptr->id_to_segment.find(plan_segment_output_id);
+            it != dag_graph_ptr->id_to_segment.end() && isLocal(it->second))
         {
-            result = compute_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
+            LOG_TRACE(
+                log,
+                "Set parallel size of output segment {} to 1 for segment id {}",
+                plan_segment_output_id,
+                plan_segment_ptr->getPlanSegmentId());
+            plan_segment_output->setParallelSize(1);
         }
     }
-
-    setParallelIndexAndSourceAddrs(plan_segment_ptr, &result);
-    auto it = dag_graph_ptr->id_to_segment.find(segment_id);
-    if (it == dag_graph_ptr->id_to_segment.end())
-        throw Exception("Logical error: plan segment segment can not be found", ErrorCodes::LOGICAL_ERROR);
-
     LOG_TRACE(log, "Select node for plansegment {} result {}", segment_id, result.toString());
     return result;
 }
@@ -597,6 +785,22 @@ String NodeSelectorResult::toString() const
     for (const auto & node_info : worker_nodes)
     {
         fmt::format_to(buf, "{},", node_info.address.toShortString());
+    }
+    fmt::format_to(buf, "\tSourceAddr:");
+    for (const auto & [exchange_id, addrs] : source_addresses)
+    {
+        fmt::format_to(buf, "[exg_id {}, addrs:", exchange_id);
+        for (const auto & addr : addrs)
+            fmt::format_to(buf, "{},", addr->toShortString());
+        fmt::format_to(buf, "],");
+    }
+    fmt::format_to(buf, "\tReadSource:");
+    for (const auto & [instance_id, read_sources] : sources)
+    {
+        fmt::format_to(buf, "[{}:", instance_id.toString());
+        for (const auto & read_source : read_sources)
+            fmt::format_to(buf, "{},", read_source.toString());
+        fmt::format_to(buf, "],");
     }
     for (const auto & [addr, source_task_count] : source_task_count_on_workers)
         fmt::format_to(buf, "\tSourceTaskCount(addr:{} count:{})", addr.toShortString(), source_task_count);

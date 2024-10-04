@@ -211,6 +211,12 @@ struct StorageInMemoryMetadata
 
     /// Unique table reserved names
     static constexpr auto DELETE_FLAG_COLUMN_NAME = "_delete_flag_";
+    static constexpr auto UPDATE_COLUMNS = "_update_columns_";
+    static constexpr auto DEDUP_SORT_COLUMN = "_dedup_sort_";
+    static constexpr auto PART_ID_COLUMN = "_part_id_";
+    /// Differentiate from the table-level version column. If this function column is specified when writing, the version field indicated by this function column is used.
+    /// TODO: need further support
+    static constexpr auto UPDATE_VERSION_COLUMN = "_update_version_column_";
 
     /// Functional columns can not be specified by create query and can not be queried, but can be contained in insert query, including INSERT and INSERT SELECT operations.
     NamesAndTypesList getFuncColumns() const
@@ -220,6 +226,11 @@ struct StorageInMemoryMetadata
             NamesAndTypesList res;
             /// When the user specifies this column in the "insert query", it will be considered as a delete operation based on the unique key if the value of this column is true(not zero).
             res.emplace_back(DELETE_FLAG_COLUMN_NAME, DataTypeFactory::instance().get("UInt8"));
+
+            /// When the user specifies this column in the "insert query", it will only update specify columns for partial update feature. Columns are separated by comma.
+            res.emplace_back(UPDATE_COLUMNS, DataTypeFactory::instance().get("String"));
+
+            res.emplace_back(DEDUP_SORT_COLUMN, DataTypeFactory::instance().get("UInt64"));
             return res;
         }
         else

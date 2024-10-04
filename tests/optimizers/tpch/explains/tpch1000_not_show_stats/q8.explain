@@ -1,12 +1,12 @@
 Projection
 │     Expressions: mkt_share:=`expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume))`, o_year:=`expr#toYear(o_orderdate)`
-└─ Sorting
-   │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
-   └─ Gather Exchange
-      └─ Sorting
-         │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
-         └─ Projection
-            │     Expressions: [expr#toYear(o_orderdate)], expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume)):=`expr#sum(multiIf(equals(nation, 'BRAZIL'), volume, 0))` / `expr#sum(volume)`
+└─ Projection
+   │     Expressions: [expr#toYear(o_orderdate)], expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume)):=`expr#sum(multiIf(equals(nation, 'BRAZIL'), volume, 0))` / `expr#sum(volume)`
+   └─ Sorting
+      │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
+      └─ Gather Exchange
+         └─ Sorting
+            │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
             └─ MergingAggregated
                └─ Repartition Exchange
                   │     Partition by: {expr#toYear(o_orderdate)}

@@ -797,6 +797,9 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
     result.emplace_back("input_format_protobuf_enable_multiple_message", settings.protobuf_enable_multiple_message.value);
     result.emplace_back("input_format_protobuf_default_length_parser", settings.protobuf_default_length_parser.value);
 
+    /// Set whether to use partial update mode for unique table
+    result.emplace_back("enable_unique_partial_update", settings.enable_unique_partial_update.value);
+
     return result;
 }
 

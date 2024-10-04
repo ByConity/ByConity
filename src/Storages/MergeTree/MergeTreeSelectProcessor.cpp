@@ -44,7 +44,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     bool check_columns_,
     const MergeTreeStreamSettings & stream_settings_,
     const Names & virt_column_names_,
-    bool quiet)
+    const MarkRangesFilterCallback& range_filter_callback_)
     :
     MergeTreeBaseSelectProcessor{
         storage_snapshot_->getSampleBlockForColumns(required_columns_),
@@ -52,16 +52,16 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     required_columns{std::move(required_columns_)},
     part_detail{part_detail_},
     delete_bitmap_getter(std::move(delete_bitmap_getter_)),
+    mark_ranges_filter_callback(range_filter_callback_),
     check_columns(check_columns_)
 {
     /// Let's estimate total number of rows for progress bar.
     total_marks_count = part_detail.getMarksCount();
 
     size_t total_rows = part_detail.getRowsCount();
-    if (!quiet)
-        LOG_DEBUG(log, "Reading {} ranges from part {}, approx. {} rows starting from {}",
-            part_detail.ranges.size(), part_detail.data_part->name, total_rows,
-            part_detail.data_part->index_granularity.getMarkStartingRow(part_detail.ranges.front().begin));
+    LOG_DEBUG(log, "Reading {} ranges from part {}, approx. {} rows starting from {}",
+        part_detail.ranges.size(), part_detail.data_part->name, total_rows,
+        part_detail.data_part->index_granularity.getMarkStartingRow(part_detail.ranges.front().begin));
 
     addTotalRowsApprox(total_rows);
     ordered_names = header_without_virtual_columns.getNames();
@@ -71,6 +71,11 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
 bool MergeTreeSelectProcessor::getNewTask()
 try
 {
+    if (is_first_task && mark_ranges_filter_callback)
+    {
+        part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
+            part_detail.ranges);
+    }
     /// Produce no more than one task
     if (!is_first_task || total_marks_count == 0)
     {

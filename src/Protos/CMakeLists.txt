@@ -4,7 +4,7 @@ PROTOBUF_GENERATE_CPP(dbms_proto_srcs dbms_proto_headers
     cnch_worker_rpc.proto
     data_models.proto
     data_models_mv.proto
-    hive_models.proto
+    lake_models.proto
     data_part.proto
     plan_segment_manager.proto
     registry.proto

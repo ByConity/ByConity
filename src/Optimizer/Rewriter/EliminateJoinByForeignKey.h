@@ -68,9 +68,9 @@ public:
 private:
     bool isEnabled(ContextMutablePtr context) const override
     {
-        return context->getSettingsRef().enable_eliminate_join_by_fk;
+        return context->getSettingsRef().enable_eliminate_join_by_fk && !context->getSettingsRef().join_using_null_safe;
     }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 
     class Rewriter;
     class Eliminator;

@@ -145,9 +145,9 @@ Projection
                               │     │        └─ Projection
                               │     │           │     Expressions: [d_date_sk_2]
                               │     │           └─ Filter
-                              │     │              │     Condition: (d_moy_2 = 5) AND (d_year_2 = 1998)
+                              │     │              │     Condition: (d_year_2 = 1998) AND (d_moy_2 = 5)
                               │     │              └─ TableScan tpcds1000.date_dim
-                              │     │                       Where: (d_moy = 5) AND (d_year = 1998)
+                              │     │                       Where: (d_year = 1998) AND (d_moy = 5)
                               │     │                       Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
                               │     └─ Repartition Exchange
                               │        │     Partition by: {ca_address_sk_2}

@@ -45,6 +45,7 @@ BuildQueryPipelineSettings BuildQueryPipelineSettings::fromPlanSegment(PlanSegme
     settings.distributed_settings = DistributedPipelineSettings::fromPlanSegment(plan_segment, info);
     settings.distributed_settings.is_explain = is_explain;
     settings.context = context;
+    settings.sources = info.sources;
     return settings;
 }
 

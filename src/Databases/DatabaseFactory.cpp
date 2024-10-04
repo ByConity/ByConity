@@ -64,6 +64,13 @@
 #include <Storages/PostgreSQL/MaterializedPostgreSQLSettings.h>
 #endif
 
+#if USE_HIVE
+#include <Databases/DataLakes/DatabaseHive.h>
+#if USE_JAVA_EXTENSIONS
+#include <Databases/DataLakes/DatabasePaimon.h>
+#endif
+#endif
+
 namespace fs = std::filesystem;
 
 namespace DB
@@ -123,8 +130,9 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
     const String & engine_name = engine_define->engine->name;
     const UUID & uuid = create.uuid;
 
-    bool engine_may_have_arguments = engine_name == "MySQL" || engine_name == "CnchMaterializedMySQL" || engine_name == "CloudMaterializedMySQL" || engine_name == "Lazy" ||
-                                     engine_name == "Replicated" || engine_name == "PostgreSQL" || engine_name == "MaterializedPostgreSQL";
+    bool engine_may_have_arguments = engine_name == "MySQL" || engine_name == "CnchMaterializedMySQL"
+        || engine_name == "CloudMaterializedMySQL" || engine_name == "Lazy" || engine_name == "Replicated" || engine_name == "PostgreSQL"
+        || engine_name == "MaterializedPostgreSQL" || engine_name == "Hive" || engine_name == "Paimon";
     static const std::unordered_set<std::string_view> engines_with_table_overrides{"CnchMaterializedMySQL", "CloudMaterializedMySQL"};
     if (engine_define->engine->arguments && !engine_may_have_arguments)
         throw Exception("Database engine " + engine_name + " cannot have arguments", ErrorCodes::BAD_ARGUMENTS);
@@ -132,7 +140,8 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
     bool has_unexpected_element = engine_define->engine->parameters || engine_define->partition_by ||
                                   engine_define->primary_key || engine_define->order_by ||
                                   engine_define->sample_by || engine_define->unique_key;
-    bool may_have_settings = endsWith(engine_name, "MySQL") || engine_name == "Replicated" || engine_name == "MaterializedPostgreSQL";
+    bool may_have_settings = endsWith(engine_name, "MySQL") || engine_name == "Replicated" || engine_name == "MaterializedPostgreSQL"
+        || engine_name == "Hive" || engine_name == "Paimon";
     if (has_unexpected_element || (!may_have_settings && engine_define->settings))
         throw Exception("Database engine " + engine_name + " cannot have parameters, primary_key, order_by, unique_key, sample_by, settings",
                         ErrorCodes::UNKNOWN_ELEMENT_IN_AST);
@@ -325,6 +334,19 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
     }
 
 
+#endif
+
+#if USE_HIVE
+    else if (engine_name == "Hive")
+    {
+        return std::make_shared<DatabaseHive>(context, database_name, metadata_path, engine_define);
+    }
+#if USE_JAVA_EXTENSIONS
+    else if (engine_name == "Paimon")
+    {
+        return std::make_shared<DatabasePaimon>(context, database_name, metadata_path, engine_define);
+    }
+#endif
 #endif
 
     throw Exception("Unknown database engine: " + engine_name, ErrorCodes::UNKNOWN_DATABASE_ENGINE);

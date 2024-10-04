@@ -12,18 +12,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <Optimizer/SimplifyExpressions.h>
 
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/PredicateUtils.h>
-#include <Optimizer/SimplifyExpressions.h>
 #include <Parsers/formatAST.h>
 
 namespace DB
 {
-ConstASTPtr CommonPredicatesRewriter::rewrite(const ConstASTPtr & predicate, ContextMutablePtr & context)
+ConstASTPtr CommonPredicatesRewriter::rewrite(const ConstASTPtr & predicate, ContextMutablePtr & context, bool deep_rewrite)
 {
     CommonPredicatesRewriter rewriter;
-    NodeContext node_context{.root = NodeContext::Root::ROOT_NODE, .context = context};
+    NodeContext node_context{.root = NodeContext::Root::ROOT_NODE, .context = context, .deep_rewrite = deep_rewrite};
     return ASTVisitorUtil::accept(predicate, rewriter, node_context);
 }
 
@@ -49,8 +49,10 @@ ConstASTPtr CommonPredicatesRewriter::visitASTFunction(const ConstASTPtr & node,
         std::vector<ConstASTPtr> result;
         for (auto & predicate : extracted_predicates)
         {
-            NodeContext child_context{.root = NodeContext::Root::NOT_ROOT_NODE, .context = node_context.context};
-            result.emplace_back(process(predicate, child_context));
+            NodeContext child_context{
+                .root = NodeContext::Root::NOT_ROOT_NODE, .context = node_context.context, .deep_rewrite = node_context.deep_rewrite};
+            auto rewritten = process(predicate, child_context);
+            result.emplace_back(rewritten);
         }
         ASTPtr combined_predicate = PredicateUtils::combinePredicates(fun.name, result);
         const auto & combined_fun = combined_predicate->as<ASTFunction>();
@@ -60,8 +62,9 @@ ConstASTPtr CommonPredicatesRewriter::visitASTFunction(const ConstASTPtr & node,
         }
         auto simplified = PredicateUtils::extractCommonPredicates(combined_predicate, node_context.context);
         // Prefer AND at the root if possible
-        const auto & simplified_fun = simplified->as<ASTFunction>();
-        if (node_context.root == NodeContext::Root::ROOT_NODE && simplified_fun && simplified_fun->name == PredicateConst::OR)
+        auto simplified_fun = simplified->as<ASTFunction>();
+        if ((node_context.root == NodeContext::Root::ROOT_NODE || node_context.deep_rewrite) && simplified_fun
+            && simplified_fun->name == PredicateConst::OR)
         {
             return PredicateUtils::distributePredicate(simplified, node_context.context);
         }

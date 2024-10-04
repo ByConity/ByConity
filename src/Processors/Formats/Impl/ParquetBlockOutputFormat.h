@@ -37,10 +37,18 @@ public:
     String getContentType() const override { return "application/octet-stream"; }
 
 private:
+    void writeRowGroup(std::vector<Chunk> chunks);
+
     const FormatSettings format_settings;
 
     std::unique_ptr<parquet::arrow::FileWriter> file_writer;
     std::unique_ptr<CHColumnToArrowColumn> ch_column_to_arrow_column;
+
+    /// Chunks to squash together to form a row group.
+    std::vector<Chunk> staging_chunks;
+    size_t staging_rows = 0;
+    size_t staging_bytes = 0;
+
 };
 
 }

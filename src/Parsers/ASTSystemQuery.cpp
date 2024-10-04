@@ -236,6 +236,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START VIEW";
         case Type::STOP_VIEW:
             return "STOP VIEW";
+        case Type::TRIGGER_HDFS_CONFIG_UPDATE:
+            return "TRIGGER HDFS CONFIG UPDATE";
         case Type::DROP_VIEW_META:
             return "DROP VIEW META";
         case Type::RELEASE_MEMORY_LOCK:

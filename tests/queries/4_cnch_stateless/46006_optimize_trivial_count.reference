@@ -35,8 +35,11 @@ Projection
 optimized:
 Projection
 └─ Union
-   ├─ ReadStorageRowCount
-   └─ ReadStorageRowCount
+   ├─ CTERef[1]
+   └─ CTERef[1]
+CTEDef [1]
+   ReadStorageRowCount
+note: CTE(Common Table Expression) is applied for 2 times.
 optimized:
 Projection
 └─ ReadStorageRowCount

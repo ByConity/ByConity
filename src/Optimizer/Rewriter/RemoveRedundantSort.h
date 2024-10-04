@@ -27,7 +27,7 @@ public:
     String name() const override { return "RemoveRedundantSort"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_redundant_sort_removal; }
 };
 

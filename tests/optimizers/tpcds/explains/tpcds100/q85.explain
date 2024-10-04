@@ -17,66 +17,72 @@ Projection Est. 54 rows
                      └─ Aggregating Est. 54 rows
                         │     Group by: {r_reason_desc}
                         │     Aggregates: expr#avg(ws_quantity):=AggNull(avg)(ws_quantity), expr#avg(wr_refunded_cash):=AggNull(avg)(wr_refunded_cash), expr#avg(wr_fee):=AggNull(avg)(wr_fee)
-                        └─ Inner Join Est. 2146431 rows
+                        └─ Inner Join Est. 15749 rows
                            │     Condition: wr_reason_sk == r_reason_sk
-                           ├─ Inner Join Est. 2146431 rows
-                           │  │     Condition: cd_education_status == cd_education_status_1, cd_marital_status == cd_marital_status_1, wr_returning_cdemo_sk == cd_demo_sk_1
-                           │  │     Runtime Filters Builder: {cd_education_status_1,cd_marital_status_1}
-                           │  ├─ Repartition Exchange Est. 3353798 rows
-                           │  │  │     Partition by: {cd_education_status, cd_marital_status}
-                           │  │  └─ Inner Join Est. 3353798 rows
-                           │  │     │     Condition: wr_refunded_cdemo_sk == cd_demo_sk
-                           │  │     │     Filter: ((cd_marital_status = 'W') AND (cd_education_status = '2 yr Degree') AND (ws_sales_price >= '150') AND (ws_sales_price <= '200')) OR ((cd_education_status = 'College') AND (ws_sales_price >= '50') AND (ws_sales_price <= '100') AND (cd_marital_status = 'S')) OR ((ws_sales_price >= '100') AND (cd_education_status = 'Advanced Degree') AND (ws_sales_price <= '150') AND (cd_marital_status = 'M'))
-                           │  │     ├─ Repartition Exchange Est. 6707597 rows
-                           │  │     │  │     Partition by: {wr_refunded_cdemo_sk}
-                           │  │     │  └─ Inner Join Est. 6707597 rows
-                           │  │     │     │     Condition: wr_refunded_addr_sk == ca_address_sk
-                           │  │     │     │     Filter: ((ws_net_profit >= 50) AND (ca_state IN ('LA', 'IA', 'AR')) AND (ws_net_profit <= 250)) OR ((ws_net_profit >= 100) AND (ws_net_profit <= 200) AND (ca_state IN ('IN', 'OH', 'NJ'))) OR ((ca_state IN ('WI', 'CT', 'KY')) AND (ws_net_profit >= 150) AND (ws_net_profit <= 300))
-                           │  │     │     ├─ Repartition Exchange Est. 13831481 rows
-                           │  │     │     │  │     Partition by: {wr_refunded_addr_sk}
-                           │  │     │     │  └─ Inner (PARALLEL_HASH) Join Est. 13831481 rows
-                           │  │     │     │     │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
-                           │  │     │     │     ├─ Inner Join Est. 14412457 rows
-                           │  │     │     │     │  │     Condition: ws_sold_date_sk == d_date_sk
-                           │  │     │     │     │  │     Runtime Filters Builder: {d_date_sk}
-                           │  │     │     │     │  ├─ Projection Est. 71983317 rows
-                           │  │     │     │     │  │  │     Expressions: [ws_item_sk, ws_net_profit, ws_order_number, ws_quantity, ws_sales_price, ws_sold_date_sk]
-                           │  │     │     │     │  │  └─ Filter Est. 71983317 rows
-                           │  │     │     │     │  │     │     Condition: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
-                           │  │     │     │     │  │     └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                           │  │     │     │     │  │              Where: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
-                           │  │     │     │     │  │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_web_page_sk, ws_order_number, ws_quantity, ws_sales_price, ws_net_profit]
-                           │  │     │     │     │  └─ Broadcast Exchange Est. 366 rows
-                           │  │     │     │     │     └─ Projection Est. 366 rows
-                           │  │     │     │     │        │     Expressions: [d_date_sk]
-                           │  │     │     │     │        └─ Filter Est. 366 rows
-                           │  │     │     │     │           │     Condition: d_year = 2000
-                           │  │     │     │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                           │  │     │     │     │                    Where: d_year = 2000
-                           │  │     │     │     │                    Outputs: [d_date_sk, d_year]
-                           │  │     │     │     └─ TableScan tpcds100.web_returns Est. 7197670 rows
-                           │  │     │     │              Outputs: [wr_item_sk, wr_refunded_cdemo_sk, wr_refunded_addr_sk, wr_returning_cdemo_sk, wr_reason_sk, wr_order_number, wr_fee, wr_refunded_cash]
-                           │  │     │     └─ Repartition Exchange Est. 969903 rows
-                           │  │     │        │     Partition by: {ca_address_sk}
-                           │  │     │        └─ Projection Est. 969903 rows
-                           │  │     │           │     Expressions: [ca_address_sk, ca_state]
-                           │  │     │           └─ Filter Est. 969903 rows
-                           │  │     │              │     Condition: ca_country = 'United States'
-                           │  │     │              └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                           │  │     │                       Where: ca_country = 'United States'
-                           │  │     │                       Outputs: [ca_address_sk, ca_state, ca_country]
-                           │  │     └─ Repartition Exchange Est. 1920800 rows
-                           │  │        │     Partition by: {cd_demo_sk}
-                           │  │        └─ Filter Est. 1920800 rows
-                           │  │           │     Condition: Runtime Filters: {cd_education_status, cd_marital_status}
-                           │  │           └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
-                           │  │                    Where: Runtime Filters: {cd_education_status, cd_marital_status}
-                           │  │                    Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
-                           │  └─ Repartition Exchange Est. 1920800 rows
-                           │     │     Partition by: {cd_education_status_1, cd_marital_status_1}
-                           │     └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
-                           │              Outputs: cd_demo_sk_1:=cd_demo_sk, cd_marital_status_1:=cd_marital_status, cd_education_status_1:=cd_education_status
+                           ├─ Inner Join Est. 15749 rows
+                           │  │     Condition: ca_address_sk == wr_refunded_addr_sk
+                           │  │     Filter: ((ws_net_profit >= 50) AND (ca_state IN ('LA', 'IA', 'AR')) AND (ws_net_profit <= 250)) OR ((ws_net_profit >= 100) AND (ws_net_profit <= 200) AND (ca_state IN ('IN', 'OH', 'NJ'))) OR ((ca_state IN ('WI', 'CT', 'KY')) AND (ws_net_profit >= 150) AND (ws_net_profit <= 300))
+                           │  │     Runtime Filters Builder: {wr_refunded_addr_sk}
+                           │  ├─ Projection Est. 969903 rows
+                           │  │  │     Expressions: [ca_address_sk, ca_state]
+                           │  │  └─ Filter Est. 969903 rows
+                           │  │     │     Condition: ca_country = 'United States' Runtime Filters: {ca_address_sk}
+                           │  │     └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                           │  │              Where: ca_country = 'United States' Runtime Filters: {ca_address_sk}
+                           │  │              Outputs: [ca_address_sk, ca_state, ca_country]
+                           │  └─ Broadcast Exchange Est. 31498 rows
+                           │     └─ Inner Join Est. 31498 rows
+                           │        │     Condition: cd_demo_sk_1 == wr_returning_cdemo_sk, cd_education_status_1 == cd_education_status, cd_marital_status_1 == cd_marital_status
+                           │        │     Runtime Filters Builder: {cd_education_status,cd_marital_status,wr_returning_cdemo_sk}
+                           │        ├─ Repartition Exchange Est. 823200 rows
+                           │        │  │     Partition by: {cd_education_status_1, cd_marital_status_1}
+                           │        │  └─ Filter Est. 823200 rows
+                           │        │     │     Condition: cd_education_status_1 IN ('2 yr Degree', 'Advanced Degree', 'College') Runtime Filters: {cd_demo_sk_1, cd_education_status_1, cd_marital_status_1}
+                           │        │     └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
+                           │        │              Where: cd_education_status IN ('2 yr Degree', 'Advanced Degree', 'College') Runtime Filters: {cd_demo_sk, cd_education_status, cd_marital_status}
+                           │        │              Outputs: cd_demo_sk_1:=cd_demo_sk, cd_marital_status_1:=cd_marital_status, cd_education_status_1:=cd_education_status
+                           │        └─ Repartition Exchange Est. 49217 rows
+                           │           │     Partition by: {cd_education_status, cd_marital_status}
+                           │           └─ Inner Join Est. 49217 rows
+                           │              │     Condition: cd_demo_sk == wr_refunded_cdemo_sk
+                           │              │     Filter: ((cd_marital_status = 'W') AND (cd_education_status = '2 yr Degree') AND (ws_sales_price >= '150') AND (ws_sales_price <= '200')) OR ((cd_education_status = 'College') AND (ws_sales_price >= '50') AND (ws_sales_price <= '100') AND (cd_marital_status = 'S')) OR ((ws_sales_price >= '100') AND (cd_education_status = 'Advanced Degree') AND (ws_sales_price <= '150') AND (cd_marital_status = 'M'))
+                           │              │     Runtime Filters Builder: {wr_refunded_cdemo_sk}
+                           │              ├─ Repartition Exchange Est. 823200 rows
+                           │              │  │     Partition by: {cd_demo_sk}
+                           │              │  └─ Filter Est. 823200 rows
+                           │              │     │     Condition: cd_education_status IN ('2 yr Degree', 'Advanced Degree', 'College') Runtime Filters: {cd_demo_sk}
+                           │              │     └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
+                           │              │              Where: cd_education_status IN ('2 yr Degree', 'Advanced Degree', 'College') Runtime Filters: {cd_demo_sk}
+                           │              │              Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
+                           │              └─ Repartition Exchange Est. 98172 rows
+                           │                 │     Partition by: {wr_refunded_cdemo_sk}
+                           │                 └─ Inner Join Est. 98172 rows
+                           │                    │     Condition: wr_item_sk == ws_item_sk, wr_order_number == ws_order_number
+                           │                    │     Runtime Filters Builder: {ws_order_number}
+                           │                    ├─ Filter Est. 7197670 rows
+                           │                    │  │     Condition: Runtime Filters: {wr_order_number}
+                           │                    │  └─ TableScan tpcds100.web_returns Est. 7197670 rows
+                           │                    │           Where: Runtime Filters: {wr_order_number}
+                           │                    │           Outputs: [wr_item_sk, wr_refunded_cdemo_sk, wr_refunded_addr_sk, wr_returning_cdemo_sk, wr_reason_sk, wr_order_number, wr_fee, wr_refunded_cash]
+                           │                    └─ Inner Join Est. 1227579 rows
+                           │                       │     Condition: ws_sold_date_sk == d_date_sk
+                           │                       │     Runtime Filters Builder: {d_date_sk}
+                           │                       ├─ Projection Est. 6131173 rows
+                           │                       │  │     Expressions: [ws_item_sk, ws_net_profit, ws_order_number, ws_quantity, ws_sales_price, ws_sold_date_sk]
+                           │                       │  └─ Filter Est. 6131173 rows
+                           │                       │     │     Condition: isNotNull(ws_web_page_sk) AND (ws_net_profit >= 50.) AND (ws_net_profit <= 300.) Runtime Filters: {ws_sold_date_sk}
+                           │                       │     └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                           │                       │              Where: isNotNull(ws_web_page_sk) AND (ws_net_profit >= 50.) AND (ws_net_profit <= 300.) Runtime Filters: {ws_sold_date_sk}
+                           │                       │              Outputs: [ws_sold_date_sk, ws_item_sk, ws_web_page_sk, ws_order_number, ws_quantity, ws_sales_price, ws_net_profit]
+                           │                       └─ Broadcast Exchange Est. 366 rows
+                           │                          └─ Projection Est. 366 rows
+                           │                             │     Expressions: [d_date_sk]
+                           │                             └─ Filter Est. 366 rows
+                           │                                │     Condition: d_year = 2000
+                           │                                └─ TableScan tpcds100.date_dim Est. 73049 rows
+                           │                                         Where: d_year = 2000
+                           │                                         Outputs: [d_date_sk, d_year]
                            └─ Broadcast Exchange Est. 55 rows
                               └─ TableScan tpcds100.reason Est. 55 rows
                                        Outputs: [r_reason_sk, r_reason_desc]
-note: Runtime Filter is applied for 3 times.
+note: Runtime Filter is applied for 7 times.

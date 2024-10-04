@@ -640,6 +640,164 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     return false;
 }
 
+#if USE_JAVA_EXTENSIONS
+static constexpr auto REPLACE = 1;
+
+static void setup_jni_log_env(const Poco::Util::AbstractConfiguration & config)
+{
+    const auto log_path = config.getString("logger.log", "");
+    if (log_path.empty())
+        return;
+    fs::path log_dir = fs::path(log_path).parent_path();
+
+    auto log_level_string = config.getString("logger.level", "trace");
+    int max_log_level = 0;
+    auto log_level = Poco::Logger::parseLevel(log_level_string);
+    if (log_level > max_log_level)
+        max_log_level = log_level;
+
+    std::string jni_log_dir = log_dir;
+    jni_log_dir.append("/jni");
+    char * exist_jni_log_dir = std::getenv("JNI_LOG_DIR");
+    if (!exist_jni_log_dir || strlen(exist_jni_log_dir) == 0)
+    {
+        setenv("JNI_LOG_DIR", jni_log_dir.c_str(), REPLACE);
+        std::cout << "Set JNI_LOG_DIR=" << jni_log_dir << std::endl;
+    }
+    else
+    {
+        std::cout << "Existing JNI_LOG_DIR=" << exist_jni_log_dir << std::endl;
+    }
+    std::string jni_log_level;
+    switch (log_level)
+    {
+        case Poco::Message::PRIO_TRACE:
+            jni_log_level = "trace";
+            break;
+        case Poco::Message::PRIO_DEBUG:
+            jni_log_level = "debug";
+            break;
+        case Poco::Message::PRIO_INFORMATION:
+        case Poco::Message::PRIO_NOTICE:
+            jni_log_level = "info";
+            break;
+        case Poco::Message::PRIO_WARNING:
+            jni_log_level = "warn";
+            break;
+        case Poco::Message::PRIO_ERROR:
+        case Poco::Message::PRIO_CRITICAL:
+        case Poco::Message::PRIO_FATAL:
+            jni_log_level = "error";
+            break;
+        default:
+            jni_log_level = "info";
+            break;
+    }
+    char * exist_jni_log_level = std::getenv("JNI_LOG_LEVEL");
+    if (!exist_jni_log_level || strlen(exist_jni_log_level) == 0)
+    {
+        setenv("JNI_LOG_LEVEL", jni_log_level.c_str(), REPLACE);
+        std::cout << "Set JNI_LOG_LEVEL=" << jni_log_level << std::endl;
+    }
+    else
+    {
+        std::cout << "Existing JNI_LOG_LEVEL=" << exist_jni_log_level << std::endl;
+    }
+}
+
+static void setup_jni_classpath_env(const Poco::Util::AbstractConfiguration & config)
+{
+    auto lib_dir = config.getString("jni.lib_dir", "");
+#ifdef __linux__
+    if (lib_dir.empty())
+    {
+        char result[1024];
+        const fs::path self = (std::string(result, readlink("/proc/self/exe", result, 1024)));
+        auto current_search_path = self.parent_path();
+        while (current_search_path.has_parent_path() && current_search_path != current_search_path.root_path())
+        {
+            std::cout << "Trying to find jni lib in " << current_search_path << std::endl;
+            const auto test_path = current_search_path / "lib" / "jar";
+            if (fs::exists(test_path) && fs::is_directory(test_path))
+            {
+                lib_dir = test_path.string();
+                std::cout << "Find jni lib in " << lib_dir << std::endl;
+                break;
+            }
+            current_search_path = current_search_path.parent_path();
+        }
+        if (lib_dir.empty())
+        {
+            std::cout << "Can't find jni lib in " << self << std::endl;
+        }
+    }
+#endif
+    if (lib_dir.empty())
+        return;
+
+    if (!fs::exists(lib_dir) || !fs::is_directory(lib_dir))
+        return;
+
+    std::vector<fs::path> jar_files;
+    for (const auto & entry : fs::recursive_directory_iterator(lib_dir))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".jar")
+        {
+            jar_files.push_back(entry.path());
+        }
+    }
+    std::string classpath;
+    if (!jar_files.empty())
+    {
+        std::stringstream ss;
+        std::copy(jar_files.begin(), jar_files.end() - 1, std::ostream_iterator<std::string>(ss, ":"));
+        ss << jar_files.back().string();
+        classpath = ss.str();
+    }
+
+    char * exist_classpath = std::getenv("CLASSPATH");
+    if (!exist_classpath || strlen(exist_classpath) == 0)
+    {
+        setenv("CLASSPATH", classpath.c_str(), REPLACE);
+        std::cout << "Set CLASSPATH=" << classpath << std::endl;
+    }
+    else
+    {
+        std::cout << "Existing CLASSPATH=" << exist_classpath << std::endl;
+    }
+}
+
+static void setup_jni_hdfs_env(const Poco::Util::AbstractConfiguration & config)
+{
+    auto hdfs_conf_dir = config.getString("jni.hdfs_conf_dir", "");
+    if (hdfs_conf_dir.empty())
+    {
+        const String dir = config.getString("hdfs_conf_manager.dir", "");
+        if (!dir.empty())
+            hdfs_conf_dir = dir;
+        if (hdfs_conf_dir.empty())
+            return;
+    }
+
+    char * exist_hdfs_conf = std::getenv("HADOOP_CONF_DIR");
+    if (!exist_hdfs_conf || strlen(exist_hdfs_conf) == 0)
+    {
+        setenv("HADOOP_CONF_DIR", hdfs_conf_dir.c_str(), REPLACE);
+        std::cout << "Set HADOOP_CONF_DIR=" << hdfs_conf_dir << std::endl;
+    }
+    else
+    {
+        std::cout << "Existing HADOOP_CONF_DIR=" << exist_hdfs_conf << std::endl;
+    }
+}
+
+static void setup_jni_env(const Poco::Util::AbstractConfiguration & config)
+{
+    setup_jni_log_env(config);
+    setup_jni_classpath_env(config);
+    setup_jni_hdfs_env(config);
+}
+#endif
 
 void BaseDaemon::reloadConfiguration()
 {
@@ -901,6 +1059,9 @@ void BaseDaemon::initialize(Application & self)
         descriptor = std::make_shared<google_breakpad::MinidumpDescriptor>(getMinidumpPath(config().getString("logger.log", "")));
 #endif
 
+#if USE_JAVA_EXTENSIONS
+    setup_jni_env(config());
+#endif
 
     /// After initialized loggers but before initialized signal handling.
     if (should_setup_watchdog)

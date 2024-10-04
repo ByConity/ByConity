@@ -1,12 +1,12 @@
 Projection Est. 729 rows
 │     Expressions: mkt_share:=`expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume))`, o_year:=`expr#toYear(o_orderdate)`
-└─ Sorting Est. 729 rows
-   │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
-   └─ Gather Exchange Est. 729 rows
-      └─ Sorting Est. 729 rows
-         │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
-         └─ Projection Est. 729 rows
-            │     Expressions: [expr#toYear(o_orderdate)], expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume)):=`expr#sum(multiIf(equals(nation, 'BRAZIL'), volume, 0))` / `expr#sum(volume)`
+└─ Projection Est. 729 rows
+   │     Expressions: [expr#toYear(o_orderdate)], expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume)):=`expr#sum(multiIf(equals(nation, 'BRAZIL'), volume, 0))` / `expr#sum(volume)`
+   └─ Sorting Est. 729 rows
+      │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
+      └─ Gather Exchange Est. 729 rows
+         └─ Sorting Est. 729 rows
+            │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
             └─ MergingAggregated Est. 729 rows
                └─ Repartition Exchange Est. 729 rows
                   │     Partition by: {expr#toYear(o_orderdate)}

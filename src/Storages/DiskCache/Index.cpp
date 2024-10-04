@@ -87,7 +87,7 @@ Index::LookupResult Index::insert(UInt64 key, UInt32 address, UInt16 size_hint)
         it.value().size_hint = size_hint;
     }
     else
-        map.try_emplace(key, address, size_hint);
+        map.try_emplace(subkey(key), address, size_hint);
     return result;
 }
 

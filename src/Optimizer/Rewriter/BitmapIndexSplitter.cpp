@@ -16,12 +16,13 @@
 
 namespace DB
 {
-void DB::BitmapIndexSplitter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool DB::BitmapIndexSplitter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     FuncSplitter visitor{context};
     SplitterContext require;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, require);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr createProjection(PlanNodes children, Assignments array_set_check_func, ContextMutablePtr & context)

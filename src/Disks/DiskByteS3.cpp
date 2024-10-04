@@ -21,7 +21,11 @@
 #include <Common/formatReadable.h>
 #include "IO/ReadSettings.h"
 #include <Disks/IO/AsynchronousBoundedReadBuffer.h>
-#include <IO/Scheduler/IOScheduler.h>
+#include <IO/PFRAWSReadBufferFromFS.h>
+#include <IO/RAReadBufferFromS3.h>
+#include <IO/ReadBufferFromS3.h>
+#include <IO/ReadBufferFromFileWithNexusFS.h>
+#include <IO/ReadSettings.h>
 #include <IO/S3Common.h>
 #include <IO/S3RemoteFSReader.h>
 #include <IO/ReadBufferFromS3.h>
@@ -233,6 +237,19 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
     {
         ReadSettings modified_settings{settings};
         modified_settings.for_disk_s3 = true;
+        std::unique_ptr<ReadBufferFromFileBase> impl;
+        {
+            impl = std::make_unique<ReadBufferFromS3>(
+                s3_util.getClient(), s3_util.getBucket(), object_key, modified_settings, 3, false, settings.remote_fs_prefetch);
+        }
+
+        if (settings.enable_nexus_fs)
+        {
+            auto nexus_fs = Context::getGlobalContextInstance()->getNexusFS();
+            if (nexus_fs)
+                impl = std::make_unique<ReadBufferFromFileWithNexusFS>(nexus_fs->getSegmentSize(), std::move(impl), *nexus_fs);
+        }
+
         if (settings.remote_fs_prefetch)
         {
             auto impl = std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
@@ -293,7 +310,7 @@ void DiskByteS3::removeRecursive(const String& path)
     assertNotReadonly();
     String prefix = std::filesystem::path(root_prefix) / path;
 
-    LOG_TRACE(&Poco::Logger::get("DiskByteS3"), "RemoveRecursive: {} - {}", prefix, path);
+    LOG_TRACE(log, "RemoveRecursive: {} - {}", prefix, path);
 
     s3_util.deleteObjectsWithPrefix(prefix, [](const S3::S3Util&, const String&){return true;});
 }

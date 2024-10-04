@@ -29,7 +29,7 @@ public:
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_column_pruning; }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 class AddProjectionPruning : public Rewriter
@@ -40,7 +40,7 @@ public:
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_add_projection_to_pruning; }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 class DistinctToAggregatePruning : public Rewriter
 {
@@ -50,7 +50,7 @@ public:
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_distinct_to_aggregate; }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 class WindowToSortPruning : public Rewriter
@@ -61,7 +61,7 @@ public:
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_filter_window_to_sorting_limit; }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 struct ColumnPruningContext

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Access/ContextAccess.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
@@ -118,9 +119,25 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
     // get current timestamp for later use.
     UInt64 current_ts = context->getTimestamp();
 
+    String tenant_id = context->getTenantId();
+
     for (size_t i = 0; i < active_tables.size(); i++)
     {
-        database_column_mut->insert(active_tables[i]->database);
+        const auto &db = active_tables[i]->database;
+        if (!tenant_id.empty())
+        {
+            if (db.size() <= tenant_id.size() + 1)
+                continue;
+            if (db[tenant_id.size()] != '.')
+                continue;
+            if (!startsWith(db, tenant_id))
+                continue;
+            database_column_mut->insert(db.substr(tenant_id.size() + 1));
+        }
+        else
+        {
+            database_column_mut->insert(db);
+        }
         table_column_mut->insert(active_tables[i]->table);
         UInt64 last_update_time = active_tables[i]->metrics_last_update_time;
         /// if the last update time is not set. we just use current timestamp to make sure the table's parts info are always returned in incremental mode.
@@ -151,6 +168,8 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
     std::atomic_size_t task_index{0};
     std::size_t total_task_size = filtered_index_column->size();
     std::atomic_bool need_abort = false;
+    const auto access = context->getAccess();
+    const bool check_access_for_databases = !access->isGranted(AccessType::SHOW_TABLES);
 
     try
     {
@@ -169,6 +188,10 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                     try
                     {
                         auto entry = active_tables[(*filtered_index_column)[current_task].get<UInt64>()];
+                        const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, entry->database);
+                        if (check_access_for_tables && !access->isGranted(AccessType::SHOW_TABLES, entry->database, entry->table))
+                            continue;
+
                         PartitionData & metrics_data = metrics_collection[current_task];
                         storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
                         /// Extra check to avoid double counting of the same table.
@@ -213,7 +236,12 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->table_uuid);
             if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(entry->database);
+            {
+                if (!tenant_id.empty())
+                    res_columns[dest_index++]->insert(getOriginalDatabaseName(entry->database, tenant_id));
+                else
+                    res_columns[dest_index++]->insert(entry->database);
+            }
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->table);
             if (columns_mask[src_index++])

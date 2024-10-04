@@ -3,7 +3,7 @@ package DB.Protos;
 
 import "data_models.proto";
 import "cnch_common.proto";
-import "hive_models.proto";
+import "lake_models.proto";
 
 option cc_generic_services = true;
 

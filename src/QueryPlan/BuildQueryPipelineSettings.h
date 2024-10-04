@@ -17,8 +17,8 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/DistributedPipelineSettings.h>
+#include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/ExpressionActionsSettings.h>
-#include "Interpreters/DistributedStages/PlanSegmentInstance.h"
 
 #include <cstddef>
 
@@ -28,6 +28,7 @@ namespace DB
 struct Settings;
 class PlanSegment;
 struct PlanSegmentExecutionInfo;
+struct PlanSegmentMultiPartitionSource;
 
 struct BuildQueryPipelineSettings
 {
@@ -35,6 +36,7 @@ struct BuildQueryPipelineSettings
     DistributedPipelineSettings distributed_settings;
     ContextPtr context;
     bool is_expand = false;
+    std::unordered_map<UInt64, std::vector<PlanSegmentMultiPartitionSource>> sources;
 
     const ExpressionActionsSettings & getActionsSettings() const { return actions_settings; }
 

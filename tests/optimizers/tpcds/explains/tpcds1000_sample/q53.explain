@@ -5,25 +5,25 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST, i_manufact_id ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 409 rows
+      └─ Gather Exchange Est. 408 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST, i_manufact_id ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 409 rows
+            └─ Projection Est. 408 rows
                │     Expressions: [expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id), expr#sum(ss_sales_price), i_manufact_id]
-               └─ Filter Est. 409 rows
+               └─ Filter Est. 408 rows
                   │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manufact_id)`, NULL) > 0.1
-                  └─ Window Est. 1637 rows
-                     └─ MergingAggregated Est. 1637 rows
-                        └─ Repartition Exchange Est. 1637 rows
+                  └─ Window Est. 1630 rows
+                     └─ MergingAggregated Est. 1630 rows
+                        └─ Repartition Exchange Est. 1630 rows
                            │     Partition by: {i_manufact_id}
-                           └─ Aggregating Est. 1637 rows
+                           └─ Aggregating Est. 1630 rows
                               │     Group by: {i_manufact_id, d_qoy}
                               │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                              └─ Inner Join Est. 1732772 rows
+                              └─ Inner Join Est. 1724823 rows
                                  │     Condition: ss_sold_date_sk == d_date_sk
                                  │     Runtime Filters Builder: {d_date_sk}
-                                 ├─ Inner Join Est. 8678142 rows
+                                 ├─ Inner Join Est. 8638334 rows
                                  │  │     Condition: ss_item_sk == i_item_sk
                                  │  │     Runtime Filters Builder: {i_item_sk}
                                  │  ├─ Projection Est. 2750374164 rows
@@ -33,12 +33,12 @@ Projection Est. 100 rows
                                  │  │     └─ TableScan tpcds1000_sample.store_sales Est. 2879987999 rows
                                  │  │              Where: isNotNull(ss_store_sk) Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                                  │  │              Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
-                                 │  └─ Projection Est. 455 rows
+                                 │  └─ Projection Est. 453 rows
                                  │     │     Expressions: [i_item_sk, i_manufact_id]
-                                 │     └─ Filter Est. 455 rows
-                                 │        │     Condition: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
+                                 │     └─ Filter Est. 453 rows
+                                 │        │     Condition: (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'exportiunivamalg #9', 'importoamalg #1', 'scholaramalgamalg #14', 'scholaramalgamalg #7', 'scholaramalgamalg #9')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants', 'personal', 'portable', 'reference', 'self-help')) AND (i_category IN ('Books', 'Children', 'Electronics', 'Men', 'Music', 'Women')) AND (((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1'))))
                                  │        └─ TableScan tpcds1000_sample.item Est. 300000 rows
-                                 │                 Where: ((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1')))
+                                 │                 Where: (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'exportiunivamalg #9', 'importoamalg #1', 'scholaramalgamalg #14', 'scholaramalgamalg #7', 'scholaramalgamalg #9')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants', 'personal', 'portable', 'reference', 'self-help')) AND (i_category IN ('Books', 'Children', 'Electronics', 'Men', 'Music', 'Women')) AND (((i_category IN ('Books', 'Children', 'Electronics')) AND (i_class IN ('personal', 'portable', 'reference', 'self-help')) AND (i_brand IN ('scholaramalgamalg #14', 'scholaramalgamalg #7', 'exportiunivamalg #9', 'scholaramalgamalg #9'))) OR ((i_category IN ('Women', 'Music', 'Men')) AND (i_class IN ('accessories', 'classical', 'fragrances', 'pants')) AND (i_brand IN ('amalgimporto #1', 'edu packscholar #1', 'exportiimporto #1', 'importoamalg #1'))))
                                  │                 Outputs: [i_item_sk, i_brand, i_class, i_category, i_manufact_id]
                                  └─ Broadcast Exchange Est. 366 rows
                                     └─ Projection Est. 366 rows

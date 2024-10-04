@@ -55,27 +55,26 @@ Projection Est. ? rows
       └─ Aggregating Est. ? rows
          │     Group by: {}
          │     Aggregates: expr#count():=AggNull(count)()
-         └─ Inner Join Est. ? rows
-            │     Condition: 
-            ├─ Inner Join Est. ? rows
-            │  │     Condition: expr#cast(sk_1, 'Nullable(Int64)') == sk
-            │  ├─ Projection Est. ? rows
-            │  │  │     Expressions: expr#cast(sk_1, 'Nullable(Int64)'):=cast(sk_1, 'Nullable(Int64)')
-            │  │  └─ TableScan correctness.cust Est. ? rows
-            │  │           Outputs: sk_1:=sk
-            │  └─ Broadcast Exchange Est. ? rows
-            │     └─ Projection Est. ? rows
-            │        │     Expressions: [sk]
-            │        └─ Filter Est. ? rows
-            │           │     Condition: price < 10.
-            │           └─ TableScan correctness.web Est. ? rows
-            │                    Where: price < 10.
-            │                    Outputs: [sk, price]
-            └─ Broadcast Exchange Est. ? rows
-               └─ Filter Est. ? rows
-                  │     Condition: 22. = price_1
+         └─ Filter Est. ? rows
+            │     Condition: price_1 = 22.
+            └─ Inner Join Est. ? rows
+               │     Condition: 
+               ├─ Inner Join Est. ? rows
+               │  │     Condition: expr#cast(sk_1, 'Nullable(Int64)') == sk
+               │  ├─ Projection Est. ? rows
+               │  │  │     Expressions: expr#cast(sk_1, 'Nullable(Int64)'):=cast(sk_1, 'Nullable(Int64)')
+               │  │  └─ TableScan correctness.cust Est. ? rows
+               │  │           Outputs: sk_1:=sk
+               │  └─ Broadcast Exchange Est. ? rows
+               │     └─ Projection Est. ? rows
+               │        │     Expressions: [sk]
+               │        └─ Filter Est. ? rows
+               │           │     Condition: price < 10.
+               │           └─ TableScan correctness.web Est. ? rows
+               │                    Where: price < 10.
+               │                    Outputs: [sk, price]
+               └─ Broadcast Exchange Est. ? rows
                   └─ TableScan correctness.web Est. ? rows
-                           Where: 22. = price
                            Outputs: price_1:=price
 Projection Est. ? rows
 │     Expressions: c:=b_2, c_1:=`expr#count()_1`

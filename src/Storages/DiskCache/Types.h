@@ -151,7 +151,7 @@ public:
 
 private:
     RegionId region_id;
-    UInt32 off{};
+    UInt32 off{0};
 };
 
 constexpr UInt32 kMaxKeySize{255};

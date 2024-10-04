@@ -160,6 +160,12 @@ public:
         bool should_update_metrics,
         const PairInt64 & topology_version);
 
+    /// Only for create corresponding partition info
+    void insertStagedPartsIntoCache(
+        const IStorage & table,
+        const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model,
+        const PairInt64 & topology_version);
+
     void insertDeleteBitmapsIntoCache(
         const IStorage & table,
         const DeleteBitmapMetaPtrVector & delete_bitmaps,
@@ -315,7 +321,7 @@ private:
     template <typename Adapter, typename... Args>
     void invalidDataCache(const UUID & uuid, const Strings & data_names, Args... args);
 
-    template <typename Adapter, typename InputValueVec, typename ValueVec, typename CachePtr, typename CacheValueMap, typename GetKeyFunc>
+    template <typename Adapter, typename InputValueVec, typename ValueVec, typename CachePtr, typename CacheValueMap, typename GetKeyFunc, bool insert_into_cache = true>
     void insertDataIntoCache(
         const IStorage & table,
         const InputValueVec & parts_model,

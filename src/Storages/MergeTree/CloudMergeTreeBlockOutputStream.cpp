@@ -69,12 +69,20 @@ void CloudMergeTreeBlockOutputStream::checkAndInit()
     {
         dedup_parameters.enable_staging_area = context->getSettingsRef().enable_staging_area_for_write.value || storage.getSettings()->cloud_enable_staging_area;
         dedup_parameters.enable_append_mode = context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+        dedup_parameters.enable_partial_update = context->getSettingsRef().enable_unique_partial_update && storage.getSettings()->enable_unique_partial_update;
 
         if (dedup_parameters.enable_staging_area)
         {
             if (context->getSettings().dedup_key_mode != DedupKeyMode::REPLACE)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Only UPSERT mode can write to staging area.");
             LOG_DEBUG(log, "enable staging area for write");
+        }
+        else if (dedup_parameters.enable_partial_update)
+        {
+            if (context->getSettings().dedup_key_mode != DedupKeyMode::REPLACE)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Only UPSERT mode support partial update.");
+            cnch_writer.setDedupMode(CnchDedupHelper::DedupMode::UPSERT);
+            LOG_DEBUG(log, "enable partial update for write");
         }
         else
         {
@@ -159,6 +167,9 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
                 if (dedup_parameters.enable_append_mode)
                     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Delete flag can not used in APPEND dedup key mode.");
 
+                if (dedup_parameters.enable_partial_update)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete flag column should be further processed during dedup stage when enable_partial_update=1.");
+
                 bitmaps.emplace_back(LocalDeleteBitmap::createBase(
                     part->info,
                     std::const_pointer_cast<Roaring>(delete_bitmap),
@@ -171,6 +182,9 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
                 bitmaps.emplace_back(LocalDeleteBitmap::createBase(
                     part->info, std::make_shared<Roaring>(), txn->getPrimaryTransactionID().toUInt64(), part->bucket_number));
             }
+            /// Handle case for unique table in partial update mode
+            if (dedup_parameters.enable_partial_update)
+                part->partial_update_state = PartialUpdateState::RWProcessNeeded;
         }
     }
     LOG_DEBUG(storage.getLogger(), "Finish converting block into parts, elapsed {} ms", watch.elapsedMilliseconds());
@@ -224,8 +238,14 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
         Stopwatch watch;
         auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
 
-        MergeTreeMutableDataPartPtr temp_part
-            = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
+        MergeTreeMutableDataPartPtr temp_part = writer.writeTempPart(
+            bucketed_block_with_partition,
+            metadata_snapshot,
+            context,
+            block_id,
+            primary_txn_id,
+            /*hint_mutation=*/ 0,
+            /*enable_partial_update=*/ dedup_parameters.enable_partial_update);
 
         if (txn->isSecondary())
             temp_part->secondary_txn_id = txn->getTransactionID();
@@ -401,42 +421,17 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
     }
 }
 
-namespace
-{
-    struct BlockUniqueKeyComparator
-    {
-        const ColumnsWithTypeAndName & keys;
-        explicit BlockUniqueKeyComparator(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
-
-        bool operator()(size_t lhs, size_t rhs) const
-        {
-            for (const auto & key : keys)
-                if (key.column->compareAt(lhs, rhs, *key.column, /*nan_direction_hint=*/1))
-                    return false;
-            return true;
-        }
-    };
-
-    struct BlockUniqueKeyHasher
-    {
-        const ColumnsWithTypeAndName & keys;
-        explicit BlockUniqueKeyHasher(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
-
-        size_t operator()(size_t rowid) const
-        {
-            size_t hash_value{0};
-            std::hash<std::string_view> hash_function;
-            for (const auto & key : keys)
-                hash_value ^= hash_function(key.column.get()->getDataAt(rowid).toView());
-            return hash_value;
-        }
-    };
-}
-
 CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::dedupWithUniqueKey(const Block & block)
 {
     if (!metadata_snapshot->hasUniqueKey())
         return FilterInfo{};
+
+    /// TODO: remove invalid update rows with version
+    if (dedup_parameters.enable_partial_update)
+    {
+        CnchDedupHelper::simplifyFunctionColumns(storage, metadata_snapshot, const_cast<Block &>(block));
+        return FilterInfo{};
+    }
 
     const ColumnWithTypeAndName * version_column = nullptr;
     if (metadata_snapshot->hasUniqueKey() && storage.merging_params.hasExplicitVersionColumn())
@@ -455,15 +450,15 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
             string_keys.push_back(col);
     }
 
-    BlockUniqueKeyComparator comparator(keys);
+    BlockUniqueKeyUnorderedComparator comparator(keys);
     BlockUniqueKeyHasher hasher(keys);
     /// first rowid of key -> rowid of the last occurrence of the same key in replace/append/throw mode;
     /// first rowid of key -> rowid of the first occurrence of the same key in insert ignore mode.
     phmap::flat_hash_map<size_t, size_t, decltype(hasher), decltype(comparator)> index(keys[0].column->size(), hasher, comparator);
 
-    auto block_size = block_copy.rows();
+    auto block_size = block.rows();
     FilterInfo res;
-    res.filter.assign(block_size, UInt8(1));
+    res.filter.assign(block_size, static_cast<UInt8>(1));
 
     ColumnWithTypeAndName delete_flag_column;
     if (block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))

@@ -59,8 +59,8 @@ Projection
                                  └─ Projection
                                     │     Expressions: [d_date_sk]
                                     └─ Filter
-                                       │     Condition: (((d_dom >= 1) AND (d_dom <= 3)) OR ((d_dom >= 25) AND (d_dom <= 28))) AND (d_year IN (1999, 2000, 2001))
+                                       │     Condition: (d_year IN (1999, 2000, 2001)) AND ((d_dom >= 1) OR (d_dom >= 25)) AND ((d_dom <= 3) OR (d_dom >= 25)) AND ((d_dom >= 1) OR (d_dom <= 28)) AND ((d_dom <= 3) OR (d_dom <= 28))
                                        └─ TableScan tpcds1000.date_dim
-                                                Where: (((d_dom >= 1) AND (d_dom <= 3)) OR ((d_dom >= 25) AND (d_dom <= 28))) AND (d_year IN (1999, 2000, 2001))
+                                                Where: (d_year IN (1999, 2000, 2001)) AND ((d_dom >= 1) OR (d_dom >= 25)) AND ((d_dom <= 3) OR (d_dom >= 25)) AND ((d_dom >= 1) OR (d_dom <= 28)) AND ((d_dom <= 3) OR (d_dom <= 28))
                                                 Outputs: [d_date_sk, d_year, d_dom]
 note: Runtime Filter is applied for 4 times.

@@ -23,6 +23,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadPool.h>
 #include <common/defines.h>
+#include <pdqsort.h>
 
 namespace DB
 {
@@ -213,7 +214,7 @@ namespace
             return;
         }
 
-        std::sort(all_items.begin(), all_items.end(), Comparator{});
+        pdqsort(all_items.begin(), all_items.end(), Comparator{});
 
         auto prev_it = all_items.begin();
         auto curr_it = std::next(prev_it);
@@ -358,7 +359,7 @@ namespace
 
         auto process_parts = [&](Vec & parts, size_t begin_pos, size_t end_pos, Vec & visible_parts_)
         {
-            std::sort(parts.begin() + begin_pos, parts.begin() + end_pos, PartComparator<Part>{});
+            pdqsort(parts.begin() + begin_pos, parts.begin() + end_pos, PartComparator<Part>{});
 
             /// One-pass algorithm to construct delta chains
             auto prev_it = parts.begin() + begin_pos;
@@ -668,7 +669,7 @@ void calcVisibleDeleteBitmaps(
         return;
     }
 
-    std::sort(all_bitmaps.begin(), all_bitmaps.end(), LessDeleteBitmapMeta());
+    pdqsort(all_bitmaps.begin(), all_bitmaps.end(), LessDeleteBitmapMeta());
 
     auto prev_it = all_bitmaps.begin();
     auto curr_it = std::next(prev_it);

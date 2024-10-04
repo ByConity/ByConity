@@ -8,38 +8,33 @@ Projection
          └─ Right Semi Join
             │     Condition: l_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}
-            ├─ Repartition Exchange
-            │  │     Partition by: {l_suppkey}
-            │  └─ Left Semi (PARALLEL_HASH) Join
-            │     │     Condition: l_partkey == p_partkey
-            │     │     Runtime Filters Builder: {p_partkey}
-            │     ├─ Repartition Exchange
-            │     │  │     Partition by: {l_partkey}
-            │     │  └─ Inner (PARALLEL_HASH) Join
-            │     │     │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-            │     │     │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)_1`)
-            │     │     ├─ MergingAggregated
-            │     │     │  └─ Repartition Exchange
-            │     │     │     │     Partition by: {l_suppkey}
-            │     │     │     └─ Aggregating
-            │     │     │        │     Group by: {l_partkey, l_suppkey}
-            │     │     │        │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sumIf)(l_quantity,build_side_non_null_symbol)
-            │     │     │        └─ Projection
-            │     │     │           │     Expressions: [l_partkey, l_quantity, l_suppkey], build_side_non_null_symbol:=1
-            │     │     │           └─ Filter
-            │     │     │              │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) Runtime Filters: {l_partkey, l_suppkey}
-            │     │     │              └─ TableScan tpch1000.lineitem
-            │     │     │                       Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) Runtime Filters: {l_partkey, l_suppkey}
-            │     │     │                       Outputs: [l_partkey, l_suppkey, l_quantity, l_shipdate]
-            │     │     └─ Repartition Exchange
-            │     │        │     Partition by: {ps_suppkey}
-            │     │        └─ Filter
-            │     │           │     Condition: Runtime Filters: {ps_partkey, ps_suppkey}
-            │     │           └─ TableScan tpch1000.partsupp
-            │     │                    Where: Runtime Filters: {ps_partkey, ps_suppkey}
-            │     │                    Outputs: [ps_partkey, ps_suppkey, ps_availqty]
-            │     └─ Repartition Exchange
-            │        │     Partition by: {p_partkey}
+            ├─ Inner (PARALLEL_HASH) Join
+            │  │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
+            │  │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)_1`)
+            │  │     Runtime Filters Builder: {ps_partkey}
+            │  ├─ MergingAggregated
+            │  │  └─ Repartition Exchange
+            │  │     │     Partition by: {l_suppkey}
+            │  │     └─ Aggregating
+            │  │        │     Group by: {l_partkey, l_suppkey}
+            │  │        │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sumIf)(l_quantity,build_side_non_null_symbol)
+            │  │        └─ Projection
+            │  │           │     Expressions: [l_partkey, l_quantity, l_suppkey], build_side_non_null_symbol:=1
+            │  │           └─ Filter
+            │  │              │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) Runtime Filters: {l_partkey, l_suppkey}
+            │  │              └─ TableScan tpch1000.lineitem
+            │  │                       Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) Runtime Filters: {l_partkey, l_suppkey}
+            │  │                       Outputs: [l_partkey, l_suppkey, l_quantity, l_shipdate]
+            │  └─ Repartition Exchange
+            │     │     Partition by: {ps_suppkey}
+            │     └─ Left Semi (PARALLEL_HASH) Join
+            │        │     Condition: ps_partkey == p_partkey
+            │        │     Runtime Filters Builder: {p_partkey}
+            │        ├─ Filter
+            │        │  │     Condition: Runtime Filters: {ps_partkey, ps_suppkey}
+            │        │  └─ TableScan tpch1000.partsupp
+            │        │           Where: Runtime Filters: {ps_partkey, ps_suppkey}
+            │        │           Outputs: [ps_partkey, ps_suppkey, ps_availqty]
             │        └─ Projection
             │           │     Expressions: [p_partkey]
             │           └─ Filter

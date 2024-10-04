@@ -35,7 +35,11 @@ class HiveMetastoreClient : public IMetaClient
 public:
     explicit HiveMetastoreClient(ThriftHiveMetastoreClientBuilder builder);
 
+    void getConfigValue(std::string& value, const std::string& name, const std::string& defaultValue) override;
+
     Strings getAllDatabases() override;
+
+    std::shared_ptr<ApacheHive::Database> getDatabase(const String & db_name) override;
 
     Strings getAllTables(const String & db_name) override;
 

@@ -33,7 +33,7 @@ public:
     String name() const override { return "SimpleReorderJoin"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_join_reorder; }
 };
 

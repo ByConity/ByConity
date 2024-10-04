@@ -270,7 +270,8 @@ PrunedPartitions CnchServerClient::fetchPartitions(
     const ConstStoragePtr & table,
     const SelectQueryInfo & query_info,
     const Names & column_names,
-    const TxnTimestamp & txn_id)
+    const TxnTimestamp & txn_id,
+    const bool & ignore_ttl)
 {
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
@@ -292,6 +293,7 @@ PrunedPartitions CnchServerClient::fetchPartitions(
         request.add_column_name_filter(name);
 
     request.set_txnid(txn_id.toUInt64());
+    request.set_ignore_ttl(ignore_ttl);
 
     stub->fetchPartitions(&cntl, &request, & response, nullptr);
 
@@ -785,6 +787,21 @@ void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
 
     request.mutable_txn_record()->CopyFrom(txn_record.pb_model);
     stub->cleanTransaction(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record)
+{
+    brpc::Controller cntl;
+    Protos::CleanUndoBuffersReq request;
+    Protos::CleanUndoBuffersResp response;
+
+    LOG_DEBUG(&Poco::Logger::get(__func__), "clean undo buffers for txn: [{}] on server: {}", txn_record.toString(), getRPCAddress());
+
+    request.mutable_txn_record()->CopyFrom(txn_record.pb_model);
+    stub->cleanUndoBuffers(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);

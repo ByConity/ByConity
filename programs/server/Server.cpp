@@ -77,6 +77,7 @@
 #include <Statistics/CacheManager.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/NvmCache.h>
+#include <Storages/NexusFS/NexusFS.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -1455,6 +1456,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
 
     global_context->setNvmCache(config());
+    global_context->initNexusFS(config());
 
     /// Set path for format schema files
     fs::path format_schema_path(config().getString("format_schema_path", fs::path(path) / "format_schemas/"));
@@ -2054,6 +2056,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             auto nvm_cache = global_context->getNvmCache();
             if (nvm_cache)
                 nvm_cache->shutDown();
+            auto nexus_fs = global_context->getNexusFS();
+            if (nexus_fs)
+                nexus_fs->shutDown();
 
             if (current_connections)
                 current_connections = waitServersToFinish(*servers, config().getInt("shutdown_wait_unfinished", 5));

@@ -808,7 +808,7 @@ void IMergeTreeDataPart::restoreMvccColumns()
 {
     if (prev_part == nullptr)
         return;
-    
+
     IMergeTreeDataPart * mutable_prev_part = const_cast<IMergeTreeDataPart *>(prev_part.get());
     mutable_prev_part->restoreMvccColumns();
 
@@ -821,7 +821,7 @@ void IMergeTreeDataPart::restoreMvccColumns()
     {
         if (current_columns.contains(column.name))
             continue;
-        
+
         /// Files will be removed from checksums if column is dropped.
         bool all_files_deleted = true;
         auto check_file_deleted = [&](const String & file_name)
@@ -1791,6 +1791,8 @@ bool IMergeTreeDataPart::enableDiskCache() const
 {
     if (!storage.getContext()->getSettingsRef().enable_local_disk_cache)
         return false;
+    if (storage.getSettings()->enable_nexus_fs)
+        return false; // use NexusFS instead
     if (disk_cache_mode == DiskCacheMode::AUTO)
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
@@ -2554,7 +2556,7 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
         flags |= IMergeTreeDataPart::LOW_PRIORITY_FLAG;
     writeIntBinary(flags, buf);
 
-    /// WARNING: For CNCH, bytes_on_disk is always 0. Keep it here for compatibility. 
+    /// WARNING: For CNCH, bytes_on_disk is always 0. Keep it here for compatibility.
     /// We can only get the value of bytes_on_disk after the whole data file wrote to vfs.
     /// So actually we have no way to store correct bytes_on_disk when writing part.
     /// It's corrected when loading part. See MergeTreeDataPartCNCH::loadMetaInfoFromBuffer and MergeTreeDataPartCNCH::loadChecksumsFromRemote.
@@ -2590,6 +2592,36 @@ void writeProjectionBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
 
     part.getColumnsPtr()->writeText(buf);
     part.ttl_infos.write(buf);
+}
+
+PartialUpdateState getPartialUpdateState(const DB::Protos::PartialUpdateState & partial_update_state)
+{
+    switch (partial_update_state)
+    {
+        case DB::Protos::PartialUpdateState::NotPartialUpdate:
+            return PartialUpdateState::NotPartialUpdate;
+        case DB::Protos::PartialUpdateState::RWProcessNeeded:
+            return PartialUpdateState::RWProcessNeeded;
+        case DB::Protos::PartialUpdateState::RWProcessFinished:
+            return PartialUpdateState::RWProcessFinished;
+        default:
+            throw Exception("Unknown partial_update_state", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+DB::Protos::PartialUpdateState getPartialUpdateState(const PartialUpdateState & partial_update_state)
+{
+    switch (partial_update_state)
+    {
+        case PartialUpdateState::NotPartialUpdate:
+            return DB::Protos::PartialUpdateState::NotPartialUpdate;
+        case PartialUpdateState::RWProcessNeeded:
+            return DB::Protos::PartialUpdateState::RWProcessNeeded;
+        case PartialUpdateState::RWProcessFinished:
+            return DB::Protos::PartialUpdateState::RWProcessFinished;
+        default:
+            throw Exception("Unknown partial_update_state", ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 }

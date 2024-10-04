@@ -6,7 +6,7 @@ Projection Est. 1 rows
          │     Group by: {}
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Filter Est. 229692040 rows
-            │     Condition: (count >= 1) AND (0 = count_1) AND (0 = count_2)
+            │     Condition: (count >= 1) AND (count_1 = 0) AND (count_2 = 0)
             └─ Aggregating Est. 918768161 rows
                │     Group by: {c_last_name_4, c_first_name_4, d_date_4}
                │     Aggregates: count:=AggNull(sum)(marker), count_1:=AggNull(sum)(marker_1), count_2:=AggNull(sum)(marker_2)

@@ -59,9 +59,6 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMemory.h>
 
-#if USE_HIVE
-#    include <Storages/Hive/StorageCnchHive.h>
-#endif
 #include <sstream>
 #include <unordered_map>
 #include <Access/ContextAccess.h>
@@ -270,9 +267,9 @@ Void QueryAnalyzerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
             auto column = table_columns.tryGetPhysical(column_name);
             if (!column)
             {
-                if (const auto & func_columns = storage_metadata->getFuncColumns();
-                    !func_columns.empty() && func_columns.begin()->name == column_name)
-                    column = *func_columns.begin();
+                auto func_column = storage_metadata->getFuncColumns().tryGetByName(column_name);
+                if (func_column)
+                    column = func_column;
                 else
                     throw Exception(
                         fmt::format("Cannot find column {} when insert-select on optimizer mode", column_name), ErrorCodes::ILLEGAL_COLUMN);

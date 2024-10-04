@@ -5,25 +5,26 @@ Projection Est. 1 rows
       └─ Aggregating Est. 1 rows
          │     Group by: {}
          │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity)
-         └─ Inner Join Est. 13353048 rows
-            │     Condition: ss_cdemo_sk == cd_demo_sk
-            │     Filter: ((ss_sales_price >= '100') AND (cd_education_status = '4 yr Degree') AND (ss_sales_price <= '150') AND (cd_marital_status = 'M')) OR ((cd_education_status = 'College') AND (ss_sales_price <= '200') AND (ss_sales_price >= '150') AND (cd_marital_status = 'S')) OR ((cd_marital_status = 'D') AND (cd_education_status = '2 yr Degree') AND (ss_sales_price >= '50') AND (ss_sales_price <= '100'))
-            ├─ Repartition Exchange Est. 26706097 rows
-            │  │     Partition by: {ss_cdemo_sk}
-            │  └─ Inner Join Est. 26706097 rows
-            │     │     Condition: ss_addr_sk == ca_address_sk
-            │     │     Filter: ((ss_net_profit <= 3000) AND (ss_net_profit >= 150) AND (ca_state IN ('OR', 'MN', 'KY'))) OR ((ss_net_profit <= 25000) AND (ss_net_profit >= 50) AND (ca_state IN ('VA', 'CA', 'MS'))) OR ((ss_net_profit >= 0) AND (ss_net_profit <= 2000) AND (ca_state IN ('CO', 'OH', 'TX')))
-            │     ├─ Repartition Exchange Est. 55069624 rows
-            │     │  │     Partition by: {ss_addr_sk}
-            │     │  └─ Inner Join Est. 55069624 rows
+         └─ Inner Join Est. 1404105 rows
+            │     Condition: ss_addr_sk == ca_address_sk
+            │     Filter: ((ss_net_profit <= 3000) AND (ss_net_profit >= 150) AND (ca_state IN ('OR', 'MN', 'KY'))) OR ((ss_net_profit <= 25000) AND (ss_net_profit >= 50) AND (ca_state IN ('VA', 'CA', 'MS'))) OR ((ss_net_profit >= 0) AND (ss_net_profit <= 2000) AND (ca_state IN ('CO', 'OH', 'TX')))
+            ├─ Repartition Exchange Est. 2895353 rows
+            │  │     Partition by: {ss_addr_sk}
+            │  └─ Inner Join Est. 2895353 rows
+            │     │     Condition: ss_cdemo_sk == cd_demo_sk
+            │     │     Filter: ((ss_sales_price >= '100') AND (cd_education_status = '4 yr Degree') AND (ss_sales_price <= '150') AND (cd_marital_status = 'M')) OR ((cd_education_status = 'College') AND (ss_sales_price <= '200') AND (ss_sales_price >= '150') AND (cd_marital_status = 'S')) OR ((cd_marital_status = 'D') AND (cd_education_status = '2 yr Degree') AND (ss_sales_price >= '50') AND (ss_sales_price <= '100'))
+            │     │     Runtime Filters Builder: {cd_demo_sk}
+            │     ├─ Repartition Exchange Est. 13511648 rows
+            │     │  │     Partition by: {ss_cdemo_sk}
+            │     │  └─ Inner Join Est. 13511648 rows
             │     │     │     Condition: ss_sold_date_sk == d_date_sk
             │     │     │     Runtime Filters Builder: {d_date_sk}
-            │     │     ├─ Projection Est. 275046373 rows
+            │     │     ├─ Projection Est. 67484204 rows
             │     │     │  │     Expressions: [ss_addr_sk, ss_cdemo_sk, ss_net_profit, ss_quantity, ss_sales_price, ss_sold_date_sk]
-            │     │     │  └─ Filter Est. 275046373 rows
-            │     │     │     │     Condition: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+            │     │     │  └─ Filter Est. 67484204 rows
+            │     │     │     │     Condition: isNotNull(ss_store_sk) AND (ss_net_profit >= 0.) AND (ss_net_profit <= 25000.) Runtime Filters: {ss_cdemo_sk, ss_sold_date_sk}
             │     │     │     └─ TableScan tpcds100.store_sales Est. 287997024 rows
-            │     │     │              Where: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+            │     │     │              Where: isNotNull(ss_store_sk) AND (ss_net_profit >= 0.) AND (ss_net_profit <= 25000.) Runtime Filters: {ss_cdemo_sk, ss_sold_date_sk}
             │     │     │              Outputs: [ss_sold_date_sk, ss_cdemo_sk, ss_addr_sk, ss_store_sk, ss_quantity, ss_sales_price, ss_net_profit]
             │     │     └─ Broadcast Exchange Est. 366 rows
             │     │        └─ Projection Est. 366 rows
@@ -33,17 +34,20 @@ Projection Est. 1 rows
             │     │              └─ TableScan tpcds100.date_dim Est. 73049 rows
             │     │                       Where: d_year = 2000
             │     │                       Outputs: [d_date_sk, d_year]
-            │     └─ Repartition Exchange Est. 969903 rows
-            │        │     Partition by: {ca_address_sk}
-            │        └─ Projection Est. 969903 rows
-            │           │     Expressions: [ca_address_sk, ca_state]
-            │           └─ Filter Est. 969903 rows
-            │              │     Condition: ca_country = 'United States'
-            │              └─ TableScan tpcds100.customer_address Est. 1000000 rows
-            │                       Where: ca_country = 'United States'
-            │                       Outputs: [ca_address_sk, ca_state, ca_country]
-            └─ Repartition Exchange Est. 1920800 rows
-               │     Partition by: {cd_demo_sk}
-               └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
-                        Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
-note: Runtime Filter is applied for 1 times.
+            │     └─ Repartition Exchange Est. 823200 rows
+            │        │     Partition by: {cd_demo_sk}
+            │        └─ Filter Est. 823200 rows
+            │           │     Condition: cd_education_status IN ('2 yr Degree', '4 yr Degree', 'College')
+            │           └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
+            │                    Where: cd_education_status IN ('2 yr Degree', '4 yr Degree', 'College')
+            │                    Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
+            └─ Repartition Exchange Est. 969903 rows
+               │     Partition by: {ca_address_sk}
+               └─ Projection Est. 969903 rows
+                  │     Expressions: [ca_address_sk, ca_state]
+                  └─ Filter Est. 969903 rows
+                     │     Condition: ca_country = 'United States'
+                     └─ TableScan tpcds100.customer_address Est. 1000000 rows
+                              Where: ca_country = 'United States'
+                              Outputs: [ca_address_sk, ca_state, ca_country]
+note: Runtime Filter is applied for 2 times.

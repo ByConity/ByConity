@@ -55,7 +55,7 @@ public:
     String name() const override { return names; }
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_iterative_rewriter; }
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 
     String names;
     RuleIndex rules;

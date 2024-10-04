@@ -34,7 +34,7 @@ public:
     String name() const override { return "PredicatePushdown"; }
 
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_predicate_pushdown_rewrite; }
     const bool pushdown_filter_into_cte;
     const bool simplify_common_filter;

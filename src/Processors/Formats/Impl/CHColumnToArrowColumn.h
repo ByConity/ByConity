@@ -20,7 +20,8 @@ public:
         bool output_string_as_string_ = false,
         bool output_fixed_string_as_fixed_byte_array_ = true);
 
-    void chChunkToArrowTable(std::shared_ptr<arrow::Table> & res, const Chunk & chunk, size_t columns_num);
+    void chChunkToArrowTable(std::shared_ptr<arrow::Table> & res, const std::vector<Chunk> & chunk, size_t columns_num);
+
 private:
     ColumnsWithTypeAndName header_columns;
     std::vector<std::shared_ptr<arrow::Field>> arrow_fields;

@@ -710,6 +710,10 @@
     M(GetAllUndoBufferFailed, "") \
     M(GetUndoBufferIteratorSuccess, "") \
     M(GetUndoBufferIteratorFailed, "") \
+    M(GetUndoBuffersWithKeysSuccess, "") \
+    M(GetUndoBuffersWithKeysFailed, "") \
+    M(ClearUndoBuffersByKeysSuccess, "") \
+    M(ClearUndoBuffersByKeysFailed, "") \
     M(GetTransactionRecordsSuccess, "") \
     M(GetTransactionRecordsFailed, "") \
     M(GetTransactionRecordsTxnIdsSuccess, "") \
@@ -1090,6 +1094,22 @@
     M(RegionManagerNumInMemBufFlushFailures, "RegionManager number of in-memory buffer flush failures") \
     M(RegionManagerNumInMemBufCleanupRetries, "RegionManager number of in-memory buffer cleanup retries") \
     M(RegionManagerCleanRegionRetries, "RegionManager number of clean region retries") \
+\
+    M(NexusFSDiskCacheHit, "NexusFS disk cache hits") \
+    M(NexusFSDiskCacheHitInflightInsert, "NexusFS disk cache hits on in-flight inserts") \
+    M(NexusFSDiskCacheMiss, "NexusFS disk cache misses") \
+    M(NexusFSDiskCacheEvict, "NexusFS disk cache evicts") \
+    M(NexusFSDiskCachePreload, "NexusFS disk cache preloads") \
+    M(NexusFSDiskCacheLookupRetries, "NexusFS disk cache retries in lookup") \
+    M(NexusFSDiskCacheInsertRetries, "NexusFS disk cache retries in insert") \
+    M(NexusFSDiskCacheError, "NexusFS disk cache errors") \
+    M(NexusFSDiskCacheBytesRead, "NexusFS disk cache total bytes read") \
+    M(NexusFSDiskCacheBytesWrite, "NexusFS disk cache total bytes write") \
+    M(NexusFSMemoryBufferHit, "NexusFS memory buffer hits") \
+    M(NexusFSMemoryBufferMiss, "NexusFS memory buffer misses") \
+    M(NexusFSMemoryBufferEvict, "NexusFS memory buffer evicts") \
+    M(NexusFSMemoryBufferError, "NexusFS memory buffer errors") \
+    M(NexusFSMemoryBufferBytesRead, "NexusFS memory buffer total bytes read") \
 \
     M(TSORequest, "Number requests sent to TSO") \
     M(TSORequestMicroseconds, "Total time spent in get timestamp from TSO") \

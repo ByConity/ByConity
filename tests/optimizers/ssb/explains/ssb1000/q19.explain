@@ -5,16 +5,18 @@ Projection Est. 2406 rows
    └─ Gather Exchange Est. 2406 rows
       └─ Sorting Est. 2406 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
-         └─ MergingAggregated Est. 2406 rows
-            └─ Repartition Exchange Est. 2406 rows
-               │     Partition by: {expr#toYear(LO_ORDERDATE), P_BRAND}
-               └─ Aggregating Est. 2406 rows
-                  │     Group by: {expr#toYear(LO_ORDERDATE), P_BRAND}
-                  │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
-                  └─ Projection Est. 1189728 rows
-                     │     Expressions: [LO_REVENUE, P_BRAND], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
-                     └─ Filter Est. 1189728 rows
-                        │     Condition: (P_BRAND = 'MFGR#2239') AND (S_REGION = 'EUROPE')
-                        └─ TableScan ssb1000.lineorder_flat Est. 5999989813 rows
-                                 Where: (P_BRAND = 'MFGR#2239') AND (S_REGION = 'EUROPE')
-                                 Outputs: [LO_ORDERDATE, LO_REVENUE, S_REGION, P_BRAND]
+         └─ Projection Est. 2406 rows
+            │     Expressions: [expr#sum(LO_REVENUE), expr#toYear(LO_ORDERDATE)], P_BRAND:='MFGR#2239'
+            └─ MergingAggregated Est. 2406 rows
+               └─ Repartition Exchange Est. 2406 rows
+                  │     Partition by: {expr#toYear(LO_ORDERDATE)}
+                  └─ Aggregating Est. 2406 rows
+                     │     Group by: {expr#toYear(LO_ORDERDATE)}
+                     │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
+                     └─ Projection Est. 1189728 rows
+                        │     Expressions: [LO_REVENUE], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
+                        └─ Filter Est. 1189728 rows
+                           │     Condition: (P_BRAND = 'MFGR#2239') AND (S_REGION = 'EUROPE')
+                           └─ TableScan ssb1000.lineorder_flat Est. 5999989813 rows
+                                    Where: (P_BRAND = 'MFGR#2239') AND (S_REGION = 'EUROPE')
+                                    Outputs: [LO_ORDERDATE, LO_REVENUE, S_REGION, P_BRAND]

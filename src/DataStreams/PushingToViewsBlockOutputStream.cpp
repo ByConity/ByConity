@@ -49,7 +49,7 @@
 
 namespace DB
 {
- 
+
 PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
     const StoragePtr & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
@@ -130,10 +130,10 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
         }
         else
             view_table = DatabaseCatalog::instance().getTable(database_table, getContext());
-        
+
         if(!view_table)
            continue;
-         
+
         auto dependent_metadata_snapshot = view_table->getInMemoryMetadataPtr();
 
         ASTPtr query;
@@ -158,10 +158,10 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
             }
             else
                 target_table = DatabaseCatalog::instance().getTable(materialized_view->getTargetTableId(), getContext());
-            
+
             if(!target_table)
                continue;
-            
+
             auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
             if (cnch_target_table && getContext()->getServerType() == ServerType::cnch_server)
             {
@@ -173,7 +173,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
             {
                 auto target_table_id = target_table->getStorageID();
                 auto target_metadata_snapshot = target_table->getInMemoryMetadataPtr();
-                
+
                 std::unique_ptr<ASTInsertQuery> insert = std::make_unique<ASTInsertQuery>();
                 insert->table_id = target_table_id;
 
@@ -260,7 +260,7 @@ Block PushingToViewsBlockOutputStream::getHeader() const
     /// If we don't write directly to the destination
     /// then expect that we're inserting with precalculated virtual columns
     if (output)
-        return metadata_snapshot->getSampleBlock();
+        return metadata_snapshot->getSampleBlock(/*include_func_columns*/ true);
     else
         return metadata_snapshot->getSampleBlockWithVirtuals(storage->getVirtuals());
 }
@@ -462,7 +462,7 @@ void PushingToViewsBlockOutputStream::writeSuffix()
     {
         auto txn = getContext()->getCurrentTransaction();
         if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(txn);
-            worker_txn && worker_txn->hasEnableExplicitCommit() && 
+            worker_txn && worker_txn->hasEnableExplicitCommit() &&
             worker_txn->getExplicitCommitStorageID() == storage->getStorageID())
         {
             txn->commitV2();
@@ -533,7 +533,7 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
                 InterpreterSelectQuery interepter_select(view.query, local_context, SelectQueryOptions());
                 in = std::make_shared<MaterializingBlockInputStream>(interepter_select.execute().getInputStream());
             }
-            
+
             /// Squashing is needed here because the materialized view query can generate a lot of blocks
             /// even when only one block is inserted into the parent table (e.g. if the query is a GROUP BY
             /// and two-level aggregation is triggered).

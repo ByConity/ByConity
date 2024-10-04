@@ -1386,6 +1386,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, true, "Whether enable query optimizer", 0) \
+    M(Bool, enable_legacy_optimizer, false, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, false, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
     M(Bool, block_json_query_in_optimizer, true, "Whether block json query in optimizer", 0) \
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
@@ -1540,6 +1541,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
     M(String, topn_filtering_algorithm_for_unsorted_stream, "SortAndLimit", "The default topn filtering algorithm for unsorted stream, can be one of: 'SortAndLimit', 'Heap'", 0) \
     M(Bool, enable_create_topn_filtering_for_aggregating, false, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
+    M(Bool, enable_push_sort_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_union, true, "Whether to enable PushTopNFilteringThroughUnion rules", 0) \
@@ -1834,12 +1836,16 @@ enum PreloadLevelSettings : UInt64
     M(Bool, bsp_mode, false, "If enabled, query will execute in bsp mode", 0) \
     M(Bool, enable_bsp_selector_fallback, false, "If enabled, query will select nodes as mpp mode if anything is wrong. IT WILL BE REMOVED IN FUTURE", 0) \
     M(String, disk_shuffle_files_codec, "LZ4", "Set compression codec for disk shuffle files. I.e. LZ4, NONE.", 0) \
+    M(UInt64, disk_shuffle_advisory_partition_size, 104857600, "Disk shuffle files's advisory partition size(including all files in a partition), used by partition coalescing", 0) \
+    M(Bool, enable_disk_shuffle_partition_coalescing, true, "If enabled, sheduler will try to coalesce overly-small partitions, thus avoid small plan segments and I/O waste", 0) \
     M(Bool, bsp_shuffle_reduce_locality_enabled, false, "Whether to compute locality preferences for reduce tasks", 0) \
     M(Float, bsp_shuffle_reduce_locality_fraction, 0.2, "Fraction of total map output that must be at a location for it to considered as a preferred location for a reduce task", 0) \
     M(UInt64, bsp_max_retry_num, 3, "max retry number for a task(plan segment instance) in bsp mode, does not include first execution(i.e. normal execution without retry)",0) \
     /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
+    M(Bool, enable_cloudfs, false, "Enable cloudfs", 0) \
+    M(Bool, enable_nexus_fs, false, "Enable read from NexusFS", 0) \
     M(Bool, enable_implicit_column_prewhere_push, false, "Enable push implicit column(map column) to prewhere", 0) \
     \
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
@@ -1949,9 +1955,12 @@ enum PreloadLevelSettings : UInt64
     M(String, output_format_pretty_grid_charset, "UTF-8", "Charset for printing grid borders. Available charsets: ASCII, UTF-8 (default one).", 0) \
     M(Bool, input_format_allow_seeks, true, "Allow seeks while reading in ORC/Parquet/Arrow input formats", 0) \
     M(Bool, input_format_arrow_avoid_buffering, true, "If ReadBuffer supports random read then avoid using buffer in arrow stream", 0) \
-    M(UInt64, output_format_parquet_row_group_size, 1000000, "Row group size in rows.", 0) \
+    M(UInt64, output_format_parquet_row_group_size, 1000000, "Target row group size in rows.", 0) \
+    M(UInt64, output_format_parquet_row_group_size_bytes, 512 * 1024 * 1024, "Target row group size in bytes, before compression.", 0) \
     M(Bool, output_format_parquet_string_as_string, false, "Use Parquet String type instead of Binary for String columns.", 0) \
     M(Bool, output_format_parquet_fixed_string_as_fixed_byte_array, true, "Use Parquet FIXED_LENGTH_BYTE_ARRAY type instead of Binary for FixedString columns.", 0) \
+    M(ParquetVersion, output_format_parquet_version, "2.latest", "Parquet format version for output format. Supported versions: 1.0, 2.4, 2.6 and 2.latest (default)", 0) \
+    M(ParquetCompression, output_format_parquet_compression_method, "snappy", "Compression method for Parquet output format. Supported codecs: snappy, lz4, brotli, zstd, gzip, none (uncompressed)", 0) \
     M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
     M(UInt64, input_format_parquet_min_bytes_for_seek, DBMS_DEFAULT_BUFFER_SIZE, "Min bytes for seek when reading parquet file", 0) \
     M(UInt64, input_format_parquet_max_buffer_size, 8 * DBMS_DEFAULT_BUFFER_SIZE, "Max buffer size for parquet read", 0) \
@@ -2100,6 +2109,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
     \
     M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
+    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 

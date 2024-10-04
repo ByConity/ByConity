@@ -25,6 +25,7 @@
 #include "Common/formatIPv6.h"
 #include "common/logger_useful.h"
 #include <common/scope_guard_safe.h>
+#include <Core/Names.h>
 #include "Storages/MergeTree/FilterWithRowUtils.h"
 #include <memory>
 #include <optional>
@@ -869,6 +870,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     Poco::Logger * log_,
     size_t num_streams,
     ReadFromMergeTree::IndexStats & index_stats,
+    DelayedSkipIndex & delayed_indices_,
     bool use_skip_indexes,
     const MergeTreeMetaBase & /*data_*/,
     bool use_sampling,
@@ -895,6 +897,13 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     };
     std::list<DataSkippingIndexAndCondition> useful_indices;
 
+    NameSet partition_ids;
+    std::for_each(parts.begin(), parts.end(), [&](const MergeTreeDataPartTypeHelper::DataPartPtr& part) {
+        partition_ids.insert(part->info.partition_id);
+    });
+    bool filter_mark_ranges_with_ivt_when_exec = partition_ids.size() > 1
+        && shouldFilterMarkRangesAtPipelineExec(settings, query_info.input_order_info);
+
     if (use_skip_indexes)
     {
         for (const auto & index : metadata_snapshot->getSecondaryIndices())
@@ -907,7 +916,14 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             }
             auto condition = index_helper->createIndexCondition(query_info, context);
             if (!condition->alwaysUnknownOrTrue())
+            {
                 useful_indices.emplace_back(index_helper, condition);
+
+                if (index_helper->isInvertedIndex() && filter_mark_ranges_with_ivt_when_exec)
+                {
+                    delayed_indices_.indices.emplace(index.name, std::make_pair(index_helper, condition));
+                }
+            }
         }
     }
 
@@ -1000,6 +1016,11 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
             {
                 if (ranges.ranges.empty())
                     break;
+
+                if (delayed_indices_.indices.contains(index_and_condition.index->index.name))
+                {
+                    continue;
+                }
 
                 std::unique_ptr<roaring::Roaring> idx_filter = settings.filtered_ratio_to_use_skip_read == 0 ?
                     nullptr : std::make_unique<roaring::Roaring>();
@@ -1392,6 +1413,50 @@ std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
         return std::make_shared<QueryIdHolder>(query_id, data);
 
     return nullptr;
+}
+
+bool MergeTreeDataSelectExecutor::shouldFilterMarkRangesAtPipelineExec(
+    const Settings& settings, const InputOrderInfoPtr& input_order)
+{
+    return input_order != nullptr && settings.filter_mark_ranges_with_ivt_when_exec
+        && (settings.optimize_read_in_order || settings.optimize_aggregation_in_order)
+        && (settings.optimize_read_in_partition_order || settings.force_read_in_partition_order);
+}
+
+MarkRanges MergeTreeDataSelectExecutor::filterMarkRangesForPartByInvertedIndex(
+    const MergeTreeData::DataPartPtr& part, const MarkRanges& mark_ranges,
+    const std::shared_ptr<DelayedSkipIndex>& delayed_index,
+    const ContextPtr& context, const MergeTreeReaderSettings& reader_settings)
+{
+    if (delayed_index == nullptr)
+    {
+        return mark_ranges;
+    }
+
+    IndexTimeWatcher time_watcher;
+    MarkRanges result_ranges = mark_ranges;
+    for (const auto& entry : delayed_index->indices)
+    {
+        if (result_ranges.empty())
+        {
+            break;
+        }
+
+        size_t total_granules = 0;
+        size_t granules_dropped = 0;
+        result_ranges = filterMarksUsingIndex(entry.second.first, entry.second.second,
+            part, result_ranges, context, reader_settings, total_granules,
+            granules_dropped, nullptr, part->storage.getLogger(), time_watcher);
+
+        LOG_DEBUG(part->storage.getLogger(), "Index {} has dropped {}/{} granules for part {}",
+            entry.first, granules_dropped, total_granules, part->name);
+    }
+
+    ProfileEvents::increment(ProfileEvents::IndexGranuleSeekTime, time_watcher.index_granule_seek_time);
+    ProfileEvents::increment(ProfileEvents::IndexGranuleReadTime, time_watcher.index_granule_read_time);
+    ProfileEvents::increment(ProfileEvents::IndexGranuleCalcTime, time_watcher.index_condition_calc_time);
+
+    return result_ranges;
 }
 
 static void selectColumnNames(

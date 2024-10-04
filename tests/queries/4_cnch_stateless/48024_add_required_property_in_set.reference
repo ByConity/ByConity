@@ -3,19 +3,16 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Projection Est. ? rows
       │     Expressions: [expr#uniqExact(l_partkey)]
-      └─ MergingAggregated Est. ? rows
-         └─ Repartition Exchange Est. ? rows
-            │     Partition by: {l_suppkey}
-            └─ Aggregating Est. ? rows
-               │     Group by: {l_suppkey}
-               │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
-               └─ MergingAggregated Est. ? rows
-                  └─ Repartition Exchange Est. ? rows
-                     │     Partition by: {l_suppkey, l_partkey}
-                     └─ Aggregating Est. ? rows
-                        │     Group by: {l_suppkey, l_partkey}
-                        └─ TableScan test.test48024 Est. ? rows
-                                 Outputs: [l_partkey, l_suppkey]
+      └─ Aggregating Est. ? rows
+         │     Group by: {l_suppkey}
+         │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {l_suppkey}
+               └─ Aggregating Est. ? rows
+                  │     Group by: {l_suppkey, l_partkey}
+                  └─ TableScan test.test48024 Est. ? rows
+                           Outputs: [l_partkey, l_suppkey]
 Projection Est. ? rows
 │     Expressions: a:=`expr#10`, t2.a:=`expr#uniqExact(l_partkey)`
 └─ Inner Join Est. ? rows

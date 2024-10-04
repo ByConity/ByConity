@@ -1194,7 +1194,7 @@ ServerDataPartsWithDBM StorageCnchMergeTree::getAllPartsInPartitionsWithDBM(
         Stopwatch watch;
 
         /// ignoring snapshot because partition infos are not cleaned right now
-        auto pruned_res = getPrunedPartitions(query_info, column_names_to_return, local_context);
+        auto pruned_res = getPrunedPartitions(query_info, column_names_to_return, local_context, staging_area);
         Strings & pruned_partitions = pruned_res.partitions;
         UInt64 total_partition_number = pruned_res.total_partition_number;
 
@@ -1282,7 +1282,10 @@ MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimesta
     MergeTreeDataPartsCNCHVector res;
     res.reserve(parts.size());
     for (auto & part : parts)
-        res.emplace_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part->getBasePart()->toCNCHDataPart(*this)));
+    {
+        /// It is necessary to ensure that the partial update part must have a unique index.
+        res.emplace_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part->toCNCHDataPart(*this)));
+    }
 
     getDeleteBitmapMetaForCnchParts(res, cnch_parts_with_dbm.second, force_bitmap);
     return res;
@@ -1556,15 +1559,15 @@ void StorageCnchMergeTree::sendDropManifestDiskCacheTasks(ContextPtr local_conte
 }
 
 PrunedPartitions StorageCnchMergeTree::getPrunedPartitions(
-    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const
+    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context, const bool & ignore_ttl) const
 {
     PrunedPartitions pruned_partitions;
     if (local_context->getCnchCatalog())
-        pruned_partitions = local_context->getCnchCatalog()->getPartitionsByPredicate(local_context, shared_from_this(), query_info, column_names_to_return);
+        pruned_partitions = local_context->getCnchCatalog()->getPartitionsByPredicate(local_context, shared_from_this(), query_info, column_names_to_return, ignore_ttl);
     return pruned_partitions;
 }
 
-void StorageCnchMergeTree::checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
+void StorageCnchMergeTree::checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings) const
 {
     MergeTreeSettingsPtr current_settings = getChangedSettings(new_settings);
 
@@ -1572,7 +1575,10 @@ void StorageCnchMergeTree::checkColumnsValidity(const ColumnsDescription & colum
     if (current_settings->enable_compact_map_data == true)
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Compact map is not supported in CnchMergeTree.");
 
-    MergeTreeMetaBase::checkColumnsValidity(columns);
+    if (current_settings->enable_unique_partial_update && !current_settings->partition_level_unique_keys)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Not support table level unique keys when enable unique partial update.");
+
+    MergeTreeMetaBase::checkMetadataValidity(columns);
 }
 
 ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
@@ -2155,7 +2161,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     alter_act.setMutationCommands(mutation_commands);
 
     commands.apply(new_metadata, local_context);
-    checkColumnsValidity(new_metadata.columns, new_metadata.settings_changes);
+    checkMetadataValidity(new_metadata.columns, new_metadata.settings_changes);
 
     {
         String create_table_query = getCreateTableSql();
@@ -2274,6 +2280,8 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
 
         "insertion_label_ttl",
         "enable_local_disk_cache",
+        /// "enable_cloudfs", // table level setting for cloudfs has not been supported well
+        "enable_nexus_fs",
         "enable_preload_parts",
         "enable_parts_sync_preload",
         "parts_preload_level",

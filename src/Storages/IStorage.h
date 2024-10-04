@@ -250,7 +250,7 @@ public:
     NameDependencies getDependentViewsByColumn(ContextPtr context) const;
 
     /// Check whether column names and data types are valid. If not, throw Exception.
-    virtual void checkColumnsValidity(const ColumnsDescription &, [[maybe_unused]] const ASTPtr & new_settings = nullptr) const {}
+    virtual void checkMetadataValidity(const ColumnsDescription &, [[maybe_unused]] const ASTPtr & new_settings = nullptr) const {}
 
     void setCreateTableSql(String sql) { create_table_sql = std::move(sql); }
     String getCreateTableSql() const { return create_table_sql; }

@@ -206,6 +206,20 @@ IMPLEMENT_SETTING_ENUM(HiveMoveToPrewhereMethod, ErrorCodes::BAD_ARGUMENTS,
      {"stats", HiveMoveToPrewhereMethod::STATS},
      {"all", HiveMoveToPrewhereMethod::ALL}})
 
+IMPLEMENT_SETTING_ENUM(ParquetVersion, ErrorCodes::BAD_ARGUMENTS,
+    {{"1.0",       FormatSettings::ParquetVersion::V1_0},
+     {"2.4", FormatSettings::ParquetVersion::V2_4},
+     {"2.6", FormatSettings::ParquetVersion::V2_6},
+     {"2.latest", FormatSettings::ParquetVersion::V2_LATEST}})
+
+IMPLEMENT_SETTING_ENUM(ParquetCompression, ErrorCodes::BAD_ARGUMENTS,
+    {{"none", FormatSettings::ParquetCompression::NONE},
+     {"snappy", FormatSettings::ParquetCompression::SNAPPY},
+     {"zstd", FormatSettings::ParquetCompression::ZSTD},
+     {"gzip", FormatSettings::ParquetCompression::GZIP},
+     {"lz4", FormatSettings::ParquetCompression::LZ4},
+     {"brotli", FormatSettings::ParquetCompression::BROTLI}})
+
 IMPLEMENT_SETTING_ENUM(MaterializedViewConsistencyCheckMethod, ErrorCodes::BAD_ARGUMENTS,
     {{"NONE", MaterializedViewConsistencyCheckMethod::NONE},
      {"PARTITION", MaterializedViewConsistencyCheckMethod::PARTITION}})

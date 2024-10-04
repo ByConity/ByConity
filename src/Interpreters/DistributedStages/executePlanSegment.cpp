@@ -200,6 +200,13 @@ void executePlanSegmentRemotelyWithPreparedBuf(
         *request.mutable_source_task_filter() = execution_info.source_task_filter.toProto();
 
     execution_info.execution_address.toProto(*request.mutable_execution_address());
+    for (const auto & iter : execution_info.sources)
+    {
+        for (const auto & source : iter.second)
+        {
+            source.toProto(*request.add_sources());
+        }
+    }
 
     butil::IOBuf attachment;
 

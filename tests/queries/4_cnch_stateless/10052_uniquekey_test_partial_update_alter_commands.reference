@@ -1,0 +1,21 @@
+insert with partial update mode
+1	bce	[10,20]	{'k1':10,'k2':2,'k5':5}
+2		[]	{'k3':3,'k4':4,'k7':7,'k8':8}
+1		{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2		{'k3':3,'k4':4,'k7':7,'k8':8}	[]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+update 1 row and insert one row
+1		{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	bcd	{'k3':3,'k4':4,'k5':5,'k7':7,'k8':8}	[10,20]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+5	efg	{'k7':7}	[70,80]
+modify column a1, update one row and insert one new row
+1		{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	bcd	{'k3':3,'k4':4,'k5':5,'k7':7,'k8':8}	[10,20]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+5	hij	{'k7':70}	100, 200
+7	xyg	{'k8':8}	10010
+delete two rows, then update one row and insert one new row
+3	opq	{'k3':30,'k4':3}	30, 40
+5	hij	{'k7':70}	100, 200
+7	xyg	{'k8':80}	20010

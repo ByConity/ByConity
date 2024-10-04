@@ -16,6 +16,13 @@ namespace ErrorCodes
 bool MergeTreeReverseSelectProcessorLM::getNewTaskImpl()
 try
 {
+    if (is_first_task && mark_ranges_filter_callback)
+    {
+        part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
+            part_detail.ranges);
+    }
+    is_first_task = false;
+
     if ((chunks.empty() && part_detail.ranges.empty()))
     {
         readers.clear();

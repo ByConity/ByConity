@@ -34,9 +34,9 @@ Projection Est. 100 rows
                         │  │  │     └─ Projection Est. 27440 rows
                         │  │  │        │     Expressions: [cd_demo_sk]
                         │  │  │        └─ Filter Est. 27440 rows
-                        │  │  │           │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                        │  │  │           │     Condition: (cd_education_status = 'College') AND (cd_marital_status = 'S') AND (cd_gender = 'M')
                         │  │  │           └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
-                        │  │  │                    Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                        │  │  │                    Where: (cd_education_status = 'College') AND (cd_marital_status = 'S') AND (cd_gender = 'M')
                         │  │  │                    Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status]
                         │  │  └─ Broadcast Exchange Est. 366 rows
                         │  │     └─ Projection Est. 366 rows

@@ -1459,8 +1459,6 @@ void TCPHandler::receiveQuery()
     Settings passed_settings;
     passed_settings.read(*in, settings_format);
 
-    adjustAccessTablesIfNeeded(query_context);
-
     /// Interserver secret.
     std::string received_hash;
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET)

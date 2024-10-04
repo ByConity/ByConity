@@ -142,7 +142,10 @@ void StorageHiveSource::prepareReader()
     }
 
     pipeline = std::make_unique<QueryPipeline>();
-    data_source = hive_file->getReader(block_info->physical_header, read_params);
+    if (hive_file->format == IHiveFile::FileFormat::Paimon)
+        data_source = hive_file->getReader(block_info->header, read_params);
+    else
+        data_source = hive_file->getReader(block_info->physical_header, read_params);
     pipeline->init(Pipe(data_source));
     reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
 
@@ -214,6 +217,11 @@ Chunk StorageHiveSource::buildResultChunk(Chunk & chunk) const
 {
     if (!hive_file)
         return {};
+
+    if (hive_file->format == IHiveFile::FileFormat::Paimon)
+    {
+        return std::move(chunk);
+    }
 
     auto num_rows = chunk.getNumRows();
     Columns read_columns = chunk.detachColumns();

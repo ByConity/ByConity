@@ -23,7 +23,8 @@ MergeTreeSelectProcessorLM::MergeTreeSelectProcessorLM(
     const SelectQueryInfo & query_info_,
     bool check_columns_,
     const MergeTreeStreamSettings & stream_settings_,
-    const Names & virt_column_names_)
+    const Names & virt_column_names_,
+    const MarkRangesFilterCallback & range_filter_callback_)
     :
     MergeTreeBaseSelectProcessorLM{
         storage_snapshot_->getSampleBlockForColumns(required_columns_),
@@ -31,6 +32,7 @@ MergeTreeSelectProcessorLM::MergeTreeSelectProcessorLM(
     required_columns{std::move(required_columns_)},
     part_detail{part_detail_},
     delete_bitmap_getter(std::move(delete_bitmap_getter_)),
+    mark_ranges_filter_callback(range_filter_callback_),
     check_columns(check_columns_)
 {
     /// Let's estimate total number of rows for progress bar.
@@ -58,6 +60,12 @@ bool MergeTreeSelectProcessorLM::getNewTaskImpl()
             range_readers.clear();
             part_detail.data_part.reset();
             return false;
+        }
+
+        if (mark_ranges_filter_callback)
+        {
+            part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
+                part_detail.ranges);
         }
 
         auto size_predictor = (stream_settings.preferred_block_size_bytes == 0)

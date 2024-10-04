@@ -1155,7 +1155,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         {
             ASTPtr single_setting = std::make_shared<ASTSetQuery>();
             single_setting->as<ASTSetQuery &>().is_standalone = false;
-            single_setting->as<ASTSetQuery &>().changes.push_back({"cnch_vw_write", vw_in_query_settings}); 
+            single_setting->as<ASTSetQuery &>().changes.push_back({"cnch_vw_write", vw_in_query_settings});
             create.storage->set(create.storage->settings, single_setting);
         }
         else if (!storage_settings->changes.tryGet("cnch_vw_write"))
@@ -1423,7 +1423,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return doCreateOrReplaceTable(create, properties);
 
     /// when create materialized view and tenant id is not empty add setting tenant_id to select query
-    if (create.is_materialized_view && create.refresh_strategy && (create.refresh_strategy->schedule_kind == RefreshScheduleKind::ASYNC || 
+    if (create.is_materialized_view && create.refresh_strategy && (create.refresh_strategy->schedule_kind == RefreshScheduleKind::ASYNC ||
         create.refresh_strategy->schedule_kind == RefreshScheduleKind::MANUAL) && !getCurrentTenantId().empty())
     {
         ASTPtr settings = std::make_shared<ASTSetQuery>();
@@ -1589,7 +1589,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
 
     try
     {
-        res->checkColumnsValidity(properties.columns);
+        res->checkMetadataValidity(properties.columns);
     }
     catch (...)
     {
@@ -1791,7 +1791,21 @@ BlockIO InterpreterCreateQuery::execute()
         return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
     }
 
-    getContext()->checkAccess(getRequiredAccess());
+    auto context = getContext();
+    context->checkAccess(getRequiredAccess());
+    if (create.is_dictionary && context->is_tenant_user())
+    {
+        if (create.dictionary)
+        {
+            auto& refresh_query = create.dictionary->clickhouse_query;
+            auto& invalidate_query = create.dictionary->clickhouse_invalidate_query;
+            if (!refresh_query.empty())
+                executeQuery("explain " + refresh_query, context, true);
+            if (!invalidate_query.empty())
+                executeQuery(invalidate_query, context, true);
+        }
+        
+    }
 
     ASTQueryWithOutput::resetOutputASTIfExist(create);
 
@@ -1823,6 +1837,17 @@ AccessRightsElements InterpreterCreateQuery::getRequiredAccess() const
     else if (create.is_dictionary)
     {
         required_access.emplace_back(AccessType::CREATE_DICTIONARY, create.database, create.table);
+        if (create.dictionary)
+        {
+            auto & db = create.dictionary->clickhouse_db;
+            auto & tb = create.dictionary->clickhouse_tb;
+            if (!db.empty() && !tb.empty())
+            {
+                auto context = getContext();
+                if (context->is_tenant_user())
+                    required_access.emplace_back(AccessType::SELECT, db, tb);
+            }   
+        }
     }
     else if (create.isView())
     {

@@ -18,7 +18,7 @@
 
 namespace DB
 {
-void SortingOrderedSource::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool SortingOrderedSource::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     SortingOrderedSource::Rewriter rewriter{context, plan.getCTEInfo()};
     SortDescription required;
@@ -28,6 +28,7 @@ void SortingOrderedSource::rewrite(QueryPlan & plan, ContextMutablePtr context) 
     SortInfo sort_info;
     auto plan_node = VisitorUtil::accept(result.plan, push_rewriter, sort_info);
     plan.update(plan_node);
+    return true;
 }
 
 PlanAndPropConstants SortingOrderedSource::Rewriter::visitPlanNode(PlanNodeBase & node, SortDescription &)

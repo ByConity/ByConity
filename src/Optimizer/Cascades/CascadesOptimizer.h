@@ -50,7 +50,7 @@ public:
     static WinnerPtr optimize(GroupId root, CascadesContext & context, const Property & required_prop);
     static PlanNodePtr buildPlanNode(GroupId root, CascadesContext & context, const Property & required_prop);
 private:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_cascades_optimizer; }
     bool enable_cbo;
 };

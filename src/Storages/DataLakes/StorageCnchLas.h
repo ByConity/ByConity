@@ -28,9 +28,6 @@ public:
         ContextPtr & local_context,
         unsigned num_streams) override;
 
-    bool supportsOptimizer() const override { return true; }
-    bool supportsDistributedRead() const override { return true; }
-    StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
     std::optional<TableStatistics> getTableStats(const Strings & columns, ContextPtr local_context) override;
 
     void serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files) override;

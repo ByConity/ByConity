@@ -266,7 +266,7 @@ EqualityPartition EqualityInference::partitionedBy(const std::set<String> & scop
             {
                 if (scope_expression != matching_canonical)
                 {
-                    ASTPtr expression = makeASTFunction("equals", ASTs{matching_canonical->clone(), scope_expression->clone()});
+                    ASTPtr expression = makeASTFunction("equals", ASTs{scope_expression->clone(), matching_canonical->clone()});
                     scope_equalities.emplace_back(expression);
                 }
             }
@@ -278,7 +278,7 @@ EqualityPartition EqualityInference::partitionedBy(const std::set<String> & scop
             {
                 if (scope_complement_expression != complement_canonical)
                 {
-                    ASTPtr expression = makeASTFunction("equals", ASTs{complement_canonical->clone(), scope_complement_expression->clone()});
+                    ASTPtr expression = makeASTFunction("equals", ASTs{scope_complement_expression->clone(), complement_canonical->clone()});
                     scope_complement_equalities.emplace_back(expression);
                 }
             }
@@ -310,7 +310,7 @@ EqualityPartition EqualityInference::partitionedBy(const std::set<String> & scop
                 if (connecting_expression_remove_null != connecting_canonical)
                 {
                     ASTPtr expression
-                        = makeASTFunction("equals", ASTs{connecting_canonical->clone(), connecting_expression_remove_null->clone()});
+                        = makeASTFunction("equals", ASTs{connecting_expression_remove_null->clone(), connecting_canonical->clone()});
                     scope_straddling_equalities.emplace_back(expression);
                 }
             }

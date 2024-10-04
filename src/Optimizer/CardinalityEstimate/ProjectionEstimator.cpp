@@ -103,9 +103,16 @@ ScalarStatsCalculator::visitASTLiteral(const ConstASTPtr & node, std::unordered_
     DataTypePtr tmp_type = removeNullable(recursiveRemoveLowCardinality(type));
     if (tmp_type->isValueRepresentedByNumber())
     {
-        double value = applyVisitor(FieldVisitorConvertToNumber<Float64>(), literal->value);
-        return std::make_shared<SymbolStatistics>(
-            1, value, value, 0, 8, Histogram{Buckets{Bucket(value, value, 1, total_rows, true, true)}}, type, "unknown", false);
+        try
+        {
+            double value = applyVisitor(FieldVisitorConvertToNumber<Float64>(), literal->value);
+            return std::make_shared<SymbolStatistics>(
+                1, value, value, 0, 8, Histogram{Buckets{Bucket(value, value, 1, total_rows, true, true)}}, type, "unknown", false);
+        }
+        catch (const std::exception&)
+        {
+            return SymbolStatistics::UNKNOWN;
+        }
     }
 
     if (tmp_type->getTypeId() == TypeIndex::String || type->getTypeId() == TypeIndex::FixedString)

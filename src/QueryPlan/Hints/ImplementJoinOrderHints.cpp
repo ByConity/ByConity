@@ -14,12 +14,13 @@
 
 namespace DB
 {
-void ImplementJoinOrderHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool ImplementJoinOrderHints::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     JoinOrderHintsVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(*plan.getPlanNode(), visitor, v);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr JoinOrderHintsVisitor::visitJoinNode(JoinNode & node, Void & v)

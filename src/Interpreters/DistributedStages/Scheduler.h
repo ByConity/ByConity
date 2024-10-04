@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <unordered_map>
@@ -33,27 +34,31 @@ enum class TaskStatus : uint8_t
 /// Indicates a plan segment.
 struct SegmentTask
 {
-    explicit SegmentTask(size_t task_id_, bool has_table_scan_ = false) : task_id(task_id_), has_table_scan(has_table_scan_)
+    explicit SegmentTask(size_t segment_id_, bool has_table_scan_, bool has_table_scan_or_value_)
+        : segment_id(segment_id_), is_leaf(has_table_scan_), has_table_scan_or_value(has_table_scan_or_value_)
     {
     }
     // plan segment id.
-    size_t task_id;
-    bool has_table_scan;
+    size_t segment_id;
+    // segment containing only source input
+    bool is_leaf;
+    // segment containing source input
+    bool has_table_scan_or_value;
 };
 
 /// Indicates a plan segment instance.
 struct SegmentTaskInstance
 {
-    SegmentTaskInstance(size_t task_id_, size_t parallel_index_) : task_id(task_id_), parallel_index(parallel_index_)
+    SegmentTaskInstance(size_t segment_id_, size_t parallel_index_) : segment_id(segment_id_), parallel_index(parallel_index_)
     {
     }
     // plan segment id.
-    size_t task_id;
+    size_t segment_id;
     size_t parallel_index;
 
     inline bool operator==(SegmentTaskInstance const & rhs) const
     {
-        return (this->task_id == rhs.task_id && this->parallel_index == rhs.parallel_index);
+        return (this->segment_id == rhs.segment_id && this->parallel_index == rhs.parallel_index);
     }
 
     class Hash
@@ -61,7 +66,7 @@ struct SegmentTaskInstance
     public:
         size_t operator()(const SegmentTaskInstance & key) const
         {
-            return (key.task_id << 13) + key.parallel_index;
+            return (key.segment_id << 13) + key.parallel_index;
         }
     };
 };
@@ -118,7 +123,8 @@ public:
 
     virtual ~Scheduler() = default;
     // Pop tasks from queue and schedule them.
-    void schedule();
+    // return execution info for final plan segment
+    PlanSegmentExecutionInfo schedule();
     virtual void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) = 0;
     /// TODO(WangTao): add staus for result
     virtual void onSegmentScheduled(const SegmentTask & task) = 0;
@@ -129,7 +135,7 @@ public:
 
 protected:
     // Remove dependencies for all tasks who depends on given `task`, and enqueue those whose dependencies become emtpy.
-    void removeDepsAndEnqueueTask(const SegmentTask & task);
+    void removeDepsAndEnqueueTask(size_t task_id);
     bool addBatchTask(BatchTaskPtr batch_task);
 
     const String query_id;
@@ -170,21 +176,17 @@ protected:
         (void)selector_info;
         (void)task;
     }
-    virtual PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index)
-    {
-        (void)task_id;
-        PlanSegmentExecutionInfo execution_info;
-        execution_info.parallel_id = index;
-        return execution_info;
-    }
-    void dispatchOrSaveTask(PlanSegment * plan_segment_ptr, const SegmentTask & task, const size_t idx);
+    void dispatchOrSaveTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task);
+    virtual PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) = 0;
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
     void batchScheduleTasks();
     void prepareFinalTask();
+    virtual void prepareFinalTaskImpl(PlanSegment * final_plan_segment, const AddressInfo & addr) = 0;
     NodeSelectorResult selectNodes(PlanSegment * plan_segment_ptr, const SegmentTask & task)
     {
         std::unique_lock<std::mutex> lock(node_selector_result_mutex);
-        auto selector_result = node_selector_result.emplace(task.task_id, node_selector.select(plan_segment_ptr, task.has_table_scan));
+        auto selector_result
+            = node_selector_result.emplace(task.segment_id, node_selector.select(plan_segment_ptr, task.has_table_scan_or_value));
         return selector_result.first->second;
     }
 

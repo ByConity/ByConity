@@ -18,6 +18,7 @@
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/SimplePlanVisitor.h>
+#include "QueryPlan/IQueryPlanStep.h"
 #include "QueryPlan/PlanNode.h"
 
 namespace DB
@@ -29,6 +30,7 @@ public:
     static bool hasCrossJoin(QueryPlan & plan);
     static bool hasOuterJoin(QueryPlan & plan);
     static size_t maxJoinSize(QueryPlan & plan, ContextMutablePtr & context);
+    static std::set<IQueryPlanStep::Type> extractStepTypes(QueryPlan & plan);
 };
 
 class SimpleQueryPlanPatternVisitor : public SimplePlanVisitor<Void>
@@ -99,6 +101,24 @@ private:
     ContextMutablePtr context;
     SimpleCTEVisitHelper<void> cte_helper;
     size_t max_size = 0;
+};
+
+class ExtractTypesVisitor : public SimplePlanVisitor<Void>
+{
+public:
+    explicit ExtractTypesVisitor(CTEInfo & cte_info) : SimplePlanVisitor(cte_info) { }
+
+    Void visitPlanNode(PlanNodeBase & node, Void & c) override
+    {
+        types.insert(node.getType());
+        for (const auto & child : node.getChildren()) VisitorUtil::accept(*child, *this, c);
+        return c;
+    }
+
+    const std::set<IQueryPlanStep::Type> & getTypes() const { return types; }
+
+private:
+    std::set<IQueryPlanStep::Type> types;
 };
 
 }

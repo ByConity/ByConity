@@ -1,0 +1,31 @@
+cnch_profile_events_labelled_query_total
+processing_stage: "processing"
+query_type: "default"
+resource_type: "vw"
+sub_query_type: "complex"
+vw: "vw_default"
+wg: "wg_default"
+Value is greater than 0
+processing_stage: "processing"
+query_type: "default"
+resource_type: "vw"
+sub_query_type: "simple"
+vw: "vw_default"
+wg: "wg_default"
+Value is greater than 0
+processing_stage: "processing"
+query_type: "insert"
+resource_type: "vw"
+sub_query_type: "simple"
+vw: "vw_default"
+wg: "wg_default"
+Value is greater than 0
+cnch_current_metrics_query
+query_type: "default"
+Value is greater than 0
+cnch_profile_events_queries_failed_total
+cnch_profile_events_queries_failed_total check 1
+cnch_histogram_metrics_query_latency_count
+Value is greater than 0
+cnch_histogram_metrics_query_latency_bucket
+Value is greater than 0

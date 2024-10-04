@@ -99,7 +99,8 @@ struct MergeTreeWriterSettings
         bool rewrite_primary_key_,
         bool blocks_are_granules_size_ = false,
         bool optimize_map_column_serialization_ = false,
-        bool enable_disk_based_key_index_ = false)
+        bool enable_disk_based_key_index_ = false,
+        bool enable_partial_update_ = false)
         : min_compress_block_size(
             storage_settings->min_compress_block_size ? storage_settings->min_compress_block_size : global_settings.min_compress_block_size)
         , max_compress_block_size(
@@ -110,6 +111,7 @@ struct MergeTreeWriterSettings
         , blocks_are_granules_size(blocks_are_granules_size_)
         , optimize_map_column_serialization(optimize_map_column_serialization_)
         , enable_disk_based_key_index(enable_disk_based_key_index_)
+        , enable_partial_update(enable_partial_update_)
     {
     }
 
@@ -121,6 +123,7 @@ struct MergeTreeWriterSettings
 
     bool optimize_map_column_serialization = false;
     bool enable_disk_based_key_index = false;
+    bool enable_partial_update = false;
     bool is_merge = false;
 };
 }

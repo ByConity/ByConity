@@ -10,12 +10,13 @@
 
 namespace DB
 {
-void RemoveRedundantDistinct::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool RemoveRedundantDistinct::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     RemoveRedundantAggregateVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
     RemoveRedundantAggregateContext remove_context{context, {}};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, remove_context);
     plan.update(result);
+    return true;
 }
 
 PlanNodePtr RemoveRedundantAggregateVisitor::visitPlanNode(PlanNodeBase & node, RemoveRedundantAggregateContext & ctx)
@@ -81,7 +82,8 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitDistinctNode(DistinctNode & no
     if (flag_distinct)
     {
         ctx.distincts = std::move(child_context.distincts);
-        return child;
+        if (step->getLimitHint() == 0)
+            return child;
     }
     //Equivalent group by, generate new distinct keys
     if (!columns.empty())

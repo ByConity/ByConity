@@ -419,7 +419,7 @@ public:
     Strings getPlainMutationEntries();
 
     MergeTreeSettingsPtr getChangedSettings(const ASTPtr new_settings) const;
-    void checkColumnsValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+    void checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
 
     virtual bool supportsOptimizer() const override { return true; }
 
@@ -445,7 +445,8 @@ public:
         const SelectQueryInfo & query_info,
         std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
         const Names & column_names_to_return,
-        ContextPtr local_context) const;
+        ContextPtr local_context,
+        const bool & ignore_ttl = false) const;
 
     /**
      * @param parts input parts, must be sorted in PartComparator order

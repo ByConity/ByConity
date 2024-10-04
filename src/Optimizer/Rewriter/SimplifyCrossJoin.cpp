@@ -15,7 +15,12 @@
 
 #include <queue>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Iterative/IterativeRewriter.h>
+#include <Optimizer/Rewriter/ColumnPruning.h>
+#include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rewriter/SimplifyCrossJoin.h>
+#include <Optimizer/Rewriter/UnifyNullableType.h>
+#include <Optimizer/Rule/Rules.h>
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/FilterStep.h>
@@ -23,16 +28,41 @@
 #include <QueryPlan/PlanPattern.h>
 #include <QueryPlan/ProjectionStep.h>
 
+
 namespace DB
 {
-void SimplifyCrossJoin::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool SimplifyCrossJoin::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     if (!PlanPattern::hasCrossJoin(plan))
-        return;
+        return false;
     SimplifyCrossJoinVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);
     plan.update(result);
+
+    if (visitor.isRewritten())
+    {
+        PredicatePushdown predicate_push_down;
+        predicate_push_down.rewritePlan(plan, context);
+        ColumnPruning cp;
+        cp.rewritePlan(plan, context);
+        UnifyNullableType un;
+        un.rewritePlan(plan, context);
+
+
+        // simple join order (primary for large joins reorder)
+        auto ir = std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression");
+        ir->rewritePlan(plan, context);
+        ir = std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant");
+        ir->rewritePlan(plan, context);
+        ir = std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection");
+        ir->rewritePlan(plan, context);
+        ir = std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression");
+        ir->rewritePlan(plan, context);
+        ir = std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate");
+        ir->rewritePlan(plan, context);
+    }
+    return true;
 }
 
 PlanNodePtr SimplifyCrossJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
@@ -62,6 +92,7 @@ PlanNodePtr SimplifyCrossJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
 
     PlanNodePtr replacement = buildJoinTree(node, output_symbols, join_graph, join_order);
     replacement = visitPlanNode(*replacement, v);
+    rewritten = true;
     return replacement;
 }
 
@@ -126,8 +157,8 @@ std::vector<UInt32> SimplifyCrossJoinVisitor::getJoinOrder(JoinGraph & graph)
     return id;
 }
 
-PlanNodePtr
-SimplifyCrossJoinVisitor::buildJoinTree(JoinNode & node, std::vector<String> & expected_output_symbols, JoinGraph & graph, std::vector<UInt32> & join_order)
+PlanNodePtr SimplifyCrossJoinVisitor::buildJoinTree(
+    JoinNode & node, std::vector<String> & expected_output_symbols, JoinGraph & graph, std::vector<UInt32> & join_order)
 {
     Utils::checkArgument(join_order.size() >= 2);
 

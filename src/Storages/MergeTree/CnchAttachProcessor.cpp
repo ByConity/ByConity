@@ -1775,7 +1775,7 @@ void CnchAttachProcessor::tryPreload(MutableMergeTreeDataPartsCNCHVector & attac
 {
     const auto & settings = query_ctx->getSettingsRef();
     if (!settings.parts_preload_level || (!target_tbl.getSettings()->parts_preload_level && !target_tbl.getSettings()->enable_preload_parts)
-        || !target_tbl.getSettings()->enable_local_disk_cache)
+        || !(target_tbl.getSettings()->enable_local_disk_cache || target_tbl.getSettings()->enable_nexus_fs))
         return;
 
     try

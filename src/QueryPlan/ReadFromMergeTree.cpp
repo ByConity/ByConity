@@ -190,15 +190,16 @@ static bool isSamePartition(const RangesInDataPart & lhs, const RangesInDataPart
 static bool canReadInPartitionOrder(
     const StorageInMemoryMetadata & metadata,
     const InputOrderInfo & input_order_info,
-    const ASTSelectQuery & select)
+    const ASTSelectQuery & select,
+    int partition_by_monotonicity_hint)
 {
     if (!metadata.isPartitionKeyDefined() || !metadata.isSortingKeyDefined())
         return false;
 
     const auto & partition_key = metadata.getPartitionKey();
     Names minmax_columns = partition_key.expression->getRequiredColumns();
-    /// for simplicity, only support table with one partition key
-    if (partition_key.column_names.size() != 1 || minmax_columns.size() != 1)
+    /// only support partition by with single required column.
+    if (minmax_columns.size() != 1)
         return false;
 
     String partition_column = minmax_columns[0];
@@ -245,7 +246,14 @@ static bool canReadInPartitionOrder(
     if (partition_key.column_names.front() == *partition_column_it)
         return true;
 
-    /// Allow "partition by func(x) order by (x)" where func is monotonic nondecreasing
+    /// for multi-level partition like "(toDate(ts), toHour(ts))",
+    /// it's difficult to deduce the monotonicity of the partition function.
+    /// currently we rely on table hint `partition_by_monotonicity_hint` for it.
+    if (partition_key.column_names.size() > 1)
+        return partition_by_monotonicity_hint > 0;
+
+    /// for single-level partition like "partition by func(x) order by (x)",
+    /// deduce the monotonicity of partition func, allow when monotonic nondecreasing
     IFunction::Monotonicity monotonicity;
     for (const auto & action : partition_key.expression->getActions())
     {
@@ -436,17 +444,17 @@ template<typename TSource>
 ProcessorPtr ReadFromMergeTree::createSource(
     const RangesInDataPart & part,
     const Names & required_columns,
-    const MergeTreeStreamSettings & stream_settings)
+    const MergeTreeStreamSettings & stream_settings,
+    const MarkRangesFilterCallback & range_filter_callback)
 {
     return std::make_shared<TSource>(
-        data, storage_snapshot, part, delete_bitmap_getter, required_columns, query_info, true, stream_settings, virt_column_names);
+        data, storage_snapshot, part, delete_bitmap_getter, required_columns, query_info, true, stream_settings, virt_column_names, range_filter_callback);
 }
 
 Pipe ReadFromMergeTree::readInOrder(
-    RangesInDataParts parts_with_range,
-    Names required_columns,
-    ReadType read_type,
-    bool use_uncompressed_cache)
+    RangesInDataParts parts_with_range, Names required_columns,
+    ReadType read_type, bool use_uncompressed_cache,
+    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
 {
     Pipes pipes;
     MergeTreeStreamSettings stream_settings{
@@ -458,13 +466,22 @@ Pipe ReadFromMergeTree::readInOrder(
         .reader_settings = reader_settings
     };
 
+    MarkRangesFilterCallback filter_callback;
+    if (delayed_index != nullptr)
+    {
+        filter_callback = [reader_settings = this->reader_settings, ctx = this->context, delayed_index](const MergeTreeDataPartPtr& part, const MarkRanges& mark_ranges) {
+            return MergeTreeDataSelectExecutor::filterMarkRangesForPartByInvertedIndex(
+                part, mark_ranges, delayed_index, ctx, reader_settings);
+        };
+    }
+
     if (!query_info.atomic_predicates.empty())
     {
         for (const auto & part : parts_with_range)
         {
             auto source = read_type == ReadType::InReverseOrder
-                        ? createSource<MergeTreeReverseSelectProcessorLM>(part, required_columns, stream_settings)
-                        : createSource<MergeTreeSelectProcessorLM>(part, required_columns, stream_settings);
+                        ? createSource<MergeTreeReverseSelectProcessorLM>(part, required_columns, stream_settings, filter_callback)
+                        : createSource<MergeTreeSelectProcessorLM>(part, required_columns, stream_settings, filter_callback);
 
             pipes.emplace_back(std::move(source));
         }
@@ -474,8 +491,8 @@ Pipe ReadFromMergeTree::readInOrder(
         for (const auto & part : parts_with_range)
         {
             auto source = read_type == ReadType::InReverseOrder
-                        ? createSource<MergeTreeReverseSelectProcessor>(part, required_columns, stream_settings)
-                        : createSource<MergeTreeSelectProcessor>(part, required_columns, stream_settings);
+                        ? createSource<MergeTreeReverseSelectProcessor>(part, required_columns, stream_settings, filter_callback)
+                        : createSource<MergeTreeSelectProcessor>(part, required_columns, stream_settings, filter_callback);
 
             pipes.emplace_back(std::move(source));
         }
@@ -495,14 +512,24 @@ Pipe ReadFromMergeTree::readInOrder(
 }
 
 Pipe ReadFromMergeTree::read(
-    RangesInDataParts parts_with_range, Names required_columns, ReadType read_type,
-    size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache)
+    RangesInDataParts parts_with_range,
+    Names required_columns,
+    ReadType read_type,
+    size_t max_streams,
+    size_t min_marks_for_concurrent_read,
+    bool use_uncompressed_cache,
+    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
 {
     if (read_type == ReadType::Default && max_streams > 1)
-        return readFromPool(parts_with_range, required_columns, max_streams,
-                            min_marks_for_concurrent_read, use_uncompressed_cache);
+    {
+        if (unlikely(delayed_index != nullptr))
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Some skip index is delayed to pipeline execution stage");
+        }
+        return readFromPool(parts_with_range, required_columns, max_streams, min_marks_for_concurrent_read, use_uncompressed_cache);
+    }
 
-    auto pipe = readInOrder(parts_with_range, required_columns, read_type, use_uncompressed_cache);
+    auto pipe = readInOrder(parts_with_range, required_columns, read_type, use_uncompressed_cache, delayed_index);
 
     /// Use ConcatProcessor to concat sources together.
     /// It is needed to read in parts order (and so in PK order) if single thread is used.
@@ -593,8 +620,14 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreams(
         }
     }
 
-    return read(std::move(parts_with_ranges), column_names, ReadType::Default,
-                num_streams, info.min_marks_for_concurrent_read, info.use_uncompressed_cache);
+    return read(
+        std::move(parts_with_ranges),
+        column_names,
+        ReadType::Default,
+        num_streams,
+        info.min_marks_for_concurrent_read,
+        info.use_uncompressed_cache,
+        nullptr);
 }
 
 static ActionsDAGPtr createProjection(const Block & header)
@@ -612,8 +645,8 @@ struct PartitionValueComparator
 {
     bool operator()(const RangesInDataPart & lhs, const RangesInDataPart & rhs) const
     {
-        const auto & l = lhs.data_part->partition.value[0];
-        const auto & r = rhs.data_part->partition.value[0];
+        const auto & l = lhs.data_part->partition.value;
+        const auto & r = rhs.data_part->partition.value;
         if constexpr (ascend)
             return l < r;
         else
@@ -627,7 +660,8 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
     const Names & column_names,
     const ActionsDAGPtr & sorting_key_prefix_expr,
     ActionsDAGPtr & out_projection,
-    const InputOrderInfoPtr & input_order_info)
+    const InputOrderInfoPtr & input_order_info,
+    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
 {
     chassert(!parts_with_ranges.empty());
 
@@ -654,7 +688,8 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
             out_projection,
             input_order_info,
             // for the result pipe to output ordered tuples for this partition
-            1 /*num_streams*/, true /*need_preliminary_merge*/);
+            1 /*num_streams*/, true /*need_preliminary_merge*/,
+            delayed_index);
 
         pipes.emplace_back(std::move(pipe));
         prev = curr;
@@ -673,7 +708,8 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
     ActionsDAGPtr & out_projection,
     const InputOrderInfoPtr & input_order_info,
     size_t num_streams,
-    bool need_preliminary_merge)
+    bool need_preliminary_merge,
+    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
 {
     const auto & settings = context->getSettingsRef();
     const auto data_settings = data.getSettings();
@@ -802,7 +838,8 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
                        : ReadFromMergeTree::ReadType::InReverseOrder;
 
         pipes.emplace_back(read(std::move(new_parts), column_names, read_type,
-                           num_streams, info.min_marks_for_concurrent_read, info.use_uncompressed_cache));
+                           num_streams, info.min_marks_for_concurrent_read,
+                           info.use_uncompressed_cache, delayed_index));
     }
 
     if (need_preliminary_merge && !pipes.empty())
@@ -1029,7 +1066,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsFinal(
                 continue;
 
             pipe = read(std::move(new_parts), column_names, ReadFromMergeTree::ReadType::InOrder,
-                num_streams, 0, info.use_uncompressed_cache);
+                num_streams, 0, info.use_uncompressed_cache, nullptr);
 
             /// Drop temporary columns, added by 'sorting_key_expr'
             if (!out_projection)
@@ -1092,7 +1129,8 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsFinal(
             num_streams_for_lonely_parts = std::max((sum_marks_in_lonely_parts + min_marks_for_concurrent_read - 1) / min_marks_for_concurrent_read, lonely_parts.size());
 
         auto pipe = read(std::move(lonely_parts), column_names, ReadFromMergeTree::ReadType::Default,
-                num_streams_for_lonely_parts, min_marks_for_concurrent_read, info.use_uncompressed_cache);
+                num_streams_for_lonely_parts, min_marks_for_concurrent_read, info.use_uncompressed_cache,
+                nullptr);
 
         /// Drop temporary columns, added by 'sorting_key_expr'
         if (!out_projection)
@@ -1290,6 +1328,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             log,
             num_streams,
             result.index_stats,
+            *(result.delayed_indices),
             settings.enable_skip_index,
             data,
             result.sampling.use_sampling,
@@ -1461,7 +1500,9 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         auto sorting_key_prefix_expr = ExpressionAnalyzer(order_key_prefix_ast, syntax_result, context).getActionsDAG(false);
 
         can_read_in_partition_order = (settings.optimize_read_in_partition_order || settings.force_read_in_partition_order)
-            && canReadInPartitionOrder(*metadata_for_reading, *input_order_info, query_info.query->as<ASTSelectQuery &>());
+            && canReadInPartitionOrder(
+                *metadata_for_reading, *input_order_info, query_info.query->as<ASTSelectQuery &>(),
+                data.getSettings()->partition_by_monotonicity_hint);
 
         if (can_read_in_partition_order && result.selected_partitions > 1)
         {
@@ -1470,7 +1511,8 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
                 column_names_to_read,
                 sorting_key_prefix_expr,
                 result_projection,
-                input_order_info);
+                input_order_info,
+                result.delayed_indices);
         }
         else
         {
@@ -1482,7 +1524,8 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
                 result_projection,
                 input_order_info,
                 requested_num_streams,
-                need_preliminary_merge);
+                need_preliminary_merge,
+                result.delayed_indices);
         }
     }
     else

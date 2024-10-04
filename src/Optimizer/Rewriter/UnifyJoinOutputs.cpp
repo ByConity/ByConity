@@ -24,13 +24,14 @@
 namespace DB
 {
 
-void UnifyJoinOutputs::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool UnifyJoinOutputs::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     auto union_find_map = UnionFindExtractor::extract(plan);
     UnifyJoinOutputs::Rewriter rewriter{context, plan.getCTEInfo(), union_find_map};
     std::set<String> require;
     auto result = VisitorUtil::accept(plan.getPlanNode(), rewriter, require);
     plan.update(result);
+    return true;
 }
 
 std::unordered_map<PlanNodeId, UnionFind<String>> UnifyJoinOutputs::UnionFindExtractor::extract(QueryPlan & plan)

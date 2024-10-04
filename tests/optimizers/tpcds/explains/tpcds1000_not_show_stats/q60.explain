@@ -92,9 +92,9 @@ Projection
                   │           │     │     └─ Projection
                   │           │     │        │     Expressions: [d_date_sk_1]
                   │           │     │        └─ Filter
-                  │           │     │           │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 9)
+                  │           │     │           │     Condition: (d_moy_1 = 9) AND (d_year_1 = 1998)
                   │           │     │           └─ TableScan tpcds1000.date_dim
-                  │           │     │                    Where: (d_year = 1998) AND (d_moy = 9)
+                  │           │     │                    Where: (d_moy = 9) AND (d_year = 1998)
                   │           │     │                    Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                   │           │     └─ Broadcast Exchange
                   │           │        └─ Left Semi Join

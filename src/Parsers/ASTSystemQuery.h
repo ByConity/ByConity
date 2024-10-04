@@ -146,6 +146,7 @@ public:
         RECALCULATE_METRICS,
         START_VIEW,
         STOP_VIEW,
+        TRIGGER_HDFS_CONFIG_UPDATE,
         DROP_VIEW_META,
         RELEASE_MEMORY_LOCK, /// RELEASE MEMORY LOCK [db.tb]/[OF TXN xxx]
         DROP_SCHEMA_CACHE,

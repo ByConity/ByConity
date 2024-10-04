@@ -12,7 +12,7 @@
 
 namespace DB
 {
-void UseNodeProperty::rewrite(QueryPlan & plan, ContextMutablePtr context) const
+bool UseNodeProperty::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     auto single = Property{Partitioning{Partitioning::Handle::SINGLE}};
     single.getNodePartitioningRef().setComponent(Partitioning::Component::COORDINATOR);
@@ -20,6 +20,7 @@ void UseNodeProperty::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     auto new_plan = VisitorUtil::accept(plan.getPlanNode(), exchange_rewriter, single);
 
     plan.update(new_plan);
+    return true;
 }
 
 PlanNodePtr UseNodeProperty::ExchangeRewriter::visitPlanNode(PlanNodeBase & node, Property & require)
