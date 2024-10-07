@@ -261,20 +261,6 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, Names
         {
             throw Exception("auto_increment not supported yet", ErrorCodes::NOT_IMPLEMENTED);
         }
-        if (column->default_expression)
-        {
-            auto default_id = column->default_expression->as<ASTIdentifier>();
-            if (default_id && Poco::toUpper(default_id->name()) == "CURRENT_TIMESTAMP")
-            {
-                column->default_expression = makeASTFunction("now64");
-            }
-
-            auto default_function = column->default_expression->as<ASTFunction>();
-            if (default_function && Poco::toUpper(default_function->name) == "CURRENT_TIMESTAMP")
-            {
-                default_function->name = "now64";
-            }
-        }
     }
 
     const auto & primary_keys_names_and_types = getNames(*primary_keys, context, columns);

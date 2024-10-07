@@ -787,6 +787,14 @@ std::optional<ColumnDefault> ColumnsDescription::getDefault(const String & colum
     return {};
 }
 
+ColumnsDescription::ColumnOnUpdates ColumnsDescription::getOnUpdates() const
+{
+    ColumnOnUpdates ret;
+    for (const auto & col : columns)
+        if (col.on_update_expression)
+            ret.emplace(col.name, col.on_update_expression);
+    return ret;
+}
 
 bool ColumnsDescription::hasCompressionCodec(const String & column_name) const
 {

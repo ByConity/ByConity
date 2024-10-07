@@ -101,6 +101,8 @@ struct ColumnDescription
     String name;
     DataTypePtr type;
     ColumnDefault default_desc;
+    // TODO: Wrap on update expression using a structure similar to default_desc
+    ASTPtr on_update_expression;
     String comment;
     ASTPtr codec;
     ASTPtr ttl;
@@ -194,6 +196,7 @@ public:
 
     Names getNamesOfPhysical() const;
     Names getNamesOfOrdinary() const;
+    Names getNamesOfOnUpdate() const;
 
     bool hasPhysical(const String & column_name) const;
     bool hasColumnOrSubcolumn(GetColumnsOptions::Kind kind, const String & column_name) const;
@@ -214,6 +217,8 @@ public:
     bool hasDefault(const String & column_name) const;
     bool hasDefaults() const;
     std::optional<ColumnDefault> getDefault(const String & column_name) const;
+    using ColumnOnUpdates = std::unordered_map<std::string, ASTPtr>;
+    ColumnOnUpdates getOnUpdates() const;
 
     /// Does column has non default specified compression codec
     bool hasCompressionCodec(const String & column_name) const;

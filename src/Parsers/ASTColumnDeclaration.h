@@ -38,6 +38,7 @@ public:
     std::optional<bool> unsigned_modifier;
     String default_specifier;
     ASTPtr default_expression;
+    ASTPtr on_update_expression;
     bool auto_increment;
     bool mysql_primary_key;
     ASTPtr comment;

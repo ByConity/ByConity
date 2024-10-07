@@ -397,6 +397,12 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         column_declaration->children.push_back(std::move(default_expression));
     }
 
+    if (on_update_expression)
+    {
+        column_declaration->on_update_expression = on_update_expression;
+        column_declaration->children.push_back(std::move(on_update_expression));
+    }
+
     if (comment_expression)
     {
         column_declaration->comment = comment_expression;

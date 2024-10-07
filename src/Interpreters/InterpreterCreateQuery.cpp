@@ -486,6 +486,11 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns,
             column_declaration->default_expression = column.default_desc.expression->clone();
         }
 
+        if (column.on_update_expression)
+        {
+            column_declaration->on_update_expression = column.on_update_expression->clone();
+        }
+
         if (!column.comment.empty())
         {
             column_declaration->comment = std::make_shared<ASTLiteral>(Field(column.comment));
@@ -562,11 +567,17 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
      *  mixed with conversion-columns for each explicitly specified type */
 
     ASTPtr default_expr_list = std::make_shared<ASTExpressionList>();
+    ASTPtr on_update_expr_list = std::make_shared<ASTExpressionList>();
     NamesAndTypesList column_names_and_types;
     /// Only applies default nullable transform if:
     /// 1. The query is not a system query, such as: system.query_log, system.query_thread_log
     /// 2. The query is to create a new table rather than attaching an existed table.
     bool make_columns_nullable = !system && !attach && context_->getSettingsRef().data_type_default_nullable;
+    auto getDefaultExpression = [](ASTPtr expression) {
+        auto identifier = expression->as<ASTIdentifier>();
+        bool use_now = identifier && Poco::toUpper(identifier->name()) == "CURRENT_TIMESTAMP";
+        return use_now ? makeASTFunction("now64") : expression->clone();
+    };
 
     for (const auto & ast : columns_ast.children)
     {
@@ -611,6 +622,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         /// add column to postprocessing if there is a default_expression specified
         if (col_decl.default_expression)
         {
+            auto default_expression = getDefaultExpression(col_decl.default_expression);
             /** For columns with explicitly-specified type create two expressions:
               * 1. default_expression aliased as column name with _tmp suffix
               * 2. conversion of expression (1) to explicitly-specified type alias as column name
@@ -627,11 +639,38 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
 
                 default_expr_list->children.emplace_back(
                     setAlias(
-                        col_decl.default_expression->clone(),
+                        default_expression,
                         tmp_column_name));
             }
             else
-                default_expr_list->children.emplace_back(setAlias(col_decl.default_expression->clone(), col_decl.name));
+                default_expr_list->children.emplace_back(setAlias(default_expression, col_decl.name));
+        }
+
+        /// add column to postprocessing if there is a on_update_expr_list specified
+        if (col_decl.on_update_expression)
+        {
+            auto on_update_expression = getDefaultExpression(col_decl.on_update_expression);
+            /** For columns with explicitly-specified type create two expressions:
+              * 1. on_update_expression aliased as column name with _tmp suffix
+              * 2. conversion of expression (1) to explicitly-specified type alias as column name
+              */
+            if (col_decl.type)
+            {
+                const auto & final_column_name = col_decl.name;
+                const auto tmp_column_name = final_column_name + "_tmp_alter" + toString(randomSeed());
+                const auto * data_type_ptr = column_names_and_types.back().type.get();
+
+                on_update_expr_list->children.emplace_back(
+                    setAlias(addTypeConversionToAST(std::make_shared<ASTIdentifier>(tmp_column_name), data_type_ptr->getName()),
+                        final_column_name));
+
+                on_update_expr_list->children.emplace_back(
+                    setAlias(
+                        on_update_expression,
+                        tmp_column_name));
+            }
+            else
+                on_update_expr_list->children.emplace_back(setAlias(on_update_expression, col_decl.name));
         }
 
         // Set type flags based on information in AST
@@ -639,9 +678,12 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
     }
 
     Block defaults_sample_block;
+    Block on_update_sample_block;
     /// set missing types and wrap default_expression's in a conversion-function if necessary
     if (!default_expr_list->children.empty())
         defaults_sample_block = validateColumnsDefaultsAndGetSampleBlock(default_expr_list, column_names_and_types, context_);
+    if (!on_update_expr_list->children.empty())
+        on_update_sample_block = validateColumnsDefaultsAndGetSampleBlock(on_update_expr_list, column_names_and_types, context_);
 
     bool sanity_check_compression_codecs = !attach && !context_->getSettingsRef().allow_suspicious_codecs;
     bool allow_experimental_codecs = attach || context_->getSettingsRef().allow_experimental_codecs;
@@ -658,7 +700,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
 
         if (col_decl.default_expression)
         {
-            ASTPtr default_expr = col_decl.default_expression->clone();
+            ASTPtr default_expr = getDefaultExpression(col_decl.default_expression);
             if (col_decl.type)
                 column.type = name_type_it->type;
             else
@@ -675,6 +717,11 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
             column.type = name_type_it->type;
         else
             throw Exception();
+
+        if (col_decl.on_update_expression)
+        {
+            column.on_update_expression = getDefaultExpression(col_decl.on_update_expression);
+        }
 
         if (col_decl.comment)
             column.comment = col_decl.comment->as<ASTLiteral &>().value.get<String>();
