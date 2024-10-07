@@ -1,11 +1,9 @@
 allow_extended_type_conversion	1
 cast_keep_nullable	1
 dialect_type	ANSI
-enable_optimizer	1
 join_use_nulls	1
 --
 allow_extended_type_conversion	0
 cast_keep_nullable	0
 dialect_type	CLICKHOUSE
-enable_optimizer	0
 join_use_nulls	1
