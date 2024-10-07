@@ -120,7 +120,7 @@ static void OnSendPlanSegmentCallback(
     {
         LOG_ERROR(
             getLogger("executePlanSegment"),
-            "send plansegment to {} failed, error: {},  msg: {}",
+            "Send plansegment to {} failed, error: {},  msg: {}",
             butil::endpoint2str(cntl->remote_side()).c_str(),
             cntl->ErrorText(),
             response->message());
@@ -132,8 +132,7 @@ static void OnSendPlanSegmentCallback(
     }
     else
     {
-        LOG_TRACE(
-            getLogger("executePlanSegment"), "send plansegment to {} success", butil::endpoint2str(cntl->remote_side()).c_str());
+        LOG_TRACE(getLogger("executePlanSegment"), "Send plansegment to {} success", butil::endpoint2str(cntl->remote_side()).c_str());
         async_context->asyncComplete(cntl->call_id(), result);
     }
 }
