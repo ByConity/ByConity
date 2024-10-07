@@ -117,6 +117,7 @@ struct KafkaSettings : public BaseSettings<KafkaSettingsTraits>
 {
     void applyKafkaSettingChanges(const SettingsChanges & changes);
     void loadFromQuery(ASTStorage & storage_def);
+    bool isFormatFactorySetting(const String & name);
 };
 
 class IAST;

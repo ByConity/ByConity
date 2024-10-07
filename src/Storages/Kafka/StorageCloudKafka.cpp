@@ -785,10 +785,6 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
     if (!settings.avro_schema_registry_url.value.empty())
         result.emplace_back("format_avro_schema_registry_url", settings.avro_schema_registry_url.value);
 
-    /// enable to read JSON object as Strings if you required by changing the setting of CnchKafka
-    if (settings.input_format_json_read_objects_as_strings.changed)
-        result.emplace_back("input_format_json_read_objects_as_strings", settings.input_format_json_read_objects_as_strings.value);
-
     /// Forbidden parallel parsing for Kafka in case of global setting.
     /// Kafka cannot support parallel parsing due to virtual column
     result.emplace_back("input_format_parallel_parsing", false);
@@ -800,6 +796,16 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
     /// Set whether to use partial update mode for unique table
     result.emplace_back("enable_unique_partial_update", settings.enable_unique_partial_update.value);
 
+    /// Add settings from the format factory
+    for (const auto & setting : settings)
+    {
+        const auto & name = setting.getName();
+        if (setting.isValueChanged() && settings.isFormatFactorySetting(name))
+        {
+            /// Use `insertSetting` to avoid adding duplicated settings
+            result.insertSetting(name, setting.getValue());
+        }
+    }
     return result;
 }
 
