@@ -2117,6 +2117,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
     M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
     \
+    M(Int64, remote_fs_read_failed_injection, 0, "inject read error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay read ms", 0) \
+    M(Int64, remote_fs_write_failed_injection, 0, "inject write error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay write ms", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 

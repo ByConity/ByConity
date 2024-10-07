@@ -582,6 +582,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
 
         auto preload_level = request->preload_level();
         auto submit_ts = request->submit_ts();
+        auto read_injection = request->read_injection();
 
         if (request->sync())
         {
@@ -589,7 +590,8 @@ void CnchWorkerServiceImpl::preloadDataParts(
             auto pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), settings.cnch_parallel_preloading.value));
             for (const auto & part : data_parts)
             {
-                pool->scheduleOrThrowOnError([part, preload_level, submit_ts, storage] {
+                pool->scheduleOrThrowOnError([part, preload_level, submit_ts, read_injection, storage] {
+                    part->remote_fs_read_failed_injection = read_injection;
                     part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;// avoid getCheckum & getIndex re-cache
                     part->preload(preload_level, submit_ts);
                 });
@@ -608,7 +610,8 @@ void CnchWorkerServiceImpl::preloadDataParts(
             ThreadPool * preload_thread_pool = &(IDiskCache::getPreloadPool());
             for (const auto & part : data_parts)
             {
-                preload_thread_pool->scheduleOrThrowOnError([part, preload_level, submit_ts, storage] {
+                preload_thread_pool->scheduleOrThrowOnError([part, preload_level, submit_ts, read_injection, storage] {
+                    part->remote_fs_read_failed_injection = read_injection;
                     part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;// avoid getCheckum & getIndex re-cache
                     part->preload(preload_level, submit_ts);
                 });

@@ -323,6 +323,9 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         WriteSettings write_settings;
         write_settings.mode = WriteMode::Create;
         write_settings.file_meta.insert(std::pair<String, String>(S3ObjectMetadata::PART_GENERATOR_ID, generator_id.str()));
+        write_settings.remote_fs_write_failed_injection = data.getContext()->getSettings().remote_fs_write_failed_injection;
+        // if (data.getSettings()->enable_cloudfs.changed)
+        //     write_settings.enable_cloudfs = data.getSettings()->enable_cloudfs;
 
         auto data_out = disk->writeFile(data_file_rel_path, write_settings);
         SCOPE_EXIT({

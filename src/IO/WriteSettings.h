@@ -19,6 +19,7 @@
 #include <map>
 #include <Core/Defines.h>
 #include <Core/Types.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -39,6 +40,7 @@ struct WriteSettings
     WriteMode mode = WriteMode::Rewrite;
     std::map<String, String> file_meta = {};
     bool allow_overwrite_file = false;
+    Int64 remote_fs_write_failed_injection = 0;
 };
 
 }

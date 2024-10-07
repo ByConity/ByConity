@@ -217,6 +217,7 @@ message PreloadDataPartsReq
   optional bool sync = 4;
   optional uint64 preload_level = 5;
   optional uint64 submit_ts = 6;
+  optional int64 read_injection = 7;
 }
 
 message PreloadDataPartsResp
