@@ -8,9 +8,9 @@ Projection Est. 1 rows
          └─ Inner (PARALLEL_HASH) Join Est. 14062433 rows
             │     Condition: ss_addr_sk == ca_address_sk
             │     Filter: ((ss_net_profit <= 3000) AND (ss_net_profit >= 150) AND (ca_state IN ('OR', 'MN', 'KY'))) OR ((ss_net_profit <= 25000) AND (ss_net_profit >= 50) AND (ca_state IN ('VA', 'CA', 'MS'))) OR ((ss_net_profit >= 0) AND (ss_net_profit <= 2000) AND (ca_state IN ('CO', 'OH', 'TX')))
-            ├─ Repartition Exchange Est. 28994021 rows
+            ├─ Repartition Exchange Est. 28994022 rows
             │  │     Partition by: {ss_addr_sk}
-            │  └─ Inner Join Est. 28994021 rows
+            │  └─ Inner Join Est. 28994022 rows
             │     │     Condition: ss_cdemo_sk == cd_demo_sk
             │     │     Filter: ((ss_sales_price >= '100') AND (cd_education_status = '4 yr Degree') AND (ss_sales_price <= '150') AND (cd_marital_status = 'M')) OR ((cd_education_status = 'College') AND (ss_sales_price <= '200') AND (ss_sales_price >= '150') AND (cd_marital_status = 'S')) OR ((cd_marital_status = 'D') AND (cd_education_status = '2 yr Degree') AND (ss_sales_price >= '50') AND (ss_sales_price <= '100'))
             │     │     Runtime Filters Builder: {cd_demo_sk}
