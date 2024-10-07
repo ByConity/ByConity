@@ -191,7 +191,7 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(MultiPathDataPacket packet)
     }
 }
 
-RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts) noexcept
+RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts)
 {
     Stopwatch s;
     MultiPathDataPacket data_packet;
