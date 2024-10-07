@@ -856,6 +856,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             {
                 context_ptr->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context_ptr);
             }
+
+            if (context_ptr->hasSessionContext())
+                context_ptr->applySessionSettingsChanges();
         }
     };
 
@@ -1035,6 +1038,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 enqueueVirtualWarehouseQueue(context, ast);
         }
     }
+
+    if (context->hasSessionContext())
+        context->clearSessionSettingsChanges();
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
     String query(begin, query_end);

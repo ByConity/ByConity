@@ -1511,6 +1511,7 @@ void TCPHandler::receiveQuery()
         query_context->clampToSettingsConstraints(settings_changes);
     }
     query_context->applySettingsChanges(settings_changes, false);
+    query_context->setSessionSettingsChanges(settings_changes);
 
     /// Disable function name normalization when it's a secondary query, because queries are either
     /// already normalized on initiator node, or not normalized and should remain unnormalized for
