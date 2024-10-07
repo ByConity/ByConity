@@ -132,10 +132,20 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
         disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(diskName());
     }
 
-    /// This can happen in testing environment when disk name may change time to time
     if (!disk)
     {
-        throw Exception("Disk " + diskName() + " not found. This should only happens in testing or unstable environment. If this exception is on production, there's a bug", ErrorCodes::LOGICAL_ERROR);
+        disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+        if (!disk)
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't find any disk when handle undo resource!");
+        }
+        LOG_WARNING(log, "Disk {} not found and fallback use default disk {}", diskName(), disk->getName());
+    }
+
+    if (disk->getType() == DiskType::Type::Local)
+    {
+        LOG_ERROR(log, "Nothing to clean in local disk {} for undo resource: {}", disk->getName(), toDebugString());
+        return;
     }
 
     if (type() == UndoResourceType::Part || type() == UndoResourceType::DeleteBitmap || type() == UndoResourceType::StagedPart
