@@ -266,7 +266,7 @@ bool NoBitmapIndexRequiredSourceColumnsMatcher::needChildVisit(ASTPtr & node, co
     {
         /// "indexHint" is a special function for index analysis. Everything that is inside it is not calculated. @sa KeyCondition
         /// "lambda" visit children itself.
-        if (f->name == "indexHint" || f->name == "lambda" || BitmapIndexHelper::isArraySetFunctions(f->name))
+        if (f->name == "indexHint" || f->name == "lambda" || BitmapIndexHelper::isValidBitMapFunctions(node))
             return false;
     }
 

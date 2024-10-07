@@ -1039,6 +1039,7 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
         if (make_set)
         {
             // check if current column type really has bitmap index
+            bool has_valid_identifier = false;
             for (size_t i = 0; i < arg_size; i += 2)
             {
                 ASTPtr arg_col = node.arguments->children.at(i);
@@ -1052,9 +1053,11 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                             should_update_bitmap_index_info = false;
                             break;
                         }
+                        has_valid_identifier = true;
                     }
                 }
             }
+            should_update_bitmap_index_info &= has_valid_identifier;
 
             auto col_name = node.getColumnName();
             if (should_update_bitmap_index_info)
