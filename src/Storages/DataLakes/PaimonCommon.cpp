@@ -227,13 +227,51 @@ Poco::JSON::Object PaimonS3CatalogClient::buildCatalogParams()
     json.set(paimon_utils::PARAMS_KEY_S3_ENDPOINT, storage_settings->endpoint.value);
     json.set(paimon_utils::PARAMS_KEY_S3_ACCESS_KEY, storage_settings->ak_id.value);
     json.set(paimon_utils::PARAMS_KEY_S3_SECRET_KEY, storage_settings->ak_secret.value);
+    json.set(paimon_utils::PARAMS_KEY_S3_PATH_STYLE_ACCESS, storage_settings->s3_use_virtual_hosted_style.value);
     json.set(paimon_utils::PARAMS_KEY_WAREHOUSE, warehouse);
+
+    if (!storage_settings->s3_extra_options.value.empty())
+    {
+        std::vector<String> s3_extra_option_pairs = paimon_utils::splitStr(storage_settings->s3_extra_options.value, ',');
+        for (const auto & pair : s3_extra_option_pairs)
+        {
+            auto kv = paimon_utils::splitStr(pair, '=');
+            if (kv.size() != 2)
+                throw Exception("Invalid s3 extra option: " + pair, ErrorCodes::UNKNOWN_EXCEPTION);
+            json.set(kv[0], kv[1]);
+        }
+    }
     return json;
 }
 
 
 namespace paimon_utils
 {
+    std::vector<String> splitStr(const String & str, const char delimiter)
+    {
+        auto ltrim = [](const String & s) {
+            String result = s;
+            result.erase(result.begin(), std::find_if(result.begin(), result.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+            return result;
+        };
+
+        auto rtrim = [](const String & s) {
+            String result = s;
+            result.erase(
+                std::find_if(result.rbegin(), result.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), result.end());
+            return result;
+        };
+
+        std::vector<String> trimed_tokens;
+        String token;
+        std::stringstream ss(str);
+        while (std::getline(ss, token, delimiter))
+        {
+            trimed_tokens.push_back(ltrim(rtrim(token)));
+        }
+        return trimed_tokens;
+    }
+
     cpputil::consul::ServiceEndpoint lookup(const String & domain)
     {
         std::vector<cpputil::consul::ServiceEndpoint> endpoints;

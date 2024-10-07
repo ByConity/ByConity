@@ -151,6 +151,7 @@ namespace paimon_utils
     static constexpr auto PARAMS_KEY_S3_ENDPOINT = "s3.endpoint";
     static constexpr auto PARAMS_KEY_S3_ACCESS_KEY = "s3.access-key";
     static constexpr auto PARAMS_KEY_S3_SECRET_KEY = "s3.secret-key";
+    static constexpr auto PARAMS_KEY_S3_PATH_STYLE_ACCESS = "s3.path.style.access";
     static constexpr auto PARAMS_KEY_DATABASE = "database";
     static constexpr auto PARAMS_KEY_TABLE = "table";
     static constexpr auto PARAMS_KEY_RPN_PREDICATE = "rpn_predicate";
@@ -166,6 +167,8 @@ namespace paimon_utils
     static constexpr auto FILESYSTEM_TYPE_HDFS = "HDFS";
     static constexpr auto FILESYSTEM_TYPE_LOCAL = "LOCAL";
     static constexpr auto FILESYSTEM_TYPE_S3 = "S3";
+
+    std::vector<String> splitStr(const String & str, char delimiter);
 
     // Split a vector into num_groups groups, if some groups are empty, they will be ignored
     template <typename Iterator, typename Value = typename Iterator::value_type>

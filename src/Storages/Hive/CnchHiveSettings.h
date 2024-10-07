@@ -60,6 +60,9 @@ struct Settings;
     M(String, hive_metastore_client_service_fqdn, "", "The fqdn for auth server", 0) \
     M(String, hive_metastore_client_keytab_path, "/etc/krb5.keytab", "The path of Kerberos keytab for hms auth", 0) \
     M(String, hive_metastore_client_principal, "hive", "The Kerberos principal for hms auth", 0) \
+    /** S3 settings **/ \
+    M(Bool, s3_use_virtual_hosted_style, true, "use virtual hosted style", 0) \
+    M(String, s3_extra_options, "", "S3 extra options, delimited by ','", 0) \
 
 
 

@@ -13,7 +13,6 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Common/Exception.h>
 
-// TODO
 namespace DB
 {
 class StorageCnchPaimon : public shared_ptr_helper<StorageCnchPaimon>, public StorageCnchLakeBase
@@ -22,6 +21,7 @@ class StorageCnchPaimon : public shared_ptr_helper<StorageCnchPaimon>, public St
 
 public:
     std::string getName() const override { return "PaimonCnch"; }
+    bool supportsPrewhere() const override { return false; }
 
     ASTPtr
     applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr storage_statistics)

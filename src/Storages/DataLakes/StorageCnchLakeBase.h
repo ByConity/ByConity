@@ -20,7 +20,7 @@ public:
     bool isRemote() const override final { return true; }
     bool supportsOptimizer() const override final { return true; }
     bool supportsDistributedRead() const override final { return true; }
-    bool supportsPrewhere() const override final { return true; }
+    bool supportsPrewhere() const override { return true; }
     bool supportIntermedicateResultCache() const override final { return true; }
 
     StorageCnchLakeBase(

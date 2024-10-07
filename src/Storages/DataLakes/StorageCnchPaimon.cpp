@@ -49,11 +49,10 @@ StorageCnchPaimon::StorageCnchPaimon(
     setInMemoryMetadata(metadata_);
 }
 
-/// Currently, we only support partition key filter push down
-/// Normal column filter can be pushed down if statistics is available, because only the filter with large selectivity can have good performance.
 ASTPtr StorageCnchPaimon::applyFilter(
     ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr storage_statistics) const
 {
+    // Push all filter to paimon side, and remain the filter in clickhouse side to guaranteen the correctness.
     filter = query_filter;
     return IStorage::applyFilter(query_filter, query_info, query_context, storage_statistics);
 }
@@ -126,6 +125,8 @@ void registerStorageCnchPaimon(StorageFactory & factory)
             metadata.setColumns(args.columns);
         if (args.storage_def->partition_by)
         {
+            if (metadata.columns.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Partition by clause is not allowed when using auto schema.");
             ASTPtr partition_by_key = args.storage_def->partition_by->ptr();
             metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
         }
