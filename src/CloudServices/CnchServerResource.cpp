@@ -653,6 +653,8 @@ void CnchServerResource::allocateResource(
                         assigned_virtual_parts.size(),
                         storage->getStorageID().getNameForLogs(),
                         host_ports.toDebugString());
+
+                    CnchPartsHelper::flattenPartsVector(assigned_virtual_parts);
                 }
 
                 if (auto it = assigned_hive_map.find(host_ports.id); it != assigned_hive_map.end())

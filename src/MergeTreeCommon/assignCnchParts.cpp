@@ -409,7 +409,7 @@ static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybrid
         const auto & part = parts[i];
         UInt64 marks_cnt = part->marksCount();
         // For little parts, we don't split it as virtual parts any more.
-        if (marks_cnt <= virtual_part_size || part->isPartial())
+        if (marks_cnt <= virtual_part_size)
         {
             auto index = hasher(part->info().getBasicPartName()) % shard_infos.size();
             String hostname = shard_infos[index].worker_id;
@@ -598,7 +598,7 @@ static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybrid
     {
         const auto & part = parts[i];
         UInt64 marks_cnt = part->marksCount();
-        if (marks_cnt <= virtual_part_size || part->isPartial())
+        if (marks_cnt <= virtual_part_size)
         {
             /// only 1 single parts
             String hostname = ring.find(part->info().getBasicPartName());
@@ -654,7 +654,7 @@ void splitHybridParts(const ServerDataPartsVector & parts, size_t virtual_part_s
         const auto & part = parts[i];
         UInt64 marks_cnt = part->marksCount();
         String base_name = part->info().getBasicPartName();
-        if (marks_cnt <= virtual_part_size || part->isPartial())
+        if (marks_cnt <= virtual_part_size)
         {
             // physical part
             hybrid_parts.emplace_back(base_name, false, i, marks_cnt, 0, marks_cnt);
