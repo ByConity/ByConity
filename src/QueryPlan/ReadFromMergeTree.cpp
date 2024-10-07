@@ -46,6 +46,8 @@ namespace ProfileEvents
     extern const Event SelectedParts;
     extern const Event SelectedRanges;
     extern const Event SelectedMarks;
+    extern const Event TotalGranulesCount;
+    extern const Event TotalSkippedGranules;
 }
 
 namespace DB
@@ -454,7 +456,7 @@ ProcessorPtr ReadFromMergeTree::createSource(
 Pipe ReadFromMergeTree::readInOrder(
     RangesInDataParts parts_with_range, Names required_columns,
     ReadType read_type, bool use_uncompressed_cache,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     Pipes pipes;
     MergeTreeStreamSettings stream_settings{
@@ -467,11 +469,21 @@ Pipe ReadFromMergeTree::readInOrder(
     };
 
     MarkRangesFilterCallback filter_callback;
-    if (delayed_index != nullptr)
+    if (delayed_index != nullptr && (!delayed_index->indices.empty() || delayed_index->multi_idx != nullptr))
     {
-        filter_callback = [reader_settings = this->reader_settings, ctx = this->context, delayed_index](const MergeTreeDataPartPtr& part, const MarkRanges& mark_ranges) {
-            return MergeTreeDataSelectExecutor::filterMarkRangesForPartByInvertedIndex(
-                part, mark_ranges, delayed_index, ctx, reader_settings);
+        filter_callback = [reader_settings = this->reader_settings, ctx = this->context, delayed_index](const MergeTreeDataPartPtr& part_, const MarkRanges& mark_ranges_, roaring::Roaring* row_filter_) {
+            size_t total_granules = 0;
+            size_t dropped_granules = 0;
+            auto ret = MergeTreeDataSelectExecutor::filterMarkRangesForPartByInvertedIndex(
+                part_, mark_ranges_, delayed_index, ctx, reader_settings, row_filter_,
+                total_granules, dropped_granules);
+
+            ProfileEvents::increment(ProfileEvents::TotalGranulesCount, total_granules);
+            ProfileEvents::increment(ProfileEvents::TotalSkippedGranules, dropped_granules);
+            LOG_DEBUG(part_->storage.getLogger(), "MultiIndex has dropped {}/{} granules for part {}",
+                dropped_granules, total_granules, part_->name);
+
+            return ret;
         };
     }
 
@@ -518,7 +530,7 @@ Pipe ReadFromMergeTree::read(
     size_t max_streams,
     size_t min_marks_for_concurrent_read,
     bool use_uncompressed_cache,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     if (read_type == ReadType::Default && max_streams > 1)
     {
@@ -661,7 +673,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
     const ActionsDAGPtr & sorting_key_prefix_expr,
     ActionsDAGPtr & out_projection,
     const InputOrderInfoPtr & input_order_info,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     chassert(!parts_with_ranges.empty());
 
@@ -709,7 +721,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
     const InputOrderInfoPtr & input_order_info,
     size_t num_streams,
     bool need_preliminary_merge,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     const auto & settings = context->getSettingsRef();
     const auto data_settings = data.getSettings();

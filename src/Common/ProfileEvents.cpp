@@ -1175,6 +1175,7 @@
     M(TotalSkippedGranules, "The total granules that skipping index dropped. If there are multiple indexes, the value is the sum value.") \
     M(GinIndexFilterResultCacheHit, "Number of posting list result cache hit") \
     M(GinIndexFilterResultCacheMiss, "Number of posting list result cache miss") \
+    M(PrimaryAndSecondaryIndexFilterTime, "Time used in primary index and secondary indices filterr, in micro seconds") \
 
 namespace ProfileEvents
 {

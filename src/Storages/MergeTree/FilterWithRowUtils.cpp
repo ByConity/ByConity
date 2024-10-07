@@ -46,4 +46,64 @@ DeleteBitmapPtr combineFilterBitmap(const RangesInDataPart & part, MergeTreeData
     return filter;
 }
 
+void flipFilterWithMarkRanges(const MarkRanges& mark_ranges_,
+    const MergeTreeIndexGranularity& granularity_, roaring::Roaring& filter_)
+{
+    for (const MarkRange& mark_range : mark_ranges_)
+    {
+        size_t start_row = granularity_.getMarkStartingRow(mark_range.begin);
+        size_t end_row = granularity_.getMarkStartingRow(mark_range.end);
+        filter_.flip(start_row, end_row);
+    }
+}
+
+void setFilterWithMarkRanges(const MarkRanges& mark_ranges_,
+    const MergeTreeIndexGranularity& granularity_, roaring::Roaring& filter_)
+{
+    for (const MarkRange& mark_range : mark_ranges_)
+    {
+        size_t start_row = granularity_.getMarkStartingRow(mark_range.begin);
+        size_t end_row = granularity_.getMarkStartingRow(mark_range.end);
+        filter_.addRange(start_row, end_row);
+    }
+}
+
+MarkRanges filterMarkRangesByRowFilter(
+    const MarkRanges& mark_ranges_, const roaring::Roaring& row_filter_,
+    const MergeTreeIndexGranularity& granularity_)
+{
+    MarkRanges result_ranges;
+    auto iter = row_filter_.begin();
+    const auto end_iter = row_filter_.end();
+    for (const MarkRange& range : mark_ranges_)
+    {
+        for (size_t mark = range.begin; mark < range.end; ++mark)
+        {
+            size_t granule_begin_row = granularity_.getMarkStartingRow(mark);
+            size_t granule_end_row = granule_begin_row + granularity_.getMarkRows(mark);
+
+            if (iter == end_iter)
+            {
+                break;
+            }
+            if (*iter < granule_begin_row)
+            {
+                iter.equalorlarger(granule_begin_row);
+            }
+            if (iter != end_iter && *iter < granule_end_row)
+            {
+                if (!result_ranges.empty() && result_ranges.back().end == mark)
+                {
+                    ++(result_ranges.back().end);
+                }
+                else
+                {
+                    result_ranges.push_back({mark, mark + 1});
+                }
+            }
+        }
+    }
+    return result_ranges;
+}
+
 }

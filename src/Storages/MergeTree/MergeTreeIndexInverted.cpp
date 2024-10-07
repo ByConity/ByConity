@@ -153,7 +153,8 @@ void MergeTreeIndexGranuleInverted::extendGinFilter(const GinFilter& incoming,
                     "between incoming range first row {} and last range's end row {}",
                     current.range_start, last.range_end);
             }
-            if (last.segment_id == current.segment_id)
+            if (last.segment_id == current.segment_id
+                && last.range_end == current.range_start)
             {
                 last.range_end = current.range_end;
                 continue;

@@ -1868,6 +1868,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_async_mv_debug, false, "whether show async debug information", 0) \
     M(Bool, async_mv_enable_mv_meta_cache, true, "whether enable read from mv meta cache.", 0) \
     \
+    M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
+    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
+    M(Bool, multi_idx_filter_for_ivt, false, "Using multiple inverted index to filter mark ranges at the same time", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.
@@ -2112,8 +2115,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
     M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
     \
-    M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
-    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 

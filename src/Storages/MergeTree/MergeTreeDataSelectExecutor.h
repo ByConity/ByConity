@@ -31,6 +31,7 @@
 #include <QueryPlan/ReadFromMergeTree.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
+#include <Storages/MergeTree/MultiIndexFilterCondition.h>
 
 namespace DB
 {
@@ -217,7 +218,7 @@ public:
         LoggerPtr log,
         size_t num_streams,
         ReadFromMergeTree::IndexStats & index_stats,
-        DelayedSkipIndex & delayed_indices_,
+        SkipIndexFilterInfo & delayed_indices_,
         bool use_skip_indexes,
         const MergeTreeMetaBase & data_,
         bool use_sampling,
@@ -266,9 +267,15 @@ public:
         const InputOrderInfoPtr& input_order);
 
     static MarkRanges filterMarkRangesForPartByInvertedIndex(
-        const MergeTreeData::DataPartPtr& part, const MarkRanges& mark_ranges,
-        const std::shared_ptr<DelayedSkipIndex>& delayed_index,
-        const ContextPtr& context, const MergeTreeReaderSettings& reader_settings);
+        const MergeTreeData::DataPartPtr& part_, const MarkRanges& mark_ranges_,
+        const std::shared_ptr<SkipIndexFilterInfo>& delayed_index_, const ContextPtr& context_,
+        const MergeTreeReaderSettings& reader_settings_, roaring::Roaring* row_filter_,
+        size_t& total_granules_, size_t& dropped_granules_);
+
+    static MarkRanges filterMarkRangesForPartByMultiInvertedIndex(
+        const MergeTreeData::DataPartPtr& part_, const MarkRanges& mark_ranges_,
+        MultiIndexFilterCondition& multi_idx_cond_, roaring::Roaring* row_filter_,
+        IndexTimeWatcher& idx_timer_, size_t& total_granules_, size_t& dropped_granules_);
 };
 
 struct IndexTimeWatcher
