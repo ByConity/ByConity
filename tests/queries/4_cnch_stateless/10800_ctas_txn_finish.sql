@@ -23,3 +23,9 @@ select * from cnch(server, system.cnch_table_transactions) where table_uuid = (s
 drop table ctas_dst;
 
 drop table if exists ctas_src;
+
+-- test select not supported by optimizer
+drop table if exists ctas_non_optimizer;
+create table ctas_non_optimizer engine = CnchMergeTree order by query_id as select query_id from cnch('vw_default', system.mutations) settings enable_optimizer_for_create_select=1;
+select * from cnch(server, system.cnch_table_transactions) where table_uuid = (select uuid from system.cnch_tables where database = currentDatabase() and name = 'ctas_non_optimizer');
+drop table if exists ctas_non_optimizer;
