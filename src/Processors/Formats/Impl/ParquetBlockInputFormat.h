@@ -33,7 +33,7 @@
 
 #include <future>
 
-namespace parquet { class FileMetaData; class ReaderProperties; }
+namespace parquet { class FileMetaData; }
 namespace parquet::arrow { class FileReader; }
 namespace arrow { class Buffer; class RecordBatchReader; class Schema; }
 namespace arrow::io { class RandomAccessFile; }
@@ -103,8 +103,6 @@ private:
     size_t getNumberOfRowGroups() override;
 
     std::optional<PendingChunk> readBatch(size_t row_group_idx) override;
-
-    void initializeEncryptionKey();
 
     void prefetchRowGroup(size_t row_group_idx) override;
 
@@ -232,8 +230,6 @@ private:
     std::shared_ptr<arrow::Schema> schema;
     // indices of columns to read from Parquet file
     std::vector<int> column_indices;
-    bool is_encrypted = false;
-    String encryption_key;
 
     /// Pushed-down filter that we'll use to skip row groups.
     PrewhereInfoPtr prewhere_info;
