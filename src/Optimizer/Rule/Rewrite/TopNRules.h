@@ -15,6 +15,82 @@ public:
     }
     ConstRefPatternPtr getPattern() const override;
 
+    bool excludeIfTransformSuccess() const override
+    {
+        return true;
+    } // should only apply once
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class CreateTopNFilteringForDistinct : public Rule
+{
+public:
+    RuleType getType() const override
+    {
+        return RuleType::CREATE_TOPN_FILTERING_FOR_DISTINCT;
+    }
+    String getName() const override
+    {
+        return "CREATE_TOPN_FILTERING_FOR_DISTINCT";
+    }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_create_topn_filtering_for_aggregating;
+    }
+    ConstRefPatternPtr getPattern() const override;
+
+    bool excludeIfTransformSuccess() const override
+    {
+        return true;
+    } // should only apply once
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class CreateTopNFilteringForAggregatingLimit : public Rule
+{
+public:
+    RuleType getType() const override
+    {
+        return RuleType::CREATE_TOPN_FILTERING_FOR_AGGREGATING_LIMIT;
+    }
+    String getName() const override
+    {
+        return "CREATE_TOPN_FILTERING_FOR_AGGREGATING_LIMIT";
+    }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_create_topn_filtering_for_aggregating;
+    }
+    ConstRefPatternPtr getPattern() const override;
+
+    bool excludeIfTransformSuccess() const override
+    {
+        return true;
+    } // should only apply once
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class CreateTopNFilteringForDistinctLimit : public Rule
+{
+public:
+    RuleType getType() const override
+    {
+        return RuleType::CREATE_TOPN_FILTERING_FOR_DISTINCT_LIMIT;
+    }
+    String getName() const override
+    {
+        return "CREATE_TOPN_FILTERING_FOR_DISTINCT_LIMIT";
+    }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_create_topn_filtering_for_aggregating;
+    }
+    ConstRefPatternPtr getPattern() const override;
+
+    bool excludeIfTransformSuccess() const override
+    {
+        return true;
+    } // should only apply once
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 

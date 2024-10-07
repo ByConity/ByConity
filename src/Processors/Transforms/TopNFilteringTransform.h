@@ -183,11 +183,40 @@ public:
     // For 'ROW_NUMBER', we keep at most top n values in the heap. A value passes the filter
     // if the heap not reach the capacity or the value is less than the heap top. A value is
     // inserted into the heap if it passes the filter.
-    //
-    // TODO:
-    // class RowNumberState : public State
-    // {
-    // };
+    class RowNumberState : public State
+    {
+    public:
+        RowNumberState(const Directions & sort_directions, const Directions & sort_nulls_directions, int capacity_)
+            : heap(EntryCompare{
+                .directions = sort_directions,
+                .nulls_directions = sort_nulls_directions,
+                .contains_equality = false}) // std::priority_queue requires a strict weak order
+            , compartor{.directions = sort_directions, .nulls_directions = sort_nulls_directions, .contains_equality = false}
+            , capacity(capacity_)
+        {
+        }
+
+        FilterResult filter(const Entry & e) override
+        {
+            if (heap.size() < capacity || compartor(e, heap.top()))
+                return {.kept_in_output = true, .added_to_state = true};
+
+            return {.kept_in_output = false, .added_to_state = false};
+        }
+
+        void add(const Entry & e) override
+        {
+            assert(heap.size() <= capacity);
+            if (heap.size() == capacity)
+                heap.pop();
+            heap.push(e);
+        }
+
+    private:
+        std::priority_queue<Entry, std::vector<Entry>, EntryCompare> heap;
+        EntryCompare compartor;
+        const size_t capacity;
+    };
 
     using StatePtr = std::unique_ptr<State>;
 

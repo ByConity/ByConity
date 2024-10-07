@@ -20,7 +20,7 @@ TopNFilteringBaseTransform::TopNFilteringBaseTransform(
     if (!size)
         throw Exception("TopN size must be greater than 0", ErrorCodes::LOGICAL_ERROR);
 
-    if (model != TopNModel::DENSE_RANK)
+    if (model != TopNModel::DENSE_RANK && model != TopNModel::ROW_NUMBER)
         throw Exception("only support DENSE_RANK", ErrorCodes::NOT_IMPLEMENTED);
 }
 
@@ -35,32 +35,41 @@ void TopNFilteringByLimitingTransform::transform(Chunk & chunk)
         return;
 
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
-    ColumnRawPtrs sort_columns;
-    for (const auto & sort_desc : sort_description)
-        sort_columns.push_back(block.getByName(sort_desc.column_name).column.get());
 
-    EntryEquals equals_op;
-
-    size_t index = 0, count = 1;
-    for (size_t i = 1; i < num_rows_before_filtration; i++)
+    if (model == TopNModel::ROW_NUMBER)
     {
-        // TODO: support multiple sort columns
-        if (!equals_op(Entry{&sort_columns, index}, Entry{&sort_columns, i}))
-        {
-            index = i;
-            count++;
-        }
-
-        if (count > size)
-        {
-            for (auto & col : block)
-                col.column = col.column->cut(0, i);
-            chunk.setColumns(block.getColumns(), i);
-            return;
-        }
+        for (auto & col : block)
+            col.column = col.column->cut(0, size);
+        chunk.setColumns(block.getColumns(), size);
     }
+    else // DENSE_RANK
+    {
+        ColumnRawPtrs sort_columns;
+        for (const auto & sort_desc : sort_description)
+            sort_columns.push_back(block.getByName(sort_desc.column_name).column.get());
 
-    chunk.setColumns(block.getColumns(), num_rows_before_filtration);
+        EntryEquals equals_op;
+
+        size_t index = 0, count = 1;
+        for (size_t i = 1; i < num_rows_before_filtration; i++)
+        {
+            if (!equals_op(Entry{&sort_columns, index}, Entry{&sort_columns, i}))
+            {
+                index = i;
+                count++;
+            }
+
+            if (count > size)
+            {
+                for (auto & col : block)
+                    col.column = col.column->cut(0, i);
+                chunk.setColumns(block.getColumns(), i);
+                return;
+            }
+        }
+
+        chunk.setColumns(block.getColumns(), num_rows_before_filtration);
+    }
 }
 
 TopNFilteringByHeapTransform::TopNFilteringByHeapTransform(
@@ -86,6 +95,9 @@ TopNFilteringByHeapTransform::TopNFilteringByHeapTransform(
     {
         case TopNModel::DENSE_RANK:
             state = std::make_unique<DenseRankState>(sort_directions, sort_nulls_directions, size);
+            break;
+        case TopNModel::ROW_NUMBER:
+            state = std::make_unique<RowNumberState>(sort_directions, sort_nulls_directions, size);
             break;
         default:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "unknown topn model");
