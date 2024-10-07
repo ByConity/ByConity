@@ -23,9 +23,6 @@ public:
     std::string getName() const override { return "PaimonCnch"; }
     bool supportsPrewhere() const override { return false; }
 
-    ASTPtr
-    applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr storage_statistics)
-        const override;
     std::optional<TableStatistics> getTableStats(const Strings & /*columns*/, ContextPtr /*local_context*/) override
     {
         return std::nullopt;
@@ -52,9 +49,6 @@ private:
     LoggerPtr log{getLogger("StoragePaimonCluster")};
 
     PaimonCatalogClientPtr catalog_client;
-
-    // Predicate that can be pushed down to jni side
-    mutable ASTPtr filter;
 };
 }
 

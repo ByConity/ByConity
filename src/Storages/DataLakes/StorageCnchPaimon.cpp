@@ -49,29 +49,22 @@ StorageCnchPaimon::StorageCnchPaimon(
     setInMemoryMetadata(metadata_);
 }
 
-ASTPtr StorageCnchPaimon::applyFilter(
-    ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr storage_statistics) const
-{
-    // Push all filter to paimon side, and remain the filter in clickhouse side to guaranteen the correctness.
-    filter = query_filter;
-    return IStorage::applyFilter(query_filter, query_info, query_context, storage_statistics);
-}
-
 PrepareContextResult StorageCnchPaimon::prepareReadContext(
     const Names & column_names,
     const StorageMetadataPtr & /*metadata_snapshot*/,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     ContextPtr & local_context,
     unsigned /*num_streams*/)
 {
     std::optional<String> predicate = std::nullopt;
-    if (filter)
+    auto where = query_info.query->as<ASTSelectQuery &>().where();
+    if (where)
     {
-        predicate = paimon_utils::Predicate2RPNConverter::convert(filter);
+        predicate = paimon_utils::Predicate2RPNConverter::convert(where);
         if (predicate.has_value())
             LOG_DEBUG(log, "rpn_predicate: {}", predicate.value());
         else
-            LOG_ERROR(log, "failed to convert filter to RPN, filter={}", queryToString(filter));
+            LOG_ERROR(log, "failed to convert filter to RPN, filter={}", queryToString(where));
     }
 
     auto scan_info = catalog_client->getScanInfo(db_name, table_name, column_names, predicate);

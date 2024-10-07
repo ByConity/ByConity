@@ -108,26 +108,26 @@ time_t DatabasePaimon::getObjectMetadataModificationTime(const String & /*table_
 
 ASTPtr DatabasePaimon::getCreateTableQueryImpl(const String & table_name, ContextPtr local_context, bool throw_on_error) const
 {
-    auto error_handler = [&](int ec, const String & msg) -> ASTPtr {
+    try
+    {
+        Protos::Paimon::Schema schema = catalog_client->getPaimonSchema(database_name_in_paimon, table_name);
+        paimon_utils::PaimonSchemaConverter converter(local_context, storage_settings, schema);
+        auto create_query_ast = converter.createQueryAST(catalog_client, getDatabaseName(), database_name_in_paimon, table_name);
+        create_query_ast.database = getDatabaseName();
+        create_query_ast.table = table_name;
+
+        addCreateQuerySettings(create_query_ast, storage_settings);
+        return create_query_ast.clone();
+    }
+    catch (...)
+    {
         if (throw_on_error)
         {
-            throw Exception(ec, msg);
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, fmt::format("Paimon table {}.{} not exists.", database_name_in_paimon, table_name));
         }
         return nullptr;
-    };
-
-    if (!catalog_client->isTableExist(database_name_in_paimon, table_name))
-        return error_handler(ErrorCodes::UNKNOWN_TABLE, fmt::format("Paimon table {}.{} not exists.", database_name_in_paimon, table_name));
-
-    Protos::Paimon::Schema schema = catalog_client->getPaimonSchema(database_name_in_paimon, table_name);
-    paimon_utils::PaimonSchemaConverter converter(local_context, storage_settings, schema);
-    auto create_query_ast = converter.createQueryAST(catalog_client, getDatabaseName(), database_name_in_paimon, table_name);
-    create_query_ast.database = getDatabaseName();
-    create_query_ast.table = table_name;
-    ContextMutablePtr mutable_context = Context::createCopy(local_context);
-
-    addCreateQuerySettings(create_query_ast, storage_settings);
-    return create_query_ast.clone();
+    }
 }
 
 }
