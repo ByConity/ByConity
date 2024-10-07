@@ -27,6 +27,7 @@
 #include <Interpreters/NestedLoopJoin.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/join_common.h>
+#include <Interpreters/ProcessList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <QueryPlan/PlanSerDerHelper.h>
@@ -247,6 +248,12 @@ void NestedLoopJoin::joinImpl(
         BlockFilterDescriptions block_filter_descriptions;
         for (Block right_block : right_blocks)
         {
+            if (auto * process_list_elem = context->getProcessListElement())
+            {
+                if (process_list_elem->isKilled() || !process_list_elem->checkTimeLimit())
+                    return ;
+            }
+
             paddingRightBlockWithConstColumn(left_block, left_row_index, right_block);
             actions->execute(right_block, false);
             auto filter_column = right_block.getByName(filter_name).column->convertToFullColumnIfConst();
@@ -310,6 +317,12 @@ void NestedLoopJoin::joinImpl(
         int j = 0;
         for (Block b : right_blocks)
         {
+            if (auto * process_list_elem = context->getProcessListElement())
+            {
+                if (process_list_elem->isKilled() || !process_list_elem->checkTimeLimit())
+                    return ;
+            }
+
             j++;
             auto right_block = block_filter_descriptions.getBlockByIndex(j-1);
             auto filtered_size = block_filter_descriptions.getFilteredSizeByIndex(j-1);

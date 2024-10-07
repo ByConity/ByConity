@@ -1,0 +1,1 @@
+SELECT * FROM (     SELECT number AS k FROM system.numbers LIMIT 100000 ) js1 ALL LEFT JOIN (     SELECT intDiv(number, 2) AS k, number AS joined FROM system.numbers LIMIT 100000 ) js2 on js1.k > js2.k settings max_execution_time=60; -- {serverError TIMEOUT_EXCEEDED}
