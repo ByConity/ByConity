@@ -43,7 +43,7 @@ namespace ErrorCodes
 }
 
 BroadcastSenderProxy::BroadcastSenderProxy(ExchangeDataKeyPtr data_key_, SenderProxyOptions options)
-    : data_key(std::move(data_key_)), wait_timeout_ms(options.wait_timeout_ms), logger(&Poco::Logger::get("BroadcastSenderProxy"))
+    : data_key(std::move(data_key_)), wait_timeout_ms(options.wait_timeout_ms), logger(getLogger("BroadcastSenderProxy"))
 {
 }
 

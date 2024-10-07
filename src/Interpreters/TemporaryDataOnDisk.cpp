@@ -108,7 +108,7 @@ struct TemporaryFileStream::OutputWriter
         , out_compressed_buf(*out_buf)
         , out_writer(out_compressed_buf, DBMS_TCP_PROTOCOL_VERSION, header_)
     {
-        LOG_TRACE(&Poco::Logger::get("TemporaryFileStream"), "Writing to temporary file {}", path);
+        LOG_TRACE(getLogger("TemporaryFileStream"), "Writing to temporary file {}", path);
     }
 
     OutputWriter(std::unique_ptr<WriteBufferToFileSegment> out_buf_, const Block & header_)
@@ -116,7 +116,7 @@ struct TemporaryFileStream::OutputWriter
         , out_compressed_buf(*out_buf)
         , out_writer(out_compressed_buf, DBMS_TCP_PROTOCOL_VERSION, header_)
     {
-        LOG_TRACE(&Poco::Logger::get("TemporaryFileStream"),
+        LOG_TRACE(getLogger("TemporaryFileStream"),
             "Writing to temporary file {}",
             static_cast<const WriteBufferToFileSegment *>(out_buf.get())->getFileName());
     }
@@ -182,7 +182,7 @@ struct TemporaryFileStream::InputReader
         , in_compressed_buf(in_file_buf)
         , in_reader(in_compressed_buf, header_, DBMS_TCP_PROTOCOL_VERSION)
     {
-        LOG_TRACE(&Poco::Logger::get("TemporaryFileStream"), "Reading {} from {}", header_.dumpStructure(), path);
+        LOG_TRACE(getLogger("TemporaryFileStream"), "Reading {} from {}", header_.dumpStructure(), path);
     }
 
     explicit InputReader(const String & path)
@@ -190,7 +190,7 @@ struct TemporaryFileStream::InputReader
         , in_compressed_buf(in_file_buf)
         , in_reader(in_compressed_buf, DBMS_TCP_PROTOCOL_VERSION)
     {
-        LOG_TRACE(&Poco::Logger::get("TemporaryFileStream"), "Reading from {}", path);
+        LOG_TRACE(getLogger("TemporaryFileStream"), "Reading from {}", path);
     }
 
     Block read()

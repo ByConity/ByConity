@@ -13,7 +13,7 @@ namespace ErrorCodes
     extern const int CANNOT_CREATE_FILE;
 }
 
-void ServerUUID::load(const fs::path & server_uuid_file, Poco::Logger * log)
+void ServerUUID::load(const fs::path & server_uuid_file, LoggerPtr log)
 {
     /// Write a uuid file containing a unique uuid if the file doesn't already exist during server start.
 

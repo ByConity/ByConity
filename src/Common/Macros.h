@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 #include <Core/Names.h>
 #include <Interpreters/StorageID.h>
@@ -26,7 +27,7 @@ class Macros
 {
 public:
     Macros() = default;
-    Macros(const Poco::Util::AbstractConfiguration & config, const String & key, Poco::Logger * log = nullptr);
+    Macros(const Poco::Util::AbstractConfiguration & config, const String & key, LoggerPtr log = nullptr);
 
     struct MacroExpansionInfo
     {

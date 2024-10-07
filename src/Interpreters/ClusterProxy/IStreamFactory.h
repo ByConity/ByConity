@@ -22,6 +22,7 @@
 #pragma once
 
 #include <Client/ConnectionPool.h>
+#include <Common/Logger.h>
 #include <Interpreters/Cluster.h>
 #include <Parsers/IAST.h>
 
@@ -56,7 +57,7 @@ public:
             std::vector<QueryPlanPtr> & res,
             Pipes & remote_pipes,
             Pipes & delayed_pipes,
-            Poco::Logger * log) = 0;
+            LoggerPtr log) = 0;
 };
 
 }

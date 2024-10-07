@@ -109,7 +109,7 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     std::unordered_map<std::string, UInt64> column_sizes_,
     const StorageMetadataPtr & metadata_snapshot_,
     const Names & queried_columns_,
-    Poco::Logger * log_,
+    LoggerPtr log_,
     MaterializeStrategy materialize_strategy_)
     : table_columns{collections::map<std::unordered_set>(
         metadata_snapshot_->getColumns().getAllPhysical(), [](const NameAndTypePair & col) { return col.name; })}
@@ -727,6 +727,8 @@ bool MergeTreeWhereOptimizer::cannotBeMoved(const ASTPtr & ptr, bool is_final) c
 {
     if (const auto * function_ptr = ptr->as<ASTFunction>())
     {
+        LOG_DEBUG(getLogger("MergeTreeWhereOptimizer"), "[cannotBeMoved]: function: {} tree: {}",
+                  function_ptr->name, function_ptr->dumpTree());
         /// disallow arrayJoin expressions to be moved to PREWHERE for now
         if ("arrayJoin" == function_ptr->name)
             return true;
@@ -978,7 +980,7 @@ void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryI
     }
     if (query_info.partition_filter)
     {
-        LOG_TRACE(&Poco::Logger::get("optimizePartitionPredicate"), "Optimize partition prediate push down query rewrited to {} , partiton filter-{} ",
+        LOG_TRACE(getLogger("optimizePartitionPredicate"), "Optimize partition prediate push down query rewrited to {} , partiton filter-{} ",
                 queryToString(query), queryToString(query_info.partition_filter));
     }
 }

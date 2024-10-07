@@ -134,7 +134,7 @@ String HDFSBuilderWrapper::getKinitCmd()
 void HDFSBuilderWrapper::runKinit()
 {
     String cmd = getKinitCmd();
-    LOG_DEBUG(&Poco::Logger::get("HDFSClient"), "running kinit: {}", cmd);
+    LOG_DEBUG(getLogger("HDFSClient"), "running kinit: {}", cmd);
 
     std::unique_lock<std::mutex> lck(kinit_mtx);
 

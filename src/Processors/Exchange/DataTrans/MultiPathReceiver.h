@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/QueryExchangeLog.h>
@@ -83,7 +84,7 @@ private:
     BroadcastReceiverPtrs sub_receivers;
     Block header;
     String name;
-    Poco::Logger * logger;
+    LoggerPtr logger;
     Stopwatch register_s;
     ContextPtr context;
 

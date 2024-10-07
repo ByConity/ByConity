@@ -58,7 +58,7 @@ RpcClientBase::RpcClientBase(const String & log_prefix, const String & host_port
 }
 
 RpcClientBase::RpcClientBase(const String & log_prefix, HostWithPorts host_ports_, brpc::ChannelOptions * options)
-    : log(&Poco::Logger::get(log_prefix + "[" + host_ports_.toDebugString() + "]"))
+    : log(getLogger(log_prefix + "[" + host_ports_.toDebugString() + "]"))
     , host_ports(std::move(host_ports_))
     , channel(std::make_unique<brpc::Channel>())
 {

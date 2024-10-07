@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
 #include <Poco/Logger.h>
@@ -19,7 +20,7 @@ public:
 
 private:
     ASTPtr query_ptr;
-    Poco::Logger * log = &Poco::Logger::get("InterpreterAutoStats");
+    LoggerPtr log = getLogger("InterpreterAutoStats");
 };
 
 }

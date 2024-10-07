@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <string>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -52,7 +53,7 @@ protected:
         mysqlxx::UseQueryResult result;
     };
 
-    Poco::Logger * log;
+    LoggerPtr log;
     std::unique_ptr<Connection> connection;
 
     const std::unique_ptr<StreamSettings> settings;

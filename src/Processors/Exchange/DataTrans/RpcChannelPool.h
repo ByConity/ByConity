@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <thread>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <bthread/shared_mutex.h>
@@ -118,7 +119,7 @@ private:
     bthread::ConditionVariable cv;
     std::atomic_bool exit{false};
 
-    Poco::Logger * log = &Poco::Logger::get("RpcChannelPool");
+    LoggerPtr log = getLogger("RpcChannelPool");
 
     void createExpireTimer();
     size_t checkAndClearExpiredPool(const std::string & client_type);

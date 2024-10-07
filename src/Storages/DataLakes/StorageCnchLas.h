@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include "Common/config.h"
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
@@ -37,7 +38,7 @@ private:
     Strings getHiveColumnTypes() const;
 
     JNIHiveMetastoreClient * jni_meta_client = nullptr;
-    Poco::Logger * log {&Poco::Logger::get("CnchLas")};
+    LoggerPtr log {getLogger("CnchLas")};
 };
 
 }

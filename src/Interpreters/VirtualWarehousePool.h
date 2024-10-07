@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Interpreters/Context_fwd.h>
@@ -51,7 +52,7 @@ private:
 
     void removeOrReplaceOutdatedVW();
 
-    Poco::Logger * log {};
+    LoggerPtr log {};
 
     std::atomic<UInt64> last_update_time_ns{0};
 };

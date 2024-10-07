@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstdint>
 #include <memory>
 #include <aws/s3/S3Client.h>
@@ -34,7 +35,7 @@ public:
     virtual const String& bucket() const = 0;
     virtual const String& key() const = 0;
     virtual std::shared_ptr<Aws::S3::S3Client> client() const = 0;
-    virtual Poco::Logger * logger() const = 0;
+    virtual LoggerPtr logger() const = 0;
 };
 
 class S3TrivialReader: public S3Reader {
@@ -52,7 +53,7 @@ public:
     virtual const String& bucket() const override { return bucket_; }
     virtual const String& key() const override { return key_; }
     virtual std::shared_ptr<Aws::S3::S3Client> client() const override { return client_; }
-    virtual Poco::Logger * logger() const override { return nullptr; }
+    virtual LoggerPtr logger() const override { return nullptr; }
 
 private:
     uint64_t readFragment(char* buffer, uint64_t offset, uint64_t size);
@@ -70,7 +71,7 @@ public:
     S3ReadAheadReader(const std::shared_ptr<Aws::S3::S3Client>& client,
         const String& bucket, const String& key, size_t min_read_size,
         size_t max_read_expand_times, size_t read_expand_pct,
-        size_t seq_read_thres, Poco::Logger* logger);
+        size_t seq_read_thres, LoggerPtr logger);
 
     virtual ~S3ReadAheadReader() override;
 
@@ -84,7 +85,7 @@ public:
     virtual const String& bucket() const override { return bucket_; }
     virtual const String& key() const override { return key_; }
     virtual std::shared_ptr<Aws::S3::S3Client> client() const override { return client_; }
-    virtual Poco::Logger * logger() const override { return logger_; }
+    virtual LoggerPtr logger() const override { return logger_; }
 
 private:
     void updateBufferSize(uint64_t size);
@@ -98,7 +99,7 @@ private:
     const size_t read_expand_pct_;
     const size_t seq_read_threshold_;
 
-    Poco::Logger* logger_;
+    LoggerPtr logger_;
 
     std::shared_ptr<Aws::S3::S3Client> client_;
     const String bucket_;
@@ -161,7 +162,7 @@ struct S3RemoteFSReaderOpts: public RemoteFSReaderOpts {
     const std::shared_ptr<Aws::S3::S3Client> client_;
     const String bucket_;
 
-    Poco::Logger* logger_;
+    LoggerPtr logger_;
 
     // Readahead options
     size_t ra_min_read_size_;

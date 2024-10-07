@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include "config_formats.h"
 #if USE_PARQUET
 
@@ -234,7 +235,7 @@ private:
     PrewhereInfoPtr prewhere_info;
     std::shared_ptr<ArrowFieldIndexUtil> field_util;
 
-    Poco::Logger * log {&Poco::Logger::get("ParquetBlockInputFormat")};
+    LoggerPtr log {getLogger("ParquetBlockInputFormat")};
 };
 
 class ParquetSchemaReader : public ISchemaReader

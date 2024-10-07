@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_HIVE
 
@@ -87,7 +88,7 @@ protected:
     std::exception_ptr hive_exception = nullptr;
 
 private:
-    Poco::Logger * log {&Poco::Logger::get("CnchHive")};
+    LoggerPtr log {getLogger("CnchHive")};
 
 };
 }

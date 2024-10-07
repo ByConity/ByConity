@@ -167,7 +167,7 @@ JoinPtr JoinStep::makeJoin(
             // TODO: Yuanning RuntimeFilter, compare with CE code when fix
             // if (enable_parallel_hash_join)
             // {
-            //     LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use parallel Hash Join");
+            //     LOG_TRACE(getLogger("JoinStep::makeJoin"), "will use parallel Hash Join");
             //     std::vector<JoinPtr> res;
             //     res.reserve(num_streams);
             //     for (size_t i = 0; i < num_streams; ++i)
@@ -177,7 +177,7 @@ JoinPtr JoinStep::makeJoin(
             //         consumer->fixParallel(num_streams);
             //     return res;
             // }
-            LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
+            LOG_TRACE(getLogger("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
             if (consumer)
                 consumer->fixParallel(ConcurrentHashJoin::toPowerOfTwo(std::min<size_t>(num_streams, 256)));
             return std::make_shared<ConcurrentHashJoin>(table_join, num_streams, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
@@ -191,10 +191,10 @@ JoinPtr JoinStep::makeJoin(
                 auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
                 return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false, num_streams);
             } else if (allow_merge_join) { // fallback into merge join
-                LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join is not support, fallback into merge join.");
+                LOG_WARNING(getLogger("JoinStep::makeJoin"), "Grace hash join is not support, fallback into merge join.");
                 return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
             } else { // fallback into hash join when grace hash and merge join not supported
-                LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
+                LOG_WARNING(getLogger("JoinStep::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
                 return std::make_shared<HashJoin>(table_join, r_sample_block);
             }
         }
@@ -208,10 +208,10 @@ JoinPtr JoinStep::makeJoin(
             auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: num_streams);
             return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false, num_streams);
         } else if (allow_merge_join) { // fallback into merge join
-            LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join is not support, fallback into merge join.");
+            LOG_WARNING(getLogger("JoinStep::makeJoin"), "Grace hash join is not support, fallback into merge join.");
             return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
         } else { // fallback into hash join when grace hash and merge join not supported
-            LOG_WARNING(&Poco::Logger::get("JoinStep::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
+            LOG_WARNING(getLogger("JoinStep::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
             return std::make_shared<HashJoin>(table_join, r_sample_block);
         }
     }

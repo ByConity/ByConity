@@ -60,7 +60,7 @@ KeeperStateMachine::KeeperStateMachine(
     , responses_queue(responses_queue_)
     , snapshots_queue(snapshots_queue_)
     , last_committed_idx(0)
-    , log(&Poco::Logger::get("KeeperStateMachine"))
+    , log(getLogger("KeeperStateMachine"))
     , superdigest(superdigest_)
     , keeper_context(keeper_context_)
 {
@@ -130,7 +130,7 @@ void assertDigest(
     if (!KeeperStorage::checkDigest(first, second))
     {
         LOG_FATAL(
-            &Poco::Logger::get("KeeperStateMachine"),
+            getLogger("KeeperStateMachine"),
             "Digest for nodes is not matching after {} request of type '{}'.\nExpected digest - {}, actual digest - {} (digest version "
             "{}). Keeper will "
             "terminate to avoid inconsistencies.\nExtra information about the request:\n{}",
@@ -426,7 +426,7 @@ void KeeperStateMachine::save_logical_snp_obj(
     }
 }
 
-static int bufferFromFile(Poco::Logger * log, const std::string & path, nuraft::ptr<nuraft::buffer> & data_out)
+static int bufferFromFile(LoggerPtr log, const std::string & path, nuraft::ptr<nuraft::buffer> & data_out)
 {
     if (path.empty() || !std::filesystem::exists(path))
     {

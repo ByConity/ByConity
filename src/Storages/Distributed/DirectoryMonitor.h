@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Client/ConnectionPool.h>
 
@@ -134,7 +135,7 @@ private:
     std::chrono::time_point<std::chrono::system_clock> last_decrease_time {std::chrono::system_clock::now()};
     std::atomic<bool> quit {false};
     std::mutex mutex;
-    Poco::Logger * log;
+    LoggerPtr log;
     ActionBlocker & monitor_blocker;
 
     BackgroundSchedulePoolTaskHolder task_handle;

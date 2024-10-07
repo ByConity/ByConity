@@ -58,7 +58,7 @@ Pipe StorageSystemCnchTrashItemsInfo::read(
 
     Block header = materializeBlock(InterpreterSelectQuery(ast, context, QueryProcessingStage::Complete).getSampleBlock());
     QueryPlan query_plan;
-    Poco::Logger * log = &Poco::Logger::get("SystemTrashItemsInfo");
+    LoggerPtr log = getLogger("SystemTrashItemsInfo");
     ClusterProxy::SelectStreamFactory stream_factory = ClusterProxy::SelectStreamFactory(
         header, {}, {}, QueryProcessingStage::Complete, StorageID{"system", "cnch_trash_items_info_local"}, Scalars{}, false, {});
 

@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_RDKAFKA
 
@@ -65,7 +66,7 @@ public:
         bool enable_skip_offsets_hole_)
         : ReadBuffer(nullptr, 0)
         , consumer(consumer_)
-        , log(&Poco::Logger::get(logger_name))
+        , log(getLogger(logger_name))
         , batch_size(max_batch_size)
         , poll_timeout(poll_timeout_)
         , expire_timeout(expire_timeout_)
@@ -115,7 +116,7 @@ public:
 
 private:
     ConsumerPtr consumer;
-    Poco::Logger * log;
+    LoggerPtr log;
     size_t batch_size;
     size_t poll_timeout;
     size_t expire_timeout;

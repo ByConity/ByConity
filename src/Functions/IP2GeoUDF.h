@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Common/Logger.h>
 #include <fstream>
 #include <shared_mutex>
 #include <unordered_set>
@@ -56,7 +57,7 @@ class IP2GeoManager
 public:
     IP2GeoManager()
     {
-        log = &Poco::Logger::get("IP2GeoUDF");
+        log = getRawLogger("IP2GeoUDF");
         location_map["country"] = 0;
         location_map["province"] = 1;
         location_map["city"] = 2;
@@ -103,7 +104,7 @@ public:
     std::unordered_map<String, int> & getLocationMap() { return location_map; }
 
 private:
-    Poco::Logger * log;
+    LoggerRawPtr log;
     Poco::Util::Timer timer;
     mutable std::shared_mutex mutex_;
 
@@ -155,10 +156,10 @@ private:
         int ipiperr;
         int ipv6err;
         ipdb_reader *ipipreader, *ipv6reader;
-        Poco::Logger * log;
+        LoggerRawPtr log;
         mutable std::shared_mutex ipipmutex_;
 
-        IPIPLocator() { log = &Poco::Logger::get("IPIPLocator"); }
+        IPIPLocator() { log = getRawLogger("IPIPLocator"); }
     };
 
     class GeoIPLocator
@@ -193,10 +194,10 @@ private:
         MMDB_s getISPMMDB_s() { return ispmmdb; }
 
     private:
-        Poco::Logger * log;
+        LoggerRawPtr log;
         mutable std::shared_mutex geoipmutex_;
         MMDB_s citymmdb, ispmmdb, asnmmdb;
-        GeoIPLocator() { log = &Poco::Logger::get("GEOIPLocator"); }
+        GeoIPLocator() { log = getRawLogger("GEOIPLocator"); }
     };
 };
 
@@ -219,7 +220,7 @@ public:
 
     IP2GeoUDF(ContextPtr cur_context) : context(cur_context)
     {
-        log = &Poco::Logger::get("IP2GeoFunc");
+        log = getLogger("IP2GeoFunc");
         IP2GeoManager::getInstance().getSettings(context);
     }
 
@@ -365,6 +366,6 @@ public:
 
 private:
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 }

@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <atomic>
 #include <Processors/Exchange/BufferChunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -58,7 +59,7 @@ private:
     BroadcastSenderPtrs senders;
     ExchangeOptions options;
     BufferChunk buffer_chunk;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

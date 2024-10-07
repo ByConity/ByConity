@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <string>
 #include <memory>
 #include <set>
@@ -189,7 +190,7 @@ namespace DB::RPCHelpers
     }
 
     template <typename Resp>
-    void onAsyncCallDoneAssertController(Resp * response, brpc::Controller * cntl, Poco::Logger * logger, String message)
+    void onAsyncCallDoneAssertController(Resp * response, brpc::Controller * cntl, LoggerPtr logger, String message)
     {
         try
         {

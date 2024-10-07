@@ -106,7 +106,7 @@ size_t RuntimeFilterCollection::add(RuntimeFilterData data, UInt32 parallel_id)
     else
     {
          LOG_WARNING(
-            &Poco::Logger::get("RuntimeFilterCollection"),
+            getLogger("RuntimeFilterCollection"),
             "build rf receive duplicate id:{} will cause rf timeout", parallel_id);
     }
 
@@ -246,7 +246,7 @@ void RuntimeFilterManager::removeQuery(const String & query_id)
 void RuntimeFilterManager::addDynamicValue(
     const String & query_id, RuntimeFilterId filter_id, DynamicData && dynamic_value, UInt32 ref_segment)
 {
-    LOG_TRACE(&Poco::Logger::get("RuntimeFilterManager"), "addDynamicValue: {}, {}", filter_id, dynamic_value.dump());
+    LOG_TRACE(getLogger("RuntimeFilterManager"), "addDynamicValue: {}, {}", filter_id, dynamic_value.dump());
     complete_runtime_filters
         .compute(
             makeKey(query_id, filter_id),

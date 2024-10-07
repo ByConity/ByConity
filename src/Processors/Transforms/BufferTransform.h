@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <list>
 #include <Processors/IProcessor.h>
 
@@ -49,7 +50,7 @@ public:
         if (input.isFinished() && output.isFinished())
         {
             LOG_DEBUG(
-                &Poco::Logger::get("BufferTransform"),
+                getLogger("BufferTransform"),
                 "max_used_queue_size:{}/{}, input:[rows:{} bytes:{}], output:[rows:{} bytes:{}]",
                 max_used_queue_size,
                 input_chunk_count,

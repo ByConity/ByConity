@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/IMetastore.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Common/SimpleIncrement.h>
@@ -90,7 +91,7 @@ private:
     String path;
     String metastore_name;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     MetaStorePtr metastore;
     std::atomic_bool closed {false};
     std::mutex meta_mutex;

@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/NamesAndTypes.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
@@ -178,7 +179,7 @@ private:
 
     mutable std::mutex mutex;
 
-    Poco::Logger * log = &Poco::Logger::get("MergeTreeReadPool");
+    LoggerPtr log = getLogger("MergeTreeReadPool");
 };
 
 using MergeTreeReadPoolPtr = std::shared_ptr<MergeTreeReadPool>;

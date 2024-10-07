@@ -145,7 +145,7 @@ private:
     const bool enable_subcolumn_optimization_through_union;
     const bool enable_implicit_arg_type_convert; // MySQL implicit cast rules
 
-    Poco::Logger * logger = &Poco::Logger::get("QueryAnalyzerVisitor");
+    LoggerPtr logger = getLogger("QueryAnalyzerVisitor");
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 

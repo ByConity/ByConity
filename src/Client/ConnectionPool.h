@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/PoolBase.h>
 #include <Client/Connection.h>
 #include <IO/ConnectionTimeouts.h>
@@ -85,7 +86,7 @@ public:
             UInt16 rpc_port_ = 0,
             String worker_id_ = "virtual_id")
         : Base(max_connections_,
-        &Poco::Logger::get("ConnectionPool (" + host_ + ":" + toString(port_) + ")")),
+        getLogger("ConnectionPool (" + host_ + ":" + toString(port_) + ")")),
         host(host_),
         port(port_),
         default_database(default_database_),

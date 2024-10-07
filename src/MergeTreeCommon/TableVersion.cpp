@@ -278,7 +278,7 @@ void TableVersion::dropDiskCache(ThreadPool & pool)
         }
         catch(...)
         {
-            tryLogCurrentException(&Poco::Logger::get("TableVersion"), "Error occurs when drop manifest disk cache : " + segment_name);
+            tryLogCurrentException(getLogger("TableVersion"), "Error occurs when drop manifest disk cache : " + segment_name);
         }
     };
 

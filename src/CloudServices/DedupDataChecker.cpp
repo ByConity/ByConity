@@ -240,7 +240,7 @@ BlockIO DedupDataChecker::tryToExecuteQuery(const String & query_to_execute)
 DedupDataChecker::DedupDataChecker(ContextPtr context_, String logger_name_, const MergeTreeMetaBase & storage_)
     : WithContext(context_)
     , log_name(logger_name_)
-    , log(&Poco::Logger::get(log_name))
+    , log(getLogger(log_name))
     , storage_id(storage_.getCnchStorageID())
 {
     check_interval = storage_.getSettings()->check_duplicate_key_interval.totalMilliseconds();

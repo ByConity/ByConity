@@ -54,7 +54,7 @@ namespace ErrorCodes
 
 static void ReadBufferFromHdfsCallBack(const hdfsEvent & event)
 {
-    // LOG_TRACE(&Poco::Logger::get("ReadBufferFromByteHDFS"), "get event {} & {}", event.eventType, event.value);
+    // LOG_TRACE(getLogger("ReadBufferFromByteHDFS"), "get event {} & {}", event.eventType, event.value);
     switch (event.eventType)
     {
         case Hdfs::Event::HDFS_EVENT_SLOWNODE:

@@ -150,7 +150,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
             break;
         }
         default:
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeIndexReader"), "Storage type: {} doesn't support secondary indexes", part_->info.storage_type);
+            LOG_DEBUG(getLogger("MergeTreeIndexReader"), "Storage type: {} doesn't support secondary indexes", part_->info.storage_type);
             break;
     }
     if(stream) stream->seekToStart();

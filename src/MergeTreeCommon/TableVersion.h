@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Protos/data_models.pb.h>
 #include <Core/UUID.h>
 #include <Interpreters/Context_fwd.h>
@@ -62,7 +63,7 @@ private:
     DataModelPartWrapperVector data_parts;
     DeleteBitmapMetaPtrVector delete_bitmaps;
 
-    Poco::Logger * log = &Poco::Logger::get("TableVersion");
+    LoggerPtr log = getLogger("TableVersion");
 };
 
 using TableVersionPtr = std::shared_ptr<TableVersion>;

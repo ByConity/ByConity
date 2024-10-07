@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/SettingsChanges.h>
 #include <Core/QualifiedTableName.h>
 #include <Interpreters/Context_fwd.h>
@@ -81,7 +82,7 @@ private:
     Poco::JSON::Object::Ptr stats;
     std::optional<String> cluster;
     ContextMutablePtr latest_context;
-    const Poco::Logger * log = &Poco::Logger::get("PlanReproducer");
+    const LoggerPtr log = getLogger("PlanReproducer");
 };
 
 

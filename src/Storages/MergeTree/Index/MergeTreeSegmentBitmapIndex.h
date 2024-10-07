@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <sstream>
 #include <Core/NamesAndTypes.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -29,6 +30,6 @@ private:
     static inline String getBitIdxExtension() { return SEGMENT_BITMAP_IDX_EXTENSION; }
 
     MergeTreeData & data;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 }

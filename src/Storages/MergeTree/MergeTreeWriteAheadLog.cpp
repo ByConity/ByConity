@@ -200,7 +200,7 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const Stor
                 || e.code() == ErrorCodes::BAD_DATA_PART_NAME
                 || e.code() == ErrorCodes::CORRUPTED_DATA)
             {
-                LOG_WARNING(&Poco::Logger::get(storage.getLogName() + " (WriteAheadLog)"),
+                LOG_WARNING(getLogger(storage.getLogName() + " (WriteAheadLog)"),
                     "WAL file '{}' is broken. {}", path, e.displayText());
 
                 /// If file is broken, do not write new parts to it.

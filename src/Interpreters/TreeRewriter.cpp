@@ -1304,7 +1304,7 @@ void TreeRewriterResult::rewriteUnknownLeftJoinIdentifier(ASTPtr & query, NameSe
             ss << "Try rewrite identifier: ";
             for(const auto & identifier: need_rewrite_identifiers)
                 ss << "'" << identifier << "' ";
-            LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer"), ss.str());
+            LOG_DEBUG(getLogger("ExpressionAnalyzer"), ss.str());
 
             TablesWithColumns tables {*it};
             TranslateQualifiedNamesVisitor::Data visitor_data(available_columns, tables, true, need_rewrite_identifiers, true, check_identifier_begin_valid);

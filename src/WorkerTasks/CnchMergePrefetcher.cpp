@@ -35,7 +35,7 @@ void CnchMergePrefetcher::PartFutureFiles::schedulePrefetchTask(FutureSegment & 
         try
         {
             Stopwatch stopwatch;
-            LOG_TRACE(&Poco::Logger::get("CnchMergePrefetcher"), "Stage {} copying to {}", stage, local_path);
+            LOG_TRACE(getLogger("CnchMergePrefetcher"), "Stage {} copying to {}", stage, local_path);
 
             std::unique_ptr<ReadBufferFromFileBase> in = part->volume->getDisk()->readFile(
                 remote_rel_path, future_segment.prefetcher->read_settings);
@@ -46,7 +46,7 @@ void CnchMergePrefetcher::PartFutureFiles::schedulePrefetchTask(FutureSegment & 
 
             if (!cancel_flag.load(std::memory_order_relaxed))
             {
-                LOG_TRACE(&Poco::Logger::get("CnchMergePrefetcher"), "Stage {} "
+                LOG_TRACE(getLogger("CnchMergePrefetcher"), "Stage {} "
                     "copied to {}, elapsed {} ms.", stage, local_path,
                     stopwatch.elapsedMilliseconds());
             }
@@ -110,13 +110,13 @@ void CnchMergePrefetcher::PartFutureFiles::releaseSegment(const String & stream_
         future_segment->future_access -= 1;
         if (future_segment->future_access == 0)
         {
-            LOG_TRACE(&Poco::Logger::get("CnchMergePrefetcher"), "Removing {}",
+            LOG_TRACE(getLogger("CnchMergePrefetcher"), "Removing {}",
                 future_segment->reservation->getDisk()->getPath() + future_segment->data_relative_path);
             future_segment->reservation->getDisk()->removeRecursive(future_segment->data_relative_path);
         }
         else if (future_segment->future_access < 0)
         {
-            LOG_WARNING(&Poco::Logger::get("CnchMergePrefetcher"), "FutureSegment access count < 0, this is a bug");
+            LOG_WARNING(getLogger("CnchMergePrefetcher"), "FutureSegment access count < 0, this is a bug");
         }
     }
 }
@@ -141,7 +141,7 @@ void CnchMergePrefetcher::submitDataPart(
     if (merging_columns.empty())
         throw Exception("Expect non-empty merging_columns", ErrorCodes::LOGICAL_ERROR);
 
-    auto* log = &Poco::Logger::get("CnchMergePrefetcher");
+    auto log = getLogger("CnchMergePrefetcher");
 
     auto* future_files
         = part_to_future_files.try_emplace(data_part->name, std::make_unique<PartFutureFiles>(*this, data_part->name)).first->second.get();

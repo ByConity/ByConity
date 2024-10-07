@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <condition_variable>
 #include <map>
@@ -56,7 +57,7 @@ public:
     }
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("SeqPoints");
+    LoggerPtr log = getLogger("SeqPoints");
 
     struct Point
     {

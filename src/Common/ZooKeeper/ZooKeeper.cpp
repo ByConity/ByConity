@@ -69,7 +69,7 @@ static void check(Coordination::Error code, const std::string & path)
 void ZooKeeper::init(const std::string & implementation_, const Strings & hosts_, const std::string & identity_,
                      int32_t session_timeout_ms_, int32_t operation_timeout_ms_, const std::string & chroot_)
 {
-    log = &Poco::Logger::get("ZooKeeper");
+    log = getLogger("ZooKeeper");
     hosts = hosts_;
     identity = identity_;
     session_timeout_ms = session_timeout_ms_;
@@ -244,7 +244,7 @@ struct ZooKeeperArgs
         }
         else if (!endpoints.empty())
         {
-            LOG_WARNING(&Poco::Logger::get("Zookeeper"), "Get Zookeeper node from config and service_discovery. Will use the first one");
+            LOG_WARNING(getLogger("Zookeeper"), "Get Zookeeper node from config and service_discovery. Will use the first one");
         }
 
         if (!chroot.empty())

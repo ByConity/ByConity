@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <IO/ReadHelpers.h>
 #include <IO/ReadWriteBufferFromHTTP.h>
 #include <Interpreters/Context.h>
@@ -67,7 +68,7 @@ public:
             Poco::Timespan http_timeout_,
             const std::string & connection_string_)
         : IXDBCBridgeHelper(context_->getGlobalContext())
-        , log(&Poco::Logger::get(BridgeHelperMixin::getName() + "BridgeHelper"))
+        , log(getLogger(BridgeHelperMixin::getName() + "BridgeHelper"))
         , connection_string(connection_string_)
         , http_timeout(http_timeout_)
         , config(context_->getGlobalContext()->getConfigRef())
@@ -122,7 +123,7 @@ protected:
 
     const Poco::Util::AbstractConfiguration & getConfig() const override { return config; }
 
-    Poco::Logger * getLog() const override { return log; }
+    LoggerPtr getLog() const override { return log; }
 
     bool startBridgeManually() const override { return BridgeHelperMixin::startBridgeManually(); }
 
@@ -144,7 +145,7 @@ protected:
 private:
     using Configuration = Poco::Util::AbstractConfiguration;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     std::string connection_string;
     Poco::Timespan http_timeout;
     std::string bridge_host;

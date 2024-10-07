@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <vector>
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
@@ -39,7 +40,7 @@ private:
     UInt64 threshold_in_bytes;
     UInt64 threshold_in_row_num;
     MutableColumns partition_buffer;
-    Poco::Logger * logger;
+    LoggerPtr logger;
     void resetBuffer();
     inline size_t bufferBytes() const;
 };

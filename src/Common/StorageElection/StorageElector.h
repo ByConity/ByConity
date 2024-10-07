@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -98,7 +99,7 @@ private:
     std::chrono::milliseconds sleep_time{std::chrono::milliseconds::zero()};
     uint64_t last_refresh_local_time{0};
 
-    Poco::Logger * logger = nullptr;
+    LoggerPtr logger = nullptr;
 
     void start();
 

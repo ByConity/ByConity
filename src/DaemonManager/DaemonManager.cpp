@@ -46,8 +46,6 @@ using namespace std::chrono_literals;
 
 #define DAEMON_MANAGER_VERSION "1.0.0"
 
-using Poco::Logger;
-
 namespace brpc
 {
 namespace policy
@@ -142,7 +140,7 @@ void DaemonManager::defineOptions(Poco::Util::OptionSet & options)
 std::vector<DaemonJobPtr> createLocalDaemonJobs(
     const Poco::Util::AbstractConfiguration & app_config,
     ContextMutablePtr global_context,
-    Logger * log)
+    LoggerPtr log)
 {
     std::map<std::string, unsigned int> default_config = {
         { "GLOBAL_GC", 5000},
@@ -171,7 +169,7 @@ std::vector<DaemonJobPtr> createLocalDaemonJobs(
 std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJobsForBGThread(
     const Poco::Util::AbstractConfiguration & app_config,
     ContextMutablePtr global_context,
-    Logger * log)
+    LoggerPtr log)
 {
     std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> res;
     std::map<std::string, unsigned int> default_config = {
@@ -221,7 +219,7 @@ int DaemonManager::main(const std::vector<std::string> &)
     if (consul_http_host != nullptr && consul_http_port != nullptr)
         brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
 
-    Logger * log = &logger();
+    auto log = getLogger("DM");
     LOG_INFO(log, "Daemon Manager start up...");
 
     /** Context contains all that query execution is dependent:
@@ -387,7 +385,7 @@ int DaemonManager::main(const std::vector<std::string> &)
         }
     );
 
-    auto fix_metadata_task = global_context->getSchedulePool().createTask("Fix catalog metadata", [& log, this] () { fixCatalogMetaData(global_context, log); });
+    auto fix_metadata_task = global_context->getSchedulePool().createTask("Fix catalog metadata", [log, this] () { fixCatalogMetaData(global_context, log); });
     fix_metadata_task->activateAndSchedule();
     waitForTerminationRequest();
 

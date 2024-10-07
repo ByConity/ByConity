@@ -548,7 +548,7 @@ namespace
 
 ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enable_materialized_view)
 {
-    const auto * logger = &Poco::Logger::get("QueryRewriter");
+    const auto logger = getLogger("QueryRewriter");
 
     (void) enable_materialized_view;
     graphviz_index = GraphvizPrinter::PRINT_AST_INDEX;

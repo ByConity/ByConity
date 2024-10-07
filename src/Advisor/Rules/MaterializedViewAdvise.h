@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Advisor/AdvisorContext.h>
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/SignatureUsage.h>
@@ -53,7 +54,7 @@ private:
     const OutputType output_type;
     const bool only_aggregate;
     const bool ignore_filter;
-    Poco::Logger * log = &Poco::Logger::get("MaterializedViewAdvisor");
+    LoggerPtr log = getLogger("MaterializedViewAdvisor");
 };
 
 /**

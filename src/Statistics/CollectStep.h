@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <limits>
 #include <memory>
 #include <Statistics/CollectorSettings.h>
@@ -94,7 +95,7 @@ protected:
     CatalogAdaptorPtr catalog;
     ContextPtr context;
     HandlerContext handler_context;
-    Poco::Logger * logger = &Poco::Logger::get("Statistics::CollectStep");
+    LoggerPtr logger = getLogger("Statistics::CollectStep");
 };
 
 

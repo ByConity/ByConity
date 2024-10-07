@@ -90,7 +90,7 @@ StorageRabbitMQ::StorageRabbitMQ(
         , persistent(rabbitmq_settings->rabbitmq_persistent.value)
         , use_user_setup(rabbitmq_settings->rabbitmq_queue_consume.value)
         , hash_exchange(num_consumers > 1 || num_queues > 1)
-        , log(&Poco::Logger::get("StorageRabbitMQ (" + table_id_.table_name + ")"))
+        , log(getLogger("StorageRabbitMQ (" + table_id_.table_name + ")"))
         , semaphore(0, num_consumers)
         , unique_strbase(getRandomName())
         , queue_size(std::max(QUEUE_SIZE, static_cast<uint32_t>(getMaxBlockSize())))

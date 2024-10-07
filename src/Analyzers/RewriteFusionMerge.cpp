@@ -295,7 +295,7 @@ void RewriteFusionMerge::visit(ASTTableExpression & table_expr, ASTPtr &)
     table_expr.children.push_back(table_expr.subquery);
 
     LOG_DEBUG(
-        &Poco::Logger::get("RewriteFusionMerge"), "Rewrite {} to {}", serializeAST(*table_func_ptr), serializeAST(*select_union_query));
+        getLogger("RewriteFusionMerge"), "Rewrite {} to {}", serializeAST(*table_func_ptr), serializeAST(*select_union_query));
 }
 
 }

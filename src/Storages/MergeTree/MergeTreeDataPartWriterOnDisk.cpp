@@ -301,14 +301,14 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
 
 /**
   * Bitmap indices can be built from :
-  * 1. build in insert / merge: 
-  *   - enable build : 
-  *       build_all_bitmap_index && !only_bitmap_index: 
+  * 1. build in insert / merge:
+  *   - enable build :
+  *       build_all_bitmap_index && !only_bitmap_index:
   *   - not enable build (insert: enable_build_ab_index; merge: build_bitmap_index_in_merge):
   *       (!build_all_bitmap_index) with empty bitmap_index_columns
   * 2. alter table build bitmap of partition:
   *   - build_all_bitmap_index && only_bitmap_index
-  * 3. other mutation: 
+  * 3. other mutation:
   *   - not_build_bitmap_index
   * 4. build with dependent columns changed:
   *   - (!build_all_bitmap_index && !only_bitmap_index) with dependent columns in bitmap_index_columns
@@ -318,7 +318,7 @@ void MergeTreeDataPartWriterOnDisk::initBitmapIndices()
     if (bitmap_build_info.not_build_bitmap_index)
         return;
 
-    auto get_all_bitmap_columns = [&](const auto & all_columns) 
+    auto get_all_bitmap_columns = [&](const auto & all_columns)
     {
         bitmap_build_info.bitmap_index_columns.clear();
         for (const auto & column : all_columns)
@@ -336,7 +336,7 @@ void MergeTreeDataPartWriterOnDisk::initBitmapIndices()
         else
             get_all_bitmap_columns(columns_list);
     }
-    
+
     for (const auto & it : bitmap_build_info.bitmap_index_columns)
     {
         if (MergeTreeBitmapIndex::isBitmapIndexColumn(it.type) && MergeTreeBitmapIndex::needBuildIndex(data_part->getFullPath(), it.name))
@@ -356,7 +356,7 @@ void MergeTreeDataPartWriterOnDisk::initSegmentBitmapIndices()
     if (bitmap_build_info.not_build_segment_bitmap_index)
         return;
 
-    auto get_all_indexed_columns = [&](const auto & all_columns) 
+    auto get_all_indexed_columns = [&](const auto & all_columns)
     {
         bitmap_build_info.segment_bitmap_index_columns.clear();
         for (const auto & column : all_columns)
@@ -374,7 +374,7 @@ void MergeTreeDataPartWriterOnDisk::initSegmentBitmapIndices()
         else
             get_all_indexed_columns(columns_list);
     }
-    
+
     for (const auto & it : bitmap_build_info.segment_bitmap_index_columns)
     {
         if (MergeTreeSegmentBitmapIndex::isSegmentBitmapIndexColumn(it.type) && MergeTreeSegmentBitmapIndex::needBuildSegmentIndex(data_part->getFullPath(), it.name))
@@ -572,7 +572,7 @@ void MergeTreeDataPartWriterOnDisk::finishSkipIndicesSerialization(
         store.second->finalize();
         store.second->addToChecksums(checksums);
     }
-    
+
     for (auto & stream : skip_indices_streams)
     {
         stream->finalize();
@@ -1107,8 +1107,8 @@ void MergeTreeDataPartWriterOnDisk::writeColumn(
 
         if (write_final_mark)
             writeFinalMark(name_and_type, offset_columns, serialize_settings.path);
-        
-                
+
+
         serializations[name]->enumerateStreams(finalizeStreams(name), serialize_settings.path);
     }
 
@@ -1376,7 +1376,7 @@ void MergeTreeDataPartWriterOnDisk::loadColumnCompressInfoFromSetting()
             catch (...)
             {
                 column_compress_settings.clear();
-                LOG_ERROR(&Poco::Logger::get("MergeTreeDataPartWriterOnDisk"),
+                LOG_ERROR(getLogger(),
                     "Failed to parse column compress settings from {}", settings);
             }
         }

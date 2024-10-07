@@ -150,7 +150,7 @@ BlockInputStreamPtr forwardIngestPartitionToWorkerWithBucketTableImpl(
     const PartitionCommand & command,
     const WorkerGroupHandle & worker_group,
     const ContextPtr & context,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     auto workers_index_with_task = getIngestWorkersIndexAndJobsWithOrder(
         worker_group->getMetrics().worker_metrics_vec, context->getSettingsRef().max_ingest_task_on_workers);
@@ -211,7 +211,7 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
     if (auto sleep_ms = context->getSettingsRef().sleep_in_send_ingest_to_worker_ms.totalMilliseconds())
         sleepForMilliseconds(sleep_ms);
 
-    Poco::Logger * log = target_table.getLogger();
+    LoggerPtr log = target_table.getLogger();
     TxnTimestamp txn_id = context->getCurrentTransactionID();
     std::hash<String> hasher;
     const String transaction_string = toString(txn_id.toUInt64());
@@ -272,7 +272,7 @@ Pipe ingestPartitionInServer(
     const struct PartitionCommand & command,
     ContextPtr local_context)
 {
-    Poco::Logger * log = storage.getLogger();
+    LoggerPtr log = storage.getLogger();
     LOG_DEBUG(log, "execute ingest partition in server");
     StorageMetadataPtr target_meta_data_ptr = storage.getInMemoryMetadataPtr();
     const Names & column_names = command.column_names;

@@ -52,7 +52,7 @@ String toString(CoordinateMode mode)
 
 WorkerGroupResourceCoordinator::WorkerGroupResourceCoordinator(ResourceManagerController & rm_controller_)
     : rm_controller(rm_controller_)
-    , log(&Poco::Logger::get("ResourceCoordinator"))
+    , log(getLogger("ResourceCoordinator"))
     , background_task(rm_controller.getContext()->getSchedulePool().createTask("ResourceCoordinator", [&]() { run(); }))
     , task_interval_ms(rm_controller.getContext()->getRootConfig().resource_manager.resource_coordinate_task_interval_ms)
     {

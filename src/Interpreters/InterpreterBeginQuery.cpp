@@ -31,7 +31,7 @@ BlockIO InterpreterBeginQuery::execute()
             "A transaction has already began: " + session_context->getCurrentTransaction()->getTransactionID().toString(),
             ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_INFO(&Poco::Logger::get("InterpreterBeginQuery"), "Creating new explicit transaction");
+    LOG_INFO(getLogger("InterpreterBeginQuery"), "Creating new explicit transaction");
     auto & coordinator = session_context->getCnchTransactionCoordinator();
     auto txn = coordinator.createTransaction(CreateTransactionOption().setType(CnchTransactionType::Explicit));
     if (txn)
@@ -44,7 +44,7 @@ BlockIO InterpreterBeginQuery::execute()
         throw Exception("Failed to create new explicit transaction", ErrorCodes::LOGICAL_ERROR);
     }
 
-    LOG_INFO(&Poco::Logger::get("InterpreterBeginQuery"), "Begin a new explicit transaction: {}", txn->getTransactionID());
+    LOG_INFO(getLogger("InterpreterBeginQuery"), "Begin a new explicit transaction: {}", txn->getTransactionID());
 
     return {};
 }

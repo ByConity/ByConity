@@ -54,7 +54,7 @@ WriteBufferToRabbitMQProducer::WriteBufferToRabbitMQProducer(
         const size_t channel_id_base_,
         const bool persistent_,
         std::atomic<bool> & wait_confirm_,
-        Poco::Logger * log_,
+        LoggerPtr log_,
         std::optional<char> delimiter,
         size_t rows_per_message,
         size_t chunk_size_)

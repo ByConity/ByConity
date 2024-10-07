@@ -190,7 +190,8 @@ void throwFromErrnoWithPath(const std::string & s, const std::string & path, int
     throw ErrnoException(s + ", " + errnoToString(code, the_errno) + ", path = " + path, code, the_errno, path);
 }
 
-static void tryLogCurrentExceptionImpl(Poco::Logger * logger, const std::string & start_of_message)
+template <typename T>
+static void tryLogCurrentExceptionImpl(T logger, const std::string & start_of_message)
 {
     try
     {
@@ -213,8 +214,7 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
     /// MemoryTracker until the exception will be logged.
     MemoryTracker::LockExceptionInThread lock_memory_tracker(VariableContext::Global);
 
-    /// Poco::Logger::get can allocate memory too
-    tryLogCurrentExceptionImpl(&Poco::Logger::get(log_name), start_of_message);
+    tryLogCurrentExceptionImpl(getLogger(log_name), start_of_message);
 }
 
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message)
@@ -229,9 +229,21 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
     tryLogCurrentExceptionImpl(logger, start_of_message);
 }
 
+void tryLogCurrentException(LoggerPtr logger, const std::string & start_of_message)
+{
+    /// Under high memory pressure, any new allocation will definitelly lead
+    /// to MEMORY_LIMIT_EXCEEDED exception.
+    ///
+    /// And in this case the exception will not be logged, so let's block the
+    /// MemoryTracker until the exception will be logged.
+    MemoryTracker::LockExceptionInThread lock_memory_tracker(VariableContext::Global);
+
+    tryLogCurrentExceptionImpl(logger, start_of_message);
+}
+
 void tryLogDebugCurrentException(const char * log_name, const std::string & start_of_message)
 {
-    tryLogDebugCurrentException(&Poco::Logger::get(log_name), start_of_message);
+    tryLogDebugCurrentException(getLogger(log_name), start_of_message);
 }
 
 void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & start_of_message)
@@ -245,12 +257,34 @@ void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & star
     }
 }
 
+void tryLogDebugCurrentException(LoggerPtr logger, const std::string & start_of_message)
+{
+    try
+    {
+        LOG_DEBUG(logger, start_of_message + (start_of_message.empty() ? "" : ": ") + getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
+}
+
 void tryLogWarningCurrentException(const char * log_name, const std::string & start_of_message)
 {
-    tryLogWarningCurrentException(&Poco::Logger::get(log_name), start_of_message);
+    tryLogWarningCurrentException(getLogger(log_name), start_of_message);
 }
 
 void tryLogWarningCurrentException(Poco::Logger * logger, const std::string & start_of_message)
+{
+    try
+    {
+        LOG_WARNING(logger, start_of_message + (start_of_message.empty() ? "" : ": ") + getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
+}
+
+void tryLogWarningCurrentException(LoggerPtr logger, const std::string & start_of_message)
 {
     try
     {
@@ -508,6 +542,18 @@ void tryLogException(std::exception_ptr e, const char * log_name, const std::str
 }
 
 void tryLogException(std::exception_ptr e, Poco::Logger * logger, const std::string & start_of_message)
+{
+    try
+    {
+        std::rethrow_exception(std::move(e)); // NOLINT
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, start_of_message);
+    }
+}
+
+void tryLogException(std::exception_ptr e, LoggerPtr logger, const std::string & start_of_message)
 {
     try
     {

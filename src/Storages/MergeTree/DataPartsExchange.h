@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/IStorage_fwd.h>
@@ -83,7 +84,7 @@ private:
     /// so Service will never access dangling reference to storage
     MergeTreeData & data;
     std::weak_ptr<IStorage> storage;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 /** Client for getting the parts from the table *MergeTree.
@@ -91,7 +92,7 @@ private:
 class Fetcher final : private boost::noncopyable
 {
 public:
-    explicit Fetcher(MergeTreeData & data_) : data(data_), log(&Poco::Logger::get("Fetcher")) {}
+    explicit Fetcher(MergeTreeData & data_) : data(data_), log(getLogger("Fetcher")) {}
 
     /// Downloads a part to tmp_directory. If to_detached - downloads to the `detached` directory.
     MergeTreeData::MutableDataPartPtr fetchPart(
@@ -172,7 +173,7 @@ private:
             ThrottlerPtr throttler);
 
     MergeTreeData & data;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

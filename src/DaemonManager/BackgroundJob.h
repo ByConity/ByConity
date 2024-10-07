@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <Interpreters/StorageID.h>
 #include <Poco/Logger.h>
@@ -168,7 +169,7 @@ private:
     CnchBGThreadStatus expected_status;
     String host_port;
     std::time_t last_start_time = 0;
-    Poco::Logger * log;
+    LoggerPtr log;
     mutable std::mutex mutex;
 };
 

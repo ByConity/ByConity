@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <filesystem>
 #include <Core/MultiEnum.h>
 #include <Core/NamesAndTypes.h>
@@ -77,7 +78,7 @@ protected:
     CnchHiveSettingsPtr storage_settings;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("DatabaseLakeBase")};
+    LoggerPtr log{getLogger("DatabaseLakeBase")};
 };
 
 class LakeDatabaseTablesIterator : public IDatabaseTablesIterator

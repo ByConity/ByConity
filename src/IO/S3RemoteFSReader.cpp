@@ -117,7 +117,7 @@ uint64_t S3TrivialReader::seek(uint64_t offset) {
 S3ReadAheadReader::S3ReadAheadReader(const std::shared_ptr<Aws::S3::S3Client>& client,
     const String& bucket, const String& key, size_t min_read_size,
     size_t max_read_expand_times, size_t read_expand_pct,
-    size_t seq_read_thres, Poco::Logger* logger):
+    size_t seq_read_thres, LoggerPtr logger):
         min_read_size_(min_read_size), max_read_expand_times_(max_read_expand_times),
         read_expand_pct_(read_expand_pct), seq_read_threshold_(seq_read_thres),
         logger_(logger), client_(client), bucket_(bucket), key_(key),
@@ -388,7 +388,7 @@ S3RemoteFSReaderOpts::S3RemoteFSReaderOpts(const std::shared_ptr<Aws::S3::S3Clie
     size_t ra_expand_pct, size_t ra_threshold_pct):
         read_ahead_(read_ahead), read_retry_(read_retry), read_backoff_ms_(read_backoff_ms),
         throttler_(throttler), client_(client), bucket_(bucket),
-        logger_(&Poco::Logger::get("S3RemoteFSReader")), ra_min_read_size_(ra_min_read_size),
+        logger_(getLogger("S3RemoteFSReader")), ra_min_read_size_(ra_min_read_size),
         ra_max_read_expand_times_(ra_max_read_expand_times),
         ra_expand_pct_(ra_expand_pct), ra_threshold_pct_(ra_threshold_pct) {}
 

@@ -36,9 +36,9 @@ namespace
     class ShellCommandOwningBlockInputStream : public OwningBlockInputStream<ShellCommand>
     {
     private:
-        Poco::Logger * log;
+        LoggerPtr log;
     public:
-        ShellCommandOwningBlockInputStream(Poco::Logger * log_, const BlockInputStreamPtr & impl, std::unique_ptr<ShellCommand> command_)
+        ShellCommandOwningBlockInputStream(LoggerPtr log_, const BlockInputStreamPtr & impl, std::unique_ptr<ShellCommand> command_)
             : OwningBlockInputStream(std::move(impl), std::move(command_)), log(log_)
         {
         }
@@ -63,7 +63,7 @@ ExecutableDictionarySource::ExecutableDictionarySource(
     const Configuration & configuration_,
     Block & sample_block_,
     ContextPtr context_)
-    : log(&Poco::Logger::get("ExecutableDictionarySource"))
+    : log(getLogger("ExecutableDictionarySource"))
     , dict_struct(dict_struct_)
     , configuration(configuration_)
     , sample_block{sample_block_}
@@ -84,7 +84,7 @@ ExecutableDictionarySource::ExecutableDictionarySource(
 }
 
 ExecutableDictionarySource::ExecutableDictionarySource(const ExecutableDictionarySource & other)
-    : log(&Poco::Logger::get("ExecutableDictionarySource"))
+    : log(getLogger("ExecutableDictionarySource"))
     , update_time(other.update_time)
     , dict_struct(other.dict_struct)
     , configuration(other.configuration)
@@ -135,7 +135,7 @@ namespace
             const std::string & format,
             const Block & sample_block,
             const std::string & command_str,
-            Poco::Logger * log_,
+            LoggerPtr log_,
             std::function<void(WriteBufferFromFile &)> && send_data_)
             : log(log_),
             command(ShellCommand::execute(command_str)),
@@ -184,7 +184,7 @@ namespace
 
         String getName() const override { return "WithBackgroundThread"; }
 
-        Poco::Logger * log;
+        LoggerPtr log;
         BlockInputStreamPtr stream;
         std::unique_ptr<ShellCommand> command;
         std::function<void(WriteBufferFromFile &)> send_data;

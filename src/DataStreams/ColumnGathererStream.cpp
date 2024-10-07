@@ -53,7 +53,7 @@ ColumnGathererStream::ColumnGathererStream(
     , low_cardinality_fallback_threshold(fallback_threshold_)
     , block_preferred_size_rows(block_preferred_size_rows_)
     , block_preferred_size_bytes(block_preferred_size_bytes_)
-    , log(&Poco::Logger::get("ColumnGathererStream"))
+    , log(getLogger("ColumnGathererStream"))
 {
     if (source_streams.empty())
         throw Exception("There are no streams to gather", ErrorCodes::EMPTY_DATA_PASSED);

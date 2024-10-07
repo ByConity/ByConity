@@ -103,7 +103,7 @@ void ReplicasStatusHandler::handleRequest(HTTPServerRequest & request, HTTPServe
         }
         catch (...)
         {
-            LOG_ERROR((&Poco::Logger::get("ReplicasStatusHandler")), "Cannot send exception to client");
+            LOG_ERROR((getLogger("ReplicasStatusHandler")), "Cannot send exception to client");
         }
     }
 }

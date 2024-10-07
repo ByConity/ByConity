@@ -49,7 +49,7 @@ RAReadBufferFromS3::RAReadBufferFromS3(const std::shared_ptr<Aws::S3::S3Client>&
         ReadBufferFromFileBase(buffer_size, existing_memory, alignment),
         throttler_(throttler), read_retry_(read_retry),
         reader_(client, bucket, key, buffer_size, max_buffer_expand_times,
-            read_expand_pct, seq_read_thres, &Poco::Logger::get("RAReadBufferFromS3")) {}
+            read_expand_pct, seq_read_thres, getLogger("RAReadBufferFromS3")) {}
 
 bool RAReadBufferFromS3::nextImpl()
 {

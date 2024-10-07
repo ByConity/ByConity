@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -43,7 +44,7 @@ private:
     8,
     bthread::Mutex>;
     MPPCoordinatorMap coordinator_map;
-    Poco::Logger * log {&Poco::Logger::get("MPPQueryManager")};
+    LoggerPtr log {getLogger("MPPQueryManager")};
 };
 
 }

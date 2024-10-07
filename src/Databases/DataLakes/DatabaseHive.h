@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 
 #if USE_HIVE
@@ -48,7 +49,7 @@ private:
     String database_name_in_hive;
     HiveMetastoreClientPtr metastore_client;
 
-    Poco::Logger * log{&Poco::Logger::get("DatabaseHive")};
+    LoggerPtr log{getLogger("DatabaseHive")};
 };
 
 }

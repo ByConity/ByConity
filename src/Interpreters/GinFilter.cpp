@@ -16,8 +16,8 @@ namespace ErrorCodes
 
 void printValuesInRoaring(GinIndexPostingsList & post_list)
 {
-    LOG_TRACE(&Poco::Logger::get(__func__), "post_list.cardinality: {}", post_list.cardinality());
-    LOG_TRACE(&Poco::Logger::get(__func__), "post_list.toString: {}", post_list.toString());
+    LOG_TRACE(getLogger(__func__), "post_list.cardinality: {}", post_list.cardinality());
+    LOG_TRACE(getLogger(__func__), "post_list.toString: {}", post_list.toString());
 }
 
 GinFilterParameters::GinFilterParameters(size_t ngrams_, Float64 density_)

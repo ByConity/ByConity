@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <optional>
 
 #include <Common/ActionBlocker.h>
@@ -65,7 +66,7 @@ private:
     String zookeeper_path;
     String replica_path;
     String logger_name;
-    Poco::Logger * log = nullptr;
+    LoggerPtr log = nullptr;
 
     /// Protects the queue, future_parts and other queue state variables.
     mutable std::mutex state_mutex;

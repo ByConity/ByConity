@@ -34,7 +34,7 @@ ExchangeBufferedSender::ExchangeBufferedSender(
     , sender(sender_)
     , threshold_in_bytes(threshold_in_bytes_)
     , threshold_in_row_num(threshold_in_row_num_)
-    , logger(&Poco::Logger::get("ExchangeBufferedSender"))
+    , logger(getLogger("ExchangeBufferedSender"))
 {
     resetBuffer();
 }

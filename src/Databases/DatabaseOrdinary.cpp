@@ -82,7 +82,7 @@ namespace
         }
     }
 
-    void logAboutProgress(Poco::Logger * log, size_t processed, size_t total, AtomicStopwatch & watch)
+    void logAboutProgress(LoggerPtr log, size_t processed, size_t total, AtomicStopwatch & watch)
     {
         if (processed % PRINT_MESSAGE_EACH_N_OBJECTS == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
         {

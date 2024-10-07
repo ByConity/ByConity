@@ -29,7 +29,7 @@ namespace ErrorCodes
 }
 
 ElectionReader::ElectionReader(IKvStoragePtr store_, const String & election_key_)
-    : store(std::move(store_)), election_key(election_key_), logger(&Poco::Logger::get("ElectionReader"))
+    : store(std::move(store_)), election_key(election_key_), logger(getLogger("ElectionReader"))
 {
     LOG_INFO(logger, "election_key: {}", election_key);
 }

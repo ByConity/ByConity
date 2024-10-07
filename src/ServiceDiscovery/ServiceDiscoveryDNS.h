@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <ServiceDiscovery/DNSResolver.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -85,7 +86,7 @@ public:
 
 private:
     std::map<String, ServicePair> serviceMap; // psm -> k8s Service pair
-    Poco::Logger * log = &Poco::Logger::get("ServiceDiscoveryDNS");
+    LoggerPtr log = getLogger("ServiceDiscoveryDNS");
 
     std::vector<String> generalLookup(ServicePair & service_pair, const String & port_name);
 

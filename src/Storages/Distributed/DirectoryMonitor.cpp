@@ -91,7 +91,7 @@ namespace
     constexpr const std::chrono::minutes decrease_error_count_period{5};
 
     template <typename PoolFactory>
-    ConnectionPoolPtrs createPoolsForAddresses(const std::string & name, PoolFactory && factory, const Cluster::ShardsInfo & shards_info, Poco::Logger * log)
+    ConnectionPoolPtrs createPoolsForAddresses(const std::string & name, PoolFactory && factory, const Cluster::ShardsInfo & shards_info, LoggerPtr log)
     {
         ConnectionPoolPtrs pools;
 
@@ -167,7 +167,7 @@ namespace
         Block block_header;
     };
 
-    DistributedHeader readDistributedHeader(ReadBufferFromFile & in, Poco::Logger * log)
+    DistributedHeader readDistributedHeader(ReadBufferFromFile & in, LoggerPtr log)
     {
         DistributedHeader distributed_header;
 
@@ -310,7 +310,7 @@ namespace
         RemoteBlockOutputStream & remote,
         bool compression_expected,
         ReadBufferFromFile & in,
-        Poco::Logger * log)
+        LoggerPtr log)
     {
         if (!remote.getHeader())
         {
@@ -376,7 +376,7 @@ StorageDistributedDirectoryMonitor::StorageDistributedDirectoryMonitor(
     , default_sleep_time(storage.getContext()->getSettingsRef().distributed_directory_monitor_sleep_time_ms.totalMilliseconds())
     , sleep_time(default_sleep_time)
     , max_sleep_time(storage.getContext()->getSettingsRef().distributed_directory_monitor_max_sleep_time_ms.totalMilliseconds())
-    , log(&Poco::Logger::get(getLoggerName()))
+    , log(getLogger(getLoggerName()))
     , monitor_blocker(monitor_blocker_)
     , metric_pending_files(CurrentMetrics::DistributedFilesToInsert, 0)
     , metric_broken_files(CurrentMetrics::BrokenDistributedFilesToInsert, 0)
@@ -924,7 +924,7 @@ public:
         std::unique_ptr<CompressedReadBuffer> decompressing_in;
         std::unique_ptr<NativeBlockInputStream> block_in;
 
-        Poco::Logger * log = nullptr;
+        LoggerPtr log = nullptr;
 
         Block first_block;
 
@@ -933,7 +933,7 @@ public:
             in = std::make_unique<ReadBufferFromFile>(file_name);
             decompressing_in = std::make_unique<CompressedReadBuffer>(*in);
             block_in = std::make_unique<NativeBlockInputStream>(*decompressing_in, DBMS_TCP_PROTOCOL_VERSION);
-            log = &Poco::Logger::get("DirectoryMonitorSource");
+            log = getLogger("DirectoryMonitorSource");
 
             readDistributedHeader(*in, log);
 

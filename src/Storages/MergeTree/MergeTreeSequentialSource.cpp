@@ -44,7 +44,7 @@ MergeTreeSequentialSource::RuntimeContext::~RuntimeContext()
     size_t avg_read_rows = update_count_ > 0 ? (total_rows_ / update_count_) : 0;
     size_t bytes_per_row = total_rows_ > 0 ? (total_bytes_ / total_rows_) : 0;
 
-    LOG_TRACE(&Poco::Logger::get("MergeTreeSequentialSource::RuntimeContext"),
+    LOG_TRACE(getLogger("MergeTreeSequentialSource::RuntimeContext"),
         "Total rows {}, total bytes {}, read count {}, average read rows {}, bytes per row {}",
         total_rows_, ReadableSize(total_bytes_), update_count_, avg_read_rows, ReadableSize(bytes_per_row));
 }

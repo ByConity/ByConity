@@ -338,7 +338,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     , storage(storage_)
     , input(input_)
     , input_pipe(std::move(input_pipe_))
-    , log(&Poco::Logger::get("InterpreterSelectQuery"))
+    , log(getLogger("InterpreterSelectQuery"))
     , metadata_snapshot(metadata_snapshot_)
 {
     checkStackSize();
@@ -720,7 +720,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
     if (query_info.projection)
         storage_snapshot->addProjection(query_info.projection->desc);
-    
+
     LOG_TRACE(log, "query: " + queryToString(query));
     std::ostringstream ostr;
     for (auto & c : required_columns)
@@ -2389,7 +2389,6 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         if (!query_plan.isInitialized())
         {
             auto header = storage_snapshot->getSampleBlockForColumns(required_columns);
-
             /// add bitmap index result column for null source
             if (auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(query_analyzer->getIndexContext()->get(MergeTreeIndexInfo::Type::BITMAP).get()))
             {

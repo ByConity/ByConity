@@ -156,7 +156,7 @@ struct DNSResolver::Impl
 };
 
 
-DNSResolver::DNSResolver() : impl(std::make_unique<DNSResolver::Impl>()), log(&Poco::Logger::get("DNSResolver")) {}
+DNSResolver::DNSResolver() : impl(std::make_unique<DNSResolver::Impl>()), log(getLogger("DNSResolver")) {}
 
 Poco::Net::IPAddress DNSResolver::resolveHost(const std::string & host)
 {

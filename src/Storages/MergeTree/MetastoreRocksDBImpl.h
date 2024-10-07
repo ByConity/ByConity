@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/IMetastore.h>
 #include <Common/Exception.h>
 #include <atomic>
@@ -86,7 +87,7 @@ private:
 
     std::atomic_bool db_closed = true;
     rocksdb::DB* db = nullptr;
-    Poco::Logger * log;
+    LoggerPtr log;
 
 public:
     MetastoreRocksDBImpl(const String & db_path_);

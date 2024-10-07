@@ -43,7 +43,7 @@ void createMissingUUIDDictionaryModel(ContextPtr context)
 }
 
 
-void fixDictionary(Catalog::Catalog * catalog, Poco::Logger * log)
+void fixDictionary(Catalog::Catalog * catalog, LoggerPtr log)
 {
     Catalog::Catalog::DataModelDictionaries all = catalog->getAllDictionaries();
     std::for_each(all.begin(), all.end(),
@@ -60,7 +60,7 @@ void fixDictionary(Catalog::Catalog * catalog, Poco::Logger * log)
         });
 }
 
-void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
+void fixCatalogMetaData(ContextPtr context, LoggerPtr log)
 {
     LOG_INFO(log, "execute fixing Catalog Metadata task");
     std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();

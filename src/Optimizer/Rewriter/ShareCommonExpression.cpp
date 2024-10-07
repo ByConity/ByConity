@@ -501,7 +501,7 @@ namespace
 PlanNodePtr ShareCommonExpression::rewriteImpl(PlanNodePtr root, ContextMutablePtr context)
 {
     assert(root != nullptr);
-    Poco::Logger * logger = &Poco::Logger::get("ShareCommonExpression");
+    LoggerPtr logger = getLogger("ShareCommonExpression");
     std::vector<DFSNode> stack;
     stack.emplace_back(root.get());
 

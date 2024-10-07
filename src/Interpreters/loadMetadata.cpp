@@ -125,7 +125,7 @@ static void loadDatabase(
 
 void loadMetadata(ContextMutablePtr context, const String & default_database_name)
 {
-    Poco::Logger * log = &Poco::Logger::get("loadMetadata");
+    LoggerPtr log = getLogger("loadMetadata");
 
     String path = context->getPath() + "metadata";
 
@@ -238,7 +238,7 @@ void loadMetadataSystem(ContextMutablePtr context)
 }
 
 /* Load schema files from hdfs*/
-void reloadFormatSchema(ContextMutablePtr context, String remote_format_schema_path, String format_schema_path, Poco::Logger * log)
+void reloadFormatSchema(ContextMutablePtr context, String remote_format_schema_path, String format_schema_path, LoggerPtr log)
 {
 #if USE_HDFS
     if (!remote_format_schema_path.empty())

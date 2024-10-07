@@ -66,7 +66,7 @@ std::map<std::string, unsigned int> updateConfig(
     return std::move(default_config);
 }
 
-void printConfig(std::map<std::string, unsigned int> & config, Poco::Logger * log)
+void printConfig(std::map<std::string, unsigned int> & config, LoggerPtr log)
 {
     std::ostringstream oss;
     std::for_each(config.begin(), config.end(),

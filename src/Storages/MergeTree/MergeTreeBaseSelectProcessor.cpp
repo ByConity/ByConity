@@ -107,7 +107,7 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
         prewhere_actions->need_filter = prewhere_info->need_filter;
 
         LOG_TRACE(
-            &Poco::Logger::get("MergeTreeBaseSelectProcessor"),
+            getLogger("MergeTreeBaseSelectProcessor"),
             "Prewhere column = {}, actions = {} ",
             prewhere_info->prewhere_column_name,
             prewhere_info->prewhere_actions->dumpDAG());

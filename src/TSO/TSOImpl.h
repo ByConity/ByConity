@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <TSO/TSOProxy.h>
 #include <TSO/Defines.h>
 #include <Protos/tso.pb.h>
@@ -86,7 +87,7 @@ public:
 private:
     std::atomic<UInt64> ts = 0;
     std::atomic_bool is_kv_down{false};
-    Poco::Logger * log = &Poco::Logger::get("TSOImpl");
+    LoggerPtr log = getLogger("TSOImpl");
     std::atomic<bool> logical_clock_checking {false};
     std::atomic<UInt64> num_tso_update_timestamp_stopped_functioning{0};
 

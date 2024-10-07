@@ -72,7 +72,7 @@ public:
 
 TEST(BGJobStatusInCatalogTest, test_CatalogBGJobStatusPersistentStoreProxy)
 {
-    DummyProxy proxy{nullptr, CnchBGThreadType::MergeMutate, &Poco::Logger::get("test_CatalogBGJobStatusPersistentStoreProxy")};
+    DummyProxy proxy{nullptr, CnchBGThreadType::MergeMutate, getLogger("test_CatalogBGJobStatusPersistentStoreProxy")};
     UUID uuid{UInt128{0, 1}};
     EXPECT_THROW(proxy.getStatus(uuid, false), Exception);
     EXPECT_THROW(proxy.getStatus(uuid, true), Exception);

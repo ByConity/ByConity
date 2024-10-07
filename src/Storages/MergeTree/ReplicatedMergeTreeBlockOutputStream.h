@@ -1,11 +1,10 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <common/types.h>
 
-
-namespace Poco { class Logger; }
 
 namespace zkutil
 {
@@ -80,8 +79,7 @@ private:
     bool deduplicate = true;
     bool last_block_is_duplicate = false;
 
-    using Logger = Poco::Logger;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     ContextPtr context;
 };

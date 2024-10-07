@@ -178,7 +178,7 @@ MPPQueryCoordinator::MPPQueryCoordinator(
     , options(std::move(options_))
     , plan_segment_tree(std::move(plan_segment_tree_))
     , query_id(query_context->getClientInfo().current_query_id)
-    , log(&Poco::Logger::get("MPPQueryCoordinator"))
+    , log(getLogger("MPPQueryCoordinator"))
     , state_machine(std::make_unique<CoordinatorStateMachine>(this))
     , progress_manager(query_id)
 {

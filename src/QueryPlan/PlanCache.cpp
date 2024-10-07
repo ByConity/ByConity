@@ -21,7 +21,7 @@ void PlanCacheManager::initialize(ContextMutablePtr context)
     auto * manager_instance = context->getPlanCacheManager();
     if (manager_instance->cache)
     {
-        LOG_WARNING(&Poco::Logger::get("PlanCacheManager"), "PlanCacheManager already initialized");
+        LOG_WARNING(getLogger("PlanCacheManager"), "PlanCacheManager already initialized");
         return;
     }
 

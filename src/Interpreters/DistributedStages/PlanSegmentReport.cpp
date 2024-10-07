@@ -14,7 +14,7 @@ namespace ErrorCodes
 
 void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) noexcept
 {
-    static auto * logger = &Poco::Logger::get("PlanSegmentExecutor");
+    static auto logger = getLogger("PlanSegmentExecutor");
     try
     {
         if (result.segment_profile)
@@ -148,7 +148,7 @@ PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
 
 void reportSuccessPlanSegmentProfile(const PlanSegmentExecutor::ExecutionResult & result)
 {
-    static auto * logger = &Poco::Logger::get("PlanSegmentExecutor");
+    static auto logger = getLogger("PlanSegmentExecutor");
     try
     {
         std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(

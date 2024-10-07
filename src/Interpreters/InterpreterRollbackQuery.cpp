@@ -39,7 +39,7 @@ BlockIO InterpreterRollbackQuery::execute()
     }
 
     SCOPE_EXIT(session_context->setCurrentTransaction(nullptr););
-    auto * log = &Poco::Logger::get("InterpreterRollbackQuery");
+    auto log = getLogger("InterpreterRollbackQuery");
 
     LOG_DEBUG(log, "Rollbacking explicit transaction: {}", explicit_txn->getTransactionID());
     try

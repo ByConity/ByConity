@@ -304,7 +304,7 @@ Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_
             case MergeTreeMetaBase::MergingParams::Collapsing:
                 return std::make_shared<CollapsingSortedAlgorithm>(
                     block, 1, sort_description, data.merging_params.sign_column,
-                    false, block_size + 1, &Poco::Logger::get("MergeTreeBlockOutputStream"));
+                    false, block_size + 1, getLogger("MergeTreeBlockOutputStream"));
             case MergeTreeMetaBase::MergingParams::Summing:
                 return std::make_shared<SummingSortedAlgorithm>(
                     block, 1, sort_description, data.merging_params.columns_to_sum,
@@ -892,7 +892,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPartialUpdat
 
 MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeProjectionPartImpl(
     MergeTreeMetaBase & data,
-    Poco::Logger * log,
+    LoggerPtr log,
     Block block,
     const StorageMetadataPtr & metadata_snapshot,
     MergeTreeMetaBase::MutableDataPartPtr && new_data_part)
@@ -990,7 +990,7 @@ MergeTreeDataWriter::writeProjectionPart(Block block, const ProjectionDescriptio
 
 MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempProjectionPart(
     MergeTreeMetaBase & data,
-    Poco::Logger * log,
+    LoggerPtr log,
     Block block,
     const ProjectionDescription & projection,
     const IMergeTreeDataPart * parent_part,

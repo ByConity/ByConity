@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Processors/Sources/SourceWithProgress.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
@@ -55,7 +56,7 @@ private:
     /// Columns we have to read (each Block from read will contain them)
     Names columns_to_read;
 
-    Poco::Logger * log = &Poco::Logger::get("MergeTreeFillDeleteWithDefaultValueSource");
+    LoggerPtr log = getLogger("MergeTreeFillDeleteWithDefaultValueSource");
 
     std::shared_ptr<MarkCache> mark_cache;
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;

@@ -136,7 +136,7 @@ std::chrono::steady_clock::duration NamedSessionsImpl<NamedSession>::closeSessio
 {
     /// Schedule closeSessions() every 1 second by default.
     static constexpr std::chrono::steady_clock::duration close_interval = std::chrono::seconds(1);
-    static auto * log = &Poco::Logger::get("NamedSession");
+    auto log = getLogger("NamedSession");
 
     if (close_times.empty())
         return close_interval;
@@ -192,11 +192,10 @@ NamedCnchSession::NamedCnchSession(NamedSessionKey key_, ContextPtr context_, si
 
 void NamedCnchSession::release()
 {
-    static auto * log = &Poco::Logger::get("NamedSession");
     timeout = 0; /// schedule immediately
     close_time = 0;
     parent.releaseSession(*this);
-    LOG_DEBUG(log, "Release CnchWorkerResource {}", key);
+    LOG_DEBUG(getLogger("NamedCnchSession"), "Release CnchWorkerResource {}", key);
 }
 
 template class NamedSessionsImpl<NamedSession>;

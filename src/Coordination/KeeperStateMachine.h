@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Coordination/KeeperStorage.h>
 #include <libnuraft/nuraft.hxx>
 #include <common/logger_useful.h>
@@ -152,7 +153,7 @@ private:
     /// Last committed Raft log number.
     std::atomic<uint64_t> last_committed_idx;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Cluster config for our quorum.
     /// It's a copy of config stored in StateManager, but here

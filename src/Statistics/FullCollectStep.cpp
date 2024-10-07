@@ -70,7 +70,7 @@ public:
 
         // to estimate ndv
         LOG_INFO(
-            &Poco::Logger::get("FirstFullColumnHandler"),
+            getLogger("FirstFullColumnHandler"),
             fmt::format(
                 FMT_STRING("col info: col={} && "
                            "sqls={}"),
@@ -113,7 +113,7 @@ public:
                     result.bucket_bounds = histogram->getBucketBounds(histogram_bucket_size);
                 }
                 LOG_INFO(
-                    &Poco::Logger::get("FirstFullColumnHandler"),
+                    getLogger("FirstFullColumnHandler"),
                     fmt::format(
                         FMT_STRING("col info: col={} && "
                                    "context raw data: full_count={} && "

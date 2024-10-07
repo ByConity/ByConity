@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <string>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include "Common/ErrorCodes.h"
@@ -69,7 +70,7 @@ class PartMergerImpl : public PartToolkitBase
     using StorageCloudMergeTreePtr = std::shared_ptr<StorageCloudMergeTree>;
 
 public:
-    PartMergerImpl(ContextMutablePtr context, Poco::Util::AbstractConfiguration & config, Poco::Logger * log_);
+    PartMergerImpl(ContextMutablePtr context, Poco::Util::AbstractConfiguration & config, LoggerPtr log_);
 
     /**
      * Main entry for selecting and merging.
@@ -99,7 +100,7 @@ private:
     void executeMergeTask(MergeTreeMetaBase & merge_tree, DiskPtr & disk, const MergeTask & task);
 
     PartMergerParams params;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 

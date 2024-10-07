@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
@@ -50,7 +51,7 @@ public:
     void getFileFromRemote(const String & remote_path, const String & local_path);
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("HDFSDumper");
+    LoggerPtr log = getLogger("HDFSDumper");
     size_t buffer_size;
     HDFSConnectionParams hdfs_params;
     std::unique_ptr<HDFSFileSystem> hdfs_filesystem = nullptr;

@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <mutex>
 #include <shared_mutex>
 #include <Interpreters/AutoStatsTaskLog.h>
@@ -162,7 +163,7 @@ private:
 
     // table uuid -> task
     std::unordered_map<UUID, std::shared_ptr<TaskInfo>> task_infos;
-    Poco::Logger * logger = &Poco::Logger::get("AutoStats::TaskQueue");
+    LoggerPtr logger = getLogger("AutoStats::TaskQueue");
     const InternalConfig & internal_config;
 };
 

@@ -27,7 +27,7 @@ void executeServerBGThreadAction(const StorageID & storage_id, const String & ho
 {
     CnchServerClientPtr server_client = context.getCnchServerClient(host_port);
     server_client->controlCnchBGThread(storage_id, type, action);
-    LOG_DEBUG(&Poco::Logger::get(__func__), "Succeed to {} thread for {} on {}",
+    LOG_DEBUG(getLogger(__func__), "Succeed to {} thread for {} on {}",
         toString(action), storage_id.getNameForLogs(), host_port);
 }
 

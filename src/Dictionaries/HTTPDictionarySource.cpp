@@ -33,7 +33,7 @@ HTTPDictionarySource::HTTPDictionarySource(
     Block & sample_block_,
     ContextPtr context_,
     bool created_from_ddl)
-    : log(&Poco::Logger::get("HTTPDictionarySource"))
+    : log(getLogger("HTTPDictionarySource"))
     , update_time(std::chrono::system_clock::from_time_t(0))
     , dict_struct(dict_struct_)
     , configuration(configuration_)
@@ -49,7 +49,7 @@ HTTPDictionarySource::HTTPDictionarySource(
 }
 
 HTTPDictionarySource::HTTPDictionarySource(const HTTPDictionarySource & other)
-    : log(&Poco::Logger::get("HTTPDictionarySource"))
+    : log(getLogger("HTTPDictionarySource"))
     , update_time(other.update_time)
     , dict_struct(other.dict_struct)
     , configuration(other.configuration)

@@ -203,7 +203,7 @@ public:
     }
 
     /// start_log_index -- all entries with index < start_log_index will be skipped, but accounted into total_entries_read_from_log
-    ChangelogReadResult readChangelog(IndexToLogEntry & logs, uint64_t start_log_index, Poco::Logger * log)
+    ChangelogReadResult readChangelog(IndexToLogEntry & logs, uint64_t start_log_index, LoggerPtr log)
     {
         ChangelogReadResult result{};
         try
@@ -296,7 +296,7 @@ Changelog::Changelog(
     const std::string & changelogs_dir_,
     uint64_t rotate_interval_,
     bool force_sync_,
-    Poco::Logger * log_,
+    LoggerPtr log_,
     bool compress_logs_)
     : changelogs_dir(changelogs_dir_)
     , rotate_interval(rotate_interval_)

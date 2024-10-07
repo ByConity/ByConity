@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include "BrpcRemoteBroadcastReceiver.h"
 
 #include <Core/Block.h>
@@ -42,7 +43,7 @@ public:
     void on_finished(brpc::StreamId id, int32_t finish_status_code) override;
 private:
     ContextPtr context;
-    Poco::Logger * log = &Poco::Logger::get("StreamHandler");
+    LoggerPtr log = getLogger("StreamHandler");
     BrpcRemoteBroadcastReceiverWeakPtr receiver;
     Block header;
     bool keep_order;

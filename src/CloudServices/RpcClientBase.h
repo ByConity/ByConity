@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Common/HostWithPorts.h>
 
@@ -54,7 +55,7 @@ protected:
     void assertController(const brpc::Controller & cntl);
     void initChannel(brpc::Channel & channel_, const String & host_port_, brpc::ChannelOptions * options = nullptr);
 
-    Poco::Logger * log;
+    LoggerPtr log;
     HostWithPorts host_ports;
 
     std::unique_ptr<brpc::Channel> channel;

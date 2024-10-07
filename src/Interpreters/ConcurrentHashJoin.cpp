@@ -57,7 +57,7 @@ ConcurrentHashJoin::ConcurrentHashJoin(
     , hash_joins_input_queue(slots)
     , hash_joins_task_in_queue(slots, false)
 {
-    LOG_DEBUG(&Poco::Logger::get("ConcurrentHashJoin"), fmt::format("parallel_join_rows_batch_threshold:{}", parallel_join_rows_batch_threshold));
+    LOG_DEBUG(getLogger("ConcurrentHashJoin"), fmt::format("parallel_join_rows_batch_threshold:{}", parallel_join_rows_batch_threshold));
     /// Non zero `max_joined_block_rows` allows to process block partially and return not processed part.
     /// TODO: It's not handled properly in ConcurrentHashJoin case, so we set it to 0 to disable this feature.
     table_join->setMaxJoinedBlockRows(0);
@@ -703,7 +703,7 @@ BlockInputStreamPtr ConcurrentHashJoin::createStreamWithNonJoinedRows(const Bloc
 
         if (!parents.empty())
         {
-            LOG_TRACE((&Poco::Logger::get("ConcurrentHashJoin")), "create ConcurrentNotJoinedBlockInputStream with total_size:{} index:{} hash_joins:{}", total_size, index, parents.size());
+            LOG_TRACE((getLogger("ConcurrentHashJoin")), "create ConcurrentNotJoinedBlockInputStream with total_size:{} index:{} hash_joins:{}", total_size, index, parents.size());
             return std::make_shared<ConcurrentNotJoinedBlockInputStream>(std::move(parents), result_sample_block, max_block_size);
         }
         else

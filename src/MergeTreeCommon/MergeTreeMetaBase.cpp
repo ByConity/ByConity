@@ -129,7 +129,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , require_part_metadata(require_part_metadata_)
     , broken_part_callback(broken_part_callback_)
     , log_name(logger_name_)
-    , log(&Poco::Logger::get(log_name))
+    , log(::getLogger(log_name))
     , storage_settings(std::move(storage_settings_))
     , pinned_part_uuids(std::make_shared<PinnedPartUUIDs>())
     , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
@@ -2002,7 +2002,7 @@ ASTPtr MergeTreeMetaBase::applyFilter(
         {
             double selectivity = FilterEstimator::estimateFilterSelectivity(storage_statistics, conjunct, names_and_types, query_context);
             LOG_DEBUG(
-                &Poco::Logger::get("OptimizerActivePrewhere"),
+                ::getLogger("OptimizerActivePrewhere"),
                 "conjunct=" + serializeAST(*conjunct) + ", selectivity=" + std::to_string(selectivity));
 
             if (selectivity <= query_context->getSettingsRef().max_active_prewhere_selectivity
@@ -2052,7 +2052,7 @@ ASTPtr MergeTreeMetaBase::applyFilter(
                 std::move(column_compressed_sizes),
                 getInMemoryMetadataPtr(),
                 current_info.syntax_analyzer_result->requiredSourceColumns(),
-                &Poco::Logger::get("OptimizerEarlyPrewherePushdown")};
+                ::getLogger("OptimizerEarlyPrewherePushdown")};
         }
     }
 

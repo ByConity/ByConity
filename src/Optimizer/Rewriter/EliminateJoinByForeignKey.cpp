@@ -127,7 +127,7 @@ bool EliminateJoinByFK::rewrite(QueryPlan & plan, ContextMutablePtr context) con
         ostr << "winner_bottom_joins: ";
         for (const auto & bottom_join : winner.second.bottom_joins)
             ostr << bottom_join.first->getId() << ", ";
-        LOG_INFO(&Poco::Logger::get("DataDependency"), "EliminateJoinByFK-JoinInfo. " + ostr.str());
+        LOG_INFO(getLogger("DataDependency"), "EliminateJoinByFK-JoinInfo. " + ostr.str());
 
         EliminateJoinByFK::Eliminator eliminator{context, plan.getCTEInfo(), winner, info};
         JoinEliminationContext c;
@@ -145,7 +145,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitPlanNode(PlanNodeBase & 
 
     FPKeysAndOrdinaryKeys translated = VisitorUtil::accept(node.getChildren()[0], *this, join_info);
 
-    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr());
+    // LOG_INFO(getLogger("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr());
 
     return translated.clearFPKeys();
 }
@@ -211,7 +211,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
         translated.fp_keys = common_fp_keys;
     }
 
-    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitJoinNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr());
+    // LOG_INFO(getLogger("DataDependency"), "visitJoinNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + translated.keysStr());
 
     bool is_inner_join = step.getKind() == ASTTableJoin::Kind::Inner;
     bool is_outer_join = step.isOuterJoin() && step.getKind() != ASTTableJoin::Kind::Full; // only allow left outer/right outer join.
@@ -726,7 +726,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitUnionNode(UnionNode & no
         });
     }
 
-    // LOG_INFO(&Poco::Logger::get("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + result.keysStr());
+    // LOG_INFO(getLogger("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + result.keysStr());
 
     std::unordered_map<String, JoinInfo::JoinWinner> old_winners = join_info.reset(invalid_tables, join_infos);
     collectEliminableJoin(old_winners);

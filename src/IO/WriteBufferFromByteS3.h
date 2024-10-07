@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <vector>
 #include <common/logger_useful.h>
@@ -61,7 +62,7 @@ private:
     String multipart_upload_id;
     std::vector<String> part_tags;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 public:
     // For default settings in 16M segment, max part is about 156G

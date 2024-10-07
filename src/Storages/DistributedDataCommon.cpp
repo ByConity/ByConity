@@ -25,12 +25,12 @@ bool brpcWriteWithRetry(brpc::StreamId id, const butil::IOBuf & buf, int retry_c
             {
                 // TODO: retain stream object before finish code is read.
                 // Ingore error when writing to the closed stream, because this stream is closed by remote peer before read any finish code.
-                LOG_INFO(&Poco::Logger::get("DistributedDataCommon"), "Stream-{}, file info {} is closed", id, message);
+                LOG_INFO(getLogger("DistributedDataCommon"), "Stream-{}, file info {} is closed", id, message);
                 return false;
             }
 
             LOG_TRACE(
-                &Poco::Logger::get("DistributedDataCommon"),
+                getLogger("DistributedDataCommon"),
                 "Stream write buffer full wait for {} ms,  remaining retry count-{}, stream_id-{}, {} wait res code: {} size:{} ", // todo(jiashuo): support distributed file stealing
                 STREAM_WAIT_TIMEOUT_MS,
                 retry_count,
@@ -42,14 +42,14 @@ bool brpcWriteWithRetry(brpc::StreamId id, const butil::IOBuf & buf, int retry_c
         else if (rect_code == EINVAL)
         {
             // Ingore error when writing to the closed stream, because this stream is closed by remote peer before read any finish code.
-            LOG_INFO(&Poco::Logger::get("DistributedDataCommon"), "Stream-{} with {} is closed", id, message);
+            LOG_INFO(getLogger("DistributedDataCommon"), "Stream-{} with {} is closed", id, message);
             return false;
         }
         else if (rect_code == 1011) //EOVERCROWDED   | 1011 | The server is overcrowded
         {
             bthread_usleep(1000 * 1000);
             LOG_WARNING(
-                &Poco::Logger::get("DistributedDataCommon"),
+                getLogger("DistributedDataCommon"),
                 "Stream-{} write buffer error rect_code: EOVERCROWDED, server is overcrowded: {}",
                 id,
                 message);
@@ -64,7 +64,7 @@ bool brpcWriteWithRetry(brpc::StreamId id, const butil::IOBuf & buf, int retry_c
             if (rc == EINVAL)
                 return false;
             LOG_INFO(
-                &Poco::Logger::get("DistributedDataCommon"),
+                getLogger("DistributedDataCommon"),
                 "Stream-{} write receive finish request, finish code: -1: {}",
                 id,
                 rect_code,

@@ -94,7 +94,7 @@ void registerStorageCloudHDFS(StorageFactory & factory)
         CnchFileSettings settings = args.getContext()->getCnchFileSettings();
         settings.loadFromQuery(*args.storage_def);
         LOG_TRACE(
-            &Poco::Logger::get("StorageCloudHDFS"),
+            getLogger("StorageCloudHDFS"),
             fmt::format(
                 "create cloud hdfs table: database={}, table={}, url={}, format={}, compression={}",
                 database,

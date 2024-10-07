@@ -101,7 +101,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
 
     QueryPipeline pipeline;
     exchange_source_step.initializePipeline(pipeline, BuildQueryPipelineSettings::fromContext(context));
-    PlanSegmentExecutor::registerAllExchangeReceivers(&Poco::Logger::get("PlanSegmentExecutor"), pipeline, 200);
+    PlanSegmentExecutor::registerAllExchangeReceivers(getLogger("PlanSegmentExecutor"), pipeline, 200);
 
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();

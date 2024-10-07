@@ -32,7 +32,7 @@ PostgreSQLReplicationHandler::PostgreSQLReplicationHandler(
     bool is_attach_,
     const MaterializedPostgreSQLSettings & replication_settings,
     bool is_materialized_postgresql_database_)
-    : log(&Poco::Logger::get("PostgreSQLReplicationHandler"))
+    : log(getLogger("PostgreSQLReplicationHandler"))
     , context(context_)
     , is_attach(is_attach_)
     , remote_database_name(remote_database_name_)

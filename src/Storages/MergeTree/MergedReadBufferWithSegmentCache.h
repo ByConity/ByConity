@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstddef>
 #include <ctime>
 #include <memory>
@@ -170,7 +171,7 @@ private:
 
     String stream_extension;
 
-    Poco::Logger* logger;
+    LoggerPtr logger;
 
     off_t read_until_position = 0;
 };

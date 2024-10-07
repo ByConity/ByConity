@@ -49,7 +49,7 @@ SinglePartitionExchangeSink::SinglePartitionExchangeSink(
     , column_num(header.columns())
     , options(options_)
     , buffered_sender(header, sender, options.send_threshold_in_bytes, options.send_threshold_in_row_num)
-    , logger(&Poco::Logger::get("SinglePartitionExchangeSink"))
+    , logger(getLogger("SinglePartitionExchangeSink"))
 {
 }
 

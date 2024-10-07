@@ -58,7 +58,7 @@ static inline bool cmp_worker_disk(const WorkerNodePtr & a, const WorkerNodePtr 
 
 QueryScheduler::QueryScheduler(VirtualWarehouse & vw_) : vw(vw_)
 {
-    log = &Poco::Logger::get(vw.getName() + " (QueryScheduler)");
+    log = getLogger(vw.getName() + " (QueryScheduler)");
 }
 
 /// pickWorkerGroups stage 1: filter groups by requirement.

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <CloudServices/CnchBGThreadCommon.h>
+#include <Common/Logger.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Poco/Logger.h>
 
@@ -39,7 +40,7 @@ class DaemonJob : public IDaemonJob, public WithMutableContext
 {
 public:
     DaemonJob(ContextMutablePtr global_context_, CnchBGThreadType type_)
-        : WithMutableContext(global_context_), type{type_}, log(&Poco::Logger::get(toString(type)))
+        : WithMutableContext(global_context_), type{type_}, log(getLogger(toString(type)))
     {}
 
     void init() override;
@@ -47,13 +48,13 @@ public:
     void stop() override final;
     bool suspended() const override { return false; }
     CnchBGThreadType getType() const { return type; }
-    Poco::Logger * getLog() { return log; }
+    LoggerPtr getLog() { return log; }
 
 protected:
     void execute() override final;
     virtual bool executeImpl() = 0;
     const CnchBGThreadType type;
-    Poco::Logger * log;
+    LoggerPtr log;
 private:
     BackgroundSchedulePool::TaskHolder task;
 };

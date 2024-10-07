@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Optimizer/IntermediateResult/CacheParam.h>
 #include <Processors/ISimpleTransform.h>
 #include <Processors/QueryPipeline.h>
@@ -49,7 +50,7 @@ private:
     UInt64 cache_max_rows = 0;
     bool all_part_in_cache = false;
     std::unordered_map<IntermediateResult::CacheKey, IntermediateResult::CacheValuePtr> uncompleted_cache;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

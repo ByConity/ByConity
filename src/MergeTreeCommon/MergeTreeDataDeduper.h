@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <MergeTreeCommon/ReplacingSortedKeysIterator.h>
 #include <Transaction/TxnTimestamp.h>
@@ -200,7 +201,7 @@ private:
 
     const MergeTreeMetaBase & data;
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
     VersionMode version_mode;
     CnchDedupHelper::DedupMode dedup_mode;
 };

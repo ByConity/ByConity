@@ -152,7 +152,7 @@ namespace
 
 StorageSystemStackTrace::StorageSystemStackTrace(const StorageID & table_id_)
     : IStorageSystemOneBlock<StorageSystemStackTrace>(table_id_)
-    , log(&Poco::Logger::get("StorageSystemStackTrace"))
+    , log(getLogger("StorageSystemStackTrace"))
 {
     notification_pipe.open();
 

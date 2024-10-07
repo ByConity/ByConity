@@ -136,7 +136,7 @@ struct KeyIndexFileCache::Rep
 };
 
 KeyIndexFileCache::KeyIndexFileCache(Context & context, UInt64 max_size)
-    : log(&Poco::Logger::get("KeyIndexFileCache")), rep(std::make_shared<Rep>(context, max_size))
+    : log(getLogger("KeyIndexFileCache")), rep(std::make_shared<Rep>(context, max_size))
 {
     initCacheFromFileSystem();
     LOG_INFO(log, "Successfully init KeyIndexFileCache in path {} and KeyIndexFileCache max_size is {}", rep->base_path, max_size);
@@ -192,7 +192,7 @@ int KeyIndexFileCache::get(const IndexFile::RemoteFileInfo & file)
                 std::shared_ptr<Rep> rep_inner = rep_wp.lock();
                 if (!rep_inner)
                 {
-                    LOG_WARNING(&Poco::Logger::get("KeyIndexFileCache"), "KeyIndexFileCache has been destory.");
+                    LOG_WARNING(getLogger("KeyIndexFileCache"), "KeyIndexFileCache has been destory.");
                     return;
                 }
                 try
@@ -221,7 +221,7 @@ int KeyIndexFileCache::get(const IndexFile::RemoteFileInfo & file)
                 catch (...)
                 {
                     LOG_ERROR(
-                        &Poco::Logger::get("KeyIndexFileCache"),
+                        getLogger("KeyIndexFileCache"),
                         "Failed to cache {} to local disks: {}",
                         String(std::filesystem::path(file.disk->getPath()) / file.rel_path),
                         getCurrentExceptionMessage(false));

@@ -52,7 +52,7 @@ CloudMergeTreeDedupWorker::CloudMergeTreeDedupWorker(StorageCloudMergeTree & sto
     : storage(storage_)
     , context(storage.getContext())
     , log_name(storage.getLogName() + "(DedupWorker)")
-    , log(&Poco::Logger::get(log_name))
+    , log(getLogger(log_name))
     , interval_scheduler(storage.getSettings()->staged_part_lifetime_threshold_ms_to_block_kafka_consume)
 {
     task = storage.getContext()->getUniqueTableSchedulePool().createTask(log_name, [this] { run(); });

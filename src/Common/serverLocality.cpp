@@ -27,7 +27,7 @@ bool isLocalServer(const std::string & target, const std::string & port)
         const size_t pos = target.find_last_of(':');
         if (std::string::npos == pos)
         {
-            LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__),
+            LOG_ERROR(getLogger(__PRETTY_FUNCTION__),
                 "Parse isLocalServer failed because cannot find colon in address {}", target);
             return false;
         }

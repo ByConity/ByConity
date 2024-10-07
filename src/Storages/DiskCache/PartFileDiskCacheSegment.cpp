@@ -114,7 +114,7 @@ String PartFileDiskCacheSegment::getMarkName() const
 
 void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_exception)
 {
-    Poco::Logger * log = disk_cache.getLogger();
+    LoggerPtr log = disk_cache.getLogger();
 
     try
     {

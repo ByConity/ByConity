@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -75,7 +76,7 @@ private:
     size_t partition_num;
     ColumnNumbers repartition_keys;
     ExecutableFunctionPtr repartition_func;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

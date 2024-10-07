@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <DaemonManager/DaemonJob.h>
 #include <Common/LRUCache.h>
 #include <Core/UUID.h>
@@ -107,7 +108,7 @@ struct BGJobInfoFromServer
 using BGJobsFromServersFetcher = std::function<std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>>(
     Context &,
     CnchBGThreadType,
-    Poco::Logger *,
+    LoggerPtr,
     const std::vector<String> &
 )>;
 

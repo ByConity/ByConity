@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -58,7 +59,7 @@ private:
     mutable bthread::Mutex mutex;
     using BroadcastSenderProxyEntry = std::weak_ptr<BroadcastSenderProxy>;
     std::unordered_map<ExchangeDataKey, BroadcastSenderProxyEntry, ExchangeDataKeyHashFunc> proxies;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

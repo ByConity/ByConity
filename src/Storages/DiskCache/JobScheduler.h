@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -91,7 +92,7 @@ public:
     Stats getStats() const;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("JobQueue");
+    LoggerPtr log = getLogger("JobQueue");
 
     struct QueueEntry
     {
@@ -145,7 +146,7 @@ public:
     std::string_view getName() const { return name; }
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("ThreadPoolExecutor");
+    LoggerPtr log = getLogger("ThreadPoolExecutor");
 
     const std::string_view name{};
     std::atomic<UInt32> next_queue{0};
@@ -169,7 +170,7 @@ public:
 
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("ThreadPoolJobScheduler");
+    LoggerPtr log = getLogger("ThreadPoolJobScheduler");
 
     void join();
 
@@ -305,7 +306,7 @@ private:
     // Actually submit the req to the worker thread
     void scheduleReq(std::unique_ptr<FiberRequest> req);
 
-    Poco::Logger * log = &Poco::Logger::get("NavyRequestDispatcher");
+    LoggerPtr log = getLogger("NavyRequestDispatcher");
 
     // The parent scheduler to get completion notification
     JobScheduler & scheduler;
@@ -366,7 +367,7 @@ private:
     // Return the context for the key and type
     FiberRequestDispatcher & getDispatcher(uint64_t keyHash, JobType type);
 
-    Poco::Logger * log = &Poco::Logger::get("NavyRequestScheduler");
+    LoggerPtr log = getLogger("NavyRequestScheduler");
 
     const size_t num_reader_threads;
     const size_t num_writer_threads;

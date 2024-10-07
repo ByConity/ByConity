@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Access/RowPolicy.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <CloudServices/CnchBGThreadPartitionSelector.h>
@@ -1536,7 +1537,7 @@ public:
 
     void clearOptimizerProfile();
 
-    void logOptimizerProfile(Poco::Logger * log, String prefix, String name, String time, bool is_rule = false);
+    void logOptimizerProfile(LoggerPtr log, String prefix, String name, String time, bool is_rule = false);
 
     const String & getTenantId() const
     {

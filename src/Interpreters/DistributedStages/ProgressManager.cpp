@@ -11,7 +11,7 @@ namespace DB
 {
 
 TCPProgressSender::TCPProgressSender(std::function<void()> send_tcp_progress_, size_t interval_)
-    : logger(&Poco::Logger::get("ProgressManager")), send_tcp_progress(send_tcp_progress_), interval(interval_)
+    : logger(getLogger("ProgressManager")), send_tcp_progress(send_tcp_progress_), interval(interval_)
 {
     if (send_tcp_progress && interval)
     {

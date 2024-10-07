@@ -120,7 +120,7 @@ PlanSegmentExecutor::PlanSegmentExecutor(
     , plan_segment_instance(std::move(plan_segment_instance_))
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
-    , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , logger(getLogger("PlanSegmentExecutor"))
     , query_log_element(std::make_unique<QueryLogElement>())
 {
     options = ExchangeUtils::getExchangeOptions(context);
@@ -138,7 +138,7 @@ PlanSegmentExecutor::PlanSegmentExecutor(
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
     , options(std::move(options_))
-    , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , logger(getLogger("PlanSegmentExecutor"))
     , query_log_element(std::make_unique<QueryLogElement>())
 {
     prepareSegmentInfo();
@@ -239,7 +239,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
 
 BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
 {
-    LOG_DEBUG(&Poco::Logger::get("PlanSegmentExecutor"), "lazyExecute: {}", plan_segment->getPlanSegmentId());
+    LOG_DEBUG(getLogger("PlanSegmentExecutor"), "lazyExecute: {}", plan_segment->getPlanSegmentId());
     BlockIO res;
     // Will run as master query and already initialized
     if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
@@ -487,7 +487,7 @@ void PlanSegmentExecutor::doExecute()
     }
 }
 
-static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(Poco::Logger * log, ContextMutablePtr& context)
+static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(LoggerPtr log, ContextMutablePtr& context)
 {
     QueryPlanOptimizationSettings settings = QueryPlanOptimizationSettings::fromContext(context);
     if(!settings.enable_optimizer)
@@ -785,7 +785,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         throw Exception("Plan segment has no exchange sender!", ErrorCodes::LOGICAL_ERROR);
 }
 
-void PlanSegmentExecutor::registerAllExchangeReceivers(Poco::Logger * log, const QueryPipeline & pipeline, UInt32 register_timeout_ms)
+void PlanSegmentExecutor::registerAllExchangeReceivers(LoggerPtr log, const QueryPipeline & pipeline, UInt32 register_timeout_ms)
 {
     const Processors & procesors = pipeline.getProcessors();
     std::vector<AsyncRegisterResult> async_results;

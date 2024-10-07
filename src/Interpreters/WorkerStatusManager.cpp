@@ -29,7 +29,7 @@ WorkerGroupStatus::~WorkerGroupStatus()
         for (const auto & half_open_id : half_open_workers)
         {
             global_context->getWorkerStatusManager()->restoreWorkerNode(half_open_id);
-            LOG_DEBUG(&Poco::Logger::get("WorkerStatusManager"), "restore half open worker {}", half_open_id.ToString());
+            LOG_DEBUG(getLogger("WorkerStatusManager"), "restore half open worker {}", half_open_id.ToString());
         }
     }
 }
@@ -62,7 +62,7 @@ void WorkerGroupStatus::calculateStatus()
         status = WorkerGroupHealthStatus::Critical;
 
     LOG_DEBUG(
-        &Poco::Logger::get("WorkerStatusManager"),
+        getLogger("WorkerStatusManager"),
         "allWorkerSize: {}  healthWorkerSize: {}  unhealthWorkerSize: {} \
     HeavyLoadSize: {} onlySourceSize: {} unknowWorkerSize: {} notConnectedWorkerSize: {} halfOpenChecking: {}  halfOpen: {}",
         total_worker_size,
@@ -84,7 +84,7 @@ std::optional<std::vector<size_t>> WorkerGroupStatus::selectHealthNode(const Hos
 }
 
 WorkerStatusManager::WorkerStatusManager(ContextWeakMutablePtr context_)
-    : WithContext(context_), log(&Poco::Logger::get("WorkerStatusManager"))
+    : WithContext(context_), log(getLogger("WorkerStatusManager"))
 {
     schedule_pool.emplace(1, CurrentMetrics::BackgroundRMHeartbeatSchedulePoolTask, "RMHeart");
     startHeartbeat(*schedule_pool);

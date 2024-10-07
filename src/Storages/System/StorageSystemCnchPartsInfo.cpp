@@ -88,7 +88,7 @@ Pipe StorageSystemCnchPartsInfo::read(
 
     Block header = materializeBlock(InterpreterSelectQuery(ast, context, QueryProcessingStage::Complete).getSampleBlock());
     QueryPlan query_plan;
-    Poco::Logger * log = &Poco::Logger::get("SystemPartsInfo");
+    LoggerPtr log = getLogger("SystemPartsInfo");
 
     ClusterProxy::SelectStreamFactory stream_factory = ClusterProxy::SelectStreamFactory(
         header,

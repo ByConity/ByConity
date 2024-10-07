@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/MergeTree/LateMaterialize/MergeTreeBaseSelectProcessorLM.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -60,7 +61,7 @@ protected:
 
     bool check_columns;
 
-    static inline Poco::Logger * log = &Poco::Logger::get("MergeTreeSelectProcessorLM");
+    static inline LoggerPtr log = getLogger("MergeTreeSelectProcessorLM");
 };
 
 }

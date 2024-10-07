@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <filesystem>
 #include <Common/HashTable/Hash.h>
@@ -128,7 +129,7 @@ private:
 
         std::unique_ptr<ThreadPool> pool;
         ExceptionHandler handler;
-        Poco::Logger * log;
+        LoggerPtr log;
     };
 
     /// Load from disk when Disk cache starts up

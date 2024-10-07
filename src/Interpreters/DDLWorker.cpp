@@ -104,7 +104,7 @@ public:
         zookeeper(zookeeper_),
         lock_path(fs::path(lock_prefix_) / lock_name_),
         lock_message(lock_message_),
-        log(&Poco::Logger::get("zkutil::Lock"))
+        log(getLogger("zkutil::Lock"))
     {
         zookeeper->createIfNotExists(lock_prefix_, "");
     }
@@ -157,7 +157,7 @@ private:
 
     std::string lock_path;
     std::string lock_message;
-    Poco::Logger * log;
+    LoggerPtr log;
 
 };
 
@@ -179,7 +179,7 @@ DDLWorker::DDLWorker(
     const String & logger_name,
     const CurrentMetrics::Metric * max_entry_metric_)
     : context(Context::createCopy(context_))
-    , log(&Poco::Logger::get(logger_name))
+    , log(getLogger(logger_name))
     , pool_size(pool_size_)
     , max_entry_metric(max_entry_metric_)
 {

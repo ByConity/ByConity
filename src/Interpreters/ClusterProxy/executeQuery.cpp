@@ -52,7 +52,7 @@ namespace ErrorCodes
 namespace ClusterProxy
 {
 
-ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr context, const Settings & settings, Poco::Logger * log)
+ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr context, const Settings & settings, LoggerPtr log)
 {
     Settings new_settings = settings;
     new_settings.queue_max_wait_ms = Cluster::saturate(new_settings.queue_max_wait_ms, settings.max_execution_time);
@@ -193,7 +193,7 @@ ASTPtr rewriteSampleForDistributedTable(const ASTPtr & query_ast, size_t shard_s
 
 void executeQuery(
     QueryPlan & query_plan,
-    IStreamFactory & stream_factory, Poco::Logger * log,
+    IStreamFactory & stream_factory, LoggerPtr log,
     const ASTPtr & query_ast, ContextPtr context, const SelectQueryInfo & query_info,
     const ExpressionActionsPtr & sharding_key_expr,
     const std::string & sharding_key_column_name,
@@ -322,7 +322,7 @@ void executeQuery(
 /// TODO: replace WorkerGroupHandle with SelectQueryInfo if worker group info is put into SelectQueryInfo
 void executeQuery(
     QueryPlan & query_plan,
-    IStreamFactory & stream_factory, Poco::Logger * log,
+    IStreamFactory & stream_factory, LoggerPtr log,
     const ASTPtr & query_ast, ContextPtr context, const WorkerGroupHandle & cluster)
 {
     assert(log);

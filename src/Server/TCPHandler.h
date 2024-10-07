@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <Poco/Net/TCPServerConnection.h>
 
@@ -156,7 +157,7 @@ public:
 private:
     IServer & server;
     bool parse_proxy_protocol = false;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     String client_name;
     UInt64 client_version_major = 0;

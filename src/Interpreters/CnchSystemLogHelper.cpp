@@ -37,7 +37,7 @@ namespace DB
 bool createDatabaseInCatalog(
     const ContextPtr & global_context,
     const String & database_name,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     bool ret = true;
     try
@@ -181,7 +181,7 @@ bool createCnchTable(
     const String & database,
     const String & table,
     ASTPtr & create_query_ast,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     bool ret = true;
     ParserCreateQuery parser;
@@ -224,7 +224,7 @@ bool prepareCnchTable(
     const String & database,
     const String & table,
     ASTPtr & create_query_ast,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     auto catalog = global_context->getCnchCatalog();
 
@@ -242,7 +242,7 @@ bool syncTableSchema(
     const String & database,
     const String & table,
     const Block & expected_block,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     bool ret = true;
     auto catalog = global_context->getCnchCatalog();
@@ -313,7 +313,7 @@ bool createView(
     ContextPtr global_context,
     const String & database,
     const String & table,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     bool ret = true;
 

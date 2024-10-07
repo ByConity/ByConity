@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Common/LinkedHashMap.h>
 #include <Processors/ISimpleTransform.h>
 #include <common/logger_useful.h>
@@ -76,6 +77,6 @@ private:
     std::atomic_bool is_bypassed = false;
 
     Stopwatch timer;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 }

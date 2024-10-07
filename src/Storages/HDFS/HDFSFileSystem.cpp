@@ -147,7 +147,7 @@ void setHdfsDirectConfig(HDFSBuilderPtr & builder, const String & hdfs_user, con
 
 HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const String & hdfs_user, const String & nnproxy)
 {
-    LOG_TRACE(&Poco::Logger::get(__func__), "params uri: {} hdfs_user: {} nnproxy: {} " , uri.toString(), hdfs_user, nnproxy);
+    LOG_TRACE(getLogger(__func__), "params uri: {} hdfs_user: {} nnproxy: {} " , uri.toString(), hdfs_user, nnproxy);
     HDFSBuilderPtr builder(hdfsNewBuilder());
     if (builder == nullptr)
         throw Exception(
@@ -182,7 +182,7 @@ HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const String & hdfs_user
                 proxies_str += host_with_port.getTCPAddress() + ",";
                 proxies.emplace_back(normalizeHost(host_with_port.getHost()), host_with_port.tcp_port);
             }
-            LOG_INFO(&Poco::Logger::get("HDFSFileSystem"), "Construct ha hdfs nn proxies {}", proxies_str);
+            LOG_INFO(getLogger("HDFSFileSystem"), "Construct ha hdfs nn proxies {}", proxies_str);
 
             service_name = "nnproxy";
         } else if (use_ha) {
@@ -192,7 +192,7 @@ HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const String & hdfs_user
                 const Poco::URI proxy_uri(addr);
                 proxies.emplace_back(normalizeHost(proxy_uri.getHost()),proxy_uri.getPort());
             }
-            LOG_INFO(&Poco::Logger::get("HDFSFileSystem"), "Construct ha hdfs namenodes {}", nnproxy);
+            LOG_INFO(getLogger("HDFSFileSystem"), "Construct ha hdfs namenodes {}", nnproxy);
             service_name = "ha_namenodes";
         }
     }
@@ -285,7 +285,7 @@ void HDFSFileSystem::reconnect() const
         fs = new_fs;
     }
 
-    LOG_TRACE(&Poco::Logger::get("HDFSFileSystem"), "Reconnect host: {}", host.data());
+    LOG_TRACE(getLogger("HDFSFileSystem"), "Reconnect host: {}", host.data());
 }
 
 void HDFSFileSystem::reconnectIfNecessary() const
@@ -991,7 +991,7 @@ HDFSBuilderPtr HDFSConnectionParams::createBuilder(const Poco::URI & uri) const
     // construct from uri.
     // uri is hdfs://host:ip/a/b or hdfs://my-hadoop/a/b
 
-    LOG_DEBUG(&Poco::Logger::get("HDFSConnectionParams"), "use nnproxy ha config: {}", toString());
+    LOG_DEBUG(getLogger("HDFSConnectionParams"), "use nnproxy ha config: {}", toString());
     auto raw_builder = hdfsNewBuilder();
     if (raw_builder == nullptr)
         throw Exception("Unable to create HDFS builder, maybe hdfs3.xml missing" , ErrorCodes::BAD_ARGUMENTS);
@@ -1028,13 +1028,13 @@ HDFSBuilderPtr HDFSConnectionParams::createBuilder(const Poco::URI & uri) const
             auto addrs_from_nnproxy = lookupAndShuffle();
             if (use_nnproxy_ha)
             {
-                LOG_DEBUG(&Poco::Logger::get("HDFSConnectionParams"), "use nnproxy ha config");
+                LOG_DEBUG(getLogger("HDFSConnectionParams"), "use nnproxy ha config");
                 setHdfsHaConfig(builder, hdfs_service, hdfs_user, addrs_from_nnproxy);
                 return builder;
             }
             else
             {
-                LOG_DEBUG(&Poco::Logger::get("HDFSConnectionParams"), "use none nnproxy ha config");
+                LOG_DEBUG(getLogger("HDFSConnectionParams"), "use none nnproxy ha config");
                 IpWithPort targetNode = addrs_from_nnproxy[0];
                 setHdfsDirectConfig(builder, hdfs_user, "hdfs://" + std::get<0>(safeNormalizeHost(targetNode.first)), targetNode.second);
                 return builder;

@@ -42,7 +42,7 @@ MultiPartitionExchangeSink::MultiPartitionExchangeSink(
     , repartition_func(std::move(repartition_func_))
     , repartition_keys(std::move(repartition_keys_))
     , options(options_)
-    , logger(&Poco::Logger::get("MultiPartitionExchangeSink"))
+    , logger(getLogger("MultiPartitionExchangeSink"))
 
 {
     bool has_null_shuffle_key = false;

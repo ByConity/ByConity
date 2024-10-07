@@ -28,7 +28,7 @@ bool IDisk::isDirectoryEmpty(const String & path)
 
 void copyFile(IDisk & from_disk, const String & from_path, IDisk & to_disk, const String & to_path)
 {
-    LOG_DEBUG(&Poco::Logger::get("IDisk"), "Copying from {} (path: {}) {} to {} (path: {}) {}.",
+    LOG_DEBUG(getLogger("IDisk"), "Copying from {} (path: {}) {} to {} (path: {}) {}.",
               from_disk.getName(), from_disk.getPath(), from_path, to_disk.getName(), to_disk.getPath(), to_path);
 
     auto in = from_disk.readFile(from_path);

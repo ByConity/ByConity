@@ -42,7 +42,7 @@ WorkloadTableStats WorkloadTableStats::build(ContextPtr context, const String & 
         collector.readAllFromCatalog();
         basic_stats = collector.toPlanNodeStatistics().value_or(nullptr);
         if (basic_stats)
-            LOG_DEBUG(&Poco::Logger::get("WorkloadTableStats"), "Stats for table {}.{}: {} rows, {} symbols",
+            LOG_DEBUG(getLogger("WorkloadTableStats"), "Stats for table {}.{}: {} rows, {} symbols",
                       database_name, table_name, basic_stats->getRowCount(), basic_stats->getSymbolStatistics().size());
     } catch (...) {}
 
@@ -80,7 +80,7 @@ WorkloadExtendedStatsPtr WorkloadTableStats::collectExtendedStats(
     query.pop_back();
     query += fmt::format(" FROM {}.{}", database, table);
 
-    LOG_DEBUG(&Poco::Logger::get("WorkloadTableStats"), "Collecting extended stats for table: {}", query);
+    LOG_DEBUG(getLogger("WorkloadTableStats"), "Collecting extended stats for table: {}", query);
 
     Statistics::SubqueryHelper subquery_helper = Statistics::SubqueryHelper::create(context, query);
     Block result = Statistics::getOnlyRowFrom(subquery_helper);

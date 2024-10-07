@@ -141,7 +141,7 @@ int StreamServiceHandler::on_received_messages(brpc::StreamId id, butil::IOBuf *
 
                 bool success = brpcWriteWithRetry(id, out.getFinishedBuf(), retry, message);
                 LOG_TRACE(
-                    &Poco::Logger::get("StreamServiceHandler"),
+                    getLogger("StreamServiceHandler"),
                     "Response(success = {}) read request[{}] stream_id: {}, "
                     "offset: {}, length: {}({}), total take {}ms from first request id: {}",
                     success,

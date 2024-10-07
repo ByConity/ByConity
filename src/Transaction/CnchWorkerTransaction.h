@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/StorageID.h>
 #include <CloudServices/CnchServerClient.h>
 #include <Transaction/ICnchTransaction.h>
@@ -93,7 +94,7 @@ private:
     CnchServerClientPtr server_client;
     StorageID kafka_table_id{StorageID::createEmpty()};
     size_t kafka_consumer_index{SIZE_MAX};
-    Poco::Logger * log {&Poco::Logger::get("CnchWorkerTransaction")};
+    LoggerPtr log {getLogger("CnchWorkerTransaction")};
 
     /// Transaction should only be committed explicitly
     bool enable_explicit_commit{false};

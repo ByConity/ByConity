@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/PODArray.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Processors/Pipe.h>
@@ -108,7 +109,7 @@ private:
     bool build_rowid_mappings;
     /// rowid mapping for each input part, only for normal parts
     std::vector<RowidMapping> rowid_mappings;
-    Poco::Logger * log = nullptr;
+    LoggerPtr log = nullptr;
     ReservationPtr space_reservation;
     /// Used for building rowid mappings
     size_t output_rowid = 0;

@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Common/ResourceMonitor.h>
 #include <Interpreters/Context_fwd.h>
@@ -46,7 +47,7 @@ private:
 private:
     std::atomic_bool init_request = true;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     std::unique_ptr<ResourceMonitor> resource_monitor;
     BackgroundSchedulePool::TaskHolder background_task;
 };

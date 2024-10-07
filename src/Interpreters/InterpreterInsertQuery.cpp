@@ -128,7 +128,7 @@ static NameSet genViewDependencyCreateQueries(StoragePtr storage, ContextPtr loc
         auto table = DatabaseCatalog::instance().tryGetTable(dependence, local_context);
         if (!table)
         {
-            LOG_WARNING(&Poco::Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table {} not found", dependence.getNameForLogs());
+            LOG_WARNING(getLogger("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table {} not found", dependence.getNameForLogs());
             continue;
         }
 
@@ -139,7 +139,7 @@ static NameSet genViewDependencyCreateQueries(StoragePtr storage, ContextPtr loc
             auto target_table = DatabaseCatalog::instance().tryGetTable(mv->getTargetTableId(), local_context);
             if (!target_table)
             {
-                LOG_WARNING(&Poco::Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "target table for {} not exist", mv->getStorageID().getNameForLogs());
+                LOG_WARNING(getLogger("InterpreterInsertQuery::genViewDependencyCreateQueries"), "target table for {} not exist", mv->getStorageID().getNameForLogs());
                 continue;
             }
 
@@ -147,7 +147,7 @@ static NameSet genViewDependencyCreateQueries(StoragePtr storage, ContextPtr loc
             auto * target_cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
             if (!target_cnch_merge)
             {
-                LOG_WARNING(&Poco::Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected",
+                LOG_WARNING(getLogger("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected",
                             target_table->getStorageID().getNameForLogs());
                 continue;
             }
@@ -185,7 +185,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
                 std::nullopt,
                 Strings{},
                 query.table_id.database_name);
-            LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}", create_query);
+            LOG_TRACE(getLogger(__PRETTY_FUNCTION__), "Worker side create query: {}", create_query);
 
             NameSet view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
             if (!view_create_sqls.empty())
@@ -387,7 +387,7 @@ BlockIO InterpreterInsertQuery::execute()
                 /// set worker group for select query
                 insert_select_context->initCnchServerResource(insert_select_context->getCurrentTransactionID());
                 LOG_DEBUG(
-                    &Poco::Logger::get("VirtualWarehouse"),
+                    getLogger("VirtualWarehouse"),
                     "Set worker group {} for table {}", worker_group->getQualifiedName(), cloud_table->getStorageID().getNameForLogs());
             }
 

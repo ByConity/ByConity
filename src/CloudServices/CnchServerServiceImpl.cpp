@@ -111,7 +111,7 @@ CnchServerServiceImpl::CnchServerServiceImpl(ContextMutablePtr global_context)
     : WithMutableContext(global_context),
       server_start_time(getTS(global_context)),
       global_gc_manager(global_context),
-      log(&Poco::Logger::get("CnchServerService"))
+      log(getLogger("CnchServerService"))
 {
 }
 
@@ -177,7 +177,7 @@ void CnchServerServiceImpl::commitParts(
                         auto column_commit_time = storage->getPartColumnsCommitTime(*(parts[0]->getColumnsPtr()));
                         if (column_commit_time != storage->commit_time.toUInt64())
                         {
-                            LOG_WARNING(&Poco::Logger::get("CnchServerService"), "Kafka consumer cannot commit parts because of underlying table change. Will reschedule consume task.");
+                            LOG_WARNING(getLogger("CnchServerService"), "Kafka consumer cannot commit parts because of underlying table change. Will reschedule consume task.");
                             throw Exception(ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP, "Commit fails because of storage schema change");
                         }
                     }
@@ -187,7 +187,7 @@ void CnchServerServiceImpl::commitParts(
                     for (const auto & tp : req->tpl())
                         tpl.emplace_back(cppkafka::TopicPartition(tp.topic(), tp.partition(), tp.offset()));
 
-                    LOG_TRACE(&Poco::Logger::get("CnchServerService"), "parsed tpl to commit with size: {}\n", tpl.size());
+                    LOG_TRACE(getLogger("CnchServerService"), "parsed tpl to commit with size: {}\n", tpl.size());
                 }
 
                 MySQLBinLogInfo binlog;

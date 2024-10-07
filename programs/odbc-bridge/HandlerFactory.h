@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Server/HTTP/HTTPRequestHandlerFactory.h>
 #include "ColumnInfoHandler.h"
@@ -19,7 +20,7 @@ class ODBCBridgeHandlerFactory : public HTTPRequestHandlerFactory, WithContext
 public:
     ODBCBridgeHandlerFactory(const std::string & name_, size_t keep_alive_timeout_, ContextPtr context_)
         : WithContext(context_)
-        , log(&Poco::Logger::get(name_))
+        , log(getLogger(name_))
         , name(name_)
         , keep_alive_timeout(keep_alive_timeout_)
     {
@@ -28,7 +29,7 @@ public:
     std::unique_ptr<HTTPRequestHandler> createRequestHandler(const HTTPServerRequest & request) override;
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     std::string name;
     size_t keep_alive_timeout;
 };

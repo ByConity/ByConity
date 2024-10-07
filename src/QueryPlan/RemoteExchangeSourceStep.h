@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -84,7 +85,7 @@ private:
         std::shared_ptr<QueryExchangeLog> query_exchange_log);
     PlanSegmentInputs inputs;
     PlanSegment * plan_segment = nullptr;
-    Poco::Logger * logger;
+    LoggerPtr logger;
     size_t plan_segment_id;
     String query_id;
     String coordinator_address;

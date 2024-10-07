@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Disks/StoragePolicy.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/SourceTask.h>
@@ -181,7 +182,7 @@ public:
 
     /// Logger
     const String & getLogName() const { return log_name; }
-    Poco::Logger * getLogger() const override { return log; }
+    LoggerPtr getLogger() const { return log; }
 
     /// A global unique id for the storage. If storage UUID is not empty, use the storage UUID. Otherwise, use the address of current object.
     String getStorageUniqueID() const;
@@ -482,7 +483,7 @@ protected:
     String storage_address;
 
     String log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Storage settings.
     /// Use get and set to receive readonly versions.

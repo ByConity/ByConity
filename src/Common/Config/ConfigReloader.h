@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "ConfigProcessor.h"
 #include <Common/ThreadPool.h>
 #include <Common/ZooKeeper/Common.h>
@@ -69,7 +70,7 @@ private:
 
     static constexpr auto reload_interval = std::chrono::seconds(2);
 
-    Poco::Logger * log = &Poco::Logger::get("ConfigReloader");
+    LoggerPtr log = getLogger("ConfigReloader");
 
     std::string path;
     std::string include_from_path;

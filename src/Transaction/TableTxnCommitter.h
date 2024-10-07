@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Transaction/CnchServerTransaction.h>
 
 
@@ -12,7 +13,7 @@ public:
     explicit TableTxnCommitter(const ContextPtr & context_, const UUID & storage_uuid_)
         : context(context_),
           uuid(storage_uuid_),
-          log(&Poco::Logger::get("TnxComitter(" + UUIDHelpers::UUIDToString(uuid) + ")"))
+          log(getLogger("TnxComitter(" + UUIDHelpers::UUIDToString(uuid) + ")"))
     {
     }
 
@@ -26,7 +27,7 @@ private:
 
     ContextPtr context;
     const UUID uuid;
-    Poco::Logger * log;
+    LoggerPtr log;
     std::atomic<UInt64> latest_version {0};
 
     std::mutex commit_mutex;

@@ -112,7 +112,7 @@ String IHiveFile::getFormatName() const
 
 std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings & settings) const
 {
-    auto * log = &Poco::Logger::get(__func__);
+    auto log = getLogger(__func__);
     auto cache_strategy = DiskCacheFactory::instance().tryGet(DiskCacheType::Hive);
     if (cache_strategy && settings.disk_cache_mode < DiskCacheMode::SKIP_DISK_CACHE)
     {

@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <thread>
 #include <atomic>
 #include <memory>
@@ -228,7 +229,9 @@ public:
     ASTPtr getCreateTableQuery(ParserSettingsImpl dt) override;
 
 protected:
-    Poco::Logger * log;
+    /// use raw logger here because TextLog requires logger->setLevel() capability
+    /// which is not supported by VirtualLogger
+    LoggerRawPtr log;
 
     /* Saving thread data */
     const StorageID table_id;
@@ -286,7 +289,7 @@ SystemLog<LogElement>::SystemLog(
     , flush_interval_milliseconds(flush_interval_milliseconds_)
 {
     assert((database_name_ == DatabaseCatalog::SYSTEM_DATABASE) || (database_name_ == CNCH_SYSTEM_LOG_DB_NAME));
-    log = &Poco::Logger::get("SystemLog (" + database_name_ + "." + table_name_ + ")");
+    log = getRawLogger("SystemLog (" + database_name_ + "." + table_name_ + ")");
 }
 
 

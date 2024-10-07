@@ -115,7 +115,7 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
     }
     catch (Exception & exception)
     {
-        static auto * log = &Poco::Logger::get("MaterializedViewRewriter");
+        static auto log = getLogger("MaterializedViewRewriter");
         if (exception.code() == ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW)
             LOG_DEBUG(log, "skip {}, reason: {}", materialized_view_id.getFullTableName(), exception.message());
         else

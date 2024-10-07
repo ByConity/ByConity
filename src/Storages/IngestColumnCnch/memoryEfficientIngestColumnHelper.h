@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Core/Block.h>
@@ -146,7 +147,7 @@ void writeBlock(
     const size_t number_of_buckets,
     IBlockOutputStream & new_part_output,
     const StorageMetadataPtr & target_meta_data_ptr,
-    Poco::Logger * log);
+    LoggerPtr log);
 
 Names getColumnsFromSourceTableForInsertNewPart(
     const Names & ordered_key_names,

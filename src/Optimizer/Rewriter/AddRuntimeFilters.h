@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
@@ -72,7 +73,7 @@ private:
     ContextMutablePtr context;
     CTEInfo & cte_info;
     SimpleCTEVisitHelper<PlanPropEquivalences> cte_helper;
-    Poco::Logger * logger = &Poco::Logger::get("AddRuntimeFilters");
+    LoggerPtr logger = getLogger("AddRuntimeFilters");
 };
 
 struct RuntimeFilterContext

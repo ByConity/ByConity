@@ -1317,7 +1317,7 @@ void increment(Event event, Count amount, Metrics::MetricType type, LabelledMetr
     }
     catch (DB::Exception & e)
     {
-        LOG_ERROR(&Poco::Logger::get("ProfileEvents"), "Metrics emit metric failed: {}", e.message());
+        LOG_ERROR(getLogger("ProfileEvents"), "Metrics emit metric failed: {}", e.message());
     }
 }
 

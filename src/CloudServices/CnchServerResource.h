@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -139,7 +140,7 @@ class CnchServerResource
 {
 public:
     explicit CnchServerResource(TxnTimestamp curr_txn_id)
-        : txn_id(curr_txn_id), log(&Poco::Logger::get("ServerResource"))
+        : txn_id(curr_txn_id), log(getLogger("ServerResource"))
     {
     }
 
@@ -280,7 +281,7 @@ private:
     ResourceStageInfo resource_stage_info;
 
     bool skip_clean_worker{false};
-    Poco::Logger * log;
+    LoggerPtr log;
     mutable ServerResourceLockManager lock_manager;
 
     bool send_mutations{false};

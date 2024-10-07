@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <Interpreters/Context.h>
@@ -235,7 +236,7 @@ class ConcurrentHashMap
 {
 public:
     explicit ConcurrentHashMap(size_t num_shard = 128, Hash const & hash_function_ = Hash())
-        : hash_function(hash_function_), shards(num_shard), log(&Poco::Logger::get("ConcurrentShardMap"))
+        : hash_function(hash_function_), shards(num_shard), log(getLogger("ConcurrentShardMap"))
     {
         for (unsigned i = 0; i < num_shard; ++i)
             shards[i].reset(new Shard());
@@ -313,7 +314,7 @@ private:
 
     Hash hash_function;
     std::vector<std::unique_ptr<Shard>> shards;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

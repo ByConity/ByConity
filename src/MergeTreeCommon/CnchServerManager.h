@@ -16,6 +16,7 @@
 #pragma once
 
 #include <Catalog/IMetastore.h>
+#include <Common/Logger.h>
 #include <Common/StorageElection/KvStorage.h>
 #include <Common/StorageElection/StorageElector.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -62,7 +63,7 @@ private:
     /// set topology status when becoming leader. may runs in background tasks.
     void initLeaderStatus();
 
-    Poco::Logger * log = &Poco::Logger::get("CnchServerManager");
+    LoggerPtr log = getLogger("CnchServerManager");
 
     BackgroundSchedulePool::TaskHolder topology_refresh_task;
     BackgroundSchedulePool::TaskHolder lease_renew_task;

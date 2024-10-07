@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <MergeTreeCommon/TableVersion.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 
@@ -41,7 +42,7 @@ private:
     std::shared_mutex mutex;
     std::map<UInt64, TableVersionPtr> versions;
 
-    Poco::Logger * log = &Poco::Logger::get("StorageDataManager");
+    LoggerPtr log = getLogger("StorageDataManager");
 };
 
 using StorageDataManagerPtr = std::shared_ptr<StorageDataManager>;

@@ -162,7 +162,7 @@ std::pair<NameSet, NameSet> BitmapIndexInfo::getIndexColumns(const IMergeTreeDat
         }
         catch (...)
         {
-            tryLogCurrentException(&Poco::Logger::get("MergeTreeBitmapIndexReader"), __PRETTY_FUNCTION__);
+            tryLogCurrentException(getLogger("MergeTreeBitmapIndexReader"), __PRETTY_FUNCTION__);
             return {};
         }
     }

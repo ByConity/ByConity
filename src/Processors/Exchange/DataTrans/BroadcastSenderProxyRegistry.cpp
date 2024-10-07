@@ -21,7 +21,7 @@
 
 namespace DB
 {
-BroadcastSenderProxyRegistry::BroadcastSenderProxyRegistry() : logger(&Poco::Logger::get("BroadcastSenderProxyRegistry"))
+BroadcastSenderProxyRegistry::BroadcastSenderProxyRegistry() : logger(getLogger("BroadcastSenderProxyRegistry"))
 {
 }
 

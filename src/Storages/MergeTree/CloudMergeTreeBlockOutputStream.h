@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <DataStreams/IBlockOutputStream.h>
@@ -59,7 +60,7 @@ private:
     void checkAndInit();
 
     MergeTreeMetaBase & storage;
-    Poco::Logger * log;
+    LoggerPtr log;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr context;
 

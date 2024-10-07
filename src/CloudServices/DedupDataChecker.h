@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/DedupGran.h>
 #include <Interpreters/executeQuery.h>
@@ -51,7 +52,7 @@ private:
     void processCheckerResult(StorageCnchMergeTree & cnch_table, Block & input_block);
 
     String log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
     /// Data unique checker in background
     BackgroundSchedulePool::TaskHolder data_checker_task;
     std::atomic<bool> is_stopped{false};

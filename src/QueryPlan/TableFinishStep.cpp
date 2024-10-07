@@ -26,7 +26,7 @@ TableFinishStep::TableFinishStep(
     , output_affected_row_count_symbol(std::move(output_affected_row_count_symbol_))
     , query(query_)
     , insert_select_with_profiles(insert_select_with_profiles_)
-    , log(&Poco::Logger::get("TableFinishStep"))
+    , log(getLogger("TableFinishStep"))
 {
     if (insert_select_with_profiles)
     {

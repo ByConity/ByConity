@@ -122,7 +122,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
             only_selected_table = table_it->second.getType() == Field::Types::String ? table_it->second.get<String>() : "";
             enable_filter_by_table = true;
 
-            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"),
+            LOG_TRACE(getLogger("StorageSystemCnchParts"),
                     "filtering from catalog by table with db name {} and table name {}",
                     only_selected_db, only_selected_table);
         }
@@ -132,14 +132,14 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
             only_selected_partition_id = partition_it->second.getType() == Field::Types::String ? partition_it->second.get<String>() : "";
             enable_filter_by_partition = true;
 
-            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"),
+            LOG_TRACE(getLogger("StorageSystemCnchParts"),
                     "filtering from catalog by partition with partition name {}",
                     only_selected_partition_id);
         }
     }
 
     if (!(enable_filter_by_partition || enable_filter_by_table))
-        LOG_TRACE(&Poco::Logger::get("StorageSystemCnchParts"), "No explicitly table and partition provided in where expression");
+        LOG_TRACE(getLogger("StorageSystemCnchParts"), "No explicitly table and partition provided in where expression");
 
     // check for required structure of WHERE clause for cnch_parts
     if (!enable_filter_by_table)

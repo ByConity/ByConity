@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -86,7 +87,7 @@ protected:
     bool check_columns;
     bool is_first_task = true;
 
-    Poco::Logger * log = &Poco::Logger::get("MergeTreeSelectProcessor");
+    LoggerPtr log = getLogger("MergeTreeSelectProcessor");
 };
 
 }

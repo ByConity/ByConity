@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Access/AccessControlManager.h>
 #include <Access/User.h>
 #include <functional>
@@ -883,7 +884,7 @@ public:
 class AuthenticationManager
 {
 private:
-    Poco::Logger * log = &Poco::Logger::get("AuthenticationManager");
+    LoggerPtr log = getLogger("AuthenticationManager");
     std::unordered_map<Authentication::Type, std::shared_ptr<AuthenticationMethod>> type_to_method = {};
 
 public:

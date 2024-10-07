@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <mutex>
 #include <Common/config.h>
 
@@ -79,7 +80,7 @@ private:
     std::mutex submit_lock;
     std::deque<IOUringRequest*> pending_requests;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

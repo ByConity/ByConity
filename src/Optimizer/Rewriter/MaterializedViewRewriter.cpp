@@ -216,7 +216,7 @@ public:
 
         if (verbose)
         {
-            static auto * log = &Poco::Logger::get("CandidatesExplorer");
+            static auto log = getLogger("CandidatesExplorer");
             for (auto & item : explorer.failure_messages)
                 for (auto & message : item.second)
                     LOG_DEBUG(
@@ -1222,7 +1222,7 @@ public:
     std::map<String, std::optional<PlanNodeStatisticsPtr>> materialized_views_stats;
     const bool verbose;
     SimpleCTEVisitHelper<BaseTables> cte_helper;
-    Poco::Logger * logger = &Poco::Logger::get("CandidatesExplorer");
+    LoggerPtr logger = getLogger("CandidatesExplorer");
 };
 
 using ASTToStringMap = EqualityASTMap<String>;

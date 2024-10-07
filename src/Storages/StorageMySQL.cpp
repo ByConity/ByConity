@@ -68,7 +68,7 @@ StorageMySQL::StorageMySQL(
     , on_duplicate_clause{on_duplicate_clause_}
     , mysql_settings(mysql_settings_)
     , pool(std::make_shared<mysqlxx::PoolWithFailover>(pool_))
-    , logger(&Poco::Logger::get(getStorageID().getNameForLogs()))
+    , logger(getLogger(getStorageID().getNameForLogs()))
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);

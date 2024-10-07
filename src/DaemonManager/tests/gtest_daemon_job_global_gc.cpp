@@ -84,7 +84,7 @@ std::vector<Protos::DataModelTable> createTables(unsigned int begin, unsigned in
 TEST(DaemonJobGlobalGC, sendToServerForGC_test)
 {
     using DB::DaemonManager::GlobalGCHelpers::sendToServerForGC;
-    Poco::Logger * log = &Poco::Logger::get("test_log");
+    LoggerPtr log = getLogger("test_log");
     std::vector<HostWithPorts> hps {
         {"127.0.0.1", 1606, 1224, 1225},
         {"127.0.0.2", 1606, 1224, 1225},

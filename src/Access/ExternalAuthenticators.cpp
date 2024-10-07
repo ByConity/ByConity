@@ -239,7 +239,7 @@ void ExternalAuthenticators::reset()
     kerberos_params.reset();
 }
 
-void ExternalAuthenticators::setConfiguration(const Poco::Util::AbstractConfiguration & config, Poco::Logger * log)
+void ExternalAuthenticators::setConfiguration(const Poco::Util::AbstractConfiguration & config, LoggerPtr log)
 {
     std::scoped_lock lock(mutex);
     reset();

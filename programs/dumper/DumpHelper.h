@@ -1,4 +1,5 @@
 // #include <Storages/MergeTree/MergeTreeDataPart.h>
+#include <Common/Logger.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Poco/Logger.h>
 #include <Common/Exception.h>
@@ -101,7 +102,7 @@ public:
 
     void removeDumpVersionFromZk(const Context & context);
 
-    void setLog(Poco::Logger * log_) { log = log_; }
+    void setLog(LoggerPtr log_) { log = log_; }
 
 private:
     void writeTempUniqueKeyIndex(Block & block, size_t first_rid, rocksdb::DB & temp_index, StorageCloudMergeTree & cloud);
@@ -111,7 +112,7 @@ private:
     String unique_version_column;
     String dump_lsn_path;
     ManifestStore manifest_store;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

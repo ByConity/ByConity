@@ -4096,7 +4096,7 @@ namespace Catalog
         return txn_undobuffers;
     }
 
-    Catalog::UndoBufferIterator::UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter_, Poco::Logger * log_)
+    Catalog::UndoBufferIterator::UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter_, LoggerPtr log_)
         : metastore_iter{std::move(metastore_iter_)}, log{log_}
     {}
 
@@ -7340,7 +7340,7 @@ namespace Catalog
 
     void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid)
     {
-        static Poco::Logger * log = &Poco::Logger::get("Catalog::notifyOtherServersOnAccessEntityChange");
+        static LoggerPtr log = getLogger("Catalog::notifyOtherServersOnAccessEntityChange");
         std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
         if (!topology_master)
         {
@@ -7770,7 +7770,7 @@ namespace Catalog
             }
             catch (...)
             {
-                tryLogCurrentException(&Poco::Logger::get("Catalog::getLastModificationTimeHints"));
+                tryLogCurrentException(getLogger("Catalog::getLastModificationTimeHints"));
             }
         }
 

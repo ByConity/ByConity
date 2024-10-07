@@ -131,7 +131,7 @@ void BackgroundSchedulePoolTaskInfo::execute()
     static const int32_t slow_execution_threshold_ms = 200;
 
     if (milliseconds >= slow_execution_threshold_ms)
-        LOG_TRACE(&Poco::Logger::get(log_name), "Execution took {} ms.", milliseconds);
+        LOG_TRACE(getLogger(log_name), "Execution took {} ms.", milliseconds);
 
     {
         std::lock_guard lock_schedule(schedule_mutex);
@@ -185,7 +185,7 @@ BackgroundSchedulePool::BackgroundSchedulePool(size_t size_, CurrentMetrics::Met
     , thread_name(thread_name_)
     , cpu_set(std::move(cpu_set_))
 {
-    LOG_INFO(&Poco::Logger::get("BackgroundSchedulePool/" + thread_name), "Create BackgroundSchedulePool with {} threads", size);
+    LOG_INFO(getLogger("BackgroundSchedulePool/" + thread_name), "Create BackgroundSchedulePool with {} threads", size);
 
     threads.reserve(size);
     for (size_t i = 0; i < size; ++i)
@@ -195,7 +195,7 @@ BackgroundSchedulePool::BackgroundSchedulePool(size_t size_, CurrentMetrics::Met
         {
             size_t tid = thread.gettid();
             if (tid == 0)
-                LOG_WARNING(&Poco::Logger::get("BackgroundSchedulePool"), "get tid: 0");
+                LOG_WARNING(getLogger("BackgroundSchedulePool"), "get tid: 0");
             else
                 cpu_set->addTask(tid);
         }
@@ -219,7 +219,7 @@ BackgroundSchedulePool::~BackgroundSchedulePool()
         queue.wakeUpAll();
         delayed_thread.join();
 
-        LOG_TRACE(&Poco::Logger::get("BackgroundSchedulePool/" + thread_name), "Waiting for threads to finish.");
+        LOG_TRACE(getLogger("BackgroundSchedulePool/" + thread_name), "Waiting for threads to finish.");
 
         std::vector<size_t> tids;
         for (auto & thread : threads)

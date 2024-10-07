@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterOnDisk.h>
 
 namespace DB
@@ -60,7 +61,7 @@ private:
     /// and skip indices in their corresponding files.
     void writeDataBlockPrimaryIndexAndSkipIndices(const Block & block, const Granules & granules);
 
-    Poco::Logger * getLogger() override { return log; }
+    LoggerPtr getLogger() override { return log; }
 
     Block header;
 
@@ -136,7 +137,7 @@ private:
 
     CompactDataWriterPtr data_writer;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 };
 

@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <libnuraft/log_store.hxx> // Y_IGNORE
 #include <map>
 #include <mutex>
@@ -84,7 +85,7 @@ public:
 
 private:
     mutable std::mutex changelog_lock;
-    Poco::Logger * log;
+    LoggerPtr log;
     Changelog changelog;
 };
 

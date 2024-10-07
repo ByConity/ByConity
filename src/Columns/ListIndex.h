@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/PODArray.h>
 #include <Common/Exception.h>
 #include <Compression/CompressedReadBuffer.h>
@@ -264,7 +265,7 @@ public:
 
     virtual String getPath() const { return path; }
 
-    Poco::Logger * log = &Poco::Logger::get("BitmapColumnListIndexes");
+    LoggerPtr log = getLogger("BitmapColumnListIndexes");
 
     virtual ~IBitmapColumnListIndexes() = default;
 };

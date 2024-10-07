@@ -37,7 +37,7 @@ BlockIO InterpreterCommitQuery::execute()
 
     SCOPE_EXIT(session_context->setCurrentTransaction(nullptr););
 
-    auto * log = &Poco::Logger::get("InterpreterCommitQuery");
+    auto log = getLogger("InterpreterCommitQuery");
 
     LOG_INFO(log, "Committing explicit transaction: {}", explicit_txn->getTransactionID());
     try

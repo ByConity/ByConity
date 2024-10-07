@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Common/Logger.h>
 #include <set>
 #include <mutex>
 #include <Common/ThreadPool.h>
@@ -41,8 +42,8 @@ std::optional<Protos::DataModelTable> getCleanableTrashTable(
     UInt64 retention_sec,
     String * fail_reason = nullptr);
 
-using GlobalGCExecuter = std::function<bool(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log)>;
-bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log);
+using GlobalGCExecuter = std::function<bool(const Protos::DataModelTable & table, const Context & context, LoggerPtr log)>;
+bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, LoggerPtr log);
 
 size_t calculateApproximateWorkLimit(size_t max_threads);
 bool canReceiveMoreWork(size_t max_threads, size_t deleting_table_num, size_t num_of_new_tables);
@@ -90,7 +91,7 @@ public:
     std::set<UUID> getDeletingUUIDs() const;
     bool isShutdown() const;
 
-    static void systemCleanTrash(ContextPtr local_context, StorageID storage_id, Poco::Logger * log);
+    static void systemCleanTrash(ContextPtr local_context, StorageID storage_id, LoggerPtr log);
 
 private:
     bool scheduleImpl(std::vector<Protos::DataModelTable> && tables);
@@ -101,7 +102,7 @@ private:
     std::set<UUID> deleting_uuids;
     std::unique_ptr<ThreadPool> threadpool;
     bool is_shutdown = false;
-    Poco::Logger * log;
+    LoggerPtr log;
     GlobalGCHelpers::GlobalGCExecuter executor = GlobalGCHelpers::executeGlobalGC;
 };
 

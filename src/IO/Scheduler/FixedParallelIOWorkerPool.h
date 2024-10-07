@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <random>
 #include <sstream>
@@ -45,7 +46,7 @@ public:
 
     FixedParallelIOWorkerPool(const Options& opts,
         const std::vector<SchedulerType*>& schedulers):
-            opts_(opts), logger_(&Poco::Logger::get("FixedParallelIOWorkerPool")),
+            opts_(opts), logger_(getLogger("FixedParallelIOWorkerPool")),
             schedulers_(schedulers), shutdown_(false), workers_(nullptr) {}
 
     virtual void startup() override {
@@ -129,7 +130,7 @@ private:
         Status status_;
     };
 
-    void workerRountine(WorkerInfo& worker_info, Poco::Logger* logger) {
+    void workerRountine(WorkerInfo& worker_info, LoggerPtr logger) {
         LOG_DEBUG(logger, fmt::format("Worker {} started up", worker_info.worker_id_));
         SCOPE_EXIT({LOG_DEBUG(logger, fmt::format("Worker {} shutted down", worker_info.worker_id_));});
 
@@ -205,7 +206,7 @@ private:
 
     const Options opts_;
 
-    Poco::Logger* logger_;
+    LoggerPtr logger_;
 
     std::vector<SchedulerType*> schedulers_;
 

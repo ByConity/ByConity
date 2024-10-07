@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/optimizer_statistics.pb.h>
 #include <brpc/server.h>
@@ -30,7 +31,7 @@ public:
         google::protobuf::Closure * done) override;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("OptimizerStatisticsService");
+    LoggerPtr log = getLogger("OptimizerStatisticsService");
 };
 
 

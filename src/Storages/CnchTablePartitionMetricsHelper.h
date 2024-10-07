@@ -1,5 +1,6 @@
 #pragma once
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -84,7 +85,7 @@ private:
         1000 * getContext()->getSettingsRef().part_cache_manager_thread_pool_size};
     ThreadPool & getTablePartitionThreadPool() { return table_partition_thread_pool; }
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /**
      * @brief Trigger a recalculation of both CNCH parts and trash items

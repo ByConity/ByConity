@@ -116,7 +116,7 @@ Pipe StorageSystemCnchKafkaTables::read(
     query_info.cluster = context->mockCnchServersCluster();
 
     QueryPlan query_plan;
-    Poco::Logger * log = &Poco::Logger::get("SystemCnchKafkaTables");
+    LoggerPtr log = getLogger("SystemCnchKafkaTables");
     ClusterProxy::executeQuery(query_plan, select_stream_factory, log, select_query, context, query_info, nullptr, {}, nullptr);
 
     return query_plan.convertToPipe(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));

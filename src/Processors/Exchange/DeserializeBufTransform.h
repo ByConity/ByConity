@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <memory>
 #include <Processors/Chunk.h>
 #include <Processors/ISimpleTransform.h>
@@ -49,7 +50,7 @@ protected:
 private:
     const Block & header;
     bool enable_block_compress;
-    Poco::Logger * logger;
+    LoggerPtr logger;
     Stopwatch s;
 };
 

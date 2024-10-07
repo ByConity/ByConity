@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <optional>
 #include <unordered_set>
@@ -371,7 +372,7 @@ private:
 
     AdaptiveSchedulerConfig adaptive_scheduler_config;
     mutable bthread::Mutex map_mutex;
-    Poco::Logger * log;
+    LoggerPtr log;
     // rm heartbeat
     mutable std::optional<BackgroundSchedulePool> schedule_pool;
     std::atomic<UInt64> heartbeat_interval{10000}; /// in ms;

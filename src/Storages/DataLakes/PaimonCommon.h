@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
@@ -65,7 +66,7 @@ protected:
     std::shared_ptr<JNIMetaClient> jni_client;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("PaimonCatalogClient")};
+    LoggerPtr log{getLogger("PaimonCatalogClient")};
 };
 
 class PaimonHiveCatalogClient final : public PaimonCatalogClient, public shared_ptr_helper<PaimonHiveCatalogClient>
@@ -80,7 +81,7 @@ protected:
 
 private:
     void parseMetastoreUrl();
-    Poco::Logger * log{&Poco::Logger::get("PaimonHiveCatalogClient")};
+    LoggerPtr log{getLogger("PaimonHiveCatalogClient")};
 
     const String metastore_url;
     const String warehouse;
@@ -97,7 +98,7 @@ protected:
     Poco::JSON::Object buildCatalogParams() override;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("PaimonHDFSCatalogClient")};
+    LoggerPtr log{getLogger("PaimonHDFSCatalogClient")};
 
     const String warehouse;
 };
@@ -113,7 +114,7 @@ protected:
     Poco::JSON::Object buildCatalogParams() override;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("PaimonLocalFilesystemCatalogClient")};
+    LoggerPtr log{getLogger("PaimonLocalFilesystemCatalogClient")};
 
     const String path;
 };
@@ -129,7 +130,7 @@ protected:
     Poco::JSON::Object buildCatalogParams() override;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("PaimonS3CatalogClient")};
+    LoggerPtr log{getLogger("PaimonS3CatalogClient")};
 
     const String warehouse;
 };
@@ -225,7 +226,7 @@ namespace paimon_utils
     private:
         void visitChildNode(ASTPtr & node, Predicate2RPNContext & context);
 
-        Poco::Logger * log{&Poco::Logger::get("Predicate2RPNConverter")};
+        LoggerPtr log{getLogger("Predicate2RPNConverter")};
     };
 
     class PaimonSchemaConverter : WithContext
@@ -242,7 +243,7 @@ namespace paimon_utils
         ASTPtr buildPartitionDef() const;
         static DataTypePtr paimonType2CHType(Protos::Paimon::Type type);
 
-        Poco::Logger * log{&Poco::Logger::get("PaimonSchemaConverter")};
+        LoggerPtr log{getLogger("PaimonSchemaConverter")};
 
         const CnchHiveSettingsPtr storage_settings;
         Protos::Paimon::Schema schema;

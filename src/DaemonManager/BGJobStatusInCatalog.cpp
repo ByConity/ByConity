@@ -62,8 +62,8 @@ char serializeToChar(CnchBGThreadStatus status)
 CatalogBGJobStatusPersistentStoreProxy::CatalogBGJobStatusPersistentStoreProxy(
     std::shared_ptr<Catalog::Catalog> catalog_,
     CnchBGThreadType type_,
-    Poco::Logger * log_)
-    : catalog{std::move(catalog_)}, statuses_cache{}, type{type_}, log{log_}
+    LoggerPtr log_)
+    : catalog{std::move(catalog_)}, type{type_}, log{std::move(log_)}
 {}
 
 std::optional<CnchBGThreadStatus> CatalogBGJobStatusPersistentStoreProxy::createStatusIfNotExist(const UUID & uuid, CnchBGThreadStatus init_status) const
@@ -126,7 +126,7 @@ IBGJobStatusPersistentStoreProxy::CacheClearer CatalogBGJobStatusPersistentStore
 
     if (catalog) // catalog is nullptr in unittest
         statuses_cache = catalog->getBGJobStatuses(type);
-        
+
     is_cache_prefetched = true;
     return CacheClearer{this};
 }

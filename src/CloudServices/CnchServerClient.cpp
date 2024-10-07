@@ -673,7 +673,7 @@ void CnchServerClient::precommitParts(
         size_t staged_part_batch_begin = std::min(batch_begin, staged_parts.size());
         size_t staged_part_batch_end = std::min(batch_end, staged_parts.size());
 
-        Poco::Logger * log = &Poco::Logger::get(__func__);
+        LoggerPtr log = getLogger(__func__);
         LOG_DEBUG(
             log,
             "Precommit: parts in batch: [{} ~  {}] of total:  {}; delete_bitmaps in batch [{} ~ {}] of total {}; staged parts in batch [{} "
@@ -783,7 +783,7 @@ void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
     Protos::CleanTransactionReq request;
     Protos::CleanTransactionResp response;
 
-    LOG_DEBUG(&Poco::Logger::get(__func__), "clean txn: [{}] on server: {}", txn_record.toString(), getRPCAddress());
+    LOG_DEBUG(getLogger(__func__), "clean txn: [{}] on server: {}", txn_record.toString(), getRPCAddress());
 
     request.mutable_txn_record()->CopyFrom(txn_record.pb_model);
     stub->cleanTransaction(&cntl, &request, &response, nullptr);
@@ -798,7 +798,7 @@ void CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record)
     Protos::CleanUndoBuffersReq request;
     Protos::CleanUndoBuffersResp response;
 
-    LOG_DEBUG(&Poco::Logger::get(__func__), "clean undo buffers for txn: [{}] on server: {}", txn_record.toString(), getRPCAddress());
+    LOG_DEBUG(getLogger(__func__), "clean undo buffers for txn: [{}] on server: {}", txn_record.toString(), getRPCAddress());
 
     request.mutable_txn_record()->CopyFrom(txn_record.pb_model);
     stub->cleanUndoBuffers(&cntl, &request, &response, nullptr);

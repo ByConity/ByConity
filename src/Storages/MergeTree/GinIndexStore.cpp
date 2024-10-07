@@ -438,7 +438,7 @@ void GinIndexStore::writeSegment()
 
     size_t rows_limit = std::lround(density * current_segment.total_row_size);
 
-    LOG_DEBUG(&Poco::Logger::get("gin info"), 
+    LOG_DEBUG(getLogger("gin info"), 
         "density {} total_size {} next_row_id {} limit {} ", 
         density, current_segment.total_row_size, current_segment.next_row_id, rows_limit);
 
@@ -577,7 +577,7 @@ void GinIndexStoreDeserializer::readSegments()
 {
     UInt32 num_segments = store->getNumOfSegments();
 
-    //LOG_TRACE(&Poco::Logger::get("GinIndexStoreDeserializer"), "Get {} Gin segments ", num_segments);
+    //LOG_TRACE(getLogger("GinIndexStoreDeserializer"), "Get {} Gin segments ", num_segments);
     
     if (num_segments == 0)
         return;
@@ -626,7 +626,7 @@ void GinIndexStoreDeserializer::readSegmentDictionary(UInt32 segment_id)
     it->second->offsets.getData().resize(fst_size);
     dict_file_stream->readStrict(reinterpret_cast<char *>(it->second->offsets.getData().data()), fst_size);
 
-    //LOG_TRACE(&Poco::Logger::get("GinIndexStoreDeserializer"), "Read Gin FST Dict {} size", fst_size);
+    //LOG_TRACE(getLogger("GinIndexStoreDeserializer"), "Read Gin FST Dict {} size", fst_size);
 }
 
 GinPostingsCachePtr GinIndexStoreDeserializer::createPostingsCacheFromTerms(const std::set<String> & terms)

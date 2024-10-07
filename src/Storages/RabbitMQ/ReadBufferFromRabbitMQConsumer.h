@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Names.h>
 #include <common/types.h>
 #include <IO/ReadBuffer.h>
@@ -25,7 +26,7 @@ public:
             std::vector<String> & queues_,
             size_t channel_id_base_,
             const String & channel_base_,
-            Poco::Logger * log_,
+            LoggerPtr log_,
             char row_delimiter_,
             uint32_t queue_size_,
             const std::atomic<bool> & stopped_);
@@ -92,7 +93,7 @@ private:
     std::vector<String> queues;
     const String channel_base;
     const size_t channel_id_base;
-    Poco::Logger * log;
+    LoggerPtr log;
     char row_delimiter;
     bool allowed = true;
     const std::atomic<bool> & stopped;

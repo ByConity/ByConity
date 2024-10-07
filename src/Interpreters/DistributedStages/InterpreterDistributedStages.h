@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/IInterpreter.h>
 #include <Interpreters/SelectQueryOptions.h>
@@ -64,7 +65,7 @@ private:
 
     ASTPtr query_ptr;
     ContextMutablePtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     PlanSegmentTreePtr plan_segment_tree = nullptr;
 };

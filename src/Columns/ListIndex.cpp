@@ -135,7 +135,7 @@ void BitmapIndexReader::init()
                  irk_buffer = std::make_unique<ReadBufferFromFile>(index_irk_disk->getPath() + index_irk_path, DBMS_DEFAULT_BUFFER_SIZE);
 
                  LOG_DEBUG(
-                     &Poco::Logger::get("BitmapIndexReader"), "Get BitMapIndex read buffers from local cache for column " + column_name);
+                     getLogger("BitmapIndexReader"), "Get BitMapIndex read buffers from local cache for column " + column_name);
                  read_from_local_cache = true;
                  return;
              }
@@ -147,7 +147,7 @@ void BitmapIndexReader::init()
     }
     catch(...)
     {
-        tryLogCurrentException(&Poco::Logger::get("BitmapIndexReader"), "Cache or Get BitMapIndex Failed");
+        tryLogCurrentException(getLogger("BitmapIndexReader"), "Cache or Get BitMapIndex Failed");
     }
 
     try
@@ -179,7 +179,7 @@ void BitmapIndexReader::init()
     }
     catch(...)
     {
-        tryLogCurrentException(&Poco::Logger::get("BitmapIndexReader"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(getLogger("BitmapIndexReader"), __PRETTY_FUNCTION__);
         compressed_idx = nullptr;
         irk_buffer = nullptr;
     }

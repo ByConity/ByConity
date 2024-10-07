@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <common/shared_ptr_helper.h>
@@ -81,6 +82,6 @@ protected:
     std::shared_ptr<CnchHiveSettings> storage_settings;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("CnchHive")};
+    LoggerPtr log{getLogger("CnchHive")};
 };
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "Aliases.h"
 #include "Internals.h"
 #include "TaskCluster.h"
@@ -19,7 +20,7 @@ public:
                   const String & host_id_,
                   const String & proxy_database_name_,
                   ContextMutablePtr context_,
-                  Poco::Logger * log_)
+                  LoggerPtr log_)
             : WithMutableContext(context_),
             task_zookeeper_path(task_path_),
             host_id(host_id_),
@@ -216,7 +217,7 @@ private:
 
     bool experimental_use_sample_offset{false};
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::chrono::milliseconds default_sleep_time{1000};
 };

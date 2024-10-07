@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TxnTimestamp.h>
@@ -193,7 +194,7 @@ private:
     mutable std::mutex mutex;
     TxnCleanTasksMap clean_tasks;
     bool shutdown{false};
-    Poco::Logger * log = &Poco::Logger::get("TransactionCleaner");
+    LoggerPtr log = getLogger("TransactionCleaner");
 };
 
 using TransactionCleanerPtr = std::unique_ptr<TransactionCleaner>;

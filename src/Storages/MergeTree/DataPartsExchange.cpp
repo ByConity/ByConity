@@ -118,7 +118,7 @@ struct ReplicatedFetchReadCallback
 
 
 Service::Service(MergeTreeData & data_, const StoragePtr & storage_)
-    : data(data_), storage(storage_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)"))
+    : data(data_), storage(storage_), log(getLogger(data.getLogName() + " (Replicated PartsService)"))
 {
 }
 

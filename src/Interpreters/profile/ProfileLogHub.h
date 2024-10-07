@@ -1,3 +1,4 @@
+#include <Common/Logger.h>
 #include <memory>
 #include <mutex>
 #include <ostream>
@@ -34,7 +35,7 @@ public:
         return profile_log_hub;
     }
 
-    explicit ProfileLogHub() : consume_thread_pool(std::make_unique<ThreadPool>(10)), logger(&Poco::Logger::get("ProfileLogHub")) { }
+    explicit ProfileLogHub() : consume_thread_pool(std::make_unique<ThreadPool>(10)), logger(getLogger("ProfileLogHub")) { }
 
     ~ProfileLogHub() = default;
 
@@ -81,7 +82,7 @@ private:
     Consumers profile_element_consumers;
     std::unique_ptr<ThreadPool> consume_thread_pool;
     bthread::Mutex mutex;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 template <typename ProfileElement>

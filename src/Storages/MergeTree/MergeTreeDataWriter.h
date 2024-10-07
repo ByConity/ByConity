@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
 
 #include <IO/WriteBufferFromFile.h>
@@ -65,7 +66,7 @@ public:
     // use dest_policy_ to reserve space if specificed
     explicit MergeTreeDataWriter(MergeTreeMetaBase & data_, IStorage::StorageLocation location = IStorage::StorageLocation::MAIN):
         data(data_), write_location(location),
-        log(&Poco::Logger::get(data.getLogName() + " (Writer)")) {}
+        log(getLogger(data.getLogName() + " (Writer)")) {}
 
     /** Split the block to blocks, each of them must be written as separate part.
       *  (split rows by partition)
@@ -99,7 +100,7 @@ public:
 
     static MergeTreeMetaBase::MutableDataPartPtr writeTempProjectionPart(
         MergeTreeMetaBase & data,
-        Poco::Logger * log,
+        LoggerPtr log,
         Block block,
         const ProjectionDescription & projection,
         const IMergeTreeDataPart * parent_part,
@@ -111,7 +112,7 @@ public:
 private:
     static MergeTreeMetaBase::MutableDataPartPtr writeProjectionPartImpl(
         MergeTreeMetaBase & data,
-        Poco::Logger * log,
+        LoggerPtr log,
         Block block,
         const StorageMetadataPtr & metadata_snapshot,
         MergeTreeMetaBase::MutableDataPartPtr && new_data_part);
@@ -120,7 +121,7 @@ private:
 
     IStorage::StorageLocation write_location;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

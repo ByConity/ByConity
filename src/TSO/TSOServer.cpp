@@ -86,7 +86,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
 {
     BaseDaemon::initialize(self);
 
-    log = &logger();
+    log = getLogger(logger());
 
     registerServiceDiscovery();
 
@@ -195,7 +195,7 @@ void TSOServer::updateTSO()
     update_tso_task->scheduleAfter(TSO_UPDATE_INTERVAL);
 }
 
-Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, Poco::Logger * log)
+Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, LoggerRawPtr log)
 {
     Poco::Net::SocketAddress socket_address;
     try
@@ -345,7 +345,7 @@ int TSOServer::main(const std::vector<std::string> &)
 
     auto metastore_conf = MetastoreConfig{config(), TSO_SERVICE_CONFIGURE};
     auto tso_metastore = Catalog::getMetastorePtr(metastore_conf);
-    proxy_ptr = std::make_shared<TSOProxy>(std::move(tso_metastore), metastore_conf.key_name, log);
+    proxy_ptr = std::make_shared<TSOProxy>(std::move(tso_metastore), metastore_conf.key_name);
     tso_service = std::make_shared<TSOImpl>(*this);
 
     bool listen_try = config().getBool("listen_try", false);

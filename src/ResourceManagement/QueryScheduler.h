@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Common/HostWithPorts.h>
 #include <Core/Types.h>
 
@@ -59,7 +60,7 @@ private:
 
 
     VirtualWarehouse & vw;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// TODO: (zuochuang.zema) With ResourceRequirement, RoundRobin might not be a good strategy anymore as the available workers (groups) changes dynamically.
     std::atomic<size_t> pick_group_sequence = 0;   /// round-robin index for pickWorkerGroup.

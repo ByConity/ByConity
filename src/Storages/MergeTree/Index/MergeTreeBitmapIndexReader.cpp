@@ -76,7 +76,7 @@ MergeTreeBitmapIndexReader::MergeTreeBitmapIndexReader
         }
         catch(...)
         {
-            tryLogCurrentException(&Poco::Logger::get("MergeTreeBitmapIndexReader"), __PRETTY_FUNCTION__);
+            tryLogCurrentException(getLogger("MergeTreeBitmapIndexReader"), __PRETTY_FUNCTION__);
             valid_reader = false;
             break;
         }

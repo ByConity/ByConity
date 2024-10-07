@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/ExecutePlanElement.h>
 #include <Storages/IStorage.h>
@@ -36,7 +37,7 @@ private:
     MergeTreeDataSelectExecutor merge_tree_reader;
     const SelectQueryInfo & select_query_info;
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     DataStream input_stream;
     Names query_required_columns;

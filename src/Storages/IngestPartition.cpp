@@ -350,7 +350,7 @@ IngestPartition::IngestPartition(
         , key_names(key_names_)
         , mutation(mutation_)
         , context(context_)
-        , log(&Poco::Logger::get("IngestPartition")) {}
+        , log(getLogger("IngestPartition")) {}
 
 
 /***
@@ -705,7 +705,7 @@ MergeTreeData::MutableDataPartPtr IngestPartition::ingestPart(MergeTreeData & da
 
     auto future_part = ingest_part->future_part;
     const auto & target_part = future_part.parts[0];
-    LOG_TRACE(&Poco::Logger::get("Ingestion"), "Begin ingest part {}", target_part->name);
+    LOG_TRACE(getLogger("Ingestion"), "Begin ingest part {}", target_part->name);
 
     bool is_wide_part = isWidePart(target_part);
 
@@ -781,7 +781,7 @@ MergeTreeData::MutableDataPartPtr IngestPartition::ingestPart(MergeTreeData & da
                     check_cached_cancel);
     }
 
-    LOG_TRACE(&Poco::Logger::get("Ingestion"), "End ingest part {}", future_part.name);
+    LOG_TRACE(getLogger("Ingestion"), "End ingest part {}", future_part.name);
 
     return new_data_part;
 }
@@ -792,11 +792,11 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
 {
     if (src_blocks.empty())
     {
-        LOG_TRACE(&Poco::Logger::get("VirtualColumnUtils"), "Read source block is empty, skip ingestion");
+        LOG_TRACE(getLogger("VirtualColumnUtils"), "Read source block is empty, skip ingestion");
         return;
     }
 
-    LOG_TRACE(&Poco::Logger::get("Ingestion"), "Ingestion task with parts {}, source_blocks {}, ingest_column_name {}, ordered_key_names {}, all_columns {}",
+    LOG_TRACE(getLogger("Ingestion"), "Ingestion task with parts {}, source_blocks {}, ingest_column_name {}, ordered_key_names {}, all_columns {}",
                                                 parts_to_ingest.size(),
                                                 src_blocks.size(),
                                                 ingest_column_names.size(),

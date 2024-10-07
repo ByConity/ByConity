@@ -301,7 +301,7 @@ std::map<String, UInt64> DatabaseMySQL::fetchTablesWithModificationTime(ContextP
         /// Handle exception when fetchTablesWithModificationTime for Database MySQL, currently known code:
         ///     POCO_EXCEPTION: for connection error
         tryLogCurrentException(
-            &Poco::Logger::get("DatabaseMySQL(" + database_name + ")"),
+            getLogger("DatabaseMySQL(" + database_name + ")"),
             "Call to fetchTablesWithModificationTime wasn't finished successfully");
         if (local_context->getSettingsRef().throw_exception_when_mysql_connection_failed)
             throw;

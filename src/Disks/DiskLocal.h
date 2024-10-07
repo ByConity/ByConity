@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 #include <common/logger_useful.h>
 #include <Disks/IDisk.h>
@@ -135,7 +136,7 @@ private:
 
     static std::mutex reservation_mutex;
 
-    Poco::Logger * log = &Poco::Logger::get("DiskLocal");
+    LoggerPtr log = getLogger("DiskLocal");
 };
 
 }

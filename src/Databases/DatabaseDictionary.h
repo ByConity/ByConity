@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Databases/DatabasesCommon.h>
 #include <Databases/IDatabase.h>
 #include <Storages/IStorage_fwd.h>
@@ -48,7 +49,7 @@ protected:
     ASTPtr getCreateTableQueryImpl(const String & table_name, ContextPtr context, bool throw_on_error) const override;
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
 
     Tables listTables(const FilterByNameFunction & filter_by_name);
 };

@@ -61,7 +61,7 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
         });
 
     LOG_DEBUG(
-        &Poco::Logger::get("StorageS3Configuration"),
+        getLogger("StorageS3Configuration"),
         fmt::format(
             "update s3 client, config: {}, region = {}, endpoint = {}, bucket = {}, key = {}, ak/sk = {} -> {}",
             uri.toString(),

@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <QueryPlan/ISourceStep.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 //#include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
@@ -131,7 +132,7 @@ public:
         bool sample_factor_column_queried_,
         bool map_column_keys_column_queried_,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
-        Poco::Logger * log_,
+        LoggerPtr log_,
         MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_
     );
 
@@ -166,7 +167,7 @@ public:
     const MergeTreeMetaBase & data,
     const Names & real_column_names,
     bool sample_factor_column_queried,
-    Poco::Logger * log);
+    LoggerPtr log);
 
     ContextPtr getContext() const { return context; }
     const SelectQueryInfo & getQueryInfo() const { return query_info; }
@@ -201,7 +202,7 @@ private:
 
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     UInt64 selected_parts = 0;
     UInt64 selected_rows = 0;
     UInt64 selected_marks = 0;

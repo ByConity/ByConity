@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstddef>
 #include <Core/Types.h>
 #include <IO/ReadBuffer.h>
@@ -37,7 +38,7 @@ protected:
     int max_retry_count{3};
     DisksMap disks;
 
-    Poco::Logger * log = &Poco::Logger::get("DistributedDataService");
+    LoggerPtr log = getLogger("DistributedDataService");
 };
 
 REGISTER_SERVICE_IMPL(DistributedDataService);
@@ -72,7 +73,7 @@ private:
     UInt64 file_size;
     int max_retry_count;
 
-    Poco::Logger * log = &Poco::Logger::get("StreamServiceHandler");
+    LoggerPtr log = getLogger("StreamServiceHandler");
 };
 
 }

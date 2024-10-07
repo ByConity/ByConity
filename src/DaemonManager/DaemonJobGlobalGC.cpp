@@ -83,7 +83,7 @@ bool sendToServerForGC(
     std::vector<std::pair<String, long>> & num_of_table_can_send_sorted,
     const std::vector<CnchServerClientPtr> & server_clients,
     ToServerForGCSender sender,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     LOG_DEBUG(log, "send {} table to server for GC, they are", tables_need_gc.size());
     for (size_t i = 0; i < tables_need_gc.size(); ++i)
@@ -135,7 +135,7 @@ bool sendToServerForGC(
 std::vector<CnchServerClientPtr> getServerClients(
     const Context & context,
     CnchTopologyMaster & topology_master,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     std::vector<CnchServerClientPtr> res;
     std::list<CnchServerTopology> server_topologies = topology_master.getCurrentTopology();
@@ -162,7 +162,7 @@ std::vector<CnchServerClientPtr> getServerClients(
 
 std::vector<std::pair<String, long>> getNumOfTablesCanSend(
     const std::vector<CnchServerClientPtr> & clients,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     std::vector<std::pair<String, long>> res;
     for (const auto & client : clients)
@@ -194,7 +194,7 @@ std::vector<std::pair<String, long>> getNumOfTablesCanSend(
 
 std::set<String> getDeletingTablesFromServers(
     const std::vector<CnchServerClientPtr> & clients,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     std::set<UUID> uuids;
     for (const auto & client : clients)

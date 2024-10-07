@@ -2,6 +2,7 @@
 
 #ifdef OS_LINUX /// Because of 'sigqueue' functions and RT signals.
 
+#include <Common/Logger.h>
 #include <mutex>
 #include <common/shared_ptr_helper.h>
 #include <Storages/System/IStorageSystemOneBlock.h>
@@ -36,7 +37,7 @@ protected:
 
     mutable std::mutex mutex;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

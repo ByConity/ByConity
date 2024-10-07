@@ -25,7 +25,7 @@ namespace DB
 {
 BrpcApplication::BrpcApplication()
 {
-    logger = &Poco::Logger::get("BrpcApplication");
+    logger = getLogger("BrpcApplication");
 
     //Init Brpc log
     initBrpcLog();

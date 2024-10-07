@@ -33,7 +33,7 @@ ExecutablePoolDictionarySource::ExecutablePoolDictionarySource(
     const Configuration & configuration_,
     Block & sample_block_,
     ContextPtr context_)
-    : log(&Poco::Logger::get("ExecutablePoolDictionarySource"))
+    : log(getLogger("ExecutablePoolDictionarySource"))
     , dict_struct{dict_struct_}
     , configuration{configuration_}
     , sample_block{sample_block_}
@@ -58,7 +58,7 @@ ExecutablePoolDictionarySource::ExecutablePoolDictionarySource(
 }
 
 ExecutablePoolDictionarySource::ExecutablePoolDictionarySource(const ExecutablePoolDictionarySource & other)
-    : log(&Poco::Logger::get("ExecutablePoolDictionarySource"))
+    : log(getLogger("ExecutablePoolDictionarySource"))
     , update_time{other.update_time}
     , dict_struct{other.dict_struct}
     , configuration{other.configuration}
@@ -91,7 +91,7 @@ namespace
             std::unique_ptr<ShellCommand> && command_,
             BlockInputStreamPtr && stream_,
             size_t read_rows_,
-            Poco::Logger * log_,
+            LoggerPtr log_,
             std::function<void(WriteBufferFromFile &)> && send_data_)
             : process_pool(process_pool_)
             , command(std::move(command_))
@@ -183,7 +183,7 @@ namespace
         std::unique_ptr<ShellCommand> command;
         BlockInputStreamPtr stream;
         size_t rows_to_read;
-        Poco::Logger * log;
+        LoggerPtr log;
         std::function<void(WriteBufferFromFile &)> send_data;
         ThreadFromGlobalPool thread;
         size_t current_read_rows = 0;

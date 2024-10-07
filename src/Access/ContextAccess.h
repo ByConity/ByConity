@@ -2,11 +2,12 @@
 
 #include <Access/AccessRights.h>
 #include <Access/RowPolicy.h>
-#include <Interpreters/ClientInfo.h>
+#include <Common/Logger.h>
 #include <Core/UUID.h>
+#include <Interpreters/ClientInfo.h>
+#include <boost/container/flat_set.hpp>
 #include <common/scope_guard.h>
 #include <common/shared_ptr_helper.h>
-#include <boost/container/flat_set.hpp>
 #include <mutex>
 
 
@@ -223,7 +224,7 @@ private:
     const AccessControlManager * manager = nullptr;
     const Params params;
     bool is_full_access = false;
-    mutable Poco::Logger * trace_log = nullptr;
+    mutable LoggerPtr trace_log = nullptr;
     mutable UserPtr user;
     mutable String user_name;
     mutable scope_guard subscription_for_user_change;

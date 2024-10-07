@@ -1,5 +1,6 @@
 #pragma once
 #include "Columns/IColumn.h"
+#include <Common/Logger.h>
 #include "Storages/MergeTree/KeyCondition.h"
 #include "config_formats.h"
 #if USE_ORC
@@ -77,7 +78,7 @@ private:
     std::set<int64_t> lowcardnull_indices;
     Block active_header;
     Block lazy_header;
-    Poco::Logger * logger = &Poco::Logger::get("OrcScanner");
+    LoggerPtr logger = getLogger("OrcScanner");
 };
 
 struct ChunkReaderParams
@@ -142,7 +143,7 @@ private:
     std::vector<int> active_fields;
     std::vector<int> lazy_fields;
     std::unique_ptr<orc::StripeInformation> stripe_info = nullptr;
-    Poco::Logger * logger = &Poco::Logger::get("OrcChunkReader");
+    LoggerPtr logger = getLogger("OrcChunkReader");
 };
 }
 #    endif

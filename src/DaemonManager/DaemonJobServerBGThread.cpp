@@ -61,7 +61,7 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
 {
     const Context & context = *daemon_job.getContext();
     std::unordered_map<UUID, StorageID> ret;
-    Poco::Logger * log = daemon_job.getLog();
+    LoggerPtr log = daemon_job.getLog();
 
     if (daemon_job.getType() == CnchBGThreadType::MaterializedMySQL)
     {
@@ -148,7 +148,7 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
 }
 
 
-const std::vector<String> getServersInTopology(Context & context, Poco::Logger * log)
+const std::vector<String> getServersInTopology(Context & context, LoggerPtr log)
 {
     std::vector<String> ret;
     std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
@@ -193,7 +193,7 @@ bool checkIfServerDied(const std::vector<String> & alive_host_port, const String
         std::find(alive_host_port.begin(), alive_host_port.end(), host_port));
 }
 
-std::map<String, UInt64> fetchServerStartTimes(Context & context, CnchTopologyMaster & topology_master, Poco::Logger * log)
+std::map<String, UInt64> fetchServerStartTimes(Context & context, CnchTopologyMaster & topology_master, LoggerPtr log)
 {
     std::map<String, UInt64> ret;
     std::list<CnchServerTopology> server_topologies = topology_master.getCurrentTopology();
@@ -257,7 +257,7 @@ std::unordered_map<UUID, String> getAllTargetServerForBGJob(
     UInt64 ts,
     DaemonJobServerBGThread & daemon_job)
 {
-    Poco::Logger * log = daemon_job.getLog();
+    LoggerPtr log = daemon_job.getLog();
     std::unordered_map<UUID, String> ret;
     for (const auto & p : bg_jobs)
     {
@@ -394,7 +394,7 @@ void syncServerBGJob(
     BackgroundJobPtr & job_from_dm,
     std::vector<BGJobInfoFromServer> jobs_from_server)
 {
-    Poco::Logger * log = daemon_job.getLog();
+    LoggerPtr log = daemon_job.getLog();
     StorageID storage_id = job_from_dm->getStorageID();
     String job_from_dm_host_port = job_from_dm->getHostPort();
     CnchBGThreadStatus job_from_dm_status = job_from_dm->getJobStatus();
@@ -467,7 +467,7 @@ void runMissingAndRemoveDuplicateJob(
     BackgroundJobs & check_jobs,
     const std::unordered_multimap<UUID, BGJobInfoFromServer> & jobs_from_server)
 {
-    Poco::Logger * log = daemon_job.getLog();
+    LoggerPtr log = daemon_job.getLog();
     std::for_each(check_jobs.begin(), check_jobs.end(),
         [& jobs_from_server, & log, & daemon_job] (auto & p)
         {
@@ -534,7 +534,7 @@ void removeZombieJobsInServer(
     const std::vector<BGJobInfoFromServer> & zombie_jobs
 )
 {
-    Poco::Logger * log = daemon_job.getLog();
+    LoggerPtr log = daemon_job.getLog();
     std::for_each(zombie_jobs.begin(), zombie_jobs.end(), [&] (const BGJobInfoFromServer & j)
         {
             LOG_INFO(log, "Will drop zombie thread for job type {}, table {} on host {}", toString(daemon_job.getType()), j.storage_id.getNameForLogs(), j.host_port);
@@ -546,7 +546,7 @@ void removeZombieJobsInServer(
 std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>> fetchBGThreadFromServer(
     Context & context,
     CnchBGThreadType type,
-    Poco::Logger * log,
+    LoggerPtr log,
     const std::vector<String> & servers
 )
 {
@@ -594,7 +594,7 @@ size_t checkLivenessIfNeed(
 )
 {
     const CnchBGThreadType type = daemon_job.getType();
-    Poco::Logger * log = daemon_job.getLog();
+    LoggerPtr log = daemon_job.getLog();
     if ((counter % liveness_check_interval) != 0)
         return counter + 1;
 
@@ -876,7 +876,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
                 {
                     CnchServerClientPtr server_client = context.getCnchServerClient(host_port);
                     server_client->controlCnchBGThread(StorageID::createEmpty(), type, action);
-                    LOG_DEBUG(&Poco::Logger::get(__func__), "Succeed to {} all threads on {}",
+                    LOG_DEBUG(getLogger(__func__), "Succeed to {} all threads on {}",
                         toString(action), host_port);
                 }
 
@@ -1169,7 +1169,7 @@ void registerServerBGThreads(DaemonFactory & factory)
 
 void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
 {
-    Poco::Logger * log = daemon_job->getLog();
+    LoggerPtr log = daemon_job->getLog();
     ContextMutablePtr context = daemon_job->getContext();
     std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
     auto data_models = catalog->getAllTables();

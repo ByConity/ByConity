@@ -202,7 +202,7 @@ MergeTreeIndexContextPtr MergeTreeIndexContext::buildFromProjection(const Assign
 
     auto actions = ProjectionStep::createActions(bitmap_expressions, building_context.input_columns, building_context.context);
 
-    LOG_DEBUG(&Poco::Logger::get("buildFromProjection"),
+    LOG_DEBUG(getLogger("buildFromProjection"),
             fmt::format("actions: {}, index_context: {}", actions->dumpDAG(), index_context->toString()));
 
     index_context->setProjection(actions);
@@ -265,7 +265,7 @@ void MergeTreeIndexContext::makeProjectionForMaterializedIndex(
 
         //actions->finalize(output_columns);
 
-        LOG_DEBUG(&Poco::Logger::get("makeProjectionForMaterializedIndex"),
+        LOG_DEBUG(getLogger("makeProjectionForMaterializedIndex"),
             fmt::format("index_output: {}, name_to_name_map: {}, output_columns: {}, actions: {}",
             index_output, name_to_name_map, output_columns, actions->dumpDAG()));
 
@@ -314,7 +314,7 @@ size_t MergeTreeIndexExecutor::read(size_t from_mark, bool continue_reading, siz
         if (it->second && it->second->validIndexReader())
         {
             result_rows = it->second->read(from_mark, continue_reading, max_rows_to_read, res);
-            LOG_TRACE(&Poco::Logger::get("MergeTreeIndexExecutor"), fmt::format("IndexExecutor ({}) read from {} mark, max_rows_to_read {}, result_rows {}",
+            LOG_TRACE(getLogger("MergeTreeIndexExecutor"), fmt::format("IndexExecutor ({}) read from {} mark, max_rows_to_read {}, result_rows {}",
                 IndexTypeToString(it->first), from_mark, max_rows_to_read, result_rows));
         }
     }

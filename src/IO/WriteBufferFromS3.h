@@ -1,6 +1,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
+#include <Common/Logger.h>
 #include <Common/config.h>
 #endif
 
@@ -49,7 +50,7 @@ private:
     String multipart_upload_id;
     std::vector<String> part_tags;
 
-    Poco::Logger * log = &Poco::Logger::get("WriteBufferFromS3");
+    LoggerPtr log = getLogger("WriteBufferFromS3");
 
 public:
     explicit WriteBufferFromS3(

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <unordered_map>
 #include "Common/config.h"
 #if USE_HIVE
@@ -75,7 +76,7 @@ private:
     std::shared_ptr<IHiveFile::ReadParams> read_params;
     std::unique_ptr<QueryPipeline> pipeline;
     std::unique_ptr<PullingPipelineExecutor> reader;
-    Poco::Logger * log {&Poco::Logger::get("StorageHiveSource")};
+    LoggerPtr log {getLogger("StorageHiveSource")};
 };
 
 }

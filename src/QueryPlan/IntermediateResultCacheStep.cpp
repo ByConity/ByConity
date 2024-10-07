@@ -14,7 +14,7 @@ IntermediateResultCacheStep::IntermediateResultCacheStep(
     const DataStream & input_stream_, CacheParam cache_param_, Aggregator::Params aggregator_params_)
     : cache_param(std::move(cache_param_))
     , aggregator_params(std::move(aggregator_params_))
-    , log(&Poco::Logger::get("IntermediateResultCacheStep"))
+    , log(getLogger("IntermediateResultCacheStep"))
 {
     input_streams.emplace_back(input_stream_);
     Block output;

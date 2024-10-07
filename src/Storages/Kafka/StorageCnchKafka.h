@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_RDKAFKA
 
@@ -56,7 +57,7 @@ public:
 private:
     std::set<cppkafka::TopicPartition> sample_consuming_partitions_list;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 protected:
     StorageCnchKafka(

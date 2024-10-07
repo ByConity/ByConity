@@ -90,7 +90,7 @@ Strings ListKeysWithRegexpMatching(
     }
 
     LOG_TRACE(
-        &Poco::Logger::get("StorageCnchS3"),
+        getLogger("StorageCnchS3"),
         "List {} with prefix `{}`, total keys = {}, filter keys = {} ",
         globbed_s3_uri.toString(),
         key_prefix,
@@ -199,7 +199,7 @@ void registerStorageCnchS3(StorageFactory & factory)
             arguments.partition_by = args.storage_def->partition_by->clone();
 
         LOG_TRACE(
-            &Poco::Logger::get("StorageCnchS3"),
+            getLogger("StorageCnchS3"),
             fmt::format(
                 "create CNCH S3 table: url={}, format={}, compression={}",
                 arguments.url,

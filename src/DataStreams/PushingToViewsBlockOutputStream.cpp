@@ -59,7 +59,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
     : WithContext(context_)
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
-    , log(&Poco::Logger::get("PushingToViewsBlockOutputStream"))
+    , log(getLogger("PushingToViewsBlockOutputStream"))
     , query_ptr(query_ptr_)
 {
     checkStackSize();

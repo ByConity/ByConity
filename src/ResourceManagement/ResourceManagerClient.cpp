@@ -270,7 +270,7 @@ void ResourceManagerClient::getWorkerGroups(
         request.set_last_settings_timestamp(last_settings_timestamp.load());
         stub_->getWorkerGroups(&cntl, &request, &response, nullptr);
         LOG_TRACE(
-            &Poco::Logger::get("adaptiveScheduler"),
+            getLogger("adaptiveScheduler"),
             "getWorkerGroups response: {}", response.ShortDebugString().c_str());
         assertController(cntl);
         RPCHelpers::checkResponse(response);
@@ -421,7 +421,7 @@ WorkerGroupData ResourceManagerClient::pickWorkerGroup(const String & vw_name, V
 
         stub_->pickWorkerGroup(&cntl, &request, &response, nullptr);
         LOG_TRACE(
-            &Poco::Logger::get("adaptiveScheduler"),
+            getLogger("adaptiveScheduler"),
             "pickWorkerGroup response: {}", response.ShortDebugString().c_str());
         assertController(cntl);
         RPCHelpers::checkResponse(response);

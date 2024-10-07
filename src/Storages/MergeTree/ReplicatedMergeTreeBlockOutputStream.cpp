@@ -72,7 +72,7 @@ ReplicatedMergeTreeBlockOutputStream::ReplicatedMergeTreeBlockOutputStream(
     , is_attach(is_attach_)
     , quorum_parallel(quorum_parallel_)
     , deduplicate(deduplicate_)
-    , log(&Poco::Logger::get(storage.getLogName() + " (Replicated OutputStream)"))
+    , log(getLogger(storage.getLogName() + " (Replicated OutputStream)"))
     , context(context_)
 {
     /// The quorum value `1` has the same meaning as if it is disabled.

@@ -1,6 +1,7 @@
 #pragma once 
 
 
+#include <Common/Logger.h>
 #include <memory>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <IO/SeekableReadBuffer.h>
@@ -77,7 +78,7 @@ private:
 
     DiskCacheMode mode;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

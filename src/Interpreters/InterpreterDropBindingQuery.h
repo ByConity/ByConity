@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
 
@@ -15,7 +16,7 @@ public:
 private:
     ASTPtr query_ptr;
     ContextMutablePtr context;
-    Poco::Logger * log = &Poco::Logger::get("InterpreterDropBindingQuery");
+    LoggerPtr log = getLogger("InterpreterDropBindingQuery");
 };
 
 }

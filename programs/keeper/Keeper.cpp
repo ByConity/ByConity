@@ -122,7 +122,7 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
     return current_connections;
 }
 
-Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, Poco::Logger * log)
+Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, LoggerPtr log)
 {
     Poco::Net::SocketAddress socket_address;
     try
@@ -186,7 +186,7 @@ std::string getUserName(uid_t user_id)
 
 Poco::Net::SocketAddress Keeper::socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure) const
 {
-    auto address = makeSocketAddress(host, port, &logger());
+    auto address = makeSocketAddress(host, port, getLogger(logger()));
 #if !defined(POCO_CLICKHOUSE_PATCH) || POCO_VERSION < 0x01090100
     if (secure)
         /// Bug in old (<1.9.1) poco, listen() after bind() with reusePort param will fail because have no implementation in SecureServerSocketImpl
@@ -313,7 +313,7 @@ void Keeper::defineOptions(Poco::Util::OptionSet & options)
 
 int Keeper::main(const std::vector<std::string> & /*args*/)
 {
-    Poco::Logger * log = &logger();
+    LoggerPtr log = getLogger(logger());
 
     UseSSL use_ssl;
 

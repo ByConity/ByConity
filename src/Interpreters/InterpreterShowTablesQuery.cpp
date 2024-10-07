@@ -287,7 +287,7 @@ static String rewriteShowCatalogForExternal(const ASTShowTablesQuery & query, co
 
     if (query.limit_length)
         rewritten_query << " LIMIT " << query.limit_length;
-    LOG_TRACE(&Poco::Logger::get("getRewrittenQueryForExternalCatalogImpl"), rewritten_query.str());
+    LOG_TRACE(getLogger("getRewrittenQueryForExternalCatalogImpl"), rewritten_query.str());
 
     return rewritten_query.str();
 }

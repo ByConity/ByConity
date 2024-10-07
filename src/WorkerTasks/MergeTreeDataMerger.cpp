@@ -120,7 +120,7 @@ MergeTreeDataMerger::MergeTreeDataMerger(
     , check_cancel(std::move(check_cancel_))
     , build_rowid_mappings(build_rowid_mappings_)
     , rowid_mappings(params.source_data_parts.size())
-    , log(&Poco::Logger::get(data.getLogName() + " (Merger)"))
+    , log(getLogger(data.getLogName() + " (Merger)"))
 {
     if (build_rowid_mappings && data.merging_params.mode != MergeTreeMetaBase::MergingParams::Ordinary)
         throw Exception(

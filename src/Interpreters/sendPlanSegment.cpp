@@ -31,7 +31,7 @@ void sendPlanSegmentToAddress(
     std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr,
     const WorkerId & worker_id)
 {
-    static auto * log = &Poco::Logger::get("SegmentScheduler::sendPlanSegment");
+    static auto log = getLogger("SegmentScheduler::sendPlanSegment");
     LOG_TRACE(
         log,
         "query id {} segment id {}, parallel index {}, address {}, addtional filters {}, plansegment {}",

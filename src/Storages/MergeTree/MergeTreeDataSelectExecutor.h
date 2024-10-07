@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <unordered_map>
 #include <Core/QueryProcessingStage.h>
 #include <Storages/SelectQueryInfo.h>
@@ -88,7 +89,7 @@ public:
 
 private:
     const MergeTreeMetaBase & data;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Get the approximate value (bottom estimate - only by full marks) of the number of rows falling under the index.
     static size_t getApproximateTotalRowsToRead(
@@ -96,14 +97,14 @@ private:
         const StorageMetadataPtr & metadata_snapshot,
         const KeyCondition & key_condition,
         const Settings & settings,
-        Poco::Logger * log);
+        LoggerPtr log);
 
     static MarkRanges markRangesFromPKRange(
         const MergeTreeMetaBase::DataPartPtr & part,
         const StorageMetadataPtr & metadata_snapshot,
         const KeyCondition & key_condition,
         const Settings & settings,
-        Poco::Logger * log);
+        LoggerPtr log);
 
     /// If filter_bitmap is nullptr, then we won't trying to generate read filter
     static MarkRanges filterMarksUsingIndex(
@@ -116,7 +117,7 @@ private:
         size_t & total_granules,
         size_t & granules_dropped,
         roaring::Roaring * filter_bitmap,
-        Poco::Logger * log,
+        LoggerPtr log,
         IndexTimeWatcher & index_time_watcher);
 
     struct PartFilterCounters
@@ -151,7 +152,7 @@ private:
         const PartitionIdToMaxBlock * max_block_numbers_to_read,
         ContextPtr query_context,
         PartFilterCounters & counters,
-        Poco::Logger * log);
+        LoggerPtr log);
 
 public:
     /// For given number rows and bytes, get the number of marks to read.
@@ -188,7 +189,7 @@ public:
         const SelectQueryInfo & query_info,
         const ContextPtr & context,
         const PartitionIdToMaxBlock * max_block_numbers_to_read,
-        Poco::Logger * log,
+        LoggerPtr log,
         ReadFromMergeTree::IndexStats & index_stats);
 
     static DataTypes get_set_element_types(const NamesAndTypesList & source_columns, const String & column_name);
@@ -213,7 +214,7 @@ public:
         const ContextPtr & context,
         const KeyCondition & key_condition,
         const MergeTreeReaderSettings & reader_settings,
-        Poco::Logger * log,
+        LoggerPtr log,
         size_t num_streams,
         ReadFromMergeTree::IndexStats & index_stats,
         DelayedSkipIndex & delayed_indices_,
@@ -226,7 +227,7 @@ public:
         const StorageID & storage_id,
         const SelectQueryInfo & query_info,
         const ContextPtr & context,
-        Poco::Logger * log,
+        LoggerPtr log,
         RangesInDataParts & parts_with_ranges,
         CacheHolderPtr & part_cache_holder);
 
@@ -242,7 +243,7 @@ public:
         const StorageMetadataPtr & metadata_snapshot,
         ContextPtr context,
         bool sample_factor_column_queried,
-        Poco::Logger * log);
+        LoggerPtr log);
 
     static MarkRanges sampleByRange(
         const MergeTreeMetaBase::DataPartPtr & part,

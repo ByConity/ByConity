@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/ITransformingStep.h>
 #include <QueryPlan/TableWriteStep.h>
@@ -56,6 +57,6 @@ private:
     String output_affected_row_count_symbol;
     ASTPtr query;
     bool insert_select_with_profiles;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 }

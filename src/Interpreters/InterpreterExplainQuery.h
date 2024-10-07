@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -37,7 +38,7 @@ class InterpreterExplainQuery : public IInterpreter, WithMutableContext
 {
 public:
     InterpreterExplainQuery(const ASTPtr & query_, ContextMutablePtr context_) : WithMutableContext(context_),
-        query(query_), log(&Poco::Logger::get("InterpreterExplainQuery")) {}
+        query(query_), log(getLogger("InterpreterExplainQuery")) {}
 
     BlockIO execute() override;
 
@@ -47,7 +48,7 @@ public:
 
 private:
     ASTPtr query;
-    Poco::Logger * log;
+    LoggerPtr log;
     SelectQueryOptions options;
 
     BlockInputStreamPtr executeImpl();

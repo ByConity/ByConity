@@ -59,7 +59,7 @@ RemoteExchangeSourceStep::RemoteExchangeSourceStep(PlanSegmentInputs inputs_, Da
     : ISourceStep(DataStream{.header = inputs_[0]->getHeader()}), inputs(std::move(inputs_)), is_add_totals(is_add_totals_), is_add_extremes(is_add_extremes_)
 {
     input_streams.emplace_back(std::move(input_stream_));
-    logger = &Poco::Logger::get("RemoteExchangeSourceStep");
+    logger = getLogger("RemoteExchangeSourceStep");
 }
 
 void RemoteExchangeSourceStep::toProto(Protos::RemoteExchangeSourceStep & proto, bool) const

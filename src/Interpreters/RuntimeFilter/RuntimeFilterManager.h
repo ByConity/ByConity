@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/RuntimeFilter/ConcurrentHashMap.h>
@@ -140,7 +141,7 @@ public:
 
 private:
     void routineCheck();
-    RuntimeFilterManager() : log(&Poco::Logger::get("RuntimeFilterManager")) { initRoutineCheck(); }
+    RuntimeFilterManager() : log(getLogger("RuntimeFilterManager")) { initRoutineCheck(); }
 
     /**
      * Coordinator: Query Id -> RuntimeFilters
@@ -152,7 +153,7 @@ private:
      */
     ConcurrentHashMap<String, DynamicValuePtr> complete_runtime_filters;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     std::unique_ptr<std::thread> check_thread{nullptr};
     std::atomic_bool need_stop = false;
     UInt64 clean_rf_time_limit = 300000; /// default 300s to timeout runtime filters

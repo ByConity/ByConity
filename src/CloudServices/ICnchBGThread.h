@@ -16,6 +16,7 @@
 #pragma once
 
 #include <CloudServices/CnchBGThreadCommon.h>
+#include <Common/Logger.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
@@ -112,7 +113,7 @@ protected:
     const CnchBGThreadType thread_type;
     const StorageID storage_id;
     std::shared_ptr<Catalog::Catalog> catalog;
-    Poco::Logger * log;
+    LoggerPtr log;
     BackgroundSchedulePool::TaskHolder scheduled_task;
 
     /// Set to true when the BackgroundThread quit because of another same task already started on other servers. Only for MergeMutateThread.

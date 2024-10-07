@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <queue>
 #include <string>
@@ -282,7 +283,7 @@ private:
     // It's not a problem
     std::shared_ptr<Cache> cache;
     Container uncompleted_cache;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

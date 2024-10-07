@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Access/IAccessEntity.h>
+#include <Common/Logger.h>
+#include <Common/callOnce.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
 #include <common/scope_guard.h>
@@ -10,7 +12,6 @@
 #include <atomic>
 
 
-namespace Poco { class Logger; }
 namespace Poco::Net { class IPAddress; }
 
 namespace DB
@@ -178,7 +179,7 @@ protected:
     virtual UUID getIDOfLoggedUserImpl(const String & user_name) const;
 
     static UUID generateRandomID();
-    Poco::Logger * getLogger() const;
+    LoggerPtr getLogger() const;
     static String outputEntityTypeAndName(EntityType type, const String & name) { return EntityTypeInfo::get(type).outputWithEntityName(name); }
     [[noreturn]] void throwNotFound(const UUID & id) const;
     [[noreturn]] void throwNotFound(EntityType type, const String & name) const;
@@ -200,7 +201,8 @@ protected:
 
 private:
     const String storage_name;
-    mutable std::atomic<Poco::Logger *> log = nullptr;
+    mutable OnceFlag log_initialized;
+    mutable LoggerPtr log = nullptr;
 };
 
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
+#include <Common/Logger.h>
 #include <Common/config.h>
 #endif
 
@@ -35,7 +36,7 @@ private:
     std::optional<Aws::S3::Model::GetObjectResult> read_result;
     std::unique_ptr<ReadBufferFromIStream> impl;
 
-    Poco::Logger * log = &Poco::Logger::get("ReadBufferFromS3");
+    LoggerPtr log = getLogger("ReadBufferFromS3");
 
 public:
     explicit ReadBufferFromS3(

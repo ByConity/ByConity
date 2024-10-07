@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Core/Types.h>
 #include <MergeTreeCommon/InsertionLabel.h>
@@ -273,7 +274,7 @@ private:
     String creator;
     mutable bthread::RecursiveMutex mutex;
 
-    Poco::Logger * log{&Poco::Logger::get("ICnchTransaction")};
+    LoggerPtr log{getLogger("ICnchTransaction")};
     mutable std::mutex database_cache_mutex;
     std::map<String, DatabasePtr> database_cache;
 };

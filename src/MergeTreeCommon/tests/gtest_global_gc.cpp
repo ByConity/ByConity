@@ -19,7 +19,7 @@ namespace GTEST_GLOBAL_GC
 {
 
 std::mutex mutex1; // to hang executeGlobalGCDummy1
-bool executeGlobalGCDummy1(const Protos::DataModelTable & /*table*/, const Context &, Poco::Logger *)
+bool executeGlobalGCDummy1(const Protos::DataModelTable & /*table*/, const Context &, LoggerPtr)
 {
     std::lock_guard<std::mutex> lock(mutex1);
     //std::cout << "executed table:" << UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table.uuid())) << "\n";
@@ -352,7 +352,7 @@ TEST(GlobalGCManager, normal_operation_test_full_queue)
     global_gc.shutdown();
 }
 
-bool executeGlobalGCDummy2(const Protos::DataModelTable & /*table*/, const Context &, Poco::Logger *)
+bool executeGlobalGCDummy2(const Protos::DataModelTable & /*table*/, const Context &, LoggerPtr)
 {
     sleep(1);
     return true;

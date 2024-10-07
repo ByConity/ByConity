@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <pdqsort.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
@@ -124,7 +125,7 @@ struct AggregateFunctionPathSplitData
             s += "Event(index=" + std::to_string(events[i].index) + ", time=" + std::to_string(events[i].time)
                 + ", param=" + events[i].param.toString() + ").\n";
         }
-        LOG_DEBUG(&Poco::Logger::get("AggregateFunctionPathSplit"), "events:" + s + ".");
+        LOG_DEBUG(getLogger("AggregateFunctionPathSplit"), "events:" + s + ".");
     }
 };
 

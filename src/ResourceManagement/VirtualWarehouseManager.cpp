@@ -36,7 +36,7 @@ namespace ErrorCodes
 namespace DB::ResourceManagement
 {
 VirtualWarehouseManager::VirtualWarehouseManager(ResourceManagerController & rm_controller_)
-    : rm_controller(rm_controller_), log(&Poco::Logger::get("VirtualWarehouseManager"))
+    : rm_controller(rm_controller_), log(getLogger("VirtualWarehouseManager"))
 {
 }
 

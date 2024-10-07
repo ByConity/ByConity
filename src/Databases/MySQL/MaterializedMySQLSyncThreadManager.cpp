@@ -62,7 +62,7 @@ static bool tryToExecuteQueryWithForwarding(const String & query_to_execute, Con
     catch (...)
     {
         tryLogCurrentException(
-            &Poco::Logger::get("MaterializeMySQLManager(" + database + ")"),
+            getLogger("MaterializeMySQLManager(" + database + ")"),
             "Query " + query_to_execute + " wasn't finished successfully");
         throw;
     }
@@ -81,7 +81,7 @@ static BlockIO tryToExecuteQuery(const String & query_to_execute, ContextMutable
     catch (...)
     {
         tryLogCurrentException(
-            &Poco::Logger::get("MaterializeMySQLManager(" + database + ")"),
+            getLogger("MaterializeMySQLManager(" + database + ")"),
             "Query " + query_to_execute + " wasn't finished successfully");
         throw;
     }
@@ -207,7 +207,7 @@ static inline void dumpDataForTables(
     auto iterator = need_dumping_tables.begin();
     for (; iterator != need_dumping_tables.end() /*&& !is_cancelled()*/; ++iterator)
     {
-        LOG_DEBUG(&Poco::Logger::get("DumpDataForMySQLTable"), "Try to create and dump data for table {} with sql: {}", iterator->first, iterator->second);
+        LOG_DEBUG(getLogger("DumpDataForMySQLTable"), "Try to create and dump data for table {} with sql: {}", iterator->first, iterator->second);
         try
         {
             /// 1. create table
@@ -233,7 +233,7 @@ static inline void dumpDataForTables(
             Stopwatch watch;
             copyData(input, *out);
             const Progress & progress = out->getProgress();
-            LOG_INFO(&Poco::Logger::get("MaterializeMySQLSyncThread(" + database_name + ")"),
+            LOG_INFO(getLogger("MaterializeMySQLSyncThread(" + database_name + ")"),
                 "Materialize MySQL step 1: dump {}, {} rows, {} in {} sec., {} rows/sec., {}/sec."
                 , table_name, formatReadableQuantity(progress.written_rows), formatReadableSizeWithBinarySuffix(progress.written_bytes)
                 , watch.elapsedSeconds(), formatReadableQuantity(static_cast<size_t>(progress.written_rows / watch.elapsedSeconds()))
@@ -245,7 +245,7 @@ static inline void dumpDataForTables(
             if (exception.code() == ErrorCodes::UNSUPPORTED_MYSQL_TABLE || exception.code() == ErrorCodes::NOT_IMPLEMENTED || exception.code() == ErrorCodes::SYNTAX_ERROR || exception.code() == ErrorCodes::ILLEGAL_COLUMN)
             {
                 LOG_WARNING(
-                        &Poco::Logger::get("MaterializeMySQLManager(" + database_name + ")"),
+                        getLogger("MaterializeMySQLManager(" + database_name + ")"),
                         "Skip unsupported MySQL table while trying to execute: [" + iterator->second + "]; "
                             + "due to: " + getCurrentExceptionMessage(true));
                 if (!unsupported_tables_local.count(iterator->first))
@@ -1523,7 +1523,7 @@ void MaterializedMySQLSyncThreadManager::doResyncTable(const String & table_name
             return resync_tables.count(table_name) == 0 || isResyncTableCancelled();
         });
         const Progress & progress = out->getProgress();
-        LOG_INFO(&Poco::Logger::get("MaterializeMySQLSyncThread(" + storage_id.database_name + ")"),
+        LOG_INFO(getLogger("MaterializeMySQLSyncThread(" + storage_id.database_name + ")"),
             "Materialize MySQL step 1: dump {}, {} rows, {} in {} sec., {} rows/sec., {}/sec."
             , table_name, formatReadableQuantity(progress.written_rows), formatReadableSizeWithBinarySuffix(progress.written_bytes)
             , watch.elapsedSeconds(), formatReadableQuantity(static_cast<size_t>(progress.written_rows / watch.elapsedSeconds()))

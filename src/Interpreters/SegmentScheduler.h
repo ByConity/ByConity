@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <algorithm>
 #include <random>
 #include <unordered_map>
@@ -75,7 +76,7 @@ struct SegmentSchedulerOptions
 class SegmentScheduler
 {
 public:
-    SegmentScheduler(): log(&Poco::Logger::get("SegmentScheduler")) {}
+    SegmentScheduler(): log(getLogger("SegmentScheduler")) {}
     virtual ~SegmentScheduler() {}
     PlanSegmentsStatusPtr insertPlanSegments(const String & query_id,
                                              PlanSegmentTree * plan_segments_ptr,
@@ -135,7 +136,7 @@ private:
     bthread::Mutex bsp_scheduler_map_mutex;
     BspSchedulerMap bsp_scheduler_map;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
     PlanSegmentExecutionInfo scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr);

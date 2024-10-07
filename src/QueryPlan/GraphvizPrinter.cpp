@@ -3321,7 +3321,7 @@ void GraphvizPrinter::printChunk(String transform, const Block & block, const Ch
         value << "\n";
     }
 
-    LOG_DEBUG(&Poco::Logger::get("GraphvizPrinter"), value.str());
+    LOG_DEBUG(getLogger("GraphvizPrinter"), value.str());
 }
 
 void appendAST(

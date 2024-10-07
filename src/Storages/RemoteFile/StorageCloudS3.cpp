@@ -141,7 +141,7 @@ void registerStorageCloudS3(StorageFactory & factory)
         CnchFileSettings settings = args.getContext()->getCnchFileSettings();
         settings.loadFromQuery(*args.storage_def);
         LOG_TRACE(
-            &Poco::Logger::get("StorageCloudS3"),
+            getLogger("StorageCloudS3"),
             fmt::format(
                 "create cloud S3 table: database={}, table={}, url={}, format={}, compression={}",
                 database,

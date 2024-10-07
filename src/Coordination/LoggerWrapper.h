@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <libnuraft/nuraft.hxx> // Y_IGNORE
 #include <common/logger_useful.h>
 #include <Core/SettingsEnums.h>
@@ -25,7 +26,7 @@ private:
 
 public:
     LoggerWrapper(const std::string & name, LogsLevel level_)
-        : log(&Poco::Logger::get(name))
+        : log(getRawLogger(name))
         , level(level_)
     {
         log->setLevel(static_cast<int>(LEVELS.at(level)));
@@ -56,7 +57,8 @@ public:
     }
 
 private:
-    Poco::Logger * log;
+    /// stick to raw logger to support setLevel
+    LoggerRawPtr log;
     std::atomic<LogsLevel> level;
 };
 

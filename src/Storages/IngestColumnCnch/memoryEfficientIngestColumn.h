@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/IngestColumnCnch/memoryEfficientIngestColumnHelper.h>
 #include <Interpreters/Context_fwd.h>
 #include <Core/Settings.h>
@@ -72,7 +73,7 @@ private:
     const MergeTreeDataPartsVector & visible_target_parts;
     const MergeTreeDataPartsVector & visible_source_parts;
     const size_t number_of_threads_for_read_source_parts;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Below is intermediate data to serve the algorithm
     /// Maping each part to an interger/ part_id

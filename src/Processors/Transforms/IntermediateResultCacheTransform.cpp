@@ -25,7 +25,7 @@ IntermediateResultCacheTransform::IntermediateResultCacheTransform(
     , cache_max_bytes(cache_max_bytes_)
     , cache_max_rows(cache_max_rows_)
     , all_part_in_cache(all_part_in_cache_)
-    , log(&Poco::Logger::get("IntermediateResultCacheTransform"))
+    , log(getLogger("IntermediateResultCacheTransform"))
 {
 }
 

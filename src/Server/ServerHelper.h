@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <string>
 #include <Poco/Logger.h>
 
@@ -17,5 +18,5 @@ std::string getCanonicalPath(std::string && path);
 /**
  * @brief Setup temporary path for later use.
  */
-void setupTmpPath(Poco::Logger * log, const std::string & path);
+void setupTmpPath(LoggerPtr log, const std::string & path);
 }

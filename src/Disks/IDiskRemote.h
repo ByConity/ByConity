@@ -22,6 +22,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
+#include <Common/Logger.h>
 #include <Common/config.h>
 #endif
 
@@ -145,7 +146,7 @@ public:
     virtual RemoteFSPathKeeperPtr createFSPathKeeper() const = 0;
 
 protected:
-    Poco::Logger * log;
+    LoggerPtr log;
     const String name;
     const String remote_fs_root_path;
 

@@ -12,7 +12,7 @@ namespace DB
 
 MergeTreeBitmapIndex::MergeTreeBitmapIndex(MergeTreeData & data_)
     : data(data_)
-    , log(&Poco::Logger::get("MergeTreeBitmapIndex"))
+    , log(getLogger("MergeTreeBitmapIndex"))
 {
 
 }

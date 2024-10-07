@@ -41,7 +41,7 @@ CloudUniqueMergeTreeMergeTask::CloudUniqueMergeTreeMergeTask(
     : ManipulationTask(std::move(params_), std::move(context_))
     , storage(storage_)
     , log_name(storage.getLogName() + "(MergeTask)")
-    , log(&Poco::Logger::get(log_name))
+    , log(getLogger(log_name))
     , cnch_writer(storage, getContext(), ManipulationType::Merge, getTaskID())
 {
     if (params.source_data_parts.empty())
@@ -202,7 +202,7 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
             if (UInt64(time(nullptr) - last_touch_time) > getContext()->getSettingsRef().cloud_task_auto_stop_timeout)
             {
                 LOG_TRACE(
-                    &Poco::Logger::get("CloudUniqueMergeTreeMergeTask"),
+                    getLogger("CloudUniqueMergeTreeMergeTask"),
                     "Task {} doesn't receive heartbeat from server, stop it self.",
                     params.task_id);
                 setCancelled();

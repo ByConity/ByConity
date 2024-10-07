@@ -136,7 +136,7 @@ TCPHandler::TCPHandler(
     : Poco::Net::TCPServerConnection(socket_)
     , server(server_)
     , parse_proxy_protocol(parse_proxy_protocol_)
-    , log(&Poco::Logger::get("TCPHandler"))
+    , log(getLogger("TCPHandler"))
     , connection_context(Context::createCopy(server.context()))
     , query_context(Context::createCopy(server.context()))
     , server_display_name(std::move(server_display_name_))

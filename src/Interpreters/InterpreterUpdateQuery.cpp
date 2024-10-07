@@ -74,7 +74,7 @@ getTableBlockIO(const StoragePtr & storage, ContextMutablePtr query_context)
 InterpreterUpdateQuery::InterpreterUpdateQuery(const ASTPtr & query_ptr_, ContextPtr context_)
     : WithContext(context_),
       query_ptr(query_ptr_),
-      log(&Poco::Logger::get("InterpreterUpdateQuery"))
+      log(getLogger("InterpreterUpdateQuery"))
 {
 }
 

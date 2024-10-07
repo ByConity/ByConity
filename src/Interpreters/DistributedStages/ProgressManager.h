@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <condition_variable>
 #include <memory>
 #include <IO/Progress.h>
@@ -19,7 +20,7 @@ public:
     ~TCPProgressSender();
 
 private:
-    Poco::Logger * logger;
+    LoggerPtr logger;
     std::atomic_bool shutdown = {false};
     std::mutex mu;
     std::condition_variable var;
@@ -31,7 +32,7 @@ private:
 class ProgressManager
 {
 public:
-    explicit ProgressManager(const String & query_id_) : log(&Poco::Logger::get("ProgressManager")), query_id(query_id_)
+    explicit ProgressManager(const String & query_id_) : log(getLogger("ProgressManager")), query_id(query_id_)
     {
     }
     /// normal progress received from sendProgress rpc
@@ -46,7 +47,7 @@ public:
     }
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     String query_id;
     /// only collects progress in worker segments
     Progress progress;

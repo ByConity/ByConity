@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Server/HTTP/HTTPRequestHandlerFactory.h>
@@ -31,7 +32,7 @@ public:
     std::unique_ptr<HTTPRequestHandler> createRequestHandler(const HTTPServerRequest & request) override;
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     std::string name;
 
     std::vector<HTTPRequestHandlerFactoryPtr> child_factories;

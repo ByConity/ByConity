@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Transaction/TableTxnCommitter.h>
 
 namespace DB
@@ -19,7 +20,7 @@ private:
     std::mutex committers_mutex;
     std::map<UUID, TableTxnCommitterPtr> committers;
 
-    Poco::Logger * log{&Poco::Logger::get("GlobalTXNComitter")};
+    LoggerPtr log{getLogger("GlobalTXNComitter")};
 };
 
 using GlobalTxnCommitterPtr = std::shared_ptr<GlobalTxnCommitter>;

@@ -308,7 +308,7 @@ HashJoin::HashJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_s
     , ineuqal_column_name(table_join->getInequalColumnName())
     , data(std::make_shared<RightTableData>())
     , right_sample_block(right_sample_block_)
-    , log(&Poco::Logger::get("HashJoin"))
+    , log(getLogger("HashJoin"))
 {
     LOG_DEBUG(log, "Right sample block: {}", right_sample_block.dumpStructure());
 
@@ -2806,7 +2806,7 @@ void HashJoin::validateInequalConditions(const ExpressionActionsPtr & inequal_co
             expression_sample_block.getByPosition(column_size - 1).name, strictnessToString(strictness), kindToString(kind));
     }
     has_inequal_condition = true;
-    LOG_DEBUG(&Poco::Logger::get("HashJoin"), "validate inequal condition for header: {}", expression_sample_block.dumpStructure());
+    LOG_DEBUG(getLogger("HashJoin"), "validate inequal condition for header: {}", expression_sample_block.dumpStructure());
 }
 
 }

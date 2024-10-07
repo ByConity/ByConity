@@ -77,7 +77,7 @@ IngestColumnBlockInputStream::IngestColumnBlockInputStream(
 )
     : target_storage{std::move(target_storage_)},
       context(std::move(local_context)),
-      log(target_storage->getLogger())
+      log(getLogger(target_storage->getStorageID().getNameForLogs() + " (IngestColumn)"))
 {
     source_storage = context->tryGetCnchWorkerResource()->getTable(StorageID{command.from_database, command.from_table});
 
@@ -169,7 +169,7 @@ Block IngestColumnBlockInputStream::readImpl()
 
             if (getCurrentVisibleSourceParts().empty())
                 continue;
-            
+
             MemoryEfficientIngestColumn executor{*this};
             executor.execute();
         }

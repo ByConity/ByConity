@@ -106,7 +106,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         if (!cnch_txn)
             throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-        LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
+        LOG_INFO(getLogger("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
         cnch_table_lock = cnch_txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, table->getStorageID().database_name, table->getStorageID().table_name);
     }
     else

@@ -149,7 +149,7 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         total_segment_count(total_segment_count_), marks_loader(marks_loader_),
         current_segment_idx(0), current_compressed_offset(std::nullopt), part_host(part_host_),
         stream_extension(stream_extension_),
-        logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
+        logger(getLogger("MergedReadBufferWithSegmentCache"))
 {
     initialize();
 }

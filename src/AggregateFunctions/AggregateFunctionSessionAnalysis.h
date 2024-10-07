@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <pdqsort.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnArray.h>
@@ -125,7 +126,7 @@ struct AggregateFunctionSessionAnalysisData
         String s = "Event size: " + std::to_string(events.size()) + "\n";
         for (const auto & event : events)
             s += "Event(type=" + std::to_string(event.type) + ", time=" + std::to_string(event.time) + ", value=" + event.value.toString() + ")\n";
-        LOG_DEBUG(&Poco::Logger::get("AggregateFunctionSessionAnalysis"), "events:" + s + ".");
+        LOG_DEBUG(getLogger("AggregateFunctionSessionAnalysis"), "events:" + s + ".");
     }
 };
 

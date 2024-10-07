@@ -102,7 +102,7 @@ public:
                       const String & partition,
                       const std::vector<String>& partitionlist,
                       const std::vector<String>& skippartitionlist);
-    
+
     void initDataDiskPath(const String & escaped_database,
                           const String & escaped_table,
                           std::vector<String> & data_paths,
@@ -113,7 +113,7 @@ public:
                               Snapshot & snapshot,
                               const std::shared_ptr<IDisk> & local_disk,
                               const std::shared_ptr<IDisk> & remote_disk);
-    
+
     void getUniqueTableActivePartsFromDisk(StorageCloudMergeTree & cloud,
                                            Snapshot & snapshot,
                                            const String & escaped_database,
@@ -135,7 +135,7 @@ private:
     ContextMutablePtr global_context;
     Settings settings;
     Int64 current_shard_number {0};
-    Poco::Logger * log{};
+    LoggerPtr log{};
     UniqueTableDumpHelper unique_table_dump_helper;
 };
 
@@ -222,7 +222,7 @@ void ClickHouseDumper::defineOptions(Poco::Util::OptionSet & options)
     options.addOption(Poco::Util::Option("skip_unkowning_settings", "", "skip dumper unknown settings") //
                           .required(false)
                           .binding("skip_unkowning_settings"));
-    
+
     options.addOption(Poco::Util::Option("multi_disk_path_list", "", "multi disk path list") //
                           .required(false)
                           .argument("<multi_disk_path_list>")
@@ -478,7 +478,7 @@ void ClickHouseDumper::initDataDiskPath(
         for (const auto & disk_name : vec_names)
         {
             String disk_path = disk_name + "data/" + escaped_database + "/" + escaped_table + "/";
-            
+
             data_paths.push_back(std::move(disk_path));
         }
     }
@@ -591,7 +591,7 @@ void ClickHouseDumper::processTable(const String & database, const String & tabl
         throw Exception("Table " + db_table + " is atomic database : " + attach_query_str, ErrorCodes::UNKNOWN_TABLE);
 
     initDataDiskPath(escaped_database, escaped_table, data_paths, is_multi_disk);
-    
+
     /// Get unique table snapshot
     if (cloud.getInMemoryMetadataPtr()->hasUniqueKey())
     {
@@ -812,8 +812,8 @@ int ClickHouseDumper::main(const std::vector<String> &)
         config().add(config_processor.loadConfig().configuration.duplicate(), PRIO_APPLICATION, true, false);
     }
 
-    log = &logger();
-    log->setLevel(config().getString("logger.level", "debug"));
+    logger().setLevel(config().getString("logger.level", "debug"));
+    log = getLogger(logger());
     unique_table_dump_helper.setLog(log);
 
     shared_context = DB::Context::createShared();

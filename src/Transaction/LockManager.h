@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Transaction/LockDefines.h>
@@ -132,7 +133,7 @@ private:
     ContextPtr global_context;
     BackgroundSchedulePool::TaskHolder txn_checker;
 
-    Poco::Logger * log{&Poco::Logger::get("CnchLockManager")};
+    LoggerPtr log{getLogger("CnchLockManager")};
 
     std::atomic<bool> is_stopped{false};
 

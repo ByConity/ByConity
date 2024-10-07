@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "MaterializedPostgreSQLConsumer.h"
 #include "MaterializedPostgreSQLSettings.h"
 #include <Databases/PostgreSQL/fetchPostgreSQLTableStructure.h>
@@ -80,7 +81,7 @@ private:
 
     PostgreSQLTableStructurePtr fetchTableStructure(pqxx::ReplicationTransaction & tx, const String & table_name) const;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     ContextPtr context;
 
     /// If it is not attach, i.e. a create query, then if publication already exists - always drop it.

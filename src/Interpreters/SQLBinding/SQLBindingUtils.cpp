@@ -49,7 +49,7 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
         auto sql_binding_ptr = session_sql_cache.get(query_hash);
         if (sql_binding_ptr && sql_binding_ptr->target_ast)
         {
-            LOG_INFO(&Poco::Logger::get("SQL Binding"), "Session SQL Binding Hit");
+            LOG_INFO(getLogger("SQL Binding"), "Session SQL Binding Hit");
             return sql_binding_ptr->target_ast->clone();
         }
     }
@@ -64,7 +64,7 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
                       && isMatchBinding(query.data(), query.data() + query.size(), *session_re_binding_ptr))
                   {
                       InterpreterSetQuery(session_re_binding_ptr->settings->clone(), context).executeForCurrentContext();
-                      LOG_INFO(&Poco::Logger::get("SQL Binding"), "Regular Expression Binding Hit : {}", session_re_binding_ptr->pattern);
+                      LOG_INFO(getLogger("SQL Binding"), "Regular Expression Binding Hit : {}", session_re_binding_ptr->pattern);
                       return true;
                   }
               }
@@ -91,7 +91,7 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
         }
         catch (...)
         {
-            tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "Update Global BindingsCache Failed.");
+            tryLogWarningCurrentException(getLogger("SQL Binding"), "Update Global BindingsCache Failed.");
         }
     }
 
@@ -102,7 +102,7 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
         auto global_sql_binding_ptr = global_sql_cache.get(query_hash);
         if (global_sql_binding_ptr && global_sql_binding_ptr->target_ast)
         {
-            LOG_INFO(&Poco::Logger::get("SQL Binding"), "Global SQL Binding Hit");
+            LOG_INFO(getLogger("SQL Binding"), "Global SQL Binding Hit");
             return global_sql_binding_ptr->target_ast->clone();
         }
     }
@@ -221,7 +221,7 @@ bool SQLBindingUtils::isMatchBinding(const char * begin, const char *, SQLBindin
     }
     catch (boost::wrapexcept<boost::regex_error> &)
     {
-        LOG_ERROR(&Poco::Logger::get("SQL Binding"), "regex_match error");
+        LOG_ERROR(getLogger("SQL Binding"), "regex_match error");
         return false;
     }
 

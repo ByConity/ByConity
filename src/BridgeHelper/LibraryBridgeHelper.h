@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <IO/ReadWriteBufferFromHTTP.h>
 #include <Poco/Logger.h>
@@ -31,7 +32,7 @@ protected:
 
     const Poco::Util::AbstractConfiguration & getConfig() const override { return config; }
 
-    Poco::Logger * getLog() const override { return log; }
+    LoggerPtr getLog() const override { return log; }
 
     Poco::Timespan getHTTPTimeout() const override { return http_timeout; }
 
@@ -40,7 +41,7 @@ protected:
     static constexpr inline size_t DEFAULT_PORT = 9012;
 
     const Poco::Util::AbstractConfiguration & config;
-    Poco::Logger * log;
+    LoggerPtr log;
     const Poco::Timespan http_timeout;
     std::string bridge_host;
     size_t bridge_port;

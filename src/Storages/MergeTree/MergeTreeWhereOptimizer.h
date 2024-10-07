@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/SelectQueryInfo.h>
@@ -73,7 +74,7 @@ public:
         std::unordered_map<std::string, UInt64> column_sizes_,
         const StorageMetadataPtr & metadata_snapshot_,
         const Names & queried_columns_,
-        Poco::Logger * log_,
+        LoggerPtr log_,
         MaterializeStrategy materialize_strategy_ = MaterializeStrategy::PREWHERE);
 
     std::vector<ASTPtr> && getAtomicPredicatesExpressions();
@@ -168,7 +169,7 @@ private:
     const Names queried_columns;
     const NameSet sorting_key_names;
     const Block block_with_constants;
-    Poco::Logger * log;
+    LoggerPtr log;
     std::unordered_map<std::string, UInt64> column_sizes;
     UInt64 total_size_of_queried_columns = 0;
     NameSet array_joined_names;

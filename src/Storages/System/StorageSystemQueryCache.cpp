@@ -35,7 +35,7 @@ void StorageSystemQueryCache::fillData(MutableColumns & res_columns, ContextPtr 
     std::vector<QueryCache::Cache::KeyMapped> content = query_cache->dump();
 
     const String & user_name = context->getUserName();
-    LOG_DEBUG(&Poco::Logger::get("StorageSystemQueryCache"), "user {}, number of entries {}", user_name, content.size());
+    LOG_DEBUG(getLogger("StorageSystemQueryCache"), "user {}, number of entries {}", user_name, content.size());
 
     for (const auto & [key, query_result] : content)
     {

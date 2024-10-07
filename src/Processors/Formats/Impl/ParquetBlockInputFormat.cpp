@@ -693,7 +693,7 @@ ParquetSchemaReader::ParquetSchemaReader(ReadBuffer & in_, const FormatSettings 
 
 NamesAndTypesList ParquetSchemaReader::readSchema()
 {
-    LOG_TRACE(&Poco::Logger::get("ParquetSchemaReader"), "start readSchema");
+    LOG_TRACE(getLogger("ParquetSchemaReader"), "start readSchema");
     std::atomic<int> is_stopped{0};
     auto file = asArrowFile(in, format_settings, is_stopped, "Parquet", PARQUET_MAGIC_BYTES);
 

@@ -195,7 +195,7 @@ void FutureMergedMutatedPart::updatePath(const MergeTreeMetaBase & storage, cons
 MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeMetaBase & data_, size_t background_pool_size_)
     : data(data_)
     , background_pool_size(background_pool_size_)
-    , log(&Poco::Logger::get(data.getLogName() + " (MergerMutator)"))
+    , log(getLogger(data.getLogName() + " (MergerMutator)"))
 {
 }
 

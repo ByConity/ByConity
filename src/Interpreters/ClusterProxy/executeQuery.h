@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST.h>
 
@@ -55,7 +56,7 @@ class IStreamFactory;
 ///   - optimize_skip_unused_shards_nesting
 ///
 /// @return new Context with adjusted settings
-ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr context, const Settings & settings, Poco::Logger * log = nullptr);
+ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr context, const Settings & settings, LoggerPtr log = nullptr);
 
 /// removes different restrictions (like max_concurrent_queries_for_user, max_memory_usage_for_user, etc.)
 /// from settings and creates new context with them
@@ -67,7 +68,7 @@ Settings getUserRestrictionsRemoved(const Settings & settings);
 /// (currently SELECT, DESCRIBE).
 void executeQuery(
     QueryPlan & query_plan,
-    IStreamFactory & stream_factory, Poco::Logger * log,
+    IStreamFactory & stream_factory, LoggerPtr log,
     const ASTPtr & query_ast, ContextPtr context, const SelectQueryInfo & query_info,
     const ExpressionActionsPtr & sharding_key_expr,
     const std::string & sharding_key_column_name,
@@ -75,7 +76,7 @@ void executeQuery(
 
 void executeQuery(
     QueryPlan & query_plan,
-    IStreamFactory & stream_factory, Poco::Logger * log,
+    IStreamFactory & stream_factory, LoggerPtr log,
     const ASTPtr & query_ast, ContextPtr context, const WorkerGroupHandle & cluster);
 
 }

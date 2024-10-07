@@ -26,7 +26,7 @@ MergeTreeSelectPrepareProcessor::MergeTreeSelectPrepareProcessor(
 
 IProcessor::Status MergeTreeSelectPrepareProcessor::prepare()
 {
-    // LOG_ERROR(&Poco::Logger::get("MergeTreeSelectPrepareProcessor"), "thread:{}", current_thread->thread_id);
+    // LOG_ERROR(getLogger("MergeTreeSelectPrepareProcessor"), "thread:{}", current_thread->thread_id);
     if (inputs.empty())
     {
         if (start_expand)
@@ -80,7 +80,7 @@ void MergeTreeSelectPrepareProcessor::work()
                 if (!RuntimeFilterManager::getInstance().getDynamicValue(rf)->isReady())
                 {
                      LOG_DEBUG(
-                        &Poco::Logger::get("MergeTreeSelectPrepareProcessor"),
+                        getLogger("MergeTreeSelectPrepareProcessor"),
                         "wait time out:{} rf:{}",
                         timing.elapsed(),
                         rf);
@@ -95,7 +95,7 @@ void MergeTreeSelectPrepareProcessor::work()
 
             if (all_ready)
             {
-                //                LOG_DEBUG(&Poco::Logger::get("MergeTreeSelectPrepareProcessor"), "cost time:{} thread:{}", timing.elapsed(),
+                //                LOG_DEBUG(getLogger("MergeTreeSelectPrepareProcessor"), "cost time:{} thread:{}", timing.elapsed(),
                 //                          current_thread->thread_id);
                 poll_done = true;
             }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Processors/Merges/IMergingTransform.h>
 #include <Processors/Merges/Algorithms/CollapsingSortedAlgorithm.h>
 
@@ -27,7 +28,7 @@ public:
             sign_column,
             only_positive_sign,
             max_block_size,
-            &Poco::Logger::get("CollapsingSortedTransform"),
+            getLogger("CollapsingSortedTransform"),
             out_row_sources_buf_,
             use_average_block_sizes)
     {

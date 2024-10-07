@@ -90,7 +90,7 @@ BlockIO InterpreterAlterWarehouseQuery::execute()
             if (const ASTAssignment * assignment = child->as<ASTAssignment>())
             {
                 const auto & assign_name = assignment->column_name;
-                LOG_TRACE(&Poco::Logger::get("InterpreterAlterWarehouseQuery"), "assign name {}", assign_name);
+                LOG_TRACE(getLogger("InterpreterAlterWarehouseQuery"), "assign name {}", assign_name);
                 if (const ASTLiteral * literal = assignment->expression()->as<ASTLiteral>())
                 {
                     if (assign_name == "rule_name")
@@ -197,7 +197,7 @@ BlockIO InterpreterAlterWarehouseQuery::execute()
             {
                 const auto & assign_name = assignment->column_name;
                 LOG_TRACE(
-                    &Poco::Logger::get("InterpreterAlterWarehouseQuery"),
+                    getLogger("InterpreterAlterWarehouseQuery"),
                     "assign name {}, assygn type {}",
                     assign_name,
                     int(assignment->expression()->getType()));

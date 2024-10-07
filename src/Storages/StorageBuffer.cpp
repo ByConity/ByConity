@@ -140,7 +140,7 @@ StorageBuffer::StorageBuffer(
     , flush_thresholds(flush_thresholds_)
     , destination_id(destination_id_)
     , allow_materialized(allow_materialized_)
-    , log(&Poco::Logger::get("StorageBuffer (" + table_id_.getFullTableName() + ")"))
+    , log(getLogger("StorageBuffer (" + table_id_.getFullTableName() + ")"))
     , bg_pool(getContext()->getBufferFlushSchedulePool())
 {
     StorageInMemoryMetadata storage_metadata;

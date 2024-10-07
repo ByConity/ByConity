@@ -18,7 +18,7 @@ Aws::Utils::Logging::LogLevel DB::S3::AWSOptionsConfig::convertStringToLogLevel(
     else if (log_level_str.compare("Trace") == 0)
         return Aws::Utils::Logging::LogLevel::Trace;
     else {
-        LOG_WARNING(&Poco::Logger::get("AWSOptionsConfig"), fmt::format("Illegal aws log level {}, please check.", log_level_str));
+        LOG_WARNING(getLogger("AWSOptionsConfig"), fmt::format("Illegal aws log level {}, please check.", log_level_str));
         return Aws::Utils::Logging::LogLevel::Off;
     }
 }

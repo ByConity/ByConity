@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnSet.h>
 #include <DataTypes/DataTypeSet.h>
@@ -30,7 +31,7 @@ public:
     static FunctionPtr create(ContextPtr context) { return std::make_shared<RuntimeFilterBloomFilterExists>(std::move(context)); }
 
     explicit RuntimeFilterBloomFilterExists(ContextPtr context_)
-        : context(std::move(context_)), log(&Poco::Logger::get("RuntimeFilterBloomFilterExists"))
+        : context(std::move(context_)), log(getLogger("RuntimeFilterBloomFilterExists"))
     {}
 
     String getName() const override { return name; }
@@ -122,7 +123,7 @@ public:
 
 private:
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     mutable std::mutex mu;
     mutable String dynamic_value_key;

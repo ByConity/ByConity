@@ -171,7 +171,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
         if (!support)
         {
             LOG_INFO(
-                &Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
+                getLogger("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
             reason = checker.getReason();
         }
     }
@@ -198,7 +198,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
         }
 
         LOG_DEBUG(
-            &Poco::Logger::get("QueryUseOptimizerChecker"),
+            getLogger("QueryUseOptimizerChecker"),
             fmt::format("support: {}, check: {}", support, check(insert_query->select, context)));
         if (support)
             support = check(insert_query->select, context, throw_exception);

@@ -45,7 +45,7 @@ using IndexFileIterators = std::vector<IndexFileIteratorPtr>;
 
 MergeTreeDataDeduper::MergeTreeDataDeduper(
     const MergeTreeMetaBase & data_, ContextPtr context_, const CnchDedupHelper::DedupMode & dedup_mode_)
-    : data(data_), context(context_), log(&Poco::Logger::get(data_.getLogName() + " (Deduper)")), dedup_mode(dedup_mode_)
+    : data(data_), context(context_), log(getLogger(data_.getLogName() + " (Deduper)")), dedup_mode(dedup_mode_)
 {
     if (data.merging_params.hasExplicitVersionColumn())
         version_mode = VersionMode::ExplicitVersion;
@@ -223,7 +223,7 @@ namespace
         return std::move(res);
     }
 
-    void dumpBlockForLogging(const Block & block, String block_stage, Poco::Logger * log)
+    void dumpBlockForLogging(const Block & block, String block_stage, LoggerPtr log)
     {
         LOG_DEBUG(log, "{}: {}",  block_stage, block.dumpStructure());
         for (size_t row_num = 0; row_num < block.rows(); row_num++)

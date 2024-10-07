@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Optimizer/EqualityInference.h>
 #include <Optimizer/Rewriter/Rewriter.h>
@@ -91,7 +92,7 @@ private:
     CTEInfo & cte_info;
     const std::unordered_map<CTEId, UInt64> & cte_reference_counts;
     std::unordered_map<CTEId, std::vector<std::pair<const CTERefStep *, ConstASTPtr>>> cte_predicates{};
-    Poco::Logger * logger = &Poco::Logger::get("PredicateVisitor");
+    LoggerPtr logger = getLogger("PredicateVisitor");
 
     PlanNodePtr process(PlanNodeBase &, PredicateContext &);
     PlanNodePtr processChild(PlanNodeBase &, PredicateContext &);

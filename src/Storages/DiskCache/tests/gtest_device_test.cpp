@@ -8,6 +8,7 @@
 #include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/tests/MockDevice.h>
 #include <Common/thread_local_rng.h>
+#include <common/logger_useful.h>
 #include <common/scope_guard.h>
 
 namespace ProfileEvents
@@ -47,7 +48,7 @@ struct DeviceParamTest : public testing::TestWithParam<std::tuple<IoEngine, int>
 {
     DeviceParamTest() : io_engine_(std::get<0>(GetParam())), q_depth_(std::get<1>(GetParam()))
     {
-        Device::logger().information(fmt::format("DeviceParamTest: ioEngine={}, qDepth={}", getIoEngineName(io_engine_), q_depth_));
+        LOG_INFO(getLogger("DeviceParamTest"), "ioEngine={}, qDepth={}", getIoEngineName(io_engine_), q_depth_);
     }
 
 protected:

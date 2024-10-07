@@ -508,7 +508,7 @@ namespace
 [[noreturn]] void onStorageInconsistency()
 {
     LOG_ERROR(
-        &Poco::Logger::get("KeeperStorage"),
+        getLogger("KeeperStorage"),
         "Inconsistency found between uncommitted and committed data. Keeper will terminate to avoid undefined behaviour.");
     std::terminate();
 }
@@ -763,7 +763,7 @@ void handleSystemNodeModification(const KeeperContext & keeper_context, std::str
             "If you still want to ignore it, you can set 'keeper_server.ignore_system_path_on_startup' to true.",
             error_msg);
 
-    LOG_ERROR(&Poco::Logger::get("KeeperStorage"), std::string(error_msg));
+    LOG_ERROR(getLogger("KeeperStorage"), std::string(error_msg));
 }
 
 }

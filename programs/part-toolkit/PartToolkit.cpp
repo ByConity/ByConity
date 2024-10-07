@@ -52,7 +52,7 @@ int mainHelp(int, char **)
     return 0;
 }
 
-void run(const std::string & query, Poco::Logger * log)
+void run(const std::string & query, LoggerPtr log)
 {
     LOG_DEBUG(log, "Executing query : {}", query);
     DB::ThreadStatus status;
@@ -133,7 +133,7 @@ int mainEntryClickhousePartToolkit(int argc, char ** argv)
     {
     }
 
-    Poco::Logger * log = &Poco::Logger::get("part-toolkit");
+    LoggerPtr log = getLogger("part-toolkit");
 
     LOG_INFO(log, "Logger level: {}", log_level);
 

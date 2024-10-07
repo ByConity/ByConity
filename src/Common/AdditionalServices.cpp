@@ -33,7 +33,7 @@ AdditionalService::AdditionalService(std::string svc_s) noexcept
         }
     }
 
-    LOG_WARNING(&Poco::Logger::get("AdditionalService"), "cannot find additional service {}", svc_s);
+    LOG_WARNING(getLogger("AdditionalService"), "cannot find additional service {}", svc_s);
     additional_service = Value::SIZE;
 }
 void AdditionalServices::parseAdditionalServicesFromConfig(const Poco::Util::AbstractConfiguration & config)

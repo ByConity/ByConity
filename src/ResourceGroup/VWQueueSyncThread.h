@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <thread>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/Types.h>
@@ -71,7 +72,7 @@ private:
 
     BackgroundSchedulePool::TaskHolder task;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

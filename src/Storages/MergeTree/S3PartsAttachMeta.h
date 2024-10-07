@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <Disks/IDisk.h>
 #include <IO/S3Common.h>
@@ -40,7 +41,7 @@ public:
 private:
     bool filterPartToRemove(const S3::S3Util & s3_util_, const String & key_);
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
     const String data_key_prefix;
     std::optional<S3ObjectMetadata::PartGeneratorID> generator_id;
 

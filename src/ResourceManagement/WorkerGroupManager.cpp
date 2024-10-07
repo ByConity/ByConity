@@ -36,7 +36,7 @@ namespace ErrorCodes
 namespace DB::ResourceManagement
 {
 WorkerGroupManager::WorkerGroupManager(ResourceManagerController & rm_controller_)
-    : rm_controller(rm_controller_), log(&Poco::Logger::get("WorkerGroupManager"))
+    : rm_controller(rm_controller_), log(getLogger("WorkerGroupManager"))
 {
 }
 

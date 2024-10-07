@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
@@ -36,7 +37,7 @@ private:
     PaimonCatalogClientPtr catalog_client;
 
 
-    Poco::Logger * log{&Poco::Logger::get("DatabasePaimon")};
+    LoggerPtr log{getLogger("DatabasePaimon")};
 };
 
 }

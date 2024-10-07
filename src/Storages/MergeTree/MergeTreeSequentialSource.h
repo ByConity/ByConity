@@ -20,8 +20,10 @@
  */
 
 #pragma once
-#include <Processors/Sources/SourceWithProgress.h>
+#include <Common/Logger.h>
+#include <memory>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Processors/Sources/SourceWithProgress.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <WorkerTasks/CnchMergePrefetcher.h>
@@ -101,7 +103,7 @@ private:
     /// Should read using direct IO
     bool read_with_direct_io;
 
-    Poco::Logger * log = &Poco::Logger::get("MergeTreeSequentialSource");
+    LoggerPtr log = getLogger("MergeTreeSequentialSource");
 
     std::shared_ptr<MarkCache> mark_cache;
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;

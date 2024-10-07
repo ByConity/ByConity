@@ -37,7 +37,7 @@ void DiskCacheFactory::init(Context & context)
 
     /// init pool
     IDiskCache::init(context);
-    Poco::Logger * log{&Poco::Logger::get("DiskCacheFactory")};
+    LoggerPtr log{getLogger("DiskCacheFactory")};
 
     // build disk cache for each type
     if (config.has(DiskCacheSettings::root))
@@ -110,7 +110,7 @@ void DiskCacheFactory::shutdown()
 
 void DiskCacheFactory::addNewCache(Context & context, const std::string & cache_name, bool create_default)
 {
-    Poco::Logger * log{&Poco::Logger::get("DiskCacheFactory")};
+    LoggerPtr log{getLogger("DiskCacheFactory")};
 
     DiskCacheSettings cache_settings;
     auto throttler = context.getDiskCacheThrottler();

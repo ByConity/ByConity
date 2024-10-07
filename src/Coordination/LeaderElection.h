@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <functional>
 #include <memory>
 #include <common/logger_useful.h>
@@ -51,7 +52,7 @@ public:
         , identifier(allow_multiple_leaders_ ? (identifier_ + suffix) : identifier_)
         , allow_multiple_leaders(allow_multiple_leaders_)
         , log_name("LeaderElection (" + path + ")")
-        , log(&Poco::Logger::get(log_name))
+        , log(getLogger(log_name))
     {
         task = pool.createTask(log_name, [this] { threadFunction(); });
         createNode();
@@ -81,7 +82,7 @@ private:
     std::string identifier;
     bool allow_multiple_leaders;
     std::string log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     EphemeralNodeHolderPtr node;
     std::string node_name;

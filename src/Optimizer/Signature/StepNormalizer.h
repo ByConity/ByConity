@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Interpreters/Context_fwd.h>
 #include <Poco/Logger.h>
@@ -71,7 +72,7 @@ protected:
 
 private:
     ContextPtr context;
-    Poco::Logger * log = &Poco::Logger::get("StepNormalizer");
+    LoggerPtr log = getLogger("StepNormalizer");
 };
 
 }

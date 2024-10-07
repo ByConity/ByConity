@@ -230,7 +230,7 @@ void CollectJoinOnKeysMatcher::analyzeJoinOnConditions(Data & data, ASTTableJoin
         for (const auto & item : columns_for_conditions_map)
             columns_for_join.emplace_back(item.second);
 
-        //LOG_DEBUG(&Poco::Logger::get("CollectJoinOnKeysMatcher"), "columns_for_join: {}", columns_for_join.toString());
+        //LOG_DEBUG(getLogger("CollectJoinOnKeysMatcher"), "columns_for_join: {}", columns_for_join.toString());
         data.analyzed_join.addInequalConditions(data.inequal_conditions, columns_for_join, data.context);
     }
     else

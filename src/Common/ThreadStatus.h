@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/SettingsEnums.h>
 #include <Interpreters/Context_fwd.h>
 #include <IO/Progress.h>
@@ -221,7 +222,7 @@ protected:
     std::unique_ptr<QueryProfilerReal> query_profiler_real;
     std::unique_ptr<QueryProfilerCpu> query_profiler_cpu;
 
-    Poco::Logger * log = nullptr;
+    LoggerPtr log = nullptr;
 
     friend class CurrentThread;
 

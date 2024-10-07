@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/Aggregator.h>
@@ -235,7 +236,7 @@ public:
     GroupingSetsParamsList prepareGroupingSetsParams() const;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("TableScanStep");
+    LoggerPtr log = getLogger("TableScanStep");
     Names keys;
 
     NameSet keys_not_hashed; // keys which can be output directly, same as function `any`, but no type loss.

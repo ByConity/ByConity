@@ -35,7 +35,7 @@ static void addDefaultHandlersFactory(
     HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, ContextMutablePtr context);
 
 HTTPRequestHandlerFactoryMain::HTTPRequestHandlerFactoryMain(const std::string & name_)
-    : log(&Poco::Logger::get(name_)), name(name_)
+    : log(getLogger(name_)), name(name_)
 {
 }
 

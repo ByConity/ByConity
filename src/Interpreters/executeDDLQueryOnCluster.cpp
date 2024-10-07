@@ -212,7 +212,7 @@ DDLQueryStatusInputStream::DDLQueryStatusInputStream(const String & zk_node_path
     : node_path(zk_node_path)
     , context(context_)
     , watch(CLOCK_MONOTONIC_COARSE)
-    , log(&Poco::Logger::get("DDLQueryStatusInputStream"))
+    , log(getLogger("DDLQueryStatusInputStream"))
 {
     if (context->getSettingsRef().distributed_ddl_output_mode == DistributedDDLOutputMode::THROW ||
         context->getSettingsRef().distributed_ddl_output_mode == DistributedDDLOutputMode::NONE)

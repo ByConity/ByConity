@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
@@ -48,7 +49,7 @@ protected:
         unsigned num_streams) override;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("StoragePaimonCluster")};
+    LoggerPtr log{getLogger("StoragePaimonCluster")};
 
     PaimonCatalogClientPtr catalog_client;
 

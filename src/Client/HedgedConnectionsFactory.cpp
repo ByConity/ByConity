@@ -24,7 +24,7 @@ HedgedConnectionsFactory::HedgedConnectionsFactory(
     const Settings * settings_,
     const ConnectionTimeouts & timeouts_,
     std::shared_ptr<QualifiedTableName> table_to_check_)
-    : pool(pool_), settings(settings_), timeouts(timeouts_), table_to_check(table_to_check_), log(&Poco::Logger::get("HedgedConnectionsFactory"))
+    : pool(pool_), settings(settings_), timeouts(timeouts_), table_to_check(table_to_check_), log(getLogger("HedgedConnectionsFactory"))
 {
     shuffled_pools = pool->getShuffledPools(settings);
     for (auto shuffled_pool : shuffled_pools)

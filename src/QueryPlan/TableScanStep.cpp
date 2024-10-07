@@ -259,7 +259,7 @@ private:
     MergeTreeDataSelectExecutor merge_tree_reader;
     const SelectQueryInfo & select_query_info;
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     bool has_aggregate;
     std::optional<SymbolTransformMap> query_lineage;
@@ -278,7 +278,7 @@ TableScanExecutor::TableScanExecutor(TableScanStep & step, const MergeTreeMetaBa
     , merge_tree_reader(storage)
     , select_query_info(step.getQueryInfo())
     , context(std::move(context_))
-    , log(&Poco::Logger::get("TableScanExecutor"))
+    , log(getLogger("TableScanExecutor"))
 {
     if (storage_metadata->projections.empty())
         return;
@@ -799,7 +799,7 @@ TableScanStep::TableScanStep(
     , pushdown_filter(std::move(filter_))
     , bucket_scan(bucket_scan_)
     , alias(alias_)
-    , log(&Poco::Logger::get("TableScanStep"))
+    , log(getLogger("TableScanStep"))
 {
     const auto & table_expression = getTableExpression(*query_info.getSelectQuery(), 0);
     if (table_expression && table_expression->table_function)
@@ -896,7 +896,7 @@ TableScanStep::TableScanStep(
     , pushdown_filter(std::move(filter_))
     , table_output_stream(std::move(table_output_stream_))
     , alias(alias_)
-    , log(&Poco::Logger::get("TableScanStep"))
+    , log(getLogger("TableScanStep"))
 {
     column_names.clear();
     for (auto & item : column_alias)
@@ -1225,7 +1225,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     bool use_optimizer_projection_selection
         = build_context.context->getSettingsRef().optimizer_projection_support && is_merge_tree && !use_projection_index;
 
-    LOG_INFO(&Poco::Logger::get("test"), "initTableScan, limit={}, !empty={}", query->limitLength() ? serializeAST(*query->limitLength()) : "nothing", use_projection_index || use_optimizer_projection_selection);
+    LOG_INFO(getLogger("test"), "initTableScan, limit={}, !empty={}", query->limitLength() ? serializeAST(*query->limitLength()) : "nothing", use_projection_index || use_optimizer_projection_selection);
 
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();

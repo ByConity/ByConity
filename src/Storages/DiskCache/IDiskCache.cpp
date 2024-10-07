@@ -62,7 +62,7 @@ void IDiskCache::init(const Context & global_context)
             settings.local_disk_cache_evict_thread_pool_size,
             settings.local_disk_cache_evict_thread_pool_size,
             settings.local_disk_cache_evict_thread_pool_size * 100);
-    
+
     local_disk_cache_preload_thread_pool = std::make_unique<ThreadPool>(
             settings.cnch_parallel_preloading,
             settings.cnch_parallel_preloading,
@@ -117,7 +117,7 @@ IDiskCache::IDiskCache(
     , support_multi_cache(support_multi_cache_)
     , type(type_)
     , name(name_)
-    , log(&Poco::Logger::get(fmt::format("DiskCache(name={})", getName())))
+    , log(::getLogger(fmt::format("DiskCache(name={})", getName())))
 {
     if (!settings.previous_disk_cache_dir.empty())
     {

@@ -195,7 +195,7 @@ QueryCache::Writer::Writer(
     if (auto entry = cache.getWithKey(key); entry.has_value() && !IsStale()(entry->key) && (entry->key.cnch_txn > source_update_time))
     {
         skip_insert = true; /// Key already contained in cache and did not expire yet --> don't replace it
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "Skipped insert (non-stale entry found), query: {}", key.queryStringFromAst());
+        LOG_TRACE(getLogger("QueryCache"), "Skipped insert (non-stale entry found), query: {}", key.queryStringFromAst());
     }
 }
 
@@ -265,14 +265,14 @@ void QueryCache::Writer::finalizeWrite()
 
     if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - query_start_time) < min_query_runtime)
     {
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "Skipped insert (query not expensive enough), query: {}", key.queryStringFromAst());
+        LOG_TRACE(getLogger("QueryCache"), "Skipped insert (query not expensive enough), query: {}", key.queryStringFromAst());
         return;
     }
 
     if (auto entry = cache.getWithKey(key); entry.has_value() && !IsStale()(entry->key) && (entry->key.cnch_txn > source_update_time))
     {
         /// same check as in ctor because a parallel Writer could have inserted the current key in the meantime
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "Skipped insert (non-stale entry found), query: {}", key.queryStringFromAst());
+        LOG_TRACE(getLogger("QueryCache"), "Skipped insert (non-stale entry found), query: {}", key.queryStringFromAst());
         return;
     }
 
@@ -352,7 +352,7 @@ void QueryCache::Writer::finalizeWrite()
 
     if ((new_entry_size_in_bytes > max_entry_size_in_bytes) || (new_entry_size_in_rows > max_entry_size_in_rows))
     {
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "Skipped insert (query result too big), new_entry_size_in_bytes: {} ({}), new_entry_size_in_rows: {} ({}), query: {}", new_entry_size_in_bytes, max_entry_size_in_bytes, new_entry_size_in_rows, max_entry_size_in_rows, key.queryStringFromAst());
+        LOG_TRACE(getLogger("QueryCache"), "Skipped insert (query result too big), new_entry_size_in_bytes: {} ({}), new_entry_size_in_rows: {} ({}), query: {}", new_entry_size_in_bytes, max_entry_size_in_bytes, new_entry_size_in_rows, max_entry_size_in_rows, key.queryStringFromAst());
         return;
     }
 
@@ -387,25 +387,25 @@ QueryCache::Reader::Reader(Cache & cache_, const Key & key, TxnTimestamp source_
 
     if (!entry.has_value())
     {
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "No entry found for query {}", key.queryStringFromAst());
+        LOG_TRACE(getLogger("QueryCache"), "No entry found for query {}", key.queryStringFromAst());
         return;
     }
 
     if (!entry->key.is_shared && entry->key.user_name != key.user_name)
     {
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "Inaccessible entry found for query {}", key.queryStringFromAst());
+        LOG_TRACE(getLogger("QueryCache"), "Inaccessible entry found for query {}", key.queryStringFromAst());
         return;
     }
 
     if (entry->key.cnch_txn < source_update_time)
     {
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "Outdated entry found for query {}, entry txn {}, max table update time {}", key.queryStringFromAst(), entry->key.cnch_txn, source_update_time);
+        LOG_TRACE(getLogger("QueryCache"), "Outdated entry found for query {}, entry txn {}, max table update time {}", key.queryStringFromAst(), entry->key.cnch_txn, source_update_time);
         return;
     }
 
     if (IsStale()(entry->key))
     {
-        LOG_TRACE(&Poco::Logger::get("QueryCache"), "Stale entry found for query {}", key.queryStringFromAst());
+        LOG_TRACE(getLogger("QueryCache"), "Stale entry found for query {}", key.queryStringFromAst());
         return;
     }
 
@@ -443,7 +443,7 @@ QueryCache::Reader::Reader(Cache & cache_, const Key & key, TxnTimestamp source_
         buildSourceFromChunks(entry->key.header, std::move(decompressed_chunks), entry->mapped->totals, entry->mapped->extremes);
     }
 
-    LOG_TRACE(&Poco::Logger::get("QueryCache"), "Entry found for query {}", key.queryStringFromAst());
+    LOG_TRACE(getLogger("QueryCache"), "Entry found for query {}", key.queryStringFromAst());
 }
 
 bool QueryCache::Reader::hasCacheEntryForKey() const
@@ -554,7 +554,7 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
             auto host_ports = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage_id.uuid), storage_id.server_vw_name, ts, true);
             if (host_ports.empty())
             {
-                LOG_WARNING(&Poco::Logger::get("getMaxUpdateTime"), "Failed to get target host for {}", storage_id.getNameForLogs());
+                LOG_WARNING(getLogger("getMaxUpdateTime"), "Failed to get target host for {}", storage_id.getNameForLogs());
                 return 0;
             }
             std::shared_ptr<Protos::TableIdentifier> id = std::make_shared<Protos::TableIdentifier>();
@@ -571,7 +571,7 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
 
             if (static_cast<size_t>(table_infos.size()) != p.second.size())
             {
-                LOG_INFO(&Poco::Logger::get("getMaxUpdateTime"), "getTableInfo does return all info: send size {}, receive size {}", p.second.size(), table_infos.size());
+                LOG_INFO(getLogger("getMaxUpdateTime"), "getTableInfo does return all info: send size {}, receive size {}", p.second.size(), table_infos.size());
                 return 0;
             }
 
@@ -580,7 +580,7 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
                 UInt64 last_modification_time = table_info.last_modification_time();
                 if (last_modification_time == 0)
                 {
-                    LOG_INFO(&Poco::Logger::get("getMaxUpdateTime"), "last_modification time for table {}.{} is 0", table_info.database(), table_info.table());
+                    LOG_INFO(getLogger("getMaxUpdateTime"), "last_modification time for table {}.{} is 0", table_info.database(), table_info.table());
                     return 0;
                 }
 
@@ -591,13 +591,13 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
     }
     catch (...)
     {
-        LOG_INFO(&Poco::Logger::get("getMaxUpdateTime"), "Failed to fetch last modification time, exception {}", getCurrentExceptionMessage(false));
+        LOG_INFO(getLogger("getMaxUpdateTime"), "Failed to fetch last modification time, exception {}", getCurrentExceptionMessage(false));
         max_last_modification_time = 0;
     }
     return max_last_modification_time;
 }
 
-void logUsedStorageIDs(Poco::Logger * log, const std::set<StorageID> & storage_ids)
+void logUsedStorageIDs(LoggerPtr log, const std::set<StorageID> & storage_ids)
 {
     LOG_DEBUG(log, "StorageIDs:");
     for (auto & storage_id : storage_ids)

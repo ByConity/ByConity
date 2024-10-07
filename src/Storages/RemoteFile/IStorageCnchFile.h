@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
@@ -104,7 +105,7 @@ public:
     Block virtual_header;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("StorageCnchFile");
+    LoggerPtr log = getLogger("StorageCnchFile");
 };
 
 }

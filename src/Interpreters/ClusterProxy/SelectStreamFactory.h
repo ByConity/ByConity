@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/ClusterProxy/IStreamFactory.h>
 #include <Interpreters/StorageID.h>
@@ -68,7 +69,7 @@ public:
         std::vector<QueryPlanPtr> & plans,
         Pipes & remote_pipes,
         Pipes & delayed_pipes,
-        Poco::Logger * log) override;
+        LoggerPtr log) override;
 
 private:
     const Block header;

@@ -34,7 +34,7 @@ DeserializeBufTransform::DeserializeBufTransform(const Block & header_, bool ena
     : ISimpleTransform(Block(), header_, true)
     , header(getOutputPort().getHeader())
     , enable_block_compress(enable_block_compress_)
-    , logger(&Poco::Logger::get("DeserializeBufTransform"))
+    , logger(getLogger("DeserializeBufTransform"))
 {
 }
 

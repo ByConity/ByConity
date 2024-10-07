@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/CurrentMetrics.h>
 #include <Core/PostgreSQLProtocol.h>
 #include <Poco/Net/TCPServerConnection.h>
@@ -34,7 +35,8 @@ public:
     void run() final;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("PostgreSQLHandler");
+    /// stick to raw logger to support log(const Exception& exc)
+    LoggerRawPtr log = getRawLogger("PostgreSQLHandler");
 
     IServer & server;
     ContextMutablePtr connection_context;

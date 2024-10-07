@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <unordered_map>
 #include <common/logger_useful.h>
 #include "DiskDecorator.h"
@@ -84,7 +85,7 @@ private:
     /// Protects concurrent downloading files to cache.
     mutable std::mutex mutex;
 
-    Poco::Logger * log = &Poco::Logger::get("DiskCache");
+    LoggerPtr log = getLogger("DiskCache");
 };
 
 }

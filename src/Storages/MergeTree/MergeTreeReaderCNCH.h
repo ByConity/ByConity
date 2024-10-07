@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <unordered_map>
 #include <Core/NamesAndTypes.h>
 #include <Storages/DiskCache/IDiskCache.h>
@@ -82,7 +83,7 @@ private:
     IDiskCacheStrategyPtr segment_cache_strategy;
     IDiskCachePtr segment_cache;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     String reader_id;
 };
 

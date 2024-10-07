@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockOutputStream.h>
@@ -152,7 +153,7 @@ private:
     Writes lifetime_writes;
     Writes total_writes;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void flushAllBuffers(bool check_thresholds = true, bool reset_blocks_structure = false);
     /// Reset the buffer. If check_thresholds is set - resets only if thresholds

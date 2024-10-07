@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <FormaterTool/PartToolkitBase.h>
 #include <Poco/Logger.h>
 
@@ -28,7 +29,7 @@ public:
     void execute() override;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("PartConverter");
+    LoggerPtr log = getLogger("PartConverter");
     String source_path;
     String target_path;
     String data_format;

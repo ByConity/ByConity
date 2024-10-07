@@ -24,7 +24,7 @@ RuntimeFilterConsumer::RuntimeFilterConsumer(
     , parallel_id(parallel_id_)
     , build_params_blocks(local_stream_parallel)
     , timer{CLOCK_MONOTONIC_COARSE}
-    , log(&Poco::Logger::get("RuntimeFilterBuild"))
+    , log(getLogger("RuntimeFilterBuild"))
 {
     timer.start();
 }
@@ -122,9 +122,9 @@ static void OnSendRuntimeFilterCallback(
 
     rpc_channel->checkAliveWithController(*cntl);
     if (cntl->Failed())
-        LOG_DEBUG(&Poco::Logger::get("RuntimeFilterBuild"), "Send to coordinator failed, message: " + cntl->ErrorText());
+        LOG_DEBUG(getLogger("RuntimeFilterBuild"), "Send to coordinator failed, message: " + cntl->ErrorText());
     else
-        LOG_DEBUG(&Poco::Logger::get("RuntimeFilterBuild"), "Send to coordinator success");
+        LOG_DEBUG(getLogger("RuntimeFilterBuild"), "Send to coordinator success");
 }
 
 void RuntimeFilterConsumer::transferRuntimeFilter(RuntimeFilterData && data)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Access/LDAPClient.h>
 #include <Access/Credentials.h>
 #include <Access/GSSAcceptor.h>
@@ -30,7 +31,7 @@ class ExternalAuthenticators
 {
 public:
     void reset();
-    void setConfiguration(const Poco::Util::AbstractConfiguration & config, Poco::Logger * log);
+    void setConfiguration(const Poco::Util::AbstractConfiguration & config, LoggerPtr log);
 
     // The name and readiness of the credentials must be verified before calling these.
     bool checkLDAPCredentials(const String & server, const BasicCredentials & credentials,

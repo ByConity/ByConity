@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <atomic>
 #include <exception>
 #include <memory>
@@ -69,7 +70,7 @@ private:
     DiskPtr disk;
     Block header;
     ExchangeDataKeyPtr key;
-    Poco::Logger * log;
+    LoggerPtr log;
     /// data_queue is used here to ensure thread-safety(by background write task) when multiple write/finish are called from different threads
     /// TODO @lianxuechao optimize for single-thread case
     std::shared_ptr<BoundedDataQueue<Chunk>> data_queue;

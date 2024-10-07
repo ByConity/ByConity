@@ -544,7 +544,7 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
     if (context->getServerType() != ServerType::cnch_server)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Must be called in Server mode: {}", context->getServerType());
 
-    auto * log = storage.getLogger();
+    auto log = storage.getLogger();
     auto txn = context->getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
     /// set main table uuid in server side

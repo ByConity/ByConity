@@ -19,6 +19,7 @@
 #    include "config_core.h"
 #endif
 
+#include <Common/Logger.h>
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_server_rpc.pb.h>
@@ -388,7 +389,7 @@ public:
 private:
     const UInt64 server_start_time;
     std::optional<GlobalGCManager> global_gc_manager;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 REGISTER_SERVICE_IMPL(CnchServerServiceImpl);

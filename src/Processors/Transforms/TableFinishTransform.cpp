@@ -143,7 +143,7 @@ void TableFinishTransform::onFinish()
     /// Make sure locks are release after transaction commit
     if (!lock_holders.empty())
         lock_holders.clear();
-    LOG_DEBUG(&Poco::Logger::get("TableFinishTransform"), "Finish insert select commit in table finish.");
+    LOG_DEBUG(getLogger("TableFinishTransform"), "Finish insert select commit in table finish.");
     output.finish();
 }
 

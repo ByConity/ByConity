@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/Aggregator.h>
 #include <Processors/ISimpleTransform.h>
@@ -60,7 +61,7 @@ private:
     Chunk current_chunk;
     Chunk to_push_chunk;
 
-    Poco::Logger * log = &Poco::Logger::get("AggregatingInOrderTransform");
+    LoggerPtr log = getLogger("AggregatingInOrderTransform");
 };
 
 

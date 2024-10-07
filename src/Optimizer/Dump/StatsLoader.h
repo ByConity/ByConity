@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/QualifiedTableName.h>
 #include <Interpreters/Context_fwd.h>
 #include <Poco/JSON/Object.h>
@@ -31,7 +32,7 @@ private:
                                                                        Poco::JSON::Object::Ptr stats_json);
     const std::string json_file_path;
     Statistics::CatalogAdaptorPtr stats_catalog;
-    const Poco::Logger * log = &Poco::Logger::get("StatsLoader");
+    const LoggerPtr log = getLogger("StatsLoader");
     Poco::JSON::Object::Ptr stats_json;
 };
 }

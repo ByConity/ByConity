@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <IO/ReadBuffer.h>
 #include <Common/PODArray.h>
@@ -155,7 +156,7 @@ private:
     Block output_block;
     MutableColumnPtr cardinality_dict = nullptr;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 template <typename Column>

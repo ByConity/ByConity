@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
 
@@ -73,7 +74,7 @@ private:
     std::unique_ptr<IInterpreterUnionOrSelectQuery>
     buildCurrentChildInterpreter(const ASTPtr & ast_ptr_, const Names & current_required_result_column_names);
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

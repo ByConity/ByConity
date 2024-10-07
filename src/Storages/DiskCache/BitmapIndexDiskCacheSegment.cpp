@@ -43,7 +43,7 @@ String BitmapIndexDiskCacheSegment::getSegmentKey(const IMergeTreeDataPartPtr & 
 
 void BitmapIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
 {
-    Poco::Logger * log = disk_cache.getLogger();
+    LoggerPtr log = disk_cache.getLogger();
     auto disk = data_part->volume->getDisk();
     std::unique_ptr<ReadBufferFromFileBase> segment_file = disk->readFile(
         data_path, read_settings

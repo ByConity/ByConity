@@ -11,8 +11,9 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnVector.h>
-#include <Common/typeid_cast.h>
+#include <Common/Logger.h>
 #include <Common/assert_cast.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionsComparison.h>
@@ -39,12 +40,6 @@ static CHJIT & getJITInstance()
 {
     static CHJIT jit;
     return jit;
-}
-
-static Poco::Logger * getLogger()
-{
-    static Poco::Logger & logger = Poco::Logger::get("ExpressionJIT");
-    return &logger;
 }
 
 class CompiledFunctionHolder : public CompiledExpressionCacheEntry
@@ -332,7 +327,7 @@ static FunctionBasePtr compile(
     {
         auto [compiled_function_cache_entry, _] = compilation_cache->getOrSet(hash_key, [&] ()
         {
-            LOG_TRACE(getLogger(), "Compile expression {}", llvm_function->getName());
+            LOG_TRACE(getLogger("ExpressionJIT"), "Compile expression {}", llvm_function->getName());
             auto compiled_function = compileFunction(getJITInstance(), *llvm_function);
             return std::make_shared<CompiledFunctionHolder>(compiled_function);
         });

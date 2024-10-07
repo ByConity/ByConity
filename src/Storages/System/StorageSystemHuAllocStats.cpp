@@ -79,7 +79,7 @@ Pipe StorageSystemHuAllocStats::read(
         res_columns.at(col_num++)->insert(GetTotalGiantAlloc());
         res_columns.at(col_num++)->insert(GetTotalGiantFree());
 #else
-    LOG_INFO(&Poco::Logger::get("StorageSystemHuAllocStats"), "HuAlloc is not enabled");
+    LOG_INFO(getLogger("StorageSystemHuAllocStats"), "HuAlloc is not enabled");
 #endif // USE_HUALLOC
 
     UInt64 num_rows = res_columns.at(0)->size();

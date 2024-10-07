@@ -1,7 +1,7 @@
 --- src/Processors/Formats/Impl/OrcChunkReader.h	(before formatting)
 +++ src/Processors/Formats/Impl/OrcChunkReader.h	(after formatting)
 @@ -145,5 +145,5 @@
-     Poco::Logger * logger = &Poco::Logger::get("OrcChunkReader");
+     LoggerPtr logger = getLogger("OrcChunkReader");
  };
  }
 -#endif

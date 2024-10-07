@@ -157,12 +157,12 @@ void InterpreterSetQuery::applyABTestProfile(ContextMutablePtr query_context)
             }
             catch (...)
             {
-                tryLogWarningCurrentException(&Poco::Logger::get("applyABTestProfile"), "Apply ab test profile failed.");
+                tryLogWarningCurrentException(getLogger("applyABTestProfile"), "Apply ab test profile failed.");
             }
         }
         else
         {
-            LOG_WARNING(&Poco::Logger::get("applyABTestProfile"), "Apply ab test profile failed, ab_test_traffic_factor must be between 0 and 1, ab_test_profile != default");        
+            LOG_WARNING(getLogger("applyABTestProfile"), "Apply ab test profile failed, ab_test_traffic_factor must be between 0 and 1, ab_test_profile != default");        
         }
     }
 }

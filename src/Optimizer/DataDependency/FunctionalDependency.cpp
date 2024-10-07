@@ -24,9 +24,9 @@ NameSet FunctionalDependencies::simplify(NameSet srcs) const
     std::string str;
     for (const auto & name : srcs)
         str += name + ",";
-    LOG_INFO(&Poco::Logger::get("DataDependency"), "FunctionalDependencies::simplify srcs -- " + str);
+    LOG_INFO(getLogger("DataDependency"), "FunctionalDependencies::simplify srcs -- " + str);
 
-    // LOG_INFO(&Poco::Logger::get("DataDependency"), "FDS: " + string());
+    // LOG_INFO(getLogger("DataDependency"), "FDS: " + string());
 
     for (const auto & [determinant, dependents] : dependencies)
     {

@@ -15,7 +15,7 @@ namespace DB
 
 
 CnchTablePartitionMetricsHelper::CnchTablePartitionMetricsHelper(ContextPtr context_)
-    : WithContext(context_), log(&Poco::Logger::get("CnchTablePartitionMetricsHelper"))
+    : WithContext(context_), log(getLogger("CnchTablePartitionMetricsHelper"))
 {
     metrics_updater = getContext()->getMetricsRecalculationSchedulePool().createTask("PartMetricsUpdater", [this]() {
         try

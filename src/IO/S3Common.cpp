@@ -121,7 +121,7 @@ public:
     AWSLogger(Aws::Utils::Logging::LogLevel log_level)
     {
         for (auto [tag, name] : S3_LOGGER_TAG_NAMES)
-            tag_loggers[tag] = &Poco::Logger::get(name);
+            tag_loggers[tag] = getLogger(name);
 
         default_logger = tag_loggers[S3_LOGGER_TAG_NAMES[0][0]];
         log_level_ = log_level;
@@ -157,8 +157,8 @@ public:
     void Flush() final { }
 
 private:
-    Poco::Logger * default_logger;
-    std::unordered_map<String, Poco::Logger *> tag_loggers;
+    LoggerPtr default_logger;
+    std::unordered_map<String, LoggerPtr> tag_loggers;
     Aws::Utils::Logging::LogLevel log_level_;
 };
 }
@@ -1095,7 +1095,7 @@ namespace S3
         const std::function<bool(const S3::S3Util &, const String &)> & filter_,
         size_t max_threads_,
         size_t batch_clean_size_)
-        : logger(&Poco::Logger::get("S3LazyCleaner"))
+        : logger(getLogger("S3LazyCleaner"))
         , batch_clean_size(batch_clean_size_)
         , filter(filter_)
         , s3_util(s3_util_)
@@ -1250,7 +1250,7 @@ namespace S3
         use_insecure_imds_request = from.use_insecure_imds_request;
     }
 
-    bool processReadException(Exception & e, Poco::Logger * log, const String & bucket, const String & key, size_t offset, size_t attempt)
+    bool processReadException(Exception & e, LoggerPtr log, const String & bucket, const String & key, size_t offset, size_t attempt)
     {
         ProfileEvents::increment(ProfileEvents::S3ReadRequestsErrors);
 

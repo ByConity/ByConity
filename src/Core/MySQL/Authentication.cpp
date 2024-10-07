@@ -119,8 +119,8 @@ void Native41::authenticate(
 
 #if USE_SSL
 
-Sha256Password::Sha256Password(RSA & public_key_, RSA & private_key_, Poco::Logger * log_)
-    : public_key(public_key_), private_key(private_key_), log(log_)
+Sha256Password::Sha256Password(RSA & public_key_, RSA & private_key_, const String & log_name_)
+    : public_key(public_key_), private_key(private_key_), log(getLogger(log_name_))
 {
     /** Native authentication sent 20 bytes + '\0' character = 21 bytes.
      *  This plugin must do the same to stay consistent with historical behavior if it is set to operate as a default plugin. [1]

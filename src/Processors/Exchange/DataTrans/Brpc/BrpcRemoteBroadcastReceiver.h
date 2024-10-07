@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Chunk.h>
@@ -92,7 +93,7 @@ public:
     AsyncRegisterResult registerToSendersAsync(UInt32 timeout_ms);
 private:
     String name;
-    Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
+    LoggerPtr log = getLogger("BrpcRemoteBroadcastReceiver");
     ExchangeDataKeyPtr trans_key;
     String registry_address;
     ContextPtr context;

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <map>
 #include <optional>
@@ -506,7 +507,7 @@ public:
     class UndoBufferIterator
     {
     public:
-        UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter, Poco::Logger * log);
+        UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter, LoggerPtr log);
         const UndoResource & getUndoResource() const;
         bool next();
         bool is_valid() const /// for testing
@@ -517,7 +518,7 @@ public:
         IMetaStore::IteratorPtr metastore_iter;
         std::optional<UndoResource> cur_undo_resource;
         bool valid = false;
-        Poco::Logger * log;
+        LoggerPtr log;
     };
 
     UndoBufferIterator getUndoBufferIterator() const;
@@ -918,7 +919,7 @@ public:
     void shutDown() {bg_task.reset();}
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("Catalog");
+    LoggerPtr log = getLogger("Catalog");
     Context & context;
     MetastoreProxyPtr meta_proxy;
     const String name_space;

@@ -51,7 +51,7 @@ LocalBroadcastChannel::LocalBroadcastChannel(
     , options(std::move(options_))
     , receive_queue(std::move(queue_))
     , context(std::move(context_))
-    , logger(&Poco::Logger::get("LocalBroadcastChannel"))
+    , logger(getLogger("LocalBroadcastChannel"))
 {
 }
 

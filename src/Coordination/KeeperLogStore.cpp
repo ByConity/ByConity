@@ -26,7 +26,7 @@ namespace DB
 {
 
 KeeperLogStore::KeeperLogStore(const std::string & changelogs_path, uint64_t rotate_interval_, bool force_sync_, bool compress_logs_)
-    : log(&Poco::Logger::get("KeeperLogStore"))
+    : log(getLogger("KeeperLogStore"))
     , changelog(changelogs_path, rotate_interval_, force_sync_, log, compress_logs_)
 {
     if (force_sync_)

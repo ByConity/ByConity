@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Interpreters/StorageID.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <CloudServices/CnchServerClient.h>
@@ -32,14 +33,14 @@ public:
 class TargetServerCalculator : public ITargetServerCalculator
 {
 public:
-    TargetServerCalculator(Context & context, CnchBGThreadType type, Poco::Logger * log);
+    TargetServerCalculator(Context & context, CnchBGThreadType type, LoggerPtr log);
     CnchServerClientPtr getTargetServer(const StorageID &, UInt64) const override;
 private:
     CnchServerClientPtr getTargetServerForCnchMergeTree(const StorageID &, UInt64) const;
     CnchServerClientPtr getTargetServerForCnchKafka(const StorageID &, UInt64) const;
     const CnchBGThreadType type;
     Context & context;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

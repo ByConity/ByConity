@@ -45,7 +45,7 @@ const std::string PartMergerApp::default_config = "<yandex>\n"
                                                   "<merge_selector>merger</merge_selector>\n"
                                                   "</yandex>";
 
-void PartMergerApp::initHDFS(DB::ContextMutablePtr context, Poco::Logger * log)
+void PartMergerApp::initHDFS(DB::ContextMutablePtr context, LoggerPtr log)
 {
     LOG_DEBUG(log, "Initialize HDFS driver.");
     using HDFSConnectionParams = DB::HDFSConnectionParams;
@@ -109,7 +109,7 @@ int PartMergerApp::main([[maybe_unused]] const std::vector<DB::String> & args)
     {
         Poco::Logger::root().setLevel("information");
     }
-    auto * log = &Poco::Logger::get("PartMergerApp");
+    auto log = getLogger("PartMergerApp");
 
     LOG_DEBUG(log, "Parse arguments");
     // Parse arguments.

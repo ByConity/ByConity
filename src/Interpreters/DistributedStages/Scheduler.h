@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -114,7 +115,7 @@ public:
         , node_selector(cluster_nodes, query_context, dag_graph_ptr)
         , local_address(getLocalAddress(*query_context))
         , batch_schedule(batch_schedule_)
-        , log(&Poco::Logger::get("Scheduler"))
+        , log(getLogger("Scheduler"))
     {
         cluster_nodes.all_workers.emplace_back(local_address, NodeType::Local, "");
         timespec query_expiration_ts = query_context->getQueryExpirationTimeStamp();
@@ -161,7 +162,7 @@ protected:
     bool batch_schedule = false;
     BatchPlanSegmentHeaders batch_segment_headers;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void genTopology();
     virtual void genTasks() = 0;

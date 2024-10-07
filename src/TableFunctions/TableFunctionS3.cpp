@@ -116,7 +116,7 @@ void TableFunctionS3::parseArgumentsImpl(ASTs & args, const ContextPtr & context
             else
             {
                 auto fourth_arg = checkAndGetLiteralArgument<String>(args[3], "format/session_token");
-                LOG_TRACE(&Poco::Logger::get("TableFunctionS3"), " config fourth_arg = {}", fourth_arg);
+                LOG_TRACE(getLogger("TableFunctionS3"), " config fourth_arg = {}", fourth_arg);
 
                 if (fourth_arg == "auto" || FormatFactory::instance().exists(fourth_arg))
                 {
@@ -182,7 +182,7 @@ void TableFunctionS3::parseArgumentsImpl(ASTs & args, const ContextPtr & context
 
         if (args_to_idx.contains("format"))
         {
-            LOG_TRACE(&Poco::Logger::get("TableFunctionS3"), " args_to_idx contain format");
+            LOG_TRACE(getLogger("TableFunctionS3"), " args_to_idx contain format");
 
             auto format = checkAndGetLiteralArgument<String>(args[args_to_idx["format"]], "format");
             /// Set format to configuration only of it's not 'auto',
@@ -208,7 +208,7 @@ void TableFunctionS3::parseArgumentsImpl(ASTs & args, const ContextPtr & context
 
         configuration.auth_settings.no_sign_request = no_sign_request;
 
-        LOG_TRACE(&Poco::Logger::get("TableFunctionS3"), " config format = {}", configuration.format);
+        LOG_TRACE(getLogger("TableFunctionS3"), " config format = {}", configuration.format);
 
         // if (configuration.format == "auto")
         //     configuration.format = FormatFactory::instance().tryGetFormatFromFileName(Poco::URI(url).getPath()).value_or("auto");

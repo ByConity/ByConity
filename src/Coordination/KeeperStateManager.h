@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <mutex>
 #include <string>
@@ -173,7 +174,7 @@ private:
 
     const std::filesystem::path server_state_path;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 
 public:
     /// Parse configuration from xml config.

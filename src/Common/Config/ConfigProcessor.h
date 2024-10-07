@@ -4,6 +4,7 @@
     #include <Common/config.h>
 #endif
 
+#include <Common/Logger.h>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -120,7 +121,8 @@ private:
 
     bool throw_on_bad_incl;
 
-    Poco::Logger * log;
+    /// stick to raw logger in order to support Poco::Logger::has(name)
+    LoggerRawPtr log;
     Poco::AutoPtr<Poco::Channel> channel_ptr;
 
     Substitutions substitutions;

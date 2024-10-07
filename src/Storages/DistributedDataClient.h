@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <cstddef>
 #include <memory>
@@ -64,7 +65,7 @@ public:
     String remote_file_path;
     UInt64 remote_file_size;
     DataQueuePtr queue;
-    Poco::Logger * log = &Poco::Logger::get("StreamClientHandler");
+    LoggerPtr log = getLogger("StreamClientHandler");
 };
 
 class StreamClientHandler : public brpc::StreamInputHandler
@@ -98,7 +99,7 @@ private:
     std::shared_ptr<DataStreamReader> file_reader;
     DistributedDataClientOption option;
 
-    Poco::Logger * log = &Poco::Logger::get("StreamClientHandler");
+    LoggerPtr log = getLogger("StreamClientHandler");
 };
 
 class DistributedDataClient
@@ -132,7 +133,7 @@ public:
 
     std::optional<Throttler> read_rate_throttler;
 
-    Poco::Logger * log = &Poco::Logger::get("DistributedDataClient");
+    LoggerPtr log = getLogger("DistributedDataClient");
 };
 
 }

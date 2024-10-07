@@ -189,7 +189,7 @@ ContextMutablePtr DDLTaskBase::makeQueryContext(ContextPtr from_context, const Z
 }
 
 
-bool DDLTask::findCurrentHostID(ContextPtr global_context, Poco::Logger * log)
+bool DDLTask::findCurrentHostID(ContextPtr global_context, LoggerPtr log)
 {
     bool host_in_hostlist = false;
 
@@ -221,7 +221,7 @@ bool DDLTask::findCurrentHostID(ContextPtr global_context, Poco::Logger * log)
     return host_in_hostlist;
 }
 
-void DDLTask::setClusterInfo(ContextPtr context, Poco::Logger * log)
+void DDLTask::setClusterInfo(ContextPtr context, LoggerPtr log)
 {
     auto * query_on_cluster = dynamic_cast<ASTQueryWithOnCluster *>(query.get());
     if (!query_on_cluster)

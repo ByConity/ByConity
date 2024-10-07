@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include "ConcurrentShardElement.h"
 
 #include <common/logger_useful.h>
@@ -73,7 +74,7 @@ public:
     }
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("ConcurrentShardMap");
+    LoggerPtr log = getLogger("ConcurrentShardMap");
     ConcurrentShardElement<KeyType, ElementPtr> & getShard(const KeyType & key)
     {
         std::size_t const shard_index = hash_function(key) % shards.size();

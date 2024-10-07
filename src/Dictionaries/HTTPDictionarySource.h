@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <IO/ConnectionTimeouts.h>
 #include <IO/ReadWriteBufferFromHTTP.h>
 #include <Poco/Net/HTTPBasicCredentials.h>
@@ -67,7 +68,7 @@ private:
     // wrap buffer using encoding from made request
     BlockInputStreamPtr createWrappedBuffer(std::unique_ptr<ReadWriteBufferFromHTTP> http_buffer);
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     LocalDateTime getLastModification() const;
 

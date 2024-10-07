@@ -279,7 +279,7 @@ namespace ErrorCodes
   */
 struct ContextSharedPart
 {
-    Poco::Logger * log = &Poco::Logger::get("Context");
+    LoggerPtr log = getLogger("Context");
 
     /// For access of most of shared objects. Recursive mutex.
     mutable std::recursive_mutex mutex;
@@ -864,7 +864,7 @@ ReadSettings Context::getReadSettings() const
         if (getIOUringReader().isSupported())
             res.local_fs_method = LocalFSReadMethod::io_uring;
         else
-            LOG_WARNING(&Poco::Logger::get("Context"), "IOUring is not supported, use default local_fs_method");
+            LOG_WARNING(getLogger("Context"), "IOUring is not supported, use default local_fs_method");
     }
 
     return res;
@@ -1264,7 +1264,7 @@ VolumePtr Context::setTemporaryStorage(const String & path, const String & polic
     return shared->tmp_volume;
 }
 
-static void setupTmpPath(Poco::Logger * log, const std::string & path)
+static void setupTmpPath(LoggerPtr log, const std::string & path)
 try
 {
     LOG_DEBUG(log, "Setting up {} to store temporary data in it", path);
@@ -1571,7 +1571,7 @@ void Context::initResourceGroupManager(const ConfigurationPtr & )
 
     // if (!config->has("resource_groups"))
     // {
-    //     LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
+    //     LOG_DEBUG(getLogger("Context"), "No config found. Not creating Resource Group Manager");
     //     return ;
     // }
     // auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
@@ -1579,15 +1579,15 @@ void Context::initResourceGroupManager(const ConfigurationPtr & )
     // {
     //     if (!getResourceManagerClient())
     //     {
-    //         LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
+    //         LOG_ERROR(getLogger("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
     //         return;
     //     }
-    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
+    //     LOG_DEBUG(getLogger("Context"), "Creating VW Resource Group Manager");
     //     shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
     // }
     // else if (resource_group_manager_type == "internal")
     // {
-    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
+    //     LOG_DEBUG(getLogger("Context"), "Creating Internal Resource Group Manager");
     //     shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
     // }
     // else
@@ -4575,7 +4575,7 @@ void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & confi
     shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
     setCurrentProfile(shared->system_profile_name);
 
-    applySettingsQuirks(settings, &Poco::Logger::get("SettingsQuirks"));
+    applySettingsQuirks(settings, getLogger("SettingsQuirks"));
 
     shared->buffer_profile_name = config.getString("buffer_profile", shared->system_profile_name);
     buffer_context = Context::createCopy(shared_from_this());
@@ -5049,7 +5049,7 @@ DeleteBitmapCachePtr Context::getDeleteBitmapCache() const
 void Context::setMetaChecker()
 {
     auto meta_checker = [this]() {
-        Poco::Logger * log = &Poco::Logger::get("MetaChecker");
+        LoggerPtr log = getLogger("MetaChecker");
 
         Stopwatch stopwatch;
         LOG_DEBUG(log, "Start to run metadata synchronization task.");
@@ -6014,7 +6014,7 @@ void Context::clearOptimizerProfile()
     optimizer_profile = nullptr;
 }
 
-void Context::logOptimizerProfile(Poco::Logger * log, String prefix, String name, String time, bool is_rule)
+void Context::logOptimizerProfile(LoggerPtr log, String prefix, String name, String time, bool is_rule)
 {
     if (settings.log_optimizer_run_time && log)
         LOG_DEBUG(log, prefix + name + " " + time);

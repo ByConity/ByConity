@@ -36,7 +36,7 @@ bool ConfigurationFieldBase::checkField(const PocoAbstractConfig & config, const
         if (deprecated())
         {
             LOG_WARNING(
-                &Poco::Logger::get("Configuration"), "Config element {} is deprecated. Please remove corresponding tags!", full_key);
+                getLogger("Configuration"), "Config element {} is deprecated. Please remove corresponding tags!", full_key);
         }
     }
     else
@@ -44,7 +44,7 @@ bool ConfigurationFieldBase::checkField(const PocoAbstractConfig & config, const
         if (recommended())
         {
             LOG_DEBUG(
-                &Poco::Logger::get("Configuration"),
+                getLogger("Configuration"),
                 "Config element {} is recommended to set in config.xml. You'd better customize it.", full_key);
         }
         else if (required())

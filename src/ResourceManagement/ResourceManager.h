@@ -15,6 +15,7 @@
 
 #pragma once
 #include <Common/Config/ConfigProcessor.h>
+#include <Common/Logger.h>
 #include <Server/IServer.h>
 #include <daemon/BaseDaemon.h>
 

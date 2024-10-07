@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
@@ -61,7 +62,7 @@ private:
 
     /// ttl_infos and empty_columns are updating while reading
     const MergeTreeMetaBase::MutableDataPartPtr & data_part;
-    Poco::Logger * log;
+    LoggerPtr log;
     Block header;
 };
 

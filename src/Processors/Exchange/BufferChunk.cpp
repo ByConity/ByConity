@@ -29,7 +29,7 @@ BufferChunk::BufferChunk(
     , column_num(header_.getColumns().size())
     , threshold_in_bytes(threshold_in_bytes_)
     , threshold_in_row_num(threshold_in_row_num_)
-    , logger(&Poco::Logger::get("BufferChunk"))
+    , logger(getLogger("BufferChunk"))
 {
     resetBuffer();
 }

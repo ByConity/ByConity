@@ -33,7 +33,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     bool enable_batch_select,
     bool final,
     [[maybe_unused]] bool merge_with_ttl_allowed,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     const auto data_settings = data.getSettings();
     auto metadata_snapshot = data.getInMemoryMetadataPtr();

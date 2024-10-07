@@ -254,7 +254,7 @@ updateAggS0AndG0(NameSet names_from_one_side, const NameSet & projection_gene_sy
     }
 
     // LOG_WARNING(
-    //     &Poco::Logger::get("test"),
+    //     getLogger("test"),
     //     "names_from_one_side={}, g0={}, new_g0={}, s0={}, new_s0={}",
     //     fmt::join(names_from_one_side, ","),
     //     fmt::join(g0, ","),
@@ -278,7 +278,7 @@ static LocalGroupByTargetMap determineBottomJoin(
     LocalGroupByTargetMap result;
 
     // LOG_WARNING(
-    //     &Poco::Logger::get("test"),
+    //     getLogger("test"),
     //     "\tinto determineBottomJoin, init_s0={}, init_g0={}, projection_gene_symbols={}, projection_gene_symbols={}, "
     //     "init_require_output_names_of_join={}",
     //     formatS0(init_s0),
@@ -327,7 +327,7 @@ static LocalGroupByTargetMap determineBottomJoin(
             std::sort(g0.begin(), g0.end());
             g0.erase(std::unique(g0.begin(), g0.end()), g0.end());
 
-            // LOG_WARNING(&Poco::Logger::get("test"), "collect new local gorup by target, join_id={}, index={}, g0={}, s0={}", join->getId(), index, fmt::join(g0, ","), formatS0(s0));
+            // LOG_WARNING(getLogger("test"), "collect new local gorup by target, join_id={}, index={}, g0={}, s0={}", join->getId(), index, fmt::join(g0, ","), formatS0(s0));
             result.emplace(join->getId(), LocalGroupByTarget{join, index, s0, g0, join_layer});
             return;
         }
@@ -387,7 +387,7 @@ static LocalGroupByTargetMap determineBottomJoin(
 std::shared_ptr<AggregatingStep>
 createLocalAggregate(const DataStream & input_stream, const AggregateDescriptions & s0, const Names & g0, const ContextPtr &)
 {
-    // LOG_WARNING(&Poco::Logger::get("test"), "create local_agg={}, keys={}", formatS0(s0), fmt::join(g0, ","));
+    // LOG_WARNING(getLogger("test"), "create local_agg={}, keys={}", formatS0(s0), fmt::join(g0, ","));
 
     return std::make_shared<AggregatingStep>(
         input_stream, g0, NameSet{}, s0, GroupingSetsParamsList{}, true);
@@ -420,7 +420,7 @@ PlanNodePtr insertLocalAggregate(
     // String names;
     // for (const auto & [k, v] : global_argument_name_to_local)
     //     names += "k=" + k + ",v=" + v + " ";
-    // LOG_WARNING(&Poco::Logger::get("test"), "before insertLocalAggregate, global_argument_name_to_local={}", names);
+    // LOG_WARNING(getLogger("test"), "before insertLocalAggregate, global_argument_name_to_local={}", names);
 
     auto symbol_mapper = SymbolMapper::simpleMapper(global_argument_name_to_local);
 
@@ -613,7 +613,7 @@ PlanNodePtr insertLocalAggregate(
 bool canAggPushDown(const LocalGroupByTarget & target, RuleContext & context)
 {
     LOG_DEBUG(
-        &Poco::Logger::get("test"),
+        getLogger("test"),
         "judge local group by target, join_id={}, index={}, g0={}, s0={}, join_layer={}",
         target.bottom_join->getId(),
         target.bottom_join_child_index,
@@ -684,7 +684,7 @@ bool canAggPushDown(const LocalGroupByTarget & target, RuleContext & context)
             return false;
 
         LOG_DEBUG(
-            &Poco::Logger::get("test"),
+            getLogger("test"),
             "agg_size={}, group_by_keys_size={}, new_row_count={}, old_row_count={}, ratio={}",
             target.aggs.size(),
             target.keys.size(),

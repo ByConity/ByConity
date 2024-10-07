@@ -104,7 +104,7 @@ private:
     std::filesystem::path prefix;
     size_t idx {0};
 
-    Poco::Logger * log {&Poco::Logger::get("DiskByteS3DirectoryIterator")};
+    LoggerPtr log{getLogger("DiskByteS3DirectoryIterator")};
 };
 
 class DiskByteS3Reservation : public IReservation

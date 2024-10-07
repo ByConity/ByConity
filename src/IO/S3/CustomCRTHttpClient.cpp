@@ -32,7 +32,7 @@ std::shared_ptr<Aws::Http::HttpResponse> CustomCRTHttpClient::MakeRequest(
             ProfileEvents::increment(ProfileEvents::CRTHTTPS3GetCount);
             ProfileEvents::increment(ProfileEvents::CRTHTTPS3GetTime, total_watch.elapsedMicroseconds());
             if (slow_read_ms_ > 0 && time >= slow_read_ms_ * 1000) {
-                Poco::Logger * log = &Poco::Logger::get("AWSClient");
+                LoggerPtr log = getLogger("AWSClient");
                 LOG_DEBUG(log, fmt::format("AWS S3 slow read(over {}ms): {}, time = {}ms",
                     slow_read_ms_, request->GetUri().GetURIString(), time/1000));
             }

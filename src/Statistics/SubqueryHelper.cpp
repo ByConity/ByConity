@@ -109,7 +109,7 @@ SubqueryHelper::SubqueryHelper(std::unique_ptr<DataImpl> impl_) : impl(std::move
 
 SubqueryHelper SubqueryHelper::create(ContextPtr context, const String & sql, bool large_sql)
 {
-    LOG_TRACE(&Poco::Logger::get("create stats subquery"), "collect stats with sql: " + sql);
+    LOG_TRACE(getLogger("create stats subquery"), "collect stats with sql: " + sql);
     auto impl = std::make_unique<SubqueryHelper::DataImpl>();
     impl->large_sql = large_sql;
     impl->old_context = context;

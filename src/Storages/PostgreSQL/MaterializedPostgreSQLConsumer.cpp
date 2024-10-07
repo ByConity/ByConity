@@ -27,7 +27,7 @@ MaterializedPostgreSQLConsumer::MaterializedPostgreSQLConsumer(
     const size_t max_block_size_,
     bool allow_automatic_update_,
     Storages storages_)
-    : log(&Poco::Logger::get("PostgreSQLReaplicaConsumer"))
+    : log(getLogger("PostgreSQLReaplicaConsumer"))
     , context(context_)
     , replication_slot_name(replication_slot_name_)
     , publication_name(publication_name_)
@@ -65,7 +65,7 @@ void MaterializedPostgreSQLConsumer::Buffer::createEmptyBuffer(StoragePtr storag
     auto insert_columns = std::make_shared<ASTExpressionList>();
 
     auto table_id = storage->getStorageID();
-    LOG_TRACE(&Poco::Logger::get("MaterializedPostgreSQLBuffer"), "New buffer for table {}.{} ({}), structure: {}",
+    LOG_TRACE(getLogger("MaterializedPostgreSQLBuffer"), "New buffer for table {}.{} ({}), structure: {}",
               table_id.database_name, table_id.table_name, toString(table_id.uuid), sample_block.dumpStructure());
 
     assert(description.sample_block.columns() == storage_columns.size());

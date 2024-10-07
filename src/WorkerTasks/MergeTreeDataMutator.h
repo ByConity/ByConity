@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/ActionBlocker.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MutationCommands.h>
@@ -184,7 +185,7 @@ private:
     MergeTreeMetaBase & data;
     const size_t background_pool_size;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     bool is_delete_command = false;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/DiskCache/ConditionVariable.h>
 #include <Common/Exception.h>
 #include <common/defines.h>
@@ -85,7 +86,7 @@ public:
     FiberThread & operator=(const FiberThread & other) = delete;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("FiberThread");
+    LoggerPtr log = getLogger("FiberThread");
 
     String name;
 

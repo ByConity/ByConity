@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Server/HTTP/HTMLForm.h>
 #include <Common/StringUtils/StringUtils.h>
 
@@ -52,7 +53,7 @@ private:
 
     void onResourceReportAction(HTTPServerRequest &, HTMLForm & params, HTTPServerResponse &);
 
-    Poco::Logger * log;
+    LoggerPtr log;
     std::string server_display_name;
 };
 

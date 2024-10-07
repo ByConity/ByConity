@@ -96,7 +96,7 @@ bool CnchStorageCommonHelper::healthCheckForWorkerGroup(ContextPtr context, Work
             catch (const NetException &)
             {
                 remove_marks[i] = 1;
-                LOG_INFO(&Poco::Logger::get("CnchStorageCommonHelper"), "Unhealthy worker {} is skipped.",
+                LOG_INFO(getLogger("CnchStorageCommonHelper"), "Unhealthy worker {} is skipped.",
                                             (worker_group->getHostWithPortsVec()[i]).id);
             }
         });
@@ -335,7 +335,7 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     formatAST(create_query, statement_buf, false);
     writeChar('\n', statement_buf);
     LOG_TRACE(
-        &Poco::Logger::get("getCreateQueryForCloudTable"), "create query for cloud table is {}", statement_buf.str());
+        getLogger("getCreateQueryForCloudTable"), "create query for cloud table is {}", statement_buf.str());
     return statement_buf.str();
 }
 
@@ -373,7 +373,7 @@ bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_cont
         query = query_status.query;
     }
     LOG_DEBUG(
-        &Poco::Logger::get("CnchStorageCommonHelper"), "Send query `{}` to server {}", query, host_port.toDebugString());
+        getLogger("CnchStorageCommonHelper"), "Send query `{}` to server {}", query, host_port.toDebugString());
     RemoteBlockInputStream stream(connection, query, {}, query_context);
     NullBlockOutputStream output({});
 

@@ -125,7 +125,7 @@ ASTPtr CatalogFactory::getCreateDictionaryByDataModel(const DB::Protos::DataMode
     }
     catch (Exception &)
     {
-        LOG_WARNING(&Poco::Logger::get("CatalogFactory"), "Dictionary create query parse failed: query {}", create_query);
+        LOG_WARNING(getLogger("CatalogFactory"), "Dictionary create query parse failed: query {}", create_query);
         throw;
     }
 

@@ -512,7 +512,7 @@ static void buildORCSearchArgumentImpl(
             if (!nested_type->equals(*expect_nested_type))
             {
                 LOG_DEBUG(
-                    &Poco::Logger::get(__PRETTY_FUNCTION__),
+                    getLogger(__PRETTY_FUNCTION__),
                     "failed to pushdown filter due to type mismatch, orc type: {}, schema type: {}",
                     expect_nested_type->getName(),
                     nested_type->getName());
@@ -759,7 +759,7 @@ void IOMergeBuffer::mergeSmallRanges(const std::vector<IORange> & small_ranges)
                 .raw_offset = small_ranges[from].offset, .raw_size = end - small_ranges[from].offset, .ref_count = ref_count};
             sb.align(align_size, file_size);
             buffer_map.insert(std::make_pair(sb.raw_offset + sb.raw_size, sb));
-            // LOG_INFO(&Poco::Logger::get("updateMap"), " sb: {} ", sb.toString());
+            // LOG_INFO(getLogger("updateMap"), " sb: {} ", sb.toString());
         };
 
         size_t unmerge = 0;
@@ -843,7 +843,7 @@ arrow::Status IOMergeBuffer::readAtFully(int64_t offset, void * out, int64_t cou
     if (!ret.ok())
     {
         auto st = random_file->ReadAt(offset, count, out);
-        // LOG_INFO(&Poco::Logger::get("readAtFully - Direct"), "read from {} to {}", offset, offset + count);
+        // LOG_INFO(getLogger("readAtFully - Direct"), "read from {} to {}", offset, offset + count);
         if (!st.ok())
             return st.status();
         ProfileEvents::increment(ProfileEvents::OrcIODirectCount, 1);
@@ -855,13 +855,13 @@ arrow::Status IOMergeBuffer::readAtFully(int64_t offset, void * out, int64_t cou
     {
         sb.buffer.reserve(sb.size);
         auto st = random_file->ReadAt(sb.offset, sb.size, sb.buffer.data());
-        // LOG_INFO(&Poco::Logger::get("readAtFully - Shared"), "read from {} to {}", sb.offset, sb.offset + sb.size);
+        // LOG_INFO(getLogger("readAtFully - Shared"), "read from {} to {}", sb.offset, sb.offset + sb.size);
         if (!st.ok())
             return st.status();
         ProfileEvents::increment(ProfileEvents::OrcIOMergedCount, 1);
         ProfileEvents::increment(ProfileEvents::OrcIOMergedBytes, sb.size);
     }
-    // LOG_INFO(&Poco::Logger::get("readAtFully"), "read offset {}, to {} buffer offset {}, to {} ", offset, offset + count,  sb.offset, sb.offset + sb.buffer.capacity());
+    // LOG_INFO(getLogger("readAtFully"), "read offset {}, to {} buffer offset {}, to {} ", offset, offset + count,  sb.offset, sb.offset + sb.buffer.capacity());
     uint8_t * buffer = sb.buffer.data() + offset - sb.offset;
     std::memcpy(out, buffer, count);
     ProfileEvents::increment(ProfileEvents::OrcIOSharedCount, 1);
@@ -1500,7 +1500,7 @@ static ColumnWithTypeAndName readColumnFromORCColumn(
 
                 column_data.insert_assume_reserved(codes.data(), codes.data() + orc_column->numElements);
                 auto lc = ColumnLowCardinality::create(std::move(dict_column), std::move(indexes_column));
-                LOG_TRACE(&Poco::Logger::get(__FUNCTION__), "read lc from dict page with structure {}", lc->dumpStructure());
+                LOG_TRACE(getLogger(__FUNCTION__), "read lc from dict page with structure {}", lc->dumpStructure());
                 return {std::move(lc), type_hint, column_name};
             }
             else if (orc_str_batch->use_codes)
@@ -1535,7 +1535,7 @@ static ColumnWithTypeAndName readColumnFromORCColumn(
                     }
                 }
                 auto lc = ColumnLowCardinality::create(std::move(dict_column), std::move(indexes_column));
-                LOG_TRACE(&Poco::Logger::get(__FUNCTION__), "read lc from dict page with structure {}", lc->dumpStructure());
+                LOG_TRACE(getLogger(__FUNCTION__), "read lc from dict page with structure {}", lc->dumpStructure());
                 return {std::move(lc), type_hint, column_name};
             }
             else
@@ -1546,7 +1546,7 @@ static ColumnWithTypeAndName readColumnFromORCColumn(
                 auto dict_column = column_lc.getDictionaryPtr()->cloneEmpty();
                 auto lc
                     = ColumnLowCardinality::create(std::move(dict_column), std::move(indexes_column), std::move(full_string_col.column));
-                LOG_TRACE(&Poco::Logger::get(__FUNCTION__), "read lc from direct page with structure {}", lc->dumpStructure());
+                LOG_TRACE(getLogger(__FUNCTION__), "read lc from direct page with structure {}", lc->dumpStructure());
                 return {std::move(lc), type_hint, column_name};
             }
         }
@@ -1844,7 +1844,7 @@ void ORCColumnToCHColumn::orcColumnsToCHChunk(
             // if (auto * orc_str_batch = dynamic_cast<const orc::StringVectorBatch *>(orc_column_with_type.first); orc_str_batch)
             // {
             //     LOG_INFO(
-            //         &Poco::Logger::get(__PRETTY_FUNCTION__),
+            //         getLogger(__PRETTY_FUNCTION__),
             //         "before orc batch {} {}  dict {}  use codes {}",
             //         orc_column_with_type.first->numElements,
             //         orc_column_with_type.second->toString(),
@@ -1854,7 +1854,7 @@ void ORCColumnToCHColumn::orcColumnsToCHChunk(
             column = readColumnFromORCColumn(
                 orc_column_with_type.first, orc_column_with_type.second, header_column.name, false, allow_out_of_range, header_column.type);
             // LOG_INFO(
-            //     &Poco::Logger::get(__PRETTY_FUNCTION__),
+            //     getLogger(__PRETTY_FUNCTION__),
             //     "orc batch {} {}, ce {}",
             //     orc_column_with_type.first->numElements,
             //     orc_column_with_type.second->toString(),
@@ -1897,7 +1897,7 @@ IStorage::ColumnSizeByName getOrcColumnsSize(orc::Reader & orc_reader)
 
     if (!stripe_info_ptr)
     {
-        LOG_INFO(&Poco::Logger::get("ORCBlockInputFormat"), "cannot get columns size, stripe info ptr is nullptr.");
+        LOG_INFO(getLogger("ORCBlockInputFormat"), "cannot get columns size, stripe info ptr is nullptr.");
         return {};
     }
     const auto & stripe_info = *stripe_info_ptr;

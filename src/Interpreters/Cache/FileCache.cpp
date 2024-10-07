@@ -35,7 +35,7 @@ FileCache::FileCache(
     , enable_filesystem_query_cache_limit(cache_settings_.enable_filesystem_query_cache_limit)
     , enable_bypass_cache_with_threashold(cache_settings_.enable_bypass_cache_with_threashold)
     , bypass_cache_threashold(cache_settings_.bypass_cache_threashold)
-    , log(&Poco::Logger::get("FileCache"))
+    , log(getLogger("FileCache"))
     , main_priority(std::make_unique<LRUFileCachePriority>())
     , stash_priority(std::make_unique<LRUFileCachePriority>())
     , max_stash_element_size(cache_settings_.max_elements)

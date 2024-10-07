@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <CloudServices/CnchDataWriter.h>
 #include <Core/Types.h>
@@ -48,7 +49,7 @@ private:
 
     StorageCloudMergeTree & storage;
     String log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
     CnchDataWriter cnch_writer;
     String partition_id;
 

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <boost/noncopyable.hpp>
 #include <butil/logging.h>
 #include <butil/strings/string_piece.h>
@@ -26,7 +27,7 @@ namespace DB
 class BrpcPocoLogSink : public ::logging::LogSink, private boost::noncopyable
 {
 public:
-    explicit BrpcPocoLogSink() { logger = &Poco::Logger::get("brpc"); }
+    explicit BrpcPocoLogSink() { logger = getLogger("brpc"); }
 
     ~BrpcPocoLogSink() override = default;
 
@@ -34,7 +35,7 @@ public:
 
 
 private:
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 static inline Poco::Message::Priority brpc2PocoLogPriority(int brpcLogPriority)

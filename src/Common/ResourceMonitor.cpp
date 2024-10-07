@@ -127,7 +127,7 @@ CPUMonitor::CPUMonitor()
     if (-1 == fd)
         throwFromErrno("Cannot open file " + std::string(filename), errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     in_container = inContainer(); 
-    LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "The env is in container : {}", in_container);
+    LOG_DEBUG(getLogger(__PRETTY_FUNCTION__), "The env is in container : {}", in_container);
 }
 
 CPUMonitor::~CPUMonitor()
@@ -247,7 +247,7 @@ MemoryMonitor::MemoryMonitor()
     if (-1 == fd)
         throwFromErrno("Cannot open file " + std::string(filename), errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     in_container = inContainer();
-    LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "The env is in container : {}", in_container);
+    LOG_DEBUG(getLogger(__PRETTY_FUNCTION__), "The env is in container : {}", in_container);
 }
 
 

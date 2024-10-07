@@ -1237,7 +1237,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     }
     else if (create.attach && !create.attach_short_syntax && getContext()->getClientInfo().query_kind != ClientInfo::QueryKind::SECONDARY_QUERY)
     {
-        auto * log = &Poco::Logger::get("InterpreterCreateQuery");
+        auto log = getLogger("InterpreterCreateQuery");
         LOG_WARNING(log, "ATTACH TABLE query with full table definition is not recommended: "
                          "use either ATTACH TABLE {}; to attach existing table "
                          "or CREATE TABLE {} <table definition>; to create new table "

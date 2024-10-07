@@ -11,7 +11,7 @@ namespace ErrorCodes
 
 
 ExternalModelsLoader::ExternalModelsLoader(ContextPtr context_)
-    : ExternalLoader("external model", &Poco::Logger::get("ExternalModelsLoader")), WithContext(context_)
+    : ExternalLoader("external model", getLogger("ExternalModelsLoader")), WithContext(context_)
 {
     setConfigSettings({"model", "name", {}, {}});
     enablePeriodicUpdates(true);

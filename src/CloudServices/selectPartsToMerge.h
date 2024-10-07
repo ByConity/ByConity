@@ -16,6 +16,7 @@
 #pragma once
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Common/Logger.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -41,7 +42,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     bool enable_batch_select,
     bool final,
     bool merge_with_ttl_allowed,
-    Poco::Logger * log);
+    LoggerPtr log);
 
 /**
 * Group data parts by bucket number

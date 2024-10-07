@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
@@ -49,7 +50,7 @@ public:
 
         if (static_cast<UInt64>(time(nullptr) - getManipulationListElement()->last_touch_time.load(std::memory_order_relaxed)) > timeout)
         {
-            LOG_TRACE(&Poco::Logger::get("ManipulationTask"),
+            LOG_TRACE(getLogger("ManipulationTask"),
                       "Set is_cancelled for task {} as no heartbeat from server.", getManipulationListElement()->task_id);
             setCancelled();
             return true;

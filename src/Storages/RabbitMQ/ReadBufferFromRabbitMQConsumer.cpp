@@ -41,7 +41,7 @@ ReadBufferFromRabbitMQConsumer::ReadBufferFromRabbitMQConsumer(
         std::vector<String> & queues_,
         size_t channel_id_base_,
         const String & channel_base_,
-        Poco::Logger * log_,
+        LoggerPtr log_,
         char row_delimiter_,
         uint32_t queue_size_,
         const std::atomic<bool> & stopped_)

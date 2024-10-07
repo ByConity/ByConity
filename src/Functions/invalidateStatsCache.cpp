@@ -67,7 +67,7 @@ ColumnPtr FunctionInvalidateStatsCache::executeImpl(
     if (!table_identifier_opt.has_value())
     {
         // DO NOTHING
-        LOG_INFO(&Poco::Logger::get("invalidateStatsCache"), "Table " + identifier_names[0] + "." + identifier_names[1] + " not found, skip cache clear");
+        LOG_INFO(getLogger("invalidateStatsCache"), "Table " + identifier_names[0] + "." + identifier_names[1] + " not found, skip cache clear");
     }
     else
     {

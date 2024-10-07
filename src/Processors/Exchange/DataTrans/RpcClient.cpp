@@ -26,7 +26,7 @@ namespace DB
 {
 
 RpcClient::RpcClient(String host_port_, std::function<void()> report_err_, brpc::ChannelOptions * options)
-    : log(&Poco::Logger::get("RpcClient"))
+    : log(getLogger("RpcClient"))
     , host_port(std::move(host_port_))
     , report_err(std::move(report_err_))
     , brpc_channel(std::make_unique<brpc::Channel>())

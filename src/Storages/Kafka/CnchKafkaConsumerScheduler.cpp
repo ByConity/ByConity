@@ -27,7 +27,7 @@ namespace DB
 
     IKafkaConsumerScheduler::IKafkaConsumerScheduler(const String &vw_name_, const KafkaConsumerScheduleMode schedule_mode_, ContextPtr context_)
         : vw_name(std::move(vw_name_)), schedule_mode(schedule_mode_), global_context(context_->getGlobalContext()),
-        log(&Poco::Logger::get("KafkaConsumer" + String(getScheduleModeName()) + "Scheduler"))
+        log(getLogger("KafkaConsumer" + String(getScheduleModeName()) + "Scheduler"))
     {
         initOrUpdateWorkerPool();
     }

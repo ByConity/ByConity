@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <map>
 #include <optional>
@@ -47,7 +48,7 @@ public:
         , txn_record(std::move(txn_record_))
         , lock_prefix(lock_prefix_)
         , intent_names(std::move(intent_names_))
-        , log(&Poco::Logger::get("IntentLock"))
+        , log(getLogger("IntentLock"))
     {
     }
 
@@ -77,7 +78,7 @@ private:
 
     bool locked{false};
     bool valid{true};
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void lockImpl();
     void writeIntents();

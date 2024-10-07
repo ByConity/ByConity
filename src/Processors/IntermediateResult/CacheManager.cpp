@@ -19,7 +19,7 @@ namespace ErrorCodes
 }
 
 CacheManager::CacheManager(size_t max_size_in_bytes)
-    : cache(std::make_shared<Cache>(max_size_in_bytes)), log(&Poco::Logger::get("CacheManager"))
+    : cache(std::make_shared<Cache>(max_size_in_bytes)), log(getLogger("CacheManager"))
 {
 }
 

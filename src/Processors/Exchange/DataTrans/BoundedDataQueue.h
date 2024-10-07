@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <queue>
 #include <type_traits>
 #include <bthread/condition_variable.h>
@@ -222,7 +223,7 @@ private:
         std::unique_lock<bthread::Mutex> lock(mutex);
         while (exceedLimit() && !is_closed)
         {
-            LOG_TRACE(&Poco::Logger::get("BoundedDataQueue"), fmt::format("Queue is full and waiting, current size: {}, max size: {}", queue.size(), capacity));
+            LOG_TRACE(getLogger("BoundedDataQueue"), fmt::format("Queue is full and waiting, current size: {}, max size: {}", queue.size(), capacity));
             full_cv.wait(lock);
         }
         if (is_closed)

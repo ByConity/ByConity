@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Common/config.h>
 
 #if USE_HDFS
@@ -35,7 +36,7 @@ public:
     ~StorageCnchHDFS() override = default;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("StorageCnchHDFS");
+    LoggerPtr log = getLogger("StorageCnchHDFS");
 
 public:
     StorageCnchHDFS(

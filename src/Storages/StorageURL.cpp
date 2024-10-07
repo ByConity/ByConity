@@ -354,7 +354,7 @@ StorageURLWithFailover::StorageURLWithFailover(
         Poco::URI poco_uri(uri_option);
         context_->getRemoteHostFilter().checkURL(poco_uri);
         uri_options.emplace_back(std::move(poco_uri));
-        LOG_DEBUG(&Poco::Logger::get("StorageURLDistributed"), "Adding URL option: {}", uri_option);
+        LOG_DEBUG(getLogger("StorageURLDistributed"), "Adding URL option: {}", uri_option);
     }
 }
 

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DaemonManager/DaemonJob.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/TransactionCommon.h>
@@ -26,7 +27,7 @@ namespace DB::DaemonManager
 class TxnGCLog
 {
 public:
-    TxnGCLog(Poco::Logger * lg) : log(lg) { }
+    TxnGCLog(LoggerPtr lg) : log(lg) { }
     TxnGCLog(const TxnGCLog &) = delete;
     TxnGCLog & operator=(const TxnGCLog &) = delete;
     ~TxnGCLog()
@@ -59,7 +60,7 @@ public:
     std::atomic<UInt32> inactive{0};
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 class DaemonJobTxnGC : public DaemonJob
 {

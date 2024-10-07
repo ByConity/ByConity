@@ -202,7 +202,7 @@ IPAddressDictionary::IPAddressDictionary(
     , dict_lifetime(dict_lifetime_)
     , require_nonempty(require_nonempty_)
     , access_to_key_from_attributes(dict_struct_.access_to_key_from_attributes)
-    , logger(&Poco::Logger::get("IPAddressDictionary"))
+    , logger(getLogger("IPAddressDictionary"))
 {
     createAttributes();
     loadData();

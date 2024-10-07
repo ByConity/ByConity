@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/shared_ptr_helper.h>
 #include <Parsers/IAST_fwd.h>
 
@@ -188,7 +189,7 @@ private:
     // mv meta cache
     MaterializedViewVersionedPartCache & cache;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 protected:
     StorageMaterializedView(

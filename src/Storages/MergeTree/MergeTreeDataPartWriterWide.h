@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterOnDisk.h>
 
@@ -88,13 +89,13 @@ private:
 
     size_t getRowsWrittenInLastMark() override { return rows_written_in_last_mark; }
 
-    Poco::Logger * getLogger() override { return log; }
+    LoggerPtr getLogger() override { return log; }
 
     /// How many rows we have already written in the current mark.
     /// More than zero when incoming blocks are smaller then their granularity.
     size_t rows_written_in_last_mark = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /** ------------------ Unique Table Only --------------------- **/
     void writeUniqueKeyIndex(Block & unique_key_block);

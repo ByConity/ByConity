@@ -156,7 +156,7 @@ PlanNodePtr PredicateVisitor::visitProjectionNode(ProjectionNode & node, Predica
 
     auto pushdown_predicate = PredicateUtils::combineConjuncts(inlined_deterministic_conjuncts);
     LOG_DEBUG(
-        &Poco::Logger::get("PredicateVisitor"),
+        getLogger("PredicateVisitor"),
         "project node {}, pushdown_predicate : {}",
         node.getId(),
         pushdown_predicate->formatForErrorMessage());
@@ -196,7 +196,7 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
     std::pair<ConstASTPtr, ConstASTPtr> split_in_filter = FilterStep::splitLargeInValueList(step.getFilter(), limit);
 
     LOG_DEBUG(
-        &Poco::Logger::get("PredicateVisitor"),
+        getLogger("PredicateVisitor"),
         "filter node {}, split_in_filter.first : {}, split_in_filter.second : {}",
         node.getId(),
         split_in_filter.first->formatForErrorMessage(),
@@ -211,7 +211,7 @@ PlanNodePtr PredicateVisitor::visitFilterNode(FilterNode & node, PredicateContex
     }
 
     LOG_DEBUG(
-        &Poco::Logger::get("PredicateVisitor"),
+        getLogger("PredicateVisitor"),
         "filter node {}, pushdown_predicate : {}",
         node.getId(),
         predicate->formatForErrorMessage());
@@ -398,7 +398,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     ASTTableJoin::Kind kind = step->getKind();
 
     LOG_DEBUG(
-        &Poco::Logger::get("PredicateVisitor"),
+        getLogger("PredicateVisitor"),
         "join node {}, inherited_predicate : {}, left effective predicate: {} , right effective predicate: {}, join_predicate : {}",
         node.getId(),
         inherited_predicate->formatForErrorMessage(),

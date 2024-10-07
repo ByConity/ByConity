@@ -158,6 +158,7 @@ static ASTPtr getBasicSelectQuery(const ASTPtr & original_query)
     else if (select.prewhere())
         select.setExpression(ASTSelectQuery::Expression::WHERE, select.prewhere()->clone());
     select.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
+    LOG_DEBUG(getLogger("getBasicSelectQuery"), "original: {}, result: {}", queryToString(original_query), queryToString(select));
     return query;
 }
 

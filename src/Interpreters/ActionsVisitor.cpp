@@ -1446,7 +1446,7 @@ SetPtr ActionsMatcher::tryMakeSet(const ASTFunction & node, Data & data, bool no
         if (BitmapIndexHelper::isNarrowArraySetFunctions(node.name))
             throw;
 
-        LOG_DEBUG(&Poco::Logger::get("ActionsMatcher"), "Cannot make set for bitmap_index_funcs, fallback to normal reader");
+        LOG_DEBUG(getLogger("ActionsMatcher"), "Cannot make set for bitmap_index_funcs, fallback to normal reader");
         return nullptr;
     }
     return return_set;

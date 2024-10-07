@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Server/HTTP/HTTPRequestHandler.h>
 #include <Common/CurrentMetrics.h>
@@ -26,7 +27,7 @@ class InterserverIOHTTPHandler : public HTTPRequestHandler
 public:
     explicit InterserverIOHTTPHandler(IServer & server_)
         : server(server_)
-        , log(&Poco::Logger::get("InterserverIOHTTPHandler"))
+        , log(getLogger("InterserverIOHTTPHandler"))
     {
     }
 
@@ -39,7 +40,7 @@ private:
     };
 
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     CurrentMetrics::Increment metric_increment{CurrentMetrics::InterserverConnection};
 

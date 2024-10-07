@@ -99,7 +99,7 @@ CassandraDictionarySource::CassandraDictionarySource(
     const DictionaryStructure & dict_struct_,
     const CassandraSettings & settings_,
     const Block & sample_block_)
-    : log(&Poco::Logger::get("CassandraDictionarySource"))
+    : log(getLogger("CassandraDictionarySource"))
     , dict_struct(dict_struct_)
     , settings(settings_)
     , sample_block(sample_block_)

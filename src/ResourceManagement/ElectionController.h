@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/StorageElection/StorageElector.h>
 #include <Catalog/IMetastore.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -47,7 +48,7 @@ private:
     // Pulls logical VW and worker group info from KV store.
     bool pullState();
 
-    Poco::Logger * log = &Poco::Logger::get("ElectionController");
+    LoggerPtr log = getLogger("ElectionController");
     ResourceManagerController & rm_controller;
 
     std::shared_ptr<StorageElector> elector;

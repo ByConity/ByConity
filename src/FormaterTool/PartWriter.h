@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <FormaterTool/PartToolkitBase.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
 #include <Poco/Logger.h>
@@ -45,7 +46,7 @@ public:
     }
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("PartWriter");
+    LoggerPtr log = getLogger("PartWriter");
     String source_path;
     String data_format;
     String dest_path;

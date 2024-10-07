@@ -87,7 +87,7 @@ void AutoStatisticsManager::prepareNewConfig(const Poco::Util::AbstractConfigura
 
 AutoStatisticsManager::AutoStatisticsManager(ContextPtr context_)
     : WithContext(context_)
-    , logger(&Poco::Logger::get("AutoStatisticsManager"))
+    , logger(getLogger("AutoStatisticsManager"))
     , task_queue(context_, internal_config)
     , settings_manager(context_)
     , schedule_lease(TimePoint{}) // just make compiler happy
@@ -559,7 +559,7 @@ void AutoStatisticsManager::initialize(ContextMutablePtr context_, const Poco::U
     }
     else
     {
-        LOG_WARNING(&Poco::Logger::get("AutoStatisticsManager::initialize"), "cnch_system.cnch_auto_stats_task_log is not initialized");
+        LOG_WARNING(getLogger("AutoStatisticsManager::initialize"), "cnch_system.cnch_auto_stats_task_log is not initialized");
     }
 
     // zk helper will make only one manager runs at the whole cluster

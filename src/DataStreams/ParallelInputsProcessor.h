@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <list>
 #include <queue>
 #include <atomic>
@@ -365,7 +366,7 @@ private:
     /// Wait for the completion of all threads.
     std::atomic<bool> joined_threads { false };
 
-    Poco::Logger * log = &Poco::Logger::get("ParallelInputsProcessor");
+    LoggerPtr log = getLogger("ParallelInputsProcessor");
 };
 
 

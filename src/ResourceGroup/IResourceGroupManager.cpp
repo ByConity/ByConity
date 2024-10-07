@@ -145,13 +145,13 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
 void IResourceGroupManager::enable()
 {
     disabled.store(false, std::memory_order_relaxed);
-    LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "enabled");
+    LOG_DEBUG(getLogger("ResourceGroupManager"), "enabled");
 }
 
 void IResourceGroupManager::disable()
 {
     disabled.store(true, std::memory_order_relaxed);
-    LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "disabled");
+    LOG_DEBUG(getLogger("ResourceGroupManager"), "disabled");
 }
 
 IResourceGroupManager::Container IResourceGroupManager::getGroups() const

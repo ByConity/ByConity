@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <DaemonManager/DaemonJob.h>
 #include <Statistics/AutoStatisticsHelper.h>
@@ -31,7 +32,7 @@ public:
     static HostWithPortsVec getServerList(const ContextPtr & ctx);
 
 private:
-    Poco::Logger * logger = &Poco::Logger::get("AutoStatsDaemon");
+    LoggerPtr logger = getLogger("AutoStatsDaemon");
 };
 
 }

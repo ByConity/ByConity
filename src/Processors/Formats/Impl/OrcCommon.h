@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include "Processors/Chunk.h"
 #include "config_formats.h"
 #if USE_ORC
@@ -169,7 +170,7 @@ private:
     bool case_insensitive_matching;
     bool allow_out_of_range;
     NameSet header_columns;
-    Poco::Logger * logger = &Poco::Logger::get("ORCColumnToCHColumn");
+    LoggerPtr logger = getLogger("ORCColumnToCHColumn");
 };
 
 IStorage::ColumnSizeByName getOrcColumnsSize(orc::Reader & orc_reader);

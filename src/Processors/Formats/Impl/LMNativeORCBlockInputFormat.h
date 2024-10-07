@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <mutex>
 #include <orc/Reader.hh>
 #include "Processors/Formats/Impl/OrcChunkReader.h"
@@ -54,7 +55,7 @@ protected:
     ScanParams scan_params;
     std::vector<std::unique_ptr<OrcScanner>> scanners;
     std::vector<std::unique_ptr<std::once_flag>> init_scanners_once;
-    Poco::Logger * log = &Poco::Logger::get("LMNativeORCBlockInputFormat");
+    LoggerPtr log = getLogger("LMNativeORCBlockInputFormat");
 };
 
 

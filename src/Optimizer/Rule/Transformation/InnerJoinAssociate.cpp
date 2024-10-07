@@ -66,7 +66,7 @@ TransformResult InnerJoinAssociate::transformImpl(PlanNodePtr node, const Captur
     auto c = node->getChildren()[1];
 
     // LOG_DEBUG(
-    //     &Poco::Logger::get("InnerJoinAssociate"),
+    //     getLogger("InnerJoinAssociate"),
     //     fmt::format(
     //         "hint {}/{}/{}",
     //         dynamic_cast<AnyStep &>(*a->getStep()).getGroupId(),

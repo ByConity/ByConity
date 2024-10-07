@@ -133,7 +133,7 @@ static Array extractMapColumnKeys(const MergeTreeMetaBase & data, const MergeTre
             map_types[it->name] = it->type;
     }
 
-    Poco::Logger * logger = nullptr;
+    LoggerPtr logger = nullptr;
     for (auto & part : parts)
     {
         for (auto & [file, _] : part->getChecksums()->files)
@@ -149,7 +149,7 @@ static Array extractMapColumnKeys(const MergeTreeMetaBase & data, const MergeTre
             if (!map_types.count(map_name))
             {
                 if (unlikely(logger == nullptr))
-                    logger = &Poco::Logger::get(data.getLogName() + " (ExtractMapKeys)");
+                    logger = getLogger(data.getLogName() + " (ExtractMapKeys)");
                 LOG_WARNING(logger, "Can not find byte map column {} of implicit file {}", map_name, file);
                 continue;
             }
@@ -296,7 +296,7 @@ ReadFromMergeTree::ReadFromMergeTree(
     bool sample_factor_column_queried_,
     bool map_column_keys_column_queried_,
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
-    Poco::Logger * log_,
+    LoggerPtr log_,
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_)
     : ISourceStep(DataStream{
     .header = query_info_.atomic_predicates.empty()
@@ -383,7 +383,7 @@ Pipe ReadFromMergeTree::readFromPool(
         settings.preferred_block_size_bytes,
         false);
 
-    auto * logger = &Poco::Logger::get(data.getLogName() + " (SelectExecutor)");
+    auto logger = getLogger(data.getLogName() + " (SelectExecutor)");
     LOG_DEBUG(logger, "Reading approx. {} rows with {} streams", total_rows, max_streams);
     MergeTreeStreamSettings stream_settings {
         .min_marks_for_concurrent_read = min_marks_for_concurrent_read,
@@ -615,7 +615,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreams(
         if (info.sum_marks < num_streams * info.min_marks_for_concurrent_read && parts_with_ranges.size() < num_streams)
         {
             num_streams = std::max((info.sum_marks + info.min_marks_for_concurrent_read - 1) / info.min_marks_for_concurrent_read, parts_with_ranges.size());
-            LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree"),
+            LOG_TRACE(getLogger("ReadFromMergeTree"),
                 "Shrink the number of streams from {} to {} since data is small.", requested_num_streams, num_streams);
         }
     }
@@ -1177,7 +1177,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     const MergeTreeMetaBase & data,
     const Names & real_column_names,
     bool sample_factor_column_queried,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     AnalysisResult result;
     const auto & settings = context->getSettingsRef();
@@ -1269,7 +1269,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
                 RewriteDistributedQueryVisitor(query_data).visit(copy_select);
             auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
             interpreter->execute();
-            LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
+            LOG_TRACE(getLogger("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
 
             MergeTreeDataSelectExecutor::filterPartsByPartition(
                 parts,

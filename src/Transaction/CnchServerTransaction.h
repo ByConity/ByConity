@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Transaction/Actions/IAction.h>
 #include <Transaction/ICnchTransaction.h>
@@ -65,7 +66,7 @@ public:
 
     void incrementModifiedCount(const Statistics::AutoStats::ModifiedCounter& new_counts);
 
-    Poco::Logger * getLogger() { return log; } 
+    LoggerPtr getLogger() { return log; }
 
 protected:
     static constexpr size_t MAX_RETRY = 3;
@@ -75,7 +76,7 @@ protected:
 
 private:
 
-    Poco::Logger * log {&Poco::Logger::get("CnchServerTransaction")};
+    LoggerPtr log {::getLogger("CnchServerTransaction")};
 
     std::atomic_bool dedup_stage_flag{false};
 

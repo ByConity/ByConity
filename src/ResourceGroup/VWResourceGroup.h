@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <ResourceGroup/IResourceGroup.h>
 
 namespace Poco { class Logger; }
@@ -50,7 +51,7 @@ private:
     mutable std::atomic<bool> logged = false;
     mutable std::atomic<bool> running_limit_debug_logged = false;
     mutable std::atomic<bool> queued_limit_debug_logged = false;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

@@ -25,7 +25,7 @@ StorageMaterializedViewRefreshTask::StorageMaterializedViewRefreshTask(
     : ManipulationTask(std::move(params_), std::move(context_))
     , storage(storage_), mv_storage_id(mv_storage_id_), server_client(client)
 {
-    LOG_DEBUG(&Poco::Logger::get("StorageMaterializedViewRefreshTask"), "construct StorageMaterializedViewRefreshTask for {}.", storage.getTableName());
+    LOG_DEBUG(getLogger("StorageMaterializedViewRefreshTask"), "construct StorageMaterializedViewRefreshTask for {}.", storage.getTableName());
 }
 
 void StorageMaterializedViewRefreshTask::refreshAsyncOnWorker(AsyncRefreshParam & mv_refresh_param, ContextMutablePtr insert_context)
@@ -34,7 +34,7 @@ void StorageMaterializedViewRefreshTask::refreshAsyncOnWorker(AsyncRefreshParam 
         throw Exception("refreshAsyncOnWorker should run in worker", ErrorCodes::LOGICAL_ERROR);
 
     // INSERT SELECT
-    LOG_DEBUG(&Poco::Logger::get("StorageMaterializedViewRefreshTask"), "materialized view refresh in worker insert select query: {}", mv_refresh_param.insert_select_query);
+    LOG_DEBUG(getLogger("StorageMaterializedViewRefreshTask"), "materialized view refresh in worker insert select query: {}", mv_refresh_param.insert_select_query);
     BlockIO insert_io;
     try
     {
@@ -73,7 +73,7 @@ void StorageMaterializedViewRefreshTask::executeImpl()
 {
     // refreshAsyncOnWorker(*params.mv_refresh_param, const_cast<Context &>(*getContext()).shared_from_this());
 
-    LOG_DEBUG(&Poco::Logger::get("StorageMaterializedViewRefreshTask"), "insert select finished.");
+    LOG_DEBUG(getLogger("StorageMaterializedViewRefreshTask"), "insert select finished.");
     server_client->handleRefreshTaskOnFinish(mv_storage_id, params.task_id, params.txn_id);
 
 }

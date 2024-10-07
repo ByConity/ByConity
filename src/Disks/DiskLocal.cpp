@@ -464,7 +464,7 @@ void registerDiskLocal(DiskFactory & factory)
 
         if (!fs::exists(tmp_path))
         {
-            LOG_WARNING(&Poco::Logger::get("DiskLocal"), "Can't find path {} so keep-free is forced to set zero", tmp_path);
+            LOG_WARNING(getLogger("DiskLocal"), "Can't find path {} so keep-free is forced to set zero", tmp_path);
             return std::make_shared<DiskLocal>(name, path, DiskStats{});
         }
 

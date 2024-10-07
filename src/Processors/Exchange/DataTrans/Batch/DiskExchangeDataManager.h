@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -144,7 +145,7 @@ private:
     ssize_t getFileSizeRecursively(const String & file_path);
     bool cancelWriteTasks(const std::vector<DiskPartitionWriterPtr> & writers);
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
     /// this mutex protects read_tasks, write_tasks, cleanup_tasks, alive_queries
     bthread::Mutex mutex;
     std::map<ExchangeDataKeyPtr, ReadTaskPtr, ExchangeDataKeyPtrLess> read_tasks;

@@ -61,7 +61,7 @@ PlanNodePtr JoinOrderHintsVisitor::getLeadingJoinOrder(PlanNodePtr join_ptr, Lea
 
         join_ptr = SimpleReorderJoinVisitor::buildJoinTree(output_symbols, join_graph, join_order, context);
 
-        LOG_WARNING(&Poco::Logger::get("ImplementJoinOrderHints"), "Leading {} is implemented.", leading_hint->getJoinOrderString());
+        LOG_WARNING(getLogger("ImplementJoinOrderHints"), "Leading {} is implemented.", leading_hint->getJoinOrderString());
     }
     return join_ptr;
 }
@@ -119,7 +119,7 @@ PlanNodePtr JoinOrderHintsVisitor::swapJoinOrder(PlanNodePtr node, SwapOrderPtr 
             step->getHints());
         PlanNodePtr new_join_node = std::make_shared<JoinNode>(
             context->nextNodeId(), std::move(join_step), PlanNodes{join_node->getChildren()[1], join_node->getChildren()[0]});
-        LOG_WARNING(&Poco::Logger::get("ImplementJoinOrderHints"), "swap_join_order{} is implemented.", swap_hint->getJoinOrderString());
+        LOG_WARNING(getLogger("ImplementJoinOrderHints"), "swap_join_order{} is implemented.", swap_hint->getJoinOrderString());
         return new_join_node;
     }
     return node;

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Protos/DataModelHelpers.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/Actions/IAction.h>
@@ -77,7 +78,7 @@ private:
     CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
 
     bool executed{false};
-    Poco::Logger * log{&Poco::Logger::get("InsertAction")};
+    LoggerPtr log{getLogger("InsertAction")};
     UInt64 * block_id = nullptr;
 };
 

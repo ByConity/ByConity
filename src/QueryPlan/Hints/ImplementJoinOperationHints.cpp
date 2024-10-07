@@ -115,14 +115,14 @@ void JoinOperationHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
         setStepOptions(new_join_step, DistributionType::BROADCAST, true);
         node.setStep(new_join_step);
         node.replaceChildren(PlanNodes{node.getChildren()[1], node.getChildren()[0]});
-        LOG_WARNING(&Poco::Logger::get("ImplementJoinOperationHints"), "BROADCAST_JOIN({})", left_broadcast_hint->getOptions().back());
+        LOG_WARNING(getLogger("ImplementJoinOperationHints"), "BROADCAST_JOIN({})", left_broadcast_hint->getOptions().back());
     }
     else if (right_broadcast_hint)
     {
         auto broadcast_step = std::dynamic_pointer_cast<JoinStep>(step.copy(context));
         setStepOptions(broadcast_step, DistributionType::BROADCAST, true);
         node.setStep(broadcast_step);
-        LOG_WARNING(&Poco::Logger::get("ImplementJoinOperationHints"), "BROADCAST_JOIN({})", right_broadcast_hint->getOptions().back());
+        LOG_WARNING(getLogger("ImplementJoinOperationHints"), "BROADCAST_JOIN({})", right_broadcast_hint->getOptions().back());
     }
     else if (left_repartition_hint || right_repartition_hint)
     {
@@ -174,9 +174,9 @@ void JoinOperationHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
         }
 
         if (left_repartition_hint)
-            LOG_WARNING(&Poco::Logger::get("ImplementJoinOperationHints"), "REPARTITION_JOIN({})", left_repartition_hint->getOptions().back());
+            LOG_WARNING(getLogger("ImplementJoinOperationHints"), "REPARTITION_JOIN({})", left_repartition_hint->getOptions().back());
         else
-            LOG_WARNING(&Poco::Logger::get("ImplementJoinOperationHints"), "REPARTITION_JOIN({})", right_repartition_hint->getOptions().back());
+            LOG_WARNING(getLogger("ImplementJoinOperationHints"), "REPARTITION_JOIN({})", right_repartition_hint->getOptions().back());
     }
 }
 

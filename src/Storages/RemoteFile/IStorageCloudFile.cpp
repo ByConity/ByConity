@@ -75,7 +75,7 @@ public:
         if (current_path.empty())
             return false;
 
-        LOG_TRACE(&Poco::Logger::get("FileBlockInputStream"), "{} start to read {}", client->type(), current_path);
+        LOG_TRACE(getLogger("FileBlockInputStream"), "{} start to read {}", client->type(), current_path);
         auto current_compression = chooseCompressionMethod(current_path, compression_method);
         auto current_format = FormatFactory::instance().getFormatFromFileName(current_path, true, format_name);
         FormatFactory::instance().checkFormatName(current_format);
@@ -244,7 +244,7 @@ public:
         size_t max_block_size_,
         size_t num_streams_,
         const CnchFileArguments & arguments_,
-        Poco::Logger * log_)
+        LoggerPtr log_)
         : ISourceStep(DataStream{.header = metadata_snapshot_->getSampleBlockForColumns(real_column_names_, virtual_, id_)})
         , client(client_)
         , data_parts(parts_)
@@ -306,7 +306,7 @@ private:
     size_t num_streams;
 
     CnchFileArguments arguments;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     Pipe read(ContextPtr & query_context_, size_t num_streams_, const Names & column_names, const UInt64 & max_block_size_)
     {

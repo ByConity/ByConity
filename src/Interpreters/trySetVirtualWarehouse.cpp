@@ -68,7 +68,7 @@ static bool trySetVirtualWarehouseFromStorageID(
                                                                 : cnch_table->getSettings()->cnch_vw_default;
 
         LOG_DEBUG(
-            &Poco::Logger::get("trySetVirtualWarehouse"),
+            getLogger("trySetVirtualWarehouse"),
             "set vw to {} from cnch table {}, type is WRITE {}",
             vw_name,
             table_id.getNameForLogs(),
@@ -109,7 +109,7 @@ static bool trySetVirtualWarehouseFromStorageID(
                                                                        : nested_table->getSettings()->cnch_vw_default;
 
         LOG_DEBUG(
-            &Poco::Logger::get("trySetVirtualWarehouse"),
+            getLogger("trySetVirtualWarehouse"),
             "set vw to {} from nested cnch table {}, type is WRITE {}",
             nested_vw_name,
             nested_table->getStorageID().getNameForLogs(),
@@ -530,7 +530,7 @@ bool trySetVirtualWarehouseAndWorkerGroup(const std::string & vw_name, ContextMu
     auto value = context->getSettingsRef().vw_schedule_algo.value;
     auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
     auto worker_group = context->getCurrentVW()->pickWorkerGroup(algo);
-    LOG_DEBUG(&Poco::Logger::get("VirtualWarehouse"), "Picked worker group {}", worker_group->getQualifiedName());
+    LOG_DEBUG(getLogger("VirtualWarehouse"), "Picked worker group {}", worker_group->getQualifiedName());
     context->setCurrentWorkerGroup(std::move(worker_group));
     return true;
 }

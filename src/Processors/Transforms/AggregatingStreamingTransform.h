@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/ReadBufferFromFile.h>
 #include <Interpreters/Aggregator.h>
@@ -50,7 +51,7 @@ private:
     Processors processors;
 
     AggregatingTransformParamsPtr params;
-    Poco::Logger * log = &Poco::Logger::get("AggregatingStreamingTransform");
+    LoggerPtr log = getLogger("AggregatingStreamingTransform");
 
     ColumnRawPtrs key_columns;
     Aggregator::AggregateColumns aggregate_columns;

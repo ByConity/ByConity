@@ -101,7 +101,7 @@ namespace ErrorCodes
 
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
     : WithMutableContext(context_->getGlobalContext())
-    , log(&Poco::Logger::get("CnchWorkerService"))
+    , log(getLogger("CnchWorkerService"))
     , thread_pool(getNumberOfPhysicalCPUCores() * 4, getNumberOfPhysicalCPUCores() * 2, getNumberOfPhysicalCPUCores() * 8)
 {
 }

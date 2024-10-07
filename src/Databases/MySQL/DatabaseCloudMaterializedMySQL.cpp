@@ -142,13 +142,13 @@ static void executeCreateSqlForSyncThread(const std::vector<String> & create_com
     ParserCreateQuery parser;
     for (const auto & cmd : create_commands)
     {
-        LOG_DEBUG(&Poco::Logger::get("MySQLSyncThreadTask"), "Try to execute CREATE query: {}", cmd);
+        LOG_DEBUG(getLogger("MySQLSyncThreadTask"), "Try to execute CREATE query: {}", cmd);
         ASTPtr ast = parseQuery(parser, cmd, "", 0, create_context->getSettingsRef().max_parser_depth);
 
         InterpreterCreateQuery interpreter_tb(ast, create_context);
         interpreter_tb.execute();
     }
-    LOG_DEBUG(&Poco::Logger::get("MySQLSyncThreadTask"), "Executed CREATE query successfully");
+    LOG_DEBUG(getLogger("MySQLSyncThreadTask"), "Executed CREATE query successfully");
 }
 
 void executeSyncThreadTaskCommandImpl(const MySQLSyncThreadCommand & command, ContextMutablePtr context)
@@ -194,13 +194,13 @@ void executeSyncThreadTaskCommandImpl(const MySQLSyncThreadCommand & command, Co
 
             for (const auto & drop_command : drop_commands)
             {
-                LOG_DEBUG(&Poco::Logger::get("ExecuteSyncThreadCommand"), "Try to Execute DROP sql: {}", drop_command);
+                LOG_DEBUG(getLogger("ExecuteSyncThreadCommand"), "Try to Execute DROP sql: {}", drop_command);
                 try
                 {
                     InterpreterDropQuery interpreter(parseQuery(parser, drop_command, "", 0, 0), context);
                     interpreter.execute();
 
-                    LOG_DEBUG(&Poco::Logger::get("ExecuteSyncThreadCommand"), "Successfully executed DROP sql: {}", drop_command);
+                    LOG_DEBUG(getLogger("ExecuteSyncThreadCommand"), "Successfully executed DROP sql: {}", drop_command);
                 }
                 catch (...)
                 {

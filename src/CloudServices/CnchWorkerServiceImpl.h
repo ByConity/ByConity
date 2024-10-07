@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
@@ -228,7 +229,7 @@ public:
         google::protobuf::Closure * done) override;
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
 
     // class PreloadHandler;
     // std::shared_ptr<PreloadHandler> preload_handler;

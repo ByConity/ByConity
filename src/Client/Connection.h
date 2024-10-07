@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include "common/types.h"
 #include <common/logger_useful.h>
 
@@ -28,6 +29,7 @@
 
 #include <Common/HostWithPorts.h>
 #include <Common/Throttler.h>
+#include <Common/callOnce.h>
 #if !defined(ARCADIA_BUILD)
 #   include <Common/config.h>
 #endif
@@ -364,16 +366,17 @@ private:
         {
         }
 
-        Poco::Logger * get()
+        LoggerPtr get()
         {
-            if (!log)
-                log = &Poco::Logger::get("Connection (" + parent.getDescription() + ")");
-
+            callOnce(log_initialized, [&] {
+                log = getLogger("Connection (" + parent.getDescription() + ")");
+            });
             return log;
         }
 
     private:
-        std::atomic<Poco::Logger *> log;
+        mutable OnceFlag log_initialized;
+        LoggerPtr log;
         Connection & parent;
     };
 

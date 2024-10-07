@@ -35,13 +35,13 @@ String TableHandler::getFullSql()
         sql_components.insert(sql_components.end(), sqls.begin(), sqls.end());
     }
     auto full_sql = fmt::format(FMT_STRING("select {} from {}"), fmt::join(sql_components, ", "), table_identifier.getDbTableName());
-    LOG_INFO(&Poco::Logger::get("TableHandler"), "full_sql={}", full_sql);
+    LOG_INFO(getLogger("TableHandler"), "full_sql={}", full_sql);
     return full_sql;
 }
 
 void TableHandler::parse(const Block & block)
 {
-    LOG_INFO(&Poco::Logger::get("TableHandler"), "table={}", table_identifier.getDbTableName());
+    LOG_INFO(getLogger("TableHandler"), "table={}", table_identifier.getDbTableName());
     if (block.columns() != column_size)
     {
         throw Exception("fetched block has wrong column size", ErrorCodes::LOGICAL_ERROR);

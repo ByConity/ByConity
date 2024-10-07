@@ -44,9 +44,9 @@ FileSegment::FileSegment(
     , file_key(key_)
     , cache(cache_)
 #ifndef NDEBUG
-    , log(&Poco::Logger::get(fmt::format("FileSegment({}) : {}", getHexUIntLowercase(key_), range().toString())))
+    , log(getLogger(fmt::format("FileSegment({}) : {}", getHexUIntLowercase(key_), range().toString())))
 #else
-    , log(&Poco::Logger::get("FileSegment"))
+    , log(getLogger("FileSegment"))
 #endif
     , segment_kind(settings.kind)
     , is_unbound(settings.unbounded)

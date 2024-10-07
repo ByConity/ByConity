@@ -127,7 +127,7 @@ DiskExchangeDataManagerPtr DiskExchangeDataManager::createDiskExchangeDataManage
     chassert(disk);
     if (volume->getDisks().size() != 1)
         LOG_INFO(
-            &Poco::Logger::get("DiskExchangeDataManager"),
+            getLogger("DiskExchangeDataManager"),
             "bsp mode now only supports single disk, will use default disk:{} of volume:{}",
             disk->getName(),
             volume->getName());
@@ -149,7 +149,7 @@ DiskExchangeDataManager::DiskExchangeDataManager(
     ServiceDiscoveryClientPtr service_discovery_client_,
     const String & psm_name_)
     : WithContext(context_)
-    , logger(&Poco::Logger::get("DiskExchangeDataManager"))
+    , logger(getLogger("DiskExchangeDataManager"))
     , start_gc_random_wait_seconds(options_.start_gc_random_wait_seconds)
     , disk(std::move(disk_))
     , path(options_.path)
