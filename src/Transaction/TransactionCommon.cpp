@@ -135,17 +135,15 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
     if (!disk)
     {
         disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
-        if (!disk)
+        if (!disk || disk->getType() == DiskType::Type::Local)
         {
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't find any disk when handle undo resource!");
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Can't find any remote disk in config but get `{}` disk",
+                !disk ? "Empty" : disk->getName());
         }
-        LOG_WARNING(log, "Disk {} not found and fallback use default disk {}", diskName(), disk->getName());
-    }
 
-    if (disk->getType() == DiskType::Type::Local)
-    {
-        LOG_ERROR(log, "Nothing to clean in local disk {} for undo resource: {}", disk->getName(), toDebugString());
-        return;
+        LOG_WARNING(log, "Disk {} not found and fallback use default disk {}", diskName(), disk->getName());
     }
 
     if (type() == UndoResourceType::Part || type() == UndoResourceType::DeleteBitmap || type() == UndoResourceType::StagedPart
