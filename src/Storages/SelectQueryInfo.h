@@ -286,4 +286,7 @@ const std::deque<AtomicPredicatePtr> & getAtomicPredicates(const SelectQueryInfo
 MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info);
 
 TableScanCacheInfo getTableScanCacheInfo(const SelectQueryInfo & query_info);
+
+ASTPtr rewriteSampleForDistributedTable(const ASTPtr & query_ast, size_t shard_size);
+
 }

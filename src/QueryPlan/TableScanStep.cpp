@@ -1790,6 +1790,13 @@ void TableScanStep::allocate(ContextPtr context)
     query_info = fillQueryInfo(context);
     original_table = storage_id.table_name;
     storage_id = storage->prepareTableRead(getRequiredColumns(), query_info, context);
+    size_t shards = context->tryGetCurrentWorkerGroup() ? context->getCurrentWorkerGroup()->getShardsInfo().size() : 1;
+    if (shards > 1 && !context->getSettingsRef().enable_final_sample)
+    {
+        ASTSelectQuery * select = query_info.query->as<ASTSelectQuery>();
+        if (select && select->sampleSize())
+            query_info.query = rewriteSampleForDistributedTable(query_info.query, shards);
+    }
 
     // update query info
     if (query_info.query)
