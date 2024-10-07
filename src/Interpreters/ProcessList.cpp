@@ -178,8 +178,7 @@ static bool isMonitoredCnchQuery(const IAST * ast)
         return isMonitoredCnchTable(ast_update->database);
     else if (const auto * ast_delete = ast->as<ASTDeleteQuery>(); ast_delete && !ast_delete->database.empty() && !ast_delete->table.empty())
         return isMonitoredCnchTable(ast_delete->database);
-    else if (const auto * ast_insert = ast->as<ASTInsertQuery>(); ast_insert && (ast_insert->select || ast_insert->in_file)
-             && !ast_insert->table_id.database_name.empty() && !ast_insert->table_id.database_name.empty())
+    else if (const auto * ast_insert = ast->as<ASTInsertQuery>(); ast_insert && !ast_insert->table_id.database_name.empty() && !ast_insert->table_id.database_name.empty())
         return isMonitoredCnchTable(ast_insert->table_id.database_name);
     else if (const auto * ast_select = ast->as<ASTSelectWithUnionQuery>())
     {
@@ -378,7 +377,7 @@ void ProcessList::checkRunningQuery(ContextPtr query_context, bool is_unlimited_
       *  like SELECT count() FROM remote('127.0.0.{1,2}', system.numbers)
       *  so they must have different query_ids.
       */
-    
+
     const ClientInfo & client_info = query_context->getClientInfo();
     const Settings & settings = query_context->getSettingsRef();
     std::unique_lock lock(mutex);
