@@ -1012,7 +1012,7 @@ IndexFile::RemoteFileInfo MergeTreeDataPartCNCH::getRemoteFileInfo()
     /// Get part who contains unique key index
     IMergeTreeDataPartPtr uki_index_part = shared_from_this();
     while (uki_index_part && uki_index_part->isPartial() && uki_index_part->partial_update_state != PartialUpdateState::RWProcessFinished)
-        uki_index_part = tryGetPreviousPart();
+        uki_index_part = uki_index_part->tryGetPreviousPart();
 
     String data_path = uki_index_part->getFullPath() + "/data";
     off_t offset = 0;
@@ -1497,7 +1497,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
                 auto source_buffer = disk->readFile(file_name, read_settings);
                 nexus_fs->preload(source_buffer->getFileName(), offsets_and_sizes, source_buffer);
             }
-            
+
             // TODO: ChecksumsDiskCacheSegment and PrimaryIndexDiskCacheSegment?
         }
     }
