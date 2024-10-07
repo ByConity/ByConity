@@ -37,3 +37,17 @@ SELECT
 FROM test.ad_request_logs
     LEFT JOIN test.ad_positions ON ad_request_logs.ad_position_id = ad_positions.id
     LEFT JOIN test.scenes ON ad_positions.scene_id = scenes.id;
+
+drop TABLE if exists test.`51005_share_common_plan_node`;
+CREATE TABLE 51005_share_common_plan_node
+(
+    `id` UInt32,
+    `k1` UInt32,
+    `k2` String
+)
+ENGINE = CnchMergeTree
+ORDER BY id;
+insert into 51005_share_common_plan_node values (1,1,'1');
+set join_use_nulls=1;
+set enable_optimizer=1;
+select t1.id from 51005_share_common_plan_node t1 left join 51005_share_common_plan_node t2 on t1.id = t2.id and t1.k1 + t2.k1 > 0 where t1.k1 >= 1
