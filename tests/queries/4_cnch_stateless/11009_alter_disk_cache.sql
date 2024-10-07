@@ -1,11 +1,17 @@
 USE test;
 set bsp_max_retry_num=0; -- disable bsp retry
 DROP TABLE IF EXISTS at_dc;
-CREATE TABLE at_dc(a UInt32, p UInt32) ENGINE = CnchMergeTree ORDER BY a PARTITION BY p SETTINGS parts_preload_level = 1;
+CREATE TABLE at_dc(a UInt32, p UInt32) ENGINE = CnchMergeTree ORDER BY a PARTITION BY p;
 INSERT INTO at_dc VALUES (1, 1), (2, 1), (3, 1);
 INSERT INTO at_dc VALUES (4, 2), (5, 2), (6, 2);
 
-ALTER DISK CACHE PRELOAD TABLE test.at_dc PARTITION 1 SYNC SETTINGS parts_preload_level = 3;
+ALTER TABLE at_dc MODIFY SETTING parts_preload_level = 1;
+ALTER DISK CACHE PRELOAD TABLE test.at_dc ASYNC SETTINGS parts_preload_level = 3, remote_fs_read_failed_injection = -1; -- preload will be failed since remote_fs_read_failed_injection = -1
+select sleepEachRow(3) from system.numbers limit 2 format Null;
+SELECT a FROM at_dc WHERE p = 1 ORDER BY a SETTINGS disk_cache_mode = 'FORCE_DISK_CACHE'; -- { serverError 5046 } --
+
+ALTER DISK CACHE PRELOAD TABLE test.at_dc PARTITION 1 SETTINGS parts_preload_level = 3;
+select sleepEachRow(3) from system.numbers limit 2 format Null;
 SELECT a FROM at_dc WHERE p = 1 ORDER BY a SETTINGS disk_cache_mode = 'FORCE_DISK_CACHE';
 
 ALTER DISK CACHE PRELOAD TABLE test.at_dc SYNC SETTINGS parts_preload_level = 3;

@@ -1220,149 +1220,173 @@ void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeData
 void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) const
 {
     Stopwatch watch;
-    String full_path = getFullPath();
 
-    String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    if (!volume->getDisk()->fileExists(part_path))
-    {
-        LOG_WARNING(storage.log, "Can't find {} when preload level: {} before caching", full_path + DATA_FILE, preload_level);
-        return;
-    }
-    auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
-    auto cache_strategy = disk_cache->getStrategy();
-
-    MarkRanges all_mark_ranges{MarkRange(0, getMarksCount())};
+    String last_exception{};
+    int real_cache_segments_count = 0;
+    std::unordered_map<String, UInt64> segments_map;
     IDiskCacheSegmentsVector segments;
 
-    MarkCachePtr mark_cache_holder = storage.getContext()->getMarkCache();
-    auto add_segments = [&, this](const NameAndTypePair & real_column) {
-        ISerialization::StreamCallback stream_callback = [&](const ISerialization::SubstreamPath & substream_path) {
-            String stream_name = ISerialization::getFileNameForStream(real_column, substream_path);
-            String file_name = stream_name;
-            ChecksumsPtr checksums = getChecksums();
-            if (!checksums->files.count(file_name + DATA_FILE_EXTENSION))
+    try
+    {
+        String full_path = getFullPath();
+
+        String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
+        if (!volume->getDisk()->fileExists(part_path))
+        {
+            LOG_WARNING(storage.log, "Can't find {} when preload level: {} before caching", full_path + DATA_FILE, preload_level);
+            return;
+        }
+
+        if ((preload_level & PreloadLevelSettings::CloudfsPreload) == PreloadLevelSettings::CloudfsPreload)
+        {
+#if USE_CLOUDFS
+            // fast path for cloudfs preload
+            LOG_TRACE(storage.log, "Preload cfs path: {}", full_path);
+            if (!volume->getDisk()->load(fs::path(full_path) / DATA_FILE))
             {
-                LOG_WARNING(
-                    storage.log,
-                    "Can't find {} in checksum info and skip cache it: column = {}, stream = {}",
-                    real_column.name,
-                    stream_name,
-                    file_name + DATA_FILE_EXTENSION);
+                LOG_ERROR(storage.log, "Failed to preload cfs path: {} due to cfs unavailable", full_path);
+            }
+#endif
+            preload_level = preload_level & (PreloadLevelSettings::CloudfsPreload - 1);
+            // fast path
+            if (preload_level == PreloadLevelSettings::ClosePreload)
                 return;
-            }
+        }
 
-            String mark_file_name = index_granularity_info.getMarksFilePath(stream_name);
-            String data_file_name = stream_name + DATA_FILE_EXTENSION;
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        auto cache_strategy = disk_cache->getStrategy();
 
-            IMergeTreeDataPartPtr source_data_part
-                = isProjectionPart() ? shared_from_this() : getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
-            auto segs = cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
-                all_mark_ranges,
-                source_data_part,
-                PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(mark_file_name), getFileSizeOrZero(mark_file_name)},
-                getMarksCount(),
-                mark_cache_holder.get(),
-                disk_cache->getMetaCache().get(),
-                stream_name,
-                DATA_FILE_EXTENSION,
-                PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(data_file_name), getFileSizeOrZero(data_file_name)},
-                preload_level);
+        MarkRanges all_mark_ranges{MarkRange(0, getMarksCount())};
+        MarkCachePtr mark_cache_holder = storage.getContext()->getMarkCache();
+        auto add_segments = [&, this](const NameAndTypePair & real_column) {
+            ISerialization::StreamCallback stream_callback = [&](const ISerialization::SubstreamPath & substream_path) {
+                String stream_name = ISerialization::getFileNameForStream(real_column, substream_path);
+                String file_name = stream_name;
+                ChecksumsPtr checksums = getChecksums();
+                if (!checksums->files.count(file_name + DATA_FILE_EXTENSION))
+                {
+                    LOG_WARNING(
+                        storage.log,
+                        "Can't find {} in checksum info and skip cache it: column = {}, stream = {}",
+                        real_column.name,
+                        stream_name,
+                        file_name + DATA_FILE_EXTENSION);
+                    return;
+                }
 
-            for (auto & seg : segs)
-            {
-                segments.emplace_back(seg);
-            }
+                String mark_file_name = index_granularity_info.getMarksFilePath(stream_name);
+                String data_file_name = stream_name + DATA_FILE_EXTENSION;
+
+                IMergeTreeDataPartPtr source_data_part
+                    = isProjectionPart() ? shared_from_this() : getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
+                auto segs = cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
+                    all_mark_ranges,
+                    source_data_part,
+                    PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(mark_file_name), getFileSizeOrZero(mark_file_name)},
+                    getMarksCount(),
+                    mark_cache_holder.get(),
+                    disk_cache->getMetaCache().get(),
+                    stream_name,
+                    DATA_FILE_EXTENSION,
+                    PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(data_file_name), getFileSizeOrZero(data_file_name)},
+                    preload_level);
+
+                for (auto & seg : segs)
+                {
+                    segments.emplace_back(seg);
+                }
+            };
+
+            auto serialization = getSerializationForColumn(real_column);
+            serialization->enumerateStreams(stream_callback);
         };
 
-        auto serialization = getSerializationForColumn(real_column);
-        serialization->enumerateStreams(stream_callback);
-    };
-
-    for (const NameAndTypePair & column : *columns_ptr)
-    {
-        if (column.type->isByteMap())
+        for (const NameAndTypePair & column : *columns_ptr)
         {
-            // Scan the directory to get all implicit columns(stream) for the map type
-            const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column.type);
-            for (auto & file : getChecksums()->files)
+            if (column.type->isByteMap())
             {
-                // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
-                const String & file_name = file.first;
-                if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
+                // Scan the directory to get all implicit columns(stream) for the map type
+                const DataTypeMap & type_map = typeid_cast<const DataTypeMap &>(*column.type);
+                for (auto & file : getChecksums()->files)
                 {
-                    auto key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
-                    String impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
-                    /// compact map is not supported in CNCH
-                    add_segments({impl_key_name, type_map.getValueTypeForImplicitColumn()});
-                }
-            }
-        }
-        else if (column.name != "_part_row_number")
-        {
-            add_segments(column);
-        }
-    }
-
-    /// cache checksums & pk
-    /// ChecksumsCache and PrimaryIndexCache will be set during caching to disk
-    if ((preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
-    {
-        segments.emplace_back(std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this(), preload_level));
-        segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this(), preload_level));
-        segments.emplace_back(std::make_shared<MetaInfoDiskCacheSegment>(shared_from_this(), preload_level));
-        // add skip_index segment
-        if (storage.getContext()->getSettingsRef().enable_skip_index)
-        {
-            for (const auto & index : storage.getInMemoryMetadataPtr()->getSecondaryIndices())
-            {
-                auto index_helper = MergeTreeIndexFactory::instance().get(index);
-                auto index_name = index_helper->getFileName();
-
-                auto mvcc_full_path = fs::path(getMvccDataPart(index_name + INDEX_FILE_EXTENSION)->getFullRelativePath()) / DATA_FILE;
-
-                // preload additional inverted index
-                if (index_helper->isInvertedIndex())
-                {
-                    ChecksumsPtr checksums = getChecksums();
-                    std::vector<String> file_names
-                        = {index_name + GIN_SEGMENT_ID_FILE_EXTENSION,
-                           index_name + GIN_SEGMENT_METADATA_FILE_EXTENSION,
-                           index_name + GIN_DICTIONARY_FILE_EXTENSION,
-                           index_name + GIN_POSTINGS_FILE_EXTENSION};
-                    for (auto & file_name : file_names)
+                    // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
+                    const String & file_name = file.first;
+                    if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
                     {
-                        auto file_iter = checksums->files.find(file_name);
-                        if (file_iter == checksums->files.end())
-                        {
-                            LOG_WARNING(
-                                storage.log,
-                                "Gin index file {} is not in part {} checksums when preload level: {}",
-                                file_name,
-                                full_path + DATA_FILE,
-                                preload_level);
-                            continue;
-                        }
-
-                        size_t offset = file_iter->second.file_offset;
-                        size_t size = file_iter->second.file_size;
-
-                        std::pair<size_t, size_t> data_range = {offset, offset + size};
-                        segments.emplace_back(std::make_shared<FileDiskCacheSegment>(volume->getDisk(), mvcc_full_path, ReadSettings{}, data_range, SegmentType::GIN_INDEX, file_name));
+                        auto key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
+                        String impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
+                        /// compact map is not supported in CNCH
+                        add_segments({impl_key_name, type_map.getValueTypeForImplicitColumn()});
                     }
                 }
+            }
+            else if (column.name != "_part_row_number")
+            {
+                add_segments(column);
+            }
+        }
 
-                // preload common secondary index
+        /// cache checksums & pk
+        /// ChecksumsCache and PrimaryIndexCache will be set during caching to disk
+        if ((preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+        {
+            segments.emplace_back(std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this(), preload_level));
+            segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this(), preload_level));
+            segments.emplace_back(std::make_shared<MetaInfoDiskCacheSegment>(shared_from_this(), preload_level));
+            // add skip_index segment
+            if (storage.getContext()->getSettingsRef().enable_skip_index)
+            {
+                for (const auto & index : storage.getInMemoryMetadataPtr()->getSecondaryIndices())
                 {
-                    MergeTreeDataPartPtr source_data_part = getMvccDataPart(index_name + INDEX_FILE_EXTENSION);
-                    String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(index_name);
+                    auto index_helper = MergeTreeIndexFactory::instance().get(index);
+                    auto index_name = index_helper->getFileName();
 
-                    off_t data_file_offset = source_data_part->getFileOffsetOrZero(index_name + INDEX_FILE_EXTENSION);
-                    size_t data_file_size = source_data_part->getFileSizeOrZero(index_name + INDEX_FILE_EXTENSION);
+                    auto mvcc_full_path = fs::path(getMvccDataPart(index_name + INDEX_FILE_EXTENSION)->getFullRelativePath()) / DATA_FILE;
 
-                    off_t mark_file_offset = source_data_part->getFileOffsetOrZero(mark_file_name);
-                    size_t mark_file_size = source_data_part->getFileSizeOrZero(mark_file_name);
+                    // preload additional inverted index
+                    if (index_helper->isInvertedIndex())
+                    {
+                        ChecksumsPtr checksums = getChecksums();
+                        std::vector<String> file_names
+                            = {index_name + GIN_SEGMENT_ID_FILE_EXTENSION,
+                               index_name + GIN_SEGMENT_METADATA_FILE_EXTENSION,
+                               index_name + GIN_DICTIONARY_FILE_EXTENSION,
+                               index_name + GIN_POSTINGS_FILE_EXTENSION};
+                        for (auto & file_name : file_names)
+                        {
+                            auto file_iter = checksums->files.find(file_name);
+                            if (file_iter == checksums->files.end())
+                            {
+                                LOG_WARNING(
+                                    storage.log,
+                                    "Gin index file {} is not in part {} checksums when preload level: {}",
+                                    file_name,
+                                    full_path + DATA_FILE,
+                                    preload_level);
+                                continue;
+                            }
 
-                    IDiskCacheSegmentsVector segs = cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
+                            size_t offset = file_iter->second.file_offset;
+                            size_t size = file_iter->second.file_size;
+
+                            std::pair<size_t, size_t> data_range = {offset, offset + size};
+                            segments.emplace_back(std::make_shared<FileDiskCacheSegment>(
+                                volume->getDisk(), mvcc_full_path, ReadSettings{}, data_range, SegmentType::GIN_INDEX, file_name));
+                        }
+                    }
+
+                    // preload common secondary index
+                    {
+                        MergeTreeDataPartPtr source_data_part = getMvccDataPart(index_name + INDEX_FILE_EXTENSION);
+                        String mark_file_name = source_data_part->index_granularity_info.getMarksFilePath(index_name);
+
+                        off_t data_file_offset = source_data_part->getFileOffsetOrZero(index_name + INDEX_FILE_EXTENSION);
+                        size_t data_file_size = source_data_part->getFileSizeOrZero(index_name + INDEX_FILE_EXTENSION);
+
+                        off_t mark_file_offset = source_data_part->getFileOffsetOrZero(mark_file_name);
+                        size_t mark_file_size = source_data_part->getFileSizeOrZero(mark_file_name);
+
+                        IDiskCacheSegmentsVector segs = cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
                             all_mark_ranges,
                             source_data_part,
                             PartFileDiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
@@ -1374,138 +1398,164 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
                             PartFileDiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size},
                             preload_level);
 
-                    for (const auto & seg : segs)
-                    {
-                        segments.emplace_back(seg);
+                        for (const auto & seg : segs)
+                        {
+                            segments.emplace_back(seg);
+                        }
                     }
+                }
+            }
+
+            for (const NameAndTypePair & column : *columns_ptr)
+            {
+                if (column.type->isBitmapIndex())
+                {
+                    MergeTreeDataPartPtr source_data_part;
+                    auto file_column_name = escapeForFileName(column.name);
+                    auto idx_pos = FileOffsetAndSize{
+                        getFileOffsetOrZero(file_column_name + BITMAP_IDX_EXTENSION),
+                        getFileSizeOrZero(file_column_name + BITMAP_IDX_EXTENSION)};
+                    auto irk_pos = FileOffsetAndSize{
+                        getFileOffsetOrZero(file_column_name + BITMAP_IRK_EXTENSION),
+                        getFileSizeOrZero(file_column_name + BITMAP_IRK_EXTENSION)};
+
+                    if ((idx_pos.file_offset != 0 && idx_pos.file_size != 0) && (irk_pos.file_offset != 0 && irk_pos.file_size != 0))
+                        source_data_part = getMvccDataPart(file_column_name + BITMAP_IDX_EXTENSION);
+                    else
+                        source_data_part = shared_from_this();
+                    std::shared_ptr<BitmapIndexDiskCacheSegment> seg
+                        = std::make_shared<BitmapIndexDiskCacheSegment>(source_data_part, column.name, BITMAP_IDX_EXTENSION);
+                    segments.emplace_back(seg);
                 }
             }
         }
 
-        for (const NameAndTypePair & column : *columns_ptr)
+        if (storage.getSettings()->enable_local_disk_cache)
         {
-            if (column.type->isBitmapIndex())
+            auto meta_disk_cache = disk_cache->getMetaCache();
+            auto data_disk_cache = disk_cache->getDataCache();
+            for (const auto & segment : segments)
             {
-                MergeTreeDataPartPtr source_data_part;
-                auto file_column_name = escapeForFileName(column.name);
-                auto idx_pos = FileOffsetAndSize{
-                    getFileOffsetOrZero(file_column_name + BITMAP_IDX_EXTENSION),
-                    getFileSizeOrZero(file_column_name + BITMAP_IDX_EXTENSION)};
-                auto irk_pos = FileOffsetAndSize{
-                    getFileOffsetOrZero(file_column_name + BITMAP_IRK_EXTENSION),
-                    getFileSizeOrZero(file_column_name + BITMAP_IRK_EXTENSION)};
-
-                if ((idx_pos.file_offset != 0 && idx_pos.file_size != 0) && (irk_pos.file_offset != 0 && irk_pos.file_size != 0))
-                    source_data_part = getMvccDataPart(file_column_name + BITMAP_IDX_EXTENSION);
-                else
-                    source_data_part = shared_from_this();
-                std::shared_ptr<BitmapIndexDiskCacheSegment> seg
-                    = std::make_shared<BitmapIndexDiskCacheSegment>(source_data_part, column.name, BITMAP_IDX_EXTENSION);
-                segments.emplace_back(seg);
+                try
+                {
+                    String mark_key = segment->getMarkName();
+                    String seg_key = segment->getSegmentName();
+                    SegmentType seg_type = segment->getSegmentType();
+                    if (seg_type > SegmentType::FILE_DATA)
+                    {
+                        if (!mark_key.empty() && meta_disk_cache->get(mark_key).second.empty())
+                        {
+                            segment->cacheToDisk(*meta_disk_cache);
+                            segments_map[SegmentTypeToString[seg_type]]++;
+                            real_cache_segments_count++;
+                        }
+                        else if (meta_disk_cache->get(seg_key).second.empty())
+                        {
+                            segment->cacheToDisk(*meta_disk_cache);
+                            segments_map[SegmentTypeToString[seg_type]]++;
+                            real_cache_segments_count++;
+                        }
+                    }
+                    else
+                    {
+                        if (preload_level == PreloadLevelSettings::MetaPreload)
+                        {
+                            if (meta_disk_cache->get(mark_key).second.empty())
+                            {
+                                segment->cacheToDisk(*meta_disk_cache);
+                                segments_map[SegmentTypeToString[seg_type]]++;
+                                real_cache_segments_count++;
+                            }
+                        }
+                        else if (preload_level == PreloadLevelSettings::DataPreload)
+                        {
+                            if (data_disk_cache->get(seg_key).second.empty())
+                            {
+                                segment->cacheToDisk(*data_disk_cache);
+                                segments_map[SegmentTypeToString[seg_type]]++;
+                                real_cache_segments_count++;
+                            }
+                        }
+                        else
+                        {
+                            if (meta_disk_cache->get(seg_key).second.empty() || meta_disk_cache->get(mark_key).second.empty())
+                            {
+                                segment->cacheToDisk(*disk_cache);
+                                segments_map[SegmentTypeToString[seg_type]]++;
+                                real_cache_segments_count++;
+                            }
+                        }
+                    }
+                }
+                catch (const Exception & e)
+                {
+                    last_exception = e.message();
+                    /// no exception thrown
+                }
             }
         }
+
+        /// Preload inverted index into memory
+        ContextPtr ctx = storage.getContext();
+        if (auto factory = ctx->getGinIndexStoreFactory(); factory != nullptr && ctx->getSettings().enable_skip_index
+            && (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+        {
+            for (const auto & idx : storage.getInMemoryMetadataPtr()->getSecondaryIndices())
+            {
+                auto index_helper = MergeTreeIndexFactory::instance().get(idx);
+                if (!index_helper->isInvertedIndex())
+                {
+                    continue;
+                }
+
+                std::unique_ptr<IGinDataPartHelper> part_helper = std::make_unique<GinDataCNCHPartHelper>(
+                    getMvccDataPart(index_helper->getFileName() + INDEX_FILE_EXTENSION),
+                    DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache(),
+                    DiskCacheMode::USE_DISK_CACHE);
+                factory->get(index_helper->getFileName(), std::move(part_helper));
+            }
+        }
+
+        // preload ann index into memory cache
+        if (storage.getSettings()->enable_vector_index_preload || storage.getContext()->getSettingsRef().enable_global_vector_index_preload)
+        {
+            if (preload_level != PreloadLevelSettings::ClosePreload)
+                ANNHelper::preload(storage.getContext(), storage.getInMemoryMetadataPtr(), storage.getStorageID(), shared_from_this());
+        }
     }
-
-    String last_exception{};
-    std::unordered_map<String, UInt64> segments_map;
-    int real_cache_segments_count = 0;
-
-    auto meta_disk_cache = disk_cache->getMetaCache();
-    auto data_disk_cache = disk_cache->getDataCache();
-    for (const auto & segment : segments)
+    catch (const Exception & e)
     {
-        try
-        {
-            String mark_key = segment->getMarkName();
-            String seg_key = segment->getSegmentName();
-            SegmentType seg_type = segment->getSegmentType();
-            if (seg_type > SegmentType::FILE_DATA)
-            {
-                if (!mark_key.empty() && meta_disk_cache->get(mark_key).second.empty())
-                {
-                    segment->cacheToDisk(*meta_disk_cache);
-                    segments_map[SegmentTypeToString[seg_type]]++;
-                    real_cache_segments_count++;
-                }
-                else if (meta_disk_cache->get(seg_key).second.empty())
-                {
-                    segment->cacheToDisk(*meta_disk_cache);
-                    segments_map[SegmentTypeToString[seg_type]]++;
-                    real_cache_segments_count++;
-                }
-            }
-            else
-            {
-                if (preload_level == PreloadLevelSettings::MetaPreload)
-                {
-                    if (meta_disk_cache->get(mark_key).second.empty())
-                    {
-                        segment->cacheToDisk(*meta_disk_cache);
-                        segments_map[SegmentTypeToString[seg_type]]++;
-                        real_cache_segments_count++;
-                    }
-                }
-                else if (preload_level == PreloadLevelSettings::DataPreload)
-                {
-                    if (data_disk_cache->get(seg_key).second.empty())
-                    {
-                        segment->cacheToDisk(*data_disk_cache);
-                        segments_map[SegmentTypeToString[seg_type]]++;
-                        real_cache_segments_count++;
-                    }
-                }
-                else
-                {
-                    if (meta_disk_cache->get(seg_key).second.empty() || meta_disk_cache->get(mark_key).second.empty())
-                    {
-                        segment->cacheToDisk(*disk_cache);
-                        segments_map[SegmentTypeToString[seg_type]]++;
-                        real_cache_segments_count++;
-                    }
-                }
-            }
-        }
-        catch (const Exception & e)
-        {
-            last_exception = e.message();
-            /// no exception thrown
-        }
+        last_exception = e.message();
+        /// no exception thrown
     }
 
-    /// Preload inverted index into memory
-    ContextPtr ctx = storage.getContext();
-    if (auto factory = ctx->getGinIndexStoreFactory();
-        factory != nullptr && ctx->getSettings().enable_skip_index
-        && (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+    try
     {
-        for (const auto& idx : storage.getInMemoryMetadataPtr()->getSecondaryIndices())
-        {
-            auto index_helper = MergeTreeIndexFactory::instance().get(idx);
-            if (!index_helper->isInvertedIndex())
-            {
-                continue;
-            }
-
-            std::unique_ptr<IGinDataPartHelper> part_helper = std::make_unique<GinDataCNCHPartHelper>(
-                getMvccDataPart(index_helper->getFileName() + INDEX_FILE_EXTENSION),
-                DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache(),
-                DiskCacheMode::USE_DISK_CACHE);
-            factory->get(index_helper->getFileName(), std::move(part_helper));
-        }
+        auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName());
+        part_log->add(PartLog::createElement(
+            PartLogElement::PRELOAD_PART,
+            shared_from_this(),
+            watch.elapsedNanoseconds(),
+            last_exception,
+            submit_ts,
+            real_cache_segments_count,
+            segments_map,
+            preload_level));
     }
-
-    auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName());
-    part_log->add(PartLog::createElement(
-        PartLogElement::PRELOAD_PART, shared_from_this(), watch.elapsedNanoseconds(), last_exception, submit_ts, real_cache_segments_count, segments_map, preload_level));
+    catch (const Exception & e)
+    {
+        LOG_WARNING(storage.log, "Failed to write part log for preload part: {}, error: {}", getFullRelativePath(), e.message());
+    }
 
     LOG_TRACE(
-        storage.log,
-        "Preloaded part: {}, marks_count: {}, total_segments: {}, cached_count: {}, time_ns: {}",
-        name,
-        getMarksCount(),
-        segments.size(),
-        real_cache_segments_count,
-        watch.elapsedNanoseconds());
+            storage.log,
+            "Preloaded part: {}, marks_count: {}, total_segments: {}, cached_count: {}, time_ns: {}, last_exception: {}",
+            name,
+            getMarksCount(),
+            segments.size(),
+            real_cache_segments_count,
+            watch.elapsedNanoseconds(),
+            last_exception);
 }
 
 void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache) const
@@ -1555,6 +1605,7 @@ std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(
 {
     ReadSettings settings = storage.getContext()->getReadSettings();
     settings.adjustBufferSize(file_size);
+    settings.remote_fs_read_failed_injection = remote_fs_read_failed_injection;
     if (settings.remote_read_log)
         settings.remote_read_context = remote_read_context;
     return disk->readFile(path, settings);

@@ -196,6 +196,17 @@ void DiskByteS3::listFiles(const String& path, std::vector<String>& file_names)
 
 std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path, const ReadSettings & settings) const
 {
+    if (unlikely(settings.remote_fs_read_failed_injection != 0))
+    {
+        if (settings.remote_fs_read_failed_injection == -1)
+            throw Exception("remote_fs_read_failed_injection is enabled and return error immediately", ErrorCodes::LOGICAL_ERROR);
+        else
+        {
+            LOG_TRACE(log, "remote_fs_read_failed_injection is enabled and will sleep {}ms", settings.remote_fs_read_failed_injection);
+            std::this_thread::sleep_for(std::chrono::milliseconds(settings.remote_fs_read_failed_injection));
+        }
+    }
+
     String object_key = std::filesystem::path(root_prefix) / path;
     if (IO::Scheduler::IOSchedulerSet::instance().enabled() && settings.enable_io_scheduler) {
         if (settings.enable_io_pfra) {
@@ -241,9 +252,33 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & path, const WriteSettings & settings)
 {
-    return std::make_unique<WriteBufferFromByteS3>(s3_util.getClient(), s3_util.getBucket(),
-        std::filesystem::path(root_prefix) / path, max_single_part_upload_size,
-        min_upload_part_size, settings.file_meta, settings.buffer_size, false, nullptr, 0, true);
+    assertNotReadonly();
+
+    if (unlikely(settings.remote_fs_write_failed_injection != 0))
+    {
+        if (settings.remote_fs_write_failed_injection == -1)
+            throw Exception("remote_fs_write_failed_injection is enabled and return error immediately", ErrorCodes::LOGICAL_ERROR);
+        else
+        {
+            LOG_TRACE(log, "remote_fs_write_failed_injection is enabled and will sleep {}ms", settings.remote_fs_write_failed_injection);
+            std::this_thread::sleep_for(std::chrono::milliseconds(settings.remote_fs_write_failed_injection));
+        }
+    }
+
+    {
+        return std::make_unique<WriteBufferFromByteS3>(
+            s3_util.getClient(),
+            s3_util.getBucket(),
+            std::filesystem::path(root_prefix) / path,
+            max_single_part_upload_size,
+            min_upload_part_size,
+            settings.file_meta,
+            settings.buffer_size,
+            false,
+            nullptr,
+            0,
+            true);
+    }
 }
 
 void DiskByteS3::removeFile(const String& path)

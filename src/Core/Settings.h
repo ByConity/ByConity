@@ -2072,7 +2072,8 @@ enum PreloadLevelSettings : UInt64
     /** End of gis related settings */ \
     \
     M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
-
+    M(Int64, remote_fs_read_failed_injection, 0, "inject read error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay read ms", 0) \
+    M(Int64, remote_fs_write_failed_injection, 0, "inject write error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay write ms", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 
