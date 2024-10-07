@@ -153,4 +153,25 @@ TableScanCacheInfo getTableScanCacheInfo(const SelectQueryInfo & query_info)
 {
     return query_info.cache_info;
 }
+
+// For distributed query, rewrite sample ast by dividing sample_size.
+// We assume data is evenly distributed and it is reasonable to divided sample_size into several parts.
+ASTPtr rewriteSampleForDistributedTable(const ASTPtr & query_ast, size_t shard_size)
+{
+    ASTPtr rewrite_ast = query_ast->clone();
+    ASTSelectQuery * select = rewrite_ast->as<ASTSelectQuery>();
+    if (select && select->sampleSize())
+    {
+        ASTSampleRatio * sample = select->sampleSize()->as<ASTSampleRatio>();
+        if (!sample)
+            return rewrite_ast;
+        ASTSampleRatio::BigNum numerator = sample->ratio.numerator;
+        ASTSampleRatio::BigNum denominator = sample->ratio.denominator;
+        if (numerator <= 1 || denominator > 1)
+            return rewrite_ast;
+        sample->ratio.numerator = (sample->ratio.numerator + 1) / shard_size;
+    }
+    return rewrite_ast;
+}
+
 }
