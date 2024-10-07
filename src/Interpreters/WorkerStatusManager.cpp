@@ -165,7 +165,7 @@ void WorkerStatusManager::updateWorkerNode(const Protos::WorkerNodeResourceData 
                     worker_status->host_ports.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, /*refresh=*/true);
                 getContext()->getSegmentScheduler()->workerRestarted(id, worker_status->host_ports, val.worker_status->register_time);
             }
-            if (val.worker_status->last_status_create_time < worker_status->last_status_create_time)
+            if (worker_status->last_status_create_time > val.worker_status->last_status_create_time)
             {
                 old_status = val.worker_status->getStatus();
                 val.worker_status = worker_status;

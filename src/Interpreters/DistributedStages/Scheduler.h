@@ -139,7 +139,6 @@ protected:
     AddressInfo local_address;
     bool time_to_handle_finish_task = false;
 
-    String error_msg;
     std::atomic<bool> stopped{false};
 
     bool batch_schedule = false;
@@ -158,7 +157,7 @@ protected:
         (void)selector_info;
         (void)task;
     }
-    void dispatchOrSaveTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task);
+    void dispatchOrCollectTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task);
     virtual PlanSegmentExecutionInfo generateExecutionInfo(size_t task_id, size_t index) = 0;
     TaskResult scheduleTask(PlanSegment * plan_segment_ptr, const SegmentTask & task);
     void batchScheduleTasks();

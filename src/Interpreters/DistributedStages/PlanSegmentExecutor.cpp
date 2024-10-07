@@ -362,7 +362,7 @@ void PlanSegmentExecutor::doExecute()
                     plan_segment->getPlanSegmentId(),
                     plan_segment_instance->info.parallel_id));
         }
-        CurrentThread::getProfileEvents().increment(ProfileEvents::PlanSegmentInstanceRetry, plan_segment_instance->info.retry_id);
+        CurrentThread::getProfileEvents().increment(ProfileEvents::PlanSegmentInstanceRetry, plan_segment_instance->info.attempt_id);
     }
 
     // set process list before building pipeline, or else TableWriteTransform's output stream can't set its process list properly

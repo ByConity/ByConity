@@ -76,21 +76,7 @@ PlanSegmentExecutionInfo MPPScheduler::schedule()
     while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
         auto curr = time_in_milliseconds(std::chrono::system_clock::now());
-        if (stopped.load(std::memory_order_relaxed))
-        {
-            if (error_msg.empty())
-            {
-                LOG_INFO(log, "Schedule interrupted");
-                return {};
-            }
-            else
-            {
-                // Now it's only used to handle worker restarting.
-                // TODO(wangtao.vip): In future it might be removed.
-                throw Exception(error_msg, ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-        else if (curr > query_expiration_ms)
+        if (curr > query_expiration_ms && !stopped.load(std::memory_order_relaxed))
         {
             throw Exception(
                 fmt::format("schedule timeout, current ts {} expire ts {}", curr, query_expiration_ms), ErrorCodes::TIMEOUT_EXCEEDED);
@@ -128,7 +114,7 @@ void MPPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
     const auto & selector_info = node_selector_result[task.segment_id];
     for (size_t idx = 0; idx < selector_info.worker_nodes.size(); idx++)
     {
-        dispatchOrSaveTask(plan_segment_ptr, {task.segment_id, idx});
+        dispatchOrCollectTask(plan_segment_ptr, {task.segment_id, idx});
     }
 }
 

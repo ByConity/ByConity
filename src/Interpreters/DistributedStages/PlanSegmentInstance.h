@@ -65,7 +65,7 @@ struct PlanSegmentExecutionInfo
     UInt32 parallel_id = std::numeric_limits<UInt32>::max();
     AddressInfo execution_address;
     SourceTaskFilter source_task_filter;
-    UInt32 retry_id = std::numeric_limits<UInt32>::max();
+    UInt32 attempt_id = std::numeric_limits<UInt32>::max();
     std::unordered_map<UInt64, std::vector<PlanSegmentMultiPartitionSource>> sources;
     UInt32 worker_epoch{0};
 };

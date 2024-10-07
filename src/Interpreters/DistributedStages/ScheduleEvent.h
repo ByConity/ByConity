@@ -36,9 +36,9 @@ enum class ScheduleEventType : uint8_t
     Unknown = 0,
     Abort = 1,
     ScheduleBatchTask = 2,
-    DispatchTrigger = 3,
-    WorkerRestart = 4,
-    SegmentInstanceFinish = 5,
+    TriggerDispatch = 3,
+    WorkerRestarted = 4,
+    SegmentInstanceFinished = 5,
     ResendResource = 6
 };
 
@@ -57,11 +57,15 @@ struct ScheduleEvent
 
 struct AbortEvent : ScheduleEvent
 {
+    explicit AbortEvent(const String & error_msg_, int code_ = ErrorCodes::LOGICAL_ERROR) : error_msg(error_msg_), code(code_)
+    {
+    }
     ScheduleEventType getType() override
     {
         return ScheduleEventType::Abort;
     }
     String error_msg;
+    int code;
 };
 
 struct ScheduleBatchTaskEvent : ScheduleEvent
@@ -81,49 +85,49 @@ struct ScheduleBatchTaskEvent : ScheduleEvent
     BatchTaskPtr batch_task;
 };
 
-struct DispatchTriggerEvent : ScheduleEvent
+struct TriggerDispatchEvent : ScheduleEvent
 {
-    explicit DispatchTriggerEvent(std::vector<WorkerNode> available_workers) : workers(std::move(available_workers))
+    explicit TriggerDispatchEvent(std::vector<WorkerNode> available_workers) : workers(std::move(available_workers))
     {
     }
-    DispatchTriggerEvent() : all_workers(true)
+    TriggerDispatchEvent() : all_workers(true)
     {
     }
 
     ScheduleEventType getType() override
     {
-        return ScheduleEventType::DispatchTrigger;
+        return ScheduleEventType::TriggerDispatch;
     }
 
     std::vector<WorkerNode> workers;
     bool all_workers{false};
 };
 
-struct WorkerRestartEvent : ScheduleEvent
+struct WorkerRestartedEvent : ScheduleEvent
 {
-    WorkerRestartEvent(const WorkerId & worker_id_, UInt32 register_time_) : worker_id(worker_id_), register_time(register_time_)
+    WorkerRestartedEvent(const WorkerId & worker_id_, UInt32 register_time_) : worker_id(worker_id_), register_time(register_time_)
     {
     }
 
     ScheduleEventType getType() override
     {
-        return ScheduleEventType::WorkerRestart;
+        return ScheduleEventType::WorkerRestarted;
     }
 
     WorkerId worker_id;
     UInt32 register_time;
 };
 
-struct SegmentInstanceFinishEvent : ScheduleEvent
+struct SegmentInstanceFinishedEvent : ScheduleEvent
 {
-    SegmentInstanceFinishEvent(size_t segment_id_, UInt64 parallel_index_, const RuntimeSegmentStatus & status_)
+    SegmentInstanceFinishedEvent(size_t segment_id_, UInt64 parallel_index_, const RuntimeSegmentStatus & status_)
         : segment_id(segment_id_), parallel_index(parallel_index_), status(status_)
     {
     }
 
     ScheduleEventType getType() override
     {
-        return ScheduleEventType::SegmentInstanceFinish;
+        return ScheduleEventType::SegmentInstanceFinished;
     }
 
     size_t segment_id;

@@ -41,7 +41,7 @@ struct RuntimeSegmentStatus
     String query_id;
     int32_t segment_id{0};
     size_t parallel_index{0};
-    int32_t retry_id{0};
+    int32_t attempt_id{0};
     bool is_succeed{true};
     bool is_cancelled{false};
     RuntimeSegmentsMetrics metrics;

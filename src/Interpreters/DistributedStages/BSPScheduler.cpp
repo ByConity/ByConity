@@ -45,10 +45,15 @@ bool BSPScheduler::postEvent(std::shared_ptr<ScheduleEvent> event)
     return queue.push(event);
 }
 
+bool BSPScheduler::postHighPriorityEvent(std::shared_ptr<ScheduleEvent> event)
+{
+    return high_priority_queue.push(event);
+}
+
 bool BSPScheduler::getEventToProcess(std::shared_ptr<ScheduleEvent> & event)
 {
-    if (!resend_queue.empty())
-        return resend_queue.pop(event);
+    if (!high_priority_queue.empty())
+        return high_priority_queue.pop(event);
     auto now = time_in_milliseconds(std::chrono::system_clock::now());
     if (query_expiration_ms <= now)
         return false;
@@ -84,26 +89,11 @@ PlanSegmentExecutionInfo BSPScheduler::schedule()
     while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
     {
         auto curr = time_in_milliseconds(std::chrono::system_clock::now());
-        // TODO(wangtao.vip): move it into Abort event processing.
-        if (stopped.load(std::memory_order_relaxed))
+        if (curr > query_expiration_ms && !stopped.load(std::memory_order_relaxed))
         {
-            finish_segment_instance_cv.notify_all();
-            if (error_msg.empty())
-            {
-                LOG_INFO(log, "Schedule interrupted");
-                return {};
-            }
-            else
-            {
-                // Now it's only used to handle worker restarting.
-                // TODO(wangtao.vip): In future it might be removed.
-                throw Exception(error_msg, ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-        else if (curr > query_expiration_ms)
-        {
-            throw Exception(
-                fmt::format("schedule timeout, current ts {} expire ts {}", curr, query_expiration_ms), ErrorCodes::TIMEOUT_EXCEEDED);
+            stopped.store(true, std::memory_order_relaxed);
+            String error_msg = fmt::format("Schedule timeout, current ts {} expire ts {}", curr, query_expiration_ms);
+            postHighPriorityEvent(std::make_shared<AbortEvent>(error_msg, ErrorCodes::TIMEOUT_EXCEEDED));
         }
 
         std::shared_ptr<ScheduleEvent> event;
@@ -112,6 +102,20 @@ PlanSegmentExecutionInfo BSPScheduler::schedule()
             switch (event->getType())
             {
                 case ScheduleEventType::Abort: {
+                    if (stopped.load(std::memory_order_relaxed))
+                    {
+                        finish_segment_instance_cv.notify_all();
+                        const auto & abort = dynamic_cast<AbortEvent &>(*event);
+                        if (abort.error_msg.empty())
+                        {
+                            LOG_INFO(log, "Schedule interrupted");
+                            return {};
+                        }
+                        else
+                        {
+                            throw Exception(abort.error_msg, abort.code);
+                        }
+                    }
                     break;
                 }
                 case ScheduleEventType::ResendResource: {
@@ -120,41 +124,19 @@ PlanSegmentExecutionInfo BSPScheduler::schedule()
                     break;
                 }
                 case ScheduleEventType::ScheduleBatchTask: {
-                    const auto & schedule_batch_task = dynamic_cast<ScheduleBatchTaskEvent &>(*event);
-                    for (auto task : *(schedule_batch_task.batch_task))
-                    {
-                        LOG_INFO(log, "Schedule segment {}", task.segment_id);
-                        if (task.segment_id == 0)
-                        {
-                            prepareFinalTask();
-                            break;
-                        }
-                        auto * plan_segment_ptr = dag_graph_ptr->getPlanSegmentPtr(task.segment_id);
-                        plan_segment_ptr->setCoordinatorAddress(local_address);
-                        scheduleTask(plan_segment_ptr, task);
-                        onSegmentScheduled(task);
-                    }
+                    handleScheduleBatchTaskEvent(event);
                     break;
                 }
-                case ScheduleEventType::DispatchTrigger: {
-                    onEventDispatchTrigger(event);
+                case ScheduleEventType::TriggerDispatch: {
+                    handleTriggerDispatchEvent(event);
                     break;
                 }
-                case ScheduleEventType::WorkerRestart: {
-                    const auto & worker_restart_event = dynamic_cast<WorkerRestartEvent &>(*event);
-                    onWorkerRestarted(worker_restart_event.worker_id, worker_restart_event.register_time);
+                case ScheduleEventType::WorkerRestarted: {
+                    handleWorkerRestartedEvent(event);
                     break;
                 }
-                case ScheduleEventType::SegmentInstanceFinish: {
-                    const auto & finish_event = dynamic_cast<SegmentInstanceFinishEvent &>(*event);
-                    auto result = onSegmentInstanceFinished(finish_event.segment_id, finish_event.parallel_index, finish_event.status);
-                    std::unique_lock<std::mutex> lock(finish_segment_instance_mutex);
-                    PlanSegmentInstanceAttempt attempt{
-                        static_cast<UInt32>(finish_event.segment_id),
-                        static_cast<UInt32>(finish_event.parallel_index),
-                        static_cast<UInt32>(finish_event.status.retry_id)};
-                    segment_status_update_results.emplace(attempt, result);
-                    finish_segment_instance_cv.notify_all();
+                case ScheduleEventType::SegmentInstanceFinished: {
+                    handleSegmentInstanceFinishedEvent(event);
                     break;
                 }
                 default:
@@ -166,6 +148,37 @@ PlanSegmentExecutionInfo BSPScheduler::schedule()
     dag_graph_ptr->joinAsyncRpcAtLast();
     LOG_DEBUG(log, "Scheduling takes {} ms", sw.elapsedMilliseconds());
     return generateExecutionInfo(0, 0);
+}
+
+void BSPScheduler::handleScheduleBatchTaskEvent(std::shared_ptr<ScheduleEvent> event)
+{
+    const auto & schedule_batch_task = dynamic_cast<ScheduleBatchTaskEvent &>(*event);
+    for (auto task : *(schedule_batch_task.batch_task))
+    {
+        LOG_INFO(log, "Schedule segment {}", task.segment_id);
+        if (task.segment_id == 0)
+        {
+            prepareFinalTask();
+            return;
+        }
+        auto * plan_segment_ptr = dag_graph_ptr->getPlanSegmentPtr(task.segment_id);
+        plan_segment_ptr->setCoordinatorAddress(local_address);
+        scheduleTask(plan_segment_ptr, task);
+        onSegmentScheduled(task);
+    }
+}
+
+void BSPScheduler::handleSegmentInstanceFinishedEvent(std::shared_ptr<ScheduleEvent> event)
+{
+    const auto & finish_event = dynamic_cast<SegmentInstanceFinishedEvent &>(*event);
+    auto result = onSegmentInstanceFinished(finish_event.segment_id, finish_event.parallel_index, finish_event.status);
+    std::unique_lock<std::mutex> lock(finish_segment_instance_mutex);
+    PlanSegmentInstanceAttempt attempt{
+        static_cast<UInt32>(finish_event.segment_id),
+        static_cast<UInt32>(finish_event.parallel_index),
+        static_cast<UInt32>(finish_event.status.attempt_id)};
+    segment_status_update_results.emplace(attempt, result);
+    finish_segment_instance_cv.notify_all();
 }
 
 void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
@@ -191,7 +204,7 @@ void BSPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask
         }
     }
 
-    postEvent(std::make_shared<DispatchTriggerEvent>());
+    postEvent(std::make_shared<TriggerDispatchEvent>());
 }
 
 void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed, bool /*is_canceled*/)
@@ -204,7 +217,7 @@ void BSPScheduler::onSegmentFinished(const size_t & segment_id, bool is_succeed,
     if (!is_succeed)
     {
         stopped.store(true, std::memory_order_relaxed);
-        postEvent(std::make_shared<AbortEvent>());
+        postEvent(std::make_shared<AbortEvent>(""));
     }
 }
 
@@ -243,9 +256,9 @@ void BSPScheduler::onQueryFinished()
 SegmentInstanceStatusUpdateResult
 BSPScheduler::segmentInstanceFinished(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status)
 {
-    postEvent(std::make_shared<SegmentInstanceFinishEvent>(segment_id, parallel_index, status));
+    postEvent(std::make_shared<SegmentInstanceFinishedEvent>(segment_id, parallel_index, status));
     auto attempt_id = PlanSegmentInstanceAttempt{
-        static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index), static_cast<UInt32>(status.retry_id)};
+        static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index), static_cast<UInt32>(status.attempt_id)};
     std::unique_lock<std::mutex> lock(finish_segment_instance_mutex);
     auto now = time_in_milliseconds(std::chrono::system_clock::now());
     std::chrono::milliseconds duration;
@@ -304,7 +317,7 @@ BSPScheduler::onSegmentInstanceFinished(size_t segment_id, UInt64 parallel_index
         }
 
         std::vector<WorkerNode> workers{running_worker};
-        postEvent(std::make_shared<DispatchTriggerEvent>(workers));
+        postEvent(std::make_shared<TriggerDispatchEvent>(workers));
     }
     else if (!status.is_succeed && !status.is_cancelled)
     {
@@ -330,12 +343,12 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
     if (isUnrecoverableStatus(status))
         return false;
     auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(segment_id), static_cast<UInt32>(parallel_index)};
-    size_t retry_id;
+    size_t attempt_id;
     String rpc_address;
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        retry_id = segment_instance_retry_cnt[instance_id];
-        if (retry_id >= query_context->getSettingsRef().bsp_max_retry_num)
+        attempt_id = segment_instance_attempts[instance_id];
+        if (attempt_id >= query_context->getSettingsRef().bsp_max_retry_num)
             return false;
         rpc_address = extractExchangeHostPort(segment_parallel_locations[instance_id.segment_id][instance_id.parallel_index].address);
     }
@@ -359,7 +372,7 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
         plansegment->getQueryId(),
         instance_id.toString(),
         rpc_address,
-        retry_id);
+        attempt_id);
     if (is_table_write)
     {
         // execute undos and clear part cache before execution
@@ -390,13 +403,13 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
             pending_task_instances.for_nodes[available_worker.address].insert({segment_id, parallel_index});
             lk.unlock();
             std::vector<WorkerNode> workers{available_worker};
-            postEvent(std::make_shared<DispatchTriggerEvent>(workers));
+            postEvent(std::make_shared<TriggerDispatchEvent>(workers));
         }
         else
         {
             pending_task_instances.no_prefs.insert({segment_id, parallel_index});
             lk.unlock();
-            postEvent(std::make_shared<DispatchTriggerEvent>());
+            postEvent(std::make_shared<TriggerDispatchEvent>());
         }
     }
     return true;
@@ -405,8 +418,8 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
 void BSPScheduler::workerRestarted(const WorkerId & id, const HostWithPorts & host_ports, UInt32 register_time)
 {
     LOG_WARNING(log, "Worker {} restarted, retry all tasks running on it.", id.ToString());
-    postEvent(std::make_shared<ResendResourceEvent>(host_ports));
-    postEvent(std::make_shared<WorkerRestartEvent>(id, register_time));
+    postHighPriorityEvent(std::make_shared<ResendResourceEvent>(host_ports));
+    postEvent(std::make_shared<WorkerRestartedEvent>(id, register_time));
 }
 
 void BSPScheduler::resendResource(const HostWithPorts & host_ports)
@@ -415,16 +428,17 @@ void BSPScheduler::resendResource(const HostWithPorts & host_ports)
     query_context->getCnchServerResource()->resendResource(query_context, host_ports);
 }
 
-void BSPScheduler::onWorkerRestarted(const WorkerId & id, UInt32 register_time)
+void BSPScheduler::handleWorkerRestartedEvent(std::shared_ptr<ScheduleEvent> event)
 {
+    const auto & worker_restart_event = dynamic_cast<WorkerRestartedEvent &>(*event);
     for (auto & all_worker : cluster_nodes.all_workers)
     {
-        if (all_worker.id == id.id)
+        if (all_worker.id == worker_restart_event.worker_id.id)
         {
             std::unordered_set<PlanSegmentInstanceId> instances_to_retry;
             {
                 std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-                instances_to_retry = running_instances.getInstances(all_worker.address, register_time);
+                instances_to_retry = running_instances.getInstances(all_worker.address, worker_restart_event.register_time);
             }
             // Status should be failed.
             RuntimeSegmentStatus status{.is_succeed = false, .is_cancelled = false};
@@ -435,7 +449,7 @@ void BSPScheduler::onWorkerRestarted(const WorkerId & id, UInt32 register_time)
                 status.code = ErrorCodes::WORKER_RESTARTED;
                 {
                     std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-                    status.retry_id = segment_instance_retry_cnt[instance];
+                    status.attempt_id = segment_instance_attempts[instance];
                 }
                 auto result = onSegmentInstanceFinished(instance.segment_id, instance.parallel_index, status);
                 if (result == SegmentInstanceStatusUpdateResult::UpdateFailed)
@@ -443,8 +457,9 @@ void BSPScheduler::onWorkerRestarted(const WorkerId & id, UInt32 register_time)
                 if (result == SegmentInstanceStatusUpdateResult::RetryFailed)
                 {
                     stopped.store(true, std::memory_order_relaxed);
-                    error_msg = fmt::format("Worker {} restared, segment instance {} failed", id.ToString(), instance.toString());
-                    postEvent(std::make_shared<AbortEvent>());
+                    String error_msg = fmt::format(
+                        "Worker {} restared, segment instance {} failed", worker_restart_event.worker_id.ToString(), instance.toString());
+                    postEvent(std::make_shared<AbortEvent>(error_msg));
                 }
             }
         }
@@ -505,9 +520,9 @@ std::pair<bool, SegmentTaskInstance> BSPScheduler::getInstanceToSchedule(const A
     return std::make_pair(false, SegmentTaskInstance(0, 0));
 }
 
-void BSPScheduler::onEventDispatchTrigger(std::shared_ptr<ScheduleEvent> event)
+void BSPScheduler::handleTriggerDispatchEvent(std::shared_ptr<ScheduleEvent> event)
 {
-    const auto & dispatch_trigger = dynamic_cast<DispatchTriggerEvent &>(*event);
+    const auto & dispatch_trigger = dynamic_cast<TriggerDispatchEvent &>(*event);
     if (dispatch_trigger.all_workers)
     {
         triggerDispatch(cluster_nodes.all_workers);
@@ -548,7 +563,7 @@ void BSPScheduler::triggerDispatch(const std::vector<WorkerNode> & available_wor
                     local_address); /// init with server addr, as we wont schedule to server
             }
 
-            dispatchOrSaveTask(dag_graph_ptr->getPlanSegmentPtr(task_instance.segment_id), task_instance);
+            dispatchOrCollectTask(dag_graph_ptr->getPlanSegmentPtr(task_instance.segment_id), task_instance);
         }
     }
 }
@@ -627,7 +642,7 @@ PlanSegmentExecutionInfo BSPScheduler::generateExecutionInfo(size_t task_id, siz
     PlanSegmentInstanceId instance_id = PlanSegmentInstanceId{static_cast<UInt32>(task_id), static_cast<UInt32>(index)};
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        execution_info.retry_id = (segment_instance_retry_cnt[instance_id]);
+        execution_info.attempt_id = (segment_instance_attempts[instance_id]);
         execution_info.worker_epoch = running_instances.getEpoch(instance_id);
     }
     {
@@ -675,22 +690,22 @@ bool BSPScheduler::isUnrecoverableStatus(const RuntimeSegmentStatus & status)
 
 bool BSPScheduler::isOutdated(const RuntimeSegmentStatus & status)
 {
-    int32_t current_retry_id = 0;
+    int32_t current_attempt_id = 0;
     auto instance_id = PlanSegmentInstanceId{static_cast<UInt32>(status.segment_id), static_cast<UInt32>(status.parallel_index)};
     {
         std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-        current_retry_id = segment_instance_retry_cnt[instance_id];
-        segment_instance_retry_cnt[instance_id]++;
+        current_attempt_id = segment_instance_attempts[instance_id];
+        segment_instance_attempts[instance_id]++;
     }
-    if (current_retry_id != status.retry_id)
+    if (current_attempt_id != status.attempt_id)
     {
         LOG_WARNING(
             log,
-            "Ignore status of segment {} parallel index {} because it retry id {} does not equal to current retry id {}",
+            "Ignore status of segment {} parallel index {} because it attempt id {} does not equal to current attempt id {}",
             status.segment_id,
             status.parallel_index,
-            status.retry_id,
-            current_retry_id);
+            status.attempt_id,
+            current_attempt_id);
         return true;
     }
     return false;

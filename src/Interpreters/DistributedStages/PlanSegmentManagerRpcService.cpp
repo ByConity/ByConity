@@ -114,7 +114,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             request->query_id(),
             request->segment_id(),
             request->parallel_index(),
-            request->retry_id(),
+            request->attempt_id(),
             request->is_succeed(),
             is_cancelled,
             RuntimeSegmentsMetrics(request->metrics()),
@@ -568,8 +568,8 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         {
             execution_info.source_task_filter.fromProto(request->source_task_filter());
         }
-        if (request->has_retry_id())
-            execution_info.retry_id = request->retry_id();
+        if (request->has_attempt_id())
+            execution_info.attempt_id = request->attempt_id();
 
         if (request->sources_size() != 0)
         {
@@ -653,8 +653,8 @@ void PlanSegmentManagerRpcService::submitPlanSegments(
             PlanSegmentExecutionInfo execution_info;
             execution_info.parallel_id = header.parallel_id();
             execution_info.execution_address = execution_address;
-            if (header.has_retry_id())
-                execution_info.retry_id = header.retry_id();
+            if (header.has_attempt_id())
+                execution_info.attempt_id = header.attempt_id();
             if (header.has_source_task_filter())
                 execution_info.source_task_filter.fromProto(header.source_task_filter());
 

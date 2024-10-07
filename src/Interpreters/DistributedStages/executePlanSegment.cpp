@@ -196,7 +196,7 @@ void executePlanSegmentRemotelyWithPreparedBuf(
     request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);
     request.set_plan_segment_id(segment_id);
     request.set_parallel_id(execution_info.parallel_id);
-    request.set_retry_id(execution_info.retry_id);
+    request.set_attempt_id(execution_info.attempt_id);
     if (execution_info.source_task_filter.isValid())
         *request.mutable_source_task_filter() = execution_info.source_task_filter.toProto();
 

@@ -36,7 +36,7 @@ void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result, 
         request->set_query_id(status.query_id);
         request->set_segment_id(status.segment_id);
         request->set_parallel_index(status.parallel_index);
-        request->set_retry_id(status.retry_id);
+        request->set_attempt_id(status.attempt_id);
         request->set_is_succeed(status.is_succeed);
         request->set_is_canceled(status.is_cancelled);
         status.metrics.setProtos(*request->mutable_metrics());
@@ -125,7 +125,7 @@ PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     result.runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
     result.runtime_segment_status.segment_id = query_context->getPlanSegmentInstanceId().segment_id;
     result.runtime_segment_status.parallel_index = execution_info.parallel_id;
-    result.runtime_segment_status.retry_id = execution_info.retry_id;
+    result.runtime_segment_status.attempt_id = execution_info.attempt_id;
     result.runtime_segment_status.is_succeed = false;
     result.runtime_segment_status.is_cancelled = exception_code == ErrorCodes::QUERY_WAS_CANCELLED;
     result.runtime_segment_status.code = exception_code;
@@ -151,7 +151,7 @@ PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     result.runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
     result.runtime_segment_status.segment_id = query_context->getPlanSegmentInstanceId().segment_id;
     result.runtime_segment_status.parallel_index = execution_info.parallel_id;
-    result.runtime_segment_status.retry_id = execution_info.retry_id;
+    result.runtime_segment_status.attempt_id = execution_info.attempt_id;
     result.runtime_segment_status.is_succeed = true;
     result.runtime_segment_status.is_cancelled = false;
     result.runtime_segment_status.code = 0;

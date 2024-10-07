@@ -28,7 +28,7 @@ namespace ErrorCodes
     extern const int WAIT_FOR_RESOURCE_TIMEOUT;
 }
 
-void Scheduler::dispatchOrSaveTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task)
+void Scheduler::dispatchOrCollectTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task)
 {
     WorkerNode worker_node;
     NodeSelectorResult selector_info;

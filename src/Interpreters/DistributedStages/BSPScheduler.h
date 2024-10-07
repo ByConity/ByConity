@@ -116,8 +116,6 @@ public:
     void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override;
     void onQueryFinished() override;
 
-    void onEventDispatchTrigger(std::shared_ptr<ScheduleEvent> event);
-    void onWorkerRestarted(const WorkerId & id, UInt32 register_time);
     SegmentInstanceStatusUpdateResult
     segmentInstanceFinished(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
     void workerRestarted(const WorkerId & id, const HostWithPorts & host_ports, UInt32 register_time);
@@ -136,6 +134,7 @@ protected:
 
 private:
     bool postEvent(std::shared_ptr<ScheduleEvent> event);
+    bool postHighPriorityEvent(std::shared_ptr<ScheduleEvent> event);
     bool getEventToProcess(std::shared_ptr<ScheduleEvent> & event);
 
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
@@ -151,6 +150,11 @@ private:
     bool isOutdated(const RuntimeSegmentStatus & status);
     bool isTaintNode(size_t task_id, const AddressInfo & worker, TaintLevel & taint_level);
 
+    void handleScheduleBatchTaskEvent(std::shared_ptr<ScheduleEvent> event);
+    void handleTriggerDispatchEvent(std::shared_ptr<ScheduleEvent> event);
+    void handleWorkerRestartedEvent(std::shared_ptr<ScheduleEvent> event);
+    void handleSegmentInstanceFinishedEvent(std::shared_ptr<ScheduleEvent> event);
+
     SegmentInstanceStatusUpdateResult
     onSegmentInstanceFinished(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
     /// retry task if possible, returns whether retry is successful or not
@@ -159,8 +163,8 @@ private:
 
     // All batch task will be enqueue first. The schedule logic will pop queue and schedule the poped tasks.
     EventQueue queue{10000};
-    // Special queue for resend event, which is of highest priority.
-    EventQueue resend_queue{10000};
+    // Special queue for events of highest priority, like abort/resend resource.
+    EventQueue high_priority_queue{10000};
 
     std::mutex finish_segment_instance_mutex;
     std::condition_variable finish_segment_instance_cv;
@@ -179,7 +183,7 @@ private:
     std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> failed_segment_to_workers;
     // segment id -> [segment instance, node]
     std::unordered_map<size_t, std::unordered_map<UInt64, WorkerNode>> segment_parallel_locations;
-    std::unordered_map<PlanSegmentInstanceId, size_t> segment_instance_retry_cnt;
+    std::unordered_map<PlanSegmentInstanceId, size_t> segment_instance_attempts;
 
     PendingTaskIntances pending_task_instances;
     // segment task instance -> <index, total> count in this worker
