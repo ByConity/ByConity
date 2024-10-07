@@ -249,7 +249,7 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
 
     if (context.disallow_subquery)
     {
-        reason = "lambda/nullIn/globalNullIn/notNullIn/globalNotNullIn function with subquery not implemented";
+        reason = "nullIn/globalNullIn/notNullIn/globalNotNullIn function with subquery not implemented";
         return false;
     }
 
@@ -324,7 +324,7 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
         }
     }
     bool disallow_subquery = context.disallow_subquery;
-    context.disallow_subquery = disallow_subquery || (fun.name == "lambda" || fun.name == "nullIn" || fun.name == "globalNullIn" || fun.name == "notNullIn" || fun.name == "globalNotNullIn");
+    context.disallow_subquery = disallow_subquery || (fun.name == "nullIn" || fun.name == "globalNullIn" || fun.name == "notNullIn" || fun.name == "globalNotNullIn");
     bool support = visitNode(node, context);
     context.disallow_subquery = disallow_subquery;
     return support;
