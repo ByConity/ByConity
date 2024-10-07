@@ -4,13 +4,11 @@ REVOKE SELECT ON `1234.db`.* FROM `1234.test_user_01074`
 --cleanup
 --simple 2
 GRANT SENSITIVE SELECT ON `1234.db`.* TO `1234.test_user_01074`
-REVOKE SENSITIVE SELECT ON `1234.db`.table FROM `1234.test_user_01074`
 GRANT SELECT ON `1234.db`.* TO `1234.test_user_01074`
 REVOKE SELECT ON `1234.db`.table FROM `1234.test_user_01074`
 --cleanup
 --simple 3
 GRANT SENSITIVE SELECT ON `1234.db`.table TO `1234.test_user_01074`
-REVOKE SENSITIVE SELECT(col1) ON `1234.db`.table FROM `1234.test_user_01074`
 GRANT SELECT ON `1234.db`.table TO `1234.test_user_01074`
 REVOKE SELECT(col1) ON `1234.db`.table FROM `1234.test_user_01074`
 --cleanup
@@ -20,7 +18,6 @@ REVOKE SELECT(col1, col2) ON `1234.db`.table FROM `1234.test_user_01074`
 --cleanup
 --complex 2
 GRANT SENSITIVE SELECT ON `1234.db`.table TO `1234.test_user_01074`
-REVOKE SENSITIVE SELECT(col1, col2) ON `1234.db`.table FROM `1234.test_user_01074`
 GRANT SELECT ON *.* TO `1234.test_user_01074`
 REVOKE SELECT ON `1234.db`.* FROM `1234.test_user_01074`
 GRANT SELECT ON `1234.db`.table TO `1234.test_user_01074`
@@ -43,7 +40,6 @@ REVOKE SELECT ON `1234.db`.* FROM `1234.test_user_01074`
 --cleanup
 --revoke 2
 GRANT SENSITIVE SELECT ON `1234.db`.* TO `1234.test_user_01074`
-REVOKE SENSITIVE SELECT ON `1234.db`.table FROM `1234.test_user_01074`
 GRANT SELECT ON *.* TO `1234.test_user_01074`
 --cleanup
 --grant option 1
@@ -66,8 +62,5 @@ GRANT SELECT ON *.* TO `1234.test_user_01074`
 --cleanup
 --grant option 4
 GRANT SENSITIVE SELECT ON `1234.db`.* TO `1234.test_user_01074` WITH GRANT OPTION
-GRANT SENSITIVE SELECT ON `1234.db`.table TO `1234.test_user_01074` WITH GRANT OPTION
-REVOKE SENSITIVE SELECT ON `1234.db`.table FROM `1234.test_user_01074`
-GRANT SENSITIVE SELECT(col1, col2) ON `1234.db`.table TO `1234.test_user_01074` WITH GRANT OPTION
 GRANT SELECT ON *.* TO `1234.test_user_01074`
 GRANT SELECT ON `1234.db`.* TO `1234.test_user_01074` WITH GRANT OPTION

@@ -539,7 +539,7 @@ private:
     bool canEraseChild([[maybe_unused]] const Node & child) const
     {
         if constexpr (IsSensitive)
-            return false;
+            return !child.max_flags_with_children;
         else
             return ((flags & child.getAllGrantableFlags()) == child.flags) && !child.children;
     }
