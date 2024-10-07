@@ -8,7 +8,7 @@ namespace DB
 {
 
 
-class StorageDataManager : public WithContext
+class StorageDataManager : public std::enable_shared_from_this<StorageDataManager>, public WithContext
 {
 
 public:
@@ -21,6 +21,8 @@ public:
         std::vector<std::shared_ptr<MergeTreePartition>> & partitions);
 
     WGWorkerInfoPtr getWorkerInfo() const { return worker_info; }
+
+    WorkerGroupHandle getWorkerGroup() const { return mock_wg; }
 
     const UUID & getStorageUUID() const { return storage_uuid; }
 
@@ -39,6 +41,9 @@ private:
 
     ///TODO: make worker info shared in the worker process
     WGWorkerInfoPtr worker_info;
+    // Mock a WorkerGroupHandle based on worker_info for parts allocation.
+    WorkerGroupHandle mock_wg;
+
     std::shared_mutex mutex;
     std::map<UInt64, TableVersionPtr> versions;
 

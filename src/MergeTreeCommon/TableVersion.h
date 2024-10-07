@@ -23,7 +23,7 @@ class TableVersion : public std::enable_shared_from_this<TableVersion>, public W
 public:
     TableVersion(const ContextPtr context_, const UUID & uuid_, const Protos::ManifestListModel & version_model, bool enable_disk_cache = true);
 
-    void setWorkerInfo(const WGWorkerInfoPtr & worker_info);
+    void setWorkerInfo(const WGWorkerInfoPtr & worker_info, const WorkerGroupHandle & worker_group);
 
     ServerDataPartsWithDBM getAllPartsWithDBM(const MergeTreeMetaBase & storage);
 
@@ -58,6 +58,7 @@ private:
     std::atomic<bool> loaded_from_manifest {false};
 
     WGWorkerInfoPtr worker_info = nullptr;
+    WorkerGroupHandle mock_wg = nullptr;
 
     std::shared_mutex mutex;
     DataModelPartWrapperVector data_parts;

@@ -55,6 +55,7 @@
 #include <Catalog/CatalogMetricHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchServerClient.h>
+#include <CloudServices/ManifestBroadcaster.h>
 #include <Dictionaries/getDictionaryConfigurationFromAST.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -3534,6 +3535,14 @@ namespace Catalog
                         context.getPartCacheManager()->insertDeleteBitmapsIntoCache(
                             *table, commit_data.delete_bitmaps, host_port.topology_version, part_models, &staged_part_models);
                     }
+                }
+
+                // now, try to broadcast manifest to warmup for new parts
+                if (write_manifest && context.getSettingsRef().enable_manifest_cache)
+                {
+                    LOG_DEBUG(log, "Will broadcast manifest for txn {}.", txnID);
+                    ContextPtr session_context = Context::createCopy(context.getGlobalContext());
+                    tryBroadcastManifest(session_context, table, txnID, part_models, commit_data.delete_bitmaps);
                 }
 
                 LOG_DEBUG(log, "Finish write part for txn {}, elapsed {} ms.", txnID, watch.elapsedMilliseconds());

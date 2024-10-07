@@ -1282,6 +1282,10 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, cnch_txn_lock_expire_duration_seconds, 30, "Transaction lock expire duration.", 0) \
     M(Seconds, cnch_lock_manager_txn_checker_schedule_seconds, 30, "LockManager txn checker schedule seconds.", 0) \
     M(UInt64, parts_preallocate_pool_size, 16, "Number of threads for part preallocate", 0) \
+    M(UInt64, max_manifest_cache_size, 10000000, "Max size of manifest cache", 0) \
+    M(Seconds, manifest_cache_min_lifetime, 1800, "Min lifetime for manifest parts", 0) \
+    M(Milliseconds, broadcast_manifest_timeout, 5000, "Timeout for broadcasting manifest", 0) \
+    M(Bool, enable_manifest_cache, true, "", 0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
     M(Bool, use_hive_cluster_key_filter, true, "", 0) \

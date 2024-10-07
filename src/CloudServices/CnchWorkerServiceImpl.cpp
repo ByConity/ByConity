@@ -57,6 +57,7 @@
 #include <Storages/ColumnsDescription.h>
 #include <Common/Exception.h>
 #include <CloudServices/CnchDedupHelper.h>
+#include <CloudServices/ManifestCache.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Core/SettingsEnums.h>
 #include <MergeTreeCommon/GlobalDataManager.h>
@@ -1344,6 +1345,36 @@ void CnchWorkerServiceImpl::getCloudMergeTreeStatus(
     Protos::GetCloudMergeTreeStatusResp * response,
     google::protobuf::Closure * done)
 {
+}
+
+void CnchWorkerServiceImpl::broadcastManifest(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    [[maybe_unused]] const Protos::BroadcastManifestReq * request,
+    [[maybe_unused]] Protos::BroadcastManifestResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done
+)
+{
+    SUBMIT_THREADPOOL({
+        const UUID storage_uuid = RPCHelpers::createUUID(request->table_uuid());
+        const UInt64 txn_id = request->txn_id();
+        //WGWorkerInfoPtr worker_info = RPCHelpers::createWorkerInfo(request->worker_info());
+        DataModelPartPtrVector part_models;
+        DataModelDeleteBitmapPtrVector delete_bitmap_models;
+
+        for (const auto & part : request->parts())
+        {
+            DataModelPartPtr part_model = std::make_shared<Protos::DataModelPart>(part);
+            part_models.push_back(part_model);
+        }
+
+        for (const auto & dbm : request->delete_bitmaps())
+        {
+            DataModelDeleteBitmapPtr dbm_model = std::make_shared<DataModelDeleteBitmap>(dbm);
+            delete_bitmap_models.push_back(dbm_model);
+        }
+
+        getContext()->getManifestCache()->addManifest(storage_uuid, txn_id, std::move(part_models), std::move(delete_bitmap_models));
+    })
 }
 
 #if defined(__clang__)

@@ -1493,6 +1493,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->setCnchTopologyMaster();
 
+    if (global_context->getServerType() == ServerType::cnch_worker)
+        global_context->setManifestCache();
+
     if (global_context->getServerType() == ServerType::cnch_server)
     {
         /// Only server need txn coordinator and rely on schedule pool config.

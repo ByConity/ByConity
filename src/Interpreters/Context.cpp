@@ -50,6 +50,7 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/ReclusteringManagerThread.h>
+#include <CloudServices/ManifestCache.h>
 #include <Compression/ICompressionCodec.h>
 #include <Coordination/Defines.h>
 #include <Coordination/KeeperDispatcher.h>
@@ -438,6 +439,7 @@ struct ContextSharedPart
     mutable OnceFlag global_txn_committer_initialized;
     mutable GlobalTxnCommitterPtr global_txn_committer;
     mutable GlobalDataManagerPtr global_data_manager;
+    mutable std::shared_ptr<ManifestCache> manifest_cache;
 
     bool enable_ssl = false;
 
@@ -5296,6 +5298,22 @@ PartCacheManagerPtr Context::getPartCacheManager() const
     /// no need to lock because PartCacheManager is initialized during server start up,
     /// there is no concurrent setPartCacheManager and getPartCacheManager usage.
     return shared->cache_manager;
+}
+
+void Context::setManifestCache()
+{
+    auto lock = getLock();
+
+    if (!shared->manifest_cache)
+        shared->manifest_cache = std::make_shared<ManifestCache>(getSettingsRef().max_manifest_cache_size, std::chrono::seconds(getSettingsRef().manifest_cache_min_lifetime.value.totalSeconds()));
+}
+
+std::shared_ptr<ManifestCache> Context::getManifestCache() const
+{
+    if (!shared->manifest_cache)
+        throw Exception("Manifest cache is not initialized", ErrorCodes::LOGICAL_ERROR);
+
+    return shared->manifest_cache;
 }
 
 void Context::initCatalog(const MetastoreConfig & catalog_conf, const String & name_space, bool writable)

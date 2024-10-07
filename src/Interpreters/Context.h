@@ -345,6 +345,7 @@ using GlobalTxnCommitterPtr = std::shared_ptr<GlobalTxnCommitter>;
 class GlobalDataManager;
 using GlobalDataManagerPtr = std::shared_ptr<GlobalDataManager>;
 
+class ManifestCache;
 
 enum class ServerType
 {
@@ -1599,6 +1600,9 @@ public:
 
     void setPartCacheManager();
     std::shared_ptr<PartCacheManager> getPartCacheManager() const;
+
+    void setManifestCache();
+    std::shared_ptr<ManifestCache> getManifestCache() const;
 
     /// catalog related
     void initCatalog(const MetastoreConfig & catalog_conf, const String & name_space, bool writable);

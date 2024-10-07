@@ -23,6 +23,7 @@
 #include <CloudServices/RpcClientBase.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/Kafka/KafkaTaskCommand.h>
 #include <Transaction/TxnTimestamp.h>
 #include <brpc/controller.h>
@@ -145,6 +146,15 @@ public:
         std::function<void(bool)> funcOnCallback);
 
     brpc::CallId removeWorkerResource(TxnTimestamp txn_id, ExceptionHandlerPtr handler);
+
+    brpc::CallId broadcastManifest(
+        const ContextPtr & context,
+        const TxnTimestamp & txn_id,
+        const WorkerId & worker_id,
+        const StoragePtr & table,
+        const Protos::DataModelPartVector & parts_vector,
+        const DeleteBitmapMetaPtrVector & delete_bitmaps,
+        const ExceptionHandlerPtr & handler);
 
     void createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports, const size_t & deduper_index);
     void assignHighPriorityDedupPartition(const StorageID & storage_id, const Names & high_priority_partition);

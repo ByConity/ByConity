@@ -478,10 +478,11 @@ brpc::CallId CnchWorkerClient::sendResources(
         worker_info->set_index(current_wg->getWorkerIndex(worker_id.id));
         worker_info->set_num_workers(current_wg->workerNum());
 
-        // worker info validation
         if (worker_info->num_workers() <= worker_info->index())
-            throw Exception("Invailid worker index " + toString(worker_info->index()) + " for worker group " +
-                current_wg->getVWName() + ", which contains " + toString(current_wg->workerNum()) + " workers.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Invailid worker index {} for worker group {}, which contains {} workers.", 
+                toString(worker_info->index()),
+                current_wg->getVWName(),
+                toString(current_wg->workerNum()));
     }
 
     request.set_disk_cache_mode(context->getSettingsRef().disk_cache_mode.toString());
@@ -583,6 +584,55 @@ brpc::CallId CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id, Excepti
     request.set_txn_id(txn_id);
     stub->removeWorkerResource(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
 
+    return call_id;
+}
+
+brpc::CallId CnchWorkerClient::broadcastManifest(
+    const ContextPtr & context,
+    const TxnTimestamp & txn_id,
+    const WorkerId & worker_id,
+    const StoragePtr & table,
+    const Protos::DataModelPartVector & parts_vector,
+    const DeleteBitmapMetaPtrVector & delete_bitmaps,
+    const ExceptionHandlerPtr & handler)
+{
+    brpc::Controller * cntl = new brpc::Controller;
+
+    cntl->set_timeout_ms(context->getSettingsRef().broadcast_manifest_timeout.totalMilliseconds());
+    const auto call_id = cntl->call_id();
+
+    Protos::BroadcastManifestReq request;
+    RPCHelpers::fillUUID(table->getStorageUUID(), *request.mutable_table_uuid());
+    request.set_txn_id(txn_id.toUInt64());
+
+    // set worker info
+    auto current_wg = context->getCurrentWorkerGroup();
+    auto * worker_info = request.mutable_worker_info();
+
+    worker_info->set_worker_id(worker_id.id);
+    worker_info->set_index(current_wg->getWorkerIndex(worker_id.id));
+    worker_info->set_num_workers(current_wg->workerNum());
+
+    if (worker_info->num_workers() <= worker_info->index())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invailid worker index {} for worker group {}, which contains {} workers.", 
+            toString(worker_info->index()),
+            current_wg->getVWName(),
+            toString(current_wg->workerNum()));
+
+    for (const auto & part : parts_vector.parts())
+    {
+        Protos::DataModelPart & part_model = *request.add_parts();
+        part_model.CopyFrom(part);
+    }
+
+    for (const auto & delete_bitmap : delete_bitmaps)
+    {
+        Protos::DataModelDeleteBitmap & delete_bitmap_model = *request.add_delete_bitmaps();
+        delete_bitmap_model.CopyFrom(*(delete_bitmap->getModel()));
+    }
+
+    auto * response = new Protos::BroadcastManifestResp;
+    stub->broadcastManifest(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
     return call_id;
 }
 

@@ -228,6 +228,12 @@ public:
         Protos::SendOffloadingResp * response,
         google::protobuf::Closure * done) override;
 
+    void broadcastManifest(
+        google::protobuf::RpcController * cntl,
+        const Protos::BroadcastManifestReq * request,
+        Protos::BroadcastManifestResp * response,
+        google::protobuf::Closure * done) override;
+
 private:
     LoggerPtr log;
 
