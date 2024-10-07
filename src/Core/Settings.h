@@ -1154,6 +1154,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
     M(Bool, formatdatetime_parsedatetime_m_is_month_name, false, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
     M(Bool, date_format_clickhouse, false, "use date_format as a clickhouse function instead of hive", 0) \
+    M(Bool, datetime_format_mysql_protocol, false, "In mysql protocol, outputs datetime with precision similar to mysql", 0) \
+    M(Bool, datetime_format_mysql_definition, false, "In mysql dialect, whether create table with timestamp/datetime uses datetime64(3)", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
