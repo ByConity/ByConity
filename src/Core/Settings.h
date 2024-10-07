@@ -1149,6 +1149,7 @@ enum PreloadLevelSettings : UInt64
     M(TextCaseOption, text_case_option, TextCaseOption::MIXED, "Convert identifiers to lower case/upper case just like MySQL", 0) \
     M(Bool, enable_implicit_arg_type_convert, false, "Eable implicit type conversion for functions", 0) \
     M(Bool, exception_on_unsupported_mysql_syntax, true, "Whether throws exceptions on currently unsupported mysql syntax such as auto_increment", 0) \
+    M(Bool, only_full_group_by, true, "If the ONLY_FULL_GROUP_BY is enabled (which it is by default), rejects queries for which the select list, HAVING condition, or ORDER BY list refer to nonaggregated columns that are neither named in the GROUP BY clause nor are functionally dependent on them.", 0) \
     M(Bool, adaptive_type_cast, true, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
