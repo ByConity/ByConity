@@ -2208,7 +2208,9 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     }
 
     // skip if a previous setting change is in process
-    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending;
+    // skip if current and target are same
+    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending
+        && settings.dialect_type.value != SettingFieldDialectTypeTraits::fromString(*dialect_type_opt);
 
     if (apply_ansi_related_settings)
     {
