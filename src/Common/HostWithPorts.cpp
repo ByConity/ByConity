@@ -64,7 +64,7 @@ HostWithPorts HostWithPorts::fromRPCAddress(const std::string & s)
 
 bool HostWithPorts::isExactlySameVec(const HostWithPortsVec & lhs, const HostWithPortsVec & rhs)
 {
-    return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), HostWithPorts::IsExactlySame{});
+    return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), HostWithPorts::IsSameEndpoint{});
 }
 
 std::ostream & operator<<(std::ostream & os, const HostWithPorts & host_ports)
