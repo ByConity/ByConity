@@ -48,6 +48,10 @@
 #include "Common/threadPoolCallbackRunner.h"
 #include <Processors/Formats/Impl/ArrowColumnCache.h>
 #include <Processors/Formats/Impl/Parquet/ParquetRecordReader.h>
+#include <Poco/Dynamic/Var.h>
+#include <Poco/JSON/Parser.h>
+#include <Poco/JSON/Stringifier.h>
+#include <Storages/Hive/HiveCryptoServiceClient.h>
 
 namespace CurrentMetrics
 {
@@ -395,6 +399,23 @@ static std::vector<Range> getHyperrectangleForRowGroup(const parquet::FileMetaDa
     return hyperrectangle;
 }
 
+static parquet::ReaderProperties buildReaderProperties(const String & encryption_key)
+{
+    auto ret = parquet::default_reader_properties();
+    if (encryption_key.empty())
+        return ret;
+    parquet::FileDecryptionProperties::Builder file_decryption_props_builder;
+    file_decryption_props_builder.footer_key(encryption_key);
+    ret.file_decryption_properties(file_decryption_props_builder.build());
+    return ret;
+}
+
+static std::shared_ptr<parquet::FileMetaData>
+readMetaData(std::shared_ptr<arrow::io::RandomAccessFile> arrow_file, parquet::ReaderProperties reader_properties)
+{
+    return parquet::ParquetFileReader::Open(arrow_file, reader_properties)->metadata();
+}
+
 ParquetBlockInputFormat::ParquetBlockInputFormat(
     ReadBuffer & buf_,
     const Block & header_,
@@ -447,6 +468,7 @@ void ParquetBlockInputFormat::initializeFileReader()
     /// TODO: prefetch scheduler
     ThreadPoolCallbackRunnerUnsafe<void> scheduler = nullptr;
     arrow_file = asArrowFile(in, format_settings, is_stopped, "Parquet", PARQUET_MAGIC_BYTES, /* avoid_buffering */ true, scheduler);
+    initializeEncryptionKey();
 
     if (is_stopped)
         return;
@@ -466,7 +488,7 @@ void ParquetBlockInputFormat::initializeFileReader()
         {
             metadata = footer_cache->getOrSet(ArrowFooterCache::calculateKeyHash(*file_name), [&] {
                 auto cell = std::make_shared<ArrowFooterCacheCell>();
-                cell->parquet_file_metadata = parquet::ReadMetaData(arrow_file);
+                cell->parquet_file_metadata = readMetaData(arrow_file, buildReaderProperties(encryption_key));
                 cell->weight = cell->parquet_file_metadata->size();
                 return cell;
             })->parquet_file_metadata;
@@ -474,7 +496,7 @@ void ParquetBlockInputFormat::initializeFileReader()
     }
 
     if (!metadata)
-        metadata = parquet::ReadMetaData(arrow_file);
+        metadata = readMetaData(arrow_file, buildReaderProperties(encryption_key));
 
     THROW_ARROW_NOT_OK(parquet::arrow::FromParquetSchema(metadata->schema(), &schema));
 
@@ -554,8 +576,8 @@ void ParquetBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_group_
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "parquet native reader only supports little endian system currently");
 #pragma clang diagnostic pop
 
-        std::unique_ptr<parquet::ParquetFileReader> raw_file_reader
-            = parquet::ParquetFileReader::Open(arrow_file, reader_properties, metadata);
+        // TODO For encryption parquet format, pass metadata will cause unexpected error
+        auto raw_file_reader = parquet::ParquetFileReader::Open(arrow_file, buildReaderProperties(encryption_key), is_encrypted ? nullptr : metadata);
 
         row_group_reader.native_record_reader = std::make_shared<ParquetRecordReader>(
             getPort().getHeader(),
@@ -570,8 +592,8 @@ void ParquetBlockInputFormat::initializeRowGroupReaderIfNeeded(size_t row_group_
     else
     {
         parquet::arrow::FileReaderBuilder builder;
-        THROW_ARROW_NOT_OK(
-            builder.Open(arrow_file, /* not to be confused with ArrowReaderProperties */ reader_properties, metadata));
+        // TODO For encryption parquet format, pass metadata will cause unexpected error
+        THROW_ARROW_NOT_OK(builder.Open(arrow_file, buildReaderProperties(encryption_key), is_encrypted ? nullptr : metadata));
         builder.properties(arrow_properties);
         builder.memory_pool(ArrowMemoryPool::instance());
         THROW_ARROW_NOT_OK(builder.Build(&row_group_reader.file_reader));
@@ -641,6 +663,64 @@ void ParquetBlockInputFormat::prefetchRowGroup(size_t row_group_idx)
     /// prebuffer will trigger async prefetch
     /// see arrow/io/caching.cc
     initializeRowGroupReaderIfNeeded(row_group_idx);
+}
+
+void ParquetBlockInputFormat::initializeEncryptionKey()
+{
+    auto initialize_func = [this]() -> arrow::Status {
+        constexpr const int64_t magic_size = 4;
+        constexpr const int64_t footer_length_size = 4;
+
+        ARROW_ASSIGN_OR_RAISE(const auto file_size, arrow_file->GetSize())
+        uint64_t pos = file_size;
+
+        ARROW_ASSIGN_OR_RAISE(auto buffer, arrow_file->ReadAt(pos - magic_size, magic_size))
+        pos -= magic_size;
+
+        // 1. Read magic number
+        const char * magic_bytes = reinterpret_cast<const char *>(buffer->data());
+        static constexpr auto ENCRYPTED_PARQUET_MAGIC_BYTES = "PARE";
+        static constexpr auto PLAIN_PARQUET_MAGIC_BYTES = "PAR1";
+
+        if (std::strcmp(PLAIN_PARQUET_MAGIC_BYTES, magic_bytes) == 0)
+            return arrow::Status::OK();
+
+        if (std::strcmp(ENCRYPTED_PARQUET_MAGIC_BYTES, magic_bytes) != 0)
+            return arrow::Status::Invalid("Invalid magic bytes ", magic_bytes);
+
+        is_encrypted = true;
+
+        // 2. File CryptoMD and File Metadata length
+        ARROW_ASSIGN_OR_RAISE(buffer, arrow_file->ReadAt(pos - footer_length_size, footer_length_size))
+        auto footer_length = *reinterpret_cast<const uint32_t *>(buffer->data());
+        pos -= footer_length_size;
+
+        // 3. Read the File Crypto Metadata
+        ARROW_ASSIGN_OR_RAISE(buffer, arrow_file->ReadAt(pos - footer_length, footer_length))
+        pos -= footer_length;
+        auto crypto_metadata = parquet::FileCryptoMetaData::Make(buffer->data(), &footer_length);
+
+        LOG_TRACE(log, "Parse encrypted parquet file, footer_length: {}, key_metadata: {}", footer_length, crypto_metadata->key_metadata());
+
+        // Parse the JSON string
+        Poco::JSON::Parser parser;
+        Poco::Dynamic::Var result = parser.parse(crypto_metadata->key_metadata());
+        const Poco::JSON::Object::Ptr & json_object = result.extract<Poco::JSON::Object::Ptr>();
+
+        const String url_prefix = json_object->getValue<String>("kmsInstanceURL");
+        const String key_identifier = json_object->getValue<String>("masterKeyID");
+        const String wrapped_key = json_object->getValue<String>("wrappedDEK");
+
+        encryption_key = HiveCryptoServiceClient::instance().unwrapKey(url_prefix, key_identifier, wrapped_key);
+
+        return arrow::Status::OK();
+    };
+
+    auto status = initialize_func();
+    if (!status.ok())
+    {
+        throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA, "Cannot initialize encryption key: {}", status.ToString());
+    }
 }
 
 size_t ParquetBlockInputFormat::getNumberOfRowGroups()

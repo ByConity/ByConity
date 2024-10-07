@@ -78,6 +78,7 @@
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/NvmCache.h>
 #include <Storages/NexusFS/NexusFS.h>
+#include <Storages/Hive/HiveCryptoServiceClient.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -971,6 +972,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         /// Directory with metadata of tables, which was marked as dropped by Atomic database
         fs::create_directories(fs::path(path) / "metadata_dropped/");
+    }
+
+    if (config().has("hive_crypto_configuration"))
+    {
+        HiveCryptoServiceClient::instance().init(config());
     }
 
     if (config().has("interserver_http_port") && config().has("interserver_https_port"))
