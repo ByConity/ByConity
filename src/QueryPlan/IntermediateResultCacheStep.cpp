@@ -58,7 +58,7 @@ QueryPipelinePtr IntermediateResultCacheStep::processCacheTransform(
             auto cache_max_bytes = settings.intermediate_result_cache_max_bytes;
             auto cache_max_rows = settings.intermediate_result_cache_max_rows;
             return std::make_shared<IntermediateResultCacheTransform>(
-                header, cache, cache_param, cache_max_bytes, cache_max_rows, cache_holder->all_part_in_cache);
+                header, cache, cache_param, cache_max_bytes, cache_max_rows, cache_holder->write_cache, cache_holder->all_part_in_cache);
         });
     }
 
