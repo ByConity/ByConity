@@ -9,7 +9,7 @@ void ManifestEntry::addManifest(UInt64 manifest_id, DataModelPartPtrVector && pa
     std::unique_lock lock(mutex);
     if (!manifest_map.contains(manifest_id))
     {
-        manifest_map.emplace(manifest_id, std::make_pair(move(parts), move(bitmaps)));
+        manifest_map.emplace(manifest_id, std::make_pair(std::move(parts), std::move(bitmaps)));
         total_manifest_data_size += parts.size() + bitmaps.size();
     }
 }

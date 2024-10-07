@@ -77,7 +77,9 @@ if (COMPILER_CLANG)
         no_warning(nested-anon-types)
         no_warning(packed)
         no_warning(padded)
-        no_warning(return-std-move-in-c++11) # clang 7+
+        if(${CMAKE_CXX_COMPILER_VERSION} VERSION_LESS 15)
+            no_warning(return-std-move-in-c++11) # clang 7+
+        endif()
         no_warning(shift-sign-overflow)
         no_warning(sign-conversion)
         no_warning(switch-enum)
