@@ -138,7 +138,7 @@ bool DiskLocal::tryReserve(UInt64 bytes)
     auto available_space = getAvailableSpace();
     auto unreserved_space
         = available_space - DiskStats{std::min(available_space.bytes, reserved_bytes), std::min(available_space.inodes, reserved_inodes)};
-    if (!unreserved_space.isEmpty())
+    if (unreserved_space.bytes >= bytes)
     {
         LOG_TRACE(
             log,
