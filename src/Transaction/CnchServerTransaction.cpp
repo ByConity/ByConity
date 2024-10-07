@@ -367,7 +367,6 @@ TxnTimestamp CnchServerTransaction::commit()
 
     TxnTimestamp commit_ts = global_context->getTimestamp();
     int retry = MAX_RETRY;
-    bool bitengine_dict_related{false};
     do
     {
         try
