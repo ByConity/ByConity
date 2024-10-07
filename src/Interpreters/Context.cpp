@@ -3004,6 +3004,8 @@ void Context::dropMarkCache() const
 
 std::shared_ptr<CloudTableDefinitionCache> Context::tryGetCloudTableDefinitionCache() const
 {
+    if (hasSessionTimeZone())
+        return nullptr;
     callOnce(shared->cloud_table_definition_cache_initialized, [&] {
         const Poco::Util::AbstractConfiguration & config = getConfigRef();
         auto cache_size = config.getUInt(".cloud_table_definition_cache_size", 50000);

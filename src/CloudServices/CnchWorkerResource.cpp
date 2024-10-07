@@ -88,7 +88,7 @@ void CnchWorkerResource::executeCacheableCreateQuery(
     static auto log = getLogger("WorkerResource");
 
     std::shared_ptr<StorageCloudMergeTree> cached;
-    if (auto cache = context->tryGetCloudTableDefinitionCache(); cache && !context->hasSessionTimeZone())
+    if (auto cache = context->tryGetCloudTableDefinitionCache(); cache)
     {
         auto load = [&]() -> std::shared_ptr<StorageCloudMergeTree>
         {

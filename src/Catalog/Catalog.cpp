@@ -1182,7 +1182,7 @@ namespace Catalog
                     {
                         // update cache with nullptr and latest table commit_time to prevent an old version be inserted into cache.
                         // the cache will be reloaded in following getTable
-                        cache_manager->insertStorageCache(storage->getStorageID(), nullptr, table->commit_time(), host_port.topology_version);
+                        cache_manager->insertStorageCache(storage->getStorageID(), nullptr, table->commit_time(), host_port.topology_version, query_context);
                     }
                 }
             },
@@ -1278,7 +1278,7 @@ namespace Catalog
                 /// update table name in table meta entry so that we can get table part metrics correctly.
                 if (auto cache_manager = context.getPartCacheManager(); cache_manager && is_local_server)
                 {
-                    cache_manager->insertStorageCache(StorageID{from_database, from_table, UUIDHelpers::toUUID(table_uuid)}, nullptr, ts, host_port.topology_version);
+                    cache_manager->insertStorageCache(StorageID{from_database, from_table, UUIDHelpers::toUUID(table_uuid)}, nullptr, ts, host_port.topology_version, context);
                     cache_manager->updateTableNameInMetaEntry(table_uuid, to_database, to_table);
                 }
 
@@ -1357,9 +1357,9 @@ namespace Catalog
                 if (!host_server.empty())
                     is_host_server = isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort()));
 
-                if (is_host_server && cache_manager && !query_context.hasSessionTimeZone())
+                if (is_host_server && cache_manager)
                 {
-                    auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version);
+                    auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version, query_context);
                     if (cached_storage && cached_storage->commit_time <= ts && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
                     {
                         res = cached_storage;
@@ -1389,7 +1389,7 @@ namespace Catalog
 
                 /// Try insert the storage into cache.
                 if (res && is_host_server && cache_manager)
-                    cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), host_server.topology_version);
+                    cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), host_server.topology_version, query_context);
             },
             ProfileEvents::GetTableSuccess,
             ProfileEvents::GetTableFailed);
@@ -1431,7 +1431,7 @@ namespace Catalog
                 {
                     if (current_topology_version != PairInt64(0, 0))
                     {
-                        auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(uuid), current_topology_version);
+                        auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(uuid), current_topology_version, query_context);
                         if (cached_storage && cached_storage->commit_time <= ts)
                         {
                             auto host_server = current_topology.getTargetServer(uuid, cached_storage->getServerVwName());
@@ -1462,7 +1462,7 @@ namespace Catalog
                 {
                     auto host_server = current_topology.getTargetServer(uuid, res->getServerVwName());
                     if (!host_server.empty() && isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort())))
-                        cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), current_topology_version);
+                        cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), current_topology_version, query_context);
                 }
             },
             ProfileEvents::TryGetTableByUUIDSuccess,

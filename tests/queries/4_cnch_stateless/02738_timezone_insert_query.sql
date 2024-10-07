@@ -1,4 +1,6 @@
-set session_timezone='Europe/Moscow';
+-- UTC+1
+set session_timezone='Europe/Berlin';
+set send_cacheable_table_definitions = 1;
 SELECT timezone();
 -- There is no explicit time zone specified for column d
 CREATE TABLE test_timezone (d DateTime) Engine=CnchMergeTree() order by d;
@@ -8,6 +10,11 @@ INSERT INTO test_timezone VALUES ('2000-01-01 01:00:00');
 SELECT d FROM test_timezone;
 -- The filter in the where condition also uses the time zone of the session
 SELECT d FROM test_timezone where d='2000-01-01 01:00:00';
+SELECT '---------------------';
+
+set session_timezone='';
+-- where conditions in the filter, the session timezone is cleared, so there will not be a result
+SELECT * FROM test_timezone where d = '2000-01-01 01:00:00';
 SELECT '---------------------';
 
 set session_timezone='Asia/Shanghai';
