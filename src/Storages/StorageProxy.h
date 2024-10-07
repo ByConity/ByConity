@@ -45,7 +45,7 @@ public:
     bool supportsPrewhere() const override { return getNested()->supportsPrewhere(); }
     bool supportsReplication() const override { return getNested()->supportsReplication(); }
     bool supportsMapImplicitColumn() const override { return getNested()->supportsMapImplicitColumn(); }
-    bool supportsParallelInsert() const override { return getNested()->supportsParallelInsert(); }
+    bool supportsParallelInsert(ContextPtr local_context) const override { return getNested()->supportsParallelInsert(local_context); }
     bool supportsDeduplication() const override { return getNested()->supportsDeduplication(); }
     bool noPushingToViews() const override { return getNested()->noPushingToViews(); }
     bool hasEvenlyDistributedRead() const override { return getNested()->hasEvenlyDistributedRead(); }

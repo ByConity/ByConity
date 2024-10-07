@@ -69,7 +69,7 @@ BlockOutputStreams TableWriteStep::createOutputStream(
     BlockOutputStreams out_streams;
     size_t out_streams_size = 1;
     auto query_settings = settings.context->getSettingsRef();
-    if (target_table->supportsParallelInsert() && query_settings.max_insert_threads > 1)
+    if (target_table->supportsParallelInsert(settings.context) && query_settings.max_insert_threads > 1)
     {
         LOG_INFO(getLogger("TableWriteStep"),
                  fmt::format("createOutputStream support parallel insert, max threads:{}, max insert threads.size:{}", max_threads, query_settings.max_insert_threads));

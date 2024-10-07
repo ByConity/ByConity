@@ -362,7 +362,15 @@ BlockIO InterpreterInsertQuery::execute()
 
         auto txn = getContext()->getCurrentTransaction();
         txn->setMainTableUUID(table->getStorageUUID());
-        res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
+
+        if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(table.get());
+            cnch_table && cnch_table->commitTxnInWriteSuffixStage(txn->getDedupImplVersion(getContext()), getContext()))
+        {
+            /// for unique table, insert select|infile is committed from worker side
+            res.in = std::move(in);
+        }
+        else
+            res.in = std::make_shared<TransactionWrapperBlockInputStream>(in, std::move(txn));
 
         if (insert_query.is_overwrite && !lock_holders.empty())
         {
@@ -449,7 +457,7 @@ BlockIO InterpreterInsertQuery::execute()
 
             res.pipeline.dropTotalsAndExtremes();
 
-            if (table->supportsParallelInsert() && settings.max_insert_threads > 1)
+            if (table->supportsParallelInsert(getContext()) && settings.max_insert_threads > 1)
                 out_streams_size = std::min(size_t(settings.max_insert_threads), res.pipeline.getNumStreams());
 
             res.pipeline.resize(out_streams_size);

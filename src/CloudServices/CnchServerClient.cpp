@@ -536,7 +536,7 @@ void CnchServerClient::redirectDetachAttachedS3Parts(
     RPCHelpers::checkResponse(response);
 }
 
-void CnchServerClient::commitParts(
+UInt32 CnchServerClient::commitParts(
     const TxnTimestamp & txn_id,
     ManipulationType type,
     MergeTreeMetaBase & storage,
@@ -638,11 +638,12 @@ void CnchServerClient::commitParts(
     stub->commitParts(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
+    return response.has_dedup_impl_version() ? response.dedup_impl_version(): 1;
 }
 
 /* This method commits from worker side, it split the commit parts in multiple batches to avoid rpc timeout for too many parts.
    Note, it only applys to ManipulationType which supports 2pc, now we already separate txn commit from part commit */
-void CnchServerClient::precommitParts(
+UInt32 CnchServerClient::precommitParts(
     ContextPtr context,
     const TxnTimestamp & txn_id,
     ManipulationType type,
@@ -662,6 +663,7 @@ void CnchServerClient::precommitParts(
 
     // Precommit parts in batches {batch_begin, batch_end}
     const size_t max_size = std::max({parts.size(), delete_bitmaps.size(), staged_parts.size()});
+    UInt32 dedup_impl_version = 1;
     for (size_t batch_begin = 0; batch_begin < max_size; batch_begin += batch_size)
     {
         size_t batch_end = batch_begin + batch_size;
@@ -695,7 +697,7 @@ void CnchServerClient::precommitParts(
         new_dumped_data.staged_parts = {staged_parts.begin() + staged_part_batch_begin, staged_parts.begin() + staged_part_batch_end};
         new_dumped_data.dedup_mode = dumped_data.dedup_mode;
 
-        commitParts(
+        dedup_impl_version = commitParts(
             txn_id,
             type,
             storage,
@@ -707,6 +709,7 @@ void CnchServerClient::precommitParts(
             binlog,
             peak_memory_usage);
     }
+    return dedup_impl_version;
 }
 
 google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
@@ -918,6 +921,20 @@ UInt64 CnchServerClient::getServerStartTime()
 
     assertController(cntl);
     return response.server_start_time();
+}
+
+UInt32 CnchServerClient::getDedupImplVersion(const TxnTimestamp & txn_id, const UUID & uuid)
+{
+    brpc::Controller cntl;
+    Protos::GetDedupImplVersionReq request;
+    Protos::GetDedupImplVersionResp response;
+    request.set_txn_id(txn_id);
+    RPCHelpers::fillUUID(uuid, *request.mutable_uuid());
+
+    stub->getDedupImplVersion(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    return response.version();
 }
 
 bool CnchServerClient::scheduleGlobalGC(const std::vector<Protos::DataModelTable> & tables)

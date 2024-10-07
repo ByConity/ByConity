@@ -31,6 +31,7 @@ namespace ErrorCodes
     extern const int BRPC_TIMEOUT;
     extern const int BRPC_HOST_DOWN;
     extern const int BRPC_CONNECT_ERROR;
+    extern const int BRPC_NO_METHOD;
 }
 
 static auto getDefaultChannelOptions()
@@ -90,6 +91,10 @@ void RpcClientBase::assertController(const brpc::Controller & cntl)
         else if (err == brpc::Errno::ERPCTIMEDOUT)
         {
             throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_TIMEOUT);
+        }
+        else if (err == brpc::Errno::ENOMETHOD)
+        {
+            throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_NO_METHOD);
         }
         else /// Should we throw exception here to cover all other errors?
             throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_EXCEPTION);

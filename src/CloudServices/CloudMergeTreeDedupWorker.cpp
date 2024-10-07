@@ -69,7 +69,7 @@ CloudMergeTreeDedupWorker::CloudMergeTreeDedupWorker(StorageCloudMergeTree & sto
     {
         /// init current_deduper before iterate
         std::lock_guard lock(current_deduper_mutex);
-        current_deduper = std::make_unique<MergeTreeDataDeduper>(storage, context);
+        current_deduper = std::make_unique<MergeTreeDataDeduper>(storage, context, CnchDedupHelper::DedupMode::UPSERT);
     }
 
     if (storage.getSettings()->duplicate_auto_repair)

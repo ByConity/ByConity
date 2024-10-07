@@ -1310,6 +1310,7 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \
     M(UInt64, max_dedup_retry_time, 1, "Dedup task retry num", 0) \
     M(Bool, insert_if_not_exists, false, "Valid for partial update using update set statements, insert will be performed when no row exists if enabled", 0) \
+    M(Bool, optimize_unique_table_write, false, "Remove gather stage and support parallel insert for unique table ETL task", 0) \
     \
     /** Settings for Map */ \
     M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \

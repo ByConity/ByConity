@@ -43,7 +43,6 @@ public:
     std::string getName() const override { return "Cnch" + merging_params.getModeName() + "MergeTree"; }
 
     void loadMutations();
-    bool supportsParallelInsert() const override { return true; }
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
     bool supportsPrewhere() const override { return true; }

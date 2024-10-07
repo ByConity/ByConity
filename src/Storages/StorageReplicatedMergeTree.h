@@ -111,7 +111,7 @@ public:
 
     std::string getName() const override { return "Replicated" + merging_params.getModeName() + "MergeTree"; }
 
-    bool supportsParallelInsert() const override { return true; }
+    bool supportsParallelInsert(ContextPtr /*local_context*/) const override { return true; }
     bool supportsReplication() const override { return true; }
     bool supportsDeduplication() const override { return true; }
 

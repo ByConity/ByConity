@@ -399,7 +399,8 @@ void executeDedupTask(StorageCnchMergeTree & cnch_table, DedupTask & dedup_task,
         typeToString(dedup_task.dedup_mode));
 }
 
-String parseAndConvertColumnsIntoIndices(MergeTreeMetaBase & storage, const NamesAndTypesList & columns, const String & columns_name)
+String parseAndConvertColumnsIntoIndices(
+    MergeTreeMetaBase & storage, const NameSet & non_updatable_columns, const NamesAndTypesList & columns, const String & columns_name)
 {
     if (columns_name.empty())
         return "";
@@ -414,7 +415,7 @@ String parseAndConvertColumnsIntoIndices(MergeTreeMetaBase & storage, const Name
         while (pos < size && columns_name[pos] != ',')
             pos++;
         String item = columns_name.substr(last_pos, pos - last_pos);
-        if (!item.empty())
+        if (!item.empty() && !non_updatable_columns.count(item))
         {
             auto index = columns.getPosByName(item);
             if (index == columns_size)
@@ -444,12 +445,24 @@ void simplifyFunctionColumns(MergeTreeMetaBase & storage, const StorageMetadataP
     /// Currently only handle _update_columns_ which is only used by partial update feature
     if (block.has(StorageInMemoryMetadata::UPDATE_COLUMNS))
     {
+        NameSet non_updatable_columns;
+        for (auto & name : metadata_snapshot->getColumnsRequiredForPartitionKey())
+            non_updatable_columns.insert(name);
+        for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
+            non_updatable_columns.insert(name);
+        for (auto & name : metadata_snapshot->getUniqueKeyColumns())
+            non_updatable_columns.insert(name);
+        {
+            NameSet func_column_names = metadata_snapshot->getFuncColumnNames();
+            non_updatable_columns.insert(func_column_names.begin(), func_column_names.end());
+        }
+
         auto & update_columns_with_type_and_name = block.getByName(StorageInMemoryMetadata::UPDATE_COLUMNS);
         auto & update_columns = update_columns_with_type_and_name.column;
         auto simplify_update_columns = update_columns_with_type_and_name.type->createColumn();
         for (size_t i = 0 ; i < block_size; ++i)
             /// TODO: convert parallel & consider all same update columns case
-            simplify_update_columns->insert(parseAndConvertColumnsIntoIndices(storage, columns, update_columns->getDataAt(i).toString()));
+            simplify_update_columns->insert(parseAndConvertColumnsIntoIndices(storage, non_updatable_columns, columns, update_columns->getDataAt(i).toString()));
         update_columns = std::move(simplify_update_columns);
     }
 }

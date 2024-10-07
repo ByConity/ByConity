@@ -68,6 +68,8 @@ public:
 
     LoggerPtr getLogger() { return log; }
 
+    UInt32 getDedupImplVersion(ContextPtr local_context) override;
+
 protected:
     static constexpr size_t MAX_RETRY = 3;
     std::vector<ActionPtr> actions;
@@ -78,8 +80,8 @@ private:
 
     LoggerPtr log {::getLogger("CnchServerTransaction")};
 
+    /// Unique table related
     std::atomic_bool dedup_stage_flag{false};
-
     size_t action_size_before_dedup = 0;
 
     void executeDedupStage();
