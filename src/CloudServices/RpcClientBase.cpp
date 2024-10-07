@@ -74,7 +74,7 @@ void RpcClientBase::assertController(const brpc::Controller & cntl)
     if (cntl.Failed())
     {
         auto err = cntl.ErrorCode();
-        const String err_prefix = "Error on connecting " + (!host_ports.id.empty() ? host_ports.id : host_ports.toDebugString()) + " by rpc: ";
+        const String err_prefix = fmt::format("Error on connecting {} by rpc {}: ", (!host_ports.id.empty() ? host_ports.id : host_ports.toDebugString()), cntl.method()->full_name());
 
         if (err == ECONNREFUSED || err == ECONNRESET || err == ENETUNREACH)
         {
