@@ -79,6 +79,8 @@ public:
 
     /// NOTE: will rewrite the AST to add immutable settings.
     void loadFromQuery(ASTStorage & storage_def);
+
+    static std::vector<String> splitStr(const String & str, const String & delimiters);
 };
 
 using CnchHiveSettingsPtr = std::shared_ptr<CnchHiveSettings>;

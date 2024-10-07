@@ -232,10 +232,10 @@ Poco::JSON::Object PaimonS3CatalogClient::buildCatalogParams()
 
     if (!storage_settings->s3_extra_options.value.empty())
     {
-        std::vector<String> s3_extra_option_pairs = paimon_utils::splitStr(storage_settings->s3_extra_options.value, ',');
+        std::vector<String> s3_extra_option_pairs = CnchHiveSettings::splitStr(storage_settings->s3_extra_options.value, ",");
         for (const auto & pair : s3_extra_option_pairs)
         {
-            auto kv = paimon_utils::splitStr(pair, '=');
+            auto kv = CnchHiveSettings::splitStr(pair, "=");
             if (kv.size() != 2)
                 throw Exception("Invalid s3 extra option: " + pair, ErrorCodes::UNKNOWN_EXCEPTION);
             json.set(kv[0], kv[1]);
@@ -247,31 +247,6 @@ Poco::JSON::Object PaimonS3CatalogClient::buildCatalogParams()
 
 namespace paimon_utils
 {
-    std::vector<String> splitStr(const String & str, const char delimiter)
-    {
-        auto ltrim = [](const String & s) {
-            String result = s;
-            result.erase(result.begin(), std::find_if(result.begin(), result.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-            return result;
-        };
-
-        auto rtrim = [](const String & s) {
-            String result = s;
-            result.erase(
-                std::find_if(result.rbegin(), result.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), result.end());
-            return result;
-        };
-
-        std::vector<String> trimed_tokens;
-        String token;
-        std::stringstream ss(str);
-        while (std::getline(ss, token, delimiter))
-        {
-            trimed_tokens.push_back(ltrim(rtrim(token)));
-        }
-        return trimed_tokens;
-    }
-
     cpputil::consul::ServiceEndpoint lookup(const String & domain)
     {
         std::vector<cpputil::consul::ServiceEndpoint> endpoints;

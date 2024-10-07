@@ -4,7 +4,10 @@
 
 #include <Protos/lake_models.pb.h>
 #include <Storages/DataLakes/PaimonCommon.h>
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
+#include <Poco/DigestStream.h>
+#include <Poco/HexBinaryEncoder.h>
+#include <Poco/MD5Engine.h>
 
 static constexpr auto PAIMON_CLASS_FACTORY_CLASS = "org/byconity/paimon/PaimonClassFactory";
 static constexpr auto PAIMON_ARROW_READER_CLASS = "org/byconity/paimon/reader/PaimonArrowReaderBuilder";
@@ -14,7 +17,18 @@ namespace DB
 HivePaimonFile::HivePaimonFile(
     const String & encoded_table, const std::optional<String> & encoded_predicate, const std::vector<String> & encoded_splits)
 {
-    load(IHiveFile::FileFormat::Paimon, "", 0, nullptr, nullptr);
+    // Paimon has no path, but the IHiveFile process requires it unique for different splits, so use md5 as its path
+    String path;
+    {
+        Poco::MD5Engine md5;
+        Poco::DigestOutputStream dos(md5);
+        dos << fmt::format("{}", fmt::join(encoded_splits, ","));
+        dos.close();
+
+        const Poco::DigestEngine::Digest & digest = md5.digest();
+        path = Poco::DigestEngine::digestToHex(digest);
+    }
+    load(IHiveFile::FileFormat::Paimon, path, 0, nullptr, nullptr);
     properties.emplace(paimon_utils::PARAMS_KEY_ENCODED_TABLE, encoded_table);
     if (encoded_predicate.has_value())
     {

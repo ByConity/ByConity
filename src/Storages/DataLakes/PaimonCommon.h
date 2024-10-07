@@ -168,8 +168,6 @@ namespace paimon_utils
     static constexpr auto FILESYSTEM_TYPE_LOCAL = "LOCAL";
     static constexpr auto FILESYSTEM_TYPE_S3 = "S3";
 
-    std::vector<String> splitStr(const String & str, char delimiter);
-
     // Split a vector into num_groups groups, if some groups are empty, they will be ignored
     template <typename Iterator, typename Value = typename Iterator::value_type>
     std::vector<std::vector<Value>> splitEqually(const Iterator first, const Iterator last, size_t num_groups)

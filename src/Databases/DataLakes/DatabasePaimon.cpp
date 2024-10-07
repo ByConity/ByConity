@@ -15,6 +15,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_DATABASE;
     extern const int UNSUPPORTED_METHOD;
     extern const int TABLE_IS_DROPPED;
     extern const int TABLE_ALREADY_EXISTS;
@@ -76,12 +77,26 @@ bool DatabasePaimon::empty() const
 
 DatabaseTablesIteratorPtr DatabasePaimon::getTablesIterator(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name)
 {
-    auto all_table_name = catalog_client->listTables(database_name_in_paimon);
+    std::vector<String> all_table_names;
+    try
+    {
+        all_table_names = catalog_client->listTables(database_name_in_paimon);
+    }
+    catch (Exception &)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw Exception(
+            ErrorCodes::UNKNOWN_DATABASE,
+            fmt::format(
+                "Please drop the Paimon Database {}, because the corresponding database {} in paimon catalog not exists.",
+                database_name,
+                database_name_in_paimon));
+    }
     std::vector<StoragePtr> all_tables;
-    all_tables.reserve(all_table_name.size());
+    all_tables.reserve(all_table_names.size());
     std::vector<String> all_names;
-    all_names.reserve(all_table_name.size());
-    for (const auto & table_name : all_table_name)
+    all_names.reserve(all_table_names.size());
+    for (const auto & table_name : all_table_names)
     {
         if (!filter_by_table_name || filter_by_table_name(table_name))
         {
