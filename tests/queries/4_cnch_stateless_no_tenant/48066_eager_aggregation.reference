@@ -1,0 +1,92 @@
+simple case, all aggFuncs are from the same side
+Projection Est. ? rows
+│     Expressions: [d_qoy, d_year], any(ss_sold_time_sk):=`expr#any(ss_sold_time_sk)`, store_sales:=`expr#uniqExact(ss_customer_sk)`, sum(ss_ext_sales_price):=`expr#sum(ss_ext_sales_price)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {d_qoy, d_year}
+         └─ Aggregating Est. ? rows
+            │     Group by: {d_qoy, d_year}
+            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(inter#ss_ext_sales_price), expr#any(ss_sold_time_sk):=AggNull(any)(inter#ss_sold_time_sk), expr#uniqExact(ss_customer_sk):=AggNull(uniqExactMerge)(inter#ss_customer_sk)
+            └─ Inner Join Est. ? rows
+               │     Condition: ss_sold_date_sk == d_date_sk
+               ├─ MergingAggregated Est. ? rows
+               │  └─ Repartition Exchange Est. ? rows
+               │     │     Partition by: {ss_sold_date_sk}
+               │     └─ Aggregating Est. ? rows
+               │        │     Group by: {ss_sold_date_sk}
+               │        │     Aggregates: inter#ss_ext_sales_price:=AggNull(sum)(ss_ext_sales_price), inter#ss_sold_time_sk:=AggNull(any)(ss_sold_time_sk), inter#ss_customer_sk:=AggNull(uniqExactState)(ss_customer_sk)
+               │        └─ TableScan default.store_sales Est. ? rows
+               │                 Outputs: [ss_sold_date_sk, ss_sold_time_sk, ss_customer_sk, ss_ext_sales_price]
+               └─ Broadcast Exchange Est. ? rows
+                  └─ TableScan default.date_dim Est. ? rows
+                           Outputs: [d_date_sk, d_year, d_qoy]
+can not pushdown, not all aggFuncs are from the same side
+Projection Est. ? rows
+│     Expressions: [d_qoy, d_year], any(ss_sold_time_sk):=`expr#any(ss_sold_time_sk)`, store_sales:=`expr#uniqExact(d_current_day)`, sum(ss_ext_sales_price):=`expr#sum(ss_ext_sales_price)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {d_qoy, d_year}
+         └─ Aggregating Est. ? rows
+            │     Group by: {d_qoy, d_year}
+            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#any(ss_sold_time_sk):=AggNull(any)(ss_sold_time_sk), expr#uniqExact(d_current_day):=AggNull(uniqExact)(d_current_day)
+            └─ Inner Join Est. ? rows
+               │     Condition: ss_sold_date_sk == d_date_sk
+               ├─ TableScan default.store_sales Est. ? rows
+               │        Outputs: [ss_sold_date_sk, ss_sold_time_sk, ss_ext_sales_price]
+               └─ Broadcast Exchange Est. ? rows
+                  └─ TableScan default.date_dim Est. ? rows
+                           Outputs: [d_date_sk, d_year, d_qoy, d_current_day]
+projection before agg, only push agg
+Projection Est. ? rows
+│     Expressions: [d_week_seq], fri_sales:=`expr#sum(multiIf(equals(d_day_name, \'Friday\'), sales_price, NULL))`, mon_sales:=`expr#sum(multiIf(equals(d_day_name, \'Monday\'), sales_price, NULL))`, sat_sales:=`expr#sum(multiIf(equals(d_day_name, \'Saturday\'), sales_price, NULL))`, sun_sales:=`expr#sum(multiIf(equals(d_day_name, \'Sunday\'), sales_price, NULL))`, thu_sales:=`expr#sum(multiIf(equals(d_day_name, \'Thursday\'), sales_price, NULL))`, tue_sales:=`expr#sum(multiIf(equals(d_day_name, \'Tuesday\'), sales_price, NULL))`, wed_sales:=`expr#sum(multiIf(equals(d_day_name, \'Wednesday\'), sales_price, NULL))`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {d_week_seq}
+         └─ Aggregating Est. ? rows
+            │     Group by: {d_week_seq}
+            │     Aggregates: expr#sum(multiIf(equals(d_day_name, \'Sunday\'), sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, \'Sunday\'), sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, \'Monday\'), sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, \'Monday\'), sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, \'Tuesday\'), sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, \'Tuesday\'), sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, \'Wednesday\'), sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, \'Wednesday\'), sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, \'Thursday\'), sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, \'Thursday\'), sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, \'Friday\'), sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, \'Friday\'), sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, \'Saturday\'), sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, \'Saturday\'), sales_price, NULL))
+            └─ Projection Est. ? rows
+               │     Expressions: [d_week_seq], expr#multiIf(equals(d_day_name, \'Friday\'), sales_price, NULL):=multiIf(d_day_name = \'Friday\', `inter#ss_ext_sales_price_1`, NULL), expr#multiIf(equals(d_day_name, \'Monday\'), sales_price, NULL):=multiIf(d_day_name = \'Monday\', `inter#ss_ext_sales_price_1`, NULL), expr#multiIf(equals(d_day_name, \'Saturday\'), sales_price, NULL):=multiIf(d_day_name = \'Saturday\', `inter#ss_ext_sales_price_1`, NULL), expr#multiIf(equals(d_day_name, \'Sunday\'), sales_price, NULL):=multiIf(d_day_name = \'Sunday\', `inter#ss_ext_sales_price_1`, NULL), expr#multiIf(equals(d_day_name, \'Thursday\'), sales_price, NULL):=multiIf(d_day_name = \'Thursday\', `inter#ss_ext_sales_price_1`, NULL), expr#multiIf(equals(d_day_name, \'Tuesday\'), sales_price, NULL):=multiIf(d_day_name = \'Tuesday\', `inter#ss_ext_sales_price_1`, NULL), expr#multiIf(equals(d_day_name, \'Wednesday\'), sales_price, NULL):=multiIf(d_day_name = \'Wednesday\', `inter#ss_ext_sales_price_1`, NULL)
+               └─ Inner Join Est. ? rows
+                  │     Condition: ss_sold_date_sk == d_date_sk
+                  ├─ MergingAggregated Est. ? rows
+                  │  └─ Repartition Exchange Est. ? rows
+                  │     │     Partition by: {ss_sold_date_sk}
+                  │     └─ Aggregating Est. ? rows
+                  │        │     Group by: {ss_sold_date_sk}
+                  │        │     Aggregates: inter#ss_ext_sales_price_1:=AggNull(sum)(ss_ext_sales_price)
+                  │        └─ TableScan default.store_sales Est. ? rows
+                  │                 Outputs: [ss_sold_date_sk, ss_ext_sales_price]
+                  └─ Broadcast Exchange Est. ? rows
+                     └─ TableScan default.date_dim Est. ? rows
+                              Outputs: [d_date_sk, d_week_seq, d_day_name]
+projection before agg, push agg with projection
+Projection Est. ? rows
+│     Expressions: [d_date_id], dyear:=d_year, sale_type:=`expr#\'s\'`, year_total:=`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))`
+└─ Gather Exchange Est. ? rows
+   └─ Projection Est. ? rows
+      │     Expressions: [d_date_id, d_year, expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))], expr#\'s\':=\'s\'
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {d_date_id, d_year}
+            └─ Aggregating Est. ? rows
+               │     Group by: {d_date_id, d_year}
+               │     Aggregates: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)):=AggNull(sum)(inter#expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))
+               └─ Inner Join Est. ? rows
+                  │     Condition: ss_sold_date_sk == d_date_sk
+                  ├─ MergingAggregated Est. ? rows
+                  │  └─ Repartition Exchange Est. ? rows
+                  │     │     Partition by: {ss_sold_date_sk}
+                  │     └─ Aggregating Est. ? rows
+                  │        │     Group by: {ss_sold_date_sk}
+                  │        │     Aggregates: inter#expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2):=AggNull(sum)(expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))
+                  │        └─ Projection Est. ? rows
+                  │           │     Expressions: [ss_sold_date_sk], expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2):=(((ss_ext_list_price - ss_ext_wholesale_cost) - ss_ext_discount_amt) + ss_ext_sales_price) / 2
+                  │           └─ TableScan default.store_sales Est. ? rows
+                  │                    Outputs: [ss_sold_date_sk, ss_ext_discount_amt, ss_ext_sales_price, ss_ext_wholesale_cost, ss_ext_list_price]
+                  └─ Broadcast Exchange Est. ? rows
+                     └─ TableScan default.date_dim Est. ? rows
+                              Outputs: [d_date_sk, d_date_id, d_year]
