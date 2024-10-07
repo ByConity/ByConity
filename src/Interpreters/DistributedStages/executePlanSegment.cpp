@@ -209,6 +209,9 @@ void executePlanSegmentRemotelyWithPreparedBuf(
         }
     }
 
+    if (execution_info.worker_epoch > 0)
+        request.set_worker_epoch(execution_info.worker_epoch);
+
     butil::IOBuf attachment;
 
     request.set_query_common_buf_size(query_common_buf.size());

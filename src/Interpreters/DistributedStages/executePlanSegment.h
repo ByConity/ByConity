@@ -127,7 +127,7 @@ struct PlanSegmentHeader
     void toProto(Protos::PlanSegmentHeader & proto) const
     {
         proto.set_plan_segment_id(instance_id.segment_id);
-        proto.set_parallel_id(instance_id.parallel_id);
+        proto.set_parallel_id(instance_id.parallel_index);
         proto.set_plan_segment_buf_size(plan_segment_buf_size);
         proto.set_retry_id(retry_id);
         if (source_task_filter.isValid())

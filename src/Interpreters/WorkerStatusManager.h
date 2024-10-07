@@ -328,6 +328,8 @@ public:
 
     std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(const String & vw_name, const String & wg_name);
 
+    std::optional<WorkerStatusExtra> getWorkerStatus(const WorkerId & worker_id);
+
     void updateConfig(const ASConfiguration & as_config);
 
     static WorkerId getWorkerId(const String & vw_name, const String & group_id, const String & id)

@@ -356,7 +356,7 @@ bool DiskExchangeDataManager::cleanupPreviousSegmentInstance(UInt64 query_unique
         "cleanupPreviousSegmentInstance for query_unique_id:{} segment_id:{} parallel_id:{}",
         query_unique_id,
         instance_id.segment_id,
-        instance_id.parallel_id);
+        instance_id.parallel_index);
     std::vector<DiskPartitionWriterPtr> cancel_tasks;
     std::vector<ssize_t> write_bytes;
     {

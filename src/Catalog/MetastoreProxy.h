@@ -583,7 +583,7 @@ public:
             undoBufferKey(name_space, txn, write_undo_buffer_new_key),
             escapeString(rpc_address),
             instance_id.segment_id,
-            instance_id.parallel_id,
+            instance_id.parallel_index,
             escapeString(toString(resource.id)));
     }
 
@@ -591,7 +591,11 @@ public:
         const std::string & name_space, const UInt64 & txn, const String & rpc_address, PlanSegmentInstanceId instance_id, bool write_undo_buffer_new_key)
     {
         return fmt::format(
-            "{}_{}_{}_{}", undoBufferKey(name_space, txn, write_undo_buffer_new_key), escapeString(rpc_address), instance_id.segment_id, instance_id.parallel_id);
+            "{}_{}_{}_{}",
+            undoBufferKey(name_space, txn, write_undo_buffer_new_key),
+            escapeString(rpc_address),
+            instance_id.segment_id,
+            instance_id.parallel_index);
     }
 
     static std::string kvLockKey(const std::string & name_space, const std::string & uuid, const std::string & part_name)

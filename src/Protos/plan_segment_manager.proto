@@ -150,6 +150,7 @@ message SubmitPlanSegmentRequest {
   optional uint32 retry_id = 10;
   optional SourceTaskFilter source_task_filter = 11;
   repeated PlanSegmentMultiPartitionSource sources = 12;
+  optional uint32 worker_epoch = 13;
 }
 
 message PlanSegmentHeader {

@@ -281,6 +281,13 @@ void CnchBGThreadsMapArray::shutdown()
         cleaner->deactivate();
 }
 
+UInt32 CnchBGThreadsMapArray::getEpoch()
+{
+    if (unlikely(!resource_reporter_task))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Resource reporter is not initialized");
+    return resource_reporter_task->getEpoch();
+}
+
 void CnchBGThreadsMapArray::cleanThread()
 {
     try

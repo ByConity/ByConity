@@ -346,7 +346,7 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
                 1, /// for normal HashJoin only one right table, parallel or concurrent hash join will change it to num_streams
                 settings.distributed_settings.parallel_size,
                 settings.distributed_settings.coordinator_address,
-                settings.context->getPlanSegmentInstanceId().parallel_id); // TODO: Yuanning RuntimeFilter, parallel_id
+                settings.context->getPlanSegmentInstanceId().parallel_index); // TODO: Yuanning RuntimeFilter, parallel_id
 
             join = makeJoin(settings.context, std::move(consumer), pipelines[0]->getNumStreams(), filter_action, filter->getColumnName());
             need_build_runtime_filter = true;

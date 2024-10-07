@@ -13,6 +13,7 @@
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/DistributedStages/ScheduleEvent.h>
 #include <Interpreters/NodeSelector.h>
 #include <Parsers/queryToString.h>
 #include <butil/endpoint.h>
@@ -30,21 +31,6 @@ enum class TaskStatus : uint8_t
     Success = 2,
     Fail = 3,
     Wait = 4
-};
-
-/// Indicates a plan segment.
-struct SegmentTask
-{
-    explicit SegmentTask(size_t segment_id_, bool has_table_scan_, bool has_table_scan_or_value_)
-        : segment_id(segment_id_), is_leaf(has_table_scan_), has_table_scan_or_value(has_table_scan_or_value_)
-    {
-    }
-    // plan segment id.
-    size_t segment_id;
-    // segment containing only source input
-    bool is_leaf;
-    // segment containing source input
-    bool has_table_scan_or_value;
 };
 
 /// Indicates a plan segment instance.
@@ -103,7 +89,6 @@ struct ScheduleResult
 class Scheduler
 {
     using PlanSegmentTopology = std::unordered_map<size_t, std::unordered_set<size_t>>;
-    using Queue = ConcurrentBoundedQueue<BatchTaskPtr>;
 
 public:
     Scheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_, bool batch_schedule_ = false)
@@ -125,7 +110,7 @@ public:
     virtual ~Scheduler() = default;
     // Pop tasks from queue and schedule them.
     // return execution info for final plan segment
-    PlanSegmentExecutionInfo schedule();
+    virtual PlanSegmentExecutionInfo schedule() = 0;
     virtual void submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task) = 0;
     /// TODO(WangTao): add staus for result
     virtual void onSegmentScheduled(const SegmentTask & task) = 0;
@@ -137,7 +122,7 @@ public:
 protected:
     // Remove dependencies for all tasks who depends on given `task`, and enqueue those whose dependencies become emtpy.
     void removeDepsAndEnqueueTask(size_t task_id);
-    bool addBatchTask(BatchTaskPtr batch_task);
+    virtual bool addBatchTask(BatchTaskPtr batch_task) = 0;
 
     const String query_id;
     ContextPtr query_context;
@@ -148,8 +133,6 @@ protected:
     // Generated per dag graph. The tasks whose number of dependencies will be enqueued.
     PlanSegmentTopology plansegment_topology;
     std::mutex plansegment_topology_mutex;
-    // All batch task will be enqueue first. The schedule logic will pop queue and schedule the poped tasks.
-    Queue queue{10000};
     ClusterNodes cluster_nodes;
     // Select nodes for tasks.
     NodeSelector node_selector;
@@ -165,8 +148,6 @@ protected:
     LoggerPtr log;
 
     void genTopology();
-    virtual void genTasks() = 0;
-    bool getBatchTaskToSchedule(BatchTaskPtr & task);
     virtual void sendResources(PlanSegment * plan_segment_ptr)
     {
         (void)plan_segment_ptr;

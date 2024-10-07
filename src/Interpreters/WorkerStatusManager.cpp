@@ -155,14 +155,15 @@ void WorkerStatusManager::updateWorkerNode(const Protos::WorkerNodeResourceData 
     bool need_callback = true;
     global_extra_workers_status.updateEmplaceIfNotExist(
         id,
-        [new_status, &old_status, id, this, &now, &worker_status, &need_callback](WorkerStatusExtra & val) {
+        [new_status, &old_status, id, this, &now, &worker_status, &need_callback, &source](WorkerStatusExtra & val) {
             // Worker has restarted. We must put it ahead of status update.
-            if (worker_status->register_time > val.worker_status->register_time)
+            // TODO(wangtao.vip): support source from worker.
+            if (worker_status->register_time > val.worker_status->register_time && source == UpdateSource::ComeFromRM)
             {
                 getContext()->getCnchWorkerClientPools().getWorker(worker_status->host_ports, /*refresh=*/true);
                 RpcChannelPool::getInstance().getClient(
                     worker_status->host_ports.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, /*refresh=*/true);
-                getContext()->getSegmentScheduler()->workerRestarted(id, worker_status->host_ports);
+                getContext()->getSegmentScheduler()->workerRestarted(id, worker_status->host_ports, val.worker_status->register_time);
             }
             if (val.worker_status->last_status_create_time < worker_status->last_status_create_time)
             {
@@ -289,6 +290,10 @@ std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(con
         nullptr, **worker_id_vec, vw_name, wg_name, [](const String &, const String &, const WorkerId & id) { return id; }, false);
 }
 
+std::optional<WorkerStatusExtra> WorkerStatusManager::getWorkerStatus(const WorkerId & worker_id)
+{
+    return global_extra_workers_status.get(worker_id);
+}
 
 void WorkerStatusManager::updateConfig(const ASConfiguration & as_config)
 {

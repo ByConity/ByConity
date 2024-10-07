@@ -1681,6 +1681,7 @@ public:
     TxnTimestamp getCurrentCnchStartTime() const;
 
     void initCnchBGThreads();
+    UInt32 getEpoch();
     CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;

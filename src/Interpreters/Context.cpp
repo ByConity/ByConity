@@ -5668,6 +5668,11 @@ void Context::initCnchBGThreads()
     shared->cnch_bg_threads_array = std::make_unique<CnchBGThreadsMapArray>(shared_from_this());
 }
 
+UInt32 Context::getEpoch()
+{
+    return shared->cnch_bg_threads_array->getEpoch();
+}
+
 CnchBGThreadsMap * Context::getCnchBGThreadsMap(CnchBGThreadType type) const
 {
     return shared->cnch_bg_threads_array->at(type);

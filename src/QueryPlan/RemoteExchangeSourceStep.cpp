@@ -177,7 +177,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         size_t write_plan_segment_id = input->getPlanSegmentId();
         size_t exchange_parallel_size = input->getExchangeParallelSize();
         UInt32 exchange_id = input->getExchangeId();
-        UInt32 parallel_id = context->getPlanSegmentInstanceId().parallel_id;
+        UInt32 parallel_id = context->getPlanSegmentInstanceId().parallel_index;
         auto exchange_mode = input->getExchangeMode();
         //TODO: hack logic for BROADCAST/LOCAL_NO_NEED_REPARTITION/LOCAL_MAY_NEED_REPARTITION, we should remove this logic
         if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
@@ -194,7 +194,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     "No source address for segment {}'s input segment {}, parallel id is {}",
                     context->getPlanSegmentInstanceId().segment_id,
                     write_plan_segment_id,
-                    context->getPlanSegmentInstanceId().parallel_id),
+                    context->getPlanSegmentInstanceId().parallel_index),
                 ErrorCodes::LOGICAL_ERROR);
         bool enable_block_compress = context->getSettingsRef().exchange_enable_block_compress;
         BroadcastReceiverPtrs receivers;
@@ -215,7 +215,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     {
                         UInt32 data_key_parallel_id;
                         if (isLocalExchange(exchange_mode))
-                            data_key_parallel_id = context->getPlanSegmentInstanceId().parallel_id;
+                            data_key_parallel_id = context->getPlanSegmentInstanceId().parallel_index;
                         else
                             data_key_parallel_id = input_index;
                         ExchangeDataKeyPtr data_key
@@ -257,13 +257,13 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                         if (source_address.getHostName() == "localhost" && source_address.getPort() == 0)
                         {
                             data_key = std::make_shared<ExchangeDataKey>(
-                                current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                                current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_index);
                         }
                         else
                         {
-                            if (input_index == context->getPlanSegmentInstanceId().parallel_id)
+                            if (input_index == context->getPlanSegmentInstanceId().parallel_index)
                                 data_key = std::make_shared<ExchangeDataKey>(
-                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_id);
+                                    current_tx_id, exchange_id, partition_id, context->getPlanSegmentInstanceId().parallel_index);
                             else
                                 break;
                         }
