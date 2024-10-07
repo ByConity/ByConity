@@ -1768,8 +1768,10 @@ void PartCacheManager::shutDown()
     trashed_active_tables_cleaner->deactivate();
 }
 
-StoragePtr PartCacheManager::getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version)
+StoragePtr PartCacheManager::getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version, const Context & query_context)
 {
+    if (query_context.hasSessionTimeZone())
+        return nullptr;
     StoragePtr res;
     TableMetaEntryPtr table_entry = getTableMeta(uuid);
     if (table_entry && topology_version == table_entry->cache_version.get())
@@ -1777,8 +1779,10 @@ StoragePtr PartCacheManager::getStorageFromCache(const UUID & uuid, const PairIn
     return res;
 }
 
-void PartCacheManager::insertStorageCache(const StorageID & storage_id, const StoragePtr storage, const UInt64 commit_ts, const PairInt64 & topology_version)
+void PartCacheManager::insertStorageCache(const StorageID & storage_id, const StoragePtr storage, const UInt64 commit_ts, const PairInt64 & topology_version, const Context & query_context)
 {
+    if (query_context.hasSessionTimeZone())
+        return;
     TableMetaEntryPtr table_entry = getTableMeta(storage_id.uuid);
     // reject insert old version storage into cache
     if (storage && storage->latest_version > commit_ts)
