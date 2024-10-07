@@ -423,7 +423,7 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
         for (auto & all_resource : all_resources)
         {
             thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
-                [&, parent_thread_ctx]() {
+                [&]() {
                     call_ids.emplace_back(doAsyncSend(context, all_resource.first, all_resource.second, handler));
                 },
                 exception_handler));
