@@ -21,6 +21,7 @@
 #include <Common/RowExistsColumnInfo.h>
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Core/SettingsEnums.h>
 #include <Storages/DataDestinationType.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
@@ -668,6 +669,16 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::cloneAndLoadDataPartOnS
 String MergeTreeMetaBase::getFullPathOnDisk(StorageLocation location, const DiskPtr & disk) const
 {
     return disk->getPath() + getRelativeDataPath(location);
+}
+
+bool MergeTreeMetaBase::supportsParallelInsert(ContextPtr local_context) const
+{
+    if (!getInMemoryMetadataPtr()->hasUniqueKey())
+        return true;
+
+    if (!local_context->getSettingsRef().optimize_unique_table_write)
+        return false;
+    return getSettings()->dedup_impl_version.value == DedupImplVersion::DEDUP_IN_TXN_COMMIT;
 }
 
 NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
@@ -1887,6 +1898,33 @@ void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns,
             throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
     }
 }
+
+bool MergeTreeMetaBase::commitTxnInWriteSuffixStage(const UInt32 & deup_impl_version, ContextPtr query_context) const
+{
+    if (!getInMemoryMetadataPtr()->hasUniqueKey() || static_cast<DedupImplVersion>(deup_impl_version) == DedupImplVersion::DEDUP_IN_TXN_COMMIT)
+        return false;
+    bool enable_staging_area = query_context->getSettingsRef().enable_staging_area_for_write || getSettings()->cloud_enable_staging_area;
+    bool enable_append_mode = query_context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+    return !enable_append_mode && !enable_staging_area;
+}
+
+bool MergeTreeMetaBase::supportsWriteInWorkers(const Context & query_context) const
+{
+    if (!getInMemoryMetadataPtr()->hasUniqueKey())
+        return true;
+    const auto & query_settings = query_context.getSettingsRef();
+    const auto & table_settings = getSettings();
+    if (query_settings.optimize_unique_table_write)
+    {
+        if (table_settings->dedup_impl_version.value == DedupImplVersion::DEDUP_IN_TXN_COMMIT)
+            return true;
+        LOG_DEBUG(log, "Can not write in workers due to dedup impl version is {}", table_settings->dedup_impl_version.value);
+    }
+    bool enable_staging_area = query_context.getSettingsRef().enable_staging_area_for_write || getSettings()->cloud_enable_staging_area;
+    bool enable_append_mode = query_context.getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+    return enable_append_mode || enable_staging_area;
+}
+
 
 ColumnSize MergeTreeMetaBase::getMapColumnSizes(const DataPartPtr & part, const String & map_implicit_column_name) const
 {

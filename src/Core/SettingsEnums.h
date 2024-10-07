@@ -386,6 +386,14 @@ enum class DedupKeyMode
 
 DECLARE_SETTING_ENUM(DedupKeyMode)
 
+enum class DedupImplVersion : int8_t
+{
+    DEDUP_IN_WRITE_SUFFIX = 1,
+    DEDUP_IN_TXN_COMMIT = 2,
+};
+
+DECLARE_SETTING_ENUM(DedupImplVersion)
+
 enum class RefreshViewTaskStatus : int8_t
 {
     START = 1,

@@ -34,7 +34,7 @@
 #include <Common/TypePromotion.h>
 #include <Common/serverLocality.h>
 #include <common/logger_useful.h>
-#include "Transaction/LockRequest.h"
+#include <Transaction/LockRequest.h>
 #include <bthread/recursive_mutex.h>
 #include <Catalog/MetastoreCommon.h>
 #include <Protos/data_models.pb.h>
@@ -111,8 +111,9 @@ public:
 
     bool isSecondary() { return txn_record.isSecondary(); }
 
-    void setMainTableUUID(const UUID & uuid) { main_table_uuid = uuid; }
-    UUID getMainTableUUID() const { return main_table_uuid; }
+    void setMainTableUUID(const UUID & uuid);
+
+    UUID getMainTableUUID() const;
 
     void setKafkaTpl(const String & consumer_group, const cppkafka::TopicPartitionList & tpl);
     void getKafkaTpl(String & consumer_group, cppkafka::TopicPartitionList & tpl) const;
@@ -174,6 +175,26 @@ public:
         throw Exception("getKafkaConsumerIndex is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+<<<<<<< HEAD
+=======
+    void setBitEngineDictTableMeta(StorageID & storage_id, TxnTimestamp version, const std::map<Int64, String> & dict_bucket_versions_)
+    {
+        dict_table_id = storage_id;
+        latest_version = version;
+        dict_bucket_versions = dict_bucket_versions_;
+    }
+
+    std::tuple<StorageID, TxnTimestamp, std::map<Int64, String>> getBitEngineDictTableMeta()
+    {
+        return std::make_tuple(dict_table_id, latest_version, dict_bucket_versions);
+    }
+
+    virtual UInt32 getDedupImplVersion(ContextPtr /*local_context*/)
+    {
+        throw Exception("getDedupImplVersion is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+>>>>>>> 5342307b51 (Merge 'fix_compatible-bug4cnch-dev' into 'cnch-dev')
     // void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
     // const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
 
@@ -268,6 +289,8 @@ protected:
 
     std::vector<TransFunction> extern_commit_functions;
 
+    /// Unique table related
+    UInt32 dedup_impl_version = 0;
 
 private:
     String creator;

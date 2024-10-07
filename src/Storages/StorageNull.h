@@ -34,7 +34,7 @@ public:
             std::make_shared<NullSource>(storage_snapshot->getSampleBlockForColumns(column_names)));
     }
 
-    bool supportsParallelInsert() const override { return true; }
+    bool supportsParallelInsert(ContextPtr /*local_context*/) const override { return true; }
 
     BlockOutputStreamPtr write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr) override
     {
