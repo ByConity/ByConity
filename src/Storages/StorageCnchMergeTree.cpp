@@ -1769,9 +1769,9 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
 
     NameSet dropped_columns;
 
-    std::map<String, const IDataType *> old_types;
+    std::map<String, const DataTypePtr> old_types;
     for (const auto & column : old_metadata.getColumns().getAllPhysical())
-        old_types.emplace(column.name, column.type.get());
+        old_types.emplace(column.name, column.type);
 
     NameSet columns_already_in_alter;
     auto all_mutations = getContext()->getCnchCatalog()->getAllMutations(getStorageID());
@@ -1798,13 +1798,35 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
             getPartitionIDFromQuery(command.partition, getContext());
         }
 
+        if (command.type == AlterCommand::MODIFY_COLUMN)
+        {
+            const IDataType * new_type = removeLowCardinality(command.data_type).get();
+            const IDataType * old_type = removeLowCardinality(old_types[command.column_name]).get();
+
+            if (new_type && old_type && !settings.mutation_allow_modify_remove_nullable)
+            {
+                auto which_new_type = WhichDataType(new_type);
+                auto which_old_type = WhichDataType(old_type);
+
+                /// forbid:
+                ///   case1: LowCardinality(Nullable(xxx)) -> LowCardinality(xxx)
+                ///   case2: Nullable(xxx) -> xxx
+                /// not limit case:
+                ///   case1: Nullable(xxx) -> LowCardinality(Nullable(xxx))
+                if (which_old_type.isNullable() && !which_new_type.isNullable())
+                    throw Exception(ErrorCodes::CANNOT_ASSIGN_ALTER,
+                        "can not modify column {} from Nullable to non-Nullable, make sure there no NULL value in part, can enable settings mutation_allow_modify_remove_nullable = 1 to force execute it",
+                        command.column_name);
+            }
+        }
+
         if (command.column_name == merging_params.version_column)
         {
             /// Some type changes for version column is allowed despite it's a part of sorting key
             if (command.type == AlterCommand::MODIFY_COLUMN)
             {
                 const IDataType * new_type = command.data_type.get();
-                const IDataType * old_type = old_types[command.column_name];
+                const IDataType * old_type = old_types[command.column_name].get();
 
                 if (new_type)
                     checkVersionColumnTypesConversion(old_type, new_type, command.column_name);
@@ -1913,7 +1935,7 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
                     auto it = old_types.find(command.column_name);
 
                     assert(it != old_types.end());
-                    if (!isSafeForKeyConversion(it->second, command.data_type.get()))
+                    if (!isSafeForKeyConversion(it->second.get(), command.data_type.get()))
                         throw Exception(
                             "ALTER of partition key column " + backQuoteIfNeed(command.column_name) + " from type " + it->second->getName()
                                 + " to type " + command.data_type->getName()
@@ -1925,7 +1947,7 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
                 {
                     auto it = old_types.find(command.column_name);
                     assert(it != old_types.end());
-                    if (!isSafeForKeyConversion(it->second, command.data_type.get()))
+                    if (!isSafeForKeyConversion(it->second.get(), command.data_type.get()))
                         throw Exception(
                             "ALTER of key column " + backQuoteIfNeed(command.column_name) + " from type " + it->second->getName()
                                 + " to type " + command.data_type->getName()
