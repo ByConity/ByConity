@@ -1479,7 +1479,7 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
 
-    server_resource->sendResources(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
+    server_resource->submitCustomTasks(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
         std::vector<brpc::CallId> ids;
         for (const auto & resource : resources)
         {
@@ -1543,7 +1543,7 @@ void StorageCnchMergeTree::sendDropDiskCacheTasks(ContextPtr local_context, cons
         }
         return ids;
     };
-    server_resource->sendResources(local_context, worker_action);
+    server_resource->submitCustomTasks(local_context, worker_action);
 }
 
 void StorageCnchMergeTree::sendDropManifestDiskCacheTasks(ContextPtr local_context, String version, bool sync)
