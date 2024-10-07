@@ -1237,22 +1237,6 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
             return;
         }
 
-        if ((preload_level & PreloadLevelSettings::CloudfsPreload) == PreloadLevelSettings::CloudfsPreload)
-        {
-#if USE_CLOUDFS
-            // fast path for cloudfs preload
-            LOG_TRACE(storage.log, "Preload cfs path: {}", full_path);
-            if (!volume->getDisk()->load(fs::path(full_path) / DATA_FILE))
-            {
-                LOG_ERROR(storage.log, "Failed to preload cfs path: {} due to cfs unavailable", full_path);
-            }
-#endif
-            preload_level = preload_level & (PreloadLevelSettings::CloudfsPreload - 1);
-            // fast path
-            if (preload_level == PreloadLevelSettings::ClosePreload)
-                return;
-        }
-
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
         auto cache_strategy = disk_cache->getStrategy();
 
@@ -1514,13 +1498,6 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, UInt64 submit_ts) cons
                     DiskCacheMode::USE_DISK_CACHE);
                 factory->get(index_helper->getFileName(), std::move(part_helper));
             }
-        }
-
-        // preload ann index into memory cache
-        if (storage.getSettings()->enable_vector_index_preload || storage.getContext()->getSettingsRef().enable_global_vector_index_preload)
-        {
-            if (preload_level != PreloadLevelSettings::ClosePreload)
-                ANNHelper::preload(storage.getContext(), storage.getInMemoryMetadataPtr(), storage.getStorageID(), shared_from_this());
         }
     }
     catch (const Exception & e)
