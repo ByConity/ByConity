@@ -17,6 +17,15 @@ void ReverseTransform::transform(Chunk & chunk)
     for (auto & column : columns)
         column = column->permute(permutation, 0);
 
+    if (auto * side_block = chunk.getSideBlock())
+    {
+        for (size_t i = 0; i < side_block->columns(); ++i)
+        {
+            auto & side_column = side_block->getByPosition(i).column;
+            side_column = side_column->permute(permutation, 0);
+        }
+    }
+
     chunk.setColumns(std::move(columns), num_rows);
 }
 
