@@ -456,10 +456,6 @@ if(USE_SIMDJSON)
     dbms_target_link_libraries(PRIVATE simdjson)
 endif()
 
-if (USE_ZTI_LIBRARY)
-    dbms_target_link_libraries (PRIVATE zti-sdk-static)
-endif()
-
 if (USE_RDKAFKA)
     dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} )
     dbms_target_include_directories(SYSTEM BEFORE PRIVATE  ${RAPIDJSON_INCLUDE_DIR})

@@ -294,7 +294,7 @@
 	url = https://github.com/google/benchmark.git
 [submodule "contrib/hivemetastore"]
 	path = contrib/hivemetastore
-	url = https://github.com/ByConity/hivemetastore.git 
+	url = https://github.com/ClickHouse/hive-metastore.git
 [submodule "contrib/udns"]
 	path = contrib/udns
 	url = https://github.com/ortclib/udns.git

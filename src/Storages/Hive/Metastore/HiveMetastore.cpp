@@ -7,10 +7,9 @@
 #if USE_HIVE
 
 #include <hive_metastore_types.h>
-#include <Access/KerberosInit.h>
-#include <Storages/Hive/CnchHiveSettings.h>
-#include <Storages/Hive/TSaslClientTransport.h>
-#include <Storages/Hive/ZtiSdk.h>
+#include "Access/KerberosInit.h"
+#include "Storages/Hive/CnchHiveSettings.h"
+#include "Storages/Hive/TSaslClientTransport.h"
 
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -283,20 +282,6 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     catch (TException & tx)
     {
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "connect to hive metastore: {} failed. {}", name, tx.what());
-    }
-    try
-    {
-        if (std::getenv("INFSEC_HADOOP_ENABLED"))
-        {
-            String token;
-            zti::ZtiSDK::GetInstance().GetToken(token);
-            thrift_client->set_token(token);
-            LOG_INFO(getLogger("HiveMetastoreClientFactory"), "ThriftHiveMetastoreClient set zti token successfully");
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
     }
     return thrift_client;
 }
