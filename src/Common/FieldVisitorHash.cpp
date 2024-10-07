@@ -251,4 +251,11 @@ void FieldVisitorHash::operator() (const Object & x) const
     }
 }
 
+void FieldVisitorHash::operator() (const JsonbField & x) const
+{
+    UInt8 type = Field::Types::JSONB;
+    hash.update(type);
+    hash.update(std::string(x.getValue(), x.getSize()));
+}
+
 }

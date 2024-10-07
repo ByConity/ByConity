@@ -163,6 +163,11 @@ void FieldVisitorCompatibleWriteBinary::operator()(const Object & x, WriteBuffer
     }
 }
 
+void FieldVisitorCompatibleWriteBinary::operator()(const JsonbField & x, WriteBuffer & buf) const
+{
+    writeStringBinary(std::string(x.getValue(), x.getSize()), buf);
+}
+
 void FieldVisitorCompatibleReadBinary::deserialize(UInt64 & value, ReadBuffer & buf)
 {
     readBinary(value, buf);
@@ -332,6 +337,13 @@ void FieldVisitorCompatibleReadBinary::deserialize(Object & value, ReadBuffer & 
         readBinary(key, buf);
         value[key] = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), static_cast<Field::Types::Which>(type));
     }
+}
+
+void FieldVisitorCompatibleReadBinary::deserialize(JsonbField & value, ReadBuffer & buf)
+{
+    std::string data;
+    readStringBinary(data, buf);
+    value = JsonbField(data.c_str(), data.size());
 }
 
 }

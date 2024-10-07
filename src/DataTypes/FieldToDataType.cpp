@@ -35,6 +35,7 @@
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Common/Exception.h>
+#include <DataTypes/DataTypeJsonb.h>
 
 
 namespace DB
@@ -206,6 +207,11 @@ DataTypePtr FieldToDataType::operator() (const Object &) const
 {
     /// TODO: Do we need different parameters for type Object?
     return std::make_shared<DataTypeObject>("json", false);
+}
+
+DataTypePtr FieldToDataType::operator() (const JsonbField &) const
+{
+    return std::make_shared<DataTypeJsonb>();
 }
 
 }

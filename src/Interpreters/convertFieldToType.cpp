@@ -46,6 +46,7 @@
 #include <Common/FieldVisitorToString.h>
 
 #include <Common/DateLUT.h>
+#include <DataTypes/DataTypeJsonb.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 
 
@@ -484,6 +485,11 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
 
             return object;
         }
+    }
+    else if (const DataTypeJsonb * jsonb_type = dynamic_cast<const DataTypeJsonb *>(&type))
+    {
+        if (src.getType() == Field::Types::JSONB)
+            return src;
     }
 
     /// Conversion from string by parsing.

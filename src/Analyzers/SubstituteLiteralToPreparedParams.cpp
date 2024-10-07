@@ -120,6 +120,10 @@ namespace
             return nullptr;
         }
 #endif
+        DataTypePtr operator()(const JsonbField &) const
+        {
+            return nullptr;
+        }
     };
 };
 

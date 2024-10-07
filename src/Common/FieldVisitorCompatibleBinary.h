@@ -38,6 +38,7 @@ public:
     void operator()(const Object & x, WriteBuffer & buf) const;
     void operator()(const IPv4 & x, WriteBuffer & buf) const;
     void operator()(const IPv6 & x, WriteBuffer & buf) const;
+    void operator()(const JsonbField & x, WriteBuffer & buf) const;
 };
 
 class FieldVisitorCompatibleReadBinary
@@ -99,6 +100,7 @@ private:
     static void deserialize(Map & value, ReadBuffer & buf);
     static void deserialize(BitMap64 & value, ReadBuffer & buf);
     static void deserialize(Object & value, ReadBuffer & buf);
+    static void deserialize(JsonbField & value, ReadBuffer & buf);
 };
 
 }

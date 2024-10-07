@@ -17,6 +17,13 @@
 #include <DataTypes/IDataType.h>
 #include <IO/WriteBufferFromVector.h>
 #include <IO/WriteHelpers.h>
+#include <DataTypes/DataTypeJsonb.h>
+#include <Common/JSONParsers/jsonb/JSONBDocument.h>
+#include <Common/JSONParsers/jsonb/JSONBUtils.h>
+#include <Common/JSONParsers/jsonb/JSONBWriter.h>
+#include <common/defines.h>
+#include "Columns/ColumnJsonb.h"
+#include <DataTypes/Serializations/JSONBValue.h>
 
 namespace DB
 {
@@ -260,6 +267,121 @@ public:
     DataTypePtr getReturnTypeImpl(const DataTypes &) const override
     {
         return std::make_shared<DataTypeString>();
+    }
+};
+
+class FunctionJSONBExtract : public IFunction
+{
+public:
+    constexpr static auto name = "jsonb_extract";
+
+    String getName() const override { return name; }
+
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionJSONBExtract>(); }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+
+    ColumnPtr
+    executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    {
+        MutableColumnPtr result{result_type->createColumn()};
+        result->reserve(input_rows_count);
+
+        if (arguments.size() != 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Function {} requires 1 or 2 arguments", getName());
+
+        auto * to = assert_cast<ColumnJsonb *>(result.get());
+
+        auto & to_chars = to->getChars();
+        auto & to_offsets = to->getOffsets();
+
+        to_chars.resize(input_rows_count);
+        to_offsets.resize(input_rows_count);
+
+        WriteBufferFromVector buf(to_chars);
+
+        const auto & first_arg = arguments[0];
+        if (!isJsonb(first_arg.type))
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "First argument for function {} must be JSONB", getName());
+
+        const auto * jsonb_col_const = typeid_cast<const ColumnConst *>(first_arg.column.get());
+
+        const auto * jsonb_col
+            = typeid_cast<const ColumnJsonb *>(jsonb_col_const ? jsonb_col_const->getDataColumnPtr().get() : first_arg.column.get());
+        const auto & second_arg = arguments[1];
+        if (!isString(second_arg.type))
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Second argument for function {} must be String", getName());
+
+        const auto * jsonb_path_const = typeid_cast<const ColumnConst *>(second_arg.column.get());
+        const auto * jsonb_path_string
+            = typeid_cast<const ColumnString *>(jsonb_path_const ? jsonb_path_const->getDataColumnPtr().get() : second_arg.column.get());
+        JsonbPath jsonb_path;
+        JsonbWriter writer;
+        if (jsonb_path_const)
+        {
+            if (!jsonb_path.seek(jsonb_path_string->getDataAt(0).data, jsonb_path_string->getDataAt(0).size))
+            {
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal JSONB path: {}", jsonb_path_string->getDataAt(0).toString());
+            }
+        }
+
+        auto write_default_jsonb = [&buf]() {
+            JsonBinaryValue jsonb_default;
+            jsonb_default.fromJsonString("{}", 2);
+            buf.write(jsonb_default.value(), jsonb_default.size());
+        };
+
+        for (size_t i = 0; i < input_rows_count; i++)
+        {
+            if (!jsonb_path_const)
+            {
+                if (!jsonb_path.seek(jsonb_path_string->getDataAt(i).data, jsonb_path_string->getDataAt(i).size))
+                {
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal JSONB path: {}", jsonb_path_string->getDataAt(i).toString());
+                }
+            }
+
+            auto binary_json_strref = jsonb_col->getDataAt(i);
+            // doc is NOT necessary to be deleted since JsonbDocument will not allocate memory
+            JsonbDocument * doc = JsonbDocument::createDocument(binary_json_strref.data, binary_json_strref.size);
+            if (unlikely(!doc || !doc->getValue()))
+            {
+                write_default_jsonb();
+            }
+            else
+            {
+                // value is NOT necessary to be deleted since JsonbValue will not allocate memory
+                JsonbValue * value = doc->getValue()->findValue(jsonb_path, nullptr);
+                if (value)
+                {
+                    writer.reset();
+                    writer.writeValue(value);
+                    buf.write(writer.getOutput()->getBuffer(), writer.getOutput()->getSize());
+                }
+                else
+                {
+                    write_default_jsonb();
+                }
+            }
+
+            writeChar(0, buf);
+            to_offsets[i] = buf.count();   
+        }
+
+        buf.finalize();
+
+        return result;
+    }
+
+    size_t getNumberOfArguments() const override { return 0; }
+
+    bool isVariadic() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes &) const override
+    {
+        return std::make_shared<DataTypeJsonb>();
     }
 };
 

@@ -5,3 +5,8 @@
 {}
 --json_build_array--
 [1,2,"3",4,5]
+--jsonb_extract--
+1
+{}
+2
+{}

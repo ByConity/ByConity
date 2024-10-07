@@ -53,6 +53,7 @@ public:
     void operator() (const AggregateFunctionStateData & x, WriteBuffer & buf) const;
     void operator() (const BitMap64 & x, WriteBuffer & buf) const;
     void operator() (const Object & x, WriteBuffer & buf) const;
+    void operator() (const JsonbField & x, WriteBuffer & buf) const;
 };
 
 }

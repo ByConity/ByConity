@@ -99,6 +99,7 @@ String FieldVisitorToString::operator() (const UUID & x) const { return formatQu
 String FieldVisitorToString::operator() (const IPv4 & x) const { return formatQuoted(x); }
 String FieldVisitorToString::operator() (const IPv6 & x) const { return formatQuoted(x); }
 String FieldVisitorToString::operator() (const AggregateFunctionStateData & x) const { return formatQuoted(x.data); }
+String FieldVisitorToString::operator() (const JsonbField& x) const { return formatQuoted(std::string(x.getValue(), x.getSize())); }
 
 String FieldVisitorToString::operator() (const Array & x) const
 {

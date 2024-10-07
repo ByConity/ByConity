@@ -140,6 +140,113 @@ template <typename T> bool decimalLessOrEqual(T x, T y, UInt32 x_scale, UInt32 y
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
+class JsonbField
+{
+public:
+    JsonbField() = default;
+
+    JsonbField(const char * ptr, uint32_t len) : size(len)
+    {
+        data = new char[size];
+        if (!data)
+        {
+            throw Exception("new data buffer failed, size: " + std::to_string(size), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        memcpy(data, ptr, size);
+    }
+
+    JsonbField(const JsonbField & x) : size(x.size)
+    {
+        data = new char[size];
+        if (!data)
+        {
+            throw Exception("new data buffer failed, size: " + std::to_string(size), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        memcpy(data, x.data, size);
+    }
+
+    JsonbField(JsonbField && x) : data(x.data), size(x.size)
+    {
+        x.data = nullptr;
+        x.size = 0;
+    }
+
+    JsonbField & operator=(const JsonbField & x)
+    {
+        data = new char[size];
+        if (!data)
+        {
+            throw Exception("new data buffer failed, size: " + std::to_string(size), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        memcpy(data, x.data, size);
+        return *this;
+    }
+
+    JsonbField & operator=(JsonbField && x)
+    {
+        if (data)
+        {
+            delete[] data;
+        }
+        data = x.data;
+        size = x.size;
+        x.data = nullptr;
+        x.size = 0;
+        return *this;
+    }
+
+    ~JsonbField()
+    {
+        if (data)
+        {
+            delete[] data;
+        }
+    }
+
+    const char * getValue() const { return data; }
+    uint32_t getSize() const { return size; }
+
+    bool operator<(const JsonbField &) const
+    {
+        throw Exception("Operator < is not implemented for JsonbField.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    bool operator<=(const JsonbField &) const
+    {
+        throw Exception("Operator <= is not implemented for JsonbField.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    bool operator==(const JsonbField & rhs) const
+    {
+        return size == rhs.size && memcmp(data, rhs.data, size) == 0;
+    }
+    bool operator>(const JsonbField &) const
+    {
+        throw Exception("Operator > is not implemented for JsonbField.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    bool operator>=(const JsonbField &) const
+    {
+        throw Exception("Operator >= is not implemented for JsonbField.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+    bool operator!=(const JsonbField & rhs) const
+    {
+        return size != rhs.size || memcmp(data, rhs.data, size) != 0;
+    }
+
+    const JsonbField & operator+=(const JsonbField &)
+    {
+        throw Exception("Operator += is not implemented for JsonbField.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+    const JsonbField & operator-=(const JsonbField &)
+    {
+        throw Exception("Operator -= is not implemented for JsonbField.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    char * data = nullptr;
+    uint32_t size = 0;
+};
+
+
 template <typename T>
 class DecimalField
 {
@@ -267,6 +374,7 @@ template <> struct NearestFieldTypeImpl<PositiveInfinity> { using Type = Positiv
 
 template <> struct NearestFieldTypeImpl<AggregateFunctionStateData> { using Type = AggregateFunctionStateData; };
 template <> struct NearestFieldTypeImpl<BitMap64> { using Type = BitMap64; };
+template <> struct NearestFieldTypeImpl<JsonbField> { using Type = JsonbField; };
 
 // For enum types, use the field type that corresponds to their underlying type.
 template <typename T>
@@ -321,6 +429,7 @@ public:
             (IPv4, 30),
             (IPv6, 31),
             (Object, 32),
+            (JSONB, 33),
             // Special types for index analysis
             (NegativeInfinity, 254),
             (PositiveInfinity, 255));
@@ -541,6 +650,7 @@ public:
             case Types::Decimal256: return get<DecimalField<Decimal256>>() < rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() < rhs.get<AggregateFunctionStateData>();
             case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
+            case Types::JSONB: return get<JsonbField>() < rhs.get<JsonbField>();
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -586,6 +696,7 @@ public:
             case Types::Decimal256: return get<DecimalField<Decimal256>>() <= rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() <= rhs.get<AggregateFunctionStateData>();
             case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
+            case Types::JSONB: return get<JsonbField>() <= rhs.get<JsonbField>();
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -635,6 +746,7 @@ public:
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() == rhs.get<AggregateFunctionStateData>();
 	        case Types::BitMap64: return get<BitMap64>() == rhs.get<BitMap64>();
             case Types::Object:  return get<Object>()  == rhs.get<Object>();
+            case Types::JSONB: return get<JsonbField>() == rhs.get<JsonbField>();
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -682,6 +794,7 @@ public:
             case Types::AggregateFunctionState: return f(field.template get<AggregateFunctionStateData>());
             case Types::BitMap64: return f(field.template get<BitMap64>());
             case Types::Object:     return f(field.template get<Object>());
+            case Types::JSONB: return f(field.template get<JsonbField>());
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -751,6 +864,8 @@ public:
                 return f.template operator()<IPv4>();
             case Types::IPv6:
                 return f.template operator()<IPv6>();
+            case Types::JSONB:
+                return f.template operator()<JsonbField>();
 #if !defined(__clang__)
 #    pragma GCC diagnostic pop
 #endif
@@ -909,6 +1024,9 @@ private:
             case Types::Object:
                 destroy<Object>();
                 break;
+            case Types::JSONB:
+                destroy<JsonbField>();
+                break;
             default:
                  break;
         }
@@ -955,6 +1073,7 @@ template <> struct Field::TypeToEnum<DecimalField<DateTime64>>{ static constexpr
 template <> struct Field::TypeToEnum<AggregateFunctionStateData>{ static constexpr Types::Which value = Types::AggregateFunctionState; };
 template <> struct Field::TypeToEnum<BitMap64>{ static constexpr Types::Which value = Types::BitMap64; };
 template <> struct Field::TypeToEnum<Object>  { static constexpr Types::Which value = Types::Object; };
+template <> struct Field::TypeToEnum<JsonbField>  { static constexpr Types::Which value = Types::JSONB; };
 
 template <> struct Field::EnumToType<Field::Types::Null>    { using Type = Null; };
 template <> struct Field::EnumToType<Field::Types::NegativeInfinity>    { using Type = NegativeInfinity; };
@@ -980,6 +1099,7 @@ template <> struct Field::EnumToType<Field::Types::Decimal128> { using Type = De
 template <> struct Field::EnumToType<Field::Types::Decimal256> { using Type = DecimalField<Decimal256>; };
 template <> struct Field::EnumToType<Field::Types::AggregateFunctionState> { using Type = DecimalField<AggregateFunctionStateData>; };
 template <> struct Field::EnumToType<Field::Types::BitMap64> { using Type = BitMap64; };
+template <> struct Field::EnumToType<Field::Types::JSONB> { using Type = JsonbField; };
 
 inline constexpr bool isInt64OrUInt64FieldType(Field::Types::Which t)
 {
@@ -1157,6 +1277,14 @@ void readBinary(Object & x, ReadBuffer & buf);
 void writeBinary(const Object & x, WriteBuffer & buf);
 void writeText(const Object & x, WriteBuffer & buf);
 [[noreturn]] inline void writeQuoted(const Object &, WriteBuffer &) { throw Exception("Cannot write Object quoted.", ErrorCodes::NOT_IMPLEMENTED); }
+
+void readBinary(JsonbField & x, ReadBuffer & buf);
+[[noreturn]] inline void readText(JsonbField &, ReadBuffer &) { throw Exception("Cannot read JSONB.", ErrorCodes::NOT_IMPLEMENTED); }
+[[noreturn]] inline void readQuoted(JsonbField &, ReadBuffer &) { throw Exception("Cannot read JSONB.", ErrorCodes::NOT_IMPLEMENTED); }
+
+void writeBinary(const JsonbField & x, WriteBuffer & buf);
+void writeText(const JsonbField & x, WriteBuffer & buf);
+[[noreturn]] inline void writeQuoted(const JsonbField &, WriteBuffer &) { throw Exception("Cannot write JSONB quoted.", ErrorCodes::NOT_IMPLEMENTED); }
 
 __attribute__ ((noreturn)) inline void writeText(const AggregateFunctionStateData &, WriteBuffer &)
 {

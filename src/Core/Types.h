@@ -92,6 +92,7 @@ enum class TypeIndex
     Object,
     IPv4,
     IPv6,
+    JSONB,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -347,6 +348,7 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::BitMap64:  return "BitMap64";
         case TypeIndex::SketchBinary: return "SketchBinary";
         case TypeIndex::Object: return "Object";
+        case TypeIndex::JSONB:      return "JSONB";
     }
 
     __builtin_unreachable();

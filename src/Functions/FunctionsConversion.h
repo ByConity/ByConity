@@ -81,6 +81,7 @@
 #include <Interpreters/Context.h>
 
 #include <Common/DateLUT.h>
+#include <DataTypes/DataTypeJsonb.h>
 
 namespace DB
 {
@@ -3904,6 +3905,17 @@ private:
         }
     }
 
+    static WrapperType createJsonbWrapper(const DataTypePtr & from_type, const DataTypeJsonb * /*to_type*/) 
+    {
+        if (checkAndGetDataType<DataTypeString>(from_type.get()))
+        {
+            return &ConvertImplGenericFromString<ColumnString>::execute;
+        }
+
+        throw Exception(ErrorCodes::TYPE_MISMATCH,
+            "Cast to JSONB can be performed only from String. Got: {}", from_type->getName());
+    }
+
     template <typename FieldType>
     WrapperType createEnumWrapper(const DataTypePtr & from_type, const DataTypeEnum<FieldType> * to_type) const
     {
@@ -4428,6 +4440,8 @@ private:
                 return createObjectWrapper(from_type, checkAndGetDataType<DataTypeObject>(to_type.get()));
             case TypeIndex::SketchBinary:
                 return createSketchWrapper(from_type, static_cast<const DataTypeSketchBinary &>(*to_type));
+            case TypeIndex::JSONB:
+                return createJsonbWrapper(from_type, checkAndGetDataType<DataTypeJsonb>(to_type.get()));
             default:
                 break;
         }

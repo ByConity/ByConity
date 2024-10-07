@@ -23,6 +23,7 @@
 
 #include <IO/WriteHelpers.h>
 #include <Common/PODArray.h>
+
 namespace DB
 {
 
@@ -44,6 +45,7 @@ void FieldVisitorWriteBinary::operator() (const DecimalField<Decimal32> & x, Wri
 void FieldVisitorWriteBinary::operator() (const DecimalField<Decimal64> & x, WriteBuffer & buf) const { writeBinary(x.getValue(), buf); }
 void FieldVisitorWriteBinary::operator() (const DecimalField<Decimal128> & x, WriteBuffer & buf) const { writeBinary(x.getValue(), buf); }
 void FieldVisitorWriteBinary::operator() (const DecimalField<Decimal256> & x, WriteBuffer & buf) const { writeBinary(x.getValue(), buf); }
+void FieldVisitorWriteBinary::operator() (const JsonbField & x, WriteBuffer & buf) const { writeBinary(std::string(x.getValue(), x.getSize()), buf); }
 void FieldVisitorWriteBinary::operator() (const AggregateFunctionStateData & x, WriteBuffer & buf) const
 {
     writeStringBinary(x.name, buf);
