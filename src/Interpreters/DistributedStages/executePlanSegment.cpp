@@ -71,18 +71,20 @@ void executePlanSegmentInternal(
     if (!plan_segment_instance)
         throw Exception("Cannot execute empty plan segment", ErrorCodes::LOGICAL_ERROR);
 
-    if (context->getSettingsRef().debug_plan_generation)
+    const auto & settings = context->getSettingsRef();
+    if (settings.debug_plan_generation)
         return;
 
+    bool inform_success_status = settings.enable_wait_for_post_processing || settings.bsp_mode;
     auto executor = std::make_shared<PlanSegmentExecutor>(
         std::move(plan_segment_instance), std::move(context), std::move(process_plan_segment_entry));
     if (async)
     {
-        ThreadFromGlobalPool async_thread([executor = std::move(executor)]() mutable {
+        ThreadFromGlobalPool async_thread([executor = std::move(executor), inform_success_status = inform_success_status]() mutable {
             auto result = executor->execute();
             executor.reset(); /// release executor
             if (result)
-                reportExecutionResult(*result);
+                reportExecutionResult(*result, inform_success_status);
         });
         async_thread.detach();
         return;
@@ -92,7 +94,7 @@ void executePlanSegmentInternal(
         auto result = executor->execute();
         executor.reset(); /// release executor
         if (result)
-            reportExecutionResult(*result);
+            reportExecutionResult(*result, inform_success_status);
     }
 }
 

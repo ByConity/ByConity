@@ -12,7 +12,7 @@
 namespace DB
 {
 
-void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) noexcept;
+void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result, bool inform_success_status = false) noexcept;
 
 PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     ContextPtr query_context,

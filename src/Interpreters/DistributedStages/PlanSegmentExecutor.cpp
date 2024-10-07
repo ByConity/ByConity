@@ -979,27 +979,24 @@ void PlanSegmentExecutor::sendProgress()
                 = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
             Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
             brpc::Controller * cntl = new brpc::Controller;
-            Protos::SendProgressRequest request;
+            Protos::SendProgressRequest * request = new Protos::SendProgressRequest;
             Protos::SendProgressResponse * response = new Protos::SendProgressResponse;
-            request.set_query_id(plan_segment->getQueryId());
-            request.set_segment_id(plan_segment->getPlanSegmentId());
-            request.set_parallel_id(plan_segment_instance->info.parallel_id);
-            *request.mutable_progress() = progress.fetchAndResetPiecewiseAtomically().toProto();
+            request->set_query_id(plan_segment->getQueryId());
+            request->set_segment_id(plan_segment->getPlanSegmentId());
+            request->set_parallel_id(plan_segment_instance->info.parallel_id);
+            *request->mutable_progress() = progress.fetchAndResetPiecewiseAtomically().toProto();
             cntl->set_timeout_ms(20000);
+
+            std::function<String()> construct_err_msg = [request = request]() -> String {
+                return fmt::format(
+                    "PlanSegment-{} send profile to coordinator failed, query id-{}", request->segment_id(), request->query_id());
+            };
+
             manager.sendProgress(
                 cntl,
-                &request,
+                request,
                 response,
-                brpc::NewCallback(
-                    RPCHelpers::onAsyncCallDoneAssertController,
-                    response,
-                    cntl,
-                    logger,
-                    fmt::format(
-                        "sendProgress failed for query_id:{} segment_id:{} parallel_id:{}",
-                        plan_segment->getQueryId(),
-                        plan_segment->getPlanSegmentId(),
-                        plan_segment_instance->info.parallel_id)));
+                brpc::NewCallback(RPCHelpers::onAsyncCallDoneAssertController, request, response, cntl, logger, construct_err_msg));
         }
         catch (...)
         {
