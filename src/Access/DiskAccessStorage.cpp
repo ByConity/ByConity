@@ -221,7 +221,6 @@ namespace
         queries.push_back(InterpreterShowCreateAccessEntityQuery::getAttachQuery(entity));
         if ((entity.getType() == EntityType::USER) || (entity.getType() == EntityType::ROLE))
         {
-            /* The true/false order must be kept, to be used for detecting sensitive tenant in KVAccessStorage.cpp */
             boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity, true));
             boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity, false));
         }

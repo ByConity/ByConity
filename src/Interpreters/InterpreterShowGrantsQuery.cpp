@@ -172,7 +172,6 @@ ASTs InterpreterShowGrantsQuery::getGrantQueries() const
     ASTs grant_queries;
     for (const auto & entity : entities)
     {
-        /* The true/false order must be kept, to be used for detecting sensitive tenant in KVAccessStorage.cpp */
         boost::range::push_back(grant_queries, getGrantQueries(*entity, access_control, true));
         boost::range::push_back(grant_queries, getGrantQueries(*entity, access_control, false));
     }
