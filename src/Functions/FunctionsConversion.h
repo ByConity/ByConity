@@ -517,7 +517,7 @@ struct ConvertImpl<std::enable_if_t<IsDataTypeDateOrDateTime<ToDataType> && !std
         auto time_scale = sources->getScale();
         auto scale_multiplier = DecimalUtils::scaleMultiplier<Decimal64>(time_scale);
         // result
-        auto mutable_result_col = result_type->createColumn();
+        auto mutable_result_col = removeNullable(result_type)->createColumn();
         auto * col_to = assert_cast<typename ToDataType::ColumnType *>(mutable_result_col.get());
         auto & col_to_data = col_to->getData();
         col_to_data.resize(input_rows_count);
@@ -551,7 +551,8 @@ struct ConvertImpl<std::enable_if_t<IsDataTypeDateOrDateTime<ToDataType> && !std
                     UInt32(date_time) + components.whole, components.fractional, dt_scale_multiplier);
             }
         }
-
+        if (result_type->isNullable())
+            return ColumnNullable::create(std::move(mutable_result_col), ColumnUInt8::create(input_rows_count, 0));
         return mutable_result_col;
     }
 };
