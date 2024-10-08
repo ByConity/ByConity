@@ -75,6 +75,7 @@ private:
     std::vector<size_t> inputs_to_update;
     BlocksList blocks;
     size_t accumulated_rows = 0;
+    std::atomic<bool> is_cancelled{false};
 };
 
 }

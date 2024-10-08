@@ -1111,7 +1111,8 @@ public:
         bool & no_more_keys) const;
 
     /// Used for aggregate projection.
-    bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const;
+    bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys, std::atomic<bool> & is_cancelled) const;
+
 
     /** Convert the aggregation data structure into a block.
       * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
@@ -1126,13 +1127,13 @@ public:
 
     using BucketToBlocks = std::map<Int32, BlocksList>;
     /// Merge partially aggregated blocks separated to buckets into one data structure.
-    void mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads);
+    void mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads, std::atomic<bool> & is_cancelled);
 
     /// Merge several partially aggregated blocks into one.
     /// Precondition: for all blocks block.info.is_overflows flag must be the same.
     /// (either all blocks are from overflow data or none blocks are).
     /// The resulting block has the same value of is_overflows flag.
-    Block mergeBlocks(BlocksList & blocks, bool final);
+    Block mergeBlocks(BlocksList & blocks, bool final, std::atomic<bool> & is_cancelled);
 
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
@@ -1346,7 +1347,7 @@ private:
         Arena * arena) const;
 
     void mergeWithoutKeyDataImpl(
-        ManyAggregatedDataVariants & non_empty_data) const;
+        ManyAggregatedDataVariants & non_empty_data, std::atomic<bool> & is_cancelled) const;
 
     template <typename Method>
     void mergeSingleLevelDataImpl(
@@ -1435,7 +1436,8 @@ private:
 
     void mergeWithoutKeyStreamsImpl(
         Block & block,
-        AggregatedDataVariants & result) const;
+        AggregatedDataVariants & result,
+        std::atomic<bool> & is_cancelled) const;
 
     template <typename Method>
     void mergeBucketImpl(
