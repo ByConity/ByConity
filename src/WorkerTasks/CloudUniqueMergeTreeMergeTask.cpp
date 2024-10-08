@@ -348,7 +348,10 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         MergeMutateAction::updatePartData(part, commit_time);
         part->relative_path = part->info.getPartNameWithHintMutation();
     }
-    /// TODO: make sure txn is rollbacked and lock is released
+
+    /// lock should be acquired during commitV2
+    if (cnch_lock)
+        cnch_lock->unlock();
 
     LOG_INFO(
         log,
@@ -356,8 +359,10 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
         params.task_id,
         watch.elapsedMilliseconds(),
         lock_watch.elapsedMilliseconds());
-    /// preload can be done outside the lock todo(jiashuo): support unique merge tree?
-    // preload(context, storage, dumped_data.parts, ManipulationType::Merge);
+
+    /// preload can be done outside the lock
+    if (params.parts_preload_level)
+        cnch_writer.preload(dumped_data.parts);
 }
 
 } // namespace DB
