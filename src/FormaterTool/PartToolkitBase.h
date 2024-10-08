@@ -56,6 +56,8 @@ protected:
 
     StoragePtr getTable();
 
+    void processIgnoreBitEngineEncode(ColumnsDescription & columns);
+
     PartNamesWithDisks collectPartsFromSource(const String & source_dirs_str, const String & dest_dir);
 
     const ASTPtr & query_ptr;
