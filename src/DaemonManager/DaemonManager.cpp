@@ -393,20 +393,17 @@ int DaemonManager::main(const std::vector<std::string> &)
 
     LOG_INFO(log, "Shutting down!");
     LOG_INFO(log, "BRPC servers stop accepting new connections and requests from existing connections");
-    std::for_each(rpc_servers.begin(), rpc_servers.end(),
-        [& log] (auto & server)
-        {
-            if (0 == server->Stop(5000))
-                LOG_INFO(log, "BRPC server stop succesfully");
-            else
-                LOG_INFO(log, "BRPC server doesn't stop succesfully with in 5 second");
+    if (0 == server.Stop(5000))
+        LOG_INFO(log, "BRPC server stop succesfully");
+    else
+        LOG_INFO(log, "BRPC server doesn't stop succesfully with in 5 second");
 
-            LOG_INFO(log, "Wait until brpc requests in progress are done");
-            if (0 == server->Join())
-                LOG_INFO(log, "brpc joins succesfully");
-            else
-                LOG_INFO(log, "brpc doesn't join succesfully");
-        });
+    LOG_INFO(log, "Wait until brpc requests in progress are done");
+    if (0 == server.Join())
+        LOG_INFO(log, "brpc joins succesfully");
+    else
+        LOG_INFO(log, "brpc doesn't join succesfully");
+
 
     LOG_INFO(log, "Wait for daemons for bg thread to finish.");
     std::for_each(
