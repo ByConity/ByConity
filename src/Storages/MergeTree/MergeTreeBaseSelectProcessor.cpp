@@ -138,8 +138,16 @@ Chunk MergeTreeBaseSelectProcessor::generate()
             injectVirtualColumns(res, task.get(), partition_value_type, virt_column_names);
             if (support_intermedicate_result_cache)
             {
-                OwnerInfo owner_info{task->data_part->name, static_cast<time_t>(task->data_part->commit_time.toSecond())};
-                res.setOwnerInfo(std::move(owner_info));
+                if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+                {
+                    OwnerInfo owner_info{task->data_part->name, static_cast<time_t>(task->data_part->getDeleteBitmapVersion())};
+                    res.setOwnerInfo(std::move(owner_info));
+                }
+                else
+                {
+                    OwnerInfo owner_info{task->data_part->name, static_cast<time_t>(task->data_part->commit_time.toSecond())};
+                    res.setOwnerInfo(std::move(owner_info));
+                }
             }
 
             return res;

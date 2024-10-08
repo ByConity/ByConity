@@ -55,7 +55,7 @@ public:
     bool supportsTrivialCount() const override { return true; }
     bool supportIntermedicateResultCache() const override
     {
-        return !getInMemoryMetadataPtr()->hasUniqueKey();
+        return true;
     }
 
     /// Whether support DELETE FROM. We only support for Unique MergeTree for now.
