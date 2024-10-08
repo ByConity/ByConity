@@ -1269,7 +1269,7 @@ StorageTrait constructStorageTrait(StoragePtr storage)
 StorageTrait constructStorageTrait(ContextMutablePtr context, const String & db, const String & table, const String & create_query)
 {
     auto ast = getASTCreateQueryFromString(create_query, context);
-    /// make shortcut because CnchHive and other remote table contructor could take long time
+    /// make shortcut because CnchHive and other remote table constructor could take long time
     if (ast->storage &&
         ast->storage->engine &&
         (!isCnchMergeTreeOrKafka(ast->storage->engine->name))

@@ -1014,7 +1014,7 @@ public:
 
     /// I/O formats.
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size) const;
-   BlockInputStreamPtr getInputStreamByFormatNameAndBuffer(
+    BlockInputStreamPtr getInputStreamByFormatNameAndBuffer(
         const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size, const ColumnsDescription& columns) const;
 
     /// Don't use streams. Better look at getOutputFormat...
@@ -1750,6 +1750,12 @@ public:
 
     void setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager);
     PlanCacheManager* getPlanCacheManager();
+
+    bool trySetRunningBackupTask(const String & backup_id);
+    bool hasRunningBackupTask() const;
+    std::optional<String> getRunningBackupTask() const;
+    bool checkRunningBackupTask(const String & backup_id) const;
+    void removeRunningBackupTask(const String & backup_id);
 
     UInt32 getQueryMaxExecutionTime() const;
     timespec getQueryExpirationTimeStamp() const { return query_expiration_timestamp; }

@@ -16,15 +16,17 @@
 #pragma once
 
 #include <optional>
+#include <type_traits>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 #include <Storages/MergeTree/PartitionPruner.h>
-#include <common/shared_ptr_helper.h>
 #include <Storages/StorageSnapshot.h>
-#include <Catalog/DataModelPartWrapper_fwd.h>
-#include <Transaction/TxnTimestamp.h>
 #include <Transaction/CnchLock.h>
+#include <Transaction/TxnTimestamp.h>
+#include <common/shared_ptr_helper.h>
 
 namespace DB
 {
@@ -120,6 +122,19 @@ public:
     CheckResults checkData(const ASTPtr & query, ContextPtr local_context) override;
 
     CheckResults autoRemoveData(const ASTPtr & query, ContextPtr local_context) override;
+
+    ServerDataPartsWithDBM
+    getServerDataPartsWithDBMFromSnapshot(const ContextPtr & local_context, std::optional<Strings> partition_ids, UInt64 snapshot_ts) const;
+
+    std::unordered_set<String> getPartitionIDsFromQuery(const ASTs & asts, ContextPtr local_context) const;
+
+    MinimumDataParts getBackupPartsFromDisk(
+        const DiskPtr & backup_disk,
+        const String & parts_path_in_backup,
+        ContextMutablePtr & local_context,
+        std::optional<ASTs> partitions) const;
+
+    void restoreDataFromBackup(BackupTaskPtr & backup_task, const DiskPtr & backup_disk, const String & data_path_in_backup, ContextMutablePtr context, std::optional<ASTs> partitions) override;
 
     /// TODO: some code in this duplicate with filterPartitionByTTL, refine it later
     time_t getTTLForPartition(const MergeTreePartition & partition) const;

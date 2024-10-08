@@ -1,6 +1,7 @@
 #include <memory>
 #include <IO/HTTPCommon.h>
 #include <IO/S3Common.h>
+#include <aws/s3/model/CopyObjectRequest.h>
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -74,6 +75,7 @@ namespace ProfileEvents
     extern const Event S3UploadPart;
     extern const Event S3PutObject;
     extern const Event S3GetObject;
+    extern const Event S3CopyObject;
 
     extern const Event DiskS3HeadObject;
     extern const Event DiskS3CreateMultipartUpload;
@@ -81,6 +83,7 @@ namespace ProfileEvents
     extern const Event DiskS3CompleteMultipartUpload;
     extern const Event DiskS3UploadPart;
     extern const Event DiskS3PutObject;
+    extern const Event DiskS3CopyObject;
 }
 
 namespace
@@ -933,6 +936,22 @@ namespace S3
             ProfileEvents::increment(ProfileEvents::DiskS3PutObject);
         auto outcome = client->PutObject(req);
 
+        if (!outcome.IsSuccess())
+        {
+            ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);
+            throw S3Exception(outcome.GetError());
+        }
+    }
+
+    void S3Util::copyObject(const String & from_key, const String & to_bucket, const String & to_key)
+    {
+        Aws::S3::Model::CopyObjectRequest request;
+        request.WithCopySource(bucket + "/" + from_key).WithBucket(to_bucket).WithKey(to_key);
+
+        Aws::S3::Model::CopyObjectOutcome outcome = client->CopyObject(request);
+        ProfileEvents::increment(ProfileEvents::S3CopyObject);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3CopyObject);
         if (!outcome.IsSuccess())
         {
             ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);

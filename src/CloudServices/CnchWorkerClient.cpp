@@ -481,7 +481,7 @@ brpc::CallId CnchWorkerClient::sendResources(
         worker_info->set_num_workers(current_wg->workerNum());
 
         if (worker_info->num_workers() <= worker_info->index())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Invailid worker index {} for worker group {}, which contains {} workers.", 
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Invailid worker index {} for worker group {}, which contains {} workers.",
                 toString(worker_info->index()),
                 current_wg->getVWName(),
                 toString(current_wg->workerNum()));
@@ -616,7 +616,7 @@ brpc::CallId CnchWorkerClient::broadcastManifest(
     worker_info->set_num_workers(current_wg->workerNum());
 
     if (worker_info->num_workers() <= worker_info->index())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invailid worker index {} for worker group {}, which contains {} workers.", 
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Invailid worker index {} for worker group {}, which contains {} workers.",
             toString(worker_info->index()),
             current_wg->getVWName(),
             toString(current_wg->workerNum()));
@@ -730,6 +730,28 @@ DedupWorkerStatus CnchWorkerClient::getDedupWorkerStatus(const StorageID & stora
         status.last_exception_time = response.last_exception_time();
     }
     return status;
+}
+
+brpc::CallId CnchWorkerClient::sendBackupCopyTask(
+    const ContextPtr & context, const String & backup_id, const std::vector<Protos::BackupCopyTask> & copy_tasks, const ExceptionHandlerPtr & handler)
+{
+    auto * cntl = new brpc::Controller;
+    Protos::SendBackupCopyTaskReq request;
+    auto * response = new Protos::SendBackupCopyTaskResp();
+
+    request.set_id(backup_id);
+    for (const auto & copy_task : copy_tasks)
+    {
+        *request.add_backup_task() = copy_task;
+    }
+
+    const auto & settings = context->getSettingsRef();
+    auto send_timeout = settings.max_execution_time.value > 0 ? settings.max_execution_time.totalMilliseconds() : 0x7fffffff;
+    cntl->set_timeout_ms(send_timeout);
+
+    stub->sendBackupCopyTask(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
+
+    return cntl->call_id();
 }
 
 #if USE_RDKAFKA

@@ -20,6 +20,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <Backups/BackupStatus.h>
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/CatalogSettings.h>
 #include <Catalog/DataModelPartWrapper.h>
@@ -30,6 +31,7 @@
 #include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_common.pb.h>
 #include <Protos/cnch_server_rpc.pb.h>
+#include <Protos/data_models.pb.h>
 #include <Statistics/ExportSymbols.h>
 #include <Statistics/StatisticsBase.h>
 // #include <Transaction/ICnchTransaction.h>
@@ -68,6 +70,9 @@ using DataModelPartPtrVector = std::vector<DataModelPartPtr>;
 struct DataModelPartWithName;
 using DataModelPartWithNamePtr = std::shared_ptr<DataModelPartWithName>;
 using DataModelPartWithNameVector = std::vector<DataModelPartWithNamePtr>;
+
+using BackupTaskModel = std::shared_ptr<Protos::DataModelBackupTask>;
+using BackupTaskModels = std::vector<BackupTaskModel>;
 }
 
 namespace DB::Catalog
@@ -171,6 +176,26 @@ public:
                        const String & create_query = "", const String & engine_name = "");
 
     /////////////////////////////
+    /// Backup related API
+    /////////////////////////////
+
+    void createBackupJob(
+        const String & backup_uuid,
+        UInt64 create_time,
+        BackupStatus backup_status,
+        const String & serialized_ast,
+        const String & server_address,
+        bool enable_auto_recover);
+
+    void updateBackupJobCAS(BackupTaskModel & backup_task, const String & expected_value);
+
+    BackupTaskModel tryGetBackupJob(const String & backup_uuid);
+
+    BackupTaskModels getAllBackupJobs();
+
+    void removeBackupJob(const String & backup_uuid);
+
+    /////////////////////////////
     /// Snapshots related API
     /////////////////////////////
 
@@ -221,6 +246,8 @@ public:
 
     bool isTableExists(const String & db, const String & name, const TxnTimestamp & ts = 0);
 
+    void restoreTableHistoryVersion(Protos::DataModelTable history_table);
+
     void alterTable(
         const Context & query_context,
         const Settings & query_settings,
@@ -253,6 +280,8 @@ public:
 
     Strings getTablesInDB(const String & database);
 
+    Strings getTableAllPreviousDefinitions(const String & table_uuid);
+
     std::vector<StoragePtr> getAllViewsOn(const Context & session_context, const StoragePtr & storage, const TxnTimestamp & ts);
 
     void setTableActiveness(const StoragePtr & storage, const bool is_active, const TxnTimestamp & ts);
@@ -271,6 +300,12 @@ public:
      * @param bucket_numbers If empty fetch all bucket_numbers (by default),
      * otherwise fetch the given bucket_numbers.
      */
+
+    ServerDataPartsWithDBM getAllServerDataPartsWithDBM(
+        const ConstStoragePtr & storage,
+        const TxnTimestamp & ts,
+        const Context * session_context,
+        VisibilityLevel visibility = VisibilityLevel::Visible);
     ServerDataPartsWithDBM getServerDataPartsInPartitionsWithDBM(
         const ConstStoragePtr & storage,
         const Strings & partitions,
@@ -293,8 +328,6 @@ public:
     ServerDataPartsVector getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, VisibilityLevel visibility = VisibilityLevel::Visible);
 
     bool hasTrashedPartsInPartition(const ConstStoragePtr & storage, const String & partition);
-
-    ServerDataPartsWithDBM getAllServerDataPartsWithDBM(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
 
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);

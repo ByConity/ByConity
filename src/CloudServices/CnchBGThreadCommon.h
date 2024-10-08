@@ -58,6 +58,7 @@ namespace CnchBGThread
         GlobalGC = 20, /// reserve several entries
         TxnGC = 21,
         AutoStatistics = 22,
+        Backup = 23,
 
         /// worker types (perhaps this should not be included in CnchBGThread?)
         ResourceReport = 30,
@@ -67,7 +68,7 @@ namespace CnchBGThread
     constexpr unsigned int ServerMaxType = ManifestCheckpoint;
     constexpr unsigned int NumServerType = ServerMaxType + 1;
     constexpr unsigned int DaemonMinType = GlobalGC;
-    constexpr unsigned int DaemonMaxType = AutoStatistics;
+    constexpr unsigned int DaemonMaxType = Backup;
 
     /// when introducing a new type, remember to update toCnchBGThreadAction()
     enum Action : unsigned int
@@ -124,6 +125,8 @@ constexpr auto toString(CnchBGThreadType type)
             return "CnchRefreshMaterializedView";
         case CnchBGThreadType::PartMover:
             return "PartMoverThread";
+        case CnchBGThreadType::Backup:
+            return "BackupThread";
         case CnchBGThreadType::ManifestCheckpoint:
             return "ManifestCheckpoint";
     }

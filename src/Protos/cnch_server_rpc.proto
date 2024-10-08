@@ -465,6 +465,28 @@ message ExecuteOptimizeQueryReq {
 
 message ExecuteOptimizeQueryResp { optional string exception = 1; }
 
+message SubmitBackupTaskReq {
+  required string id = 1;
+  required string command = 2;
+}
+
+message SubmitBackupTaskResp { optional string exception = 1; }
+
+message GetRunningBackupTaskReq {}
+
+message GetRunningBackupTaskResp {
+  optional string ret = 1;
+  optional string exception = 2;
+}
+
+message RemoveRunningBackupTaskReq {
+  required string id = 1;
+}
+
+message RemoveRunningBackupTaskResp {
+  optional string exception = 1;
+}
+
 message SubmitMaterializedMySQLDDLQueryReq {
   required string database_name = 1;
   required string thread_key = 2;
@@ -657,6 +679,15 @@ service CnchServerService {
 
   rpc executeOptimize(ExecuteOptimizeQueryReq)
       returns(ExecuteOptimizeQueryResp);
+
+  rpc submitBackupTask(SubmitBackupTaskReq)
+    returns(SubmitBackupTaskResp);
+
+  rpc getRunningBackupTask(GetRunningBackupTaskReq)
+    returns(GetRunningBackupTaskResp);
+
+  rpc removeRunningBackupTask(RemoveRunningBackupTaskReq)
+    returns(RemoveRunningBackupTaskResp);
 
   rpc submitPreloadTask(SubmitPreloadTaskReq) returns(SubmitPreloadTaskResp);
 

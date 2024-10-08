@@ -41,6 +41,12 @@ public:
     UUID uuid = UUIDHelpers::Nil;
     bool temporary{false};
 
+    String getDatabase() const;
+    String getTable() const;
+
+    void setDatabase(const String & name);
+    void setTable(const String & name);
+
     ASTType getType() const override { return ASTType::ASTQueryWithTableAndOutput; }
     void setTableInfo(const StorageID& storage_id);
     StorageID getTableInfo() const;

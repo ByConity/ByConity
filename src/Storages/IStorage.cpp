@@ -350,6 +350,11 @@ ASTPtr IStorage::applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, 
     return query_filter;
 }
 
+void IStorage::restoreDataFromBackup(BackupTaskPtr &, const DiskPtr &, const String &, ContextMutablePtr, std::optional<ASTs>)
+{
+    throw Exception("Table engine " + getName() + " doesn't support restoring.", ErrorCodes::NOT_IMPLEMENTED);
+}
+
 std::string PrewhereInfo::dump() const
 {
     WriteBufferFromOwnString ss;

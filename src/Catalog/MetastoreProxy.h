@@ -29,6 +29,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <Access/IAccessEntity.h>
+#include <Backups/BackupStatus.h>
 #include <Catalog/IMetastore.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <Core/UUID.h>
@@ -131,6 +132,7 @@ namespace DB::Catalog
 #define TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX "TTS_"
 #define DICTIONARY_BUCKET_UPDATE_TIME_PREFIX "DBUT_"
 #define ENTITY_UUID_MAPPING "EUM_"
+#define BACKUP_TASK_PREFIX "BT_"
 #define SENSITIVE_RESOURCE_PREFIX "SR_"
 #define MANIFEST_DATA_PREFIX "MFST_"
 #define MANIFEST_LIST_PREFIX "MFSTS_"
@@ -269,6 +271,16 @@ public:
     static std::string snapshotKey(const std::string & name_space, const std::string & db_uuid, const std::string & name)
     {
         return snapshotPrefix(name_space, db_uuid) + escapeString(name);
+    }
+
+    static std::string backupPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + "_" + BACKUP_TASK_PREFIX;
+    }
+
+    static std::string backupKey(const std::string & name_space, const std::string & backup_uuid)
+    {
+        return escapeString(name_space) + "_" + BACKUP_TASK_PREFIX + backup_uuid;
     }
 
     static std::string deleteBitmapPrefix(const std::string & name_space, const std::string & uuid)
@@ -1067,6 +1079,12 @@ public:
     /// return snapshot from KV, nullptr if not found.
     std::shared_ptr<Protos::DataModelSnapshot> tryGetSnapshot(const String & name_space, const String & db_uuid, const String & name);
     std::vector<std::shared_ptr<Protos::DataModelSnapshot>> getAllSnapshots(const String & name_space, const String & db_uuid);
+
+    void createBackupJob(const String & name_space, const String & backup_uuid, const Protos::DataModelBackupTask & backup_task);
+    void removeBackupJob(const String & name_space, const String & backup_uuid);
+    std::shared_ptr<Protos::DataModelBackupTask> tryGetBackupJob(const String & name_space, const String & backup_uuid);
+    std::vector<std::shared_ptr<Protos::DataModelBackupTask>> getAllBackupJobs(const String & name_space);
+    void updateBackupJobCAS(const String & name_space, std::shared_ptr<Protos::DataModelBackupTask> & backup_task, const String & expected_value);
 
     String getMaskingPolicy(const String & name_space, const String & masking_policy_name) const;
     Strings getMaskingPolicies(const String & name_space, const Strings & masking_policy_names) const;

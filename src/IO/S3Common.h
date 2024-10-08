@@ -251,6 +251,8 @@ public:
         const std::optional<std::map<String, String>> & metadata = std::nullopt,
         const std::optional<std::map<String, String>> & tags = std::nullopt) const;
 
+    void copyObject(const String & from_key, const String & to_bucket, const String & to_key);
+
     // Delete object
     void deleteObject(const String & key, bool check_existence = true) const;
     void deleteObjects(const std::vector<String> & keys) const;

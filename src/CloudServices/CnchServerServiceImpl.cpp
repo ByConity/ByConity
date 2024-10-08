@@ -38,6 +38,9 @@
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
+#include <Parsers/ParserBackupQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Backups/BackupsWorker.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <DataTypes/ObjectUtils.h>
 #include <Parsers/ASTSerDerHelper.h>
@@ -1847,6 +1850,83 @@ void CnchServerServiceImpl::executeOptimize(
     );
 }
 
+void CnchServerServiceImpl::submitBackupTask(
+    google::protobuf::RpcController *,
+    const Protos::SubmitBackupTaskReq * request,
+    Protos::SubmitBackupTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    const String & backup_id = request->id();
+    const String & backup_command = request->command();
+
+    try
+    {
+        ThreadFromGlobalPool async_thread([=, global_context = getContext(), log = log] {
+            ContextMutablePtr context_ptr = Context::createCopy(global_context);
+
+            ParserBackupQuery backup_parser;
+            ASTPtr backup_ast = parseQuery(backup_parser, backup_command, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+            const ASTBackupQuery & backup_query = backup_ast->as<const ASTBackupQuery &>();
+
+            if (backup_query.kind == ASTBackupQuery::BACKUP)
+                BackupsWorker::doBackup(backup_id, backup_ast, context_ptr);
+            else
+                BackupsWorker::doRestore(backup_id, backup_ast, context_ptr);
+        });
+        async_thread.detach();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchServerServiceImpl::getRunningBackupTask(
+    google::protobuf::RpcController *,
+    const Protos::GetRunningBackupTaskReq *,
+    Protos::GetRunningBackupTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [response = response, done = done, global_context = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            std::optional<String> backup_id = global_context->getRunningBackupTask();
+            if (backup_id)
+                response->set_ret(backup_id.value());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::removeRunningBackupTask(
+    google::protobuf::RpcController *,
+    const Protos::RemoveRunningBackupTaskReq * request,
+    Protos::RemoveRunningBackupTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                const String & backup_id = request->id();
+                global_context->removeRunningBackupTask(backup_id);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        });
+}
+
 void CnchServerServiceImpl::forceRecalculateMetrics(
     google::protobuf::RpcController *,
     const Protos::ForceRecalculateMetricsReq * request,
@@ -1974,5 +2054,4 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
 #else
     #pragma GCC diagnostic pop
 #endif
-
 }

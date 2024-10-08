@@ -1135,13 +1135,14 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
     M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
     M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to execute merge", 0)\
     M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
     M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
-    M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not avaiable", 0) \
+    M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not available", 0) \
     M(BackupVWMode, backup_vw_mode, BackupVWMode::BACKUP, "backup vw mode. backup round_robin backup_only", 0) \
+    M(UInt64, backup_copy_tasks_per_worker, 8, "The batch size of backup copy tasks that send to worker each time", 0) \
     M(String, virtual_warehouse_write, "", "When executing CREATE TABLE query, if this is set, the value will be treated as table setting `cnch_vw_write`", 0) \
     M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
@@ -2057,7 +2058,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
     M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
-    M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
+    M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert total number of part rows to attach.", 0) \
     M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \

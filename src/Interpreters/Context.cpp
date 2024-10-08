@@ -271,6 +271,8 @@ namespace ErrorCodes
     extern const int CATALOG_SERVICE_INTERNAL_ERROR;
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
+    extern const int BACKUP_JOB_CREATE_FAILED;
+    extern const int BACKUP_JOB_CLEAR_FAILED;
     extern const int DATABASE_ACCESS_DENIED;
     extern const int QUERY_WAS_CANCELLED;
 }
@@ -520,6 +522,7 @@ struct ContextSharedPart
 
     std::unique_ptr<PreparedStatementManager> prepared_statement_manager;
 
+    std::optional<String> running_backup_task;
 #if USE_LIBURING
     mutable std::once_flag io_uring_reader_initialized;
     mutable std::vector<std::unique_ptr<IOUringReader>> io_uring_reader;
@@ -6099,6 +6102,55 @@ PlanCacheManager* Context::getPlanCacheManager()
 {
     auto lock = getLock(); // checked
     return shared->plan_cache_manager ? shared->plan_cache_manager.get() : nullptr;
+}
+
+bool Context::trySetRunningBackupTask(const String & backup_id)
+{
+    auto lock = getLock();
+    if (!shared->running_backup_task)
+    {
+        shared->running_backup_task = backup_id;
+        return true;
+    }
+    else if (shared->running_backup_task != backup_id)
+    {
+        LOG_INFO(
+            shared->log,
+            "Cannot create new backup task {} because there is one running backup task {}",
+            backup_id,
+            shared->running_backup_task.value());
+        return false;
+    }
+    return true;
+}
+
+bool Context::hasRunningBackupTask() const
+{
+    auto lock = getLock();
+    return shared->running_backup_task.has_value();
+}
+
+std::optional<String> Context::getRunningBackupTask() const
+{
+    auto lock = getLock();
+    return shared->running_backup_task;
+}
+
+bool Context::checkRunningBackupTask(const String & backup_id) const
+{
+    auto lock = getLock();
+    return shared->running_backup_task && shared->running_backup_task == backup_id;
+}
+
+void Context::removeRunningBackupTask(const String & backup_id)
+{
+    auto lock = getLock();
+    if (!shared->running_backup_task || shared->running_backup_task != backup_id)
+    {
+        LOG_WARNING(shared->log, "Cannot remove backup task {}, which is not running in current server", backup_id);
+        return;
+    }
+    shared->running_backup_task.reset();
 }
 
 void Context::setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager)

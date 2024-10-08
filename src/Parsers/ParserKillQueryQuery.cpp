@@ -38,6 +38,7 @@ bool ParserKillQueryQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     ParserKeyword p_kill{"KILL"};
     ParserKeyword p_query{"QUERY"};
     ParserKeyword p_mutation{"MUTATION"};
+    ParserKeyword p_backup{"BACKUP"};
     ParserKeyword p_on{"ON"};
     ParserKeyword p_test{"TEST"};
     ParserKeyword p_sync{"SYNC"};
@@ -52,6 +53,8 @@ bool ParserKillQueryQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
         query->type = ASTKillQueryQuery::Type::Query;
     else if (p_mutation.ignore(pos, expected))
         query->type = ASTKillQueryQuery::Type::Mutation;
+    else if (p_backup.ignore(pos, expected))
+        query->type = ASTKillQueryQuery::Type::Backup;
     else
         return false;
 

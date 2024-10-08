@@ -30,6 +30,7 @@
 #include <Statistics/StatisticsBase.h>
 #include <Storages/MergeTree/IMetastore.h>
 #include <Storages/StorageSnapshot.h>
+#include "Common/Exception.h"
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include "Interpreters/DistributedStages/PlanSegmentInstance.h"
@@ -51,6 +52,7 @@ extern const int METASTORE_TABLE_TDH_CAS_ERROR;
 extern const int METASTORE_ACCESS_ENTITY_CAS_ERROR;
 extern const int METASTORE_ACCESS_ENTITY_EXISTS_ERROR;
 extern const int NOT_IMPLEMENTED;
+extern const int BACKUP_JOB_BRAIN_SPLIT;
 }
 
 namespace DB::Catalog
@@ -260,6 +262,52 @@ MetastoreProxy::getAllSnapshots(const String & name_space, const String & db_uui
         res.push_back(std::move(item));
     }
     return res;
+}
+
+void MetastoreProxy::createBackupJob(const String & name_space, const String & backup_uuid, const Protos::DataModelBackupTask & backup_task)
+{
+    auto key = backupKey(name_space, backup_uuid);
+    metastore_ptr->put(key, backup_task.SerializeAsString(), /*if_not_exists*/ true);
+}
+
+void MetastoreProxy::removeBackupJob(const String & name_space, const String & backup_uuid)
+{
+    metastore_ptr->drop(backupKey(name_space, backup_uuid));
+}
+
+std::shared_ptr<Protos::DataModelBackupTask> MetastoreProxy::tryGetBackupJob(const String & name_space, const String & backup_uuid)
+{
+    auto key = backupKey(name_space, backup_uuid);
+    String value;
+    metastore_ptr->get(key, value);
+    if (value.empty())
+        return {};
+
+    auto res = std::make_shared<Protos::DataModelBackupTask>();
+    res->ParseFromString(value);
+    return res;
+}
+
+std::vector<std::shared_ptr<Protos::DataModelBackupTask>> MetastoreProxy::getAllBackupJobs(const String & name_space)
+{
+    std::vector<std::shared_ptr<Protos::DataModelBackupTask>> res;
+    auto it = metastore_ptr->getByPrefix(backupPrefix(name_space));
+    while (it->next())
+    {
+        auto item = std::make_shared<Protos::DataModelBackupTask>();
+        item->ParseFromString(it->value());
+        res.push_back(std::move(item));
+    }
+    return res;
+}
+
+void MetastoreProxy::updateBackupJobCAS(
+    const String & name_space, std::shared_ptr<Protos::DataModelBackupTask> & backup_task, const String & expected_value)
+{
+    auto key = backupKey(name_space, backup_task->id());
+    auto res = metastore_ptr->putCAS(key, backup_task->SerializeAsString(), expected_value, true);
+    if (!res.first)
+        throw Exception(ErrorCodes::BACKUP_JOB_BRAIN_SPLIT, "Backup job failed because of network reason, please retry again.");
 }
 
 String MetastoreProxy::getTableUUID(const String & name_space, const String & database, const String & name)

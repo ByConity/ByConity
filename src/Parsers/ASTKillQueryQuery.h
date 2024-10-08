@@ -34,6 +34,7 @@ public:
     {
         Query,      /// KILL QUERY
         Mutation,   /// KILL MUTATION
+        Backup,     /// KILL BACKUP OR RESTORE
     };
 
     Type type = Type::Query;

@@ -13,7 +13,10 @@ class AccessRightsElements;
 class InterpreterKillQueryQuery final : public IInterpreter, WithMutableContext
 {
 public:
-    InterpreterKillQueryQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_) : WithMutableContext(context_), query_ptr(query_ptr_) { }
+    InterpreterKillQueryQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
+        : WithMutableContext(context_), query_ptr(query_ptr_), logger(getLogger("KillQuery"))
+    {
+    }
 
     BlockIO execute() override;
 
@@ -22,6 +25,7 @@ private:
     Block getSelectResult(const String & columns, const String & table);
 
     ASTPtr query_ptr;
+    LoggerPtr logger;
 };
 
 }

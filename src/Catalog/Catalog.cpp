@@ -143,6 +143,16 @@ namespace ProfileEvents
     extern const Event TryGetSnapshotFailed;
     extern const Event GetAllSnapshotsSuccess;
     extern const Event GetAllSnapshotsFailed;
+    extern const Event CreateBackupJobSuccess;
+    extern const Event CreateBackupJobFailed;
+    extern const Event RemoveBackupJobSuccess;
+    extern const Event RemoveBackupJobFailed;
+    extern const Event UpdateBackupJobSuccess;
+    extern const Event UpdateBackupJobFailed;
+    extern const Event GetBackupJobSuccess;
+    extern const Event GetBackupJobFailed;
+    extern const Event GetAllBackupJobSuccess;
+    extern const Event GetAllBackupJobFailed;
     extern const Event CreateTableSuccess;
     extern const Event CreateTableFailed;
     extern const Event DropTableSuccess;
@@ -836,6 +846,95 @@ namespace Catalog
             ProfileEvents::AlterDatabaseFailed);
     }
 
+    void Catalog::createBackupJob(
+        const String & backup_uuid,
+        UInt64 create_time,
+        BackupStatus backup_status,
+        const String & serialized_ast,
+        const String & server_address,
+        bool enable_auto_recover)
+    {
+        runWithMetricSupport(
+            [&] {
+                Protos::DataModelBackupTask model;
+                UInt64 status = static_cast<UInt64>(backup_status);
+                model.set_id(backup_uuid);
+                model.set_create_time(create_time);
+                model.set_status(status);
+                model.set_serialized_ast(serialized_ast);
+                model.set_server_address(server_address);
+                model.set_enable_auto_recover(enable_auto_recover);
+
+                meta_proxy->createBackupJob(name_space, backup_uuid, model);
+                LOG_INFO(log, "Created backup job {} for {}", backup_uuid, serialized_ast);
+            },
+            ProfileEvents::CreateBackupJobSuccess,
+            ProfileEvents::CreateBackupJobFailed);
+    }
+
+    void Catalog::updateBackupJobCAS(BackupTaskModel & backup_task, const String & expected_value)
+    {
+        runWithMetricSupport(
+            [&] {
+                std::optional<UInt64> endtime;
+                auto backup_status = static_cast<BackupStatus>(backup_task->status());
+                if (backup_status == BackupStatus::RESCHEDULING)
+                {
+                    if (backup_task->has_reschedule_times())
+                        backup_task->set_reschedule_times(backup_task->reschedule_times() + 1);
+                    else
+                        backup_task->set_reschedule_times(1);
+                }
+                else if (
+                    backup_status == BackupStatus::COMPLETED || backup_status == BackupStatus::FAILED
+                    || backup_status == BackupStatus::ABORTED)
+                {
+                    endtime = context.getTimestamp();
+                    backup_task->set_end_time(*endtime);
+                    backup_task->set_progress("Finished");
+                }
+                meta_proxy->updateBackupJobCAS(name_space, backup_task, expected_value);
+            },
+            ProfileEvents::UpdateBackupJobSuccess,
+            ProfileEvents::UpdateBackupJobFailed);
+    }
+
+    /// Return backup task if exist, nullptr otherwise.
+    BackupTaskModel Catalog::tryGetBackupJob(const String & backup_uuid)
+    {
+        BackupTaskModel res;
+        runWithMetricSupport(
+            [&] {
+                res = meta_proxy->tryGetBackupJob(name_space, backup_uuid);
+            },
+            ProfileEvents::GetBackupJobSuccess,
+            ProfileEvents::GetBackupJobFailed);
+        return res;
+    }
+
+    BackupTaskModels Catalog::getAllBackupJobs()
+    {
+        BackupTaskModels res;
+        runWithMetricSupport(
+            [&] {
+                res = meta_proxy->getAllBackupJobs(name_space);
+            },
+            ProfileEvents::GetAllBackupJobSuccess,
+            ProfileEvents::GetAllBackupJobFailed);
+        return res;
+    }
+
+    void Catalog::removeBackupJob(const String & backup_uuid)
+    {
+        runWithMetricSupport(
+            [&] {
+                meta_proxy->removeBackupJob(name_space, backup_uuid);
+                LOG_INFO(log, "Remove backup job {}", backup_uuid);
+            },
+            ProfileEvents::RemoveBackupJobSuccess,
+            ProfileEvents::RemoveBackupJobFailed);
+    }
+
     void Catalog::createSnapshot(
         const UUID & db,
         const String & snapshot_name,
@@ -948,8 +1047,9 @@ namespace Catalog
                 // Strings masking_policy_names = getMaskingPolicyNames(ast);
                 Strings masking_policy_names = {};
                 meta_proxy->createTable(name_space, db_uuid, tb_data, dependencies, masking_policy_names);
-                if (auto query_context = CurrentThread::getGroup()->query_context.lock())
+                if (CurrentThread::getGroup() && CurrentThread::getGroup()->query_context.lock())
                 {
+                    auto query_context = CurrentThread::getGroup()->query_context.lock();
                     meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(*query_context, tb_data)->getTableHashForClusterBy().getDeterminHash());
                 }
                 else
@@ -977,8 +1077,11 @@ namespace Catalog
             }
 
             StoragePtr storage;
-            if (auto query_context = CurrentThread::getGroup()->query_context.lock())
+            if (CurrentThread::getGroup() && CurrentThread::getGroup()->query_context.lock())
+            {
+                auto query_context = CurrentThread::getGroup()->query_context.lock();
                 storage = tryGetTableByUUID(*query_context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+            }
             else
                 storage = tryGetTableByUUID(context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
 
@@ -1095,6 +1198,18 @@ namespace Catalog
             ProfileEvents::IsTableExistsSuccess,
             ProfileEvents::IsTableExistsFailed);
         return res;
+    }
+
+    void Catalog::restoreTableHistoryVersion(Protos::DataModelTable history_table)
+    {
+        runWithMetricSupport(
+            [&] {
+                auto res = meta_proxy->alterTable(name_space, history_table, {}, {});
+                if (!res)
+                    throw Exception("Alter table failed.", ErrorCodes::CATALOG_ALTER_TABLE_FAILURE);
+            },
+            ProfileEvents::AlterTableSuccess,
+            ProfileEvents::AlterTableFailed);
     }
 
     void Catalog::alterTable(
@@ -1495,6 +1610,22 @@ namespace Catalog
         return res;
     }
 
+    Strings Catalog::getTableAllPreviousDefinitions(const String & table_uuid)
+    {
+        Strings tables_meta;
+        meta_proxy->getTableByUUID(name_space, table_uuid, tables_meta);
+
+        Strings table_versions;
+        for (size_t i = 0; i < tables_meta.size() - 1; i++)
+        {
+            DB::Protos::DataModelTable model;
+            model.ParseFromString(tables_meta[i]);
+            table_versions.push_back(model.definition());
+        }
+
+        return table_versions;
+    }
+
     std::vector<StoragePtr> Catalog::getAllViewsOn(const Context & session_context, const StoragePtr & storage, const TxnTimestamp & ts)
     {
         std::vector<StoragePtr> res;
@@ -1717,6 +1848,22 @@ namespace Catalog
             },
             ProfileEvents::GetStagedPartsSuccess,
             ProfileEvents::GetStagedPartsFailed);
+        return res;
+    }
+
+    ServerDataPartsWithDBM Catalog::getAllServerDataPartsWithDBM(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
+    {
+        ServerDataPartsWithDBM res;
+        runWithMetricSupport(
+            [&] {
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
+                {
+                    return;
+                }
+                res = getServerDataPartsInPartitionsWithDBM(storage, getPartitionIDs(storage, session_context), ts, session_context, visibility);
+            },
+            ProfileEvents::GetAllServerDataPartsWithDBMSuccess,
+            ProfileEvents::GetAllServerDataPartsWithDBMFailed);
         return res;
     }
 
@@ -2179,22 +2326,6 @@ namespace Catalog
         auto it = meta_proxy->getByPrefix(trash_part_prefix, 10);
 
         return it->next();
-    }
-
-    ServerDataPartsWithDBM Catalog::getAllServerDataPartsWithDBM(
-        const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, const VisibilityLevel visibility)
-    {
-        ServerDataPartsWithDBM res;
-        runWithMetricSupport(
-            [&] {
-                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
-                    return;
-
-                res = getServerDataPartsInPartitionsWithDBM(storage, getPartitionIDs(storage, session_context), ts, session_context, visibility);
-            },
-            ProfileEvents::GetAllServerDataPartsWithDBMSuccess,
-            ProfileEvents::GetAllServerDataPartsWithDBMFailed);
-        return res;
     }
 
     ServerDataPartsVector Catalog::getAllServerDataParts(
@@ -5603,7 +5734,7 @@ namespace Catalog
     {
         runWithMetricSupport(
             [&] {
-                LOG_TRACE(log, "Updating topologies : {}", DB::dumpTopologies(topologies));
+                // LOG_TRACE(log, "Updating topologies : {}", DB::dumpTopologies(topologies));
 
                 if (topologies.empty())
                 {

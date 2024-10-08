@@ -1131,6 +1131,56 @@ void CnchServerClient::executeOptimize(const StorageID & storage_id, const Strin
     RPCHelpers::checkResponse(response);
 }
 
+brpc::CallId CnchServerClient::submitBackupTask(const String & backup_id, const String & backup_command)
+{
+    auto * cntl = new brpc::Controller();
+    Protos::SubmitBackupTaskReq request;
+    auto * response = new Protos::SubmitBackupTaskResp();
+
+    request.set_id(backup_id);
+    request.set_command(backup_command);
+
+    stub->submitBackupTask(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, std::make_shared<ExceptionHandler>()));
+
+    return cntl->call_id();
+}
+
+std::optional<String> CnchServerClient::getRunningBackupTask()
+{
+    brpc::Controller cntl;
+    Protos::GetRunningBackupTaskReq request;
+    Protos::GetRunningBackupTaskResp response;
+
+    stub->getRunningBackupTask(&cntl, &request, &response, nullptr);
+
+    try
+    {
+        // If rpc error, just return empty string
+        assertController(cntl);
+        RPCHelpers::checkResponse(response);
+    }
+    catch (...)
+    {
+        return std::nullopt;
+    }
+
+    return response.has_ret() ? response.ret() : "";
+}
+
+void CnchServerClient::removeRunningBackupTask(const String & backup_id)
+{
+    brpc::Controller cntl;
+    Protos::RemoveRunningBackupTaskReq request;
+    Protos::RemoveRunningBackupTaskResp response;
+
+    request.set_id(backup_id);
+
+    stub->removeRunningBackupTask(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid)
 {
     brpc::Controller cntl;

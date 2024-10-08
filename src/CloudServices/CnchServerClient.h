@@ -201,6 +201,12 @@ public:
     void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms);
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name);
 
+    brpc::CallId submitBackupTask(const String & backup_id, const String & backup_command);
+
+    std::optional<String> getRunningBackupTask();
+
+    void removeRunningBackupTask(const String & backup_id);
+
     UInt32 getDedupImplVersion(const TxnTimestamp & txn_id, const UUID & uuid);
 
 #if USE_MYSQL

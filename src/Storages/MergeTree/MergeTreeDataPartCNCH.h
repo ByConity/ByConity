@@ -33,7 +33,7 @@ public:
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
         const IMergeTreeDataPart * parent_part_ = nullptr,
-        const UUID& part_id = UUIDHelpers::Nil);
+        const UUID & part_id = UUIDHelpers::Nil);
 
     MergeTreeDataPartCNCH(
         const MergeTreeMetaBase & storage_,

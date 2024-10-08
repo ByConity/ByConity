@@ -50,17 +50,19 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <Storages/ColumnsDescription.h>
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 #include <brpc/stream.h>
 #include <Common/Configurations.h>
-#include <Storages/ColumnsDescription.h>
 #include <Common/Exception.h>
+#include <IO/copyData.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/ManifestCache.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Core/SettingsEnums.h>
 #include <MergeTreeCommon/GlobalDataManager.h>
+#include <Backups/BackupUtils.h>
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -1077,6 +1079,68 @@ void CnchWorkerServiceImpl::dropDedupWorker(
             LOG_DEBUG(log, "Dropped table: {}", storage_id.getNameForLogs());
         }).detach();
     })
+}
+
+void CnchWorkerServiceImpl::sendBackupCopyTask(
+    google::protobuf::RpcController *,
+    const Protos::SendBackupCopyTaskReq * request,
+    Protos::SendBackupCopyTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    // backup copy task will hang for a while, so we use separate thread pool to execute it
+    {
+        std::lock_guard lock(backup_lock);
+        if (!backup_rpc_pool)
+            backup_rpc_pool = std::make_unique<ThreadPool>(8, 8, 16, false);
+    }
+    try
+    {
+        backup_rpc_pool->scheduleOrThrowOnError([=, this]() {
+            brpc::ClosureGuard done_guard(done);
+            bool finished = false;
+            const auto & backup_tasks = request->backup_task();
+            try
+            {
+                // Check if the backup task is aborted before and after copying data
+                checkBackupTaskNotAborted(request->id(), getContext());
+                ThreadPool copy_pool(std::min(16, backup_tasks.size()));
+                for (const auto & backup_task : backup_tasks)
+                {
+                    copy_pool.scheduleOrThrowOnError([&, backup_task]() {
+                        setThreadName("BackupCopyThr");
+                        DiskPtr source_disk = getContext()->getDisk(backup_task.source_disk());
+                        DiskPtr destination_disk = getContext()->getDisk(backup_task.destination_disk());
+                        auto read_buffer = source_disk->readFile(backup_task.source_path());
+                        auto write_buffer = destination_disk->writeFile(backup_task.destination_path());
+                        copyData(*read_buffer, *write_buffer);
+                        write_buffer->finalize();
+                    });
+                }
+                copy_pool.wait();
+                finished = true;
+                checkBackupTaskNotAborted(request->id(), getContext());
+            }
+            catch (...)
+            {
+                if (finished)
+                {
+                    for (const auto & backup_task : backup_tasks)
+                    {
+                        DiskPtr destination_disk = getContext()->getDisk(backup_task.destination_disk());
+                        destination_disk->removeFileIfExists(backup_task.destination_path());
+                    }
+                }
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        });
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+        done->Run();
+    }
 }
 
 void CnchWorkerServiceImpl::getDedupWorkerStatus(

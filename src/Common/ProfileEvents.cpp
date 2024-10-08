@@ -560,6 +560,16 @@
     M(TryGetSnapshotFailed, "") \
     M(GetAllSnapshotsSuccess, "") \
     M(GetAllSnapshotsFailed, "") \
+    M(CreateBackupJobSuccess, "") \
+    M(CreateBackupJobFailed, "") \
+    M(UpdateBackupJobSuccess, "") \
+    M(UpdateBackupJobFailed, "") \
+    M(GetBackupJobSuccess, "") \
+    M(GetBackupJobFailed, "") \
+    M(GetAllBackupJobSuccess, "") \
+    M(GetAllBackupJobFailed, "") \
+    M(RemoveBackupJobSuccess, "") \
+    M(RemoveBackupJobFailed, "") \
     M(CreateTableSuccess, "") \
     M(CreateTableFailed, "") \
     M(DropTableSuccess, "") \
