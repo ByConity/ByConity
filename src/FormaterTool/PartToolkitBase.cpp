@@ -168,6 +168,9 @@ StoragePtr PartToolkitBase::getTable()
         ForeignKeysDescription foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(create.columns_list->foreign_keys);
         UniqueNotEnforcedDescription unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(create.columns_list->unique);
 
+        /// In PartTools, BitEngineEncode is illegal, discard
+        processIgnoreBitEngineEncode(columns);
+
         StoragePtr res = StorageFactory::instance().get(
             create,
             PT_RELATIVE_LOCAL_PATH,
@@ -182,6 +185,21 @@ StoragePtr PartToolkitBase::getTable()
         storage = res;
         return res;
     }
+}
+
+void PartToolkitBase::processIgnoreBitEngineEncode(ColumnsDescription & columns)
+{
+    auto reset_bitengine_encode = [](auto & column)
+    {
+        if (column.type->isBitEngineEncode())
+        {
+            auto bitmap_type = std::make_shared<DataTypeBitMap64>();
+            bitmap_type->setFlags(column.type->getFlags());
+            bitmap_type->resetFlags(TYPE_BITENGINE_ENCODE_FLAG);
+            const_cast<ColumnDescription &>(column).type = std::move(bitmap_type);
+        }
+    };
+    std::for_each(columns.begin(), columns.end(), reset_bitengine_encode);
 }
 
 
