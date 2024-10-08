@@ -649,7 +649,7 @@ void StorageCnchMergeTree::filterPartsByPartition(
         return name == "_part" || name == "_bucket_number";
     });
     if (part_filter_queried)
-        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context);
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, query_info.partition_filter);
     auto part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
 
     size_t prev_sz = parts.size();
@@ -3301,7 +3301,8 @@ std::optional<UInt64> StorageCnchMergeTree::totalRowsByPartitionPredicate(const 
 
         /// Generate valid expressions for filtering
         partition_column_valid = partition_column_valid
-            && VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
+            && VirtualColumnUtils::prepareFilterBlockWithQuery(
+                                     query_info.query, local_context, partition_block, expression_ast, query_info.partition_filter);
     }
 
     PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
@@ -3313,7 +3314,7 @@ std::optional<UInt64> StorageCnchMergeTree::totalRowsByPartitionPredicate(const 
     bool part_column_queried
         = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) { return name == "_part"; });
     if (part_column_queried)
-        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context);
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, query_info.partition_filter);
     auto part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
     if (part_values.empty())
         return 0;

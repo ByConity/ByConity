@@ -1280,7 +1280,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             if (!query_data.table_rewrite_info.empty())
                 RewriteDistributedQueryVisitor(query_data).visit(copy_select);
             auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
-            interpreter->execute();
+            interpreter->execute(true);
             LOG_TRACE(getLogger("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
 
             MergeTreeDataSelectExecutor::filterPartsByPartition(

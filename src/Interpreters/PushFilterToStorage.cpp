@@ -27,7 +27,7 @@ std::tuple<ASTs, ASTs> PushFilterToStorage::extractPartitionFilter(ASTPtr query_
         if (!supports_parition_runtime_filter && RuntimeFilterUtils::isInternalRuntimeFilter(predicate))
             return false;
 
-        PartitionPredicateVisitor::Data visitor_data{getContext(), partition_key_names};
+        PartitionPredicateVisitor::Data visitor_data{getContext(), std::const_pointer_cast<IStorage>(storage), predicate};
         PartitionPredicateVisitor(visitor_data).visit(predicate);
         return visitor_data.getMatch();
     });

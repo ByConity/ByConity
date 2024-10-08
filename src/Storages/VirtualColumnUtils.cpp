@@ -21,11 +21,12 @@
 
 #include <Core/NamesAndTypes.h>
 
+#include <Interpreters/ApplyWithPartitionVisitor.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/TreeRewriter.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IdentifierSemantic.h>
+#include <Interpreters/TreeRewriter.h>
 #include <Interpreters/misc.h>
 
 #include <Parsers/ASTIdentifier.h>
@@ -89,8 +90,6 @@ bool isValidFunction(const ASTPtr & expression, const std::function<bool(const A
         // Second argument of IN can be a scalar subquery
         return isValidFunction(function->arguments->children[0], is_constant);
     }
-    else if (function && function->name == InternalFunctionRuntimeFilter::name)
-        return true;
     else
         return is_constant(expression);
 }
@@ -242,6 +241,9 @@ void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr contex
 
     if (!expression_ast)
         return;
+
+    ApplyWithPartitionVisitor::Data visitor_data{block};
+    ApplyWithPartitionVisitor::visit(expression_ast, visitor_data);
 
     /// Let's analyze and calculate the prepared expression.
     auto syntax_result = TreeRewriter(context).analyze(expression_ast, block.getNamesAndTypesList());

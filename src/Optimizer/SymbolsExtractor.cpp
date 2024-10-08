@@ -22,6 +22,9 @@ namespace DB
 {
 std::vector<std::string> SymbolsExtractor::extractVector(ConstASTPtr node)
 {
+    if (!node)
+        return {};
+
     SymbolVisitor visitor;
     SymbolVisitorContext context;
     ASTVisitorUtil::accept(node, visitor, context);
@@ -55,7 +58,8 @@ std::set<std::string> SymbolsExtractor::extract(std::vector<ConstASTPtr> & nodes
     SymbolVisitorContext context;
     for (auto & node : nodes)
     {
-        ASTVisitorUtil::accept(node, visitor, context);
+        if (node)
+            ASTVisitorUtil::accept(node, visitor, context);
     }
     return std::set(context.result.begin(), context.result.end());
 }

@@ -25,6 +25,7 @@
 #include <common/types.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <CloudServices/CnchDataWriter.h>
+#include <Optimizer/PredicateUtils.h>
 
 
 namespace DB
@@ -286,7 +287,14 @@ PrunedPartitions CnchServerClient::fetchPartitions(
     request.set_database(table->getDatabaseName());
     request.set_table(table->getTableName());
     WriteBufferFromOwnString buff;
-    serializeAST(query_info.query, buff);
+    ASTs conjuncts;
+    if (auto where = query_info.getSelectQuery()->where())
+        conjuncts.emplace_back(where);
+    if (query_info.partition_filter)
+        conjuncts.emplace_back(query_info.partition_filter);
+    auto cloned_select = query_info.getSelectQuery()->clone();
+    cloned_select->as<ASTSelectQuery &>().setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts<>(conjuncts));
+    serializeAST(cloned_select, buff);
     request.set_predicate(buff.str());
 
     for (const auto & name : column_names)

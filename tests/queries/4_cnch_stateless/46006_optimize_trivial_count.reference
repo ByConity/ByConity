@@ -52,11 +52,7 @@ Projection
             └─ TableScan default.test46006
 non-optimized:
 Projection
-└─ MergingAggregated
-   └─ Gather Exchange
-      └─ Aggregating
-         └─ Filter
-            └─ TableScan default.test46006
+└─ ReadStorageRowCount
 non-optimized:
 Projection
 └─ Gather Exchange

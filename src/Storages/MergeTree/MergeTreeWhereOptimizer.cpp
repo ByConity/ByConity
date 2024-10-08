@@ -947,7 +947,7 @@ void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryI
             Names virtual_key_names = merge_tree_data->getSampleBlockWithVirtualColumns().getNames();
             partition_key_names.insert(partition_key_names.end(), virtual_key_names.begin(), virtual_key_names.end());
             auto iter = std::stable_partition(conjuncts.begin(), conjuncts.end(), [&](const auto & predicate) {
-                PartitionPredicateVisitor::Data visitor_data{context, partition_key_names};
+                PartitionPredicateVisitor::Data visitor_data{context, storage, predicate};
                 PartitionPredicateVisitor(visitor_data).visit(predicate);
                 return visitor_data.getMatch();
             });

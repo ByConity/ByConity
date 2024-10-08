@@ -1105,9 +1105,8 @@ enum PreloadLevelSettings : UInt64
       "Limit the total number of optimizations applied to query plan. If zero, ignored. If limit reached, throw exception", \
       0) \
     M(Bool, query_plan_filter_push_down, true, "Allow to push down filter by predicate query plan step", 0) \
-    M(Bool, enable_partition_filter_push_down, false, "Allow to push down partition filter to query info", 0) \
+    M(Bool, enable_partition_filter_push_down, true, "Allow to push down partition filter to query info", 0) \
     M(Bool, external_enable_partition_filter_push_down, true, "Allow to push down partition filter to query info for external table. Consider to merge into enable_partition_filter_push_down when mergetree bug is fixed", 0) \
-    M(Bool, remove_partition_filter_on_worker, true, "Remove partition filter before worker execution, since partition pruning has been done on the server. This temp fix is used for not selecting partition key as prewhere", 0) \
     M(Bool, enable_optimizer_early_prewhere_push_down, false, "Allow to push down prewhere in the optimizer phase", 0) \
     M(HiveMoveToPrewhereMethod, hive_move_to_prewhere_method, HiveMoveToPrewhereMethod::COLUMN_SIZE, "Move WHERE to PREWHERE based on which method. Used in hive external table", 0) \
     M(UInt64, regexp_max_matches_per_row, 1000, "Max matches of any single regexp per row, used to safeguard 'extractAllGroupsHorizontal' against consuming too much memory with greedy RE.", 0) \
@@ -1343,6 +1342,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_replace_group_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
     M(Bool, enable_replace_order_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
     M(Bool, enable_topn_filtering_optimization, false, "Obsolete setting, Whether enable TopNFilterting optimization", 0) \
+    M(Bool, remove_partition_filter_on_worker, true, "Obsolete setting, remove partition filter before worker execution, since partition pruning has been done on the server. This temp fix is used for not selecting partition key as prewhere", 0) \
     /** Ingestion */ \
     M(Seconds, ingest_column_memory_lock_timeout, 5, "The time that spend on wait for memory lock", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \

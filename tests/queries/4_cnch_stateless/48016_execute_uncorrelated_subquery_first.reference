@@ -121,13 +121,9 @@ Projection Est. 1000 rows, cost 7.400000e+01
          └─ Sorting Est. 1000 rows, cost 0.000000e+00
             │     Order by: {followed_counter_td DESC NULLS LAST}
             │     Limit: 1000
-            └─ Projection Est. ? rows, cost 0.000000e+00
-               │     Expressions: [followed_counter_td, user_id]
-               └─ Filter Est. ? rows, cost 0.000000e+00
-                  │     Condition: date = cast(19551, \'Date\')
-                  └─ TableScan default.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
-                           Where: date = cast(19551, \'Date\')
-                           Outputs: [date, followed_counter_td, user_id]
+            └─ TableScan default.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
+                     Partition filter: date = cast(19551, \'Date\')
+                     Outputs: [followed_counter_td, user_id]
 Projection Est. 1000 rows, cost 7.600000e+01
 │     Expressions: [user_id]
 └─ Limit Est. 1000 rows, cost 2.000000e+00
