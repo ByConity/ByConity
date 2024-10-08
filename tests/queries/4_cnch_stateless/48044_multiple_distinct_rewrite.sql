@@ -645,3 +645,28 @@ SELECT
     quantile(0.5)(CAST(product_num, 'Nullable(Float64)')) AS _quantile05_1700038790744
 FROM test_48044.aeolus_data_table_8_1718608_prod
 GROUP BY first_normal_business_time;
+
+drop table if exists test_48044.t_order_mx_all;
+CREATE TABLE test_48044.t_order_mx_all
+(
+    `city` String COMMENT '城市',
+    `version_time` DateTime DEFAULT now() COMMENT '版本时间',
+    `loginname` String COMMENT '玩家名称',
+    `product_id` String COMMENT '产品号',
+    `reckontime` DateTime COMMENT '结算时间',
+    `billtime` DateTime COMMENT '投注时间',
+    `billno` String COMMENT '订单编号',
+    `platform_id` String DEFAULT 97 COMMENT '游戏厅id'
+)
+ENGINE = CnchMergeTree
+PARTITION BY toYYYYMMDD(reckontime)
+CLUSTER BY sipHash64(billno, platform_id) INTO 20 BUCKETS
+PRIMARY KEY (billno, platform_id)
+ORDER BY (billno, platform_id);
+
+SELECT
+        `count`(DISTINCT `loginname`) AS `totalheadcount`,
+        `argMax`(`city`, `version_time`) AS `city`
+FROM `test_48044`.`t_order_mx_all`
+GROUP BY
+        `product_id`;

@@ -748,8 +748,12 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
     return {};
 }
 
-void interpretSettings(ASTPtr ast, ContextMutablePtr context)
+void interpretSettings(ASTPtr query, ContextMutablePtr context)
 {
+    auto & ast = query;
+    if (auto * explain_select_query = ast->as<ASTExplainQuery>())
+        ast = explain_select_query->getExplainedQuery();
+
     if (const auto * select_query = ast->as<ASTSelectQuery>())
     {
         if (auto new_settings = select_query->settings())
@@ -933,8 +937,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
-        if (input_ast == nullptr)
-            InterpreterSetQuery::applySettingsFromQuery(ast, context);
+        InterpreterSetQuery::applySettingsFromQuery(ast, context);
 
         if (context->getServerType() == ServerType::cnch_server && context->hasQueryContext())
         {
