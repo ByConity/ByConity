@@ -55,7 +55,7 @@ public:
     static GlueMetastoreClientFactory & instance();
 
     GlueMetastoreClientPtr getOrCreate(const ExternalCatalog::PlainConfigsPtr & configs);
-
+    GlueMetastoreClientPtr getOrCreate(const std::string & name, const std::shared_ptr<CnchHiveSettings> & settings);
 private:
     std::mutex mutex;
     std::map<String, GlueMetastoreClientPtr> clients;

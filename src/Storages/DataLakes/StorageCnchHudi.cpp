@@ -40,9 +40,9 @@ StorageCnchHudi::StorageCnchHudi(
 {
 }
 
-std::shared_ptr<IDirectoryLister> StorageCnchHudi::getDirectoryLister()
+std::shared_ptr<IDirectoryLister> StorageCnchHudi::getDirectoryLister(ContextPtr local_context)
 {
-    auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, getContext(), *storage_settings);
+    auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, local_context, *storage_settings);
     const auto & input_format = hive_table->sd.inputFormat;
     if (input_format == "org.apache.hudi.hadoop.HoodieParquetInputFormat")
     {

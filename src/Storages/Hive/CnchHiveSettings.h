@@ -53,17 +53,28 @@ struct Settings;
     M(String, ak_id, "", "S3 access key", 0) \
     M(String, ak_secret, "", "S3 secret key", 0) \
     M(String, region, "", "S3 region", 0) \
-    M(Bool, hive_remote_virtual_hosted_style, true, "Whether use virtual hosted style URL in Hive S3 connection", 0) \
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
+    M(Bool, s3_use_virtual_hosted_style, true, "use virtual hosted style", 0) \
     /** HMS kerberos settings **/ \
     M(Bool, hive_metastore_client_kerberos_auth, 0, "Enable hms auth with Kerberos", 0) \
     M(String, hive_metastore_client_service_fqdn, "", "The fqdn for auth server", 0) \
     M(String, hive_metastore_client_keytab_path, "/etc/krb5.keytab", "The path of Kerberos keytab for hms auth", 0) \
     M(String, hive_metastore_client_principal, "hive", "The Kerberos principal for hms auth", 0) \
     /** S3 settings **/ \
-    M(Bool, s3_use_virtual_hosted_style, true, "use virtual hosted style", 0) \
     M(String, s3_extra_options, "", "S3 extra options, delimited by ','", 0) \
-
+    M(String, meta_type, "hive", "hive for hive, lf for lasformation, glue for aws glue", 0) \
+    /** las formation settings **/ \
+    M(String, lf_metastore_url, "thrift://dummy:9083", "lasformation thrift addr", 0) \
+    M(String, lf_metastore_region, "cn-beijing", "region", 0) \
+    M(String, lf_metastore_catalog, "hive", "the catalog to be mapped", 0) \
+    M(String, lf_metastore_ak_id, "dummy-ak", "lf ak", 0) \
+    M(String, lf_metastore_ak_secret, "dummy-sk", "lf sk", 0) \
+    M(String, aws_glue_catalog_id, "aws.glue.catalog_id", "aws.glue.catalog_id", 0) \
+    M(String, aws_glue_ak_id, "aws.glue.access_key", "aws.glue.access_key", 0) \
+    M(String, aws_glue_ak_secret, "aws.glue.secret_key", "aws.glue.secret_key", 0) \
+    M(String, aws_glue_region, "aws.glue.region", "aws.glue.region", 0) \
+    M(String, aws_glue_endpoint, "aws.glue.endpoint", "aws.glue.endpoint", 0) \
+    M(Bool, aws_glue_use_instance_profile, false, "aws.glue.use_instance_profile", 0) \
 
 
 /// Settings that should not change after the creation of a table.

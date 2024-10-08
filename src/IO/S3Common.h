@@ -30,10 +30,6 @@ namespace DB
 {
 class RemoteHostFilter;
 
-inline bool isS3Scheme(const std::string & scheme)
-{
-    return strcasecmp(scheme.c_str(), "s3") == 0;
-}
 
 bool isS3URIScheme(const String & scheme);
 }
@@ -130,6 +126,8 @@ struct URI
     }
 
     static void validateBucket(const String & bucket, const Poco::URI & uri);
+    static bool isS3Scheme(const Poco::URI & uri);
+    static bool isS3Scheme(const String & scheme);
 };
 
 class S3Config

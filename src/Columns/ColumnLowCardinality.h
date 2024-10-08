@@ -517,7 +517,16 @@ public:
     public:
         Index();
         Index(const Index & other) = default;
-        Index &operator=(const Index &other) = default;
+
+        Index & operator=(const Index & other)
+        {
+            if (this != &other)
+            {
+                positions = other.positions;
+                size_of_type = other.size_of_type;
+            }
+            return *this;
+        }
 
         explicit Index(MutableColumnPtr && positions_);
         explicit Index(ColumnPtr positions_);
@@ -572,11 +581,18 @@ private:
     {
     public:
         Dictionary(const Dictionary & other) = default;
-        Dictionary &operator=(const Dictionary &other) = default;
 
         explicit Dictionary(MutableColumnPtr && column_unique, bool is_shared);
         explicit Dictionary(ColumnPtr column_unique, bool is_shared);
-
+        Dictionary & operator=(const Dictionary & other)
+        {
+            if (this != &other)
+            {
+                column_unique = other.column_unique;
+                shared = other.shared;
+            }
+            return *this;
+        }
         const ColumnPtr & getColumnUniquePtr() const { return column_unique; }
         WrappedPtr & getColumnUniquePtr() { return column_unique; }
 

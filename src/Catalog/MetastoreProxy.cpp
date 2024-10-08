@@ -106,11 +106,13 @@ void MetastoreProxy::addExternalCatalog(const String & name_space, const Protos:
 
 void MetastoreProxy::getExternalCatalog(const String & name_space, const String & name, Strings & catalog_info)
 {
-    auto it = metastore_ptr->getByPrefix(externalCatalogKey(name_space, name));
-    if (it->next())
-    {
-        catalog_info.emplace_back(it->value());
+    auto key = externalCatalogKey(name_space, name); 
+    String value;
+    metastore_ptr->get(externalCatalogKey(name_space, name), value);
+    if(value.empty()){
+        return;
     }
+    catalog_info.push_back(value);
 }
 
 

@@ -277,5 +277,39 @@ GlueMetastoreClientPtr GlueMetastoreClientFactory::getOrCreate(const ExternalCat
     return client;
 }
 
+
+GlueMetastoreClientPtr GlueMetastoreClientFactory::getOrCreate([[maybe_unused]]const std::string & name, const std::shared_ptr<CnchHiveSettings> & settings)
+{
+    auto catalog_id = settings->aws_glue_catalog_id.value;
+    std::lock_guard lock(mutex);
+    auto it = clients.find(catalog_id);
+    if (it != clients.end())
+    {
+        return it->second;
+    }
+
+    auto glue_ak = settings->aws_glue_ak_id.value;
+    auto glue_sk = settings->aws_glue_ak_secret.value;
+    auto region =  settings->aws_glue_ak_secret.value;
+    auto endpoint = settings->aws_glue_endpoint.value;
+    auto use_instance_profile = settings->aws_glue_use_instance_profile.value;
+
+    // TODO(renming):: use config in catalog.
+    std::shared_ptr<Aws::Client::ClientConfiguration> conf
+        = DB::S3::ClientFactory::instance().createClientConfiguration(region, DB::RemoteHostFilter(), 3, 10000, 1024, false);
+    conf->endpointOverride = endpoint;
+    conf->region = region;
+
+
+    Aws::Auth::AWSCredentials aws_credential(glue_ak, glue_sk);
+    DB::S3::S3CredentialsProviderChain credential_chain(conf, aws_credential, DB::S3::CredentialsConfiguration{use_instance_profile, false});
+    auto glue_credential = credential_chain.GetAWSCredentials();
+
+    GlueClientAuxParams params{.catalog_id = catalog_id};
+    std::shared_ptr<GlueMetastoreClient> client = std::make_shared<GlueMetastoreClient>(glue_credential, conf, params);
+    clients.emplace(catalog_id, client);
+    return client;
+}
+
 }
 

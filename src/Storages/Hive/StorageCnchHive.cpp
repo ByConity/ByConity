@@ -116,7 +116,7 @@ void StorageCnchHive::initialize(StorageInMemoryMetadata metadata_)
     try
     {
         if (!hive_client)
-            hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, storage_settings);
+            hive_client = LakeMetaClientFactory::create(hive_metastore_url, storage_settings);
 
         hive_table = hive_client->getTable(db_name, table_name);
     }
@@ -186,7 +186,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     HiveFiles hive_files;
     std::mutex mu;
 
-    auto lister = getDirectoryLister();
+    auto lister = getDirectoryLister(local_context);
     auto list_partition = [&](const HivePartitionPtr & partition) {
         HiveFiles files = lister->list(partition);
         {
@@ -555,17 +555,17 @@ std::vector<std::pair<String, UInt64>> StorageCnchHive::getPartitionLastModifica
             String partition_str;
             WriteBufferFromString write_buffer(partition_str);
             partition->store(write_buffer, metadata_snapshot->getPartitionKey());
-            partition_last_modification_times.emplace_back(partition_str, apache_partition.lastAccessTime);
+            partition_last_modification_times.emplace_back(partition_str, apache_partition.createTime);
         }
         else
-            partition_last_modification_times.emplace_back(partition->partition_id, apache_partition.lastAccessTime);
+            partition_last_modification_times.emplace_back(partition->partition_id, apache_partition.createTime);
     }
     return partition_last_modification_times;
 }
 
-std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
+std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister(ContextPtr local_context)
 {
-    auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, getContext(), *storage_settings);
+    auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, local_context, *storage_settings);
     const auto & input_format = hive_table->sd.inputFormat;
     if (input_format == "org.apache.hudi.hadoop.HoodieParquetInputFormat")
     {
