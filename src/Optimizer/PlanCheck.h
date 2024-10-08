@@ -51,4 +51,12 @@ private:
     bool check_filter;
 };
 
+class TableScanChecker : public PlanNodeVisitor<Void, ContextMutablePtr>
+{
+public:
+    static void check(QueryPlan & plan, ContextMutablePtr & context);
+
+    Void visitPlanNode(PlanNodeBase &, ContextMutablePtr &) override;
+    Void visitTableScanNode(TableScanNode &, ContextMutablePtr &) override;
+};
 }
