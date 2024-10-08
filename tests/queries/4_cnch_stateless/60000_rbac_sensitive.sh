@@ -117,6 +117,12 @@ $CLICKHOUSE_CLIENT --user=$NEW_USER --multiline --multiquery --testmode --query 
 SELECT * FROM db.tb; -- { serverError ACCESS_DENIED }
 """
 
+$CLICKHOUSE_CLIENT --user=$NEW_USER --multiline --multiquery --testmode --query """
+SET SENSITIVE DATABASE db = 0; -- { serverError ACCESS_DENIED }
+SET SENSITIVE TABLE db.tb = 0; -- { serverError ACCESS_DENIED }
+SET SENSITIVE COLUMN db.tb(id) = 0; -- { serverError ACCESS_DENIED }
+"""
+
 # select from system table
 ${CLICKHOUSE_CLIENT} --multiline --multiquery -q """
 SELECT * FROM system.sensitive_grants where user_name like '%my_user' FORMAT CSV;
