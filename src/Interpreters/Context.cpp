@@ -2962,14 +2962,13 @@ void Context::setFooterCache(size_t max_size_in_bytes)
         ArrowFooterCache::initialize(max_size_in_bytes);
 }
 
-void Context::setUncompressedCache(size_t max_size_in_bytes)
+void Context::setUncompressedCache(size_t max_size_in_bytes, bool shard_mode)
 {
     auto lock = getLock(); // checked
 
     if (shared->uncompressed_cache)
         throw Exception("Uncompressed cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->uncompressed_cache = std::make_shared<UncompressedCache>(max_size_in_bytes);
+    shared->uncompressed_cache = std::make_shared<UncompressedCache>(max_size_in_bytes, shard_mode);
 }
 
 

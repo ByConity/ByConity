@@ -1278,7 +1278,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Uncompressed cache size was lowered to {} because the system has low amount of memory",
             formatReadableSizeWithBinarySuffix(uncompressed_cache_size));
     }
-    global_context->setUncompressedCache(uncompressed_cache_size);
+
+    global_context->setUncompressedCache(uncompressed_cache_size, root_config.enable_uncompressed_cache_shard_mode);
 
 #if USE_EMBEDDED_COMPILER
     /// Compiled expression cache

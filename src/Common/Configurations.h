@@ -172,6 +172,7 @@ struct BSPConfiguration final : public BSPConfigurationData
     M(UInt64, unique_key_index_data_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, unique_key_index_meta_cache_size, "", 1UL * 1024 * 1024 * 1024, ConfigFlag::Default, "") \
     M(UInt64, uncompressed_cache_size, "", 0, ConfigFlag::Default, "") \
+    M(Bool, enable_uncompressed_cache_shard_mode, "", false, ConfigFlag::Default, "") \
     /**
      * Cache default size max ratio */ \
     M(Float32, bitengine_memory_cache_size_default_max_ratio, "", 0.15, ConfigFlag::Default, "") \
