@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Parsers/IAST_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
@@ -83,7 +84,7 @@ namespace CacheableChecker
     private:
         const RuntimeFilterBuildsAndProbes query_runtime_filter_info;
         ContextPtr context;
-        Poco::Logger * log = &Poco::Logger::get("RuntimeFilterCacheableChecker");
+        LoggerPtr log = getLogger("RuntimeFilterCacheableChecker");
 
         // add the rtf to checked if cachable; also add extra rtfs to unchecked_ids
         bool checkRuntimeFilterId(RuntimeFilterId id,

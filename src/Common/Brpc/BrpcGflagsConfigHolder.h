@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/Brpc/SealedConfigHolder.h>
 #include <common/logger_useful.h>
@@ -31,13 +32,13 @@ class BrpcGflagsConfigHolder : public SealedConfigHolder<BrpcGflagsConfigHolder,
 {
 public:
     static inline std::string name{"gflags"};
-    explicit BrpcGflagsConfigHolder() { logger = &Poco::Logger::get("BrpcGflagsConfigHolder"); }
+    explicit BrpcGflagsConfigHolder() { logger = getLogger("BrpcGflagsConfigHolder"); }
     void afterInit(const RawConfig * config_ptr) override;
     void onChange(const RawConfig * old_conf_ptr, const RawConfig * new_conf_ptr) override;
     bool hasChanged(const RawConfig * old_conf_ptr, const RawConfig * new_conf_ptr) override;
 
 private:
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

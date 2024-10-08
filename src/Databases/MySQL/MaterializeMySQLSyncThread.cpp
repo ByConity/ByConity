@@ -54,7 +54,7 @@ static BlockIO tryToExecuteQuery(const String & query_to_execute, ContextMutable
     catch (...)
     {
         tryLogCurrentException(
-            &Poco::Logger::get("MaterializeMySQLSyncThread(" + database + ")"),
+            getLogger("MaterializeMySQLSyncThread(" + database + ")"),
             "Query " + query_to_execute + " wasn't finished successfully");
         throw;
     }
@@ -89,7 +89,7 @@ MaterializeMySQLSyncThread::MaterializeMySQLSyncThread(
     MaterializeMySQLSettings * settings_,
     const String & assigned_table)
     : WithContext(context_->getGlobalContext())
-    , log(&Poco::Logger::get("MaterializedMySQLSyncThread (" + database_name_ + ") "))
+    , log(getLogger("MaterializedMySQLSyncThread (" + database_name_ + ") "))
     , database_name(database_name_)
     , mysql_database_name(mysql_database_name_)
     , assigned_materialized_table(assigned_table)
@@ -765,7 +765,7 @@ void MaterializeMySQLSyncThread::Buffers::prepareCommit(ContextMutablePtr query_
     if (!server_client)
         throw Exception("Failed to get ServerClient", ErrorCodes::LOGICAL_ERROR);
 
-    LOG_TRACE(&Poco::Logger::get("MaterializedMySQLSyncThread"), "Try to commit buffer data to server: {}", server_client->getRPCAddress());
+    LOG_TRACE(getLogger("MaterializedMySQLSyncThread"), "Try to commit buffer data to server: {}", server_client->getRPCAddress());
     /// set rpc info for committing later
     auto & client_info = query_context->getClientInfo();
 
@@ -801,7 +801,7 @@ void MaterializeMySQLSyncThread::Buffers::commit(ContextPtr context, const MySQL
             BlockOutputStreamPtr out = getTableOutput(database, table_name_and_buffer.first + "_" + table_suffix, query_context, true);
             Stopwatch watch;
             copyData(input, *out);
-            LOG_DEBUG(&Poco::Logger::get("MaterializeMySQLThread ({})"), "Copied {} rows and elapsed {} ms",
+            LOG_DEBUG(getLogger("MaterializeMySQLThread ({})"), "Copied {} rows and elapsed {} ms",
                 table_name_and_buffer.first, table_name_and_buffer.second->first.rows(), watch.elapsedMilliseconds());
         }
 

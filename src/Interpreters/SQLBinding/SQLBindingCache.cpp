@@ -27,7 +27,7 @@ void BindingCacheManager::initializeGlobalBinding(ContextMutablePtr & context)
 
     if (manager_instance->sql_binding_cache && manager_instance->re_binding_cache)
     {
-        LOG_WARNING(&Poco::Logger::get("BindingCacheManager"), "Global BindingCacheManager already initialized");
+        LOG_WARNING(getLogger("BindingCacheManager"), "Global BindingCacheManager already initialized");
         return;
     }
 
@@ -39,7 +39,7 @@ void BindingCacheManager::initializeSessionBinding()
 {
     if (sql_binding_cache && re_binding_cache)
     {
-        LOG_WARNING(&Poco::Logger::get("BindingCacheManager"), "Sesion BindingCacheManager already initialized");
+        LOG_WARNING(getLogger("BindingCacheManager"), "Sesion BindingCacheManager already initialized");
         return;
     }
 

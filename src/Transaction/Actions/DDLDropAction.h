@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <variant>
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
@@ -57,7 +58,7 @@ class DDLDropAction : public IAction
 {
 public:
     DDLDropAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, DropActionParams params_)
-        : IAction(query_context_, txn_id_), params(std::move(params_)), log(&Poco::Logger::get("DropAction"))
+        : IAction(query_context_, txn_id_), params(std::move(params_)), log(getLogger("DropAction"))
     {
     }
 
@@ -70,7 +71,7 @@ private:
     // void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
 
     DropActionParams params;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using DDLDropActionPtr = std::shared_ptr<DDLDropAction>;

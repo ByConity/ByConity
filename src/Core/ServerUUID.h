@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Core/UUID.h>
 #include <filesystem>
 
@@ -20,7 +21,7 @@ public:
     static UUID get() { return server_uuid; }
 
     /// Loads server UUID from file or creates new one. Should be called on daemon startup.
-    static void load(const fs::path & server_uuid_file, Poco::Logger * log);
+    static void load(const fs::path & server_uuid_file, LoggerPtr log);
 };
 
 }

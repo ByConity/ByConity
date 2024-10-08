@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "IDictionarySource.h"
 #include <Core/Block.h>
 #include <Interpreters/Context_fwd.h>
@@ -56,7 +57,7 @@ private:
     using SourceRegistry = std::unordered_map<std::string, Creator>;
     SourceRegistry registered_sources;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

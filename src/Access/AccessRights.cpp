@@ -483,7 +483,7 @@ public:
             optimizeTree();
     }
 
-    void logTree(Poco::Logger * log, const String & title) const
+    void logTree(LoggerPtr log, const String & title) const
     {
         LOG_TRACE(log, "Tree({}): level={}, name={}, flags={}, min_flags={}, max_flags={}, num_children={}, is_sensitive={}",
             title, level, node_name ? *node_name : "NULL", flags.toString(),
@@ -539,7 +539,7 @@ private:
     bool canEraseChild([[maybe_unused]] const Node & child) const
     {
         if constexpr (IsSensitive)
-            return false;
+            return !child.max_flags_with_children;
         else
             return ((flags & child.getAllGrantableFlags()) == child.flags) && !child.children;
     }
@@ -1250,7 +1250,7 @@ AccessRights AccessRights::getFullAccess()
 template <bool IsSensitive>
 void AccessRightsBase<IsSensitive>::logTree() const
 {
-    auto * log = &Poco::Logger::get("AccessRights");
+    auto log = getLogger("AccessRights");
     if (root)
     {
         root->logTree(log, "");

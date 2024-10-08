@@ -19,7 +19,7 @@ HTTPSender::HTTPSender(
 
 void HTTPSender::send(const std::string & body)
 {
-    LOG_TRACE((&Poco::Logger::get("HTTPSender")), "Sending request to {}", request.getURI());
+    LOG_TRACE((getLogger("HTTPSender")), "Sending request to {}", request.getURI());
 
     if (body.empty())
     {

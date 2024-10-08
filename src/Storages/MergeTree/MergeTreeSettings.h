@@ -486,6 +486,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, partial_update_query_parts_thread_size, 8, "The thread size of query data parts.", 0) \
     M(UInt64, partial_update_query_columns_thread_size, 1, "The thread size of query columns for each part.", 0) \
     M(Bool, partial_update_enable_merge_map, true, "Map row will just replace the original one when it's false. Otherwise, it will merge row.", 0) \
+    M(DedupImplVersion, dedup_impl_version, DedupImplVersion::DEDUP_IN_WRITE_SUFFIX, "Choose different dedup impl version for unique table write process, current valid values: DEDUP_IN_WRITE_SUFFIX, DEDUP_IN_TXN_COMMIT.", 0) \
     /** CI settings || test settings **/               \
     M(Bool, disable_dedup_parts, false, "Whether block the actual dedup progress.", 0) \
     M(Bool, partial_update_detail_logging, false, "Whether print some detailed troubleshooting information, only used for test scenarios.", 0) \

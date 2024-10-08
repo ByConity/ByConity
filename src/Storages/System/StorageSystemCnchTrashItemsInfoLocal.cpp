@@ -138,7 +138,7 @@ Pipe StorageSystemCnchTrashItemsInfoLocal::read(
                     {
                         if (e.code() == ErrorCodes::CANNOT_GET_TABLE_LOCK && storage)
                             LOG_WARNING(
-                                &Poco::Logger::get("TrashItemsInfoLocal"),
+                                getLogger("TrashItemsInfoLocal"),
                                 "Failed to get parts info for table {} because cannot get table lock, skip it.",
                                 storage->getStorageID().getFullTableName());
                     }

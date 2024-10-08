@@ -28,7 +28,7 @@ void refreshClusterStatsCache(ContextPtr context, const StatsTableIdentifier & t
     {
         Protos::RefreshStatisticsCacheRequest req;
         RPCHelpers::fillStorageID(table_identifier.getStorageID(), *req.add_tables());
-        auto * log = &Poco::Logger::get("refreshClusterStatsCache");
+        auto log = getLogger("refreshClusterStatsCache");
         req.set_mode(mode);
 
         LOG_INFO(log, "refresh statistics on {}", table_identifier.getNameForLogs());
@@ -72,7 +72,7 @@ StatisticsSettings fetchStatisticsSettings(ContextPtr context)
     (void)context;
     throw Exception("not implemented", ErrorCodes::NOT_IMPLEMENTED);
 #if 0
-    auto * log = &Poco::Logger::get("fetchStatisticsSettings");
+    auto log = getLogger("fetchStatisticsSettings");
     Protos::FetchStatisticsSettingsRequest req;
     auto * manager = context->getAutoStatisticsManager();
     auto leader_addr = manager->getZkHelper().getLeaderAddr();
@@ -93,7 +93,7 @@ StatisticsSettings fetchStatisticsSettings(ContextPtr context)
 // std::map<UUID, UInt64> queryUdiCounter(ContextPtr context)
 // {
 //     (void)context;
-//     auto * log = &Poco::Logger::get("queryUdiCounter");
+//     auto log = getLogger("queryUdiCounter");
 
 //     std::map<UUID, UInt64> result;
 

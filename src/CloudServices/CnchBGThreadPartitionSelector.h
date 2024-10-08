@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
 #include <Poco/Logger.h>
@@ -132,7 +133,7 @@ private:
     bool needRoundRobinPick(const StoragePtr & storage, Type type, size_t & out_n_suggestion);
     Strings doRoundRobinPick(const StoragePtr & storage, Type type, size_t n);
 
-    Poco::Logger * log;
+    LoggerPtr log;
     
     /// Whether loading digest information from system.server_part_log successful.
     bool load_success = true;

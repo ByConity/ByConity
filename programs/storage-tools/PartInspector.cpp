@@ -344,7 +344,7 @@ void ParallelInspectRunner::InspectTask::exec() {
 }
 
 ParallelInspectRunner::TaskAllocator::TaskAllocator(const String& base_path, FSOp& fs_op, InspectTask::Type type,
-    const String& stream_name, Poco::Logger* logger):
+    const String& stream_name, LoggerPtr logger):
         base_path_(base_path), fs_op_(fs_op), type_(type), logger_(logger), stream_name_(stream_name) {
     if (fs_op_.isFile(base_path_)) {
         abs_paths_.push_back(base_path_);
@@ -382,7 +382,7 @@ void ParallelInspectRunner::TaskAllocator::collectPaths(const String& base_path,
 
 ParallelInspectRunner::ParallelInspectRunner(const String& base_path, FSOp& fs_op,
     size_t worker_threads, InspectTask::Type type, const String& stream_name):
-        task_allocator_(base_path, fs_op, type, stream_name, &Poco::Logger::get("ParallelInspectRunner")) {
+        task_allocator_(base_path, fs_op, type, stream_name, getLogger("ParallelInspectRunner")) {
     worker_pool_ = std::make_unique<ThreadPool>(worker_threads, worker_threads, worker_threads);
 
     for (size_t i = 0; i < worker_threads; ++i) {

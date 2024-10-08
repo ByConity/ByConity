@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 
 #include <Poco/Logger.h>
@@ -48,7 +49,7 @@ public:
     }
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("FifoPolicy");
+    LoggerPtr log = getLogger("FifoPolicy");
 
     std::deque<detail::Node> queue;
     mutable TimedMutex mutex;

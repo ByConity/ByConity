@@ -68,7 +68,7 @@ String GinDataLocalPartHelper::getPartUniqueID() const
 GinDataCNCHPartHelper::GinDataCNCHPartHelper(const IMergeTreeDataPartPtr& part_,
     const IDiskCachePtr& cache_, DiskCacheMode mode_):
         cache(cache_), part_checksums(part_->getChecksums()),
-        disk(part_->volume->getDisk()), part_rel_path(part_->getFullRelativePath()), mode(mode_), log(&Poco::Logger::get("GinDataCNCHPartHelper"))
+        disk(part_->volume->getDisk()), part_rel_path(part_->getFullRelativePath()), mode(mode_), log(getLogger("GinDataCNCHPartHelper"))
 {
     if (part_->getType() != IMergeTreeDataPart::Type::CNCH)
     {

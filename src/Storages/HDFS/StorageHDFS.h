@@ -1,6 +1,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
+#include <Common/Logger.h>
 #include <Common/config.h>
 #endif
 
@@ -54,7 +55,7 @@ private:
     String format_name;
     String compression_method;
 
-    Poco::Logger * log = &Poco::Logger::get("StorageHDFS");
+    LoggerPtr log = getLogger("StorageHDFS");
 };
 }
 

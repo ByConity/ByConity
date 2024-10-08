@@ -81,7 +81,7 @@ MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
     const MergeTreeDataFormatVersion version_)
     : data(data_)
     , generator_id(generator_id_)
-    , log(&Poco::Logger::get(data.getLogName() + "(CNCHDumper)"))
+    , log(getLogger(data.getLogName() + "(CNCHDumper)"))
     , magic_code(magic_code_)
     , version(version_)
 {
@@ -136,7 +136,7 @@ size_t MergeTreeCNCHDataDumper::check(
 
     DiskPtr remote_disk = remote_part->volume->getDisk();
     String part_data_rel_path = remote_part->getFullRelativePath() + "data";
-    LOG_DEBUG(&Poco::Logger::get("MergeTreeCNCHDataDumper::check"), "Checking part {} from {}\n", remote_part->name, part_data_rel_path);
+    LOG_DEBUG(getLogger("MergeTreeCNCHDataDumper::check"), "Checking part {} from {}\n", remote_part->name, part_data_rel_path);
 
     size_t cnch_data_file_size = remote_disk->getFileSize(part_data_rel_path);
 
@@ -323,6 +323,9 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         WriteSettings write_settings;
         write_settings.mode = WriteMode::Create;
         write_settings.file_meta.insert(std::pair<String, String>(S3ObjectMetadata::PART_GENERATOR_ID, generator_id.str()));
+        write_settings.remote_fs_write_failed_injection = data.getContext()->getSettings().remote_fs_write_failed_injection;
+        // if (data.getSettings()->enable_cloudfs.changed)
+        //     write_settings.enable_cloudfs = data.getSettings()->enable_cloudfs;
 
         auto data_out = disk->writeFile(data_file_rel_path, write_settings);
         SCOPE_EXIT({

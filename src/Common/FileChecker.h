@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/logger_useful.h>
 #include <Storages/CheckResults.h>
 #include <Disks/IDisk.h>
@@ -41,7 +42,7 @@ private:
 
     Map map;
 
-    Poco::Logger * log = &Poco::Logger::get("FileChecker");
+    LoggerPtr log = getLogger("FileChecker");
 };
 
 }

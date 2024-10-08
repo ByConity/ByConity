@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstddef>
 #include <thread>
 #include <utility>
@@ -186,7 +187,7 @@ class ISegmentBitmapColumnListIndexes
 
     virtual String getPath() const { return path; }
 
-    Poco::Logger * log = &Poco::Logger::get("SegmentBitmapColumnListIndexes");
+    LoggerPtr log = getLogger("SegmentBitmapColumnListIndexes");
 
     virtual ~ISegmentBitmapColumnListIndexes() = default;
 };

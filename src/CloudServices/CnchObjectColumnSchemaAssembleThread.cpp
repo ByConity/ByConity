@@ -111,7 +111,7 @@ void CnchObjectColumnSchemaAssembleThread::runImpl()
                 // Step 4:update assembled schema and delete partial schema in storage cache
                 if (auto cache_manager = getContext()->getPartCacheManager())
                 {
-                    if (auto storage_in_cache = cache_manager->getStorageFromCache(table_uuid, current_topology_version))
+                    if (auto storage_in_cache = cache_manager->getStorageFromCache(table_uuid, current_topology_version, *getContext()))
                     {
                         auto & table_in_cache = checkAndGetCnchTable(storage_in_cache);
                         table_in_cache.refreshAssembledSchema(new_assembled_schema, committed_partial_schema_txnids);

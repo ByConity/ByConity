@@ -97,6 +97,7 @@ namespace RPCHelpers
         else /// Should we throw exception here to cover all other errors?
             throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_EXCEPTION);
     }
+
 }
 
 }

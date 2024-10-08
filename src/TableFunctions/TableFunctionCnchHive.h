@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include "Common/config.h"
 
 #if USE_HIVE
@@ -24,7 +25,7 @@ public:
     void parseArguments(const ASTPtr & ast_function_, ContextPtr context_) override;
 
 private:
-    Poco::Logger * logger = &Poco::Logger::get("TableFunctionHive");
+    LoggerPtr logger = getLogger("TableFunctionHive");
 
     String cluster_name;
     String hive_metastore_url;

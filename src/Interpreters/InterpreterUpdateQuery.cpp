@@ -74,7 +74,7 @@ getTableBlockIO(const StoragePtr & storage, ContextMutablePtr query_context)
 InterpreterUpdateQuery::InterpreterUpdateQuery(const ASTPtr & query_ptr_, ContextPtr context_)
     : WithContext(context_),
       query_ptr(query_ptr_),
-      log(&Poco::Logger::get("InterpreterUpdateQuery"))
+      log(getLogger("InterpreterUpdateQuery"))
 {
 }
 
@@ -158,6 +158,8 @@ ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & 
     for (const auto & column : metadata_ptr->getColumns().getOrdinary())
         ordinary_columns.emplace(column.name);
 
+    ColumnsDescription::ColumnOnUpdates onupdate_columns = metadata_ptr->getColumns().getOnUpdates();
+
     /// collect assignments
     std::unordered_map<String, ASTPtr> assignments;
     String update_table_alias;
@@ -191,6 +193,8 @@ ASTPtr InterpreterUpdateQuery::prepareInterpreterSelectQuery(const StoragePtr & 
         ASTPtr element;
         if (assignments.count(ordinary_column.name))
             element = assignments[ordinary_column.name];
+        else if (onupdate_columns.count(ordinary_column.name))
+            element = onupdate_columns[ordinary_column.name];
         else
             element = std::make_shared<ASTIdentifier>(ordinary_column.name);
         select_list->children.push_back(element);

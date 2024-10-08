@@ -488,6 +488,7 @@ struct WhichDataType
     constexpr bool isBitmap64() const { return idx == TypeIndex::BitMap64; }
     constexpr bool isLowCardinality() const { return idx == TypeIndex::LowCardinality; }
     constexpr bool isSketchBinary() const { return idx == TypeIndex::SketchBinary; }
+    constexpr bool isJsonb() const { return idx == TypeIndex::JSONB; }
 };
 
 /// IDataType helpers (alternative for IDataType virtual methods with single point of truth)
@@ -520,6 +521,7 @@ inline bool isUUID(const DataTypePtr & data_type) { return WhichDataType(data_ty
 inline bool isIPv4(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv4(); }
 inline bool isIPv6(const DataTypePtr & data_type) { return WhichDataType(data_type).isIPv6(); }
 inline bool isBitmap64(const DataTypePtr & data_type) { return WhichDataType(data_type).isBitmap64(); }
+inline bool isJsonb(const DataTypePtr & data_type) { return WhichDataType(data_type).isJsonb(); }
 
 template <typename T>
 inline bool isObject(const T & data_type)

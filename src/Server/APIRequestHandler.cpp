@@ -96,7 +96,7 @@ namespace ErrorCodes
 }
 
 APIRequestHandler::APIRequestHandler(IServer & server)
-    : WithMutableContext(server.context()), log(&Poco::Logger::get("HTTPHandler for API"))
+    : WithMutableContext(server.context()), log(getLogger("HTTPHandler for API"))
 {
     server_display_name = getContext()->getConfigRef().getString("display_name", getFQDNOrHostName());
 }

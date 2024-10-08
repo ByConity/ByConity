@@ -82,7 +82,7 @@ namespace ErrorCodes
     extern const int TOO_LARGE_DISTRIBUTED_DEPTH;
 }
 
-static Block adoptBlock(const Block & header, const Block & block, Poco::Logger * log)
+static Block adoptBlock(const Block & header, const Block & block, LoggerPtr log)
 {
     if (blocksHaveEqualStructure(header, block))
         return block;
@@ -99,7 +99,7 @@ static Block adoptBlock(const Block & header, const Block & block, Poco::Logger 
 }
 
 
-static void writeBlockConvert(const BlockOutputStreamPtr & out, const Block & block, size_t repeats, Poco::Logger * log)
+static void writeBlockConvert(const BlockOutputStreamPtr & out, const Block & block, size_t repeats, LoggerPtr log)
 {
     Block adopted_block = adoptBlock(out->getHeader(), block, log);
     for (size_t i = 0; i < repeats; ++i)
@@ -126,7 +126,7 @@ DistributedBlockOutputStream::DistributedBlockOutputStream(
     , allow_materialized(context->getSettingsRef().insert_allow_materialized_columns)
     , insert_timeout(insert_timeout_)
     , main_table(main_table_)
-    , log(&Poco::Logger::get("DistributedBlockOutputStream"))
+    , log(getLogger("DistributedBlockOutputStream"))
 {
     const auto & settings = context->getSettingsRef();
     if (settings.max_distributed_depth && context->getClientInfo().distributed_depth > settings.max_distributed_depth)

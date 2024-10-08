@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 #include <Common/ZooKeeper/Types.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -35,7 +36,7 @@ public:
 private:
     StorageReplicatedMergeTree & storage;
     String log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
     BackgroundSchedulePool::TaskHolder task;
     pcg64 rng{randomSeed()};
 

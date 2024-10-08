@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Poco/Net/TCPServerConnection.h>
 #include <common/getFQDNOrHostName.h>
 #include <Common/CurrentMetrics.h>
@@ -70,7 +71,8 @@ protected:
 
     IServer & server;
     TCPServer & tcp_server;
-    Poco::Logger * log;
+    /// stick to raw logger to support log(const Exception& exc)
+    LoggerRawPtr log;
     uint32_t connection_id = 0;
 
     uint32_t server_capabilities = 0;

@@ -31,7 +31,7 @@ namespace DB
 VWQueueSyncThread::VWQueueSyncThread(UInt64 interval_, ContextPtr global_context_)
     : WithContext(global_context_)
     , interval(interval_)
-    , log(&Poco::Logger::get("VWQueueSyncThread"))
+    , log(getLogger("VWQueueSyncThread"))
 {
     LOG_DEBUG(log, "Starting VW Queue Sync");
     task = getContext()->getSchedulePool().createTask("VWQueueSyncThread", [this]{ run(); });
@@ -204,7 +204,7 @@ void VWQueueSyncThread::run()
     auto vw_resource_group_manager = dynamic_cast<VWResourceGroupManager *>(resource_group_manager);
     if (!vw_resource_group_manager)
     {
-        LOG_DEBUG(&Poco::Logger::get("VWQueueSyncThread"), "Stopping VW Queue Sync Thread because Resource Group Manager is not of type VWResourceGroupManager");
+        LOG_DEBUG(getLogger("VWQueueSyncThread"), "Stopping VW Queue Sync Thread because Resource Group Manager is not of type VWResourceGroupManager");
         return;
     }
 

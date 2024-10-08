@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <shared_mutex>
 #include <Interpreters/Context.h>
 #include <Protos/auto_statistics.pb.h>
@@ -76,7 +77,7 @@ private:
     void logTaskIfNeeded(const StatsTableIdentifier & table, UInt64 udi_count, UInt64 stats_row_count);
 
     void createTask(const StatisticsScope & scope);
-    Poco::Logger * logger;
+    LoggerPtr logger;
 
     // we don't have lock to protect internal_config since it will be accessed only single-threaded
     InternalConfig internal_config;

@@ -19,7 +19,7 @@ namespace ErrorCodes
 }
 
 CacheManager::CacheManager(size_t max_size_in_bytes)
-    : cache(std::make_shared<Cache>(max_size_in_bytes)), log(&Poco::Logger::get("CacheManager"))
+    : cache(std::make_shared<Cache>(max_size_in_bytes)), log(getLogger("CacheManager"))
 {
 }
 
@@ -169,9 +169,7 @@ void CacheManager::setComplete(const CacheKey & key)
     {
         auto empty_key = key.cloneWithoutOwnerInfo();
         value = tryGetUncompletedCache(empty_key);
-        if (value)
-            eraseUncompletedCache(empty_key);
-        else
+        if (!value)
             modifyKeyStateToRefused(key);
     }
     if (value)

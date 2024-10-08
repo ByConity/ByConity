@@ -55,7 +55,7 @@ static ASTPtr parseCreateQuery(ContextMutablePtr context, const String & create_
 
 void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const String & create_query, bool skip_if_exists, const ColumnsDescription & object_columns)
 {
-    LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "start create cloud table {}", create_query);
+    LOG_DEBUG(getLogger("WorkerResource"), "start create cloud table {}", create_query);
     auto ast_query = parseCreateQuery(context, create_query);
     auto & ast_create_query = ast_query->as<ASTCreateQuery &>();
 
@@ -85,10 +85,10 @@ void CnchWorkerResource::executeCacheableCreateQuery(
     const String & underlying_dictionary_tables,
     const ColumnsDescription & object_columns)
 {
-    static auto * log = &Poco::Logger::get("WorkerResource");
+    static auto log = getLogger("WorkerResource");
 
     std::shared_ptr<StorageCloudMergeTree> cached;
-    if (auto cache = context->tryGetCloudTableDefinitionCache(); cache && !context->hasSessionTimeZone())
+    if (auto cache = context->tryGetCloudTableDefinitionCache(); cache)
     {
         auto load = [&]() -> std::shared_ptr<StorageCloudMergeTree>
         {
@@ -220,7 +220,7 @@ void CnchWorkerResource::insertCloudTable(DatabaseAndTableName key, const Storag
         }
     }
 
-    static auto * log = &Poco::Logger::get("WorkerResource");
+    static auto log = getLogger("WorkerResource");
     LOG_DEBUG(log, "Successfully create database {} and table {} {}",
         tenant_db, storage->getName(), storage->getStorageID().getNameForLogs());
 }

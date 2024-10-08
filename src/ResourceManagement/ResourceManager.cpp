@@ -105,7 +105,7 @@ int ResourceManager::main(const std::vector<std::string> &)
     if (consul_http_host != nullptr && consul_http_port != nullptr)
         brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
 
-    Poco::Logger * log = &logger();
+    auto log = getLogger(logger());
     LOG_INFO(log, "Resource Manager is starting up...");
 
     auto shared_context = Context::createShared();

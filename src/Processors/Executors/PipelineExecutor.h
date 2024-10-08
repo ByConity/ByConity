@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Processors/IProcessor.h>
 #include <Processors/Executors/PollingQueue.h>
 #include <Processors/Executors/ThreadsQueue.h>
@@ -131,7 +132,7 @@ private:
     std::atomic_bool cancelled;
     std::atomic_bool finished;
 
-    Poco::Logger * log = &Poco::Logger::get("PipelineExecutor");
+    LoggerPtr log = getLogger("PipelineExecutor");
 
     /// Things to stop execution to expand pipeline.
     struct ExpandPipelineTask

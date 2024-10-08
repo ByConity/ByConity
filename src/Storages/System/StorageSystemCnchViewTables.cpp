@@ -171,7 +171,7 @@ Pipe StorageSystemCnchViewTables::read(
         }
         catch (...)
         {
-            tryLogCurrentException(&Poco::Logger::get("StorageSystemCnchViewTables"));
+            tryLogCurrentException(getLogger("StorageSystemCnchViewTables"));
             continue;
         }
         if (!mv)

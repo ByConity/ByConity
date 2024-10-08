@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <Optimizer/Rule/Rewrite/EagerAggregation.h>
 
@@ -19,6 +20,7 @@
 #include <QueryPlan/ValuesStep.h>
 #include <fmt/format.h>
 #include <incubator-brpc/src/butil/file_util.h>
+#include <Poco/Logger.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include "Core/NameToType.h"
@@ -31,6 +33,7 @@
 #include "Optimizer/SymbolsExtractor.h"
 #include "Parsers/ASTFunction.h"
 #include "QueryPlan/IQueryPlanStep.h"
+#include <DataTypes/DataTypeCustomSimpleAggregateFunction.h>
 
 namespace DB
 {
@@ -45,6 +48,8 @@ ConstRefPatternPtr EagerAggregation::getPattern() const
 
 enum class AggFuncClass
 {
+    BASIC,
+    NEED_MERGE,
     CLASS_C,
     CLASS_D,
     UNKNOWN
@@ -53,16 +58,58 @@ enum class AggFuncClass
 static AggFuncClass getClassOfAggFunc(String name)
 {
     name = Poco::toLower(name);
-    if (name == "sum" || name == "count")
-        return AggFuncClass::CLASS_C;
-    if (name == "sumdistinct" || name == "uniqexact" || name == "avg" || name == "min" || name == "max")
-        return AggFuncClass::CLASS_D;
+
+    static const std::unordered_set<std::string> simple_aggregate_functions = {
+        "any",
+        "anyLast",
+        "min",
+        "max",
+        "sum",
+        "sumWithOverflow",
+        "groupBitAnd",
+        "groupBitOr",
+        "groupBitXor",
+        "sumMap",
+        "minMap",
+        "maxMap",
+        "groupArrayArray",
+        "groupArrayLastArray",
+        "groupUniqArrayArray",
+        "sumMappedArrays",
+        "minMappedArrays",
+        "maxMappedArrays"
+    };
+
+    if (simple_aggregate_functions.contains(name))
+        return AggFuncClass::BASIC;
+    if (name == "uniqexact" || name == "count")
+        return AggFuncClass::NEED_MERGE;
+    // if (name == "sum" || name == "count")
+    //     return AggFuncClass::CLASS_C;
+    // if (name == "sumdistinct" || name == "uniqexact" || name == "avg" || name == "min" || name == "max")
+    //     return AggFuncClass::CLASS_D;
     return AggFuncClass::UNKNOWN;
+}
+
+// Split any function in clickhouse to state + merge:
+// sum -split to-> sumState + sumMerge.
+// Sometimes it is necessary to further split the intermediate function:
+// sumState -split to-> sumState + sumStateMerge.
+// sumMerge -split to-> sumStateMerge + sumMerge.
+// sumStateMerge -split to-> sumStateMerge + sumStateMerge.
+static String getStateName(const String & func_name)
+{
+    return func_name + "State";
+}
+
+static String getMergeName(const String & func_name)
+{
+    return func_name + "Merge";
 }
 
 static bool decomposeAggJoin(
     const AggregateDescriptions & agg_descs,
-    const Names & group_by_keys,
+    const NameSet & group_by_keys,
     const NameSet & names_from_left,
     const NameSet & names_from_right,
     AggregateDescriptions & composed_aggregates,
@@ -74,16 +121,16 @@ static bool decomposeAggJoin(
     for (const auto & aggregator : agg_descs)
     {
         auto function_type = getClassOfAggFunc(aggregator.function->getName());
-        if (function_type != AggFuncClass::CLASS_C)
+        if (function_type == AggFuncClass::UNKNOWN)
             return false;
         if (SymbolUtils::containsAll(names_from_left, aggregator.argument_names))
         {
-            if (aggregator.argument_names.size() == 1)
+            if (aggregator.argument_names.size() == 1 && !group_by_keys.contains(aggregator.argument_names[0]))
                 s1.emplace_back(aggregator);
         }
         else if (SymbolUtils::containsAll(names_from_right, aggregator.argument_names))
         {
-            if (aggregator.argument_names.size() == 1)
+            if (aggregator.argument_names.size() == 1 && !group_by_keys.contains(aggregator.argument_names[0]))
                 s2.emplace_back(aggregator);
         }
         else
@@ -108,6 +155,7 @@ static bool decomposeAggJoin(
 static bool decomposeProjection(
     const ProjectionStep & projection_step,
     const AggregateDescriptions & composed_aggregates,
+    const NameSet & group_by_keys,
     const NameSet & names_from_left,
     const NameSet & names_from_right,
     NameToNameMap & global_argument_name_to_local_from_left,
@@ -142,8 +190,8 @@ static bool decomposeProjection(
                                 String decomposed_argument_name = child->name();
 
                                 if (!global_argument_name_to_local_from_left.contains(decomposed_argument_name)
-                                    && !global_argument_name_to_local_from_right.contains(
-                                        decomposed_argument_name)) // Avoid producing duplicate sum entries in local aggregate.
+                                    && !global_argument_name_to_local_from_right.contains(decomposed_argument_name)
+                                    && !group_by_keys.contains(decomposed_argument_name)) // Avoid producing duplicate sum entries in local aggregate.
                                 {
                                     String new_decomposed_argument_name = symbol_allocator->newSymbol("inter#" + decomposed_argument_name);
 
@@ -228,8 +276,18 @@ static bool decomposeProjection(
     return deep_parse_success;
 }
 
-static std::pair<AggregateDescriptions, Names>
-updateAggS0AndG0(NameSet names_from_one_side, const NameSet & projection_gene_symbols, const AggregateDescriptions & s0, const Names & g0)
+struct AggregationsAndKeys
+{
+public:
+    AggregateDescriptions descriptions;
+    Names keys;
+    bool invalid = false;
+
+    operator bool() const { return !invalid; }
+};
+AggregationsAndKeys AggregationsAndKeysInvalidFlag{{}, {}, true};
+
+static AggregationsAndKeys updateAggS0AndG0(NameSet names_from_one_side, const NameSet & projection_gene_symbols, const AggregateDescriptions & s0, const Names & g0)
 {
     names_from_one_side.insert(projection_gene_symbols.begin(), projection_gene_symbols.end());
 
@@ -237,13 +295,12 @@ updateAggS0AndG0(NameSet names_from_one_side, const NameSet & projection_gene_sy
     for (const auto & agg : s0)
     {
         auto function_type = getClassOfAggFunc(agg.function->getName());
-        if (function_type != AggFuncClass::CLASS_C)
-            continue;
 
-        if (agg.argument_names.size()
-            == 1) // argument_names cannot be empty, otherwise it is not possible to tell whether to push down to the left or the right
-            if (SymbolUtils::containsAll(names_from_one_side, agg.argument_names))
-                new_s0.push_back(agg);
+        // argument_names cannot be empty, otherwise it is not possible to tell whether to push down to the left or the right
+        if (function_type != AggFuncClass::UNKNOWN && agg.argument_names.size() == 1 && SymbolUtils::containsAll(names_from_one_side, agg.argument_names))
+            new_s0.push_back(agg);
+        else
+            return AggregationsAndKeysInvalidFlag;
     }
 
     Names new_g0;
@@ -253,8 +310,8 @@ updateAggS0AndG0(NameSet names_from_one_side, const NameSet & projection_gene_sy
             new_g0.push_back(group_key);
     }
 
-    // LOG_WARNING(
-    //     &Poco::Logger::get("test"),
+    // LOG_DEBUG(
+    //     getLogger("test"),
     //     "names_from_one_side={}, g0={}, new_g0={}, s0={}, new_s0={}",
     //     fmt::join(names_from_one_side, ","),
     //     fmt::join(g0, ","),
@@ -272,25 +329,83 @@ static LocalGroupByTargetMap determineBottomJoin(
     const Names & init_g0,
     const NameOrderedSet & projection_require_symbols,
     const NameSet & projection_gene_symbols,
-    const NameSet & init_require_output_names_of_join,
-    const NameToNameMap & global_argument_name_to_local_from_projection)
+    const NameSet & init_require_output_names_from_local_agg,
+    const NameToNameMap & global_argument_name_to_local_from_projection,
+    RuleContext & context)
 {
     LocalGroupByTargetMap result;
 
-    // LOG_WARNING(
-    //     &Poco::Logger::get("test"),
-    //     "\tinto determineBottomJoin, init_s0={}, init_g0={}, projection_gene_symbols={}, projection_gene_symbols={}, "
-    //     "init_require_output_names_of_join={}",
-    //     formatS0(init_s0),
-    //     fmt::join(init_g0, ","),
-    //     fmt::join(projection_require_symbols, ","),
-    //     fmt::join(projection_gene_symbols, ","),
-    //     fmt::join(init_require_output_names_of_join, ","));
+    String global_argument_name_to_local_from_projection_str;
+    for (const auto & [a, b] : global_argument_name_to_local_from_projection)
+        global_argument_name_to_local_from_projection_str += a + ", " + b + "\n";
 
-    std::function<void(NameSet, PlanNodePtr, int, AggregateDescriptions, Names, int)> find_bottom_join =
-        [&](NameSet require_output_names_of_join, PlanNodePtr join, int index, AggregateDescriptions s0, Names g0, int join_layer)
-        -> void {
-        if (join->getChildren()[index]->getType() != IQueryPlanStep::Type::Join)
+    LOG_DEBUG(
+        getLogger("test"),
+        "\tinto determineBottomJoin, init_s0={}, init_g0={}, projection_gene_symbols={}, projection_gene_symbols={}, "
+        "init_require_output_names_from_local_agg={}, global_argument_name_to_local_from_projection_str={}",
+        formatS0(init_s0),
+        fmt::join(init_g0, ","),
+        fmt::join(projection_require_symbols, ","),
+        fmt::join(projection_gene_symbols, ","),
+        fmt::join(init_require_output_names_from_local_agg, ","),
+        global_argument_name_to_local_from_projection_str);
+
+    bool has_visit_first_join = false;
+
+    std::function<void(NameSet, PlanNodePtr, int, AggregateDescriptions, Names, int, std::unordered_map<String, String>)> find_bottom_join
+        = [&](NameSet require_output_names_from_local_agg, PlanNodePtr join, int index, AggregateDescriptions s0, Names g0, int join_layer, std::unordered_map<String, String> proj_expr_to_origin_column) {
+
+        if (join->getChildren()[index]->getType() == IQueryPlanStep::Type::Projection
+            && join->getChildren()[index]->getChildren()[0]->getType() == IQueryPlanStep::Type::Join
+            && proj_expr_to_origin_column.empty()) // try to push agg through projection
+        {
+            const auto & projection_step = dynamic_cast<const ProjectionStep &>(*join->getChildren()[index]->getStep());
+            const auto & next_join_node = join->getChildren()[index]->getChildren()[0];
+
+            for (const auto & [name, ast] : projection_step.getAssignments())
+            {
+                if (!Utils::isIdentity(name, ast))
+                {
+                    auto names = SymbolsExtractor::extract(ast);
+                    if (names.size() != 1)
+                    {
+                        proj_expr_to_origin_column.clear();
+                        break;
+                    }
+                    proj_expr_to_origin_column.emplace(name, *names.begin());
+                }
+            }
+            if (!proj_expr_to_origin_column.empty())
+            {
+                const auto & second_join_step = dynamic_cast<const JoinStep &>(*next_join_node->getStep());
+                if (second_join_step.getFilter())
+                {
+                    auto symbols = SymbolsExtractor::extract(second_join_step.getFilter());
+                    require_output_names_from_local_agg.insert(symbols.begin(), symbols.end());
+                }
+                require_output_names_from_local_agg.insert(second_join_step.getLeftKeys().begin(), second_join_step.getLeftKeys().end());
+                require_output_names_from_local_agg.insert(second_join_step.getRightKeys().begin(), second_join_step.getRightKeys().end());
+                auto second_names_from_left = next_join_node->getChildren()[0]->getCurrentDataStream().header.getNameSet();
+                auto second_names_from_right = next_join_node->getChildren()[1]->getCurrentDataStream().header.getNameSet();
+
+                auto old_result_size = result.size();
+                if (auto new_sg = updateAggS0AndG0(second_names_from_left, projection_gene_symbols, s0, g0))
+                {
+                    find_bottom_join(require_output_names_from_local_agg, next_join_node, 0, new_sg.descriptions, new_sg.keys, join_layer, proj_expr_to_origin_column);
+                }
+
+                if (old_result_size == result.size())
+                {
+                    if (auto new_sg = updateAggS0AndG0(second_names_from_right, projection_gene_symbols, s0, g0))
+                    {
+                        find_bottom_join(require_output_names_from_local_agg, next_join_node, 1, new_sg.descriptions, new_sg.keys, join_layer, proj_expr_to_origin_column);
+                    }
+                }
+                return;
+            }
+        }
+
+        if (join->getChildren()[index]->getType() != IQueryPlanStep::Type::Join || has_visit_first_join)
         {
             Names c1;
             if (projection_gene_symbols.empty())
@@ -306,7 +421,14 @@ static LocalGroupByTargetMap determineBottomJoin(
                 }
             }
 
-            require_output_names_of_join.insert(init_require_output_names_of_join.begin(), init_require_output_names_of_join.end());
+
+            String str;
+            for (const auto & [a, b] : proj_expr_to_origin_column)
+                str += a + ", " + b + "\n";
+
+            LOG_WARNING(getLogger("test"), "before proj_expr_to_origin_column={}", str);
+
+            require_output_names_from_local_agg.insert(init_require_output_names_from_local_agg.begin(), init_require_output_names_from_local_agg.end());
 
             NameSet global_agg_needs;
             for (const auto & aggregator : s0)
@@ -318,7 +440,21 @@ static LocalGroupByTargetMap determineBottomJoin(
                 }
             }
 
-            std::erase_if(c1, [&](const String & v) { return !require_output_names_of_join.contains(v); });
+            // convert group by expr(xx) in global agg -> group by xx in local agg, xx must be saved in local agg.
+            if (!proj_expr_to_origin_column.empty())
+            {
+                for (const auto & [expr, origin_column] : proj_expr_to_origin_column)
+                {
+                    if (require_output_names_from_local_agg.erase(expr))
+                    {
+                        require_output_names_from_local_agg.insert(origin_column);
+                    }
+                }
+            }
+
+            LOG_DEBUG(getLogger("test"), "before erase, g0={}, c1={}, require_output_names_from_local_agg={}, global_agg_needs={}",
+                fmt::join(g0, ","), fmt::join(c1, ","), fmt::join(require_output_names_from_local_agg, ","), fmt::join(global_agg_needs, ","));
+            std::erase_if(c1, [&](const String & v) { return !require_output_names_from_local_agg.contains(v); });
             if (!s0.empty())
                 std::erase_if(c1, [&](const String & v) { return global_argument_name_to_local_from_projection.contains(v); });
             std::erase_if(c1, [&](const String & v) { return global_agg_needs.contains(v); });
@@ -327,10 +463,14 @@ static LocalGroupByTargetMap determineBottomJoin(
             std::sort(g0.begin(), g0.end());
             g0.erase(std::unique(g0.begin(), g0.end()), g0.end());
 
-            // LOG_WARNING(&Poco::Logger::get("test"), "collect new local gorup by target, join_id={}, index={}, g0={}, s0={}", join->getId(), index, fmt::join(g0, ","), formatS0(s0));
-            result.emplace(join->getId(), LocalGroupByTarget{join, index, s0, g0, join_layer});
+            LOG_DEBUG(getLogger("test"), "collect new local group by target, join_id={}, index={}, g0={}, s0={}", join->getId(), index, fmt::join(g0, ","), formatS0(s0));
+            result.emplace(join->getId(), LocalGroupByTarget{join, index, s0, g0, join_layer, !proj_expr_to_origin_column.empty()});
+
             return;
         }
+
+        if (context.context->getSettingsRef().agg_push_down_every_join)
+            has_visit_first_join = true;
 
         PlanNodePtr second_join = join->getChildren()[index];
 
@@ -339,10 +479,10 @@ static LocalGroupByTargetMap determineBottomJoin(
         if (second_join_step.getFilter())
         {
             auto symbols = SymbolsExtractor::extract(second_join_step.getFilter());
-            require_output_names_of_join.insert(symbols.begin(), symbols.end());
+            require_output_names_from_local_agg.insert(symbols.begin(), symbols.end());
         }
-        require_output_names_of_join.insert(second_join_step.getLeftKeys().begin(), second_join_step.getLeftKeys().end());
-        require_output_names_of_join.insert(second_join_step.getRightKeys().begin(), second_join_step.getRightKeys().end());
+        require_output_names_from_local_agg.insert(second_join_step.getLeftKeys().begin(), second_join_step.getLeftKeys().end());
+        require_output_names_from_local_agg.insert(second_join_step.getRightKeys().begin(), second_join_step.getRightKeys().end());
 
         auto second_names_from_left = second_join->getChildren()[0]->getCurrentDataStream().header.getNameSet();
         auto second_names_from_right = second_join->getChildren()[1]->getCurrentDataStream().header.getNameSet();
@@ -350,36 +490,51 @@ static LocalGroupByTargetMap determineBottomJoin(
         // pattern1: push full projection + sub agg.
         if (!projection_require_symbols.empty())
         {
+            auto old_result_size = result.size();
             if (SymbolUtils::containsAll(second_names_from_left, projection_require_symbols))
             {
-                auto [new_s0, new_g0] = updateAggS0AndG0(second_names_from_left, projection_gene_symbols, s0, g0);
-                find_bottom_join(require_output_names_of_join, second_join, 0, new_s0, new_g0, join_layer + 1);
+                if (auto new_sg = updateAggS0AndG0(second_names_from_left, projection_gene_symbols, s0, g0))
+                {
+                    find_bottom_join(require_output_names_from_local_agg, second_join, 0, new_sg.descriptions, new_sg.keys, join_layer + 1, proj_expr_to_origin_column);
+                }
             }
-            if (SymbolUtils::containsAll(second_names_from_right, projection_require_symbols))
+            if (old_result_size == result.size())
             {
-                auto [new_s0, new_g0] = updateAggS0AndG0(second_names_from_right, projection_gene_symbols, s0, g0);
-                find_bottom_join(require_output_names_of_join, second_join, 1, new_s0, new_g0, join_layer + 1);
+                if (SymbolUtils::containsAll(second_names_from_right, projection_require_symbols))
+                {
+                    if (auto new_sg = updateAggS0AndG0(second_names_from_right, projection_gene_symbols, s0, g0))
+                    {
+                        find_bottom_join(require_output_names_from_local_agg, second_join, 1, new_sg.descriptions, new_sg.keys, join_layer + 1, proj_expr_to_origin_column);
+                    }
+                }
             }
         }
         else
         {
             // pattern2: only push sub agg.
+            auto old_result_size = result.size();
             if (second_join->getChildren()[0]->getType()
                 != IQueryPlanStep::Type::Aggregating) // avoid push agg through join which child is already an aggregation node.
             {
-                auto [new_s0, new_g0] = updateAggS0AndG0(second_names_from_left, NameSet{}, s0, g0);
-                find_bottom_join(require_output_names_of_join, second_join, 0, new_s0, new_g0, join_layer + 1);
+                if (auto new_sg = updateAggS0AndG0(second_names_from_left, {}, s0, g0))
+                {
+                    find_bottom_join(require_output_names_from_local_agg, second_join, 0, new_sg.descriptions, new_sg.keys, join_layer + 1, proj_expr_to_origin_column);
+                }
             }
-            if (second_join->getChildren()[1]->getType() != IQueryPlanStep::Type::Aggregating)
+            if (old_result_size == result.size())
             {
-                auto [new_s0, new_g0] = updateAggS0AndG0(second_names_from_right, NameSet{}, s0, g0);
-                find_bottom_join(require_output_names_of_join, second_join, 1, new_s0, new_g0, join_layer + 1);
+                if (second_join->getChildren()[1]->getType() != IQueryPlanStep::Type::Aggregating)
+                {
+                    if (auto new_sg = updateAggS0AndG0(second_names_from_right, {}, s0, g0))
+                    {
+                        find_bottom_join(require_output_names_from_local_agg, second_join, 1, new_sg.descriptions, new_sg.keys, join_layer + 1, proj_expr_to_origin_column);
+                    }
+                }
             }
         }
-        return;
     };
 
-    find_bottom_join(NameSet{}, parent_of_first_join, 0, init_s0, init_g0, 0);
+    find_bottom_join({}, parent_of_first_join, 0, init_s0, init_g0, 0, {});
 
     return result;
 }
@@ -387,19 +542,20 @@ static LocalGroupByTargetMap determineBottomJoin(
 std::shared_ptr<AggregatingStep>
 createLocalAggregate(const DataStream & input_stream, const AggregateDescriptions & s0, const Names & g0, const ContextPtr &)
 {
-    // LOG_WARNING(&Poco::Logger::get("test"), "create local_agg={}, keys={}", formatS0(s0), fmt::join(g0, ","));
+    LOG_DEBUG(getLogger("test"), "create local_agg={}, keys={}", formatS0(s0), fmt::join(g0, ","));
 
     return std::make_shared<AggregatingStep>(
         input_stream, g0, NameSet{}, s0, GroupingSetsParamsList{}, true);
 }
 
-PlanNodePtr insertLocalAggregate(
+PlanNodePtr doInsertAggregation(
     const PlanNodePtr & aggregation,
     const AggregateDescriptions & s1,
     const Names & g1,
     bool push_projection,
     PlanNodeId bottom_join_id,
     int bottom_join_child_index,
+    bool push_through_final_projection,
     const SymbolAllocatorPtr & symbol_allocator,
     RuleContext & rule_context)
 {
@@ -408,7 +564,7 @@ PlanNodePtr insertLocalAggregate(
     {
         for (const auto & argument_name : aggregator.argument_names)
         {
-            if (!global_argument_name_to_local.contains(argument_name))
+            if (!global_argument_name_to_local.contains(argument_name) && std::find(g1.begin(), g1.end(), argument_name) == g1.end())
             {
                 String new_argument_name = symbol_allocator->newSymbol("inter#" + argument_name);
                 global_argument_name_to_local.emplace(argument_name, new_argument_name);
@@ -417,10 +573,10 @@ PlanNodePtr insertLocalAggregate(
         }
     }
 
-    // String names;
-    // for (const auto & [k, v] : global_argument_name_to_local)
-    //     names += "k=" + k + ",v=" + v + " ";
-    // LOG_WARNING(&Poco::Logger::get("test"), "before insertLocalAggregate, global_argument_name_to_local={}", names);
+    String names;
+    for (const auto & [k, v] : global_argument_name_to_local)
+        names += "k=" + k + ",v=" + v + "\n";
+    LOG_DEBUG(getLogger("test"), "before doInsertAggregation, global_argument_name_to_local={}", names);
 
     auto symbol_mapper = SymbolMapper::simpleMapper(global_argument_name_to_local);
 
@@ -444,7 +600,20 @@ PlanNodePtr insertLocalAggregate(
 
             // mapping argument_names of global_aggregate.
             for (auto & agg_desc : new_global_agg_desc)
+            {
                 agg_desc.argument_names = symbol_mapper.map(agg_desc.argument_names);
+                if (getClassOfAggFunc(agg_desc.function->getName()) == AggFuncClass::NEED_MERGE)
+                {
+                    AggregateFunctionProperties properties;
+                    DataTypes arguments_types;
+                    auto name_to_type = child_node->getOutputNamesToTypes();
+                    for (const auto & argument_name : agg_desc.argument_names)
+                        arguments_types.emplace_back(name_to_type.at(argument_name));
+                    agg_desc.function = AggregateFunctionFactory::instance().get(getMergeName(agg_desc.function->getName()), arguments_types, agg_desc.parameters, properties);
+                }
+            }
+
+            LOG_DEBUG(getLogger("test"), "create global_agg={}, keys={}", formatS0(new_global_agg_desc), fmt::join(agg_step.getKeys(), ","));
 
             auto new_global_agg_step = std::make_shared<AggregatingStep>(
                 child_node->getCurrentDataStream(),
@@ -453,7 +622,7 @@ PlanNodePtr insertLocalAggregate(
                 new_global_agg_desc,
                 agg_step.getGroupingSetsParams(),
                 agg_step.isFinal(),
-                agg_step.getGroupBySortDescription(),
+                SortDescription{agg_step.getGroupBySortDescription()},
                 agg_step.getGroupings(),
                 agg_step.needOverflowRow(),
                 agg_step.shouldProduceResultsInOrderOfBucketNumber(),
@@ -465,7 +634,7 @@ PlanNodePtr insertLocalAggregate(
         }
         else if (current_node->getType() == IQueryPlanStep::Type::Projection)
         {
-            if (has_visit_join)
+            if (has_visit_join && !push_through_final_projection)
                 return current_node;
 
             const auto & projection_step = dynamic_cast<const ProjectionStep &>(*current_node->getStep());
@@ -478,17 +647,52 @@ PlanNodePtr insertLocalAggregate(
 
             PlanNodePtr child_node = update_plan_node_until_bottom_join(current_node->getChildren()[0]);
 
+            if (push_through_final_projection)
+            {
+                auto child_name_to_type = child_node->getCurrentDataStream().getNamesToTypes();
+
+                Assignments new_assignments = projection_step.getAssignments();
+                NameToType new_name_to_type = projection_step.getNameToType();
+
+                NameSet new_name_from_local_agg;
+                for (const auto & [k, v] : global_argument_name_to_local)
+                {
+                    // convert xx to inter#xx, because the local agg is push through current projection.
+                    if (new_assignments.contains(k) && child_name_to_type.contains(v))
+                    {
+                        new_assignments.erase(k);
+                        new_assignments.emplace(v, std::make_shared<ASTIdentifier>(v));
+                        new_name_to_type.erase(k);
+                        new_name_to_type.emplace(v, child_name_to_type.at(v));
+                    }
+                }
+
+                auto new_projection_step = std::make_shared<ProjectionStep>(
+                    child_node->getCurrentDataStream(),
+                    new_assignments,
+                    new_name_to_type,
+                    projection_step.isFinalProject(),
+                    projection_step.isIndexProject(),
+                    projection_step.getHints());
+
+                return ProjectionNode::createPlanNode(rule_context.context->nextNodeId(), std::move(new_projection_step), {child_node});
+            }
+
             if (push_projection)
                 return child_node;
 
             Assignments new_assignments;
             for (const auto & [name, ast] : projection_step.getAssignments())
-                new_assignments.emplace(name, symbol_mapper.map(ast)); // TODO: only map assignment.second with multiIf?
+                new_assignments.emplace(symbol_mapper.map(name), symbol_mapper.map(ast)); // TODO: only map assignment.second with multiIf?
+
+            NameToType new_name_to_type;
+            for (const auto & [name, type] : projection_step.getNameToType())
+                new_name_to_type.emplace(symbol_mapper.map(name), type);
 
             auto new_projection_step = std::make_shared<ProjectionStep>(
                 child_node->getCurrentDataStream(),
                 new_assignments,
-                projection_step.getNameToType(), // no type change
+                new_name_to_type,
                 projection_step.isFinalProject(),
                 projection_step.isIndexProject(),
                 projection_step.getHints());
@@ -547,7 +751,19 @@ PlanNodePtr insertLocalAggregate(
                 // mapping column_name of local_aggregate.
                 auto new_s1 = s1;
                 for (auto & agg_desc : new_s1)
+                {
                     agg_desc.column_name = symbol_mapper.map(agg_desc.column_name);
+
+                    if (getClassOfAggFunc(agg_desc.function->getName()) == AggFuncClass::NEED_MERGE)
+                    {
+                        AggregateFunctionProperties properties;
+                        DataTypes arguments_types;
+                        auto name_to_type = node_below_local_agg->getOutputNamesToTypes();
+                        for (const auto & argument_name : agg_desc.argument_names)
+                            arguments_types.emplace_back(name_to_type.at(argument_name));
+                        agg_desc.function = AggregateFunctionFactory::instance().get(getStateName(agg_desc.function->getName()), arguments_types, agg_desc.parameters, properties);
+                    }
+                }
 
                 std::shared_ptr<AggregatingStep> local_agg_step
                     = createLocalAggregate(node_below_local_agg->getCurrentDataStream(), new_s1, {g1}, rule_context.context);
@@ -613,19 +829,28 @@ PlanNodePtr insertLocalAggregate(
 bool canAggPushDown(const LocalGroupByTarget & target, RuleContext & context)
 {
     LOG_DEBUG(
-        &Poco::Logger::get("test"),
-        "judge local group by target, join_id={}, index={}, g0={}, s0={}, join_layer={}",
+        getLogger("test"),
+        "judge local group by target, join_id={}, index={}, g0={}, s0={}, join_layer={}, push_through_final_projection={}",
         target.bottom_join->getId(),
         target.bottom_join_child_index,
         fmt::join(target.keys, ","),
         formatS0(target.aggs),
-        target.join_layer);
-    
+        target.join_layer,
+        target.push_through_final_projection);
+
     const Settings & settings = context.context->getSettingsRef();
-    String blocklist = settings.eager_agg_join_id_blocklist;
+    String blocklist = settings.eager_agg_join_id_blocklist; // join_id
     Poco::StringTokenizer tokenizer(blocklist, ",", 0x11);
     if (tokenizer.has(std::to_string(target.bottom_join->getId())))
         return false;
+
+    String whitelist = settings.eager_agg_join_id_whitelist;
+    Poco::StringTokenizer tokenizer2(whitelist, ",", 0x11); // join_id-child_index
+    if (tokenizer2.count())
+    {
+        return tokenizer2.has(std::to_string(target.bottom_join->getId()) + "-" + std::to_string(target.bottom_join_child_index));
+    }
+
 
     const auto & bottom_node = target.bottom_join->getChildren()[target.bottom_join_child_index];
     auto bottom_stat = CardinalityEstimator::estimate(*bottom_node, context.cte_info, context.context);
@@ -658,7 +883,7 @@ bool canAggPushDown(const LocalGroupByTarget & target, RuleContext & context)
             return false;
 
         std::sort(cndvs.begin(), cndvs.end(), std::greater<double>());
-        
+
         for (size_t i = 0; i < cndvs.size(); i++)
         {
             double cndv = cndvs[i];
@@ -684,8 +909,8 @@ bool canAggPushDown(const LocalGroupByTarget & target, RuleContext & context)
             return false;
 
         LOG_DEBUG(
-            &Poco::Logger::get("test"),
-            "agg_size={}, group_by_keys_size={}, new_row_count={}, old_row_count={}, ratio={}",
+            getLogger("test"),
+            "Success pushdown Agg, agg_size={}, group_by_keys_size={}, new_row_count={}, old_row_count={}, ratio={}",
             target.aggs.size(),
             target.keys.size(),
             row_count,
@@ -693,6 +918,8 @@ bool canAggPushDown(const LocalGroupByTarget & target, RuleContext & context)
             child_stats->getRowCount() / row_count);
         return child_stats->getRowCount() / row_count > settings.agg_push_down_threshold.value;
     }
+    else if (settings.agg_push_down_threshold.value == 0)
+        return true;
     return false;
 }
 
@@ -714,6 +941,7 @@ TransformResult EagerAggregation::transformImpl(PlanNodePtr aggregation, const C
     }
 
     const auto & agg_step = dynamic_cast<const AggregatingStep &>(*aggregation->getStep());
+    // const auto & join_step = dynamic_cast<const JoinStep &>(*join->getStep());
 
     auto names_from_left = join->getChildren()[0]->getCurrentDataStream().header.getNameSet();
     auto names_from_right = join->getChildren()[1]->getCurrentDataStream().header.getNameSet();
@@ -722,20 +950,22 @@ TransformResult EagerAggregation::transformImpl(PlanNodePtr aggregation, const C
     AggregateDescriptions composed_aggregates; // Can be further decomposed into s1 or s2.
     Names g1, g2;
 
+    NameSet agg_step_keys_set(agg_step.getKeys().begin(), agg_step.getKeys().end()); // aggregate functions with agg_step_keys_set are no need to be push down.
+
     // Used to update the name of the path from local_aggregate to `global_aggregate(argument_names)`/`projection below global_aggregate`.
     NameToNameMap global_argument_name_to_local_only_projection_from_left;
     NameToNameMap global_argument_name_to_local_only_projection_from_right;
 
     const SymbolAllocatorPtr & symbol_allocator = rule_context.context->getSymbolAllocator();
     if (!decomposeAggJoin(
-            agg_step.getAggregates(), agg_step.getKeys(), names_from_left, names_from_right, composed_aggregates, s1, s2, g1, g2))
+            agg_step.getAggregates(), agg_step_keys_set, names_from_left, names_from_right, composed_aggregates, s1, s2, g1, g2))
         return {};
 
-    NameSet require_output_names_of_join;
+    NameSet require_output_names_from_local_agg;
     {
-        require_output_names_of_join.insert(agg_step.getKeys().begin(), agg_step.getKeys().end());
+        require_output_names_from_local_agg.insert(agg_step.getKeys().begin(), agg_step.getKeys().end());
         for (const auto & agg_desc : agg_step.getAggregates())
-            require_output_names_of_join.insert(agg_desc.argument_names.begin(), agg_desc.argument_names.end());
+            require_output_names_from_local_agg.insert(agg_desc.argument_names.begin(), agg_desc.argument_names.end());
     }
 
     NameOrderedSet projection_require_symbols; // not empty means can be fully push down.
@@ -747,6 +977,7 @@ TransformResult EagerAggregation::transformImpl(PlanNodePtr aggregation, const C
         if (!decomposeProjection(
                 projection_step,
                 composed_aggregates,
+                agg_step_keys_set,
                 names_from_left,
                 names_from_right,
                 global_argument_name_to_local_only_projection_from_left,
@@ -763,7 +994,7 @@ TransformResult EagerAggregation::transformImpl(PlanNodePtr aggregation, const C
             for (const auto & assignment : projection_step.getAssignments())
             {
                 auto symbols = SymbolsExtractor::extract(assignment.second);
-                require_output_names_of_join.insert(symbols.begin(), symbols.end());
+                require_output_names_from_local_agg.insert(symbols.begin(), symbols.end());
             }
         }
     }
@@ -781,8 +1012,9 @@ TransformResult EagerAggregation::transformImpl(PlanNodePtr aggregation, const C
             g1,
             projection_require_symbols,
             projection_gene_symbols,
-            require_output_names_of_join,
-            global_argument_name_to_local_only_projection_from_left);
+            require_output_names_from_local_agg,
+            global_argument_name_to_local_only_projection_from_left,
+            rule_context);
         target_map.insert(local_target_map.begin(), local_target_map.end());
     }
     else if (!global_argument_name_to_local_only_projection_from_right.empty())
@@ -794,21 +1026,30 @@ TransformResult EagerAggregation::transformImpl(PlanNodePtr aggregation, const C
             g2,
             projection_require_symbols,
             projection_gene_symbols,
-            require_output_names_of_join,
-            global_argument_name_to_local_only_projection_from_right);
+            require_output_names_from_local_agg,
+            global_argument_name_to_local_only_projection_from_right,
+            rule_context);
         target_map.insert(local_target_map.begin(), local_target_map.end());
     }
     else
     {
+        auto aggregates = agg_step.getAggregates();
+        std::erase_if(aggregates, [&](const auto & aggregate) {
+            for (const auto & name : aggregate.argument_names)
+                if (agg_step_keys_set.contains(name))
+                    return true;
+            return false;
+        });
         LocalGroupByTargetMap local_target_map = determineBottomJoin(
             parent_of_first_join,
             projection,
-            agg_step.getAggregates(),
+            aggregates,
             agg_step.getKeys(),
             projection_require_symbols,
             projection_gene_symbols,
-            require_output_names_of_join,
-            {});
+            require_output_names_from_local_agg,
+            {},
+            rule_context);
         target_map.insert(local_target_map.begin(), local_target_map.end());
     }
 
@@ -818,13 +1059,14 @@ TransformResult EagerAggregation::transformImpl(PlanNodePtr aggregation, const C
         if (!canAggPushDown(target, rule_context))
             continue;
 
-        new_global_agg_node = insertLocalAggregate(
+        new_global_agg_node = doInsertAggregation(
             new_global_agg_node,
             target.aggs,
             target.keys,
             !projection_require_symbols.empty(),
             target_id,
             target.bottom_join_child_index,
+            target.push_through_final_projection,
             symbol_allocator,
             rule_context);
         // GraphvizPrinter::printLogicalPlan(*new_global_agg_node, rule_context.context, fmt::format("target_id={}, index={}", target_id, target.bottom_join_child_index));

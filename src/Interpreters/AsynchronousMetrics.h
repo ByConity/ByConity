@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Common/MemoryStatisticsOS.h>
 #include <Common/ThreadPool.h>
@@ -43,7 +44,7 @@ public:
         int update_period_seconds,
         std::shared_ptr<std::vector<ProtocolServerAdapter>> servers_to_start_before_tables_,
         std::shared_ptr<std::vector<ProtocolServerAdapter>> servers_,
-        Poco::Logger * log_);
+        LoggerPtr log_);
 
     ~AsynchronousMetrics();
 
@@ -79,7 +80,7 @@ private:
     /// On first run we will only collect the values to subtract later.
     bool first_run = true;
     std::chrono::system_clock::time_point previous_update_time;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 
 #if defined(OS_LINUX)
     MemoryStatisticsOS memory_stat;

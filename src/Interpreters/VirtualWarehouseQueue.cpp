@@ -146,13 +146,13 @@ void enqueueVirtualWarehouseQueue(ContextMutablePtr context, ASTPtr & query_ast)
     }
     catch (...)
     {
-        LOG_DEBUG(&Poco::Logger::get("VirtualWarehouseQueue"), "only queue dml query");
+        LOG_DEBUG(getLogger("VirtualWarehouseQueue"), "only queue dml query");
         return;
     }
     if (ast_type != ASTType::ASTSelectQuery && ast_type != ASTType::ASTSelectWithUnionQuery && ast_type != ASTType::ASTInsertQuery
         && ast_type != ASTType::ASTDeleteQuery && ast_type != ASTType::ASTUpdateQuery)
     {
-        LOG_DEBUG(&Poco::Logger::get("VirtualWarehouseQueue"), "only queue dml query");
+        LOG_DEBUG(getLogger("VirtualWarehouseQueue"), "only queue dml query");
         return;
     }
     auto vw_handle = context->tryGetCurrentVW();
@@ -172,7 +172,7 @@ void enqueueVirtualWarehouseQueue(ContextMutablePtr context, ASTPtr & query_ast)
         if (query_ast)
         {
             auto fingerprint = SQLFingerprint().generateMD5(query_ast);
-            LOG_TRACE(&Poco::Logger::get("VirtualWarehouseQueueManager"), "sql : fingerprint is {}", fingerprint);
+            LOG_TRACE(getLogger("VirtualWarehouseQueueManager"), "sql : fingerprint is {}", fingerprint);
             vw_queue_info->query_rule.fingerprint = fingerprint;
         }
         auto queue_result = vw_handle->enqueue(vw_queue_info, context->getSettingsRef().vw_query_queue_timeout_ms);
@@ -181,12 +181,12 @@ void enqueueVirtualWarehouseQueue(ContextMutablePtr context, ASTPtr & query_ast)
         if (queue_result == VWQueueResultStatus::QueueSuccess)
         {
             LOG_DEBUG(
-                &Poco::Logger::get("VirtualWarehouseQueueManager"), "query queue run time : {} ms", queue_watch.elapsedMilliseconds());
+                getLogger("VirtualWarehouseQueueManager"), "query queue run time : {} ms", queue_watch.elapsedMilliseconds());
         }
         else
         {
             LOG_ERROR(
-                &Poco::Logger::get("VirtualWarehouseQueueManager"), "query queue result : {}", VWQueueResultStatusToString(queue_result));
+                getLogger("VirtualWarehouseQueueManager"), "query queue result : {}", VWQueueResultStatusToString(queue_result));
             throw Exception(
                 ErrorCodes::CNCH_QUEUE_QUERY_FAILURE,
                 "query queue failed for query_id {}: {}",

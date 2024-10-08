@@ -107,7 +107,7 @@ void StorageSystemMutations::fillCnchData(MutableColumns & res_columns, ContextP
 
     if (!filtered_block.rows())
     {
-        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "No need to process any tables.");
+        LOG_DEBUG(getLogger(__PRETTY_FUNCTION__), "No need to process any tables.");
         return ;
     }
 

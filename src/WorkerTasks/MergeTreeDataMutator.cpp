@@ -80,7 +80,7 @@ static const double DISK_USAGE_COEFFICIENT_TO_RESERVE = 1.1;
 MergeTreeDataMutator::MergeTreeDataMutator(MergeTreeMetaBase & data_, size_t background_pool_size_)
     : data(data_)
     , background_pool_size(background_pool_size_)
-    , log(&Poco::Logger::get(data.getLogName() + " (CnchMutator)"))
+    , log(getLogger(data.getLogName() + " (CnchMutator)"))
 {
 }
 

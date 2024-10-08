@@ -28,7 +28,7 @@ void CacheManager::initialize(ContextPtr context)
 {
     if (cache)
     {
-        LOG_WARNING(&Poco::Logger::get("CacheManager"), "CacheManager already initialized");
+        LOG_WARNING(getLogger("CacheManager"), "CacheManager already initialized");
         return;
     }
     auto max_size = context->getConfigRef().getUInt64("optimizer.statistics.max_cache_size", ConfigParameters::max_cache_size);

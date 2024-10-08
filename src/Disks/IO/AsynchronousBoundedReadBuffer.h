@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <utility>
 #include <IO/AsynchronousReader.h>
@@ -64,7 +65,7 @@ private:
     Memory<> prefetch_buffer;
     std::future<IAsynchronousReader::Result> prefetch_future;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     AsyncReadCountersPtr async_read_counters;
 

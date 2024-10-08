@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Disks/DiskDecorator.h>
 #include <Disks/IDisk.h>
 
@@ -92,7 +93,7 @@ private:
     /// Mutex to protect RW access.
     mutable std::shared_timed_mutex mutex;
 
-    Poco::Logger * log = &Poco::Logger::get("DiskRestartProxy");
+    LoggerPtr log = getLogger("DiskRestartProxy");
 };
 
 }

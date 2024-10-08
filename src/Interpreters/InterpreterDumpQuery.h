@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTDumpQuery.h>
@@ -59,7 +60,7 @@ private:
     QueryDumper query_dumper;
     bool enable_ddl = true;
     bool enable_explain = false;
-    const Poco::Logger * log = &Poco::Logger::get("InterpreterDumpWorkloadQuery");
+    const LoggerPtr log = getLogger("InterpreterDumpWorkloadQuery");
 };
 
 }

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <functional>
 #include <Core/Types.h>
@@ -50,7 +51,7 @@ public:
 protected:
     void initChannel(brpc::Channel & channel_, const String host_port_, brpc::ChannelOptions * options = nullptr);
 
-    Poco::Logger * log;
+    LoggerPtr log;
     String host_port;
     std::function<void()> report_err;
 

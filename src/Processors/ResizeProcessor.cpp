@@ -264,7 +264,7 @@ IProcessor::Status ResizeProcessor::prepare(const PortNumbers & updated_inputs, 
 
 IProcessor::Status StrictResizeProcessor::prepare(const PortNumbers & updated_inputs, const PortNumbers & updated_outputs)
 {
-    static auto * logger = &Poco::Logger::get("MultiPartitionExchangeSink");
+    static auto logger = getLogger("StrictResizeProcessor");
 
     if (!initialized)
     {

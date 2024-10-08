@@ -207,7 +207,7 @@ bool prepareDatabaseAndTable(
     const String & table_name,
     const Poco::Util::AbstractConfiguration & config,
     const String & config_prefix,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     if (!config.has(config_prefix) ||
         (context->getServerType() != ServerType::cnch_server))
@@ -266,7 +266,7 @@ bool prepareDatabaseAndTable(
 
 CnchSystemLogs::CnchSystemLogs(ContextPtr global_context)
 {
-    log = &Poco::Logger::get("CnchSystemLogs");
+    log = getLogger("CnchSystemLogs");
     if (global_context->getServerType() == ServerType::cnch_server)
     {
         init_task = global_context->getSchedulePool().createTask(

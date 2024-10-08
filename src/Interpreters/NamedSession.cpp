@@ -65,15 +65,11 @@ std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
     {
         if (return_null_if_not_found)
         {
-            LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Session not found, return nullptr");
             return nullptr;
         }
 
         if (throw_if_not_found)
             throw Exception("Session not found.", ErrorCodes::SESSION_NOT_FOUND);
-        else
-            LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Session not found, and create a new one");
-
         it = sessions.insert(std::make_pair(session_id, std::make_shared<NamedSession>(session_id, context, timeout, *this))).first;
     }
 
@@ -140,6 +136,7 @@ std::chrono::steady_clock::duration NamedSessionsImpl<NamedSession>::closeSessio
 {
     /// Schedule closeSessions() every 1 second by default.
     static constexpr std::chrono::steady_clock::duration close_interval = std::chrono::seconds(1);
+    auto log = getLogger("NamedSession");
 
     if (close_times.empty())
         return close_interval;
@@ -165,7 +162,7 @@ std::chrono::steady_clock::duration NamedSessionsImpl<NamedSession>::closeSessio
             }
             else
             {
-                LOG_DEBUG(&Poco::Logger::get("NamedSession"), "Release timed out session: {}", session_iter->second->getID());
+                LOG_DEBUG(log, "Release timed out session: {}", session_iter->second->getID());
                 sessions.erase(session_iter);
             }
         }
@@ -198,7 +195,7 @@ void NamedCnchSession::release()
     timeout = 0; /// schedule immediately
     close_time = 0;
     parent.releaseSession(*this);
-    LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Release CnchWorkerResource {}", key);
+    LOG_DEBUG(getLogger("NamedCnchSession"), "Release CnchWorkerResource {}", key);
 }
 
 template class NamedSessionsImpl<NamedSession>;

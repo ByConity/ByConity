@@ -134,7 +134,7 @@ WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, c
             setThreadName("BuildQuery");
             if (thread_group)
                 CurrentThread::attachToIfDetached(thread_group);
-            LOG_DEBUG(&Poco::Logger::get("WorkloadQuery"), "start building query {}", i);
+            LOG_DEBUG(getLogger("WorkloadQuery"), "start building query {}", i);
             const auto & query = queries[i];
             try
             {
@@ -142,7 +142,7 @@ WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, c
                 res[i] = std::move(workload_query);
             } catch (Exception & e)
             {
-                LOG_WARNING(&Poco::Logger::get("WorkloadQuery"),
+                LOG_WARNING(getLogger("WorkloadQuery"),
                           "failed to build query, reason: {}, sql: {}",
                           e.message(), query);
             }
@@ -150,7 +150,7 @@ WorkloadQueries WorkloadQuery::build(const std::vector<std::string> & queries, c
     }
     query_thread_pool.wait();
     res.erase(std::remove(res.begin(), res.end(), nullptr), res.end());
-    LOG_DEBUG(&Poco::Logger::get("WorkloadQuery"), "built queries {}/{}", res.size(), queries.size());
+    LOG_DEBUG(getLogger("WorkloadQuery"), "built queries {}/{}", res.size(), queries.size());
     return res;
 }
 

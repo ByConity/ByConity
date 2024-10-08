@@ -73,7 +73,7 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
 {
     if (settings.enable_batch_select)
     {
-        LOG_ERROR(&Poco::Logger::get("DanceMergeSelector"), "Calling select() with enable_batch_select=1 is not supported!");
+        LOG_ERROR(getLogger("DanceMergeSelector"), "Calling select() with enable_batch_select=1 is not supported!");
         return {};
     }
 

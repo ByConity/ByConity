@@ -65,7 +65,7 @@ bool ResourceQeueueThrottler::isThrottling(QueueInfo * queue_info)
     if (worker_status == nullptr)
     {
         LOG_DEBUG(
-            &Poco::Logger::get("QueueManager"),
+            getLogger("QueueManager"),
             "{} ResourceQeueueThrottler {}.{} is nullptr",
             queue_info->query_id,
             queue_info->vw_name,
@@ -74,7 +74,7 @@ bool ResourceQeueueThrottler::isThrottling(QueueInfo * queue_info)
     }
     if (worker_status->getWorkerGroupHealth() == WorkerGroupHealthStatus::Critical)
     {
-        LOG_TRACE(&Poco::Logger::get("QueueManager"), "{} ResourceQeueueThrottler throttle", queue_info->query_id);
+        LOG_TRACE(getLogger("QueueManager"), "{} ResourceQeueueThrottler throttle", queue_info->query_id);
         return true;
     }
     return false;
@@ -83,7 +83,7 @@ bool ResourceQeueueThrottler::isThrottling(QueueInfo * queue_info)
 void VWConcurrencyQeueueThrottler::release(const String & vw)
 {
     std::unique_lock lk(mutex);
-    LOG_TRACE(&Poco::Logger::get("QueueManager"), "VWConcurrencyQeueueThrottler minus {} parallel size", vw);
+    LOG_TRACE(getLogger("QueueManager"), "VWConcurrencyQeueueThrottler minus {} parallel size", vw);
     vw_parallel_map[vw]--;
 }
 
@@ -97,12 +97,12 @@ bool VWConcurrencyQeueueThrottler::isThrottling(QueueInfo * queue_info)
     std::unique_lock lk(mutex);
     if (vw_parallel_map[queue_info->vw] >= queue_manager->getVWParallelizeSize())
     {
-        LOG_TRACE(&Poco::Logger::get("QueueManager"), "VWConcurrencyQeueueThrottler throttle");
+        LOG_TRACE(getLogger("QueueManager"), "VWConcurrencyQeueueThrottler throttle");
         return true;
     }
 
     LOG_TRACE(
-        &Poco::Logger::get("QueueManager"), "{} VWConcurrencyQeueueThrottler add {} parallel size", queue_info->query_id, queue_info->vw);
+        getLogger("QueueManager"), "{} VWConcurrencyQeueueThrottler add {} parallel size", queue_info->query_id, queue_info->vw);
     vw_parallel_map[queue_info->vw]++;
     queue_info->context->setQueueDeleter(getDeleter(getWorkerGroupName(queue_info->vw_name, queue_info->wg_name)));
     return false;
@@ -148,7 +148,7 @@ void QueueManager::cancel(const String & query_id)
     }
 }
 
-QueueManager::QueueManager(ContextWeakMutablePtr context_) : WithContext(context_), log(&Poco::Logger::get("QueueManager"))
+QueueManager::QueueManager(ContextWeakMutablePtr context_) : WithContext(context_), log(getLogger("QueueManager"))
 {
     LOG_DEBUG(log, "Start QueueManager");
     schedule_pool.emplace(1, CurrentMetrics::BackgroundQueueManagerSchedulePoolTask, "QueuePool");

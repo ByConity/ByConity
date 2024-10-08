@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Storages/IndexFile/RemoteFileCache.h>
@@ -42,7 +43,7 @@ public:
 private:
     void initCacheFromFileSystem();
 
-    Poco::Logger * log;
+    LoggerPtr log;
     struct Rep;
     std::shared_ptr<Rep> rep;
 };

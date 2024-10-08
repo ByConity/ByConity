@@ -46,6 +46,8 @@ namespace ProfileEvents
     extern const Event SelectedParts;
     extern const Event SelectedRanges;
     extern const Event SelectedMarks;
+    extern const Event TotalGranulesCount;
+    extern const Event TotalSkippedGranules;
 }
 
 namespace DB
@@ -133,7 +135,7 @@ static Array extractMapColumnKeys(const MergeTreeMetaBase & data, const MergeTre
             map_types[it->name] = it->type;
     }
 
-    Poco::Logger * logger = nullptr;
+    LoggerPtr logger = nullptr;
     for (auto & part : parts)
     {
         for (auto & [file, _] : part->getChecksums()->files)
@@ -149,7 +151,7 @@ static Array extractMapColumnKeys(const MergeTreeMetaBase & data, const MergeTre
             if (!map_types.count(map_name))
             {
                 if (unlikely(logger == nullptr))
-                    logger = &Poco::Logger::get(data.getLogName() + " (ExtractMapKeys)");
+                    logger = getLogger(data.getLogName() + " (ExtractMapKeys)");
                 LOG_WARNING(logger, "Can not find byte map column {} of implicit file {}", map_name, file);
                 continue;
             }
@@ -296,7 +298,7 @@ ReadFromMergeTree::ReadFromMergeTree(
     bool sample_factor_column_queried_,
     bool map_column_keys_column_queried_,
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
-    Poco::Logger * log_,
+    LoggerPtr log_,
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_)
     : ISourceStep(DataStream{
     .header = query_info_.atomic_predicates.empty()
@@ -383,7 +385,7 @@ Pipe ReadFromMergeTree::readFromPool(
         settings.preferred_block_size_bytes,
         false);
 
-    auto * logger = &Poco::Logger::get(data.getLogName() + " (SelectExecutor)");
+    auto logger = getLogger(data.getLogName() + " (SelectExecutor)");
     LOG_DEBUG(logger, "Reading approx. {} rows with {} streams", total_rows, max_streams);
     MergeTreeStreamSettings stream_settings {
         .min_marks_for_concurrent_read = min_marks_for_concurrent_read,
@@ -454,7 +456,7 @@ ProcessorPtr ReadFromMergeTree::createSource(
 Pipe ReadFromMergeTree::readInOrder(
     RangesInDataParts parts_with_range, Names required_columns,
     ReadType read_type, bool use_uncompressed_cache,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     Pipes pipes;
     MergeTreeStreamSettings stream_settings{
@@ -467,11 +469,21 @@ Pipe ReadFromMergeTree::readInOrder(
     };
 
     MarkRangesFilterCallback filter_callback;
-    if (delayed_index != nullptr)
+    if (delayed_index != nullptr && (!delayed_index->indices.empty() || delayed_index->multi_idx != nullptr))
     {
-        filter_callback = [reader_settings = this->reader_settings, ctx = this->context, delayed_index](const MergeTreeDataPartPtr& part, const MarkRanges& mark_ranges) {
-            return MergeTreeDataSelectExecutor::filterMarkRangesForPartByInvertedIndex(
-                part, mark_ranges, delayed_index, ctx, reader_settings);
+        filter_callback = [reader_settings = this->reader_settings, ctx = this->context, delayed_index](const MergeTreeDataPartPtr& part_, const MarkRanges& mark_ranges_, roaring::Roaring* row_filter_) {
+            size_t total_granules = 0;
+            size_t dropped_granules = 0;
+            auto ret = MergeTreeDataSelectExecutor::filterMarkRangesForPartByInvertedIndex(
+                part_, mark_ranges_, delayed_index, ctx, reader_settings, row_filter_,
+                total_granules, dropped_granules);
+
+            ProfileEvents::increment(ProfileEvents::TotalGranulesCount, total_granules);
+            ProfileEvents::increment(ProfileEvents::TotalSkippedGranules, dropped_granules);
+            LOG_DEBUG(part_->storage.getLogger(), "MultiIndex has dropped {}/{} granules for part {}",
+                dropped_granules, total_granules, part_->name);
+
+            return ret;
         };
     }
 
@@ -518,7 +530,7 @@ Pipe ReadFromMergeTree::read(
     size_t max_streams,
     size_t min_marks_for_concurrent_read,
     bool use_uncompressed_cache,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     if (read_type == ReadType::Default && max_streams > 1)
     {
@@ -615,7 +627,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreams(
         if (info.sum_marks < num_streams * info.min_marks_for_concurrent_read && parts_with_ranges.size() < num_streams)
         {
             num_streams = std::max((info.sum_marks + info.min_marks_for_concurrent_read - 1) / info.min_marks_for_concurrent_read, parts_with_ranges.size());
-            LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree"),
+            LOG_TRACE(getLogger("ReadFromMergeTree"),
                 "Shrink the number of streams from {} to {} since data is small.", requested_num_streams, num_streams);
         }
     }
@@ -661,7 +673,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithPartitionOrder(
     const ActionsDAGPtr & sorting_key_prefix_expr,
     ActionsDAGPtr & out_projection,
     const InputOrderInfoPtr & input_order_info,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     chassert(!parts_with_ranges.empty());
 
@@ -709,7 +721,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
     const InputOrderInfoPtr & input_order_info,
     size_t num_streams,
     bool need_preliminary_merge,
-    const std::shared_ptr<DelayedSkipIndex>& delayed_index)
+    const std::shared_ptr<SkipIndexFilterInfo>& delayed_index)
 {
     const auto & settings = context->getSettingsRef();
     const auto data_settings = data.getSettings();
@@ -1177,7 +1189,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     const MergeTreeMetaBase & data,
     const Names & real_column_names,
     bool sample_factor_column_queried,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     AnalysisResult result;
     const auto & settings = context->getSettingsRef();
@@ -1269,7 +1281,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
                 RewriteDistributedQueryVisitor(query_data).visit(copy_select);
             auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
             interpreter->execute();
-            LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
+            LOG_TRACE(getLogger("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
 
             MergeTreeDataSelectExecutor::filterPartsByPartition(
                 parts,

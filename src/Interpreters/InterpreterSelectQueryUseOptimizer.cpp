@@ -134,7 +134,7 @@ InterpreterSelectQueryUseOptimizer::InterpreterSelectQueryUseOptimizer(
     , cte_info(std::move(cte_info_))
     , context(context_)
     , options(options_)
-    , log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+    , log(getLogger("InterpreterSelectQueryUseOptimizer"))
 {
     interpret_sub_query = !!sub_plan_ptr;
 }
@@ -298,7 +298,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 
-QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr context, ASTPtr query_ptr, Poco::Logger * log)
+QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr context, ASTPtr query_ptr, LoggerPtr log)
 {
     const ASTSelectWithUnionQuery & ast = query_ptr->as<ASTSelectWithUnionQuery &>();
 

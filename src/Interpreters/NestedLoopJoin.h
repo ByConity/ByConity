@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <shared_mutex>
 
@@ -93,7 +94,7 @@ public:
     size_t getTotalByteCount() const override;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("NestedLoopJoin");
+    LoggerPtr log = getLogger("NestedLoopJoin");
 
     using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
     std::shared_ptr<TableJoin> table_join;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <stddef.h>
 #include <cstdint>
 #include <unordered_map>
@@ -86,7 +87,7 @@ namespace HistogramMetrics
         {
             if (type != Metrics::MetricType::Timer)
             {
-                LOG_ERROR(&Poco::Logger::get("HistogramMetrics"), "Only support Metrics::MetricType::Timer type when report histogram metrics");
+                LOG_ERROR(getLogger("HistogramMetrics"), "Only support Metrics::MetricType::Timer type when report histogram metrics");
                 return;
             }
 
@@ -96,7 +97,7 @@ namespace HistogramMetrics
             }
             catch (DB::Exception & e)
             {
-                LOG_ERROR(&Poco::Logger::get("HistogramMetrics"), "Metrics emit metric failed: {}", e.message());
+                LOG_ERROR(getLogger("HistogramMetrics"), "Metrics emit metric failed: {}", e.message());
             }
         }
     }

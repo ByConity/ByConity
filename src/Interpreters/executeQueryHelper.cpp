@@ -62,7 +62,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
             // simplily use the first table if there are multiple tables used
             DatabaseAndTableWithAlias db_and_table(tables[0]);
             LOG_DEBUG(
-                &Poco::Logger::get("executeQuery"),
+                getLogger("executeQuery"),
                 "Extract db and table {}.{} from the query.",
                 db_and_table.database,
                 db_and_table.table);
@@ -134,7 +134,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     res.remote_execution_conn->setDefaultDatabase(context->getCurrentDatabase());
 
     // PipelineExecutor requires block header.
-    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
+    LOG_DEBUG(getLogger("executeQuery"), "Sending query as ordinary query");
     Block header;
     if (context->getSettingsRef().enable_select_query_forwarding && ast->as<ASTSelectWithUnionQuery>())
     {
@@ -166,14 +166,14 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         if (proxy_txn)
             proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
 
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
+        LOG_DEBUG(getLogger("executeQuery"), "Query success on remote server");
 
     };
     res.exception_callback = [proxy_txn, context]() {
         if (proxy_txn)
             proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
 
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
+        LOG_DEBUG(getLogger("executeQuery"), "Query failed on remote server");
     };
 }
 

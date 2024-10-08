@@ -1,0 +1,1 @@
+select * from ( SELECT * FROM (select '123qwe' as city) dc INNER JOIN (select 'qwer' as city_name ) dl ON dl.city_name LIKE concat(multiIf(length(dc.city) = 0, '-1', dc.city), '%')) settings enable_optimizer=1 format Null;

@@ -30,7 +30,7 @@ namespace ErrorCodes
 
 MergeTreeDataReclusterMutator::MergeTreeDataReclusterMutator(MergeTreeMetaBase & data_)
     : data(data_)
-    , log(&Poco::Logger::get(data.getLogName() + " (CnchRecluster)"))
+    , log(getLogger(data.getLogName() + " (CnchRecluster)"))
 {
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/RabbitMQ/UVLoop.h>
 #include <Storages/RabbitMQ/RabbitMQHandler.h>
 
@@ -19,7 +20,7 @@ struct RabbitMQConfiguration
 class RabbitMQConnection
 {
 public:
-    RabbitMQConnection(const RabbitMQConfiguration & configuration_, Poco::Logger * log_);
+    RabbitMQConnection(const RabbitMQConfiguration & configuration_, LoggerPtr log_);
 
     bool isConnected();
 
@@ -48,7 +49,7 @@ private:
     void disconnectImpl(bool immediately = false);
 
     RabbitMQConfiguration configuration;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     UVLoop loop;
     RabbitMQHandler event_handler;

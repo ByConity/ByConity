@@ -1,4 +1,6 @@
 #pragma once
+#include <unordered_set>
+#include <Common/Logger.h>
 #include <QueryPlan/ISourceStep.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 //#include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
@@ -7,6 +9,9 @@
 #include <Interpreters/ExpressionActionsSettings.h>
 #include <Interpreters/ExtractExpressionInfoVisitor.h>
 #include <Core/Names.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeIndices.h>
+#include <Storages/MergeTree/MultiIndexFilterCondition.h>
 
 namespace DB
 {
@@ -42,14 +47,14 @@ using MergeTreeDataSelectAnalysisResultPtr = std::shared_ptr<MergeTreeDataSelect
 namespace IntermediateResult { struct CacheHolder; }
 using CacheHolderPtr = std::shared_ptr<IntermediateResult::CacheHolder>;
 
-/// Contains delayed skip index information which should execute
-/// on pipeline execution stage
-struct DelayedSkipIndex
+struct SkipIndexFilterInfo
 {
-    std::unordered_map<String, std::pair<MergeTreeIndexPtr, MergeTreeIndexConditionPtr>> indices;
+    std::unique_ptr<MultiIndexFilterCondition> multi_idx;
+
+    std::vector<std::pair<MergeTreeIndexPtr, MergeTreeIndexConditionPtr>> indices;
 };
 
-using MarkRangesFilterCallback = std::function<MarkRanges(const MergeTreeData::DataPartPtr, const MarkRanges&)>;
+using MarkRangesFilterCallback = std::function<MarkRanges(const MergeTreeDataPartPtr, const MarkRanges&, roaring::Roaring*)>;
 
 /// This step is created to read from MergeTree* table.
 /// For now, it takes a list of parts and creates source from it.
@@ -105,7 +110,7 @@ public:
         IndexStats index_stats;
         Names column_names_to_read;
         ReadFromMergeTree::ReadType read_type = ReadFromMergeTree::ReadType::Default;
-        std::shared_ptr<DelayedSkipIndex> delayed_indices = std::make_shared<DelayedSkipIndex>();
+        std::shared_ptr<SkipIndexFilterInfo> delayed_indices = std::make_shared<SkipIndexFilterInfo>();
         UInt64 total_parts = 0;
         UInt64 parts_before_pk = 0;
         UInt64 selected_parts = 0;
@@ -131,7 +136,7 @@ public:
         bool sample_factor_column_queried_,
         bool map_column_keys_column_queried_,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
-        Poco::Logger * log_,
+        LoggerPtr log_,
         MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_
     );
 
@@ -166,7 +171,7 @@ public:
     const MergeTreeMetaBase & data,
     const Names & real_column_names,
     bool sample_factor_column_queried,
-    Poco::Logger * log);
+    LoggerPtr log);
 
     ContextPtr getContext() const { return context; }
     const SelectQueryInfo & getQueryInfo() const { return query_info; }
@@ -201,14 +206,14 @@ private:
 
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     UInt64 selected_parts = 0;
     UInt64 selected_rows = 0;
     UInt64 selected_marks = 0;
 
-    Pipe read(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache, const std::shared_ptr<DelayedSkipIndex>& delayed_index);
+    Pipe read(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache, const std::shared_ptr<SkipIndexFilterInfo>& delayed_index);
     Pipe readFromPool(RangesInDataParts parts_with_ranges, Names required_columns, size_t max_streams, size_t min_marks_for_concurrent_read, bool use_uncompressed_cache);
-    Pipe readInOrder(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, bool use_uncompressed_cache, const std::shared_ptr<DelayedSkipIndex>& delayed_index);
+    Pipe readInOrder(RangesInDataParts parts_with_range, Names required_columns, ReadType read_type, bool use_uncompressed_cache, const std::shared_ptr<SkipIndexFilterInfo>& delayed_index);
 
     template<typename TSource>
     ProcessorPtr createSource(const RangesInDataPart & part, const Names & required_columns,const MergeTreeStreamSettings & stream_settings, const MarkRangesFilterCallback & range_filter_callback);
@@ -225,7 +230,7 @@ private:
         const InputOrderInfoPtr & input_order_info,
         size_t num_streams,
         bool need_preliminary_merge,
-        const std::shared_ptr<DelayedSkipIndex>& delayed_index);
+        const std::shared_ptr<SkipIndexFilterInfo>& delayed_index);
 
     Pipe spreadMarkRangesAmongStreamsWithPartitionOrder(
         RangesInDataParts && parts_with_ranges,
@@ -233,7 +238,7 @@ private:
         const ActionsDAGPtr & sorting_key_prefix_expr,
         ActionsDAGPtr & out_projection,
         const InputOrderInfoPtr & input_order_info,
-        const std::shared_ptr<DelayedSkipIndex>& delayed_index);
+        const std::shared_ptr<SkipIndexFilterInfo>& delayed_index);
 
     Pipe spreadMarkRangesAmongStreamsFinal(
         RangesInDataParts && parts,

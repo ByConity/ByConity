@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Core/ExternalResultDescription.h>
@@ -27,7 +28,7 @@ public:
     void write(const Block & block) override;
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
 
     nanodbc::ConnectionHolderPtr connection_holder;
     std::string db_name;

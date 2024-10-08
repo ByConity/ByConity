@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -36,7 +37,7 @@ public:
 private:
 
     MergeTreeData & data;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

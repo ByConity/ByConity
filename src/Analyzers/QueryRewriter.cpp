@@ -18,6 +18,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
+#include <Analyzers/SubstituteSelectItemToAnyFunction.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
 #include <Analyzers/RewriteFusionMerge.h>
 #include <Analyzers/SimpleFunctionVisitor.h>
@@ -48,6 +49,7 @@
 #include <Storages/StorageSnapshot.h>
 
 #include <common/logger_useful.h>
+#include "Core/SettingsEnums.h"
 
 namespace DB
 {
@@ -195,6 +197,8 @@ namespace
     {
         if (context->getSettingsRef().rewrite_like_function)
             SimpleFunctionVisitor().visit(query);
+        if (context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE && !context->getSettingsRef().only_full_group_by)
+            SubstituteSelectItemToAnyFunction(context).visit(query);
     }
 
     void expandView(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
@@ -548,7 +552,7 @@ namespace
 
 ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enable_materialized_view)
 {
-    const auto * logger = &Poco::Logger::get("QueryRewriter");
+    const auto logger = getLogger("QueryRewriter");
 
     (void) enable_materialized_view;
     graphviz_index = GraphvizPrinter::PRINT_AST_INDEX;

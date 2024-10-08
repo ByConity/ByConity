@@ -89,7 +89,7 @@ void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, Contex
             only_selected_db = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
             only_selected_table = table_it->second.getType() == Field::Types::String ? table_it->second.get<String>() : "";
             enable_filter_by_table = true;
-            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchStagedParts"),
+            LOG_TRACE(getLogger("StorageSystemCnchStagedParts"),
                     "filtering from catalog by table with db name {} and table name {}",
                     only_selected_db, only_selected_table);
         }

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <mutex>
 #include <Common/Exception.h>
 #include <Common/escapeForFileName.h>
@@ -98,7 +99,7 @@ protected:
     ASTPtr getCreateTableQueryImpl(const String & name, ContextPtr local_context, bool throw_on_error) const override;
     StoragePtr tryGetTableImpl(const String & name, ContextPtr local_context) const;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 private:
     const UUID db_uuid;
     /// local storage cache, mapping from name->storage, mainly for select query

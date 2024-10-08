@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/HostWithPorts.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Interpreters/Context_fwd.h>
@@ -86,7 +87,7 @@ public:
 
 
 private:
-    Poco::Logger * log{nullptr};
+    LoggerPtr log{nullptr};
 
     std::unique_ptr<ResourceTracker> resource_tracker;
     std::unique_ptr<VirtualWarehouseManager> vw_manager;

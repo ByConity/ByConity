@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <atomic>
 #include <deque>
 #include <memory>
@@ -161,7 +162,7 @@ private:
     mutable std::optional<BackgroundSchedulePool> schedule_pool;
     std::unique_ptr<QueueManagerTriggerTask> queue_manager_trigger_task;
     QeueueThrottlersPtr throttlers;
-    Poco::Logger * log;
+    LoggerPtr log;
     VWConcurrencyQeueueThrottlerPtr vw_concurrency_throttler;
 };
 

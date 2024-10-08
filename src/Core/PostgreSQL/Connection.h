@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <pqxx/pqxx> // Y_IGNORE
 #include <Core/Types.h>
 #include <boost/noncopyable.hpp>
@@ -42,6 +43,6 @@ private:
     bool replication;
     size_t num_tries;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 }

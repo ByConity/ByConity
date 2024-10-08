@@ -21,6 +21,7 @@
 #include <Common/RowExistsColumnInfo.h>
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Core/SettingsEnums.h>
 #include <Storages/DataDestinationType.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
@@ -129,7 +130,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , require_part_metadata(require_part_metadata_)
     , broken_part_callback(broken_part_callback_)
     , log_name(logger_name_)
-    , log(&Poco::Logger::get(log_name))
+    , log(::getLogger(log_name))
     , storage_settings(std::move(storage_settings_))
     , pinned_part_uuids(std::make_shared<PinnedPartUUIDs>())
     , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
@@ -668,6 +669,16 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::cloneAndLoadDataPartOnS
 String MergeTreeMetaBase::getFullPathOnDisk(StorageLocation location, const DiskPtr & disk) const
 {
     return disk->getPath() + getRelativeDataPath(location);
+}
+
+bool MergeTreeMetaBase::supportsParallelInsert(ContextPtr local_context) const
+{
+    if (!getInMemoryMetadataPtr()->hasUniqueKey())
+        return true;
+
+    if (!local_context->getSettingsRef().optimize_unique_table_write)
+        return false;
+    return getSettings()->dedup_impl_version.value == DedupImplVersion::DEDUP_IN_TXN_COMMIT;
 }
 
 NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
@@ -1891,6 +1902,33 @@ void MergeTreeMetaBase::checkMetadataValidity(const ColumnsDescription & columns
     }
 }
 
+bool MergeTreeMetaBase::commitTxnInWriteSuffixStage(const UInt32 & deup_impl_version, ContextPtr query_context) const
+{
+    if (!getInMemoryMetadataPtr()->hasUniqueKey() || static_cast<DedupImplVersion>(deup_impl_version) == DedupImplVersion::DEDUP_IN_TXN_COMMIT)
+        return false;
+    bool enable_staging_area = query_context->getSettingsRef().enable_staging_area_for_write || getSettings()->cloud_enable_staging_area;
+    bool enable_append_mode = query_context->getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+    return !enable_append_mode && !enable_staging_area;
+}
+
+bool MergeTreeMetaBase::supportsWriteInWorkers(const Context & query_context) const
+{
+    if (!getInMemoryMetadataPtr()->hasUniqueKey())
+        return true;
+    const auto & query_settings = query_context.getSettingsRef();
+    const auto & table_settings = getSettings();
+    if (query_settings.optimize_unique_table_write)
+    {
+        if (table_settings->dedup_impl_version.value == DedupImplVersion::DEDUP_IN_TXN_COMMIT)
+            return true;
+        LOG_DEBUG(log, "Can not write in workers due to dedup impl version is {}", table_settings->dedup_impl_version.value);
+    }
+    bool enable_staging_area = query_context.getSettingsRef().enable_staging_area_for_write || getSettings()->cloud_enable_staging_area;
+    bool enable_append_mode = query_context.getSettingsRef().dedup_key_mode == DedupKeyMode::APPEND;
+    return enable_append_mode || enable_staging_area;
+}
+
+
 ColumnSize MergeTreeMetaBase::getMapColumnSizes(const DataPartPtr & part, const String & map_implicit_column_name) const
 {
     auto part_checksums = part->getChecksums();
@@ -2002,7 +2040,7 @@ ASTPtr MergeTreeMetaBase::applyFilter(
         {
             double selectivity = FilterEstimator::estimateFilterSelectivity(storage_statistics, conjunct, names_and_types, query_context);
             LOG_DEBUG(
-                &Poco::Logger::get("OptimizerActivePrewhere"),
+                ::getLogger("OptimizerActivePrewhere"),
                 "conjunct=" + serializeAST(*conjunct) + ", selectivity=" + std::to_string(selectivity));
 
             if (selectivity <= query_context->getSettingsRef().max_active_prewhere_selectivity
@@ -2052,7 +2090,7 @@ ASTPtr MergeTreeMetaBase::applyFilter(
                 std::move(column_compressed_sizes),
                 getInMemoryMetadataPtr(),
                 current_info.syntax_analyzer_result->requiredSourceColumns(),
-                &Poco::Logger::get("OptimizerEarlyPrewherePushdown")};
+                ::getLogger("OptimizerEarlyPrewherePushdown")};
         }
     }
 

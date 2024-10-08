@@ -71,18 +71,20 @@ void executePlanSegmentInternal(
     if (!plan_segment_instance)
         throw Exception("Cannot execute empty plan segment", ErrorCodes::LOGICAL_ERROR);
 
-    if (context->getSettingsRef().debug_plan_generation)
+    const auto & settings = context->getSettingsRef();
+    if (settings.debug_plan_generation)
         return;
 
+    bool inform_success_status = settings.enable_wait_for_post_processing || settings.bsp_mode;
     auto executor = std::make_shared<PlanSegmentExecutor>(
         std::move(plan_segment_instance), std::move(context), std::move(process_plan_segment_entry));
     if (async)
     {
-        ThreadFromGlobalPool async_thread([executor = std::move(executor)]() mutable {
+        ThreadFromGlobalPool async_thread([executor = std::move(executor), inform_success_status = inform_success_status]() mutable {
             auto result = executor->execute();
             executor.reset(); /// release executor
             if (result)
-                reportExecutionResult(*result);
+                reportExecutionResult(*result, inform_success_status);
         });
         async_thread.detach();
         return;
@@ -92,7 +94,7 @@ void executePlanSegmentInternal(
         auto result = executor->execute();
         executor.reset(); /// release executor
         if (result)
-            reportExecutionResult(*result);
+            reportExecutionResult(*result, inform_success_status);
     }
 }
 
@@ -117,8 +119,8 @@ static void OnSendPlanSegmentCallback(
     if (cntl->Failed())
     {
         LOG_ERROR(
-            &Poco::Logger::get("executePlanSegment"),
-            "send plansegment to {} failed, error: {},  msg: {}",
+            getLogger("executePlanSegment"),
+            "Send plansegment to {} failed, error: {},  msg: {}",
             butil::endpoint2str(cntl->remote_side()).c_str(),
             cntl->ErrorText(),
             response->message());
@@ -130,8 +132,7 @@ static void OnSendPlanSegmentCallback(
     }
     else
     {
-        LOG_TRACE(
-            &Poco::Logger::get("executePlanSegment"), "send plansegment to {} success", butil::endpoint2str(cntl->remote_side()).c_str());
+        LOG_TRACE(getLogger("executePlanSegment"), "Send plansegment to {} success", butil::endpoint2str(cntl->remote_side()).c_str());
         async_context->asyncComplete(cntl->call_id(), result);
     }
 }
@@ -195,7 +196,7 @@ void executePlanSegmentRemotelyWithPreparedBuf(
     request.set_brpc_protocol_major_revision(DBMS_BRPC_PROTOCOL_MAJOR_VERSION);
     request.set_plan_segment_id(segment_id);
     request.set_parallel_id(execution_info.parallel_id);
-    request.set_retry_id(execution_info.retry_id);
+    request.set_attempt_id(execution_info.attempt_id);
     if (execution_info.source_task_filter.isValid())
         *request.mutable_source_task_filter() = execution_info.source_task_filter.toProto();
 
@@ -207,6 +208,9 @@ void executePlanSegmentRemotelyWithPreparedBuf(
             source.toProto(*request.add_sources());
         }
     }
+
+    if (execution_info.worker_epoch > 0)
+        request.set_worker_epoch(execution_info.worker_epoch);
 
     butil::IOBuf attachment;
 

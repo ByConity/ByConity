@@ -28,21 +28,7 @@ namespace ErrorCodes
     extern const int WAIT_FOR_RESOURCE_TIMEOUT;
 }
 
-bool Scheduler::addBatchTask(BatchTaskPtr batch_task)
-{
-    return queue.push(batch_task);
-}
-
-bool Scheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
-{
-    auto now = time_in_milliseconds(std::chrono::system_clock::now());
-    if (query_expiration_ms <= now)
-        return false;
-    else
-        return queue.tryPop(task, query_expiration_ms - now);
-}
-
-void Scheduler::dispatchOrSaveTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task)
+void Scheduler::dispatchOrCollectTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task)
 {
     WorkerNode worker_node;
     NodeSelectorResult selector_info;
@@ -134,62 +120,6 @@ void Scheduler::batchScheduleTasks()
     for (const auto & iter : batch_segment_headers)
         sendPlanSegmentsToAddress(iter.first.address_info, iter.second, query_context, dag_graph_ptr, iter.first.worker_id);
     batch_segment_headers.clear();
-}
-
-PlanSegmentExecutionInfo Scheduler::schedule()
-{
-    Stopwatch sw;
-    genTopology();
-    genTasks();
-
-    /// Leave final segment alone.
-    while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
-    {
-        auto curr = time_in_milliseconds(std::chrono::system_clock::now());
-        if (stopped.load(std::memory_order_relaxed))
-        {
-            if (error_msg.empty())
-            {
-                LOG_INFO(log, "Schedule interrupted");
-                return {};
-            }
-            else
-            {
-                // Now it's only used to handle worker restarting.
-                // TODO(wangtao.vip): In future it might be removed.
-                throw Exception(error_msg, ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-        else if (curr > query_expiration_ms)
-        {
-            throw Exception(
-                fmt::format("schedule timeout, current ts {} expire ts {}", curr, query_expiration_ms), ErrorCodes::TIMEOUT_EXCEEDED);
-        }
-        /// nullptr means invalid task
-        BatchTaskPtr batch_task;
-        if (getBatchTaskToSchedule(batch_task) && batch_task)
-        {
-            for (auto task : *batch_task)
-            {
-                LOG_INFO(log, "Schedule segment {}", task.segment_id);
-                if (task.segment_id == 0)
-                {
-                    prepareFinalTask();
-                    break;
-                }
-                auto * plan_segment_ptr = dag_graph_ptr->getPlanSegmentPtr(task.segment_id);
-                plan_segment_ptr->setCoordinatorAddress(local_address);
-                scheduleTask(plan_segment_ptr, task);
-                onSegmentScheduled(task);
-            }
-        }
-        if (batch_schedule)
-            batchScheduleTasks();
-    }
-
-    dag_graph_ptr->joinAsyncRpcAtLast();
-    LOG_DEBUG(log, "Scheduling takes {} ms", sw.elapsedMilliseconds());
-    return generateExecutionInfo(0, 0);
 }
 
 void Scheduler::genTopology()

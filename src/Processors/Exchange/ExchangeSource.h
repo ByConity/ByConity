@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -67,7 +68,7 @@ private:
     ExchangeExtremesSourcePtr extremes_source;
     std::atomic<bool> was_query_canceled {false};
     std::atomic<bool> was_receiver_finished {false};
-    Poco::Logger * logger;
+    LoggerPtr logger;
     void checkBroadcastStatus(const BroadcastStatus & status) const;
 };
 

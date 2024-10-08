@@ -40,7 +40,7 @@ GlobalGCManager::GlobalGCManager(
     size_t default_max_threads,
     size_t default_max_free_threads,
     size_t default_max_queue_size)
-    : WithContext(global_context_), log(&Poco::Logger::get("GlobalGCManager"))
+    : WithContext(global_context_), log(getLogger("GlobalGCManager"))
 {
     const auto & config_ref = getContext()->getConfigRef();
     this->max_threads =
@@ -94,7 +94,7 @@ size_t amountOfWorkCanReceive(size_t max_threads, size_t deleting_table_num)
 }
 
 namespace {
-    void cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, Poco::Logger * log)
+    void cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, LoggerPtr log)
     {
         auto catalog = context.getCnchCatalog();
         Strings partition_ids = catalog->getPartitionIDs(storage, &context);
@@ -157,7 +157,7 @@ namespace {
         clean_pool.wait();
     }
 
-void cleanDisks(const Disks & disks, const String & relative_path, Poco::Logger * log)
+void cleanDisks(const Disks & disks, const String & relative_path, LoggerPtr log)
 {
     for (const DiskPtr & disk : disks)
     {
@@ -256,7 +256,7 @@ std::optional<Protos::DataModelTable> getCleanableTrashTable(
         return snapshot->commit_time() + TxnTimestamp::fromUnixTimestamp(snapshot->ttl_in_days() * 3600 * 24) < ts;
     });
 
-    auto * log = &Poco::Logger::get("getCleanableTrashTable");
+    auto log = getLogger("getCleanableTrashTable");
     for (const auto & [beg, end] : lifespans)
     {
         LOG_TRACE(log, "lifespan [{} - {})", beg, end);
@@ -275,7 +275,7 @@ std::optional<Protos::DataModelTable> getCleanableTrashTable(
     return table_versions.back();
 }
 
-bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log)
+bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, LoggerPtr log)
 {
     auto storage_id = StorageID{table.database(), table.name(), RPCHelpers::createUUID(table.uuid())};
 
@@ -534,7 +534,7 @@ bool GlobalGCManager::schedule(std::vector<Protos::DataModelTable> tables)
     return true;
 }
 
-void GlobalGCManager::systemCleanTrash(ContextPtr local_context, StorageID storage_id, Poco::Logger * log)
+void GlobalGCManager::systemCleanTrash(ContextPtr local_context, StorageID storage_id, LoggerPtr log)
 {
     const UInt64 retention_sec = local_context->getSettingsRef().cnch_data_retention_time_in_sec;
     auto catalog = local_context->getCnchCatalog();

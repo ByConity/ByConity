@@ -295,7 +295,7 @@ void BlockBloomFilter::mergeInplace( BlockBloomFilter && bf)
             for (size_t i = 0; i < bytes_in_slot * bf.slots; i++)
                 this->data[start + i] |= bf.data[i];
         }
-        // LOG_DEBUG(&Poco::Logger::get("BlockBloomFilter"), "merge... build rf ndv:{}-{}, slot:{}-{}, total:{}, step:{}",
+        // LOG_DEBUG(getLogger("BlockBloomFilter"), "merge... build rf ndv:{}-{}, slot:{}-{}, total:{}, step:{}",
         //     this->ndv, bf.ndv, slots, bf.slots, total, step);
         return;
     }

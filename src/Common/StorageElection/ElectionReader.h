@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <boost/noncopyable.hpp>
 #include <Common/HostWithPorts.h>
 #include <common/logger_useful.h>
@@ -40,7 +41,7 @@ private:
     mutable std::mutex leader_info_mutex;
     IKvStoragePtr store;
     String election_key;
-    Poco::Logger * logger = nullptr;
+    LoggerPtr logger = nullptr;
 };
 
 }

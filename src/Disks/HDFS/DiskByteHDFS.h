@@ -17,7 +17,7 @@
 
 #include <limits>
 #include <memory>
-#include <Poco/Logger.h>
+#include <Common/Logger.h>
 #include <Disks/DiskType.h>
 #include <Disks/IDisk.h>
 #include <IO/HDFSRemoteFSReader.h>
@@ -106,7 +106,7 @@ public:
 private:
     inline String absolutePath(const String& relative_path) const;
 
-    Poco::Logger * log = &Poco::Logger::get("DiskByteHDFS");
+    LoggerPtr log = getLogger("DiskByteHDFS");
 
     const String disk_name;
     const String disk_path;

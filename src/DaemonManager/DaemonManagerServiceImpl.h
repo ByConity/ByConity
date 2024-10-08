@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DaemonManager/DaemonJobServerBGThread.h>
 #include <Protos/daemon_manager_rpc.pb.h>
 
@@ -54,7 +55,7 @@ public:
 
 private:
     std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> daemon_jobs;
-    Poco::Logger * log = &Poco::Logger::get("DaemonManagerRPCService");
+    LoggerPtr log = getLogger("DaemonManagerRPCService");
 };
 
 using DaemonManagerServicePtr = std::shared_ptr<DaemonManagerServiceImpl>;

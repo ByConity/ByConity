@@ -55,7 +55,7 @@ MySQLBlockInputStream::MySQLBlockInputStream(
     const std::string & query_str,
     const Block & sample_block,
     const StreamSettings & settings_)
-    : log(&Poco::Logger::get("MySQLBlockInputStream"))
+    : log(getLogger("MySQLBlockInputStream"))
     , connection{std::make_unique<Connection>(entry, query_str)}
     , settings{std::make_unique<StreamSettings>(settings_)}
 {
@@ -65,7 +65,7 @@ MySQLBlockInputStream::MySQLBlockInputStream(
 
 /// For descendant MySQLWithFailoverBlockInputStream
     MySQLBlockInputStream::MySQLBlockInputStream(const Block &sample_block_, const StreamSettings & settings_)
-    : log(&Poco::Logger::get("MySQLBlockInputStream"))
+    : log(getLogger("MySQLBlockInputStream"))
     , settings(std::make_unique<StreamSettings>(settings_))
 {
     description.init(sample_block_);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstddef>
 #include <unordered_map>
 #include <unordered_set>
@@ -135,7 +136,7 @@ private:
     std::unordered_map<const ExchangeKey, ExchangeStatuses, ExchangeKey::Hash> exchange_statuses;
     // Store all exchange ids for query, used to delete exchange statuses for a query.
     std::unordered_map<String, std::unordered_set<UInt64>> query_exchange_ids;
-    Poco::Logger * log = &Poco::Logger::get("ExchangeStatusTracker");
+    LoggerPtr log = getLogger("ExchangeStatusTracker");
 };
 
 using ExchangeStatusTrackerPtr = std::shared_ptr<ExchangeStatusTracker>;

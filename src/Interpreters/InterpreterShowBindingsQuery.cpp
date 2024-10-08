@@ -80,7 +80,7 @@ BlockIO InterpreterShowBindingsQuery::execute()
         }
         catch (...)
         {
-            LOG_WARNING(&Poco::Logger::get("SQL Binding"), "Update Global Bindings Failed");
+            LOG_WARNING(getLogger("SQL Binding"), "Update Global Bindings Failed");
         }
     }
 

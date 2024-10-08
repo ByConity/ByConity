@@ -77,7 +77,7 @@ std::vector<StatsTableIdentifier> getTablesFromScope(ContextPtr context, const S
                     mv->getTableName(),
                     mv->getTargetDatabaseName(),
                     mv->getTargetTableName());
-                LOG_WARNING(&Poco::Logger::get("ShowStats"), err_msg);
+                LOG_WARNING(getLogger("ShowStats"), err_msg);
                 continue;
             }
             table = table_opt.value();

@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <ServiceDiscovery/ServiceDiscoveryCache.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -52,7 +53,7 @@ public:
     static HostWithPortsVec formatResult(const Endpoints & eps, ComponentType type);
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("ServiceDiscoveryConsul");
+    LoggerPtr log = getLogger("ServiceDiscoveryConsul");
 
     ServiceDiscoveryCache<Endpoint> cache;
     bool passCheckCluster(const Endpoint & e);

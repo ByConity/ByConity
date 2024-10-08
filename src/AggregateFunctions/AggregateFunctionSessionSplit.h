@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Common/Stopwatch.h>
 #include <common/logger_useful.h>
@@ -146,7 +147,7 @@ struct AggregateFunctionSessionSplitData
                    << "Sorted " << std::to_string(size) << " rows SessionEvent data."
                    << " in " << elapsed << " sec.";
 
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), log_helper.str());
+        LOG_TRACE(getLogger(__PRETTY_FUNCTION__), log_helper.str());
         sorted = true;
     }
 
@@ -195,7 +196,7 @@ struct AggregateFunctionSessionSplitData
                    <<  " in " << elapsed << " sec."
                    << " (" << other.events.size() / elapsed << " rows/sec.)";
 
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), log_helper.str());
+        LOG_TRACE(getLogger(__PRETTY_FUNCTION__), log_helper.str());
     }
 
     void serialize(WriteBuffer & buf) const

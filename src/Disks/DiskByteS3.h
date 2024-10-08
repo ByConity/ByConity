@@ -16,7 +16,7 @@
 #pragma once
 
 #include <tuple>
-#include <Poco/Logger.h>
+#include <Common/Logger.h>
 #include <Disks/IDisk.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO/WriteBufferFromFileBase.h>
@@ -136,7 +136,7 @@ private:
 
     static String trimPrefix(const String& prefix, const String& key);
 
-    Poco::Logger * log = &Poco::Logger::get("DiskByteS3");
+    LoggerPtr log = getLogger("DiskByteS3");
 
     const UInt64 disk_id;
     String name;

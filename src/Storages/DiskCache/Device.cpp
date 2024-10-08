@@ -7,7 +7,6 @@
 #include <sys/types.h>
 
 #include <fmt/core.h>
-#include <Poco/Logger.h>
 
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/Device.h>
@@ -45,7 +44,6 @@ extern const Event DiskCacheDeviceReadIOLatency;
 
 namespace DB::HybridCache
 {
-Poco::Logger * Device::logger_{nullptr};
 
 Device::Device(UInt64 size_, UInt32 io_align_size_, UInt32 max_write_size_)
     : size(size_), io_alignment_size(io_align_size_), max_write_size(max_write_size_)
@@ -55,8 +53,6 @@ Device::Device(UInt64 size_, UInt32 io_align_size_, UInt32 max_write_size_)
 
     if (max_write_size % io_alignment_size != 0)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid max_write_size: {}, io_align_size: {}", max_write_size, io_alignment_size);
-
-    logger_ = &Poco::Logger::get("Device");
 }
 
 namespace
@@ -257,7 +253,7 @@ namespace
 
         using WaiterList = folly::SafeIntrusiveList<Waiter, &Waiter::hook>;
 
-        Poco::Logger * log = &Poco::Logger::get("AsyncIoContext");
+        LoggerPtr log = getLogger("AsyncIoContext");
 
         std::unique_ptr<folly::AsyncBase> async_base;
         // Sequential id assigned to this context
@@ -460,19 +456,20 @@ namespace
 
         bool result = (status == size);
         if (!result)
-            Device::logger().error(
-                fmt::format("[{}] IO error: {} ret={}, {}", parent.context.getName(), toString(), status, std::strerror(-status)));
+            LOG_ERROR(getLogger("Device"),
+                "[{}] IO error: {} ret={}, {}",
+                parent.context.getName(), toString(), status, std::strerror(-status)) ;
 
         auto cur_time = getSteadyClock();
         auto delay_ms = toMillis(cur_time - start_time).count();
         if (delay_ms > static_cast<Int64>(kIOTimeoutMs))
-            Device::logger().error(fmt::format(
+            LOG_ERROR(getLogger("Device"),
                 "[{}] IO timeout {}ms (submit +{}ms comp +{}ms): {}",
                 parent.context.getName(),
                 delay_ms,
                 toMillis(submit_time - start_time).count(),
                 toMillis(cur_time - submit_time).count(),
-                toString()));
+                toString());
 
         parent.notifyOpResult(result);
         return result;
@@ -529,13 +526,13 @@ namespace
             delay_ms = toMillis(cur_time - comp_time).count();
 
         if (delay_ms > static_cast<Int64>(kIOTimeoutMs))
-            Device::logger().error(fmt::format(
+            LOG_ERROR(getLogger("Device"),
                 "[{}] IOReq timeout {}ms (comp +{}ms notify +{}ms): {}",
                 context.getName(),
                 delay_ms,
                 toMillis(comp_time - start_time).count(),
                 toMillis(cur_time - comp_time).count(),
-                toString()));
+                toString());
 
         return result;
     }
@@ -787,7 +784,7 @@ namespace
         // (e.g., recovery path, read random alloc path)
         sync_io_context = std::make_unique<SyncIoContext>();
 
-        Device::logger().information(fmt::format(
+        LOG_INFO(getLogger("Device"),
             "Created device with num_devices {} size {} block_size {} stripe_size {} max_write_size {} io_engine {} qdepth {}",
             fvec.size(),
             getSize(),
@@ -795,7 +792,7 @@ namespace
             stripe_size,
             max_device_write_size,
             getIoEngineName(io_engine),
-            q_depth_per_context));
+            q_depth_per_context);
     }
 
     bool FileDevice::readImpl(UInt64 offset, UInt32 size, void * value)

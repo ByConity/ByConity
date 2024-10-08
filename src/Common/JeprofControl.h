@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/singleton.h>
 
 #if __has_include(<Common/config.h>)
@@ -46,7 +47,7 @@ private:
 
     String prof_path{"/tmp/"};
     mutable std::atomic<size_t> index{0};
-    Poco::Logger * log{&Poco::Logger::get("JeprofControl")};
+    LoggerPtr log{getLogger("JeprofControl")};
 #endif
 
 };

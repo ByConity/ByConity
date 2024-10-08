@@ -261,7 +261,7 @@ void InterpreterSystemQuery::startStopAction(StorageActionBlockType action_type,
 
 
 InterpreterSystemQuery::InterpreterSystemQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
-        : WithMutableContext(context_), query_ptr(query_ptr_->clone()), log(&Poco::Logger::get("InterpreterSystemQuery"))
+        : WithMutableContext(context_), query_ptr(query_ptr_->clone()), log(getLogger("InterpreterSystemQuery"))
 {
 }
 
@@ -1657,7 +1657,7 @@ namespace
 {
 
 template<typename T>
-void executeActionOnCNCHLogImpl(std::shared_ptr<T> cnch_log, ASTSystemQuery::Type type, const String & table_name , Poco::Logger * log)
+void executeActionOnCNCHLogImpl(std::shared_ptr<T> cnch_log, ASTSystemQuery::Type type, const String & table_name , LoggerPtr log)
 {
     using Type = ASTSystemQuery::Type;
     if (cnch_log)

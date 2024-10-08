@@ -165,7 +165,7 @@ MySQLHandler::MySQLHandler(IServer & server_, TCPServer & tcp_server_, const Poc
     : Poco::Net::TCPServerConnection(socket_)
     , server(server_)
     , tcp_server(tcp_server_)
-    , log(&Poco::Logger::get("MySQLHandler"))
+    , log(getRawLogger("MySQLHandler"))
     , connection_id(connection_id_)
     , connection_context(Context::createCopy(server.context()))
     , auth_plugin(new MySQLProtocol::Authentication::Native41())
@@ -699,7 +699,7 @@ MySQLHandlerSSL::MySQLHandlerSSL(IServer & server_, TCPServer & tcp_server_, con
 
 void MySQLHandlerSSL::authPluginSSL()
 {
-    auth_plugin = std::make_unique<MySQLProtocol::Authentication::Sha256Password>(public_key, private_key, log);
+    auth_plugin = std::make_unique<MySQLProtocol::Authentication::Sha256Password>(public_key, private_key, log->name());
 }
 
 void MySQLHandlerSSL::finishHandshakeSSL(

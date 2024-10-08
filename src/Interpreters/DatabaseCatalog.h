@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/UUID.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
@@ -298,7 +299,7 @@ private:
     UUIDToDatabaseMap db_uuid_map;
     UUIDToStorageMap uuid_map;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Do not allow simultaneous execution of DDL requests on the same table.
     /// database name -> database guard -> (table name mutex, counter),

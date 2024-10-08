@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Optimizer/JoinGraph.h>
 #include <Optimizer/MaterializedView/MaterializedViewStructure.h>
 #include <Optimizer/MaterializedView/PartitionConsistencyChecker.h>
@@ -45,6 +46,6 @@ private:
     LinkedHashMap<MaterializedViewStructurePtr, PartitionCheckResult>
     getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context) const;
 
-    Poco::Logger * log = &Poco::Logger::get("MaterializedViewRewriter");
+    LoggerPtr log = getLogger("MaterializedViewRewriter");
 };
 }

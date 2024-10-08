@@ -117,9 +117,9 @@ MemoryTracker total_memory_tracker(nullptr, VariableContext::Global);
 
 
 MemoryTracker::MemoryTracker(VariableContext level_)
-    : parent(&total_memory_tracker), log(&Poco::Logger::get("MemoryTracker")), level(level_) {}
+    : parent(&total_memory_tracker), log(getLogger("MemoryTracker")), level(level_) {}
 MemoryTracker::MemoryTracker(MemoryTracker * parent_, VariableContext level_)
-    : parent(parent_), log(&Poco::Logger::get("MemoryTracker")), level(level_) {}
+    : parent(parent_), log(getLogger("MemoryTracker")), level(level_) {}
 
 
 MemoryTracker::~MemoryTracker()

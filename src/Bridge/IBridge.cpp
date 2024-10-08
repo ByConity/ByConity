@@ -54,7 +54,7 @@ namespace ErrorCodes
 
 namespace
 {
-    Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, Poco::Logger * log)
+    Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, LoggerPtr log)
     {
         Poco::Net::SocketAddress socket_address;
         try
@@ -78,7 +78,7 @@ namespace
         return socket_address;
     }
 
-    Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, Poco::Logger * log)
+    Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, LoggerPtr log)
     {
         auto address = makeSocketAddress(host, port, log);
 #if POCO_VERSION < 0x01080000
@@ -190,7 +190,7 @@ void IBridge::initialize(Application & self)
 
     BaseDaemon::logRevision();
 
-    log = &logger();
+    log = getLogger(logger());
     hostname = config().getString("listen-host", "127.0.0.1");
     port = config().getUInt("http-port");
     if (port > 0xFFFF)

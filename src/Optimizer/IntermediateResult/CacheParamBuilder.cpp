@@ -122,7 +122,7 @@ size_t CacheParamBuilder::computeAggregatingHash(std::shared_ptr<AggregatingStep
     // pb_options.always_print_primitive_fields = true;
     // pb_options.add_whitespace = false;
     // google::protobuf::util::MessageToJsonString(proto, &json_msg, pb_options);
-    // LOG_DEBUG(&Poco::Logger::get("AddCache"), " {} hash: {}\n json: {}", new_step->getName(), new_step->hash(), json_msg);
+    // LOG_DEBUG(getLogger("AddCache"), " {} hash: {}\n json: {}", new_step->getName(), new_step->hash(), json_msg);
     return new_step->hash();
 }
 

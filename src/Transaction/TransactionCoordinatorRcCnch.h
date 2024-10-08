@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <optional>
 #include <Interpreters/Context_fwd.h>
 #include <Transaction/CnchExplicitTransaction.h>
@@ -79,7 +80,7 @@ public:
               getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_dm_queue_size", 10000)))
         , finished_or_failed_txn_record_cache(std::make_unique<TransactionRecordCache>(getContext()->getConfigRef().getUInt("size_of_cached_txn_records", 20000)))
         , scan_interval(getContext()->getConfigRef().getInt("cnch_transaction_list_scan_interval", 10 * 60 * 1000)) // default 10 mins
-        , log(&Poco::Logger::get("TransactionCoordinator"))
+        , log(getLogger("TransactionCoordinator"))
     {
         scan_active_txns_task = getContext()->getSchedulePool().createTask("ScanActiveTxnsTask", [this]() { scanActiveTransactions(); });
         scan_active_txns_task->activate();
@@ -203,7 +204,7 @@ private:
     UInt64 scan_interval;
     BackgroundSchedulePool::TaskHolder scan_active_txns_task;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

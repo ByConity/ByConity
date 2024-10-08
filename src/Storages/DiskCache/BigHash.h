@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <istream>
 #include <memory>
@@ -80,7 +81,7 @@ public:
     std::pair<Status, std::string> getRandomAlloc(Buffer & value) override;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("BigHash");
+    LoggerPtr log = getLogger("BigHash");
 
     STRONG_TYPEDEF(UInt32, BucketId)
 

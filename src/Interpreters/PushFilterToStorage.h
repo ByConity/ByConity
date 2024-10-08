@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "common/logger_useful.h"
 #include "Interpreters/Context_fwd.h"
 #include "Parsers/IAST_fwd.h"
@@ -20,6 +21,6 @@ public:
 
 private:
     ConstStoragePtr storage;
-    const Poco::Logger * logger = &Poco::Logger::get("PushFilterToStorage");
+    const LoggerPtr logger = getLogger("PushFilterToStorage");
 };
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Databases/DatabasesCommon.h>
 #include <Databases/IDatabase.h>
 #include <Storages/IStorage_fwd.h>
@@ -49,7 +50,7 @@ protected:
 private:
     String hive_catalog_name;
     ExternalCatalog::ExternalCatalogPtr hive_catalog;
-    Poco::Logger * log;
+    LoggerPtr log;
     mutable std::unordered_map<String, std::tuple<StoragePtr,time_t>> cache;
     mutable std::shared_mutex cache_mutex;
 };

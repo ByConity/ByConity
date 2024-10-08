@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Names.h>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/IBlockStream_fwd.h>
@@ -173,7 +174,7 @@ public:
     virtual bool supportsReplication() const { return false; }
 
     /// Returns true if the storage supports parallel insert.
-    virtual bool supportsParallelInsert() const { return false; }
+    virtual bool supportsParallelInsert(ContextPtr /*local_context*/) const { return false; }
 
     /// Return true if the storage use MAP flattened model. i.e. MergeTree for now
     virtual bool supportsMapImplicitColumn() const { return false; }
@@ -655,11 +656,6 @@ public:
     /// Otherwise - throws an exception with detailed information.
     /// We do not use mutex because it is not very important that the size could change during the operation.
     virtual void checkPartitionCanBeDropped(const ASTPtr & /*partition*/) {}
-
-    virtual Poco::Logger* getLogger() const
-    {
-        throw Exception("Method getLogger is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
 
     /// Returns true if Storage may store some data on disk.
     /// NOTE: may not be equivalent to !getDataPaths().empty()

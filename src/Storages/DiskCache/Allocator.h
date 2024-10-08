@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <folly/fibers/TimedMutex.h>
 
 #include <Storages/DiskCache/Region.h>
@@ -64,7 +65,7 @@ public:
     void flush();
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("BlockCacheAllocator");
+    LoggerPtr log = getLogger("BlockCacheAllocator");
     
     void flushAndReleaseRegionFromRALocked(RegionAllocator & ra, bool flushAsync);
 

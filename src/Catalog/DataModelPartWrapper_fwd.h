@@ -29,6 +29,6 @@ using DataModelPartWrapperVector = std::vector<DataModelPartWrapperPtr>;
 using ServerDataPartPtr = std::shared_ptr<const ServerDataPart>;
 using ServerDataPartsVector = std::vector<ServerDataPartPtr>;
 using ServerDataPartsWithDBM = std::pair<ServerDataPartsVector, std::vector<std::shared_ptr<DeleteBitmapMeta>>>; // DBM: delete bitmap meta
-using ServerVirtualPartPtr = std::shared_ptr<ServerVirtualPart>;
+using ServerVirtualPartPtr = std::shared_ptr<const ServerVirtualPart>;
 using ServerVirtualPartVector = std::vector<ServerVirtualPartPtr>;
 }

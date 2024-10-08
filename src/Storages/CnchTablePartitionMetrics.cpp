@@ -86,7 +86,7 @@ void PartitionMetrics::restoreFromSnapshot(const PartitionMetrics & other)
     if (shutdown)
         return;
 
-    auto * log = &Poco::Logger::get("PartitionMetrics");
+    auto log = getLogger("PartitionMetrics");
 
     auto expected_value = false;
     if (!recalculating.compare_exchange_strong(expected_value, true))
@@ -106,7 +106,7 @@ bool PartitionMetrics::recalculate(size_t current_time, ContextPtr context, bool
 {
     if (shutdown)
         return false;
-    auto * log = &Poco::Logger::get("PartitionMetrics");
+    auto log = getLogger("PartitionMetrics");
 
     auto expected_value = false;
     if (!recalculating.compare_exchange_strong(expected_value, true))
@@ -216,7 +216,7 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
     if (shutdown)
         return;
     size_t current_time = recalculate_current_time;
-    auto * log = &Poco::Logger::get("PartitionMetrics");
+    auto log = getLogger("PartitionMetrics");
     LOG_TRACE(log, "{} Recalculate bottom half.", getTraceID());
 
     if (!old_store.has_value())
@@ -350,7 +350,7 @@ void TableMetrics::restoreFromSnapshot(Protos::TableTrashItemsMetricsSnapshot & 
     if (shutdown)
         return;
 
-    auto * log = &Poco::Logger::get("TableMetrics");
+    auto log = getLogger("TableMetrics");
 
     auto expected_value = false;
     if (!recalculating.compare_exchange_strong(expected_value, true))
@@ -369,7 +369,7 @@ void TableMetrics::recalculate(size_t current_time, ContextPtr context, bool for
 {
     if (shutdown)
         return;
-    auto * log = &Poco::Logger::get("TableMetrics");
+    auto log = getLogger("TableMetrics");
 
     auto expected_value = false;
     if (!recalculating.compare_exchange_strong(expected_value, true))

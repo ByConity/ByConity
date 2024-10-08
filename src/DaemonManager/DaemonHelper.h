@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Poco/Logger.h>
 
@@ -26,7 +27,7 @@ namespace DB::DaemonManager
         return cnch_table != nullptr;
     }
 
-    void printConfig(std::map<std::string, unsigned int> & config, Poco::Logger * log);
+    void printConfig(std::map<std::string, unsigned int> & config, LoggerPtr log);
 
     std::map<std::string, unsigned int> updateConfig(
         std::map<std::string, unsigned int> && default_config,

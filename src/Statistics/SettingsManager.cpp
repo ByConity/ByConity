@@ -96,7 +96,7 @@ std::unordered_map<String, String> parseAllKeyValue(const Poco::Util::AbstractCo
     return result;
 }
 
-SettingsChanges mapToChanges(const std::unordered_map<String, String> & kv_map, Poco::Logger * logger)
+SettingsChanges mapToChanges(const std::unordered_map<String, String> & kv_map, LoggerPtr logger)
 {
     SettingsChanges changes;
     for (const auto & [k, v] : kv_map)
@@ -123,7 +123,7 @@ bool stringToBool(const std::string& str) {
 
 void SettingsManager::loadSettingsFromXml(const Poco::Util::AbstractConfiguration & config)
 {
-    auto * logger = &Poco::Logger::get("Statistics::AutoStats::SettingsManager");
+    auto logger = getLogger("Statistics::AutoStats::SettingsManager");
     try
     {
         bool any_is_enabled = false;

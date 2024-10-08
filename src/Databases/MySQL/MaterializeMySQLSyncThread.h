@@ -7,6 +7,7 @@
 #if USE_MYSQL
 
 #    include <mutex>
+#    include <Common/Logger.h>
 #    include <Core/MySQL/MySQLClient.h>
 #    include <DataStreams/BlockIO.h>
 #    include <DataTypes/DataTypeString.h>
@@ -62,7 +63,7 @@ public:
     void setBinLogInfo(const MySQLBinLogInfo & binlog) { binlog_info = binlog; }
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
 
     String database_name;
     String mysql_database_name;

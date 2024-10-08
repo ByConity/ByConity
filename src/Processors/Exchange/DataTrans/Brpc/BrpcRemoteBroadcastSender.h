@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -44,7 +45,7 @@ public:
     BroadcastSenderType getType() override { return BroadcastSenderType::Brpc; }
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastSender");
+    LoggerPtr log = getLogger("BrpcRemoteBroadcastSender");
     ExchangeDataKeyPtrs trans_keys;
     ContextPtr context;
     Block header;

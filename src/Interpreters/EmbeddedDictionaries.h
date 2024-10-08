@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Common/MultiVersion.h>
 #include <Common/ThreadPool.h>
@@ -25,7 +26,7 @@ namespace DB
 class EmbeddedDictionaries : WithContext
 {
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
 
     MultiVersion<RegionsHierarchies> regions_hierarchies;
     MultiVersion<RegionsNames> regions_names;

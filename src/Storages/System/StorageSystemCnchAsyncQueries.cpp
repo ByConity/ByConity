@@ -53,12 +53,12 @@ void StorageSystemCnchAsyncQueries::fillData(MutableColumns & res_columns, Conte
             }
             else
             {
-                LOG_TRACE(&Poco::Logger::get(getName()), "return empty result with async_query_id {}", selected_id);
+                LOG_TRACE(getLogger(getName()), "return empty result with async_query_id {}", selected_id);
             }
         }
         else
         {
-            LOG_TRACE(&Poco::Logger::get(getName()), "doesn't do any filtering");
+            LOG_TRACE(getLogger(getName()), "doesn't do any filtering");
         }
     }
 }

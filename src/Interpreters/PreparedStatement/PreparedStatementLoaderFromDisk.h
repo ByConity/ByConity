@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Settings.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
@@ -36,7 +37,7 @@ private:
 
     String dir_path;
     mutable std::shared_mutex mutex;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

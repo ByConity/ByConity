@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <string>
 #include <variant>
@@ -35,7 +36,7 @@ public:
             peak.store(will_be, std::memory_order_relaxed);
     }
     void decrease(const MultiPathDataPacket & packet) { amount.fetch_sub(calculate(packet), std::memory_order_relaxed); }
-    void logPeakMemoryUsage() const { LOG_TRACE(&Poco::Logger::get("MemoryController"), "Peak memory usage: {}", ReadableSize(peak)); }
+    void logPeakMemoryUsage() const { LOG_TRACE(getLogger("MemoryController"), "Peak memory usage: {}", ReadableSize(peak)); }
 private:
     Int64 calculate(const MultiPathDataPacket & packet) const
     {

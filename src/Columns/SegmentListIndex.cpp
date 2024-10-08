@@ -108,7 +108,7 @@ void SegmentBitmapIndexReader::init()
     }
     catch(...)
     {
-        tryLogCurrentException(&Poco::Logger::get("SegmentBitmapIndexReader"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(getLogger("SegmentBitmapIndexReader"), __PRETTY_FUNCTION__);
         compressed_idx = nullptr;
         seg_tab = nullptr;
         seg_dir = nullptr;

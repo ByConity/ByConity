@@ -18,21 +18,27 @@ IntermediateResultCacheTransform::IntermediateResultCacheTransform(
     CacheParam & cache_param_,
     UInt64 cache_max_bytes_,
     UInt64 cache_max_rows_,
-    bool all_part_in_cache_)
+    CacheHolderPtr cache_holder_)
     : ISimpleTransform(header_, header_, false)
     , cache(std::move(cache_))
     , cache_param(cache_param_)
     , cache_max_bytes(cache_max_bytes_)
     , cache_max_rows(cache_max_rows_)
-    , all_part_in_cache(all_part_in_cache_)
-    , log(&Poco::Logger::get("IntermediateResultCacheTransform"))
+    , cache_holder(std::move(cache_holder_))
+    , log(getLogger("IntermediateResultCacheTransform"))
 {
 }
 
 IProcessor::Status IntermediateResultCacheTransform::prepare()
 {
-    if (all_part_in_cache)
+    if (cache_holder->all_part_in_cache)
         stopReading();
+
+    if (!cache_holder->early_finish && output.isFinished() && !input.isFinished())
+    {
+        cache_holder->early_finish = true;
+        LOG_DEBUG(log, "Cache {} generate was early finish", cache_param.digest);
+    }
 
     return ISimpleTransform::prepare();
 }
@@ -52,6 +58,9 @@ void IntermediateResultCacheTransform::transform(DB::Chunk & chunk)
     if (!owner_info.empty())
     {
         CacheKey key{cache_param.digest, cache_param.cached_table.getFullTableName(), owner_info};
+        if (!cache_holder->write_cache.contains(key))
+            return;
+
         auto it = uncompleted_cache.find(key);
         if (it != uncompleted_cache.end())
             value = it->second;

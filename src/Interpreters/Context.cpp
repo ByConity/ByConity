@@ -50,6 +50,7 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/ReclusteringManagerThread.h>
+#include <CloudServices/ManifestCache.h>
 #include <Compression/ICompressionCodec.h>
 #include <Coordination/Defines.h>
 #include <Coordination/KeeperDispatcher.h>
@@ -279,7 +280,7 @@ namespace ErrorCodes
   */
 struct ContextSharedPart
 {
-    Poco::Logger * log = &Poco::Logger::get("Context");
+    LoggerPtr log = getLogger("Context");
 
     /// For access of most of shared objects. Recursive mutex.
     mutable std::recursive_mutex mutex;
@@ -438,6 +439,7 @@ struct ContextSharedPart
     mutable OnceFlag global_txn_committer_initialized;
     mutable GlobalTxnCommitterPtr global_txn_committer;
     mutable GlobalDataManagerPtr global_data_manager;
+    mutable std::shared_ptr<ManifestCache> manifest_cache;
 
     bool enable_ssl = false;
 
@@ -839,6 +841,9 @@ InterserverIOHandler & Context::getInterserverIOHandler()
 ReadSettings Context::getReadSettings() const
 {
     ReadSettings res;
+
+    res.remote_fs_read_failed_injection = settings.remote_fs_read_failed_injection;
+
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.remote_read_log = settings.enable_remote_read_log ? getRemoteReadLog().get() : nullptr;
@@ -864,7 +869,7 @@ ReadSettings Context::getReadSettings() const
         if (getIOUringReader().isSupported())
             res.local_fs_method = LocalFSReadMethod::io_uring;
         else
-            LOG_WARNING(&Poco::Logger::get("Context"), "IOUring is not supported, use default local_fs_method");
+            LOG_WARNING(getLogger("Context"), "IOUring is not supported, use default local_fs_method");
     }
 
     return res;
@@ -1264,7 +1269,7 @@ VolumePtr Context::setTemporaryStorage(const String & path, const String & polic
     return shared->tmp_volume;
 }
 
-static void setupTmpPath(Poco::Logger * log, const std::string & path)
+static void setupTmpPath(LoggerPtr log, const std::string & path)
 try
 {
     LOG_DEBUG(log, "Setting up {} to store temporary data in it", path);
@@ -1571,7 +1576,7 @@ void Context::initResourceGroupManager(const ConfigurationPtr & )
 
     // if (!config->has("resource_groups"))
     // {
-    //     LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
+    //     LOG_DEBUG(getLogger("Context"), "No config found. Not creating Resource Group Manager");
     //     return ;
     // }
     // auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
@@ -1579,15 +1584,15 @@ void Context::initResourceGroupManager(const ConfigurationPtr & )
     // {
     //     if (!getResourceManagerClient())
     //     {
-    //         LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
+    //         LOG_ERROR(getLogger("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
     //         return;
     //     }
-    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
+    //     LOG_DEBUG(getLogger("Context"), "Creating VW Resource Group Manager");
     //     shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
     // }
     // else if (resource_group_manager_type == "internal")
     // {
-    //     LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
+    //     LOG_DEBUG(getLogger("Context"), "Creating Internal Resource Group Manager");
     //     shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
     // }
     // else
@@ -2331,7 +2336,9 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     }
 
     // skip if a previous setting change is in process
-    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending;
+    // skip if current and target are same
+    bool apply_ansi_related_settings = dialect_type_opt && !settings.dialect_type.pending
+        && settings.dialect_type.value != SettingFieldDialectTypeTraits::fromString(*dialect_type_opt);
 
     if (apply_ansi_related_settings)
     {
@@ -3002,6 +3009,8 @@ void Context::dropMarkCache() const
 
 std::shared_ptr<CloudTableDefinitionCache> Context::tryGetCloudTableDefinitionCache() const
 {
+    if (hasSessionTimeZone())
+        return nullptr;
     callOnce(shared->cloud_table_definition_cache_initialized, [&] {
         const Poco::Util::AbstractConfiguration & config = getConfigRef();
         auto cache_size = config.getUInt(".cloud_table_definition_cache_size", 50000);
@@ -4575,7 +4584,7 @@ void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & confi
     shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
     setCurrentProfile(shared->system_profile_name);
 
-    applySettingsQuirks(settings, &Poco::Logger::get("SettingsQuirks"));
+    applySettingsQuirks(settings, getLogger("SettingsQuirks"));
 
     shared->buffer_profile_name = config.getString("buffer_profile", shared->system_profile_name);
     buffer_context = Context::createCopy(shared_from_this());
@@ -5049,7 +5058,7 @@ DeleteBitmapCachePtr Context::getDeleteBitmapCache() const
 void Context::setMetaChecker()
 {
     auto meta_checker = [this]() {
-        Poco::Logger * log = &Poco::Logger::get("MetaChecker");
+        LoggerPtr log = getLogger("MetaChecker");
 
         Stopwatch stopwatch;
         LOG_DEBUG(log, "Start to run metadata synchronization task.");
@@ -5296,6 +5305,22 @@ PartCacheManagerPtr Context::getPartCacheManager() const
     /// no need to lock because PartCacheManager is initialized during server start up,
     /// there is no concurrent setPartCacheManager and getPartCacheManager usage.
     return shared->cache_manager;
+}
+
+void Context::setManifestCache()
+{
+    auto lock = getLock();
+
+    if (!shared->manifest_cache)
+        shared->manifest_cache = std::make_shared<ManifestCache>(getSettingsRef().max_manifest_cache_size, std::chrono::seconds(getSettingsRef().manifest_cache_min_lifetime.value.totalSeconds()));
+}
+
+std::shared_ptr<ManifestCache> Context::getManifestCache() const
+{
+    if (!shared->manifest_cache)
+        throw Exception("Manifest cache is not initialized", ErrorCodes::LOGICAL_ERROR);
+
+    return shared->manifest_cache;
 }
 
 void Context::initCatalog(const MetastoreConfig & catalog_conf, const String & name_space, bool writable)
@@ -5644,6 +5669,11 @@ void Context::initCnchBGThreads()
 {
     auto lock = getLock(); // checked
     shared->cnch_bg_threads_array = std::make_unique<CnchBGThreadsMapArray>(shared_from_this());
+}
+
+UInt32 Context::getEpoch()
+{
+    return shared->cnch_bg_threads_array->getEpoch();
 }
 
 CnchBGThreadsMap * Context::getCnchBGThreadsMap(CnchBGThreadType type) const
@@ -6014,7 +6044,7 @@ void Context::clearOptimizerProfile()
     optimizer_profile = nullptr;
 }
 
-void Context::logOptimizerProfile(Poco::Logger * log, String prefix, String name, String time, bool is_rule)
+void Context::logOptimizerProfile(LoggerPtr log, String prefix, String name, String time, bool is_rule)
 {
     if (settings.log_optimizer_run_time && log)
         LOG_DEBUG(log, prefix + name + " " + time);

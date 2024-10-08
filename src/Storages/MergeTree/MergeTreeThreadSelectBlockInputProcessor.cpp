@@ -45,7 +45,7 @@ MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcess
         pool_->getHeader(), storage_, storage_snapshot_, query_info_, stream_settings_, virt_column_names_},
     thread{thread_},
     pool{pool_},
-    log(&Poco::Logger::get("MergeTreeThreadSelectBlockInputProcessor"))
+    log(getLogger("MergeTreeThreadSelectBlockInputProcessor"))
 {
     /// round min_marks_to_read up to nearest multiple of block_size expressed in marks
     /// If granularity is adaptive it doesn't make sense

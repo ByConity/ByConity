@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -201,7 +202,7 @@ public:
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "bighash size pct should be in range of [0, 100), but {} is set", size_pct_);
 
         if (size_pct_ == 0)
-            LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "BigHash is not configured");
+            LOG_INFO(getLogger("NvmCacheConfig"), "BigHash is not configured");
 
         size_pct = size_pct_;
         small_item_max_size = small_item_max_size_;

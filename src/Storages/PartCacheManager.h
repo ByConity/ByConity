@@ -206,9 +206,9 @@ public:
 
     bool checkIfCacheValidWithNHUT(const UUID & uuid, const UInt64 & nhut);
 
-    StoragePtr getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version);
+    StoragePtr getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version, const Context & query_context);
 
-    void insertStorageCache(const StorageID & storage_id, StoragePtr storage, UInt64 commit_ts, const PairInt64 & topology_version);
+    void insertStorageCache(const StorageID & storage_id, StoragePtr storage, UInt64 commit_ts, const PairInt64 & topology_version, const Context & query_context);
 
     void removeStorageCache(const String & database, const String & table = "");
 

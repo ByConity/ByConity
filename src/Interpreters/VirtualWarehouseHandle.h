@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/VirtualWarehouseQueue.h>
@@ -176,7 +177,7 @@ private:
     const String name;
     const UUID uuid;
     VirtualWarehouseSettings settings;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// In ByteHouse, a VW will be auto recycled (auto-suspend) if no new queries received for a period (5 minutes by default).
     /// And when user send queries to the VW again, ByteYard will make sure to send out the queries after workers are full ready.

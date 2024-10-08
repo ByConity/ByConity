@@ -325,7 +325,7 @@ static std::string getUserName(uid_t user_id)
     return toString(user_id);
 }
 
-Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, Poco::Logger * log)
+Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, LoggerPtr log)
 {
     Poco::Net::SocketAddress socket_address;
     try
@@ -355,7 +355,7 @@ Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port
 
 Poco::Net::SocketAddress Server::socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure) const
 {
-    auto address = makeSocketAddress(host, port, &logger());
+    auto address = makeSocketAddress(host, port, getLogger(logger()));
 #if !defined(POCO_CLICKHOUSE_PATCH) || POCO_VERSION < 0x01090100
     if (secure)
         /// Bug in old (<1.9.1) poco, listen() after bind() with reusePort param will fail because have no implementation in SecureServerSocketImpl
@@ -403,7 +403,7 @@ static void clearOldStoreDirectory(const DisksMap& disk_map)
 
             try
             {
-                LOG_DEBUG(&Poco::Logger::get(__func__), "Removing {} from disk {}",
+                LOG_DEBUG(getLogger(__func__), "Removing {} from disk {}",
                     String(fs::path(disk->getPath()) / iter->path()), disk->getName());
                 disk->removeRecursive(iter->path());
             }
@@ -508,7 +508,7 @@ void checkForUsersNotInMainConfig(
     const Poco::Util::AbstractConfiguration & config,
     const std::string & config_path,
     const std::string & users_config_path,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     if (config.getBool("skip_check_for_incorrect_settings", false))
         return;
@@ -539,7 +539,7 @@ void checkForUsersNotInMainConfig(
 
 void huallocLogPrint(std::string s)
 {
-    static Poco::Logger * logger = &Poco::Logger::get("HuallocDebug");
+    static LoggerPtr logger = getLogger("HuallocDebug");
     LOG_INFO(logger, s);
 }
 
@@ -571,7 +571,7 @@ void limitMemoryCacheDefaultMaxRatio(RootConfiguration & root_config, const UInt
 
     Float32 max_total_ratio = root_config.cache_size_to_ram_max_ratio.value;
     Float32 lowered_ratio = (total_ratio > max_total_ratio ? max_total_ratio / total_ratio : 1.0f);
-    Poco::Logger * logger = &Poco::Logger::get("MemoryCacheDefaultRatioLimit");
+    auto logger = getLogger("MemoryCacheDefaultRatioLimit");
 
     LOG_INFO(logger, "Total memory {}, max ratio for memory cache is {}{}",
         formatReadableSizeWithBinarySuffix(memory_amount), max_total_ratio,
@@ -601,7 +601,7 @@ void limitMemoryCacheDefaultMaxRatio(RootConfiguration & root_config, const UInt
 
 int Server::main(const std::vector<std::string> & /*args*/)
 {
-    Poco::Logger * log = &logger();
+    LoggerPtr log = getLogger(logger());
 
     UseSSL use_ssl;
 
@@ -1492,6 +1492,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
 
     global_context->setCnchTopologyMaster();
+
+    if (global_context->getServerType() == ServerType::cnch_worker)
+        global_context->setManifestCache();
 
     if (global_context->getServerType() == ServerType::cnch_server)
     {

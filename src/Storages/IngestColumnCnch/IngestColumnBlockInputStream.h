@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
@@ -52,7 +53,7 @@ private:
     Int64 cur_bucket_index = -1;    // if cur_bcuket_index = -1 use ordinary ingest
     std::vector<Int64> buckets_for_ingest;
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

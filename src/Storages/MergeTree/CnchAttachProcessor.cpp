@@ -448,7 +448,7 @@ String CnchAttachProcessor::relativePathTo(const String& from, const String& to)
         relative_path.pushDirectory(to_path[i]);
     }
 
-    LOG_TRACE(&Poco::Logger::get("RelativePath"), fmt::format("From {}, to {}, rel {}", from, to, relative_path.toString()));
+    LOG_TRACE(getLogger("RelativePath"), fmt::format("From {}, to {}, rel {}", from, to, relative_path.toString()));
 
     return relative_path.toString();
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -71,7 +72,7 @@ private:
     MPPQueryOptions options;
     std::shared_ptr<PlanSegmentTree> plan_segment_tree;
     const String & query_id;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     // All allowed lock order: (state_machine_mutex,status_mutex) or (status_mutex) or (state_machine_mutex)
     mutable bthread::Mutex state_machine_mutex;

@@ -70,6 +70,7 @@ public:
     DataTypePtr operator() (const AggregateFunctionStateData & x) const;
     DataTypePtr operator() (const BitMap64 & x) const;
     DataTypePtr operator() (const Object & map) const;
+    DataTypePtr operator() (const JsonbField & x) const;
 
 private:
     bool allow_convertion_to_string;

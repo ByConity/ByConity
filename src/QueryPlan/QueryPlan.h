@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/prepared_statement.h>
@@ -209,7 +210,7 @@ public:
     void prepare(const PreparedStatementContext & prepared_context);
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("QueryPlan");
+    LoggerPtr log = getLogger("QueryPlan");
     // Flatten, in segment only
     Nodes nodes;
     CTENodes cte_nodes; // won't serialize

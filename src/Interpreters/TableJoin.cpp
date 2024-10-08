@@ -129,7 +129,7 @@ void TableJoin::addInequalConditions(const ASTs & inequal_conditions, const Name
     inequal_column_name = mixed_inequal_condition->getColumnName();
     auto syntax_result = TreeRewriter(context).analyze(mixed_inequal_condition, columns_for_join);
     inequal_condition_actions = ExpressionAnalyzer(mixed_inequal_condition, syntax_result, context).getActions(false);
-    LOG_DEBUG(&Poco::Logger::get("TableJoin"), fmt::format("addInequalConditions: mixed_inequal_condition: {}", 
+    LOG_DEBUG(getLogger("TableJoin"), fmt::format("addInequalConditions: mixed_inequal_condition: {}", 
         queryToString(mixed_inequal_condition)));
 }
 
@@ -517,7 +517,7 @@ bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const Nam
             return fmt::format("{}", fmt::join(text, ", "));
         };
         LOG_TRACE(
-            &Poco::Logger::get("TableJoin"),
+            getLogger("TableJoin"),
             "Infer supertype for joined columns. Left: [{}], Right: [{}]",
             format_type_map(left_type_map),
             format_type_map(right_type_map));

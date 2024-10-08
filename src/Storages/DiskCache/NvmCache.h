@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -108,7 +109,7 @@ public:
     bool recover() override;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("NvmCache");
+    LoggerPtr log = getLogger("NvmCache");
 
     struct ValidConfigTag
     {

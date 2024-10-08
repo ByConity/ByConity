@@ -183,7 +183,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
 
         UInt64 time_pass_ms = stop_watch.elapsedMilliseconds();
         if (time_pass_ms > 2000)
-            LOG_INFO(&Poco::Logger::get("StorageSystemCnchColumns"),
+            LOG_INFO(getLogger("StorageSystemCnchColumns"),
                 "cnch_catalog->getAllTables() took {} ms", time_pass_ms);
 
         const auto access = context->getAccess();

@@ -809,7 +809,7 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData()
         }
         catch (...)
         {
-            tryLogWarningCurrentException(&Poco::Logger::get("InterpreterExplainQuery::explainMetaData"), "build plan failed.");
+            tryLogWarningCurrentException(getLogger("InterpreterExplainQuery::explainMetaData"), "build plan failed.");
         }
     }
 

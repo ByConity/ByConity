@@ -118,7 +118,7 @@ void IStorageCnchKafka::checkAndLoadingSettings(KafkaSettings &kafka_settings)
     {
         /// TODO: should we throw an Exception later to make a powerful restriction?
         if (kafka_settings.unique_group_prefix.value.empty())
-            LOG_WARNING(&Poco::Logger::get("IStorageCnchKafka"), "No unique prefix set for tob kafka, which may cause duplicate keys for offset in bytekv");
+            LOG_WARNING(getLogger("IStorageCnchKafka"), "No unique prefix set for tob kafka, which may cause duplicate keys for offset in bytekv");
     }
 
     /// Use global schema_registry_url if the user does not set the table level setting parameter

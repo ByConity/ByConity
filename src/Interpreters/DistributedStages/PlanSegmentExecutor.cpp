@@ -120,7 +120,7 @@ PlanSegmentExecutor::PlanSegmentExecutor(
     , plan_segment_instance(std::move(plan_segment_instance_))
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
-    , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , logger(getLogger("PlanSegmentExecutor"))
     , query_log_element(std::make_unique<QueryLogElement>())
 {
     options = ExchangeUtils::getExchangeOptions(context);
@@ -138,7 +138,7 @@ PlanSegmentExecutor::PlanSegmentExecutor(
     , plan_segment(plan_segment_instance->plan_segment.get())
     , plan_segment_outputs(plan_segment_instance->plan_segment->getPlanSegmentOutputs())
     , options(std::move(options_))
-    , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+    , logger(getLogger("PlanSegmentExecutor"))
     , query_log_element(std::make_unique<QueryLogElement>())
 {
     prepareSegmentInfo();
@@ -239,7 +239,7 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
 
 BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
 {
-    LOG_DEBUG(&Poco::Logger::get("PlanSegmentExecutor"), "lazyExecute: {}", plan_segment->getPlanSegmentId());
+    LOG_DEBUG(getLogger("PlanSegmentExecutor"), "lazyExecute: {}", plan_segment->getPlanSegmentId());
     BlockIO res;
     // Will run as master query and already initialized
     if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
@@ -362,7 +362,7 @@ void PlanSegmentExecutor::doExecute()
                     plan_segment->getPlanSegmentId(),
                     plan_segment_instance->info.parallel_id));
         }
-        CurrentThread::getProfileEvents().increment(ProfileEvents::PlanSegmentInstanceRetry, plan_segment_instance->info.retry_id);
+        CurrentThread::getProfileEvents().increment(ProfileEvents::PlanSegmentInstanceRetry, plan_segment_instance->info.attempt_id);
     }
 
     // set process list before building pipeline, or else TableWriteTransform's output stream can't set its process list properly
@@ -487,7 +487,7 @@ void PlanSegmentExecutor::doExecute()
     }
 }
 
-static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(Poco::Logger * log, ContextMutablePtr& context)
+static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(LoggerPtr log, ContextMutablePtr& context)
 {
     QueryPlanOptimizationSettings settings = QueryPlanOptimizationSettings::fromContext(context);
     if(!settings.enable_optimizer)
@@ -785,7 +785,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         throw Exception("Plan segment has no exchange sender!", ErrorCodes::LOGICAL_ERROR);
 }
 
-void PlanSegmentExecutor::registerAllExchangeReceivers(Poco::Logger * log, const QueryPipeline & pipeline, UInt32 register_timeout_ms)
+void PlanSegmentExecutor::registerAllExchangeReceivers(LoggerPtr log, const QueryPipeline & pipeline, UInt32 register_timeout_ms)
 {
     const Processors & procesors = pipeline.getProcessors();
     std::vector<AsyncRegisterResult> async_results;
@@ -979,27 +979,24 @@ void PlanSegmentExecutor::sendProgress()
                 = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
             Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
             brpc::Controller * cntl = new brpc::Controller;
-            Protos::SendProgressRequest request;
+            Protos::SendProgressRequest * request = new Protos::SendProgressRequest;
             Protos::SendProgressResponse * response = new Protos::SendProgressResponse;
-            request.set_query_id(plan_segment->getQueryId());
-            request.set_segment_id(plan_segment->getPlanSegmentId());
-            request.set_parallel_id(plan_segment_instance->info.parallel_id);
-            *request.mutable_progress() = progress.fetchAndResetPiecewiseAtomically().toProto();
+            request->set_query_id(plan_segment->getQueryId());
+            request->set_segment_id(plan_segment->getPlanSegmentId());
+            request->set_parallel_id(plan_segment_instance->info.parallel_id);
+            *request->mutable_progress() = progress.fetchAndResetPiecewiseAtomically().toProto();
             cntl->set_timeout_ms(20000);
+
+            std::function<String()> construct_err_msg = [request = request]() -> String {
+                return fmt::format(
+                    "PlanSegment-{} send profile to coordinator failed, query id-{}", request->segment_id(), request->query_id());
+            };
+
             manager.sendProgress(
                 cntl,
-                &request,
+                request,
                 response,
-                brpc::NewCallback(
-                    RPCHelpers::onAsyncCallDoneAssertController,
-                    response,
-                    cntl,
-                    logger,
-                    fmt::format(
-                        "sendProgress failed for query_id:{} segment_id:{} parallel_id:{}",
-                        plan_segment->getQueryId(),
-                        plan_segment->getPlanSegmentId(),
-                        plan_segment_instance->info.parallel_id)));
+                brpc::NewCallback(RPCHelpers::onAsyncCallDoneAssertController, request, response, cntl, logger, construct_err_msg));
         }
         catch (...)
         {

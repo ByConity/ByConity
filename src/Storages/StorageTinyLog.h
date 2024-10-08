@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <map>
 
 #include <common/shared_ptr_helper.h>
@@ -73,7 +74,7 @@ private:
     FileChecker file_checker;
     std::shared_timed_mutex rwlock;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void addFiles(const NameAndTypePair & column);
 };

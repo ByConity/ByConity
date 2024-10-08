@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/SortDescription.h>
 #include <Core/SortCursor.h>
 
@@ -78,7 +79,7 @@ private:
     template <typename TSortingHeap>
     void merge(MutableColumns & merged_columns, TSortingHeap & queue);
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Read is finished.
     bool finished = false;

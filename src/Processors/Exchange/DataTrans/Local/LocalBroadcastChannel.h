@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <cstddef>
 #include <Interpreters/QueryExchangeLog.h>
@@ -96,6 +97,6 @@ private:
     BroadcastStatus init_status{BroadcastStatusCode::RUNNING, false, "init"};
     std::atomic<BroadcastStatus *> broadcast_status{&init_status};
     ContextPtr context;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 }

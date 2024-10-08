@@ -24,14 +24,14 @@ String RemoteDiskCacheService::getFileFullPath(const String & key)
     auto [disk, path] = disk_cache->get(key);
     if (!disk)
     {
-        LOG_WARNING(&Poco::Logger::get("RemoteDiskCacheService"), "Can't find the cache key: {}", key);
+        LOG_WARNING(getLogger("RemoteDiskCacheService"), "Can't find the cache key: {}", key);
         return "";
     }
 
     if (!disk->exists(path))
     {
         LOG_WARNING(
-            &Poco::Logger::get("RemoteDiskCacheService"),
+            getLogger("RemoteDiskCacheService"),
             "Find the cache key but the cache data path is not exist: {}->{}",
             key,
             fullPath(disk, path));

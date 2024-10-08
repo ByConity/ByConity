@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
@@ -86,7 +87,7 @@ public:
 private:
     ContextMutablePtr context;
     int max_buf_size;
-    Poco::Logger * log = &Poco::Logger::get("BrpcExchangeReceiverRegistryService");
+    LoggerPtr log = getLogger("BrpcExchangeReceiverRegistryService");
 
     /// stream will be accepted, but the host socket of the accpeted stream
     /// is not really set yet until done->Run() is called

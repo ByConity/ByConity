@@ -18,6 +18,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Storages/Hive/CnchHiveSettings.h>
+#include <boost/algorithm/string.hpp>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/Exception.h>
 
@@ -85,4 +86,17 @@ void CnchHiveSettings::loadFromQuery(ASTStorage & storage_def)
 #undef ADD_IF_ABSENT
 }
 
+std::vector<String> CnchHiveSettings::splitStr(const String & str, const String & delimiters)
+{
+    std::vector<String> tokens;
+    boost::split(tokens, str, boost::is_any_of(delimiters));
+
+    std::vector<String> trimed_tokens;
+    std::transform(tokens.begin(), tokens.end(), std::back_inserter(trimed_tokens), [](const String & token) {
+        String trimed_token = token;
+        boost::trim(trimed_token);
+        return trimed_token;
+    });
+    return trimed_tokens;
+}
 }

@@ -294,6 +294,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeSketchBinary(*this);
     registerDataTypeDomainBool(*this);
     registerDataTypeObject(*this);
+    registerDataTypeJSONB(*this);
 }
 
 DataTypeFactory & DataTypeFactory::instance()

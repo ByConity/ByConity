@@ -32,7 +32,7 @@ namespace ErrorCodes
 class BufferingToFileTransform : public IAccumulatingTransform
 {
 public:
-    BufferingToFileTransform(const Block & header, Poco::Logger * log_, std::string path_)
+    BufferingToFileTransform(const Block & header, LoggerPtr log_, std::string path_)
         : IAccumulatingTransform(header, header), log(log_)
         , path(std::move(path_)), file_buf_out(path), compressed_buf_out(file_buf_out)
         , out_stream(std::make_shared<NativeBlockOutputStream>(compressed_buf_out, 0, header))
@@ -81,7 +81,7 @@ public:
     }
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     std::string path;
     WriteBufferFromFile file_buf_out;
     CompressedWriteBuffer compressed_buf_out;

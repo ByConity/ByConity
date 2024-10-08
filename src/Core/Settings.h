@@ -919,6 +919,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
     M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
     M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
+    M(Bool, mutation_allow_modify_remove_nullable, false, "default not allow modify column from Nullable(xxx) to xxx", 0) \
     M(Bool, system_mutations_only_basic_info, false, "Only return basic information that stored in KV. It avoid acquiring merge thread of tables", 0) \
     M(Bool, enable_lightweight_delete, true, "Enable lightweight DELETE for mergetree tables.", 0) \
     M(Bool, optimize_move_functions_out_of_any, false, "Move functions out of aggregate functions 'any', 'anyLast'.", 0) \
@@ -1148,11 +1149,14 @@ enum PreloadLevelSettings : UInt64
     M(TextCaseOption, text_case_option, TextCaseOption::MIXED, "Convert identifiers to lower case/upper case just like MySQL", 0) \
     M(Bool, enable_implicit_arg_type_convert, false, "Eable implicit type conversion for functions", 0) \
     M(Bool, exception_on_unsupported_mysql_syntax, true, "Whether throws exceptions on currently unsupported mysql syntax such as auto_increment", 0) \
+    M(Bool, only_full_group_by, true, "If the ONLY_FULL_GROUP_BY is enabled (which it is by default), rejects queries for which the select list, HAVING condition, or ORDER BY list refer to nonaggregated columns that are neither named in the GROUP BY clause nor are functionally dependent on them.", 0) \
     M(Bool, adaptive_type_cast, true, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
     M(Bool, formatdatetime_parsedatetime_m_is_month_name, false, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
     M(Bool, date_format_clickhouse, false, "use date_format as a clickhouse function instead of hive", 0) \
+    M(Bool, datetime_format_mysql_protocol, false, "In mysql protocol, outputs datetime with precision similar to mysql", 0) \
+    M(Bool, datetime_format_mysql_definition, false, "In mysql dialect, whether create table with timestamp/datetime uses datetime64(3)", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
@@ -1282,6 +1286,10 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, cnch_txn_lock_expire_duration_seconds, 30, "Transaction lock expire duration.", 0) \
     M(Seconds, cnch_lock_manager_txn_checker_schedule_seconds, 30, "LockManager txn checker schedule seconds.", 0) \
     M(UInt64, parts_preallocate_pool_size, 16, "Number of threads for part preallocate", 0) \
+    M(UInt64, max_manifest_cache_size, 10000000, "Max size of manifest cache", 0) \
+    M(Seconds, manifest_cache_min_lifetime, 1800, "Min lifetime for manifest parts", 0) \
+    M(Milliseconds, broadcast_manifest_timeout, 5000, "Timeout for broadcasting manifest", 0) \
+    M(Bool, enable_manifest_cache, true, "", 0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
     M(Bool, use_hive_cluster_key_filter, true, "", 0) \
@@ -1303,6 +1311,7 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, max_dedup_execution_time, 21600, "Set default value to 6h", 0) \
     M(UInt64, max_dedup_retry_time, 1, "Dedup task retry num", 0) \
     M(Bool, insert_if_not_exists, false, "Valid for partial update using update set statements, insert will be performed when no row exists if enabled", 0) \
+    M(Bool, optimize_unique_table_write, false, "Remove gather stage and support parallel insert for unique table ETL task", 0) \
     \
     /** Settings for Map */ \
     M(Bool, optimize_map_column_serialization, false, "Construct map value columns in advance during serialization", 0) \
@@ -1636,7 +1645,6 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
     M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
-    M(Bool, enable_wait_cancel_rpc, false, "Whether wait rpcs of cancel worker to finish", 0) \
     M(UInt64, parallel_join_rows_batch_threshold, 4096, "Rows that concurrent hash join wait data reach, then to build hashtable or join block", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
@@ -1681,7 +1689,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_eager_aggregation, false, "Whether to enable RBO -- eager aggregation optimization", 0) \
     M(Bool, only_push_agg_with_functions, false, "Only use eager aggregation with functions", 0) \
     M(Float, agg_push_down_threshold, 40.0, "Which ratio is greater than threshold can be push down", 0) \
+    M(Bool, agg_push_down_every_join, false, "Below every join can insert one agg instead of bottom jion", 0) \
     M(String, eager_agg_join_id_blocklist, "", "Which join in blocklist can't be push down through", 0) \
+    M(String, eager_agg_join_id_whitelist, "", "Which join in blocklist can be push down through", 0) \
     M(Bool, enable_sum_if_to_count_if, false, "Whether enable rewrite sumIf to countIf", 0) \
     M(Bool, enable_eliminate_join_by_fk, false, "Whether to enable RBO -- eliminate join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
@@ -1864,6 +1874,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_async_mv_debug, false, "whether show async debug information", 0) \
     M(Bool, async_mv_enable_mv_meta_cache, true, "whether enable read from mv meta cache.", 0) \
     \
+    M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
+    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
+    M(Bool, multi_idx_filter_for_ivt, false, "Using multiple inverted index to filter mark ranges at the same time", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.
@@ -2108,8 +2121,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_short_circuit, false, "Whether to enable topn short path", 0) \
     M(Bool, enable_table_scan_build_pipeline_optimization, false, "Whether to enable table scan build pipeline optimization", 0) \
     \
-    M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
-    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
+    M(Int64, remote_fs_read_failed_injection, 0, "inject read error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay read ms", 0) \
+    M(Int64, remote_fs_write_failed_injection, 0, "inject write error for remote fs, 0 means disable, -1 means return error immediately, > 0 means delay write ms", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 

@@ -45,7 +45,7 @@ using IndexFileIterators = std::vector<IndexFileIteratorPtr>;
 
 MergeTreeDataDeduper::MergeTreeDataDeduper(
     const MergeTreeMetaBase & data_, ContextPtr context_, const CnchDedupHelper::DedupMode & dedup_mode_)
-    : data(data_), context(context_), log(&Poco::Logger::get(data_.getLogName() + " (Deduper)")), dedup_mode(dedup_mode_)
+    : data(data_), context(context_), log(getLogger(data_.getLogName() + " (Deduper)")), dedup_mode(dedup_mode_)
 {
     if (data.merging_params.hasExplicitVersionColumn())
         version_mode = VersionMode::ExplicitVersion;
@@ -223,7 +223,7 @@ namespace
         return std::move(res);
     }
 
-    void dumpBlockForLogging(const Block & block, String block_stage, Poco::Logger * log)
+    void dumpBlockForLogging(const Block & block, String block_stage, LoggerPtr log)
     {
         LOG_DEBUG(log, "{}: {}",  block_stage, block.dumpStructure());
         for (size_t row_num = 0; row_num < block.rows(); row_num++)
@@ -779,8 +779,7 @@ size_t MergeTreeDataDeduper::prepareBitmapsToDump(
                 txn_id.toUInt64());
             if (base_bitmap)
             {
-                UInt64 bitmap_version = new_parts[i - visible_parts.size()]->getDeleteBitmapVersion();
-                if (bitmap_version == txn_id.toUInt64())
+                if (new_parts[i - visible_parts.size()]->delete_flag)
                 {
                     LOG_TRACE(
                         log,
@@ -1636,16 +1635,9 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
         non_updatable_columns.insert(name);
     for (auto & name : data.getInMemoryMetadataPtr()->getUniqueKeyColumns())
         non_updatable_columns.insert(name);
-
-    NamesAndTypesList func_columns = data.getInMemoryMetadataPtr()->getFuncColumns();
-    auto is_func_col = [&](String col_name) {
-        for (auto & [name, type] : func_columns)
-        {
-            if (name == col_name)
-                return true;
-        }
-        return false;
-    };
+    for (auto & name: data.getInMemoryMetadataPtr()->getColumnsRequiredForPartitionKey())
+        non_updatable_columns.insert(name);
+    NameSet func_column_names = data.getInMemoryMetadataPtr()->getFuncColumnNames();
 
     std::unordered_map<String, ColumnVector<UInt8>::MutablePtr> default_filters;
     /// Pre-construct default filters based on update columns by forcing set default filter to zero if it belongs to update columns.
@@ -1667,7 +1659,7 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
         {
             auto & col = block.getByPosition(i);
             /// Skip func columns
-            if (non_updatable_columns.count(col.name) || is_func_col(col.name))
+            if (non_updatable_columns.count(col.name) || func_column_names.count(col.name))
                 continue;
             if (update_all || col.name == StorageInMemoryMetadata::PART_ID_COLUMN)
             {
@@ -1682,7 +1674,7 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
         }
         if (!update_all)
         {
-            auto check_column = [&](String column) { return non_updatable_columns.count(column) || is_func_col(column) || column == StorageInMemoryMetadata::PART_ID_COLUMN; };
+            auto check_column = [&](String column) { return non_updatable_columns.count(column) || func_column_names.count(column) || column == StorageInMemoryMetadata::PART_ID_COLUMN; };
             std::vector<Names> part_column_list;
             for (const auto & part : current_dedup_new_parts)
                 part_column_list.emplace_back(part->getColumnsPtr()->getNames());
@@ -1708,7 +1700,7 @@ void MergeTreeDataDeduper::replaceColumnsAndFilterData(
             {
                 auto & col = block.getByPosition(j);
                 /// Skip func columns
-                if (is_func_col(col.name))
+                if (func_column_names.count(col.name))
                     continue;
 
                 if (replace_dst_indexes.empty() || non_updatable_columns.count(col.name))

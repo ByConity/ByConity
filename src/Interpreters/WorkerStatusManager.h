@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <optional>
 #include <unordered_set>
@@ -327,6 +328,8 @@ public:
 
     std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(const String & vw_name, const String & wg_name);
 
+    std::optional<WorkerStatusExtra> getWorkerStatus(const WorkerId & worker_id);
+
     void updateConfig(const ASConfiguration & as_config);
 
     static WorkerId getWorkerId(const String & vw_name, const String & group_id, const String & id)
@@ -371,7 +374,7 @@ private:
 
     AdaptiveSchedulerConfig adaptive_scheduler_config;
     mutable bthread::Mutex map_mutex;
-    Poco::Logger * log;
+    LoggerPtr log;
     // rm heartbeat
     mutable std::optional<BackgroundSchedulePool> schedule_pool;
     std::atomic<UInt64> heartbeat_interval{10000}; /// in ms;

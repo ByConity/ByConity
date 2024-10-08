@@ -63,7 +63,7 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
     String encoded_sd_url;
     Poco::URI::encode(sd_url, "", encoded_sd_url);
     Poco::URI uri(encoded_sd_url);
-    auto * log = &Poco::Logger::get(__func__);
+    auto log = getLogger(__func__);
     LOG_TRACE(log, "sd_url: {}\n encoded {}", sd_url, encoded_sd_url);
     const auto & scheme = uri.getScheme();
     if (scheme == "hdfs")

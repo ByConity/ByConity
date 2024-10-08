@@ -1,6 +1,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
+#include <Common/Logger.h>
 #include "config_core.h"
 #endif
 #include "DictionaryStructure.h"
@@ -63,7 +64,7 @@ private:
     const Configuration configuration;
     postgres::PoolWithFailoverPtr pool;
     Block sample_block;
-    Poco::Logger * log;
+    LoggerPtr log;
     ExternalQueryBuilder query_builder;
     const std::string load_all_query;
     std::chrono::time_point<std::chrono::system_clock> update_time;

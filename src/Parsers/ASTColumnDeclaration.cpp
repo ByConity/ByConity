@@ -49,6 +49,12 @@ ASTPtr ASTColumnDeclaration::clone() const
         res->children.push_back(res->default_expression);
     }
 
+    if (on_update_expression)
+    {
+        res->on_update_expression = on_update_expression->clone();
+        res->children.push_back(res->on_update_expression);
+    }
+
     if (comment)
     {
         res->comment = comment->clone();
@@ -109,6 +115,12 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << default_specifier << (settings.hilite ? hilite_none : "") << ' ';
         default_expression->formatImpl(settings, state, frame);
+    }
+
+    if (on_update_expression)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "ON UPDATE" << (settings.hilite ? hilite_none : "") << ' ';
+        on_update_expression->formatImpl(settings, state, frame);
     }
 
     if (flags & TYPE_COMPRESSION_FLAG)

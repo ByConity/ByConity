@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstddef>
 #include <Core/Names.h>
 #include <Core/UUID.h>
@@ -144,7 +145,7 @@ struct UndoResource
     UInt64 id;
     Container pb_model;
 
-    Poco::Logger * log = &Poco::Logger::get("UndoResource");
+    LoggerPtr log = getLogger("UndoResource");
 
     /// pb_model.placeholders is a repeated field that hold resource info. Depending on the type,
     /// we have different interpretations of the resource info. Note that disk name is not a

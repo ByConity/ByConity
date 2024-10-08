@@ -61,7 +61,7 @@ void ChineseTokenizerFactory::registeChineseTokneizer(const Poco::Util::Abstract
         tokenizers[tokenizer_name] = std::make_shared<ChineseTokenizer>(
             dict_path, hmm_model_path, user_dict_path, idf_path, stop_words_path);
 
-        LOG_TRACE(&Poco::Logger::get(__func__), "registe chinese tokenizer config name: {} ", tokenizer_name);
+        LOG_TRACE(getLogger(__func__), "registe chinese tokenizer config name: {} ", tokenizer_name);
     }
 }
 

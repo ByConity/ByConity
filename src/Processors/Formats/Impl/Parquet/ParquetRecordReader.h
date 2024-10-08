@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Formats/FormatSettings.h>
 #include <Processors/Chunk.h>
@@ -91,7 +92,7 @@ private:
     size_t cur_row_group_left_rows = 0;
     int next_row_group_idx = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     bool loadNextRowGroup();
 };
 

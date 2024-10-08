@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_RDKAFKA
 
@@ -57,7 +58,7 @@ private:
     StoragePtr storage = nullptr; /// Used to ensure the life cycle
     StorageCnchKafka * kafka_table = nullptr;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using CnchKafkaOffsetManagerPtr = std::shared_ptr<CnchKafkaOffsetManager>;

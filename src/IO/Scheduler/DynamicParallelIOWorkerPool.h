@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -76,7 +77,7 @@ public:
 
     DynamicParallelIOWorkerPool(const Options& opts,
         const std::vector<SchedulerType*>& schedulers):
-            opts_(opts), logger_(&Poco::Logger::get("DynamicParallelIOWorkerPool")),
+            opts_(opts), logger_(getLogger("DynamicParallelIOWorkerPool")),
             schedulers_(schedulers), worker_pool_(nullptr), dispatcher_pool_(nullptr) {}
 
     virtual void startup() override {
@@ -183,7 +184,7 @@ private:
     };
 
     struct Worker {
-        Worker(WorkerGroup& worker_group, Poco::Logger* logger,
+        Worker(WorkerGroup& worker_group, LoggerPtr logger,
             typename std::list<std::unique_ptr<Worker>>::iterator worker_iter):
                 worker_group_(worker_group), logger_(logger), opts_(worker_group.opts_),
                 shutdown_(worker_group.shutdown_), status_(worker_group.status_),
@@ -283,7 +284,7 @@ private:
 
         WorkerGroup& worker_group_;
 
-        Poco::Logger* logger_;
+        LoggerPtr logger_;
 
         const Options& opts_;
         std::atomic<bool>& shutdown_;
@@ -294,7 +295,7 @@ private:
     };
 
     struct WorkerGroup {
-        WorkerGroup(const Options& opts, Poco::Logger* logger, ThreadPool* pool):
+        WorkerGroup(const Options& opts, LoggerPtr logger, ThreadPool* pool):
                 opts_(opts), shutdown_(false), logger_(logger),
                 requests_queue_(opts.worker_group_queue_length), worker_pool_(pool), worker_num_(0) {
             for (size_t i = 0; i < opts_.min_thread_per_worker_group_; ++i) {
@@ -353,7 +354,7 @@ private:
 
         std::atomic<bool> shutdown_;
 
-        Poco::Logger* logger_;
+        LoggerPtr logger_;
 
         WorkerGroupStatus status_;
 
@@ -375,7 +376,7 @@ private:
             std::atomic<uint64_t> dispatch_time_ns_;
         };
 
-        Dispatcher(const Options& opts, Poco::Logger* logger, SchedulerType* scheduler,
+        Dispatcher(const Options& opts, LoggerPtr logger, SchedulerType* scheduler,
             std::vector<std::unique_ptr<WorkerGroup>>& worker_groups):
                 opts_(opts), logger_(logger), shutdown_(false), scheduler_(scheduler),
                 worker_groups_(worker_groups) {}
@@ -424,7 +425,7 @@ private:
         }
 
         const Options& opts_;
-        Poco::Logger* logger_;
+        LoggerPtr logger_;
 
         std::atomic<bool> shutdown_;
 
@@ -437,7 +438,7 @@ private:
 
     const Options opts_;
 
-    Poco::Logger* logger_;
+    LoggerPtr logger_;
 
     std::vector<SchedulerType*> schedulers_;
 

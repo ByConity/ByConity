@@ -41,6 +41,7 @@ namespace ErrorCodes
     extern const int QUERY_WAS_CANCELLED;
     extern const int QUERY_WAS_CANCELLED_INTERNAL;
     extern const int TIMEOUT_EXCEEDED;
+    extern const int EPOCH_MISMATCH;
 }
 
 WorkerNodeResourceData ResourceMonitorTimer::getResourceData() const {
@@ -113,7 +114,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
             request->query_id(),
             request->segment_id(),
             request->parallel_index(),
-            request->retry_id(),
+            request->attempt_id(),
             request->is_succeed(),
             is_cancelled,
             RuntimeSegmentsMetrics(request->metrics()),
@@ -122,24 +123,23 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
         /// if retry is successful, this status is not used anymore
         auto bsp_scheduler = scheduler->getBSPScheduler(request->query_id());
-        if (bsp_scheduler && !status.is_succeed && !status.is_cancelled)
+        if (bsp_scheduler)
         {
-            bsp_scheduler->updateSegmentStatusCounter(request->segment_id(), request->parallel_index(), status);
-            if (bsp_scheduler->retryTaskIfPossible(request->segment_id(), request->parallel_index(), status))
+            if (request->has_sender_metrics())
+            {
+                for (const auto & [ex_id, exg_status] : fromSenderMetrics(request->sender_metrics()))
+                {
+                    context->getExchangeDataTracker()->registerExchangeStatus(
+                        request->query_id(), ex_id, request->parallel_index(), exg_status);
+                }
+            }
+            auto result = bsp_scheduler->segmentInstanceFinished(request->segment_id(), request->parallel_index(), status);
+            if (result == SegmentInstanceStatusUpdateResult::UpdateFailed || result == SegmentInstanceStatusUpdateResult::RetrySuccess)
                 return;
         }
         scheduler->updateSegmentStatus(status);
         scheduler->updateQueryStatus(status);
-        if (request->has_sender_metrics())
-        {
-            for (const auto & [ex_id, exg_status] : fromSenderMetrics(request->sender_metrics()))
-            {
-                context->getExchangeDataTracker()->registerExchangeStatus(
-                    request->query_id(), ex_id, request->parallel_index(), exg_status);
-            }
-        }
-        // TODO(WangTao): fine grained control, conbining with retrying.
-        scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index(), status);
+        scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index());
 
         if (!status.is_cancelled && status.code == 0)
         {
@@ -538,6 +538,13 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
+        if (request->has_worker_epoch() && request->worker_epoch() > 0 && request->worker_epoch() != context->getEpoch())
+            throw Exception(
+                ErrorCodes::EPOCH_MISMATCH,
+                "The epoch of doesn't match, received {}, expected {}",
+                request->worker_epoch(),
+                context->getEpoch());
+
         auto query_common = std::make_shared<Protos::QueryCommon>();
         std::shared_ptr<butil::IOBuf> settings_io_buf;
         prepareCommonParams(
@@ -561,8 +568,8 @@ void PlanSegmentManagerRpcService::submitPlanSegment(
         {
             execution_info.source_task_filter.fromProto(request->source_task_filter());
         }
-        if (request->has_retry_id())
-            execution_info.retry_id = request->retry_id();
+        if (request->has_attempt_id())
+            execution_info.attempt_id = request->attempt_id();
 
         if (request->sources_size() != 0)
         {
@@ -646,8 +653,8 @@ void PlanSegmentManagerRpcService::submitPlanSegments(
             PlanSegmentExecutionInfo execution_info;
             execution_info.parallel_id = header.parallel_id();
             execution_info.execution_address = execution_address;
-            if (header.has_retry_id())
-                execution_info.retry_id = header.retry_id();
+            if (header.has_attempt_id())
+                execution_info.attempt_id = header.attempt_id();
             if (header.has_source_task_filter())
                 execution_info.source_task_filter.fromProto(header.source_task_filter());
 

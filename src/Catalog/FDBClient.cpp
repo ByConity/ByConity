@@ -77,7 +77,7 @@ static fdb_error_t RunWithRetry(FDBTransactionPtr tr, size_t max_retry, Runnable
             if (fdb_error_t f_code = waitFuture(f->future); f_code)
                 return code;
             // continue the loop and perform the operation again.
-            LOG_WARNING(&Poco::Logger::get("FDBClient::RunWithRetry"), "Try perform the transaction again with retryable error : {}, remain retry time: {}",
+            LOG_WARNING(getLogger("FDBClient::RunWithRetry"), "Try perform the transaction again with retryable error : {}, remain retry time: {}",
                 std::string(fdb_get_error(code)), max_retry);
         }
     }
@@ -478,7 +478,7 @@ bool Iterator::Next(fdb_error_t & code)
             if (code == FDBError::FDB_transaction_too_old
                 || code == FDBError::FDB_transaction_timed_out)
             {
-                LOG_DEBUG(&Poco::Logger::get("FDBIterator"), "Transaction timeout or too old, create new transaction");
+                LOG_DEBUG(getLogger("FDBIterator"), "Transaction timeout or too old, create new transaction");
                 tr = std::make_shared<FDB::FDBTransactionRAII>();
                 Catalog::MetastoreFDBImpl::check_fdb_op(client->CreateTransaction(tr));
                 continue;

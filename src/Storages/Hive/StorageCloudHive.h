@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "Common/config.h"
 #if USE_HIVE
 
@@ -48,7 +49,7 @@ private:
 
     HiveFiles files;
     std::shared_ptr<CnchHiveSettings> storage_settings;
-    Poco::Logger * log {&Poco::Logger::get("CloudHive")};
+    LoggerPtr log {getLogger("CloudHive")};
     CacheHolderPtr cache_holder;
 };
 

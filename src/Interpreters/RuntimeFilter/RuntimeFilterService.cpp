@@ -29,7 +29,7 @@ namespace ErrorCodes
 
 static void
 onDispatchRuntimeFilter(
-    Poco::Logger * log, Protos::DispatchRuntimeFilterResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel)
+    LoggerPtr log, Protos::DispatchRuntimeFilterResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel)
 {
     std::unique_ptr<Protos::DispatchRuntimeFilterResponse> response_guard(response);
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);

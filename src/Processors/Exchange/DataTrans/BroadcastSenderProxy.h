@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <memory>
 #include <Core/Block.h>
@@ -78,7 +79,7 @@ private:
 
     UInt32 wait_timeout_ms;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

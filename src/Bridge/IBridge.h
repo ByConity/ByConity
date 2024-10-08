@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Server/HTTP/HTTPRequestHandlerFactory.h>
 #include <daemon/BaseDaemon.h>
@@ -46,6 +47,6 @@ private:
     size_t max_server_connections;
     size_t http_timeout;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 }

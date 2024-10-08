@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Dictionaries/CassandraHelpers.h>
 
 #if USE_CASSANDRA
@@ -74,7 +75,7 @@ private:
     void maybeAllowFiltering(String & query) const;
     CassSessionShared getSession();
 
-    Poco::Logger * log;
+    LoggerPtr log;
     const DictionaryStructure dict_struct;
     const CassandraSettings settings;
     Block sample_block;

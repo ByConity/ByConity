@@ -153,7 +153,7 @@ void LocalServer::tryInitPath()
     {
         // The path is not provided explicitly - use a unique path in the system temporary directory
         // (or in the current dir if temporary don't exist)
-        Poco::Logger * log = &logger();
+        LoggerPtr log = getLogger("LocalServer");
         std::filesystem::path parent_folder;
         std::filesystem::path default_path;
 
@@ -217,7 +217,7 @@ static DatabasePtr createMemoryDatabaseIfNotExists(ContextPtr context, const Str
 int LocalServer::main(const std::vector<std::string> & /*args*/)
 try
 {
-    Poco::Logger * log = &logger();
+    LoggerPtr log = getLogger("LocalServer");
     ThreadStatus thread_status;
     UseSSL use_ssl;
 

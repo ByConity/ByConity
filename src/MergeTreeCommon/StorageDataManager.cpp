@@ -20,6 +20,10 @@ StorageDataManager::StorageDataManager(const ContextPtr context_,const UUID & uu
       storage_uuid(uuid_),
       worker_info(worker_info_)
 {
+    const String & worker_id = worker_info->worker_id;
+    // suppose worker id always has the format `{worker_id_prefix}-{index}`
+    String worker_id_prefix = worker_id.substr(0, worker_id.find_last_of('-') + 1);
+    mock_wg = WorkerGroupHandleImpl::mockWorkerGroupHandle(worker_id_prefix, worker_info->num_workers, getContext());
 }
 
 void StorageDataManager::loadDataPartsWithDBM(
@@ -111,7 +115,7 @@ void StorageDataManager::reloadTableVersions()
             break;
 
         auto new_table_version = std::make_shared<TableVersion>(getContext(), storage_uuid, *(*it));
-        new_table_version->setWorkerInfo(worker_info);
+        new_table_version->setWorkerInfo(worker_info, mock_wg);
 
         versions.emplace((*it)->version(), new_table_version);
 

@@ -86,6 +86,15 @@ bool ServerDataPart::containsExactly(const ServerDataPart & other) const
 
 void ServerDataPart::setPreviousPart(const ServerDataPartPtr & part) const { prev_part = part; }
 const ServerDataPartPtr & ServerDataPart::tryGetPreviousPart() const { return prev_part; }
+const ServerVirtualPartPtr & ServerVirtualPart::tryGetPreviousPart() const
+{
+    if (prev_part)
+        return prev_part;
+    const ServerDataPartPtr & prev_physical_part = part->tryGetPreviousPart();
+    if (prev_physical_part)
+        prev_part = std::make_shared<ServerVirtualPart>(prev_physical_part, std::make_unique<MarkRanges>(*mark_ranges));
+    return prev_part;
+}
 
 const ServerDataPartPtr & ServerDataPart::getPreviousPart() const
 {

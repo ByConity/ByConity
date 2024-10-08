@@ -177,7 +177,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, int priority, std::opti
                     {
                         auto tid = threads.front().gettid();
                         cpu_set->addTask(tid);
-                        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "add thread : {}", tid);
+                        LOG_DEBUG(getLogger("ThreadPool"), "add thread : {}", tid);
                     }
                 }
             }
@@ -190,7 +190,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, int priority, std::opti
                     {
                         DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
                         system_cpu_set->addTask(threads.front().gettid());
-                        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "clear thread for exception : {}", threads.front().gettid());
+                        LOG_DEBUG(getLogger("ThreadPool"), "clear thread for exception : {}", threads.front().gettid());
                     }
                 }
 
@@ -288,7 +288,7 @@ void ThreadPoolImpl<Thread>::finalize()
             DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
             system_cpu_set->addTasks(tids);
         }
-        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "clear thread for finalize : {}", ss.str());
+        LOG_DEBUG(getLogger("ThreadPool"), "clear thread for finalize : {}", ss.str());
     }
 
     threads.clear();
@@ -320,7 +320,7 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
     {
         auto tid = DB::SystemUtils::gettid();
         cpu->addTask(tid);
-        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "add thread : {}", tid);
+        LOG_DEBUG(getLogger("ThreadPool"), "add thread : {}", tid);
     }
 
     bool job_is_done = false;
@@ -367,7 +367,7 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
                     {
                         DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
                         system_cpu_set->addTask(thread_it->gettid());
-                        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "clear thread for max_threads : {}", thread_it->gettid());
+                        LOG_DEBUG(getLogger("ThreadPool"), "clear thread for max_threads : {}", thread_it->gettid());
                     }
                 }
 

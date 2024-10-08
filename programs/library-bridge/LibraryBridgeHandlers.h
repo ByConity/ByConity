@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/logger_useful.h>
 #include <Interpreters/Context.h>
 #include <Server/HTTP/HTTPRequestHandler.h>
@@ -26,7 +27,7 @@ private:
     static constexpr inline auto FORMAT = "RowBinary";
 
     const size_t keep_alive_timeout;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 
@@ -40,7 +41,7 @@ public:
 
 private:
     const size_t keep_alive_timeout;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 
@@ -69,7 +70,7 @@ public:
 
 private:
     const size_t keep_alive_timeout;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 
@@ -83,7 +84,7 @@ public:
 
 private:
     const size_t keep_alive_timeout;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

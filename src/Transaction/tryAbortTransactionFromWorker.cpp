@@ -25,7 +25,7 @@ namespace DB
 TransactionRecord tryAbortTransactionFromWorker(const Context & context, const TransactionCnchPtr & txn)
 {
     static constexpr size_t MAX_ABORT_RETRY = 3;
-    Poco::Logger * log = &Poco::Logger::get(__func__);
+    LoggerPtr log = getLogger(__func__);
 
     TransactionRecord cur_txn_record = txn->getTransactionRecord();
     cur_txn_record.setStatus(CnchTransactionStatus::Running);

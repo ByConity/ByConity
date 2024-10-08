@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/CurrentThread.h>
 #include <Common/DNSResolver.h>
 #include <Common/ThreadPool.h>
@@ -132,7 +133,7 @@ protected:
     void runCleanupThread();
 
     ContextMutablePtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::string host_fqdn;      /// current host domain name
     std::string host_fqdn_id;   /// host_name:port

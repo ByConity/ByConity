@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Optimizer/Rule/Rule.h>
 
 namespace DB
@@ -36,7 +37,7 @@ public:
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 
-    Poco::Logger * log = &Poco::Logger::get("PushUnionThroughJoin");
+    LoggerPtr log = getLogger("PushUnionThroughJoin");
 };
 
 class PushUnionThroughProjection : public Rule

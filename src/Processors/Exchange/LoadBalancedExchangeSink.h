@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <memory>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/IProcessor.h>
@@ -64,7 +65,7 @@ private:
     Block header = getPort().getHeader();
     BroadcastSenderPtrs senders;
     LoadBalanceSelectorPtr partition_selector;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

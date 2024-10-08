@@ -111,7 +111,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
         if (address.is_local)
             info.local_addresses.push_back(address);
 
-        LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Add address {}. is_local: {} id: {}", host.toDebugString(), address.is_local, host.id);
+        LOG_DEBUG(getLogger("WorkerGroupHandleImpl"), "Add address {}. is_local: {} id: {}", host.toDebugString(), address.is_local, host.id);
 
         ConnectionPoolPtr pool = std::make_shared<ConnectionPool>(
             settings.distributed_connections_pool_size,
@@ -129,7 +129,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     }
 
     buildRing();
-    LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
+    LOG_DEBUG(getLogger("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const ContextPtr & context_)

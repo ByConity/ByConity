@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "ConnectionHolder.h"
 #include <mutex>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -57,7 +58,7 @@ private:
     size_t pool_wait_timeout;
     size_t max_tries;
     std::mutex mutex;
-    Poco::Logger * log = &Poco::Logger::get("PostgreSQLConnectionPool");
+    LoggerPtr log = getLogger("PostgreSQLConnectionPool");
 };
 
 using PoolWithFailoverPtr = std::shared_ptr<PoolWithFailover>;

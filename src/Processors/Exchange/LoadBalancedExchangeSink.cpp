@@ -41,7 +41,7 @@ LoadBalancedExchangeSink::LoadBalancedExchangeSink(Block header_, BroadcastSende
     , name(name_)
     , senders(std::move(senders_))
     , partition_selector(std::make_unique<RoundRobinSelector>(senders.size()))
-    , logger(&Poco::Logger::get("LoadBalancedExchangeSink"))
+    , logger(getLogger("LoadBalancedExchangeSink"))
 {
 }
 

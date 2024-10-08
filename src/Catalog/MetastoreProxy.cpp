@@ -553,7 +553,7 @@ String MetastoreProxy::getMvMetaVersion(const String & name_space, const String 
 {
     String mv_meta_version_ts;
     metastore_ptr->get(matViewVersionKey(name_space, uuid), mv_meta_version_ts);
-    LOG_TRACE(&Poco::Logger::get("MetaStore"), "get mv meta, version {}.", mv_meta_version_ts);
+    LOG_TRACE(getLogger("MetaStore"), "get mv meta, version {}.", mv_meta_version_ts);
     if (mv_meta_version_ts.empty())
         return "";
 
@@ -565,7 +565,7 @@ BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_s
     std::vector<std::shared_ptr<Protos::VersionedPartition>> drop_partitions,
     String mv_version_ts)
 {
-    LOG_TRACE(&Poco::Logger::get("MetaStore"), "construct mv meta, version {}.", mv_version_ts);
+    LOG_TRACE(getLogger("MetaStore"), "construct mv meta, version {}.", mv_version_ts);
 
     BatchCommitRequest multi_write;
     for (const auto & add : add_partitions)
@@ -575,7 +575,7 @@ BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_s
         add->SerializeToString(&value);
         String key = matViewBaseTablesKey(name_space, uuid, base_uuid, add->partition());
         multi_write.AddPut(SinglePutRequest(key, value));
-        LOG_TRACE(&Poco::Logger::get("MetaStore"), "add key {} value size {}.", key, value.size());
+        LOG_TRACE(getLogger("MetaStore"), "add key {} value size {}.", key, value.size());
     }
 
     multi_write.AddPut(SinglePutRequest(matViewVersionKey(name_space, uuid), mv_version_ts));
@@ -587,7 +587,7 @@ BatchCommitRequest MetastoreProxy::constructMvMetaRequests(const String & name_s
         drop->SerializeToString(&value);
         String key = matViewBaseTablesKey(name_space, uuid, base_uuid, drop->partition());
         multi_write.AddDelete(SinglePutRequest(key, value));
-        LOG_TRACE(&Poco::Logger::get("MetaStore"), "drop key {}.", key);
+        LOG_TRACE(getLogger("MetaStore"), "drop key {}.", key);
     }
 
     return multi_write;
@@ -605,7 +605,7 @@ void MetastoreProxy::updateMvMeta(const String & name_space, const String & uuid
                 String serialized_meta;
                 p.SerializeToString(&serialized_meta);
                 metastore_ptr->put(matViewBaseTablesKey(name_space, uuid, base_uuid, p.partition()), serialized_meta);
-                LOG_TRACE(&Poco::Logger::get("MetaStore"), "value size {}.", serialized_meta.size());
+                LOG_TRACE(getLogger("MetaStore"), "value size {}.", serialized_meta.size());
             }
         }
     }
@@ -1188,7 +1188,7 @@ void MetastoreProxy::createMutation(const String & name_space, const String & uu
 
 void MetastoreProxy::removeMutation(const String & name_space, const String & uuid, const String & mutation_name)
 {
-    LOG_TRACE(&Poco::Logger::get(__func__), "Removing mutation {}", mutation_name);
+    LOG_TRACE(getLogger(__func__), "Removing mutation {}", mutation_name);
     metastore_ptr->drop(tableMutationKey(name_space, uuid, mutation_name));
 }
 
@@ -1425,7 +1425,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
 
     auto snapshot = metastore_ptr->multiGet(intent_names);
 
-    Poco::Logger * log = &Poco::Logger::get(__func__);
+    LoggerPtr log = getLogger(__func__);
     std::vector<size_t> matched_intent_index;
 
     for (size_t i = 0; i < intents.size(); i++)
@@ -2816,7 +2816,7 @@ void MetastoreProxy::attachDetachedParts(
         {
             auto info_ptr = createPartInfoFromModel(parts.parts(idx).part_info());
             String part_key = dataPartKey(name_space, to_uuid, info_ptr->getPartName());
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedParts] Write part record {}", part_key);
+            LOG_TRACE(getLogger("MetaStore"), "[attachDetachedParts] Write part record {}", part_key);
 
             if (!existing_partitions.contains(info_ptr->partition_id) && !partition_map.contains(info_ptr->partition_id))
             {
@@ -2829,7 +2829,7 @@ void MetastoreProxy::attachDetachedParts(
         {
             auto info_ptr = createPartInfoFromModel(staged_parts.parts(idx).part_info());
             String staged_part_key = stagedDataPartKey(name_space, to_uuid, info_ptr->getPartName());
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedStagedParts] Write part record {}", staged_part_key);
+            LOG_TRACE(getLogger("MetaStore"), "[attachDetachedStagedParts] Write part record {}", staged_part_key);
 
             if (!existing_partitions.contains(info_ptr->partition_id) && !partition_map.contains(info_ptr->partition_id))
             {
@@ -2845,7 +2845,7 @@ void MetastoreProxy::attachDetachedParts(
             partition_model.set_id(partition_id);
             partition_model.set_partition_minmax(partition_minmax);
 
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedParts] Write partition record {}",
+            LOG_TRACE(getLogger("MetaStore"), "[attachDetachedParts] Write partition record {}",
                 partition_key);
 
             batch_writer.addPut(partition_key, partition_model.SerializeAsString());
@@ -2864,7 +2864,7 @@ void MetastoreProxy::attachDetachedParts(
             {
                 String detached_part_key = detachedPartKey(name_space, from_uuid,
                     detached_part_names[idx]);
-                LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedParts] Delete detached part record {}",
+                LOG_TRACE(getLogger("MetaStore"), "[attachDetachedParts] Delete detached part record {}",
                     detached_part_key);
 
                 batch_writer.addDelete(detached_part_key);
@@ -2880,7 +2880,7 @@ void MetastoreProxy::attachDetachedParts(
         {
             const auto & bitmap_model_meta = bitmap_meta->getModel();
             String detached_bitmap_meta_key = deleteBitmapKey(name_space, to_uuid, *bitmap_model_meta);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedDeleteBitmaps] Write new bitmap meta record {}", detached_bitmap_meta_key);
+            LOG_TRACE(getLogger("MetaStore"), "[attachDetachedDeleteBitmaps] Write new bitmap meta record {}", detached_bitmap_meta_key);
 
             batch_writer.addPut(detached_bitmap_meta_key, bitmap_model_meta->SerializeAsString());
         }
@@ -2893,7 +2893,7 @@ void MetastoreProxy::attachDetachedParts(
         for (auto & bitmap_meta: detached_bitmaps)
         {
             String detached_bitmap_meta_key = detachedDeleteBitmapKey(name_space, from_uuid, *bitmap_meta->getModel());
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedDeleteBitmaps] Delete detached bitmap meta record {}", detached_bitmap_meta_key);
+            LOG_TRACE(getLogger("MetaStore"), "[detachAttachedDeleteBitmaps] Delete detached bitmap meta record {}", detached_bitmap_meta_key);
 
             batch_writer.addDelete(detached_bitmap_meta_key);
         }
@@ -2937,7 +2937,7 @@ void MetastoreProxy::detachAttachedParts(
                 auto info_ptr = createPartInfoFromModel(parts[idx].value().part_info());
                 String detached_part_key = detachedPartKey(name_space, to_uuid,
                     info_ptr->getPartName());
-                LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedParts] Write detach part record {}",
+                LOG_TRACE(getLogger("MetaStore"), "[detachAttachedParts] Write detach part record {}",
                     detached_part_key);
 
                 batch_writer.addPut(detached_part_key, parts[idx].value().SerializeAsString());
@@ -2952,7 +2952,7 @@ void MetastoreProxy::detachAttachedParts(
         for (size_t idx = 0; idx < attached_part_names.size(); ++idx)
         {
             String part_key = dataPartKey(name_space, from_uuid, attached_part_names[idx]);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedParts] Delete part record {}",
+            LOG_TRACE(getLogger("MetaStore"), "[detachAttachedParts] Delete part record {}",
                 part_key);
 
             batch_writer.addDelete(part_key);
@@ -2960,7 +2960,7 @@ void MetastoreProxy::detachAttachedParts(
         for (size_t idx = 0; idx < attached_staged_part_names.size(); ++idx)
         {
             String part_key = stagedDataPartKey(name_space, from_uuid, attached_staged_part_names[idx]);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedParts] Delete staged part record {}", part_key);
+            LOG_TRACE(getLogger("MetaStore"), "[detachAttachedParts] Delete staged part record {}", part_key);
 
             batch_writer.addDelete(part_key);
         }
@@ -2976,7 +2976,7 @@ void MetastoreProxy::detachAttachedParts(
             const auto & bitmap_model_meta = bitmap_meta->getModel();
             String detached_bitmap_meta_key = detachedDeleteBitmapKey(name_space, to_uuid, *bitmap_model_meta);
             LOG_TRACE(
-                &Poco::Logger::get("MetaStore"),
+                getLogger("MetaStore"),
                 "[detachAttachedDeleteBitmaps] Write detach bitmap meta record {}",
                 detached_bitmap_meta_key);
 
@@ -2992,7 +2992,7 @@ void MetastoreProxy::detachAttachedParts(
         {
             String detached_bitmap_meta_key = deleteBitmapKey(name_space, from_uuid, *bitmap_meta->getModel());
             LOG_TRACE(
-                &Poco::Logger::get("MetaStore"), "[detachAttachedDeleteBitmaps] Delete bitmap meta record {}", detached_bitmap_meta_key);
+                getLogger("MetaStore"), "[detachAttachedDeleteBitmaps] Delete bitmap meta record {}", detached_bitmap_meta_key);
 
             batch_writer.addDelete(detached_bitmap_meta_key);
         }
@@ -3044,7 +3044,7 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
                 else
                     part_key = stagedDataPartKey(name_space, tbl_uuid, part_names[i]);
                 LOG_TRACE(
-                    &Poco::Logger::get("MetaStore"),
+                    getLogger("MetaStore"),
                     "[attachDetachedPartsRaw] Write {} part meta record {}",
                     i < detached_visible_part_size ? "" : "staged ",
                     part_key);
@@ -3061,7 +3061,7 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
         for (size_t i = 0; i < part_names.size(); ++i)
         {
             String detached_part_key = detachedPartKey(name_space, tbl_uuid, part_names[i]);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedPartsRaw] Delete detached part record {}",
+            LOG_TRACE(getLogger("MetaStore"), "[attachDetachedPartsRaw] Delete detached part record {}",
                 detached_part_key);
 
             batch_writer.addDelete(detached_part_key);
@@ -3075,7 +3075,7 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
         for (size_t i = 0; i < bitmap_names.size(); ++i)
         {
             String detached_bitmap_meta_key = detachedDeleteBitmapKey(name_space, tbl_uuid, bitmap_names[i]);
-            LOG_TRACE(&Poco::Logger::get("MS"), "[attachDetachedPartsRaw] Delete detached bitmap meta record {}", detached_bitmap_meta_key);
+            LOG_TRACE(getLogger("MS"), "[attachDetachedPartsRaw] Delete detached bitmap meta record {}", detached_bitmap_meta_key);
 
             batch_writer.addDelete(detached_bitmap_meta_key);
         }
@@ -3102,7 +3102,7 @@ void MetastoreProxy::detachAttachedPartsRaw(
         for (const auto& [detached_part_name, detached_part_meta] : detached_part_metas)
         {
             String detached_part_key = detachedPartKey(name_space, to_uuid, detached_part_name);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Write detached part record {} in detachAttachedPartsRaw",
+            LOG_TRACE(getLogger("MetaStore"), "Write detached part record {} in detachAttachedPartsRaw",
                 detached_part_key);
 
             batch_writer.addPut(detached_part_key, detached_part_meta);
@@ -3117,11 +3117,11 @@ void MetastoreProxy::detachAttachedPartsRaw(
         {
             /// We don't know whether attach a staged part or normal part, just delete both.
             String attached_part_key = dataPartKey(name_space, from_uuid, attached_part_name);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Delete part record {} in detachAttachedPartsRaw",
+            LOG_TRACE(getLogger("MetaStore"), "Delete part record {} in detachAttachedPartsRaw",
                 attached_part_key);
 
             String attached_staged_part_key = stagedDataPartKey(name_space, from_uuid, attached_part_name);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Delete staged part record {} in detachAttachedPartsRaw", attached_staged_part_key);
+            LOG_TRACE(getLogger("MetaStore"), "Delete staged part record {} in detachAttachedPartsRaw", attached_staged_part_key);
 
             batch_writer.addDelete(attached_part_key);
             batch_writer.addDelete(attached_staged_part_key);
@@ -3135,7 +3135,7 @@ void MetastoreProxy::detachAttachedPartsRaw(
         for (const auto & [detached_bitmap_name, detached_bitmap_meta] : detached_bitmap_metas)
         {
             String detached_bitmap_key = detachedDeleteBitmapKey(name_space, to_uuid, detached_bitmap_name);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Write detached bitmap record {} in detachAttachedPartsRaw", detached_bitmap_key);
+            LOG_TRACE(getLogger("MetaStore"), "Write detached bitmap record {} in detachAttachedPartsRaw", detached_bitmap_key);
 
             batch_writer.addPut(detached_bitmap_key, detached_bitmap_meta);
         }
@@ -3148,7 +3148,7 @@ void MetastoreProxy::detachAttachedPartsRaw(
         for (const String & attached_bitmap_name : attached_bitmap_names)
         {
             String attached_bitmap_key = deleteBitmapKey(name_space, from_uuid, attached_bitmap_name);
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Delete bitmap record {} in detachAttachedPartsRaw", attached_bitmap_key);
+            LOG_TRACE(getLogger("MetaStore"), "Delete bitmap record {} in detachAttachedPartsRaw", attached_bitmap_key);
 
             batch_writer.addDelete(attached_bitmap_key);
         }
@@ -3244,7 +3244,7 @@ bool MetastoreProxy::resetObjectAssembledSchemaAndPurgePartialSchemas(
     const SerializedObjectSchema & new_assembled_schema,
     const std::vector<TxnTimestamp> & partial_schema_txnids)
 {
-    Poco::Logger * log = &Poco::Logger::get(__func__);
+    LoggerPtr log = getLogger(__func__);
 
     BatchCommitRequest batch_write;
     bool if_not_exists = false;
@@ -3348,7 +3348,7 @@ Strings MetastoreProxy::removePartitions(const String & name_space, const String
 
     auto partitions_meta = metastore_ptr->multiGet(request_keys);
 
-    Poco::Logger * log = &Poco::Logger::get(__func__);
+    LoggerPtr log = getLogger(__func__);
 
     Strings res;
     // try commit all partitions with CAS in one batch

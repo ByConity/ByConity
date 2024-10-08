@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/DiskCache/IDiskCacheStrategy.h>
 #include "Storages/DiskCache/IDiskCache.h"
@@ -31,7 +32,7 @@ public:
         : IDiskCacheStrategy(settings_)
         , cache_statistics(settings_.stats_bucket_size)
         , segment_hits_to_cache(settings_.hits_to_cache)
-        , logger(&Poco::Logger::get("DiskCacheSimpleStrategy"))
+        , logger(getLogger("DiskCacheSimpleStrategy"))
     {
     }
 
@@ -56,7 +57,7 @@ private:
     CacheStatistics cache_statistics;
 
     size_t segment_hits_to_cache;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

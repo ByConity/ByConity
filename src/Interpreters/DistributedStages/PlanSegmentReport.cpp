@@ -2,6 +2,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/PlanSegmentReport.h>
+#include <Protos/RPCHelpers.h>
 #include <Protos/plan_segment_manager.pb.h>
 
 namespace DB
@@ -12,46 +13,63 @@ namespace ErrorCodes
     extern const int QUERY_WAS_CANCELLED;
 }
 
-void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result) noexcept
+void reportExecutionResult(const PlanSegmentExecutor::ExecutionResult & result, bool inform_success_status) noexcept
 {
-    static auto * logger = &Poco::Logger::get("PlanSegmentExecutor");
+    static auto logger = getLogger("PlanSegmentExecutor");
+
+    const auto & status = result.runtime_segment_status;
+    if (status.is_succeed && !inform_success_status)
+        return;
+
     try
     {
         if (result.segment_profile)
             reportSuccessPlanSegmentProfile(result);
         auto address = extractExchangeHostPort(result.coordinator_address);
-        const auto & status = result.runtime_segment_status;
 
         std::shared_ptr<RpcClient> rpc_client
             = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
-        brpc::Controller cntl;
-        Protos::SendPlanSegmentStatusRequest request;
-        Protos::SendPlanSegmentStatusResponse response;
-        request.set_query_id(status.query_id);
-        request.set_segment_id(status.segment_id);
-        request.set_parallel_index(status.parallel_index);
-        request.set_retry_id(status.retry_id);
-        request.set_is_succeed(status.is_succeed);
-        request.set_is_canceled(status.is_cancelled);
-        status.metrics.setProtos(*request.mutable_metrics());
-        request.set_code(status.code);
-        request.set_message(status.message);
-        *request.mutable_sender_metrics() = std::move(result.sender_metrics);
+        brpc::Controller * cntl = new brpc::Controller;
+        Protos::SendPlanSegmentStatusRequest * request = new Protos::SendPlanSegmentStatusRequest;
+        Protos::SendPlanSegmentStatusResponse * response = new Protos::SendPlanSegmentStatusResponse;
+        request->set_query_id(status.query_id);
+        request->set_segment_id(status.segment_id);
+        request->set_parallel_index(status.parallel_index);
+        request->set_attempt_id(status.attempt_id);
+        request->set_is_succeed(status.is_succeed);
+        request->set_is_canceled(status.is_cancelled);
+        status.metrics.setProtos(*request->mutable_metrics());
+        request->set_code(status.code);
+        request->set_message(status.message);
+        *request->mutable_sender_metrics() = std::move(result.sender_metrics);
 
-        manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
-        rpc_client->assertController(cntl);
         LOG_INFO(
             logger,
-            "PlanSegment-{} send status to coordinator successfully, query id-{} parallel_index-{} cpu_micros-{} is_succeed:{} "
+            "PlanSegment-{} send status to coordinator, query id-{} parallel_index-{} cpu_micros-{} is_succeed:{} "
             "is_cancelled:{} code:{}",
-            request.segment_id(),
-            request.query_id(),
+            request->segment_id(),
+            request->query_id(),
             status.parallel_index,
             status.metrics.cpu_micros,
             status.is_succeed,
             status.is_cancelled,
             status.code);
+
+        std::function<String()> construct_err_msg = [request = request, parallel_index = status.parallel_index]() -> String {
+            String msg = fmt::format(
+                "PlanSegment-{} send status to coordinator failed, query id-{} parallel_index-{}",
+                request->segment_id(),
+                request->query_id(),
+                parallel_index);
+            return msg;
+        };
+
+        manager.sendPlanSegmentStatus(
+            cntl,
+            request,
+            response,
+            brpc::NewCallback(RPCHelpers::onAsyncCallDoneAssertController, request, response, cntl, logger, construct_err_msg));
     }
     catch (...)
     {
@@ -107,7 +125,7 @@ PlanSegmentExecutor::ExecutionResult convertFailurePlanSegmentStatusToResult(
     result.runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
     result.runtime_segment_status.segment_id = query_context->getPlanSegmentInstanceId().segment_id;
     result.runtime_segment_status.parallel_index = execution_info.parallel_id;
-    result.runtime_segment_status.retry_id = execution_info.retry_id;
+    result.runtime_segment_status.attempt_id = execution_info.attempt_id;
     result.runtime_segment_status.is_succeed = false;
     result.runtime_segment_status.is_cancelled = exception_code == ErrorCodes::QUERY_WAS_CANCELLED;
     result.runtime_segment_status.code = exception_code;
@@ -133,7 +151,7 @@ PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
     result.runtime_segment_status.query_id = query_context->getClientInfo().initial_query_id;
     result.runtime_segment_status.segment_id = query_context->getPlanSegmentInstanceId().segment_id;
     result.runtime_segment_status.parallel_index = execution_info.parallel_id;
-    result.runtime_segment_status.retry_id = execution_info.retry_id;
+    result.runtime_segment_status.attempt_id = execution_info.attempt_id;
     result.runtime_segment_status.is_succeed = true;
     result.runtime_segment_status.is_cancelled = false;
     result.runtime_segment_status.code = 0;
@@ -148,22 +166,30 @@ PlanSegmentExecutor::ExecutionResult convertSuccessPlanSegmentStatusToResult(
 
 void reportSuccessPlanSegmentProfile(const PlanSegmentExecutor::ExecutionResult & result)
 {
-    static auto * logger = &Poco::Logger::get("PlanSegmentExecutor");
+    static auto logger = getLogger("PlanSegmentExecutor");
     try
     {
         std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(
             extractExchangeHostPort(result.coordinator_address), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
-        brpc::Controller cntl;
-        Protos::PlanSegmentProfileRequest request;
-        Protos::PlanSegmentProfileResponse response;
+        brpc::Controller * cntl = new brpc::Controller;
+        Protos::PlanSegmentProfileRequest * request = new Protos::PlanSegmentProfileRequest;
+        Protos::PlanSegmentProfileResponse * response = new Protos::PlanSegmentProfileResponse;
         result.segment_profile->is_succeed = true;
-        result.segment_profile->toProto(request);
+        result.segment_profile->toProto(*request);
 
-        manager.sendPlanSegmentProfile(&cntl, &request, &response, nullptr);
-        rpc_client->assertController(cntl);
-        LOG_TRACE(
-            logger, "PlanSegment-{} send profile to coordinator successfully, query id-{}.", request.segment_id(), request.query_id());
+        LOG_TRACE(logger, "PlanSegment-{} send profile to coordinator, query id-{}.", request->segment_id(), request->query_id());
+
+        std::function<String()> construct_err_msg = [request = request]() -> String {
+            return fmt::format(
+                "PlanSegment-{} send profile to coordinator failed, query id-{}", request->segment_id(), request->query_id());
+        };
+
+        manager.sendPlanSegmentProfile(
+            cntl,
+            request,
+            response,
+            brpc::NewCallback(RPCHelpers::onAsyncCallDoneAssertController, request, response, cntl, logger, construct_err_msg));
     }
     catch (...)
     {

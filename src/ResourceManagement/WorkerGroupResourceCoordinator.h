@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/BackgroundSchedulePool.h>
 
 #include <bthread/mutex.h>
@@ -86,7 +87,7 @@ public:
 
 private:
     ResourceManagerController & rm_controller;
-    Poco::Logger * log;
+    LoggerPtr log;
     CoordinateMode mode{CoordinateMode::Sharing};
     BackgroundSchedulePool::TaskHolder background_task;
     UInt64 task_interval_ms;

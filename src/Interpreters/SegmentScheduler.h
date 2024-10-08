@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <algorithm>
 #include <random>
 #include <unordered_map>
@@ -75,7 +76,7 @@ struct SegmentSchedulerOptions
 class SegmentScheduler
 {
 public:
-    SegmentScheduler(): log(&Poco::Logger::get("SegmentScheduler")) {}
+    SegmentScheduler(): log(getLogger("SegmentScheduler")) {}
     virtual ~SegmentScheduler() {}
     PlanSegmentsStatusPtr insertPlanSegments(const String & query_id,
                                              PlanSegmentTree * plan_segments_ptr,
@@ -104,8 +105,7 @@ public:
     void updateSegmentProfile(PlanSegmentProfilePtr & segment_profile);
     std::unordered_map<size_t, PlanSegmentProfiles> getSegmentsProfile(const String & query_id);
 
-    void updateReceivedSegmentStatusCounter(
-        const String & query_id, const size_t & segment_id, const UInt64 & parallel_index, const RuntimeSegmentStatus & status);
+    void updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index);
     // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
     bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
     bool alreadyReceivedAllSegmentStatus(const String & query_id);
@@ -114,7 +114,7 @@ public:
 
     PlanSegmentSet getIOPlanSegmentInstanceIDs(const String & query_id) const;
 
-    void workerRestarted(const WorkerId & id, const HostWithPorts & host_ports);
+    void workerRestarted(const WorkerId & id, const HostWithPorts & host_ports, UInt32 register_time);
 
 private:
     // Protect `query_map`.
@@ -135,7 +135,7 @@ private:
     bthread::Mutex bsp_scheduler_map_mutex;
     BspSchedulerMap bsp_scheduler_map;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
     PlanSegmentExecutionInfo scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr);

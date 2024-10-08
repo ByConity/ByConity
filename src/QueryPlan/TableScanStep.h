@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Core/QueryProcessingStage.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/SelectQueryOptions.h>
@@ -101,7 +102,7 @@ public:
         , table_output_stream(std::move(table_output_stream_))
         , bucket_scan(bucket_scan_)
         , alias(alias_)
-        , log(&Poco::Logger::get("TableScanStep"))
+        , log(getLogger("TableScanStep"))
     {
         if (storage)
             storage_id.uuid = storage->getStorageUUID();
@@ -247,7 +248,7 @@ private:
     // Only for worker.
     bool is_null_source{false};
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;

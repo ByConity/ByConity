@@ -24,7 +24,7 @@
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/FilterWithRowUtils.h>
-
+#include <roaring.hh>
 
 namespace DB
 {
@@ -71,16 +71,15 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
 bool MergeTreeSelectProcessor::getNewTask()
 try
 {
-    if (is_first_task && mark_ranges_filter_callback)
-    {
-        part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
-            part_detail.ranges);
-    }
     /// Produce no more than one task
     if (!is_first_task || total_marks_count == 0)
     {
         finish();
         return false;
+    }
+    if (is_first_task)
+    {
+        firstTaskInitialization();
     }
     is_first_task = false;
 
@@ -97,7 +96,7 @@ try
     column_name_set = NameSet{column_names.begin(), column_names.end()};
 
     task = std::make_unique<MergeTreeReadTask>(
-        part_detail.data_part, getDeleteBitmap(), part_detail.ranges, part_detail.part_index_in_query, ordered_names, column_name_set, task_columns,
+        part_detail.data_part, delete_bitmap, part_detail.ranges, part_detail.part_index_in_query, ordered_names, column_name_set, task_columns,
         prewhere_info && prewhere_info->remove_prewhere_column, task_columns.should_reorder, std::move(size_predictor), part_detail.ranges);
 
     if (!reader)
@@ -113,14 +112,32 @@ catch (...)
     throw;
 }
 
-ImmutableDeleteBitmapPtr MergeTreeSelectProcessor::getDeleteBitmap()
+void MergeTreeSelectProcessor::firstTaskInitialization()
 {
-    if (delete_bitmap_initialized)
-        return delete_bitmap;
-
+    std::unique_ptr<roaring::Roaring> row_filter = nullptr;
+    if (mark_ranges_filter_callback)
+    {
+        if (stream_settings.reader_settings.read_settings.filtered_ratio_to_use_skip_read > 0)
+        {
+            row_filter = std::make_unique<roaring::Roaring>();
+        }
+        part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
+            part_detail.ranges, row_filter.get());
+    }
     delete_bitmap = combineFilterBitmap(part_detail, delete_bitmap_getter);
-    delete_bitmap_initialized = true;
-    return delete_bitmap;
+    if (row_filter != nullptr)
+    {
+        flipFilterWithMarkRanges(part_detail.ranges,
+            part_detail.data_part->index_granularity, *row_filter);
+        if (delete_bitmap == nullptr)
+        {
+            delete_bitmap = std::shared_ptr<roaring::Roaring>(row_filter.release());
+        }
+        else
+        {
+            *delete_bitmap &= *row_filter;
+        }
+    }
 }
 
 void MergeTreeSelectProcessor::finish()

@@ -45,7 +45,7 @@ namespace SaslCommon
     static int saslLogCallbacks(void * context, int level, const char * message)
     {
         String auth_context = reinterpret_cast<char *>(context);
-        auto * log = &Poco::Logger::get(auth_context);
+        auto log = getLogger(auth_context);
         const String auth_message(message);
 
         if (!message)
@@ -179,7 +179,7 @@ void SaslClient::saslInit(sasl_callback_t * callbacks)
 {
     if (SaslCommon::sasl_inited)
     {
-        LOG_WARNING(&Poco::Logger::get("SaslClient"), "Sasl Client is already Init");
+        LOG_WARNING(getLogger("SaslClient"), "Sasl Client is already Init");
         return;
     }
     int result = sasl_client_init(callbacks);

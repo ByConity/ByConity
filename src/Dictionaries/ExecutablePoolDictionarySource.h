@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/BorrowedObjectPool.h>
 
 #include <Core/Block.h>
@@ -73,7 +74,7 @@ public:
     BlockInputStreamPtr getStreamForBlock(const Block & block);
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     time_t update_time = 0;
     const DictionaryStructure dict_struct;
     const Configuration configuration;

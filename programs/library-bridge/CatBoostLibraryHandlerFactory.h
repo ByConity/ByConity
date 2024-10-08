@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "CatBoostLibraryHandler.h"
 
 #include <common/defines.h>
@@ -31,7 +32,7 @@ private:
     /// map: model path --> catboost library handler
     std::unordered_map<String, CatBoostLibraryHandlerPtr> library_handlers TSA_GUARDED_BY(mutex);
     std::mutex mutex;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

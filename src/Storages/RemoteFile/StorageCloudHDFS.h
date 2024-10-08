@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 
 #if USE_HDFS
@@ -38,7 +39,7 @@ public:
     };
 
 
-    Poco::Logger * log = &Poco::Logger::get("StorageCloudHDFS");
+    LoggerPtr log = getLogger("StorageCloudHDFS");
 
     ~StorageCloudHDFS() override = default;
 

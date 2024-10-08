@@ -3,6 +3,7 @@
 #include <MergeTreeCommon/StorageDataManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <CloudServices/CheckpointHelper.h>
+#include <CloudServices/ManifestCache.h>
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/IDiskCache.h>
@@ -13,8 +14,10 @@
 
 namespace ProfileEvents
 {
-    extern const Event LoadManifestPartsCacheHits;
-    extern const Event LoadManifestPartsCacheMisses;
+    extern const Event LoadManifestPartsDiskCacheHits;
+    extern const Event LoadManifestPartsDiskCacheMisses;
+    extern const Event ManifestCacheHits;
+    extern const Event ManifestCacheMisses;
 }
 
 namespace DB
@@ -81,9 +84,10 @@ TableVersion::TableVersion(const ContextPtr context_, const UUID & uuid_, const 
         enable_disk_cache = true;
 }
 
-void TableVersion::setWorkerInfo(const WGWorkerInfoPtr & worker_info_)
+void TableVersion::setWorkerInfo(const WGWorkerInfoPtr & worker_info_, const WorkerGroupHandle & worker_group_)
 {
     worker_info = worker_info_;
+    mock_wg = worker_group_;
 }
 
 ServerDataPartsWithDBM TableVersion::getAllPartsWithDBM(const MergeTreeMetaBase & storage)
@@ -132,16 +136,10 @@ void TableVersion::fileterDataByWorkerInfo(const MergeTreeMetaBase & storage, st
     }
     else
     {
-        const String & worker_id = worker_info->worker_id;
-        // suppose worker id always has the format `{worker_id_prefix}-{index}`
-        String worker_id_prefix = worker_id.substr(0, worker_id.find_last_of('-') + 1);
-        WorkerGroupHandle mock_wg = WorkerGroupHandleImpl::mockWorkerGroupHandle(worker_id_prefix, worker_info->num_workers, getContext());
-
         // Use consistent hash to make sure the parts with the same basic name are always allocated to the same worker
         auto allocate_res = assignCnchParts(mock_wg, data_vector, getContext(), storage.getSettings(), Context::PartAllocator::JUMP_CONSISTENT_HASH);
-
         // only get the allocated data which belongs to current worker
-        worker_hold_data = std::move(allocate_res[worker_id]);
+        worker_hold_data = std::move(allocate_res[worker_info->worker_id]);
     }
 
     data_vector.swap(worker_hold_data);
@@ -200,7 +198,7 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
                 segment_path);
 
             loaded_from_manifest = true;
-            ProfileEvents::increment(ProfileEvents::LoadManifestPartsCacheHits);
+            ProfileEvents::increment(ProfileEvents::LoadManifestPartsDiskCacheHits);
             return;
         }
     }
@@ -223,14 +221,57 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
     // load from manifest
     else
     {
-        auto catalog = getContext()->getCnchCatalog();
-        loaded_parts = catalog->getCommittedPartsFromManifest(storage, txn_list);
+        auto try_load_from_manifest_cache = [&]()
+        {
+            if (getContext()->getSettingsRef().enable_manifest_cache)
+            {
+                auto manifest_cache_ptr = getContext()->getManifestCache();
+                // try load from manifest cache first
+                DataModelPartPtrVector part_models;
+                DataModelDeleteBitmapPtrVector delete_bitmap_models;
+                std::vector<UInt64> uncached_txns = manifest_cache_ptr->getManifestData(storage_uuid, txn_list, part_models, delete_bitmap_models);
+                for (auto & part_model_ptr : part_models)
+                {
+                    Protos::DataModelPart part_model = *part_model_ptr;
+                    // Parts within current version must be committed. We just set the commit time to table version in case commit time is required later.
+                    part_model.set_commit_time(version);
+                    loaded_parts.emplace_back(createPartWrapperFromModel(storage, std::move(part_model)));
+                }
+                for (auto & dbm_model_ptr : delete_bitmap_models)
+                {
+                    // make a copy and set commit time
+                    auto dbm_ptr_copy = std::make_shared<Protos::DataModelDeleteBitmap>(*dbm_model_ptr);
+                    dbm_ptr_copy->set_commit_time(version);
+                    loaded_dbm.emplace_back(std::make_shared<DeleteBitmapMeta>(storage, dbm_ptr_copy));
+                }
 
-        if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
-            loaded_dbm = catalog->getDeleteBitmapsFromManifest(storage, txn_list);
+                return uncached_txns;
+            }
+            else
+                return txn_list;
+        };
+
+        auto cache_miss_txns = try_load_from_manifest_cache();
+
+        if (!cache_miss_txns.empty())
+        {
+            LOG_TRACE(log, "Will load {} uncached manifest from metastore.", cache_miss_txns.size());
+            auto catalog = getContext()->getCnchCatalog();
+            DataModelPartWrapperVector uncached_parts = catalog->getCommittedPartsFromManifest(storage, cache_miss_txns);
+            loaded_parts.insert(loaded_parts.end(), uncached_parts.begin(), uncached_parts.end());
+            if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+            {
+                DeleteBitmapMetaPtrVector uncahced_dbm = catalog->getDeleteBitmapsFromManifest(storage, cache_miss_txns);
+                loaded_dbm.insert(loaded_dbm.end(), uncahced_dbm.begin(), uncahced_dbm.end());
+            }
+        }
+
+        ProfileEvents::increment(ProfileEvents::ManifestCacheMisses, cache_miss_txns.size());
+        ProfileEvents::increment(ProfileEvents::ManifestCacheHits, txn_list.size() - cache_miss_txns.size());
     }
 
-    ProfileEvents::increment(ProfileEvents::LoadManifestPartsCacheMisses);
+    ProfileEvents::increment(ProfileEvents::LoadManifestPartsDiskCacheMisses);
+
     // filter parts by worker info.
     if (worker_info)
     {
@@ -244,6 +285,11 @@ void TableVersion::loadManifestData(const MergeTreeMetaBase & storage)
         data_parts.swap(loaded_parts);
         delete_bitmaps.swap(loaded_dbm);
         loaded_from_manifest = true;
+    }
+    else
+    {
+        // directly return since other thread may has already loaded data.
+        return;
     }
 
     LOG_TRACE(log, "Loaded {} parts and {} delete bitmap in table version {} from {}.",
@@ -278,7 +324,7 @@ void TableVersion::dropDiskCache(ThreadPool & pool)
         }
         catch(...)
         {
-            tryLogCurrentException(&Poco::Logger::get("TableVersion"), "Error occurs when drop manifest disk cache : " + segment_name);
+            tryLogCurrentException(getLogger("TableVersion"), "Error occurs when drop manifest disk cache : " + segment_name);
         }
     };
 

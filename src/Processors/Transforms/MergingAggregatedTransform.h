@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Processors/IAccumulatingTransform.h>
 #include <Interpreters/Aggregator.h>
 #include <Processors/Transforms/AggregatingTransform.h>
@@ -21,7 +22,7 @@ protected:
 
 private:
     AggregatingTransformParamsPtr params;
-    Poco::Logger * log = &Poco::Logger::get("MergingAggregatedTransform");
+    LoggerPtr log = getLogger("MergingAggregatedTransform");
     size_t max_threads;
 
     AggregatedDataVariants data_variants;

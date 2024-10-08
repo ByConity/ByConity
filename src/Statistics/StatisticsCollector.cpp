@@ -69,7 +69,7 @@ StatisticsCollector::StatisticsCollector(
         settings.set_enable_sample(false);
     }
 
-    logger = &Poco::Logger::get("StatisticsLogger" + table_info.getDbTableName());
+    logger = getLogger("StatisticsLogger" + table_info.getDbTableName());
 }
 
 

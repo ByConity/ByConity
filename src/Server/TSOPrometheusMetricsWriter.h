@@ -44,6 +44,7 @@ private:
     {
         {YIELD_LEADERSHIP_KEY, "Number of times leadership was yielded by this TSO node."},
         {IS_LEADER_KEY, "Denotes if this TSO node is a leader."},
+        {UPDATE_TS_STOPPED_KEY, "Number of times TSO update timestamp stopped functioning."},
     };
 
     const bool send_metrics;

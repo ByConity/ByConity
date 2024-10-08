@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Core/ColumnNumbers.h>
 #include <Functions/IFunction.h>
 #include <Processors/Chunk.h>
@@ -65,7 +66,7 @@ private:
     ExchangeOptions options;
     ExchangeBufferedSender buffered_sender;
     ChunkInfoPtr current_chunk_info;
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

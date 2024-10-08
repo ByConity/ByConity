@@ -167,7 +167,7 @@ StorageExternalDistributed::StorageExternalDistributed(
             shard = std::make_shared<StorageURL>(
                 uri, table_id, format_name, format_settings, columns, constraints, String{}, context, compression_method);
 
-            LOG_DEBUG(&Poco::Logger::get("StorageURLDistributed"), "Adding URL: {}", url_description);
+            LOG_DEBUG(getLogger("StorageURLDistributed"), "Adding URL: {}", url_description);
         }
 
         shards.emplace(std::move(shard));

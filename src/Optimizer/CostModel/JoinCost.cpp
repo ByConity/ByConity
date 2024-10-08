@@ -74,7 +74,7 @@ PlanNodeCost JoinCost::calculate(const JoinStep & step, CostContext & context)
                             : PlanNodeCost::cpuCost(right_stats->getOutputSizeInBytes()) ;
         PlanNodeCost join_cpu_cost = join_stats ? PlanNodeCost::cpuCost(join_stats->getOutputSizeInBytes()) : PlanNodeCost::ZERO;
 
-        // Poco::Logger * log = &Poco::Logger::get("JoinCost");
+        // LoggerPtr log = getLogger("JoinCost");
         // LOG_DEBUG(log, "left {}  avg {} right {} join key {} join type {} ", left_cpu_cost.getCpuValue(), getAvgProbeCost(step, context), right_cpu_cost.getCpuValue(), step.getLeftKeys()[0], step.getDistributionType() == DistributionType::REPARTITION);
         return (left_cpu_cost * context.cost_model.getJoinProbeSideCostWeight()
                 + right_cpu_cost * context.cost_model.getJoinBuildSideCostWeight() + join_cpu_cost)

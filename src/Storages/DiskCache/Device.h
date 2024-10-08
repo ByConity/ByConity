@@ -5,7 +5,6 @@
 #include <fmt/core.h>
 #include <sys/param.h>
 #include <Poco/AtomicCounter.h>
-#include <Poco/Logger.h>
 #include <Common/Exception.h>
 #include <common/types.h>
 #include <Common/File.h>
@@ -48,16 +47,12 @@ public:
 
     UInt32 getIOAlignmentSize() const { return io_alignment_size; }
 
-    static Poco::Logger & logger();
-
 protected:
     virtual bool writeImpl(UInt64 offset, UInt32 size, const void * value) = 0;
     virtual bool readImpl(UInt64 offset, UInt32 size, void * value) = 0;
     virtual void flushImpl() = 0;
 
 private:
-    static Poco::Logger * logger_;
-
     bool readInternal(UInt64 offset, UInt32 size, void * data);
 
     bool writeInternal(UInt64 offset, const UInt8 * data, size_t size);
@@ -84,9 +79,4 @@ std::unique_ptr<Device> createDirectIoFileDevice(
     IoEngine io_engine = IoEngine::Sync,
     UInt32 q_depth = 0);
 
-inline Poco::Logger & Device::logger()
-{
-    chassert(logger_ != nullptr);
-    return *logger_;
-}
 }

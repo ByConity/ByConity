@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include "Types.h"
 #include <Poco/Util/LayeredConfiguration.h>
 #include <unordered_set>
@@ -344,7 +345,7 @@ private:
 
     std::mutex mutex;
 
-    Poco::Logger * log = nullptr;
+    LoggerPtr log = nullptr;
     std::shared_ptr<DB::ZooKeeperLog> zk_log;
 
     AtomicStopwatch session_uptime;

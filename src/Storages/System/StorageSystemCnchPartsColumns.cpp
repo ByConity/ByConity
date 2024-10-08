@@ -54,7 +54,7 @@ NamesAndTypesList StorageSystemCnchPartsColumns::getNamesAndTypes()
 
 void StorageSystemCnchPartsColumns::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
-    Poco::Logger * log = &Poco::Logger::get(getName());
+    LoggerPtr log = getLogger(getName());
 
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
 

@@ -38,7 +38,7 @@ void MergeTreeSettings::loadFromConfig(const String & config_elem, const Poco::U
                 e.addMessage("in MergeTree config");
         
             if (skip_unknown_settings)
-                LOG_ERROR(&Poco::Logger::get("MergeTreeSettings"), "Unknown setting in {} config", key);
+                LOG_ERROR(getLogger("MergeTreeSettings"), "Unknown setting in {} config", key);
             else
                 throw;
         }
@@ -61,7 +61,7 @@ void MergeTreeSettings::loadFromQuery(ASTStorage & storage_def, bool attach)
                     e.addMessage("for storage " + storage_def.engine->name);
             
                 if (attach)
-                    LOG_ERROR(&Poco::Logger::get("MergeTreeSettings"),
+                    LOG_ERROR(getLogger("MergeTreeSettings"),
                           "Unknown setting for storage {}", storage_def.engine->name);
                 else
                     throw;

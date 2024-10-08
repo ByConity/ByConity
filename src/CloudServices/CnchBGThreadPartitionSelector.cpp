@@ -26,7 +26,7 @@ HAVING insert_parts > 0;
 )";
 
 CnchBGThreadPartitionSelector::CnchBGThreadPartitionSelector(ContextMutablePtr global_context_)
-: WithMutableContext(global_context_), log(&Poco::Logger::get("PartitionSelector"))
+: WithMutableContext(global_context_), log(getLogger("PartitionSelector"))
 {
     try
     {

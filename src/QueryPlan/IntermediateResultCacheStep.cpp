@@ -14,7 +14,7 @@ IntermediateResultCacheStep::IntermediateResultCacheStep(
     const DataStream & input_stream_, CacheParam cache_param_, Aggregator::Params aggregator_params_)
     : cache_param(std::move(cache_param_))
     , aggregator_params(std::move(aggregator_params_))
-    , log(&Poco::Logger::get("IntermediateResultCacheStep"))
+    , log(getLogger("IntermediateResultCacheStep"))
 {
     input_streams.emplace_back(input_stream_);
     Block output;
@@ -58,7 +58,7 @@ QueryPipelinePtr IntermediateResultCacheStep::processCacheTransform(
             auto cache_max_bytes = settings.intermediate_result_cache_max_bytes;
             auto cache_max_rows = settings.intermediate_result_cache_max_rows;
             return std::make_shared<IntermediateResultCacheTransform>(
-                header, cache, cache_param, cache_max_bytes, cache_max_rows, cache_holder->all_part_in_cache);
+                header, cache, cache_param, cache_max_bytes, cache_max_rows, cache_holder);
         });
     }
 

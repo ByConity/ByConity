@@ -15,8 +15,9 @@
 
 #pragma once
 #include <Core/BackgroundSchedulePool.h>
-#include <Common/ResourceMonitor.h>
 #include <Interpreters/Context_fwd.h>
+#include <Common/Logger.h>
+#include <Common/ResourceMonitor.h>
 
 namespace DB
 {
@@ -36,6 +37,13 @@ public:
     void stop();
     bool registered();
 
+    inline UInt32 getEpoch() const
+    {
+        if (resource_monitor)
+            return resource_monitor->getStartTime();
+        return 0;
+    }
+
 private:
     bool sendHeartbeat();
     void sendRegister();
@@ -43,10 +51,9 @@ private:
 
     inline String getenv(const char * name) { return std::getenv(name) ? std::getenv(name) : ""; }
 
-private:
     std::atomic_bool init_request = true;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     std::unique_ptr<ResourceMonitor> resource_monitor;
     BackgroundSchedulePool::TaskHolder background_task;
 };

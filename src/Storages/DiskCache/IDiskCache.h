@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <exception>
 #include <vector>
 #include <Core/BackgroundSchedulePool.h>
@@ -106,7 +107,7 @@ public:
 
     VolumePtr getStorageVolume() const { return volume; }
     ThrottlerPtr getDiskCacheThrottler() const { return disk_cache_throttler; }
-    Poco::Logger * getLogger() const { return log; }
+    LoggerPtr getLogger() const { return log; }
     String getDataDir() const {return latest_disk_cache_dir;}
 
     virtual std::shared_ptr<IDiskCache> getMetaCache() { return shared_from_this(); }
@@ -147,7 +148,7 @@ protected:
     IDiskCache::DataType type;
     String name;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 private:
     bool scheduleCacheTask(const std::function<void()> & task);

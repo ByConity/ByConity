@@ -88,7 +88,7 @@ public:
     M(uint16_t, rpc_default_max_connections, 2, "max connections") \
     M(std::string, rpc_default_load_balancer, "rr", "") \
     M(int32_t, rpc_default_connect_timeout_ms, 1000, "") \
-    M(int32_t, rpc_default_timeout_ms, 3000, "") \
+    M(int32_t, rpc_default_timeout_ms, 9000, "") \
     M(int32_t, rpc_default_backup_request_ms, -1, "") \
     M(int, rpc_default_max_retry, 3, "") \
     M(bool, rpc_default_enable_circuit_breaker, false, "") \

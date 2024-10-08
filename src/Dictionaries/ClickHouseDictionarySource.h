@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <Poco/Logger.h>
 #include <Client/ConnectionPoolWithFailover.h>
@@ -84,7 +85,7 @@ private:
     ContextMutablePtr context;
     ConnectionPoolWithFailoverPtr pool;
     const std::string load_all_query;
-    Poco::Logger * log = &Poco::Logger::get("ClickHouseDictionarySource");
+    LoggerPtr log = getLogger("ClickHouseDictionarySource");
 };
 
 }

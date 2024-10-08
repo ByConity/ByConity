@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <libnuraft/nuraft.hxx>
 #include <city.h>
 #include <optional>
@@ -94,7 +95,7 @@ class Changelog
 
 public:
     Changelog(const std::string & changelogs_dir_, uint64_t rotate_interval_,
-            bool force_sync_, Poco::Logger * log_, bool compress_logs_ = true);
+            bool force_sync_, LoggerPtr log_, bool compress_logs_ = true);
 
     /// Read changelog from files on changelogs_dir_ skipping all entries before from_log_index
     /// Truncate broken entries, remove files after broken entries.
@@ -165,7 +166,7 @@ private:
     const std::string changelogs_dir;
     const uint64_t rotate_interval;
     const bool force_sync;
-    Poco::Logger * log;
+    LoggerPtr log;
     bool compress_logs;
 
     /// Currently existing changelogs

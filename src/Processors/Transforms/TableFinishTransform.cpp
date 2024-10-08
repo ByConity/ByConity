@@ -138,12 +138,19 @@ void TableFinishTransform::onFinish()
 {
     TransactionCnchPtr txn = context->getCurrentTransaction();
     txn->setMainTableUUID(storage->getStorageUUID());
-    txn->commitV2();
+
+    if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+        cnch_table && cnch_table->commitTxnInWriteSuffixStage(txn->getDedupImplVersion(context), context))
+    {
+        /// for unique table, insert select|infile is committed from worker side
+    }
+    else
+        txn->commitV2();
 
     /// Make sure locks are release after transaction commit
     if (!lock_holders.empty())
         lock_holders.clear();
-    LOG_DEBUG(&Poco::Logger::get("TableFinishTransform"), "Finish insert select commit in table finish.");
+    LOG_DEBUG(getLogger("TableFinishTransform"), "Finish insert select commit in table finish.");
     output.finish();
 }
 

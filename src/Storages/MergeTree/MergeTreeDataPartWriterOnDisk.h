@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromFileBase.h>
@@ -270,7 +271,7 @@ protected:
         WrittenOffsetColumns & offset_columns,
         ISerialization::SubstreamPath & path);
 
-    virtual Poco::Logger * getLogger() = 0;
+    virtual LoggerPtr getLogger() = 0;
 
     const MergeTreeIndices skip_indices;
 

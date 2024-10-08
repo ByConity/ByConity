@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <set>
 #include <string_view>
@@ -125,7 +126,7 @@ template <class DerivedSelector>
 class CommonNodeSelector
 {
 public:
-    CommonNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : cluster_nodes(cluster_nodes_), log(log_) { }
+    CommonNodeSelector(const ClusterNodes & cluster_nodes_, LoggerPtr log_) : cluster_nodes(cluster_nodes_), log(log_) { }
 
     void checkClusterInfo(PlanSegment * plan_segment_ptr)
     {
@@ -172,20 +173,20 @@ public:
 
 protected:
     const ClusterNodes & cluster_nodes;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 class LocalNodeSelector : public CommonNodeSelector<LocalNodeSelector>
 {
 public:
-    LocalNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
+    LocalNodeSelector(const ClusterNodes & cluster_nodes_, LoggerPtr log_) : CommonNodeSelector(cluster_nodes_, log_) { }
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context);
 };
 
 class LocalityNodeSelector : public CommonNodeSelector<LocalityNodeSelector>
 {
 public:
-    LocalityNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
+    LocalityNodeSelector(const ClusterNodes & cluster_nodes_, LoggerPtr log_) : CommonNodeSelector(cluster_nodes_, log_) { }
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
@@ -193,14 +194,14 @@ class SourceNodeSelector : public CommonNodeSelector<SourceNodeSelector>
 {
 public:
     using Map = std::unordered_map<UUID, std::unordered_map<AddressInfo, SourceTaskPayload, AddressInfo::Hash>>;
-    SourceNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
+    SourceNodeSelector(const ClusterNodes & cluster_nodes_, LoggerPtr log_) : CommonNodeSelector(cluster_nodes_, log_) { }
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
 class ComputeNodeSelector : public CommonNodeSelector<ComputeNodeSelector>
 {
 public:
-    ComputeNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_) { }
+    ComputeNodeSelector(const ClusterNodes & cluster_nodes_, LoggerPtr log_) : CommonNodeSelector(cluster_nodes_, log_) { }
     NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
@@ -213,7 +214,7 @@ public:
         : query_context(query_context_)
         , dag_graph_ptr(dag_graph_ptr_.get())
         , cluster_nodes(cluster_nodes_)
-        , log(&Poco::Logger::get("NodeSelector"))
+        , log(getLogger("NodeSelector"))
         , local_node_selector(cluster_nodes, log)
         , source_node_selector(cluster_nodes, log)
         , compute_node_selector(cluster_nodes, log)
@@ -240,7 +241,7 @@ private:
     ContextPtr query_context;
     DAGGraph * dag_graph_ptr;
     const ClusterNodes & cluster_nodes;
-    Poco::Logger * log;
+    LoggerPtr log;
     LocalNodeSelector local_node_selector;
     SourceNodeSelector source_node_selector;
     ComputeNodeSelector compute_node_selector;

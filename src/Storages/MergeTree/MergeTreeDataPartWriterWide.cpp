@@ -123,7 +123,7 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
         settings_,
         index_granularity_,
         bitmap_build_info_)
-    , log(&Poco::Logger::get(storage.getLogName() + " (WriterWide)"))
+    , log(::getLogger(storage.getLogName() + " (WriterWide)"))
 {
     const auto & columns = metadata_snapshot->getColumns();
     for (const auto & it : columns_list)

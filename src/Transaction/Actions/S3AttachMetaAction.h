@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Transaction/Actions/IAction.h>
 #include <Transaction/TransactionCommon.h>
@@ -80,7 +81,7 @@ private:
 
     bool executed{false};
 
-    Poco::Logger * log{&Poco::Logger::get("S3AttachMetaAction")};
+    LoggerPtr log{getLogger("S3AttachMetaAction")};
 };
 
 }

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <string>
 #include <memory>
 #include <set>
@@ -188,9 +189,12 @@ namespace DB::RPCHelpers
         }
     }
 
-    template <typename Resp>
-    void onAsyncCallDoneAssertController(Resp * response, brpc::Controller * cntl, Poco::Logger * logger, String message)
+    template <typename Req, typename Resp>
+    void onAsyncCallDoneAssertController(
+        Req * request, Resp * response, brpc::Controller * cntl, LoggerPtr logger, std::function<String()> construct_err_msg)
     {
+        // request will be use in construct_err_msg
+        std::unique_ptr<Req> request_guard(request);
         try
         {
             std::unique_ptr<Resp> response_guard(response);
@@ -199,7 +203,7 @@ namespace DB::RPCHelpers
         }
         catch (...)
         {
-            tryLogCurrentException(logger, message);
+            tryLogCurrentException(logger, construct_err_msg());
         }
     }
 

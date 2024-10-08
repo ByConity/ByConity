@@ -103,7 +103,7 @@ IResourceGroup* VWResourceGroupManager::addGroup(const String & virtual_warehous
     //         throw Exception("Select case's query type is illegal: " + key + " -> " + queryType, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
     // }
     select_cases[select_case.name] = std::move(select_case);
-    LOG_DEBUG(&Poco::Logger::get("VWResourceGroupManager"), "Added group " + virtual_warehouse + " using default values");
+    LOG_DEBUG(getLogger("VWResourceGroupManager"), "Added group " + virtual_warehouse + " using default values");
     return pr.first->second.get();
 }
 
@@ -112,14 +112,14 @@ bool VWResourceGroupManager::deleteGroup(const String & virtual_warehouse) const
     auto lock = getWriteLock();
     if (ResourceManagement::isSystemVW(virtual_warehouse))
     {
-        LOG_DEBUG(&Poco::Logger::get("VWResourceGroupManager"), "Skipping deletion of read/write/task/default VWs.");
+        LOG_DEBUG(getLogger("VWResourceGroupManager"), "Skipping deletion of read/write/task/default VWs.");
         return false;
     }
 
     auto root_group = root_groups.find(virtual_warehouse);
     if (root_group == root_groups.end())
     {
-        LOG_DEBUG(&Poco::Logger::get("VWResourceGroupManager"), "Resource group does not exist locally");
+        LOG_DEBUG(getLogger("VWResourceGroupManager"), "Resource group does not exist locally");
         return false;
     }
     auto info = root_group->second->getInfo();
@@ -132,7 +132,7 @@ bool VWResourceGroupManager::deleteGroup(const String & virtual_warehouse) const
     if (info.queued_queries != 0 || info.running_queries != 0
     || info.in_use || info.last_used >= vw_timeout_threshold)
     {
-        LOG_DEBUG(&Poco::Logger::get("VWResourceGroupManager"), "Resource group " + virtual_warehouse + " is still being used, and will not be deleted.");
+        LOG_DEBUG(getLogger("VWResourceGroupManager"), "Resource group " + virtual_warehouse + " is still being used, and will not be deleted.");
         return false;
     }
 
@@ -158,7 +158,7 @@ bool VWResourceGroupManager::deleteGroup(const String & virtual_warehouse) const
         vw_select_case_map.erase(cases);
     }
     groups.erase(virtual_warehouse);
-    LOG_DEBUG(&Poco::Logger::get("VWResourceGroupManager"), "Deleted VWResourceGroup " + virtual_warehouse);
+    LOG_DEBUG(getLogger("VWResourceGroupManager"), "Deleted VWResourceGroup " + virtual_warehouse);
     return true;
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <memory>
 #include <Server/IServer.h>
@@ -20,7 +21,7 @@ class MySQLHandlerFactory : public TCPServerConnectionFactory
 {
 private:
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
 
 #if USE_SSL
     struct RSADeleter

@@ -105,7 +105,7 @@ void RowPolicyCache::PolicyInfo::setPolicy(const RowPolicyPtr & policy_)
         catch (...)
         {
             tryLogCurrentException(
-                &Poco::Logger::get("RowPolicy"),
+                getLogger("RowPolicy"),
                 String("Could not parse the condition ") + toString(type) + " of row policy "
                     + backQuote(policy->getName()));
         }

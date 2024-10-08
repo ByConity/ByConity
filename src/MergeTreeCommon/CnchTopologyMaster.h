@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context_fwd.h>
@@ -58,7 +59,7 @@ private:
         bool allow_empty_result,
         bool allow_tso_unavailable);
 
-    Poco::Logger * log = &Poco::Logger::get("CnchTopologyMaster");
+    LoggerPtr log = getLogger("CnchTopologyMaster");
     BackgroundSchedulePool::TaskHolder topology_fetcher;
     std::list<CnchServerTopology> topologies;
     const Settings settings;

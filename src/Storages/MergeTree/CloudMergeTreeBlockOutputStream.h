@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <DataStreams/IBlockOutputStream.h>
@@ -54,12 +55,17 @@ private:
     using FilterInfo = CnchDedupHelper::FilterInfo;
     FilterInfo dedupWithUniqueKey(const Block & block);
 
+    void writeSuffixForInsert();
+    void writeSuffixForUpsert();
+
+    bool shouldDedupInWriteSuffixStage();
+
     void initOverwritePartitionPruner();
 
     void checkAndInit();
 
     MergeTreeMetaBase & storage;
-    Poco::Logger * log;
+    LoggerPtr log;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr context;
 

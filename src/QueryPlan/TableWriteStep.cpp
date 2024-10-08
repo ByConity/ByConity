@@ -69,9 +69,9 @@ BlockOutputStreams TableWriteStep::createOutputStream(
     BlockOutputStreams out_streams;
     size_t out_streams_size = 1;
     auto query_settings = settings.context->getSettingsRef();
-    if (target_table->supportsParallelInsert() && query_settings.max_insert_threads > 1)
+    if (target_table->supportsParallelInsert(settings.context) && query_settings.max_insert_threads > 1)
     {
-        LOG_INFO(&Poco::Logger::get("TableWriteStep"),
+        LOG_INFO(getLogger("TableWriteStep"),
                  fmt::format("createOutputStream support parallel insert, max threads:{}, max insert threads.size:{}", max_threads, query_settings.max_insert_threads));
         out_streams_size = std::min(size_t(query_settings.max_insert_threads), max_threads);
     }
@@ -168,11 +168,11 @@ void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
                     [&](const Block & current_header) -> ProcessorPtr {
                         return std::make_shared<SimpleSquashingChunksTransform>(current_header, min_insert_block_size_rows, min_insert_block_size_bytes);}
                 );
-                LOG_INFO(&Poco::Logger::get("TableWriteStep"), fmt::format("squash min insert block size rows:{}, min insert block size bytes:{}", min_insert_block_size_rows, min_insert_block_size_bytes));
+                LOG_INFO(getLogger("TableWriteStep"), fmt::format("squash min insert block size rows:{}, min insert block size bytes:{}", min_insert_block_size_rows, min_insert_block_size_bytes));
             }
-            //LOG_DEBUG(&Poco::Logger::get("TableWriteStep"), fmt::format("output header: {}", stream->getHeader().dumpStructure()));
+            //LOG_DEBUG(getLogger("TableWriteStep"), fmt::format("output header: {}", stream->getHeader().dumpStructure()));
             pipeline.resize(out_streams.size());
-            LOG_INFO(&Poco::Logger::get("TableWriteStep"), fmt::format("pipeline size: {}, out streams size {}", pipeline.getNumStreams(), out_streams.size()));
+            LOG_INFO(getLogger("TableWriteStep"), fmt::format("pipeline size: {}, out streams size {}", pipeline.getNumStreams(), out_streams.size()));
 
             if (insert_select_with_profiles)
             {

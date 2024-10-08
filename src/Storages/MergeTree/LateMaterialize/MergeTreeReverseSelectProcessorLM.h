@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/MergeTree/LateMaterialize/MergeTreeSelectProcessorLM.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -38,7 +39,7 @@ protected:
 private:
     bool is_first_task;
     Chunks chunks;
-    static inline Poco::Logger * log = &Poco::Logger::get("MergeTreeReverseSelectProcessor");
+    static inline LoggerPtr log = getLogger("MergeTreeReverseSelectProcessor");
 };
 
 }

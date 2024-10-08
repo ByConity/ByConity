@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/KafkaLog.h>
 #include <Interpreters/QueryLog.h>
@@ -116,7 +117,7 @@ private:
     bool initInWorker(ContextPtr global_context);
 
     BackgroundSchedulePool::TaskHolder init_task;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::vector<ISystemLog *> logs;
 };

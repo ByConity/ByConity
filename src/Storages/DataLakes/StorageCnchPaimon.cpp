@@ -49,30 +49,22 @@ StorageCnchPaimon::StorageCnchPaimon(
     setInMemoryMetadata(metadata_);
 }
 
-/// Currently, we only support partition key filter push down
-/// Normal column filter can be pushed down if statistics is available, because only the filter with large selectivity can have good performance.
-ASTPtr StorageCnchPaimon::applyFilter(
-    ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr storage_statistics) const
-{
-    filter = query_filter;
-    return IStorage::applyFilter(query_filter, query_info, query_context, storage_statistics);
-}
-
 PrepareContextResult StorageCnchPaimon::prepareReadContext(
     const Names & column_names,
     const StorageMetadataPtr & /*metadata_snapshot*/,
-    SelectQueryInfo & /*query_info*/,
+    SelectQueryInfo & query_info,
     ContextPtr & local_context,
     unsigned /*num_streams*/)
 {
     std::optional<String> predicate = std::nullopt;
-    if (filter)
+    auto where = query_info.query->as<ASTSelectQuery &>().where();
+    if (where)
     {
-        predicate = paimon_utils::Predicate2RPNConverter::convert(filter);
+        predicate = paimon_utils::Predicate2RPNConverter::convert(where);
         if (predicate.has_value())
             LOG_DEBUG(log, "rpn_predicate: {}", predicate.value());
         else
-            LOG_ERROR(log, "failed to convert filter to RPN, filter={}", queryToString(filter));
+            LOG_ERROR(log, "failed to convert filter to RPN, filter={}", queryToString(where));
     }
 
     auto scan_info = catalog_client->getScanInfo(db_name, table_name, column_names, predicate);
@@ -126,6 +118,8 @@ void registerStorageCnchPaimon(StorageFactory & factory)
             metadata.setColumns(args.columns);
         if (args.storage_def->partition_by)
         {
+            if (metadata.columns.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Partition by clause is not allowed when using auto schema.");
             ASTPtr partition_by_key = args.storage_def->partition_by->ptr();
             metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
         }

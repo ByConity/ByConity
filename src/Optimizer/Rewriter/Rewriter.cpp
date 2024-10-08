@@ -17,11 +17,11 @@ void Rewriter::rewritePlan(QueryPlan & plan, ContextMutablePtr context) const
     double duration = watch.elapsedMillisecondsAsDouble();
 
     context->logOptimizerProfile(
-        &Poco::Logger::get("PlanOptimizer"), "Optimizer rule run time: ", name(), std::to_string(duration) + "ms", true);
+        getLogger("PlanOptimizer"), "Optimizer rule run time: ", name(), std::to_string(duration) + "ms", true);
 
     if (duration >= context->getSettingsRef().plan_optimizer_rule_warning_time)
         LOG_WARNING(
-            &Poco::Logger::get("PlanOptimizer"),
+            getLogger("PlanOptimizer"),
             "the execute time of " + name() + " rewriter " + std::to_string(duration)
                 + " ms greater than or equal to " + std::to_string(context->getSettingsRef().plan_optimizer_rule_warning_time) + " ms");
 

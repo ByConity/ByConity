@@ -63,7 +63,7 @@ namespace ErrorCodes
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
 }
 
-bool DumpedData::isEmpty()
+bool DumpedData::isEmpty() const
 {
     return parts.empty() && bitmaps.empty() && staged_parts.empty();
 }
@@ -379,6 +379,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
         return;
 
     TxnTimestamp txn_id = context->getCurrentTransactionID();
+    UInt32 dedup_impl_version = 0;
 
     try
     {
@@ -399,7 +400,8 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
         {
             auto is_server = context->getServerType() == ServerType::cnch_server;
             CnchServerClientPtr server_client;
-            if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context->getCurrentTransaction()); worker_txn && worker_txn->tryGetServerClient())
+            auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context->getCurrentTransaction());
+            if (worker_txn && worker_txn->tryGetServerClient())
             {
                 /// case: client submits INSERTs directly to worker
                 server_client = worker_txn->getServerClient();
@@ -414,7 +416,9 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
                 throw Exception("Server with transaction " + txn_id.toString() + " is unknown", ErrorCodes::LOGICAL_ERROR);
             }
 
-            server_client->precommitParts(context, txn_id, type, storage, dumped_data, task_id, is_server, consumer_group, tpl, binlog, peak_memory_usage);
+            dedup_impl_version = server_client->precommitParts(context, txn_id, type, storage, dumped_data, task_id, is_server, consumer_group, tpl, binlog, peak_memory_usage);
+            if (worker_txn)
+                worker_txn->setDedupImplVersion(dedup_impl_version);
         }
     }
     catch (const Exception &)
@@ -427,13 +431,14 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
 
     LOG_DEBUG(
         storage.getLogger(),
-        "Committed {} parts, {} bitmaps, {} staged parts in transaction {}, elapsed {} ms, dedup mode is {}",
+        "Committed {} parts, {} bitmaps, {} staged parts in transaction {}, elapsed {} ms, dedup mode is {}, dedup impl version is {}",
         dumped_parts.size(),
         delete_bitmaps.size(),
         dumped_staged_parts.size(),
         toString(UInt64(txn_id)),
         watch.elapsedMilliseconds(),
-        typeToString(dumped_data.dedup_mode));
+        typeToString(dumped_data.dedup_mode),
+        dedup_impl_version);
 }
 
 void CnchDataWriter::initialize(size_t max_threads)
@@ -544,7 +549,7 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
     if (context->getServerType() != ServerType::cnch_server)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Must be called in Server mode: {}", context->getServerType());
 
-    auto * log = storage.getLogger();
+    auto log = storage.getLogger();
     auto txn = context->getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
     /// set main table uuid in server side

@@ -65,7 +65,7 @@ void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextP
             only_selected_database = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
             only_selected_table = table_it->second.getType() == Field::Types::String ? table_it->second.get<String>() : "";
             enable_filter_by_database_and_table = true;
-            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchTableHost"),
+            LOG_TRACE(getLogger("StorageSystemCnchTableHost"),
                     "filtering by db and table with db name {} and table name {}",
                     only_selected_database, only_selected_table);
         }
@@ -73,11 +73,11 @@ void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextP
         {
             only_selected_database = db_it->second.getType() == Field::Types::String ? db_it->second.get<String>() : "";
             enable_filter_by_db = true;
-            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchTableHost"),
+            LOG_TRACE(getLogger("StorageSystemCnchTableHost"),
                     "filtering by db with db name {}", only_selected_database);
         }
         else
-            LOG_TRACE(&Poco::Logger::get("StorageSystemCnchTableHost"), "doesn't do any filtering");
+            LOG_TRACE(getLogger("StorageSystemCnchTableHost"), "doesn't do any filtering");
     }
 
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();

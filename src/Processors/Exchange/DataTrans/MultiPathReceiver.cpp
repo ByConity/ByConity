@@ -50,7 +50,7 @@ MultiPathReceiver::MultiPathReceiver(
     , sub_receivers(std::move(sub_receivers_))
     , header(header_)
     , name(std::move(name_))
-    , logger(&Poco::Logger::get("MultiPathReceiver"))
+    , logger(getLogger("MultiPathReceiver"))
     , context(context_)
 {
     for (auto & sub_receiver : sub_receivers)

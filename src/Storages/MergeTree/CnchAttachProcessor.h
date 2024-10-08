@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <set>
 #include <mutex>
 #include <Poco/Logger.h>
@@ -118,7 +119,7 @@ public:
         std::map<String, String> rename_map;
     };
 
-    AttachContext(const Context& qctx, int pool_expand_thres, int max_thds, Poco::Logger* log):
+    AttachContext(const Context& qctx, int pool_expand_thres, int max_thds, LoggerPtr log):
         query_ctx(qctx), expand_thread_pool_threshold(pool_expand_thres),
         max_worker_threads(max_thds), new_txn(nullptr), logger(log) {}
 
@@ -162,7 +163,7 @@ private:
     std::map<String, TempResource> resources;
     std::map<String, TempResource> meta_files_to_delete;
 
-    Poco::Logger* logger;
+    LoggerPtr logger;
 };
 
 // Attach will follow such process
@@ -180,7 +181,7 @@ public:
             target_tbl(tbl), from_storage(nullptr),
             is_unique_tbl(tbl.getInMemoryMetadataPtr()->hasUniqueKey()),
             command(cmd), query_ctx(ctx),
-            logger(&Poco::Logger::get("CnchAttachProcessor")) {}
+            logger(getLogger("CnchAttachProcessor")) {}
 
     void exec();
 
@@ -247,7 +248,7 @@ private:
     const PartitionCommand& command;
     ContextMutablePtr query_ctx;
 
-    Poco::Logger* logger;
+    LoggerPtr logger;
 
     // For unique table
     std::mutex unique_table_info_mutex;

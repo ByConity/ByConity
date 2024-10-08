@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Parsers/formatAST.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/StorageInMemoryMetadata.h>
@@ -141,7 +142,7 @@ private:
 
     std::atomic<unsigned> finished_jobs_count{0};
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

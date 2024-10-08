@@ -32,7 +32,7 @@ namespace ErrorCodes
 namespace DaemonManager
 {
 
-TargetServerCalculator::TargetServerCalculator(Context & context_, CnchBGThreadType type_, Poco::Logger * log_)
+TargetServerCalculator::TargetServerCalculator(Context & context_, CnchBGThreadType type_, LoggerPtr log_)
     : type{type_}, context(context_), log{log_}
 {}
 

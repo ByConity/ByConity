@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/StorageID.h>
 
 #include <unordered_map>
@@ -166,7 +167,7 @@ private:
     mutable bool levels_calculated = false;
 
     const String name_for_logging;
-    mutable Poco::Logger * logger = nullptr;
+    mutable LoggerPtr logger = nullptr;
 
     Node * findNode(const StorageID & table_id) const;
     Node * addOrUpdateNode(const StorageID & table_id);
@@ -178,7 +179,7 @@ private:
     void setNeedRecalculateLevels() const;
     const NodesSortedByLevel & getNodesSortedByLevel() const;
 
-    Poco::Logger * getLogger() const;
+    LoggerPtr getLogger() const;
 };
 
 }

@@ -51,7 +51,7 @@ BlockIO InterpreterAdviseQuery::execute()
     auto advises = advisor.analyze(queries, getContext());
     auto stop_watch = std::chrono::high_resolution_clock::now();
 
-    LOG_DEBUG(&Poco::Logger::get("InterpreterAdviseQuery"), "Analyze cost: {} ms",
+    LOG_DEBUG(getLogger("InterpreterAdviseQuery"), "Analyze cost: {} ms",
               std::chrono::duration_cast<std::chrono::milliseconds>(stop_watch - start_watch).count());
 
     start_watch = std::chrono::high_resolution_clock::now();
@@ -71,7 +71,7 @@ BlockIO InterpreterAdviseQuery::execute()
 
     stop_watch = std::chrono::high_resolution_clock::now();
 
-    LOG_DEBUG(&Poco::Logger::get("InterpreterAdviseQuery"), "Apply advises cost: {} ms",
+    LOG_DEBUG(getLogger("InterpreterAdviseQuery"), "Apply advises cost: {} ms",
               std::chrono::duration_cast<std::chrono::milliseconds>(stop_watch - start_watch).count());
 
     if (query_ptr->as<const ASTAdviseQuery &>().output_ddl)
@@ -105,7 +105,7 @@ BlockIO InterpreterAdviseQuery::execute()
         stop_watch = std::chrono::high_resolution_clock::now();
 
         LOG_DEBUG(
-            &Poco::Logger::get("InterpreterAdviseQuery"),
+            getLogger("InterpreterAdviseQuery"),
             "Get optimal DDL cost: {} ms",
             std::chrono::duration_cast<std::chrono::milliseconds>(stop_watch - start_watch).count());
     }

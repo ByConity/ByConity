@@ -22,7 +22,7 @@ namespace ErrorCodes
 
 MySQLHandlerFactory::MySQLHandlerFactory(IServer & server_)
     : server(server_)
-    , log(&Poco::Logger::get("MySQLHandlerFactory"))
+    , log(getLogger("MySQLHandlerFactory"))
 {
 #if USE_SSL
     try

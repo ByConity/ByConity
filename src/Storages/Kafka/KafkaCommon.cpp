@@ -56,7 +56,7 @@ cppkafka::Configuration createConsumerConfiguration(
      ContextPtr context, const StorageID & storage_id, const Names & topics, const KafkaSettings & settings)
 {
     cppkafka::Configuration conf;
-    const auto log = &Poco::Logger::get(storage_id.getNameForLogs());
+    const auto log = getLogger(storage_id.getNameForLogs());
 
     /// 1) set from global configuration
 

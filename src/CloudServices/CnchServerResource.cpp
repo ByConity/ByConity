@@ -179,15 +179,29 @@ void CnchServerResource::cleanResourceInWorker()
     if (!worker_group || skip_clean_worker)
         return;
 
-    auto worker_clients = worker_group->getWorkerClients();
+    /// worker may not participant in the query due to enable_prune_source_plan_segment,
+    /// only requested workers need to be cleaned
+    WorkerInfoSet workers;
+    {
+        auto lock = getLock();
+        workers = requested_workers;
+    }
 
     auto handler = std::make_shared<ExceptionHandler>();
     std::vector<brpc::CallId> call_ids;
-    call_ids.reserve(worker_clients.size());
-    for (auto & worker_client : worker_clients)
+    call_ids.reserve(workers.size());
+    for (const auto & worker : workers)
     {
-        LOG_TRACE(log, "Send finish to worker {}", worker_client->getRPCAddress());
-        call_ids.emplace_back(worker_client->removeWorkerResource(txn_id, handler));
+        try
+        {
+            auto worker_client = worker_group->getWorkerClient(worker);
+            LOG_TRACE(log, "Send finish to worker {}", worker_client->getRPCAddress());
+            call_ids.emplace_back(worker_client->removeWorkerResource(txn_id, handler));
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Failed to remove resources on worker {}: {}", worker.getRPCAddress(), getCurrentExceptionMessage(false));
+        }
     }
 
     for (auto & call_id : call_ids)
@@ -285,6 +299,22 @@ void CnchServerResource::setTableVersion(
     assigned_resource.bucket_numbers.insert(required_bucket_numbers.begin(), required_bucket_numbers.end());
 }
 
+brpc::CallId CnchServerResource::doAsyncSend(
+    const ContextPtr & context,
+    const HostWithPorts & worker,
+    const std::vector<AssignedResource> & resources,
+    const ExceptionHandlerWithFailedInfoPtr & handler)
+{
+    auto worker_client = worker_group->getWorkerClient(worker);
+    auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
+    {
+        auto lock = getLock();
+        requested_workers.insert(worker);
+    }
+    LOG_TRACE(log, "Sending resources to {}", worker.toDebugString());
+    return worker_client->sendResources(context, resources, handler, full_worker_id, send_mutations);
+}
+
 /// NOTE: Only used when optimizer is disabled.
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
@@ -311,12 +341,11 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
         assigned_worker_resource.erase(it);
     }
 
+    Stopwatch rpc_watch;
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
-    auto worker_client = worker_group->getWorkerClient(worker);
-    auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
-    auto call_id = worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations);
-    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
+    auto call_id = doAsyncSend(context, worker, resources_to_send, handler);
     brpc::Join(call_id);
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, rpc_watch.elapsedMilliseconds());
     handler->throwIfException();
     ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
@@ -341,12 +370,11 @@ void CnchServerResource::resendResource(const ContextPtr & context, const HostWi
             resources_to_send = std::move(it->second);
     }
 
+    Stopwatch rpc_watch;
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
-    auto worker_client = worker_group->getWorkerClient(worker);
-    auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
-    auto call_id = worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations);
-    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
+    auto call_id = doAsyncSend(context, worker, resources_to_send, handler);
     brpc::Join(call_id);
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, rpc_watch.elapsedMilliseconds());
     handler->throwIfException();
     ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
@@ -376,35 +404,27 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
     if (resource_option)
         initSourceTaskPayload(context, all_resources);
 
+    Stopwatch rpc_watch;
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
     std::vector<brpc::CallId> call_ids;
     call_ids.reserve(all_resources.size());
-    auto worker_send_resources = [&](const HostWithPorts & host_ports, const std::vector<AssignedResource> & resources_to_send)
-    {
-        auto worker_client = worker_group->getWorkerClient(host_ports);
-        auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), host_ports.id);
-        LOG_TRACE(log, "Send resource to {}", host_ports.toDebugString());
-        call_ids.emplace_back(worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations));
-    };
 
     size_t max_threads = Catalog::getMaxThreads();
     if (max_threads < 2 || all_resources.size() < 2)
     {
         for (auto & [host_ports_, resources_] : all_resources)
-        {
-            worker_send_resources(host_ports_, resources_);
-        }
+            call_ids.emplace_back(doAsyncSend(context, host_ports_, resources_, handler));
     }
     else
     {
         max_threads = std::min(max_threads, all_resources.size());
         ExceptionHandler exception_handler;
         ThreadPool thread_pool(max_threads);
-        for (auto it = all_resources.begin(); it != all_resources.end(); it++)
+        for (auto & all_resource : all_resources)
         {
             thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
-                [&, it]() {
-                    worker_send_resources(it->first, it->second);
+                [&]() {
+                    call_ids.emplace_back(doAsyncSend(context, all_resource.first, all_resource.second, handler));
                 },
                 exception_handler));
         }
@@ -412,10 +432,9 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
         exception_handler.throwIfException();
     }
 
-    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
-
     for (auto & call_id : call_ids)
         brpc::Join(call_id);
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, rpc_watch.elapsedMilliseconds());
 
     auto worker_group_status = context->getWorkerGroupStatusPtr();
     if (worker_group_status)
@@ -433,11 +452,10 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
     }
 
     handler->throwIfException();
-
     ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
 
-void CnchServerResource::sendResources(const ContextPtr & context, WorkerAction act)
+void CnchServerResource::submitCustomTasks(const ContextPtr & context, WorkerAction act)
 {
     auto handler = std::make_shared<ExceptionHandler>();
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
@@ -635,6 +653,8 @@ void CnchServerResource::allocateResource(
                         assigned_virtual_parts.size(),
                         storage->getStorageID().getNameForLogs(),
                         host_ports.toDebugString());
+
+                    CnchPartsHelper::flattenPartsVector(assigned_virtual_parts);
                 }
 
                 if (auto it = assigned_hive_map.find(host_ports.id); it != assigned_hive_map.end())

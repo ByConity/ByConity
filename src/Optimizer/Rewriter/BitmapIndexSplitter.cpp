@@ -47,7 +47,7 @@ PlanNodePtr createProjection(PlanNodes children, Assignments array_set_check_fun
 
     auto projection = std::make_shared<ProjectionStep>(child->getCurrentDataStream(), assignments, name_to_type, false, true);
     LOG_DEBUG(
-        &Poco::Logger::get("createProjection"),
+        getLogger("createProjection"),
         fmt::format(
             "projection input: {}, output: {}",
             projection->getInputStreams()[0].header.dumpStructure(),

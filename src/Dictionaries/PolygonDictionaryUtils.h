@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 #include <Common/ThreadPool.h>
 #include <Poco/Logger.h>
@@ -81,7 +82,7 @@ private:
     /** Auxiliary function for adding ring to the index */
     void indexAddRing(const Ring & ring, size_t polygon_id);
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /** Sorted distinct coordinates of all vertices */
     std::vector<Coord> sorted_x;

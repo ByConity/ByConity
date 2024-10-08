@@ -149,7 +149,7 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         total_segment_count(total_segment_count_), marks_loader(marks_loader_),
         current_segment_idx(0), current_compressed_offset(std::nullopt), part_host(part_host_),
         stream_extension(stream_extension_),
-        logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
+        logger(getLogger("MergedReadBufferWithSegmentCache"))
 {
     initialize();
 }
@@ -358,11 +358,6 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
     std::optional<String> parsed_disk_cache_host;
     if (!part_host.disk_cache_host_port.empty())
         parsed_disk_cache_host = parseAddress(part_host.disk_cache_host_port, 0).first;
-    LOG_TRACE(
-        &Poco::Logger::get(__func__),
-        "Current node host vs disk cache host: {} vs {}",
-        parsed_assign_compute_host.has_value() ? removeBracketsIfIpv6(parsed_assign_compute_host.value()) : "",
-        parsed_disk_cache_host.has_value() ? removeBracketsIfIpv6(parsed_disk_cache_host.value()) : "");
 
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
     if (cache_entry.first == nullptr)

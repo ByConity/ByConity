@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Disks/StoragePolicy.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/SourceTask.h>
@@ -174,6 +175,7 @@ public:
     bool supportsSampling() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    bool supportsParallelInsert(ContextPtr local_context) const override;
 
     NamesAndTypesList getVirtuals() const override;
 
@@ -181,7 +183,7 @@ public:
 
     /// Logger
     const String & getLogName() const { return log_name; }
-    Poco::Logger * getLogger() const override { return log; }
+    LoggerPtr getLogger() const { return log; }
 
     /// A global unique id for the storage. If storage UUID is not empty, use the storage UUID. Otherwise, use the address of current object.
     String getStorageUniqueID() const;
@@ -424,6 +426,11 @@ public:
     virtual bool supportsOptimizer() const override { return true; }
 
     virtual bool supportIntermedicateResultCache() const override { return true; }
+
+    /// Just compatible with old impl for unique table
+    bool commitTxnInWriteSuffixStage(const UInt32 & deup_impl_version, ContextPtr query_context) const;
+    bool supportsWriteInWorkers(const Context & query_context) const;
+
     ColumnSize calculateMapColumnSizesImpl(const String & map_implicit_column_name) const;
 
     void resetObjectColumns(const ColumnsDescription & object_columns_) { object_columns = object_columns_; }
@@ -482,7 +489,7 @@ protected:
     String storage_address;
 
     String log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Storage settings.
     /// Use get and set to receive readonly versions.

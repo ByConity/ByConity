@@ -286,7 +286,7 @@ StorageStripeLog::StorageStripeLog(
     , table_path(relative_path_)
     , max_compress_block_size(max_compress_block_size_)
     , file_checker(disk, table_path + "sizes.json")
-    , log(&Poco::Logger::get("StorageStripeLog"))
+    , log(getLogger("StorageStripeLog"))
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -54,7 +55,7 @@ protected:
 
     virtual const Poco::Util::AbstractConfiguration & getConfig() const = 0;
 
-    virtual Poco::Logger * getLog() const = 0;
+    virtual LoggerPtr getLog() const = 0;
 
     virtual Poco::Timespan getHTTPTimeout() const = 0;
 

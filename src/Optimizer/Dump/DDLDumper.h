@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/QualifiedTableName.h>
 #include <Core/Names.h>
 #include <Databases/IDatabase.h>
@@ -61,7 +62,7 @@ private:
     std::unordered_map<QualifiedTableName, size_t> shard_counts;
     std::unordered_set<QualifiedTableName> visited_tables;
     DumpUtils::DumpSettings settings;
-    const Poco::Logger * log = &Poco::Logger::get("DDLDumper");
+    const LoggerPtr log = getLogger("DDLDumper");
 };
 
 }

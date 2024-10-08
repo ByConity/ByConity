@@ -23,7 +23,7 @@ namespace DB
 MergeTreeMeta::MergeTreeMeta(const String _path, const String metastore_name_)
         : path(_path + "catalog.db")
         , metastore_name(metastore_name_)
-        , log(&Poco::Logger::get(metastore_name + "(MetaStore)"))
+        , log(getLogger(metastore_name + "(MetaStore)"))
 {
     openMetastore();
 }

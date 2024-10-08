@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
 #include <Interpreters/Context.h>
@@ -45,7 +46,7 @@ public:
         else if (global_context->getServerType() == ServerType::cnch_worker)
         {
             addService(*rpc_server, rpc_services, CnchWorkerServiceImpl_RegisterService(global_context).service);
-            LOG_DEBUG(&Poco::Logger::get("BrpcServerHolder"), "Start register RemoteDiskCacheService: {}", host_port);
+            LOG_DEBUG(getLogger("BrpcServerHolder"), "Start register RemoteDiskCacheService: {}", host_port);
             addService(*rpc_server, rpc_services, RemoteDiskCacheService_RegisterService(global_context).service);
         }
 
@@ -61,7 +62,7 @@ public:
         {
             start_success = false;
             if (listen_try)
-                LOG_ERROR(&Poco::Logger::get("BrpcServerHolder"), "Failed tp start rpc server on {}", host_port);
+                LOG_ERROR(getLogger("BrpcServerHolder"), "Failed tp start rpc server on {}", host_port);
             else
                 throw Exception("Failed tp start rpc server on " + host_port, ErrorCodes::BRPC_EXCEPTION);
         }

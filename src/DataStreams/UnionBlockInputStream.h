@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/logger_useful.h>
 
 #include <Common/ConcurrentBoundedQueue.h>
@@ -276,7 +277,7 @@ private:
     bool started = false;
     bool all_read = false;
 
-    Poco::Logger * log = &Poco::Logger::get("UnionBlockInputStream");
+    LoggerPtr log = getLogger("UnionBlockInputStream");
 };
 
 }

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -49,7 +50,7 @@ public:
 
 private:
     ::logging::LogSink * old_sink;
-    Poco::Logger * logger;
+    LoggerPtr logger;
     ConfigHolderMap config_holder_map;
     mutable std::mutex holder_map_mutex;
 

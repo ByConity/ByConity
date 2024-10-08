@@ -219,7 +219,7 @@ std::pair<ConstASTPtr, ConstASTPtr> FilterStep::splitLargeInValueList(const Cons
     std::vector<ConstASTPtr> large_in_value_list;
     for (auto & predicate : PredicateUtils::extractConjuncts(filter))
     {
-        LOG_DEBUG(&Poco::Logger::get("FilterStep"), " predicate : {}", predicate->formatForErrorMessage());
+        LOG_DEBUG(getLogger("FilterStep"), " predicate : {}", predicate->formatForErrorMessage());
 
         if (predicate->as<ASTFunction>() &&
             (predicate->as<const ASTFunction &>().name == "in" ||

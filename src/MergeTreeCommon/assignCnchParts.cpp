@@ -39,7 +39,7 @@ namespace DB
 {
 
 template<typename M>
-inline void reportStats(Poco::Logger * log, const M & map, const String & name, size_t num_workers)
+inline void reportStats(LoggerPtr log, const M & map, const String & name, size_t num_workers)
 {
     std::stringstream ss;
     ss << name << " : ";
@@ -76,7 +76,7 @@ template std::unordered_map<String, DeleteBitmapMetaPtrVector> assignCnchParts<D
 template <typename DataPartsCnchVector>
 std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts, const ContextPtr & query_context, MergeTreeSettingsPtr settings, std::optional<Context::PartAllocator> allocator)
 {
-    static auto * log = &Poco::Logger::get("assignCnchParts");
+    static auto log = getLogger("assignCnchParts");
     Context::PartAllocator part_allocation_algorithm = allocator.value_or(query_context->getPartAllocationAlgo(settings));
 
     switch (part_allocation_algorithm)
@@ -159,7 +159,7 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(
 
 /// 2 round apporach
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalance(Poco::Logger * log, WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts)
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalance(LoggerPtr log, WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts)
 {
     LOG_INFO(log, "Consistent Hash: Start to allocate part with bounded ring based hash policy.");
     std::unordered_map<String, DataPartsCnchVector> ret;
@@ -214,7 +214,7 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
 
 // 1 round approach
 template <typename DataPartsCnchVector>
-static std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBoundedHash(Poco::Logger * log, WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts, bool strict)
+static std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBoundedHash(LoggerPtr log, WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts, bool strict)
 {
     LOG_DEBUG(log, "Strict Bounded Consistent Hash: Start to allocate part with bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
     std::unordered_map<String, DataPartsCnchVector> ret;
@@ -249,6 +249,7 @@ static std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrict
 
 HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts)
 {
+    static LoggerPtr log = getLogger("assignCnchHiveParts");
     auto worker_ids = worker_group->getWorkerIDVec();
     /// we don't know the order of workers returned from consul so sort explicitly now
     sort(worker_ids.begin(), worker_ids.end());
@@ -264,6 +265,12 @@ HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, c
         else
             assigned_worker_idx = consistentHashForString(file->file_path, num_workers);
 
+        LOG_DEBUG(
+            log,
+            "file '{}' assign to worker with id: {}, use bucket id dispatch method: {}",
+            file->file_path,
+            assigned_worker_idx,
+            file->getBucketId().has_value());
         ret[worker_ids[assigned_worker_idx]].emplace_back(file);
     }
 
@@ -397,7 +404,7 @@ size_t computeVirtualPartSize(size_t min_rows_per_vp, size_t index_granularity)
 }
 
 static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithMod(
-    Poco::Logger * log, const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
+    LoggerPtr log, const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
 {
     std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
     auto & physical_assignment = res.first;
@@ -409,7 +416,7 @@ static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybrid
         const auto & part = parts[i];
         UInt64 marks_cnt = part->marksCount();
         // For little parts, we don't split it as virtual parts any more.
-        if (marks_cnt <= virtual_part_size || part->isPartial())
+        if (marks_cnt <= virtual_part_size)
         {
             auto index = hasher(part->info().getBasicPartName()) % shard_infos.size();
             String hostname = shard_infos[index].worker_id;
@@ -523,7 +530,7 @@ static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybrid
 }
 
 static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithStrictBoundedHash(
-    Poco::Logger * log,
+    LoggerPtr log,
     const WorkerGroupHandle & worker_group,
     const ServerDataPartsVector & parts,
     size_t virtual_part_size /* unit = num marks */,
@@ -588,7 +595,7 @@ static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybrid
 }
 
 static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridPartsWithConsistentHash(
-    Poco::Logger * log, const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
+    LoggerPtr log, const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */)
 {
     const auto & ring = worker_group->getRing();
     std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> res;
@@ -598,7 +605,7 @@ static std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybrid
     {
         const auto & part = parts[i];
         UInt64 marks_cnt = part->marksCount();
-        if (marks_cnt <= virtual_part_size || part->isPartial())
+        if (marks_cnt <= virtual_part_size)
         {
             /// only 1 single parts
             String hostname = ring.find(part->info().getBasicPartName());
@@ -654,7 +661,7 @@ void splitHybridParts(const ServerDataPartsVector & parts, size_t virtual_part_s
         const auto & part = parts[i];
         UInt64 marks_cnt = part->marksCount();
         String base_name = part->info().getBasicPartName();
-        if (marks_cnt <= virtual_part_size || part->isPartial())
+        if (marks_cnt <= virtual_part_size)
         {
             // physical part
             hybrid_parts.emplace_back(base_name, false, i, marks_cnt, 0, marks_cnt);
@@ -700,7 +707,7 @@ void mergeConsecutiveRanges(VirtualPartAssignmentMap & virtual_part_assignment)
         }
 }
 
-static void reportHybridAllocStats(Poco::Logger * log, ServerAssignmentMap & physical_parts, VirtualPartAssignmentMap & virtual_parts, const String & name)
+static void reportHybridAllocStats(LoggerPtr log, ServerAssignmentMap & physical_parts, VirtualPartAssignmentMap & virtual_parts, const String & name)
 {
     std::unordered_map<String, size_t> allocated_marks;
     for (const auto & physical_part : physical_parts)
@@ -770,7 +777,7 @@ ServerVirtualPartVector getVirtualPartVector(const ServerDataPartsVector & parts
 std::pair<ServerAssignmentMap, VirtualPartAssignmentMap> assignCnchHybridParts(
     const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts, size_t virtual_part_size /* unit = num marks */, const ContextPtr & query_context)
 {
-    static auto * log = &Poco::Logger::get("assignCnchHybridParts");
+    static auto log = getLogger("assignCnchHybridParts");
     // If part_allocation_algorithm is specified in SQL Level, use it with high priority
     Context::HybridPartAllocator part_allocation_algorithm;
     if (query_context->getSettingsRef().cnch_hybrid_part_allocation_algorithm.changed)

@@ -75,7 +75,7 @@ DeadlineScheduler::Options DeadlineScheduler::Options::parseFromConfig(
 }
 
 DeadlineScheduler::DeadlineScheduler(const Options& opts):
-    logger_(&Poco::Logger::get("DeadlineScheduler")), opts_(opts),
+    logger_(getLogger("DeadlineScheduler")), opts_(opts),
         last_retrieve_pos_(0, 0) {
     if (opts_.max_request_size_ % opts_.aligned_boundary_ != 0) {
         throw Exception(fmt::format("Max request size {} is not aligned to request boundary {}",

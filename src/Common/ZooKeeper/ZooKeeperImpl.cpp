@@ -1080,7 +1080,7 @@ void ZooKeeper::initApiVersion()
         promise->set_value(response);
     };
 
-    auto * log = &Poco::Logger::get("ZooKeeperClient");
+    auto log = getLogger("ZooKeeperClient");
 
     get(keeper_api_version_path, std::move(callback), {});
     if (future.wait_for(std::chrono::milliseconds(operation_timeout.totalMilliseconds())) != std::future_status::ready)

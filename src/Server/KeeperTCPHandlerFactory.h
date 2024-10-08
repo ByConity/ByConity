@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Server/KeeperTCPHandler.h>
 #include <Poco/Net/TCPServerConnectionFactory.h>
 #include <Poco/Net/NetException.h>
@@ -35,7 +36,7 @@ class KeeperTCPHandlerFactory : public Poco::Net::TCPServerConnectionFactory
 {
 private:
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
     class DummyTCPHandler : public Poco::Net::TCPServerConnection
     {
     public:
@@ -46,7 +47,7 @@ private:
 public:
     KeeperTCPHandlerFactory(IServer & server_, bool secure)
         : server(server_)
-        , log(&Poco::Logger::get(std::string{"KeeperTCP"} + (secure ? "S" : "") + "HandlerFactory"))
+        , log(getLogger(std::string{"KeeperTCP"} + (secure ? "S" : "") + "HandlerFactory"))
     {
     }
 

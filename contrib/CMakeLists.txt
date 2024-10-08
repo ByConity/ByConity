@@ -408,6 +408,11 @@ endif ()
 
 add_subdirectory(fast_float)
 
+
+# Check Clang version and add -Wno-unused-but-set-variable if Clang version is 15 or higher
+if(${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER_EQUAL 15)
+    add_compile_options(-Wno-unused-but-set-variable)
+endif()
 add_subdirectory(incubator-brpc)
 if(OPENSSL_INCLUDE_DIR)
     target_include_directories(brpc-static BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})

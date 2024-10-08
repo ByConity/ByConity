@@ -428,7 +428,7 @@ void writeBlock(
     const size_t number_of_buckets,
     IBlockOutputStream & new_part_output,
     const StorageMetadataPtr & target_meta_data_ptr,
-    Poco::Logger * log)
+    LoggerPtr log)
 {
     Arena temporary_keys_pool;
     StringRefHash hasher;

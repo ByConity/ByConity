@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/IInterpreter.h>
 #include <Interpreters/executeQuery.h>
 #include <Parsers/ASTDropQuery.h>
@@ -43,7 +44,7 @@ class InterpreterAnalyticalMySQLDDLQuery : public IInterpreter, WithMutableConte
 public:
     InterpreterAnalyticalMySQLDDLQuery(
         const ASTPtr & query_ptr_, ContextMutablePtr context_)
-        : WithMutableContext(context_), query_ptr(query_ptr_), log(&Poco::Logger::get("InterpreterAnalyticalMySQLDDLQuery"))
+        : WithMutableContext(context_), query_ptr(query_ptr_), log(getLogger("InterpreterAnalyticalMySQLDDLQuery"))
     {
     }
 
@@ -68,7 +69,7 @@ public:
 
 private:
     ASTPtr query_ptr;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using InterpreterAnalyticalMySQLAlterQuery = InterpreterAnalyticalMySQLDDLQuery<InterpreterAlterAnalyticalMySQLImpl>;

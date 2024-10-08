@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Poco/Net/TCPServerConnectionFactory.h>
 #include <atomic>
 #include <memory>
@@ -13,7 +14,7 @@ class PostgreSQLHandlerFactory : public Poco::Net::TCPServerConnectionFactory
 {
 private:
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
 
 #if USE_SSL
     bool ssl_enabled = true;

@@ -217,6 +217,7 @@ message PreloadDataPartsReq
   optional bool sync = 4;
   optional uint64 preload_level = 5;
   optional uint64 submit_ts = 6;
+  optional int64 read_injection = 7;
 }
 
 message PreloadDataPartsResp
@@ -595,6 +596,20 @@ message ExecuteDedupTaskResp
   optional string exception = 1;
 }
 
+message BroadcastManifestReq
+{
+  required UUID table_uuid = 1;
+  required uint64 txn_id = 2;
+  optional WorkerInfo worker_info = 3;
+  repeated DataModelPart parts = 4;
+  repeated DataModelDeleteBitmap delete_bitmaps = 5;
+}
+
+message BroadcastManifestResp
+{
+  optional string exception = 1;
+}
+
 service CnchWorkerService
 {
   rpc executeSimpleQuery(ExecuteSimpleQueryReq) returns (ExecuteSimpleQueryResp);
@@ -641,4 +656,6 @@ service CnchWorkerService
   rpc dropMemoryDictCache(DropMemoryDictCacheReq) returns (DropMemoryDictCacheResp);
 
   rpc executeDedupTask(ExecuteDedupTaskReq) returns (ExecuteDedupTaskResp);
+
+  rpc broadcastManifest(BroadcastManifestReq) returns (BroadcastManifestResp);
 }

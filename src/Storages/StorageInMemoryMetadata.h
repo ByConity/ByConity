@@ -239,6 +239,14 @@ struct StorageInMemoryMetadata
         }
     }
 
+    NameSet getFuncColumnNames() const
+    {
+        if (hasUniqueKey())
+            return {DELETE_FLAG_COLUMN_NAME, UPDATE_COLUMNS, DEDUP_SORT_COLUMN};
+        else
+            return {};
+    }
+
     /// Block with ordinary + materialized + aliases + virtuals. Virtuals have
     /// to be explicitly specified, because they are part of Storage type, not
     /// Storage metadata. StorageID required only for more clear exception

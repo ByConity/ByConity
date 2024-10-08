@@ -56,7 +56,7 @@ VirtualWarehouseHandleImpl::VirtualWarehouseHandleImpl(
     , name(std::move(name_))
     , uuid(uuid_)
     , settings(settings_)
-    , log(&Poco::Logger::get(name + " (VirtualWarehouseHandle)"))
+    , log(getLogger(name + " (VirtualWarehouseHandle)"))
 {
     tryUpdateWorkerGroups(ForceUpdate);
 }

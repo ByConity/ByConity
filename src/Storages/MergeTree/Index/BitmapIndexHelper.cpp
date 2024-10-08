@@ -48,6 +48,10 @@ static std::map<String, BitmapIndexReturnType> bitmap_functions = {
     {"bitmapHasAnyElement", BitmapIndexReturnType::BOOL}
 };
 
+static std::unordered_set<String> func_inside_bitmap_function = {
+    "assumeNotNull"
+};
+
 bool BitmapIndexHelper::hasNullArgument(const ASTPtr & ast)
 {
     const auto* func = typeid_cast<const ASTFunction*>(ast.get());
@@ -162,7 +166,7 @@ std::pair<NameSet, NameSet> BitmapIndexInfo::getIndexColumns(const IMergeTreeDat
         }
         catch (...)
         {
-            tryLogCurrentException(&Poco::Logger::get("MergeTreeBitmapIndexReader"), __PRETTY_FUNCTION__);
+            tryLogCurrentException(getLogger("MergeTreeBitmapIndexReader"), __PRETTY_FUNCTION__);
             return {};
         }
     }
@@ -187,6 +191,35 @@ bool BitmapIndexHelper::isNarrowArraySetFunctions(const String & name)
     return narrow_array_set_functions.count(name);
 }
 
+bool BitmapIndexHelper::isValidBitMapFunctions(const ASTPtr & ast)
+{
+    if (!ast) return false;
+
+    auto * func = ast->as<ASTFunction>();
+
+    if (func)
+    {
+        if (isArraySetFunctions(func->name))
+        {
+            if (func->arguments)
+            {
+                for (size_t i = 0, arg_size = func->arguments->children.size(); i < arg_size; i += 2)
+                {
+                    ASTPtr arg = func->arguments->children.at(i);
+                    if (auto * arg_func = arg->as<ASTFunction>(); arg_func && !func_inside_bitmap_function.count(arg_func->name))
+                        return false;
+
+                    if (!arg->as<ASTIdentifier>() && !arg->as<ASTLiteral>())
+                        return false;
+                }
+                return true;
+            }
+        }
+    } 
+
+    return false;
+}
+
 BitmapIndexReturnType BitmapIndexHelper::getBitmapIndexReturnType(const String & name)
 {
     auto it = array_set_functions.find(name);
@@ -209,7 +242,7 @@ void BitmapIndexInfo::buildIndexInfo(
 
     if (auto * function = node->as<ASTFunction>())
     {
-        bool is_array_set_func = BitmapIndexHelper::isArraySetFunctions(function->name);
+        bool is_array_set_func = BitmapIndexHelper::isValidBitMapFunctions(node);
         if (is_array_set_func)
         {
             bool should_update_bitmap_index_info = !index_names.count(function->getColumnName());
@@ -222,6 +255,7 @@ void BitmapIndexInfo::buildIndexInfo(
             if (make_set)
             {
                 // check if current column type really has bitmap index
+                bool has_valid_identifier = false;
                 for (size_t i = 0; i < arg_size; i += 2)
                 {
                     ASTPtr arg_col = function->arguments->children.at(i);
@@ -235,9 +269,11 @@ void BitmapIndexInfo::buildIndexInfo(
                                 should_update_bitmap_index_info = false;
                                 break;
                             }
+                            has_valid_identifier = true;
                         }
                     }
                 }
+                should_update_bitmap_index_info &= has_valid_identifier;
 
                 auto col_name = function->getColumnName();
 

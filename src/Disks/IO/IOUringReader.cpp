@@ -50,7 +50,7 @@ namespace ErrorCodes
 }
 
 IOUringReader::IOUringReader(uint32_t entries_, bool enable_sqpoll_)
-    : enable_sqpoll(enable_sqpoll_), enable_iopoll(false), log(&Poco::Logger::get("IOUringReader"))
+    : enable_sqpoll(enable_sqpoll_), enable_iopoll(false), log(getLogger("IOUringReader"))
 {
     struct io_uring_probe * probe = io_uring_get_probe();
     if (!probe)

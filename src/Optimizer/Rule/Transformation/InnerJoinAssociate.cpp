@@ -28,9 +28,9 @@ ConstRefPatternPtr InnerJoinAssociate::getPattern() const
         })
         .with(
             Patterns::join()
-                .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered() && (!s.getFilter() || PredicateUtils::isTruePredicate(s.getFilter())); })
-                .with(Patterns::tree(), Patterns::tableScan()),
-            Patterns::tableScan())
+                .matchingStep<JoinStep>([&](const JoinStep & s) { return supportSwap(s) && !s.isOrdered(); })
+                .with(Patterns::tree(), Patterns::tree()),
+            Patterns::tree())
         .result();
     return pattern;
 }
@@ -66,7 +66,7 @@ TransformResult InnerJoinAssociate::transformImpl(PlanNodePtr node, const Captur
     auto c = node->getChildren()[1];
 
     // LOG_DEBUG(
-    //     &Poco::Logger::get("InnerJoinAssociate"),
+    //     getLogger("InnerJoinAssociate"),
     //     fmt::format(
     //         "hint {}/{}/{}",
     //         dynamic_cast<AnyStep &>(*a->getStep()).getGroupId(),

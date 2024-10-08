@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <CloudServices/DedupWorkerStatus.h>
 #include <CloudServices/DedupGran.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -128,7 +129,7 @@ private:
             else /// idle area
                 ratio = 1.5;
             LOG_DEBUG(
-                &Poco::Logger::get("TaskIntervalScheduler"),
+                getLogger("TaskIntervalScheduler"),
                 "min staged part timestamp: {} ms, current timestamp: {} ms, final ratio is: {}, current sleep time: {} ms.",
                 mts,
                 current_timestamp.toMillisecond(),
@@ -154,7 +155,7 @@ private:
     std::atomic<size_t> index{0};
     ContextMutablePtr context;
     String log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
     BackgroundSchedulePool::TaskHolder task;
     TaskIntervalScheduler interval_scheduler;
     std::atomic<bool> is_stopped{false};

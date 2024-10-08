@@ -16,6 +16,7 @@
 #pragma once
 
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -191,7 +192,7 @@ private:
     Container initail_query_to_groups;
     mutable bthread::Mutex mutex;
     mutable bthread::ConditionVariable remove_group;
-    Poco::Logger * logger = &Poco::Logger::get("PlanSegmentProcessList");
+    LoggerPtr logger = getLogger("PlanSegmentProcessList");
 };
 
 }

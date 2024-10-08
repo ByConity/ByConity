@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <ResourceManagement/VirtualWarehouse.h>
 #include <Common/ConcurrentMapForCreating.h>
 
@@ -48,7 +49,7 @@ public:
 
 private:
     ResourceManagerController & rm_controller;
-    Poco::Logger * log{nullptr};
+    LoggerPtr log{nullptr};
     /// Use bthread::Mutex but not std::mutex to avoid deadlock issue as we call other rpc API (catalog) in the lock scope.
     mutable bthread::Mutex vw_mgr_mutex;
 

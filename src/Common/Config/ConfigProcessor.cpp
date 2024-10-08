@@ -89,7 +89,7 @@ ConfigProcessor::ConfigProcessor(
     }
     else
     {
-        log = &Poco::Logger::get("ConfigProcessor");
+        log = getRawLogger("ConfigProcessor");
     }
 }
 

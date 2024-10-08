@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_RDKAFKA
 
@@ -77,7 +78,7 @@ protected:
     VirtualWarehouseHandle vw_handle;
     KafkaConsumerScheduleMode schedule_mode;
     ContextPtr global_context;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     const time_t min_running_time_for_reschedule{60};
 };

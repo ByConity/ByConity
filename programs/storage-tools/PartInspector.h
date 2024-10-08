@@ -1,3 +1,4 @@
+#include <Common/Logger.h>
 #include <iostream>
 #include <mutex>
 #include <memory>
@@ -129,14 +130,14 @@ public:
             ALL = BRIEF | CHECKSUMS,
         };
 
-        InspectTask(const String& path, FSOp& fs, Type type, const String& stream_name, Poco::Logger* logger):
+        InspectTask(const String& path, FSOp& fs, Type type, const String& stream_name, LoggerPtr logger):
             type_(type), logger_(logger), stream_name_(stream_name), inspector_(path, fs) {}
 
         void exec();
 
     private:
         Type type_;
-        Poco::Logger* logger_;
+        LoggerPtr logger_;
         String stream_name_;
         PartInspector inspector_;
     };
@@ -144,7 +145,7 @@ public:
     class TaskAllocator {
     public:
         TaskAllocator(const String& base_path, FSOp& fs_op, InspectTask::Type type,
-            const String& stream_name, Poco::Logger* logger);
+            const String& stream_name, LoggerPtr logger);
 
         std::unique_ptr<InspectTask> acquire();
 
@@ -157,7 +158,7 @@ public:
 
         InspectTask::Type type_;
 
-        Poco::Logger* logger_;
+        LoggerPtr logger_;
 
         String stream_name_;
 

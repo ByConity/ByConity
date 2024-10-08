@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <optional>
 
 #include <common/logger_useful.h>
@@ -97,7 +98,7 @@ protected:
 
 private:
     RemoteQueryExecutor query_executor;
-    Poco::Logger * log = &Poco::Logger::get("RemoteBlockInputStream");
+    LoggerPtr log = getLogger("RemoteBlockInputStream");
 
     void init();
 };

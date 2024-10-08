@@ -48,7 +48,7 @@ namespace ErrorCodes
 InterpreterDistributedStages::InterpreterDistributedStages(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : query_ptr(query_ptr_->clone())
     , context(std::move(context_))
-    , log(&Poco::Logger::get("InterpreterDistributedStages"))
+    , log(getLogger("InterpreterDistributedStages"))
     , plan_segment_tree(std::make_unique<PlanSegmentTree>())
 {
     initSettings();
@@ -158,7 +158,7 @@ void MockSendPlanSegment(ContextPtr query_context)
     connection->sendPlanSegment(connection_timeouts, plan_segment.get(), &settings, &query_context->getClientInfo());
     connection->poll(1000);
     Packet packet = connection->receivePacket();
-    LOG_TRACE(&Poco::Logger::get("MockSendPlanSegment"), "sendPlanSegmentToLocal finish:" + std::to_string(packet.type));
+    LOG_TRACE(getLogger("MockSendPlanSegment"), "sendPlanSegmentToLocal finish:" + std::to_string(packet.type));
     switch (packet.type)
     {
         case Protocol::Server::Exception:

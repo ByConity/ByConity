@@ -92,7 +92,11 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
         return; /// go into children
 
     if (func.name == "or")
+    {
+        if (!data.check_function_type_in_join_on_condition)
+            return;
         throw Exception("JOIN ON does not support OR. Unexpected '" + queryToString(ast) + "'", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     ASOF::Inequality inequality = ASOF::getInequality(func.name);
     if (func.name == "equals" || func.name == "bitEquals" || func.name == "notEquals" || func.name == "bitNotEquals" || inequality != ASOF::Inequality::None)
@@ -101,6 +105,8 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
             throw Exception("Function " + func.name + " takes two arguments, got '" + func.formatForErrorMessage() + "' instead",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
+    else if (!data.check_function_type_in_join_on_condition)
+        return;
     else
         throw Exception("Expected equality or inequality, got '" + queryToString(ast) + "'", ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
 
@@ -149,7 +155,7 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
     {
         data.inequal_conditions.push_back(ast);
     }
-    else
+    else if (data.check_function_type_in_join_on_condition)
     {
         throw Exception(fmt::format("JOIN ON condition {} is not support", queryToString(ast)), ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
     }
@@ -224,7 +230,7 @@ void CollectJoinOnKeysMatcher::analyzeJoinOnConditions(Data & data, ASTTableJoin
         for (const auto & item : columns_for_conditions_map)
             columns_for_join.emplace_back(item.second);
 
-        //LOG_DEBUG(&Poco::Logger::get("CollectJoinOnKeysMatcher"), "columns_for_join: {}", columns_for_join.toString());
+        //LOG_DEBUG(getLogger("CollectJoinOnKeysMatcher"), "columns_for_join: {}", columns_for_join.toString());
         data.analyzed_join.addInequalConditions(data.inequal_conditions, columns_for_join, data.context);
     }
     else

@@ -153,7 +153,7 @@ CnchBGThreadPtr CnchBGThreadsMap::startThread(const StorageID & storage_id)
     {
         // Create new MergeThread but not start it,
         // to prevent daemon_manager send duplicate startMergeThread request
-        auto * log = &Poco::Logger::get("CnchBGThreadsMap");
+        auto log = getLogger("CnchBGThreadsMap");
         LOG_DEBUG(log, "Cancel start MergeThread for table {}, since table on the blacklist.", storage_id.getNameForLogs());
     }
     else
@@ -171,7 +171,7 @@ void CnchBGThreadsMap::tryRemoveThread(const StorageID & storage_id)
     auto t = tryGetThread(storage_id);
     if (!t)
     {
-        LOG_DEBUG(&Poco::Logger::get("CnchBGThreadsMap"), "{} for {} not found", toString(type), storage_id.getNameForLogs());
+        LOG_DEBUG(getLogger("CnchBGThreadsMap"), "{} for {} not found", toString(type), storage_id.getNameForLogs());
         return;
     }
 
@@ -184,7 +184,7 @@ void CnchBGThreadsMap::tryDropThread(const StorageID & storage_id)
     auto t = tryGetThread(storage_id);
     if (!t)
     {
-        LOG_DEBUG(&Poco::Logger::get("CnchBGThreadsMap"), "{} for {} not found", toString(type), storage_id.getNameForLogs());
+        LOG_DEBUG(getLogger("CnchBGThreadsMap"), "{} for {} not found", toString(type), storage_id.getNameForLogs());
         return;
     }
 
@@ -222,7 +222,7 @@ void CnchBGThreadsMap::cleanup()
             if (it->second->error())
             {
                 LOG_WARNING(
-                    &Poco::Logger::get("CnchBGThreadsMap"),
+                    getLogger("CnchBGThreadsMap"),
                     "{} for {} got error, remove it",
                     toString(type),
                     it->second->getStorageID().getNameForLogs());
@@ -279,6 +279,13 @@ void CnchBGThreadsMapArray::shutdown()
     /// `cleaner` must be stopped as well
     if (cleaner)
         cleaner->deactivate();
+}
+
+UInt32 CnchBGThreadsMapArray::getEpoch()
+{
+    if (unlikely(!resource_reporter_task))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Resource reporter is not initialized");
+    return resource_reporter_task->getEpoch();
 }
 
 void CnchBGThreadsMapArray::cleanThread()

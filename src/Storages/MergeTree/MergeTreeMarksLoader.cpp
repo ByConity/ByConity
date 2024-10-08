@@ -156,7 +156,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
             parsed_disk_cache_host = parseAddress(part_host.disk_cache_host_port, 0).first;
 
         LOG_TRACE(
-            &Poco::Logger::get(__func__),
+            getLogger(__func__),
             "Current node host vs disk cache host: {} vs {}",
             parsed_assign_compute_host.has_value() ? removeBracketsIfIpv6(parsed_assign_compute_host.value()) : "",
             parsed_disk_cache_host.has_value() ? removeBracketsIfIpv6(parsed_disk_cache_host.value()) : "");
@@ -171,7 +171,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                     if (local_cache_disk && local_cache_disk->exists(local_cache_path) && settings.read_settings.disk_cache_mode != DiskCacheMode::FORCE_STEAL_DISK_CACHE)
                     {
                         from_disk_cache = true;
-                        LOG_TRACE(&Poco::Logger::get(__func__), "load from local disk cache {}, mrk_path {}", local_cache_disk->getPath(), local_cache_path);
+                        LOG_TRACE(getLogger(__func__), "load from local disk cache {}, mrk_path {}", local_cache_disk->getPath(), local_cache_path);
                         size_t cached_mark_file_size = local_cache_disk->getFileSize(local_cache_path);
                         if (expected_file_size != cached_mark_file_size)
                             throw Exception(
@@ -200,7 +200,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                         auto remote_cache_file = std::make_unique<ReadBufferFromRpcStreamFile>(remote_data_client, mark_file_size);
                         if (remote_cache_file->getFileName().empty())
                         {
-                            LOG_TRACE(&Poco::Logger::get(__func__), "load from remote filesystem mrk_path {} since remote disk cache is empty", mrk_path);
+                            LOG_TRACE(getLogger(__func__), "load from remote filesystem mrk_path {} since remote disk cache is empty", mrk_path);
                             auto buf = disk->readFile(mrk_path, load_mark_read_settings);
                             if (buf->seek(mark_file_offset) != mark_file_offset)
                                 throw Exception(
@@ -210,7 +210,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                         }
 
                         LOG_TRACE(
-                            &Poco::Logger::get(__func__),
+                            getLogger(__func__),
                             "load from remote disk cache mrk_path {}/{}, size = {}",
                             part_host.disk_cache_host_port,
                             remote_cache_file->getFileName(), remote_cache_file->getFileSize());
@@ -230,7 +230,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                 }
             }
 
-            LOG_TRACE(&Poco::Logger::get(__func__), "load from remote filesystem mrk_path {}", mrk_path);
+            LOG_TRACE(getLogger(__func__), "load from remote filesystem mrk_path {}", mrk_path);
             auto buf = disk->readFile(mrk_path, load_mark_read_settings);
             if (buf->seek(mark_file_offset) != mark_file_offset)
                 throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);

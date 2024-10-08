@@ -29,7 +29,7 @@ ICnchBGThread::ICnchBGThread(ContextPtr global_context_, CnchBGThreadType thread
     , thread_type(thread_type_)
     , storage_id(storage_id_)
     , catalog(global_context_->getCnchCatalog())
-    , log(&Poco::Logger::get(storage_id.getNameForLogs() + "(" + toString(thread_type) + ")"))
+    , log(getLogger(storage_id.getNameForLogs() + "(" + toString(thread_type) + ")"))
     , startup_time(time(nullptr))
 {
     switch (thread_type)

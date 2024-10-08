@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
@@ -44,7 +45,7 @@ public:
         , source_part_names(source_part_names_)
         , manipulation_submit_time_ns(manipulation_submit_time_ns_)
         , peak_memory_usage(peak_memory_usage_)
-        , log(&Poco::Logger::get("MergeMutationAction"))
+        , log(getLogger("MergeMutationAction"))
     {
     }
 
@@ -79,7 +80,7 @@ private:
     UInt64 manipulation_submit_time_ns;
     UInt64 peak_memory_usage;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     MutableMergeTreeDataPartsCNCHVector parts;
     DeleteBitmapMetaPtrVector delete_bitmaps;

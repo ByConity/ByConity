@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/StorageElection/StorageElector.h>
 #include <daemon/BaseDaemon.h>
@@ -98,7 +99,7 @@ protected:
 private:
     friend class TSOImpl;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     size_t tso_window;
 

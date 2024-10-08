@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 
 #include <DataStreams/IBlockInputStream.h>
@@ -27,7 +28,7 @@ public:
     {
         children.clear();
         if (stream.use_count() > 1)
-            LOG_WARNING(&Poco::Logger::get("OwningBlockInputStream"), "The BlockInputStream might outlive the buffer!");
+            LOG_WARNING(getLogger("OwningBlockInputStream"), "The BlockInputStream might outlive the buffer!");
         if (stream)
             stream.reset();
         if (own)

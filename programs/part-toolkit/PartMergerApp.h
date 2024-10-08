@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <sstream>
 #include <string>
 #include <Poco/FileChannel.h>
@@ -54,12 +55,12 @@ private:
     /**
      * Print help message for part_merger_tool.
      */
-    inline static void mergerHelp(Poco::Logger * log) { LOG_ERROR(log, PartMergerApp::help_message); }
+    inline static void mergerHelp(LoggerPtr log) { LOG_ERROR(log, PartMergerApp::help_message); }
 
     /**
      * Init HDFS default configuration.
      */
-    void initHDFS(DB::ContextMutablePtr context, Poco::Logger * log);
+    void initHDFS(DB::ContextMutablePtr context, LoggerPtr log);
 
     int main([[maybe_unused]] const std::vector<DB::String> & args) override;
 

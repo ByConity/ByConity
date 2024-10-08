@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
@@ -12,7 +13,6 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Common/Exception.h>
 
-// TODO
 namespace DB
 {
 class StorageCnchPaimon : public shared_ptr_helper<StorageCnchPaimon>, public StorageCnchLakeBase
@@ -21,10 +21,8 @@ class StorageCnchPaimon : public shared_ptr_helper<StorageCnchPaimon>, public St
 
 public:
     std::string getName() const override { return "PaimonCnch"; }
+    bool supportsPrewhere() const override { return false; }
 
-    ASTPtr
-    applyFilter(ASTPtr query_filter, SelectQueryInfo & query_info, ContextPtr query_context, PlanNodeStatisticsPtr storage_statistics)
-        const override;
     std::optional<TableStatistics> getTableStats(const Strings & /*columns*/, ContextPtr /*local_context*/) override
     {
         return std::nullopt;
@@ -48,12 +46,9 @@ protected:
         unsigned num_streams) override;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("StoragePaimonCluster")};
+    LoggerPtr log{getLogger("StoragePaimonCluster")};
 
     PaimonCatalogClientPtr catalog_client;
-
-    // Predicate that can be pushed down to jni side
-    mutable ASTPtr filter;
 };
 }
 

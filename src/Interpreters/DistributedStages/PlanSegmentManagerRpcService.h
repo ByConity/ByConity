@@ -14,6 +14,7 @@
  */
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
@@ -38,7 +39,7 @@ class Context;
 
 class ResourceMonitorTimer : public RepeatedTimerTask {
 public:
-    ResourceMonitorTimer(ContextMutablePtr & global_context_, UInt64 interval_, const std::string& name_, Poco::Logger* log_) :
+    ResourceMonitorTimer(ContextMutablePtr & global_context_, UInt64 interval_, const std::string& name_, LoggerPtr log_) :
         RepeatedTimerTask(global_context_->getSchedulePool(), interval_, name_), resource_monitor(global_context_) {
         log = log_;
     }
@@ -51,7 +52,7 @@ private:
     ResourceMonitor resource_monitor;
     WorkerNodeResourceData cached_resource_data;
     mutable std::mutex resource_data_mutex;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 class PlanSegmentManagerRpcService : public Protos::PlanSegmentManagerService
@@ -59,7 +60,7 @@ class PlanSegmentManagerRpcService : public Protos::PlanSegmentManagerService
 public:
     explicit PlanSegmentManagerRpcService(ContextMutablePtr context_)
         : context(context_)
-        , log(&Poco::Logger::get("PlanSegmentManagerRpcService"))
+        , log(getLogger("PlanSegmentManagerRpcService"))
     {
         report_metrics_timer = std::make_unique<ResourceMonitorTimer>(context, 1000, "ResourceMonitorTimer", log);
         report_metrics_timer->start();
@@ -167,7 +168,7 @@ private:
 
     ContextMutablePtr context;
     std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 REGISTER_SERVICE_IMPL(PlanSegmentManagerRpcService);

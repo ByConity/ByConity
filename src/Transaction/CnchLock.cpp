@@ -47,7 +47,7 @@ public:
         auto client = getTargetServer();
 
         LOG_DEBUG(
-            &Poco::Logger::get("CnchLockManagerClient"),
+            getLogger("CnchLockManagerClient"),
             "try lock {}, target server: {}", lock_info->toDebugString(), (client.has_value() ? (*client)->getRPCAddress() : "local"));
 
         if (!client)
@@ -70,7 +70,7 @@ public:
         if (locked)
         {
             LOG_DEBUG(
-                &Poco::Logger::get("CnchLockManagerClient"),
+                getLogger("CnchLockManagerClient"),
                 "unlock lock {}, target server: {}", lock_info->toDebugString(), (server_client ? server_client->getRPCAddress() : "local"));
 
             if (server_client)
@@ -162,7 +162,7 @@ CnchLockHolder::~CnchLockHolder()
 bool CnchLockHolder::tryLock()
 {
     Stopwatch watch;
-    SCOPE_EXIT({ LOG_DEBUG(&Poco::Logger::get("CnchLock"), "acquire {} locks in {} ms", cnch_locks.size(), watch.elapsedMilliseconds()); });
+    SCOPE_EXIT({ LOG_DEBUG(getLogger("CnchLock"), "acquire {} locks in {} ms", cnch_locks.size(), watch.elapsedMilliseconds()); });
 
     /// Init heartbeat task if needed
     /// We need to start the heartbeat process in advance, otherwise txn may be aborted due to expiration time

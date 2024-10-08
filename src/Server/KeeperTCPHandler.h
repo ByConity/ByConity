@@ -28,6 +28,7 @@
 
 #if USE_NURAFT
 
+#include <Common/Logger.h>
 #include <Poco/Net/TCPServerConnection.h>
 #include <Common/MultiVersion.h>
 #include "IServer.h"
@@ -82,7 +83,7 @@ public:
 
 private:
     IServer & server;
-    Poco::Logger * log;
+    LoggerPtr log;
     ContextPtr global_context;
     std::shared_ptr<KeeperDispatcher> keeper_dispatcher;
     Poco::Timespan operation_timeout;

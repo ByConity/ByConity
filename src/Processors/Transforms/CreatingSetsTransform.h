@@ -1,13 +1,12 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/SizeLimits.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Processors/IAccumulatingTransform.h>
 #include <Common/Stopwatch.h>
-
-#include <Poco/Logger.h>
 
 namespace DB
 {
@@ -52,8 +51,7 @@ private:
     size_t rows_to_transfer = 0;
     size_t bytes_to_transfer = 0;
 
-    using Logger = Poco::Logger;
-    Poco::Logger * log = &Poco::Logger::get("CreatingSetsTransform");
+    LoggerPtr log = getLogger("CreatingSetsTransform");
 
     bool is_initialized = false;
 

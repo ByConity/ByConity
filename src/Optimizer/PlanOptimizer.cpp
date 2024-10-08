@@ -550,7 +550,7 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     total_watch.restart();
     PlanCheck::checkFinalPlan(plan, context);
 
-    context->logOptimizerProfile(&Poco::Logger::get("PlanOptimizer"),
+    context->logOptimizerProfile(getLogger("PlanOptimizer"),
                                 "Optimizer stage run time: ",
                                 "checkFinalPlan",
                                 std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms", true);
@@ -578,6 +578,6 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context, const 
     }
 
     UInt64 elapsed = total_watch.elapsedMilliseconds();
-    LOG_DEBUG(&Poco::Logger::get("PlanOptimizer"), "Total optimizer time: " + std::to_string(elapsed));
+    LOG_DEBUG(getLogger("PlanOptimizer"), "Total optimizer time: " + std::to_string(elapsed));
 }
 }

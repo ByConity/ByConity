@@ -656,7 +656,7 @@ void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {
     if (do_global && !getContext()->getSettingsRef().distributed_perfect_shard)
     {
-        LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables"), "input query-{}", queryToString(query));
+        LOG_DEBUG(getLogger("ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables"), "input query-{}", queryToString(query));
         GlobalSubqueriesVisitor::Data subqueries_data(
             getContext(), subquery_depth, isRemoteStorage(), external_tables, subqueries_for_sets, has_global_subqueries);
         GlobalSubqueriesVisitor(subqueries_data).visit(query);
@@ -789,7 +789,7 @@ void ExpressionAnalyzer::getRootActionsWithOwnBitmapInfo(const ASTPtr & ast, boo
     LogAST log;
     ActionsVisitor::Data visitor_data(getContext(), settings.size_limits_for_set, subquery_depth,
                                    sourceColumns(), std::move(actions), prepared_sets, subqueries_for_sets,
-                                   no_subqueries, false, only_consts, !isRemoteStorage(), getAggregationKeysInfo(), false, own_index_context);
+                                   no_subqueries, false, only_consts, !isRemoteStorage(), getAggregationKeysInfo(), false, own_index_context, metadata_snapshot);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -1302,7 +1302,7 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
     {
         if (analyzed_join->allowParallelHashJoin())
         {
-            LOG_TRACE(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "will use ConcurrentHashJoin");
+            LOG_TRACE(getLogger("SelectQueryExpressionAnalyzer::makeJoin"), "will use ConcurrentHashJoin");
             return std::make_shared<ConcurrentHashJoin>(analyzed_join, context->getSettings().max_threads, context->getSettings().parallel_join_rows_batch_threshold, r_sample_block);
         }
         return std::make_shared<HashJoin>(analyzed_join, r_sample_block);
@@ -1317,10 +1317,10 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
             auto parallel = (context->getSettingsRef().grace_hash_join_left_side_parallel != 0 ? context->getSettingsRef().grace_hash_join_left_side_parallel: context->getSettings().max_threads);
             return std::make_shared<GraceHashJoin>(context, analyzed_join, l_sample_block, r_sample_block, context->getTempDataOnDisk(), parallel, context->getSettingsRef().spill_mode == SpillMode::AUTO, false, context->getSettings().max_threads);
         }  else if (allow_merge_join) {  // fallback into merge join
-            LOG_WARNING(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join is not support, fallback into merge join.");
+            LOG_WARNING(getLogger("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join is not support, fallback into merge join.");
             return {std::make_shared<JoinSwitcher>(analyzed_join, r_sample_block)};
         } else { // fallback into hash join when grace hash and merge join not supported
-            LOG_WARNING(&Poco::Logger::get("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
+            LOG_WARNING(getLogger("SelectQueryExpressionAnalyzer::makeJoin"), "Grace hash join and merge join is not support, fallback into hash join.");
             return {std::make_shared<HashJoin>(analyzed_join, r_sample_block)};
         }
     }
@@ -1965,7 +1965,7 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
             // This is probably not the best way to do it. Should _partition_id even be allowed here?
             if (required_result_columns_not_present.count(column) > 0)
             {
-                LOG_DEBUG(&Poco::Logger::get("SelectQueryExpressionAnalyzer::appendProjectResult"), "Column not present: {}", column);
+                LOG_DEBUG(getLogger("SelectQueryExpressionAnalyzer::appendProjectResult"), "Column not present: {}", column);
                 continue;
             }
             result_columns.emplace_back(column, std::string{});

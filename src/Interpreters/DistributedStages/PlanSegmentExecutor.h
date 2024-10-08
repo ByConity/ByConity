@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <unordered_map>
 #include <utility>
@@ -72,7 +73,7 @@ public:
     std::optional<ExecutionResult> execute();
     BlockIO lazyExecute(bool add_output_processors = false);
 
-    static void registerAllExchangeReceivers(Poco::Logger * log, const QueryPipeline & pipeline, UInt32 register_timeout_ms);
+    static void registerAllExchangeReceivers(LoggerPtr log, const QueryPipeline & pipeline, UInt32 register_timeout_ms);
 
 protected:
     void doExecute();
@@ -87,7 +88,7 @@ private:
     PlanSegment * plan_segment;
     PlanSegmentOutputs plan_segment_outputs;
     ExchangeOptions options;
-    Poco::Logger * logger;
+    LoggerPtr logger;
     RuntimeSegmentsMetrics metrics;
     std::unique_ptr<QueryLogElement> query_log_element;
     SenderMetrics sender_metrics;

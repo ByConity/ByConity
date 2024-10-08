@@ -672,6 +672,9 @@ public:
     mutable String disk_cache_host_port;
     mutable String assign_compute_host_port;
 
+    Int64 remote_fs_read_failed_injection{0};
+    Int64 remote_fs_write_failed_injection{0};
+
 protected:
     friend class MergeTreeMetaBase;
     friend class MergeTreeData;

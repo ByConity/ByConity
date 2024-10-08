@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Columns/IColumn.h>
+#include <Common/Logger.h>
 #include <DataTypes/Serializations/ISerialization.h>
 
 #include "ParquetColumnReader.h"
@@ -48,7 +49,7 @@ private:
     size_t num_values_remaining_in_page = 0;
     bool reading_low_cardinality = false;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     void resetColumn(UInt64 rows_num);
     void resetColumn();

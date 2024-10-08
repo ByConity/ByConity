@@ -61,7 +61,7 @@ CacheDictionary<dictionary_key_type>::CacheDictionary(
             update(unit_to_update);
         })
     , dict_lifetime(dict_lifetime_)
-    , log(&Poco::Logger::get("ExternalDictionaries"))
+    , log(getLogger("ExternalDictionaries"))
     , allow_read_expired_keys(allow_read_expired_keys_)
     , rnd_engine(randomSeed())
 {

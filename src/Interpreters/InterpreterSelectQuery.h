@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 
 #include <Core/QueryProcessingStage.h>
@@ -245,7 +246,7 @@ private:
     BlockInputStreamPtr input;
     std::optional<Pipe> input_pipe;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     StorageMetadataPtr metadata_snapshot;
     bool has_join = false;
     StorageSnapshotPtr storage_snapshot;

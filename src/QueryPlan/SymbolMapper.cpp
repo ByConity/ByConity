@@ -718,7 +718,7 @@ std::shared_ptr<TopNFilteringStep> SymbolMapper::map(const TopNFilteringStep & t
 {
     return std::make_shared<TopNFilteringStep>(
         map(topn_filter.getInputStreams()[0]),
-        SortDescription{topn_filter.getSortDescription()},
+        map(topn_filter.getSortDescription()),
         topn_filter.getSize(),
         topn_filter.getModel(),
         topn_filter.getAlgorithm());

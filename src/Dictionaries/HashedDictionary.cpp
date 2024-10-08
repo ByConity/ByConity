@@ -575,7 +575,7 @@ void HashedDictionary<dictionary_key_type, sparse>::loadData()
                 size_t current_new_size = new_size.exchange(0);
                 if (current_new_size)
                 {
-                    LOG_TRACE(&Poco::Logger::get("HashedDictionary"), "Preallocated {} elements", current_new_size);
+                    LOG_TRACE(getLogger("HashedDictionary"), "Preallocated {} elements", current_new_size);
                     resize(current_new_size);
                 }
             }

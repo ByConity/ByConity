@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <common/logger_useful.h>
@@ -35,10 +36,10 @@ private:
     bthread::Mutex mutex;
     std::unordered_map<KeyType, ElementType> map_data;
     std::unordered_map<KeyType, std::shared_ptr<bthread::ConditionVariable>> cvs;
-    Poco::Logger * log;
+    LoggerPtr log;
 
 public:
-    ConcurrentShardElement() { log = &Poco::Logger::get("ConcurrentShardElement"); }
+    ConcurrentShardElement() { log = getLogger("ConcurrentShardElement"); }
 
     bool empty()
     {

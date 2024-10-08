@@ -6,7 +6,7 @@ namespace postgres
 
 Connection::Connection(const ConnectionInfo & connection_info_, bool replication_, size_t num_tries_)
     : connection_info(connection_info_), replication(replication_), num_tries(num_tries_)
-    , log(&Poco::Logger::get("PostgreSQLReplicaConnection"))
+    , log(getLogger("PostgreSQLReplicaConnection"))
 {
     if (replication)
     {
@@ -63,7 +63,7 @@ void Connection::updateConnection()
     connection = std::make_unique<pqxx::connection>(connection_info.first);
     if (replication)
         connection->set_variable("default_transaction_isolation", "'repeatable read'");
-    LOG_DEBUG(&Poco::Logger::get("PostgreSQLConnection"), "New connection to {}", connection_info.second);
+    LOG_DEBUG(getLogger("PostgreSQLConnection"), "New connection to {}", connection_info.second);
 }
 
 void Connection::connect()

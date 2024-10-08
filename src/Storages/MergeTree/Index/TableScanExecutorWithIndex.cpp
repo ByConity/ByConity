@@ -16,7 +16,7 @@ TableScanExecutorWithIndex::TableScanExecutorWithIndex(TableScanStep & step, Con
 , merge_tree_reader(merge_tree_data)
 , select_query_info(step.getQueryInfo())
 , context(std::move(context_))
-, log(&Poco::Logger::get("TableScanExecutorWithIndex"))
+, log(getLogger("TableScanExecutorWithIndex"))
 {
     input_stream = step.getOutputStream();
     query_required_columns = step.getRequiredColumns();

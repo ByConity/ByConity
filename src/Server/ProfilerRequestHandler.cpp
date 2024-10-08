@@ -62,7 +62,7 @@ void ProfilerRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
 {
    
     const auto & uri = request.getURI();
-    LOG_INFO(&Poco::Logger::get("ProfilerHttp"), "fetching {}", uri);
+    LOG_INFO(getLogger("ProfilerHttp"), "fetching {}", uri);
 
     std::string resource_name, content_type;
     extractResourceAndType(uri, resource_name, content_type);
@@ -80,7 +80,7 @@ void ProfilerRequestHandler::handleRequest(HTTPServerRequest & request, HTTPServ
         response.setStatusAndReason(Poco::Net::HTTPResponse::HTTP_OK);
     *response.send() << content;
 
-    LOG_INFO(&Poco::Logger::get("ProfilerHttp"), "return {}, type {}", resource_name, content_type);
+    LOG_INFO(getLogger("ProfilerHttp"), "return {}, type {}", resource_name, content_type);
 }
 
 }

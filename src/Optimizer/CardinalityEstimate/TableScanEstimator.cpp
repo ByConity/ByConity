@@ -100,7 +100,7 @@ std::optional<PlanNodeStatisticsPtr> TableScanEstimator::estimate(
     }
     catch(...)
     {
-        auto * logger = &Poco::Logger::get("TableScanEstimator");
+        auto logger = getLogger("TableScanEstimator");
         tryLogCurrentException(logger);
         return std::nullopt;
     }

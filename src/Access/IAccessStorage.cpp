@@ -538,12 +538,12 @@ UUID IAccessStorage::generateRandomID()
 }
 
 
-Poco::Logger * IAccessStorage::getLogger() const
+LoggerPtr IAccessStorage::getLogger() const
 {
-    Poco::Logger * ptr = log.load();
-    if (!ptr)
-        log.store(ptr = &Poco::Logger::get("Access(" + storage_name + ")"), std::memory_order_relaxed);
-    return ptr;
+    callOnce(log_initialized, [&] {
+        log = ::getLogger("Access(" + storage_name + ")");
+    });
+    return log;
 }
 
 

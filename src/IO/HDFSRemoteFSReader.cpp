@@ -28,7 +28,7 @@ namespace ErrorCodes {
 
 static void ReadBufferFromHdfsCallBack(const hdfsEvent & event)
 {
-    LOG_TRACE(&Poco::Logger::get("ReadBufferFromHDFS"), fmt::format("get event {} with value {}",
+    LOG_TRACE(getLogger("ReadBufferFromHDFS"), fmt::format("get event {} with value {}",
         event.eventType, event.value));
     switch (event.eventType)
     {

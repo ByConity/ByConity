@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage.h>
@@ -60,7 +61,7 @@ private:
     StorageMetadataPtr metadata_snapshot;
     BlockOutputStreamPtr output;
     ReplicatedMergeTreeBlockOutputStream * replicated_output = nullptr;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     ASTPtr query_ptr;
     Stopwatch main_watch;

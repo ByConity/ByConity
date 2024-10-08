@@ -54,6 +54,7 @@ public:
     String operator() (const AggregateFunctionStateData & x) const;
     String operator() (const BitMap64 & x) const;
     String operator() (const Object & x) const;
+    String operator() (const JsonbField & x) const;
 };
 
 class DecimalFieldVisitorToString : public FieldVisitorToString

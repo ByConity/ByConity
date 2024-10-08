@@ -27,6 +27,7 @@ struct LocalGroupByTarget
     AggregateDescriptions aggs;
     Names keys;
     int join_layer; // how many join is influenced.
+    bool push_through_final_projection = false;
 };
 
 using LocalGroupByTargetMap = std::unordered_multimap<PlanNodeId, LocalGroupByTarget>;

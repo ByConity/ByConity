@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Poco/Event.h>
 #include <common/logger_useful.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -33,7 +34,7 @@ public:
 private:
     StorageReplicatedMergeTree & storage;
     String log_name;
-    Poco::Logger * log;
+    LoggerPtr log;
     std::atomic<bool> need_stop {false};
 
     // We need it besides `storage.is_readonly`, because `shutdown()` may be called many times, that way `storage.is_readonly` will not change.

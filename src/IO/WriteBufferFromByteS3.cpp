@@ -62,7 +62,7 @@ WriteBufferFromByteS3::WriteBufferFromByteS3(
     , temporary_buffer(nullptr)
     , last_part_size(0)
     , total_write_size(0)
-    , log(&Poco::Logger::get("WriteBufferFromByteS3"))
+    , log(getLogger("WriteBufferFromByteS3"))
 {
     if (max_single_put_threshold > min_segment_size)
     {

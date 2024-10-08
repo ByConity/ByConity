@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
 #include <Optimizer/IntermediateResult/CacheParam.h>
@@ -63,7 +64,7 @@ private:
     std::unordered_set<RuntimeFilterId> ignored_runtime_filters;
     std::unordered_set<RuntimeFilterId> included_runtime_filters;
     Block cache_order;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

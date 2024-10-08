@@ -108,7 +108,7 @@ namespace
         {
             auto context = getContext();
             Stopwatch watch;
-            auto * logger = &Poco::Logger::get("CreateStats");
+            auto logger = getLogger("CreateStats");
             while (counter < collect_targets.size())
             {
                 auto collect_target = collect_targets.at(counter++);

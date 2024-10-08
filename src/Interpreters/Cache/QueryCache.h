@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/CacheBase.h>
 #include <Core/Block.h>
 #include <Parsers/IAST_fwd.h>
@@ -213,7 +214,7 @@ private:
 
 using QueryCachePtr = std::shared_ptr<QueryCache>;
 
-void logUsedStorageIDs(Poco::Logger * log, const std::set<StorageID> & storage_ids);
+void logUsedStorageIDs(LoggerPtr log, const std::set<StorageID> & storage_ids);
 
 struct QueryCacheContext
 {

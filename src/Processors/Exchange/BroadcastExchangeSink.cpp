@@ -32,7 +32,7 @@ BroadcastExchangeSink::BroadcastExchangeSink(Block header_, BroadcastSenderPtrs 
     , senders(std::move(senders_))
     , options(std::move(options_))
     , buffer_chunk(getPort().getHeader(), options.send_threshold_in_bytes, options.send_threshold_in_row_num)
-    , logger(&Poco::Logger::get("BroadcastExchangeSink"))
+    , logger(getLogger("BroadcastExchangeSink"))
 {
     if (options.force_use_buffer)
         buffer_chunk.resetBuffer();

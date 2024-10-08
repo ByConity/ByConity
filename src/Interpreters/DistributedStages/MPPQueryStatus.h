@@ -33,9 +33,9 @@ struct QueryError
     UInt16 exchange_status_port;
     Int32 segment_id;
     // TODO
-    
+
     // UInt32 instance_id;
-    // UInt32 retry_id;
+    // UInt32 attempt_id;
 };
 
 constexpr bool isAmbiguosError(int error_code)

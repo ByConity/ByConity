@@ -206,7 +206,11 @@ std::vector<RulePtr> Rules::pushDownTopNRules()
 
 std::vector<RulePtr> Rules::createTopNFilteringRules()
 {
-    return {std::make_shared<CreateTopNFilteringForAggregating>()};
+    return {
+        std::make_shared<CreateTopNFilteringForAggregating>(),
+        std::make_shared<CreateTopNFilteringForDistinct>(),
+        std::make_shared<CreateTopNFilteringForAggregatingLimit>(),
+        std::make_shared<CreateTopNFilteringForDistinctLimit>()};
 }
 
 std::vector<RulePtr> Rules::pushDownTopNFilteringRules()

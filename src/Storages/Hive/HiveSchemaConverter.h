@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include "DataTypes/IDataType.h"
 #include "Interpreters/Context_fwd.h"
 #include "Parsers/ASTCreateQuery.h"
@@ -30,7 +31,7 @@ public:
 
 private:
     std::shared_ptr<Apache::Hadoop::Hive::Table> hive_table;
-    Poco::Logger * log{&Poco::Logger::get("HiveSchemaConverter")};
+    LoggerPtr log {getLogger("HiveSchemaConverter")};
 };
 
 

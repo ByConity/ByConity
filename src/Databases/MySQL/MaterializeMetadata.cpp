@@ -35,7 +35,7 @@ static std::unordered_map<String, String> fetchTablesCreateQuery(
     {
         if (!materialized_tables_list.contains(fetch_table_name))
         {
-            LOG_INFO(&Poco::Logger::get("fetchTablesCreateQuery"), "Skip table " + fetch_table_name + " as it is not in materialized_table_list");
+            LOG_INFO(getLogger("fetchTablesCreateQuery"), "Skip table " + fetch_table_name + " as it is not in materialized_table_list");
             continue;
         }
 
@@ -76,7 +76,7 @@ std::vector<String> MaterializeMetadata::fetchTablesInDB(const mysqlxx::PoolWith
     }
 
     for (const auto & table : tables_in_db)
-        LOG_INFO(&Poco::Logger::get("fetchTablesInDB"), "Fetched table from MySQL : " + database + "." + table);
+        LOG_INFO(getLogger("fetchTablesInDB"), "Fetched table from MySQL : " + database + "." + table);
 
     return tables_in_db;
 }
@@ -298,7 +298,7 @@ void MaterializeMetadata::getTablesWithCreateQueryFromMySql(mysqlxx::PoolWithFai
         }
         catch (...)
         {
-            tryLogCurrentException(&Poco::Logger::get("GetTablesFromMysql"),
+            tryLogCurrentException(getLogger("GetTablesFromMysql"),
                                    "Failed to Unlock tables while getting tables list from mysql " + database);
         }
     });

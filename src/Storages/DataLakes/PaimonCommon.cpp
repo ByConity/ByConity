@@ -227,7 +227,20 @@ Poco::JSON::Object PaimonS3CatalogClient::buildCatalogParams()
     json.set(paimon_utils::PARAMS_KEY_S3_ENDPOINT, storage_settings->endpoint.value);
     json.set(paimon_utils::PARAMS_KEY_S3_ACCESS_KEY, storage_settings->ak_id.value);
     json.set(paimon_utils::PARAMS_KEY_S3_SECRET_KEY, storage_settings->ak_secret.value);
+    json.set(paimon_utils::PARAMS_KEY_S3_PATH_STYLE_ACCESS, storage_settings->s3_use_virtual_hosted_style.value);
     json.set(paimon_utils::PARAMS_KEY_WAREHOUSE, warehouse);
+
+    if (!storage_settings->s3_extra_options.value.empty())
+    {
+        std::vector<String> s3_extra_option_pairs = CnchHiveSettings::splitStr(storage_settings->s3_extra_options.value, ",");
+        for (const auto & pair : s3_extra_option_pairs)
+        {
+            auto kv = CnchHiveSettings::splitStr(pair, "=");
+            if (kv.size() != 2)
+                throw Exception("Invalid s3 extra option: " + pair, ErrorCodes::UNKNOWN_EXCEPTION);
+            json.set(kv[0], kv[1]);
+        }
+    }
     return json;
 }
 

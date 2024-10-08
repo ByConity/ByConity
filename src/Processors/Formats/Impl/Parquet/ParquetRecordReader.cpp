@@ -222,7 +222,7 @@ ParquetRecordReader::ParquetRecordReader(
     , prewhere_info(std::move(prewhere_info_))
     , max_block_size(format_settings.parquet.max_block_size)
     , row_groups_indices(std::move(row_groups_indices_))
-    , log(&Poco::Logger::get("ParquetRecordReader"))
+    , log(getLogger("ParquetRecordReader"))
 {
     /// TODO: implement our own Schema Manifest
     std::ignore = parquet::arrow::SchemaManifest::Make(

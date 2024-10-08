@@ -20,6 +20,39 @@ namespace
             res = context->getSettingsRef().max_block_size / 10;
         return res;
     }
+
+    // create a TopNFiltering node below cur_node, return true if the creation is successful
+    bool createTopNFilteringForAggLike(
+        PlanNodePtr cur_node, const NameSet & agg_keys, SortDescription sort_desc, UInt64 limit_value, ContextMutablePtr context)
+    {
+        // if topN sort column is from an aggregate function, fail to rewrite
+        for (const auto & sort_column_desc : sort_desc)
+            if (!agg_keys.count(sort_column_desc.column_name))
+                return false;
+
+        // add other keys to sort keys to filter more data
+        for (const auto & agg_key : agg_keys)
+        {
+            if (std::find_if(
+                    sort_desc.begin(),
+                    sort_desc.end(),
+                    [&](const auto & sort_column_desc) { return sort_column_desc.column_name == agg_key; })
+                == sort_desc.end())
+                sort_desc.emplace_back(agg_key, 1, 1);
+        }
+
+        if (sort_desc.empty())
+            return false;
+
+        const auto & child_node = cur_node->getChildren()[0];
+
+        auto topn_filter_step
+            = std::make_shared<TopNFilteringStep>(child_node->getStep()->getOutputStream(), sort_desc, limit_value, TopNModel::DENSE_RANK);
+        auto topn_filter_node = PlanNodeBase::createPlanNode(context->nextNodeId(), topn_filter_step, PlanNodes{child_node});
+
+        cur_node->replaceChildren(PlanNodes{topn_filter_node});
+        return true;
+    }
 };
 
 ConstRefPatternPtr CreateTopNFilteringForAggregating::getPattern() const
@@ -36,18 +69,19 @@ ConstRefPatternPtr CreateTopNFilteringForAggregating::getPattern() const
 TransformResult CreateTopNFilteringForAggregating::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
     const auto & topn_step = dynamic_cast<const SortingStep &>(*node->getStep());
+    if (topn_step.hasPreparedParam())
+        return {};
 
     if (topn_step.getLimitValue() > getMaxRowsToUseTopnFiltering(context.context))
         return {};
 
-    if (topn_step.hasPreparedParam())
-        return {};
-    auto & aggregate_node = node->getChildren()[0];
-    const auto & aggregate_step = dynamic_cast<const AggregatingStep &>(*aggregate_node->getStep());
+    auto & agg_like_node = node->getChildren()[0];
+    const auto & agg_like_step = dynamic_cast<const AggregatingStep &>(*agg_like_node->getStep());
 
-    NameSet agg_keys{aggregate_step.getKeys().begin(), aggregate_step.getKeys().end()};
+    NameSet agg_keys{agg_like_step.getKeys().begin(), agg_like_step.getKeys().end()};
 
-    for (const auto & set_param : aggregate_step.getGroupingSetsParams())
+    // for grouping sets, use the intersection of keys
+    for (const auto & set_param : agg_like_step.getGroupingSetsParams())
     {
         for (auto it = agg_keys.begin(); it != agg_keys.end();)
         {
@@ -58,21 +92,110 @@ TransformResult CreateTopNFilteringForAggregating::transformImpl(PlanNodePtr nod
         }
     }
 
-    // if topN sort column is from an aggregate function, fail to rewrite
-    for (const auto & sort_column_desc : topn_step.getSortDescription())
-        if (!agg_keys.count(sort_column_desc.column_name))
-            return {};
+    if (!createTopNFilteringForAggLike(agg_like_node, agg_keys, topn_step.getSortDescription(), topn_step.getLimitValue(), context.context))
+        return {};
 
-    const auto & aggregate_child_node = aggregate_node->getChildren()[0];
+    return TransformResult{node};
+}
 
-    auto topn_filter_step = std::make_shared<TopNFilteringStep>(
-        aggregate_child_node->getStep()->getOutputStream(),
-        topn_step.getSortDescription(),
-        topn_step.getLimitValue(),
-        TopNModel::DENSE_RANK);
-    auto topn_filter_node = PlanNodeBase::createPlanNode(context.context->nextNodeId(), topn_filter_step, PlanNodes{aggregate_child_node});
+ConstRefPatternPtr CreateTopNFilteringForDistinct::getPattern() const
+{
+    static auto pattern = Patterns::topN()
+        .withSingle(Patterns::distinct().withSingle(Patterns::any().matching(
+            [](const QueryPlanStepPtr & step, auto &) { return step->getType() != IQueryPlanStep::Type::TopNFiltering; })))
+        .result();
+    return pattern;
+}
 
-    aggregate_node->replaceChildren(PlanNodes{topn_filter_node});
+TransformResult CreateTopNFilteringForDistinct::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    const auto & topn_step = dynamic_cast<const SortingStep &>(*node->getStep());
+    if (topn_step.hasPreparedParam())
+        return {};
+
+    if (topn_step.getLimitValue() > getMaxRowsToUseTopnFiltering(context.context))
+        return {};
+
+    auto & agg_like_node = node->getChildren()[0];
+    const auto & agg_like_step = dynamic_cast<const DistinctStep &>(*agg_like_node->getStep());
+
+    NameSet agg_keys{agg_like_step.getColumns().begin(), agg_like_step.getColumns().end()};
+
+    if (!createTopNFilteringForAggLike(agg_like_node, agg_keys, topn_step.getSortDescription(), topn_step.getLimitValue(), context.context))
+        return {};
+
+    return TransformResult{node};
+}
+
+ConstRefPatternPtr CreateTopNFilteringForAggregatingLimit::getPattern() const
+{
+    // TopN -> Aggregating -> !TopNFiltering
+    // by this pattern, we also assume GROUP WITH TOTALS is not matched
+    static auto pattern = Patterns::limit()
+        .withSingle(Patterns::aggregating().withSingle(Patterns::any().matching(
+            [](const QueryPlanStepPtr & step, auto &) { return step->getType() != IQueryPlanStep::Type::TopNFiltering; })))
+        .result();
+    return pattern;
+}
+
+TransformResult CreateTopNFilteringForAggregatingLimit::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    const auto & limit_step = dynamic_cast<const LimitStep &>(*node->getStep());
+    if (limit_step.hasPreparedParam())
+        return {};
+
+    if (limit_step.getLimitValue() > getMaxRowsToUseTopnFiltering(context.context))
+        return {};
+
+    auto & agg_like_node = node->getChildren()[0];
+    const auto & agg_like_step = dynamic_cast<const AggregatingStep &>(*agg_like_node->getStep());
+
+    NameSet agg_keys{agg_like_step.getKeys().begin(), agg_like_step.getKeys().end()};
+
+    // for grouping sets, use the intersection of keys
+    for (const auto & set_param : agg_like_step.getGroupingSetsParams())
+    {
+        for (auto it = agg_keys.begin(); it != agg_keys.end();)
+        {
+            if (std::find(set_param.used_key_names.begin(), set_param.used_key_names.end(), *it) == set_param.used_key_names.end())
+                it = agg_keys.erase(it);
+            else
+                ++it;
+        }
+    }
+
+    if (!createTopNFilteringForAggLike(agg_like_node, agg_keys, SortDescription(), limit_step.getLimitValue(), context.context))
+        return {};
+
+    return TransformResult{node};
+}
+
+ConstRefPatternPtr CreateTopNFilteringForDistinctLimit::getPattern() const
+{
+    static auto pattern = Patterns::limit()
+        .withSingle(Patterns::distinct().withSingle(Patterns::any().matching(
+            [](const QueryPlanStepPtr & step, auto &) { return step->getType() != IQueryPlanStep::Type::TopNFiltering; })))
+        .result();
+    return pattern;
+}
+
+TransformResult CreateTopNFilteringForDistinctLimit::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    const auto & limit_step = dynamic_cast<const LimitStep &>(*node->getStep());
+    if (limit_step.hasPreparedParam())
+        return {};
+
+    if (limit_step.getLimitValue() > getMaxRowsToUseTopnFiltering(context.context))
+        return {};
+
+    auto & agg_like_node = node->getChildren()[0];
+    const auto & agg_like_step = dynamic_cast<const DistinctStep &>(*agg_like_node->getStep());
+
+    NameSet agg_keys{agg_like_step.getColumns().begin(), agg_like_step.getColumns().end()};
+
+    if (!createTopNFilteringForAggLike(agg_like_node, agg_keys, SortDescription(), limit_step.getLimitValue(), context.context))
+        return {};
+
     return TransformResult{node};
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
+#include <Common/Logger.h>
 #include <Common/config.h>
 #endif
 
@@ -44,7 +45,7 @@ private:
 
     IServer & iserver;
     const Poco::Net::SocketAddress address_to_listen;
-    Poco::Logger * log;
+    LoggerPtr log;
     GRPCService grpc_service;
     std::unique_ptr<grpc::Server> grpc_server;
     std::unique_ptr<grpc::ServerCompletionQueue> queue;

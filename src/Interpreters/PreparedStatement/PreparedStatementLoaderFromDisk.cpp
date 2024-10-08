@@ -51,7 +51,7 @@ namespace
 }
 
 PreparedStatementLoaderFromDisk::PreparedStatementLoaderFromDisk(const String & dir_path_)
-    : dir_path{makeDirectoryPathCanonical(dir_path_)}, log{&Poco::Logger::get("PreparedStatementLoaderFromDisk")}
+    : dir_path{makeDirectoryPathCanonical(dir_path_)}, log{getLogger("PreparedStatementLoaderFromDisk")}
 {
     createDirectory();
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstddef>
 #include <memory>
 #include <DataStreams/RemoteBlockInputStream.h>
@@ -32,7 +33,7 @@ public:
 private:
     std::shared_ptr<DistributedDataClient> client;
     size_t current_file_offset{0};
-    Poco::Logger * log = &Poco::Logger::get("ReadBufferFromRpcStreamFile");
+    LoggerPtr log = getLogger("ReadBufferFromRpcStreamFile");
 };
 
 }

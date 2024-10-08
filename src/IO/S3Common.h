@@ -18,6 +18,7 @@
 #    include <aws/s3/model/HeadObjectResult.h>
 #    include <Poco/URI.h>
 #    include <Common/HTTPHeaderEntries.h>
+#    include <Common/Logger.h>
 #    include <Common/ThreadPool.h>
 #    include <common/types.h>
 namespace Aws::S3
@@ -293,7 +294,7 @@ public:
 private:
     void lazyRemove(const std::optional<String> & key_);
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 
     size_t batch_clean_size;
     std::function<bool(const S3::S3Util &, const String &)> filter;
@@ -335,7 +336,7 @@ struct AuthSettings
 };
 
 /// return whether the exception worth retry or not
-bool processReadException(Exception & e, Poco::Logger * log, const String & bucket, const String & key, size_t read_offset, size_t attempt);
+bool processReadException(Exception & e, LoggerPtr log, const String & bucket, const String & key, size_t read_offset, size_t attempt);
 
 void resetSessionIfNeeded(bool read_all_range_successfully, std::optional<Aws::S3::Model::GetObjectResult> & read_result);
 

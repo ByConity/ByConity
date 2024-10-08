@@ -104,6 +104,8 @@ public:
         return res;
     }
 
+    UInt32 getEpoch();
+
     void cleanThread();
 
     void startResourceReport();

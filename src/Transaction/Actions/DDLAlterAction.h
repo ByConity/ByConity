@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MutationCommands.h>
@@ -37,7 +38,7 @@ class DDLAlterAction : public IAction
 public:
     DDLAlterAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, StoragePtr table_, const Settings & query_settings_, const String & query_id_)
         : IAction(query_context_, txn_id_),
-        log(&Poco::Logger::get("AlterAction")),
+        log(getLogger("AlterAction")),
         table(std::move(table_)),
         query_settings(query_settings_),
         params{table->getStorageID(), "fake_statement", false, ""},
@@ -47,7 +48,7 @@ public:
 
     DDLAlterAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, AlterDatabaseActionParams params_, const Settings & query_settings_)
         : IAction(query_context_, txn_id_),
-        log(&Poco::Logger::get("AlterAction")),
+        log(getLogger("AlterAction")),
         query_settings(query_settings_),
         params(std::move(params_))
     {
@@ -74,7 +75,7 @@ private:
     // return if the DDL will change table schema.
     bool changeSchema() const;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     const StoragePtr table;
 
     String old_schema;

@@ -20,7 +20,7 @@ namespace Mgr
     {
         //TODO(renming):: add more implementation
         auto key_mgr_type = configPrefix() + ".type";
-        auto * log = &Poco::Logger::get("ExternalCatalogMgr");
+        auto log = getLogger("ExternalCatalogMgr");
         if (!conf.has(key_mgr_type))
         {
             throw Exception(fmt::format("No {} in config", key_mgr_type), ErrorCodes::BAD_ARGUMENTS);

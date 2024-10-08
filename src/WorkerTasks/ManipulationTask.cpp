@@ -58,7 +58,7 @@ void ManipulationTask::execute()
 
 void executeManipulationTask(ManipulationTaskPtr task, MergeTreeMutableDataPartsVector all_parts)
 {
-    auto * log = &Poco::Logger::get(__func__);
+    auto log = getLogger(__func__);
 
     try
     {

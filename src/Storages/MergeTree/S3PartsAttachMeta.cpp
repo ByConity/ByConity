@@ -36,7 +36,7 @@ S3PartsLazyCleaner::S3PartsLazyCleaner(
     const std::optional<S3ObjectMetadata::PartGeneratorID> & generator_id_,
     size_t max_threads_,
     size_t batch_clean_size_)
-    : logger(&Poco::Logger::get("S3PartsLazyCleaner"))
+    : logger(getLogger("S3PartsLazyCleaner"))
     , data_key_prefix(data_key_prefix_)
     , generator_id(generator_id_)
     , lazy_cleaner(nullptr)

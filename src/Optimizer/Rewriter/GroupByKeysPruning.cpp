@@ -92,7 +92,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
         std::string str;
         for (const auto & name : simplified_agg_keys)
             str += name + ",";
-        LOG_INFO(&Poco::Logger::get("DataDependency"), "after GroupByKeysPruning by functional dependecy, new_agg_keys -- " + str + ". note we don't remove unused keys, but just add it to keys_not_hashed");
+        LOG_INFO(getLogger("DataDependency"), "after GroupByKeysPruning by functional dependecy, new_agg_keys -- " + str + ". note we don't remove unused keys, but just add it to keys_not_hashed");
     }
 
     auto node_ptr = node.shared_from_this();
@@ -137,7 +137,7 @@ PlanAndDataDependencyWithConstants GroupByKeysPruning::Rewriter::visitAggregatin
             std::string str;
             for (const auto & name : new_agg_keys)
                 str += name + ",";
-            LOG_INFO(&Poco::Logger::get("DataDependency"), "after GroupByKeysPruning by constants, new_agg_keys -- " + str);
+            LOG_INFO(getLogger("DataDependency"), "after GroupByKeysPruning by constants, new_agg_keys -- " + str);
         }
     }
 

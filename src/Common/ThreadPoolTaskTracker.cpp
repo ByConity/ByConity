@@ -138,7 +138,7 @@ void TaskTracker::waitTilInflightShrink()
         return;
 
     if (futures.size() >= max_tasks_inflight)
-        LOG_DEBUG(&Poco::Logger::get("TaskTracker"), "have to wait some tasks finish, in queue {}, limit {}", futures.size(), max_tasks_inflight);
+        LOG_DEBUG(getLogger("TaskTracker"), "have to wait some tasks finish, in queue {}, limit {}", futures.size(), max_tasks_inflight);
 
     Stopwatch watch;
 

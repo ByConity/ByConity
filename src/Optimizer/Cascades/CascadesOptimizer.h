@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Optimizer/Cascades/GroupExpression.h>
 #include <Optimizer/Cascades/Memo.h>
 #include <Optimizer/CostModel/CostModel.h>
@@ -73,7 +74,7 @@ public:
     TaskStack & getTaskStack() { return task_stack; }
     Memo & getMemo() { return memo; }
     size_t getWorkerSize() const { return worker_size; }
-    Poco::Logger * getLog() const { return log; }
+    LoggerPtr getLog() const { return log; }
     bool isSupportFilter() const { return support_filter; }
     CTEInfo & getCTEInfo() { return cte_info; }
     CTEDefPropertyRequirements & getCTEDefPropertyRequirements() { return cte_property_requirements; }
@@ -121,7 +122,7 @@ private:
     };
     std::unordered_map<RuleType, std::unordered_map<String, Metric>> rule_trace;
     
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 class OptimizationContext

@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <Core/UUID.h>
 #include <Interpreters/Context.h>
 #include <Storages/Hive/Metastore/IMetaClient.h>
@@ -38,7 +39,7 @@ public:
 
 private:
     std::string catalog_name;
-    Poco::Logger * log = &Poco::Logger::get("MockExternalCatalog");
+    LoggerPtr log = getLogger("MockExternalCatalog");
 };
 
 }

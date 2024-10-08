@@ -58,7 +58,7 @@ ExchangeSource::ExchangeSource(
     , options(options_)
     , totals_source(std::move(totals_source_))
     , extremes_source(std::move(extremes_source_))
-    , logger(&Poco::Logger::get("ExchangeSource"))
+    , logger(getLogger("ExchangeSource"))
 {
 }
 
@@ -74,7 +74,7 @@ ExchangeSource::ExchangeSource(
     , options(options_)
     , totals_source(std::move(totals_source_))
     , extremes_source(std::move(extremes_source_))
-    , logger(&Poco::Logger::get("ExchangeSource"))
+    , logger(getLogger("ExchangeSource"))
 {
 }
 

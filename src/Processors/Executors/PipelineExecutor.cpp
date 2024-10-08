@@ -518,7 +518,7 @@ void collectProfileMetricRequest(
 }
 
 void reportToCoordinator(
-    Poco::Logger * log,
+    LoggerPtr log,
     const AddressInfo & coordinator_address,
     const AddressInfo & current_address,
     const IProcessor * processor,
@@ -546,7 +546,7 @@ void reportToCoordinator(
 }
 
 void reportToCoordinator(
-    Poco::Logger * log,
+    LoggerPtr log,
     const AddressInfo & coordinator_address,
     const AddressInfo & current_address,
     const Processors & processors,

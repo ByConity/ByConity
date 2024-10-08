@@ -29,7 +29,7 @@ WorkerGroupStatus::~WorkerGroupStatus()
         for (const auto & half_open_id : half_open_workers)
         {
             global_context->getWorkerStatusManager()->restoreWorkerNode(half_open_id);
-            LOG_DEBUG(&Poco::Logger::get("WorkerStatusManager"), "restore half open worker {}", half_open_id.ToString());
+            LOG_DEBUG(getLogger("WorkerStatusManager"), "restore half open worker {}", half_open_id.ToString());
         }
     }
 }
@@ -62,7 +62,7 @@ void WorkerGroupStatus::calculateStatus()
         status = WorkerGroupHealthStatus::Critical;
 
     LOG_DEBUG(
-        &Poco::Logger::get("WorkerStatusManager"),
+        getLogger("WorkerStatusManager"),
         "allWorkerSize: {}  healthWorkerSize: {}  unhealthWorkerSize: {} \
     HeavyLoadSize: {} onlySourceSize: {} unknowWorkerSize: {} notConnectedWorkerSize: {} halfOpenChecking: {}  halfOpen: {}",
         total_worker_size,
@@ -84,7 +84,7 @@ std::optional<std::vector<size_t>> WorkerGroupStatus::selectHealthNode(const Hos
 }
 
 WorkerStatusManager::WorkerStatusManager(ContextWeakMutablePtr context_)
-    : WithContext(context_), log(&Poco::Logger::get("WorkerStatusManager"))
+    : WithContext(context_), log(getLogger("WorkerStatusManager"))
 {
     schedule_pool.emplace(1, CurrentMetrics::BackgroundRMHeartbeatSchedulePoolTask, "RMHeart");
     startHeartbeat(*schedule_pool);
@@ -155,16 +155,17 @@ void WorkerStatusManager::updateWorkerNode(const Protos::WorkerNodeResourceData 
     bool need_callback = true;
     global_extra_workers_status.updateEmplaceIfNotExist(
         id,
-        [new_status, &old_status, id, this, &now, &worker_status, &need_callback](WorkerStatusExtra & val) {
+        [new_status, &old_status, id, this, &now, &worker_status, &need_callback, &source](WorkerStatusExtra & val) {
             // Worker has restarted. We must put it ahead of status update.
-            if (worker_status->register_time > val.worker_status->register_time)
+            // TODO(wangtao.vip): support source from worker.
+            if (worker_status->register_time > val.worker_status->register_time && source == UpdateSource::ComeFromRM)
             {
                 getContext()->getCnchWorkerClientPools().getWorker(worker_status->host_ports, /*refresh=*/true);
                 RpcChannelPool::getInstance().getClient(
                     worker_status->host_ports.getRPCAddress(), BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, /*refresh=*/true);
-                getContext()->getSegmentScheduler()->workerRestarted(id, worker_status->host_ports);
+                getContext()->getSegmentScheduler()->workerRestarted(id, worker_status->host_ports, val.worker_status->register_time);
             }
-            if (val.worker_status->last_status_create_time < worker_status->last_status_create_time)
+            if (worker_status->last_status_create_time > val.worker_status->last_status_create_time)
             {
                 old_status = val.worker_status->getStatus();
                 val.worker_status = worker_status;
@@ -289,6 +290,10 @@ std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(con
         nullptr, **worker_id_vec, vw_name, wg_name, [](const String &, const String &, const WorkerId & id) { return id; }, false);
 }
 
+std::optional<WorkerStatusExtra> WorkerStatusManager::getWorkerStatus(const WorkerId & worker_id)
+{
+    return global_extra_workers_status.get(worker_id);
+}
 
 void WorkerStatusManager::updateConfig(const ASConfiguration & as_config)
 {

@@ -46,7 +46,7 @@ ODBCBlockOutputStream::ODBCBlockOutputStream(nanodbc::ConnectionHolderPtr connec
                                              const Block & sample_block_,
                                              ContextPtr local_context_,
                                              IdentifierQuotingStyle quoting_)
-    : log(&Poco::Logger::get("ODBCBlockOutputStream"))
+    : log(getLogger("ODBCBlockOutputStream"))
     , connection_holder(std::move(connection_holder_))
     , db_name(remote_database_name_)
     , table_name(remote_table_name_)

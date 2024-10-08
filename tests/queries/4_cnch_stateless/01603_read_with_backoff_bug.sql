@@ -4,7 +4,7 @@ create table t (x UInt64, s String) engine = CnchMergeTree order by x;
 INSERT INTO t SELECT
     number,
     if(number < (8129 * 1024), arrayStringConcat(arrayMap(x -> toString(x), range(number % 128)), ' '), '')
-FROM numbers_mt((8129 * 1024) * 3) settings max_insert_threads=8;
+FROM numbers_mt((8129 * 1024) * 3) settings max_block_size=10000, max_insert_threads=4;
 
 -- optimize table t;
 

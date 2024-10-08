@@ -87,9 +87,9 @@ static void InitMetricsHelper(const metrics2::MetricCollectorConf& config, const
     metrics2::Metrics::init(config);
 
     isInitialized = true;
-    LOG_INFO(&Poco::Logger::get("metric_helper::InitMetricsHelper"), "{}, tag = {}", config.toString(), tags);
+    LOG_INFO(getLogger("metric_helper::InitMetricsHelper"), "{}, tag = {}", config.toString(), tags);
 
-    // LOG_INFO(&Poco::Logger::get("metric_helper::InitMetricsHelper"), config.toString() << ", tag = " << tags);
+    // LOG_INFO(getLogger("metric_helper::InitMetricsHelper"), config.toString() << ", tag = " << tags);
 }
 
 void InitMetrics(const metrics2::MetricCollectorConf& config, const std::string & custom_tags) {

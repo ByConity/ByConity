@@ -337,7 +337,7 @@ void GSSAcceptorContext::initHandles()
     }
 }
 
-String GSSAcceptorContext::processToken(const String & input_token, Poco::Logger * log)
+String GSSAcceptorContext::processToken(const String & input_token, LoggerPtr log)
 {
     std::scoped_lock lock(gss_global_mutex);
 
@@ -459,7 +459,7 @@ void GSSAcceptorContext::initHandles()
 {
 }
 
-String GSSAcceptorContext::processToken(const String &, Poco::Logger *)
+String GSSAcceptorContext::processToken(const String &, LoggerPtr)
 {
     throw Exception("ClickHouse was built without GSS-API/Kerberos support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 }

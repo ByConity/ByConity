@@ -528,7 +528,7 @@ DiskCacheLRU::DiskIterator::DiskIterator(
     , worker_per_disk(worker_per_disk_)
     , min_depth_parallel(min_depth_parallel_)
     , max_depth_parallel(max_depth_parallel_)
-    , log(&Poco::Logger::get(fmt::format("DiskIterator{}({})", name, disk_cache.getName())))
+    , log(::getLogger(fmt::format("DiskIterator{}({})", name, disk_cache.getName())))
 {
 }
 

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Disks/IDisk.h>
 #include <IO/HashingWriteBuffer.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
@@ -128,7 +129,7 @@ private:
 
     MergeTreeMetaBase & data;
     S3ObjectMetadata::PartGeneratorID generator_id;
-    Poco::Logger * log;
+    LoggerPtr log;
     String magic_code{"CNCH"};
     MergeTreeDataFormatVersion version{MERGE_TREE_CHCH_DATA_STORAGTE_VERSION};
 };

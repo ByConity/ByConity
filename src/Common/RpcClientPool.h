@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 #include <unordered_map>
 
@@ -58,7 +59,7 @@ public:
         : service_name(std::move(service_name_))
         , lookup(std::move(lookup_))
         , creator(std::move(creator_))
-        , log(&Poco::Logger::get(getName() + ':' + getServiceName()))
+        , log(getLogger(getName() + ':' + getServiceName()))
     {
     }
 
@@ -242,7 +243,7 @@ private:
     const String service_name;
     std::function<HostWithPortsVec()> lookup;
     std::function<Ptr(HostWithPorts)> creator;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     mutable std::mutex state_mutex;
 

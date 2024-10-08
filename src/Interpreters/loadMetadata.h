@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 
 
@@ -37,6 +38,6 @@ void loadMetadata(ContextMutablePtr context, const String & default_database_nam
 
 void reloadFormatSchema(ContextMutablePtr context, String remote_format_schema_path,
                         String format_schema_path,
-                        Poco::Logger * log = nullptr);
+                        LoggerPtr log = nullptr);
 
 }

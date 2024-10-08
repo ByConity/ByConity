@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Access/RowPolicy.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <CloudServices/CnchBGThreadPartitionSelector.h>
@@ -47,6 +48,7 @@
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/AdditionalServices.h>
+#include <Common/SettingsChanges.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
@@ -344,6 +346,7 @@ using GlobalTxnCommitterPtr = std::shared_ptr<GlobalTxnCommitter>;
 class GlobalDataManager;
 using GlobalDataManagerPtr = std::shared_ptr<GlobalDataManager>;
 
+class ManifestCache;
 
 enum class ServerType
 {
@@ -461,6 +464,7 @@ protected:
     CopyableAtomic<IResourceGroup *> resource_group{nullptr}; /// Current resource group.
     String current_database;
     Settings settings; /// Setting for query execution.
+    SettingsChanges settings_changes; // query level or session level settings changes
 
     using ProgressCallback = std::function<void(const Progress & progress)>;
     ProgressCallback progress_callback; /// Callback for tracking progress of query execution.
@@ -974,6 +978,9 @@ public:
 
     Settings getSettings() const;
     void setSettings(const Settings & settings_);
+    void setSessionSettingsChanges(const SettingsChanges & settings_changes_) const { getSessionContext()->settings_changes = settings_changes_; }
+    void applySessionSettingsChanges() { applySettingsChanges(getSessionContext()->settings_changes); }
+    void clearSessionSettingsChanges() const { getSessionContext()->settings_changes.clear(); }
 
     /// Set settings by name.
     void setSetting(const StringRef & name, const String & value);
@@ -1536,7 +1543,7 @@ public:
 
     void clearOptimizerProfile();
 
-    void logOptimizerProfile(Poco::Logger * log, String prefix, String name, String time, bool is_rule = false);
+    void logOptimizerProfile(LoggerPtr log, String prefix, String name, String time, bool is_rule = false);
 
     const String & getTenantId() const
     {
@@ -1598,6 +1605,9 @@ public:
 
     void setPartCacheManager();
     std::shared_ptr<PartCacheManager> getPartCacheManager() const;
+
+    void setManifestCache();
+    std::shared_ptr<ManifestCache> getManifestCache() const;
 
     /// catalog related
     void initCatalog(const MetastoreConfig & catalog_conf, const String & name_space, bool writable);
@@ -1671,6 +1681,7 @@ public:
     TxnTimestamp getCurrentCnchStartTime() const;
 
     void initCnchBGThreads();
+    UInt32 getEpoch();
     CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;

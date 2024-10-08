@@ -489,9 +489,9 @@ namespace
         if (!partition_sorted || !partition_aligned)
         {
             if (!partition_sorted)
-                LOG_WARNING(&Poco::Logger::get(__func__), "parts are not partition sorted, this could make calcVisible slow");
+                LOG_WARNING(getLogger(__func__), "parts are not partition sorted, this could make calcVisible slow");
             else if (partition_ids.size() > 1)
-                LOG_WARNING(&Poco::Logger::get(__func__), "parts are not partition aligned, this could make calcVisible slow");
+                LOG_WARNING(getLogger(__func__), "parts are not partition aligned, this could make calcVisible slow");
             process_parts(all_parts, 0, all_parts.size(), visible_parts);
         }
         else
@@ -531,7 +531,7 @@ namespace
 
         if (logging == EnableLogging)
         {
-            auto log = &Poco::Logger::get(__func__);
+            auto log = getLogger(__func__);
             LOG_DEBUG(log, "all_parts:\n {}", partsToDebugString(all_parts));
             LOG_DEBUG(log, "visible_parts (skip_drop_ranges={}):\n{}", skip_drop_ranges, partsToDebugString(visible_parts));
             if (visible_alone_drop_ranges)

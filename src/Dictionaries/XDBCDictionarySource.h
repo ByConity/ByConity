@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <IO/ConnectionTimeouts.h>
 #include <Poco/Data/SessionPool.h>
 #include <Poco/URI.h>
@@ -75,7 +76,7 @@ private:
 
     BlockInputStreamPtr loadFromQuery(const Poco::URI & url, const Block & required_sample_block, const std::string & query) const;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::chrono::time_point<std::chrono::system_clock> update_time;
     const DictionaryStructure dict_struct;

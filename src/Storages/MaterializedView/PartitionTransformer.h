@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/shared_ptr_helper.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage.h>
@@ -67,7 +68,7 @@ class PartitionTransformer
 {
 public:
     explicit PartitionTransformer(ASTPtr mv_query_, const StorageID & target_id, bool async_materialized_view_)
-        : mv_query(mv_query_), target_table_id(target_id), async_materialized_view(async_materialized_view_), log(&Poco::Logger::get("PartitionTransformer")) {}
+        : mv_query(mv_query_), target_table_id(target_id), async_materialized_view(async_materialized_view_), log(getLogger("PartitionTransformer")) {}
 
     void validate(ContextMutablePtr local_context);
     void validate(ContextMutablePtr local_context, MaterializedViewStructurePtr structure);
@@ -101,7 +102,7 @@ private:
 
     /// all base table
     std::unordered_set<StoragePtr> base_tables;
-    Poco::Logger * log;
+    LoggerPtr log;
     
     /// matererialized view sql is always non partition based 
     bool always_non_partition_based = true;

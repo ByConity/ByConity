@@ -7,6 +7,7 @@
 
 #include <google/protobuf/io/zero_copy_stream.h>
 
+#include <Common/Logger.h>
 #include <Protos/disk_cache.pb.h>
 #include <Storages/DiskCache/Allocator.h>
 #include <Storages/DiskCache/BlockCacheReinsertionPolicy.h>
@@ -81,7 +82,7 @@ public:
     void loadFromConfig(const Poco::Util::AbstractConfiguration & conf);
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("NexusFSConfig");
+    LoggerPtr log = getLogger("NexusFSConfig");
 
     NexusFSConfig & validate();
     File openFile(const std::string & file_name, UInt64 size, bool truncate);
@@ -194,7 +195,7 @@ private:
     UInt32 alignedSize(UInt32 size) const { return roundup(size, alloc_align_size); }
 
     NexusFSComponents::NexusFSIndex::LookupResult load(const HybridCache::HashedKey &key, off_t offset_in_source, std::unique_ptr<ReadBufferFromFileBase> &source, std::shared_ptr<InsertCxt> &insert_cxt);
-    
+
     void writeEntry(HybridCache::RelAddress addr, UInt32 slot_size, const HybridCache::HashedKey &key, HybridCache::BufferView value);
 
     size_t readEntry(const HybridCache::RegionDescriptor &desc, HybridCache::RelAddress addr, UInt32 size, char *to);
@@ -222,7 +223,7 @@ private:
     // std::shared_ptr<NexusFSComponents::SegmentHandle> loadToMemoryCache(const NexusFSComponents::NexusFSIndex::LookupResult &lr);
 
 
-    Poco::Logger * log = &Poco::Logger::get("NexusFS");
+    LoggerPtr log = getLogger("NexusFS");
 
     const Protos::NexusFSConfig serialized_config;
 

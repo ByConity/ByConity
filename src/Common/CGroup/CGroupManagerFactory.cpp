@@ -34,7 +34,7 @@ void CGroupManagerFactory::loadFromConfig(const Poco::Util::AbstractConfiguratio
     if (!config.has("enable_cgroup") || !config.getBool("enable_cgroup"))
         return;
 
-    LOG_INFO(&Poco::Logger::get("CGroupManager"), "Init CGroupManager");
+    LOG_INFO(getLogger("CGroupManager"), "Init CGroupManager");
 
     if (config.has("cgroup_root_path") && !config.getString("cgroup_root_path").empty())
     {

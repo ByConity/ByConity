@@ -93,7 +93,7 @@ void StorageSystemResourceGroups::fillData(MutableColumns & res_columns, Context
             res_columns[i++]->insert(info.last_used / 1000);
         else
         {
-            LOG_WARNING(&Poco::Logger::get("StorageSystemResourceGroups"), "last_used unset. This should not happen");
+            LOG_WARNING(getLogger("StorageSystemResourceGroups"), "last_used unset. This should not happen");
             res_columns[i++]->insert(info.last_used);
         }
         res_columns[i++]->insert(info.in_use);

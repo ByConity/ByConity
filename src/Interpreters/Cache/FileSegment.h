@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <boost/noncopyable.hpp>
 #include <Interpreters/Cache/FileCacheKey.h>
 
@@ -329,7 +330,7 @@ private:
     Key file_key;
     FileCache * cache;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// "detached" file segment means that it is not owned by cache ("detached" from cache).
     /// In general case, all file segments are owned by cache.

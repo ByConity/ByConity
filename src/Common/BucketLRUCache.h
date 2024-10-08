@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -202,7 +203,7 @@ public:
     };
 
     explicit BucketLRUCache(const Options& opts_):
-        opts(opts_), logger(&Poco::Logger::get("BucketLRUCache")),
+        opts(opts_), logger(getLogger("BucketLRUCache")),
         weighter(), current_weight(), hits(0), misses(0),
         container(opts_.mapping_bucket_size)
     {
@@ -518,7 +519,7 @@ private:
             auto iter = bucket.cells.find(key);
             if (iter == bucket.cells.end())
             {
-                LOG_ERROR(&Poco::Logger::get("BucketLRUCache"), "BucketLRUCache become inconsistent, There must be a bug on it");
+                LOG_ERROR(getLogger("BucketLRUCache"), "BucketLRUCache become inconsistent, There must be a bug on it");
                 abort();
             }
 
@@ -801,7 +802,7 @@ private:
     }
 
     const Options opts;
-    Poco::Logger* logger;
+    LoggerPtr logger;
 
     TWeighter weighter;
     // First return value indiecate if the entry should dropped,

@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Poco/Net/TCPServerConnectionFactory.h>
 #include <Poco/Net/NetException.h>
 #include <common/logger_useful.h>
@@ -37,7 +38,7 @@ class TCPHandlerFactory : public Poco::Net::TCPServerConnectionFactory
 private:
     IServer & server;
     bool parse_proxy_protocol = false;
-    Poco::Logger * log;
+    LoggerPtr log;
     std::string server_display_name;
 
     class DummyTCPHandler : public Poco::Net::TCPServerConnection
@@ -54,7 +55,7 @@ public:
       */
     TCPHandlerFactory(IServer & server_, bool secure_, bool parse_proxy_protocol_)
         : server(server_), parse_proxy_protocol(parse_proxy_protocol_)
-        , log(&Poco::Logger::get(std::string("TCP") + (secure_ ? "S" : "") + "HandlerFactory"))
+        , log(getLogger(std::string("TCP") + (secure_ ? "S" : "") + "HandlerFactory"))
     {
         server_display_name = server.config().getString("display_name", getIPOrFQDNOrHostName());
     }

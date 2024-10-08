@@ -38,7 +38,7 @@ public:
     bool isSeekCheap() override { return false; }
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("ReadBufferFromFileWithNexusFS");
+    LoggerPtr log = getLogger("ReadBufferFromFileWithNexusFS");
 
     const String file_name;
     std::unique_ptr<ReadBufferFromFileBase> source_read_buffer;

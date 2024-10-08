@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -131,7 +132,7 @@ private:
 
     String schedulerStatus() const;
 
-    Poco::Logger* logger_;
+    LoggerPtr logger_;
 
     const Options opts_;
 

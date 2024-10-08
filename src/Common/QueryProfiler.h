@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 #include <signal.h>
 #include <time.h>
@@ -38,7 +39,7 @@ public:
 private:
     void tryCleanup();
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 #if USE_UNWIND
     /// Timer id from timer_create(2)

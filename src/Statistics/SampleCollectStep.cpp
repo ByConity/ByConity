@@ -86,7 +86,7 @@ public:
 
         // to estimate ndv
         LOG_INFO(
-            &Poco::Logger::get("FirstSampleColumnHandler"),
+            getLogger("FirstSampleColumnHandler"),
             fmt::format(
                 FMT_STRING("col info: col={} && "
                            "sqls={}"),
@@ -147,7 +147,7 @@ public:
             auto estimated_ndv_upper_bound = scaleNdv(full_count, sample_row_count, sample_ndv_ub, block_ndv);
 
             LOG_INFO(
-                &Poco::Logger::get("ThirdSampleColumnHandler"),
+                getLogger("ThirdSampleColumnHandler"),
                 fmt::format(
                     FMT_STRING("estimated_ndv={}, estimated_ndv_low_bound={}, estimated_ndv_upper_bound={}"),
                     estimated_ndv,
@@ -209,7 +209,7 @@ public:
             }
 
             LOG_INFO(
-                &Poco::Logger::get("FirstSampleColumnHandler"),
+                getLogger("FirstSampleColumnHandler"),
                 fmt::format(
                     FMT_STRING("col info: col={} && "
                                "context raw data: full_count={}, sample_row_count={} && "
@@ -513,7 +513,7 @@ public:
         {
             auto & col_data = handler_context.columns_data.at(col_desc.name);
             auto full_sql = constructThirdSql(handler_context.settings, table_info, col_desc, col_data.bucket_bounds, getSampleTail(true));
-            LOG_INFO(&Poco::Logger::get("thirdSampleColumnHandler"), full_sql);
+            LOG_INFO(getLogger("thirdSampleColumnHandler"), full_sql);
             auto helper = SubqueryHelper::create(context, full_sql, true);
             Block block;
 

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <MergeTreeCommon/ReplacingSortedKeysIterator.h>
 #include <Transaction/TxnTimestamp.h>
@@ -38,7 +39,7 @@ public:
     MergeTreeDataDeduper(
         const MergeTreeMetaBase & data_,
         ContextPtr context_,
-        const CnchDedupHelper::DedupMode & dedup_mode_ = CnchDedupHelper::DedupMode::UPSERT);
+        const CnchDedupHelper::DedupMode & dedup_mode_);
 
     /// Remove duplicate keys among visible, staged, and uncommitted parts.
     /// Assumes that
@@ -200,7 +201,7 @@ private:
 
     const MergeTreeMetaBase & data;
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
     VersionMode version_mode;
     CnchDedupHelper::DedupMode dedup_mode;
 };

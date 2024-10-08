@@ -36,7 +36,7 @@ RepartitionTransform::RepartitionTransform(
     , partition_num(partition_num_)
     , repartition_keys(std::move(repartition_keys_))
     , repartition_func(std::move(repartition_func_))
-    , logger(&Poco::Logger::get("RepartitionTransform"))
+    , logger(getLogger("RepartitionTransform"))
 {
 }
 

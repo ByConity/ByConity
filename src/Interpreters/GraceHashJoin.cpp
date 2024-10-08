@@ -70,7 +70,7 @@ namespace
                 {
                     if (!reader_queue->tryPop(index, UINT_MAX))
                     {
-                        LOG_INFO(&Poco::Logger::get("GraceHashJoin"), "all file read done");
+                        LOG_INFO(getLogger("GraceHashJoin"), "all file read done");
                         return {};
                     }
                     bool finished = false;
@@ -78,11 +78,11 @@ namespace
                     if (finished)
                     {
                         std::unique_lock<std::mutex> lock(eof_cnt_mutex);
-                        LOG_TRACE(&Poco::Logger::get("GraceHashJoin"), "file " + std::to_string(index) + " read done");
+                        LOG_TRACE(getLogger("GraceHashJoin"), "file " + std::to_string(index) + " read done");
                         eof_cnt ++;
                         if (eof_cnt == total_reader)
                         {
-                            LOG_INFO(&Poco::Logger::get("GraceHashJoin"), "close all readers");
+                            LOG_INFO(getLogger("GraceHashJoin"), "close all readers");
                             reader_queue->close();
                         }
                     }
@@ -94,7 +94,7 @@ namespace
                 }
                 catch (...)
                 {
-                    tryLogCurrentException(&Poco::Logger::get("GraceHashJoin"), "Fail to read file");
+                    tryLogCurrentException(getLogger("GraceHashJoin"), "Fail to read file");
                     reader_queue->close();
                     throw;
                 }
@@ -170,7 +170,7 @@ class GraceHashJoin::FileBucket : boost::noncopyable
 public:
     using BucketLock = std::unique_lock<std::mutex>;
 
-    explicit FileBucket(size_t bucket_index_, std::shared_ptr<TemporaryFileStreams> & left_files_, TemporaryFileStreamShardPtr & right_file_, Poco::Logger * log_, size_t read_result_block_size_, size_t read_block_bytes_)
+    explicit FileBucket(size_t bucket_index_, std::shared_ptr<TemporaryFileStreams> & left_files_, TemporaryFileStreamShardPtr & right_file_, LoggerPtr log_, size_t read_result_block_size_, size_t read_block_bytes_)
         : idx{bucket_index_}, left_files{left_files_}, right_file{right_file_}, state{State::WRITING_BLOCKS}, log{log_}, read_result_block_size{read_result_block_size_}, read_block_bytes(read_block_bytes_)
     {
         left_side_parallel = left_files_->size();
@@ -291,7 +291,7 @@ private:
     std::atomic<State> state;
     std::atomic<size_t> left_blk_id{0};
 
-    Poco::Logger * log;
+    LoggerPtr log;
     size_t read_result_block_size;
     size_t read_block_bytes;
 
@@ -335,7 +335,7 @@ GraceHashJoin::GraceHashJoin(
     bool enable_adaptive_spill,
     bool any_take_last_row_,
     int num_streams_)
-    : log{&Poco::Logger::get("GraceHashJoin")}
+    : log{getLogger("GraceHashJoin")}
     , context{context_}
     , adaptive_spill_mode(enable_adaptive_spill)
     , table_join{std::move(table_join_)}
@@ -523,7 +523,7 @@ void GraceHashJoin::addBuckets(const size_t bucket_count)
         catch (...)
         {
             LOG_ERROR(
-                &Poco::Logger::get("GraceHashJoin"),
+                getLogger("GraceHashJoin"),
                 "Can't create bucket {} due to error: {}",
                 current_size + i,
                 getCurrentExceptionMessage(false));

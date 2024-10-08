@@ -44,7 +44,7 @@ void CnchWorkerClientPools::addVirtualWarehouseImpl(const String & name, const S
     /// Will replace old pool
     pools[name] = std::move(pool);
 
-    LOG_INFO(&Poco::Logger::get("CnchWorkerClientPools"), "Added new vw: {} ", name);
+    LOG_INFO(getLogger("CnchWorkerClientPools"), "Added new vw: {} ", name);
 }
 
 void CnchWorkerClientPools::removeVirtualWarehouse(const String & name)

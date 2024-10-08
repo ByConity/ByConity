@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <DaemonManager/DaemonJob.h>
 #include <Catalog/Catalog.h>
 
@@ -56,7 +57,7 @@ bool sendToServerForGC(
     std::vector<std::pair<String, long>> & num_of_table_can_send_sorted,
     const std::vector<CnchServerClientPtr> & server_clients,
     ToServerForGCSender sender,
-    Poco::Logger * log);
+    LoggerPtr log);
 
 std::vector<std::pair<String, long>> sortByValue(
     std::vector<std::pair<String, long>> && num_of_table_can_send);

@@ -177,7 +177,7 @@ void SerializationMap::deserializeTextImpl(IColumn & column, ReadBuffer & istr, 
                     unlikely(current_key.size > settings.map.max_map_key_length))
                 {
                     LOG_WARNING(
-                        &Poco::Logger::get("SerializationMap"),
+                        getLogger("SerializationMap"),
                         "Key of map can not be longer than {}, discard key: {}",
                         settings.map.max_map_key_length,
                         current_key.toString());

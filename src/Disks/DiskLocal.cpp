@@ -138,7 +138,7 @@ bool DiskLocal::tryReserve(UInt64 bytes)
     auto available_space = getAvailableSpace();
     auto unreserved_space
         = available_space - DiskStats{std::min(available_space.bytes, reserved_bytes), std::min(available_space.inodes, reserved_inodes)};
-    if (!unreserved_space.isEmpty())
+    if (unreserved_space.bytes >= bytes)
     {
         LOG_TRACE(
             log,
@@ -464,7 +464,7 @@ void registerDiskLocal(DiskFactory & factory)
 
         if (!fs::exists(tmp_path))
         {
-            LOG_WARNING(&Poco::Logger::get("DiskLocal"), "Can't find path {} so keep-free is forced to set zero", tmp_path);
+            LOG_WARNING(getLogger("DiskLocal"), "Can't find path {} so keep-free is forced to set zero", tmp_path);
             return std::make_shared<DiskLocal>(name, path, DiskStats{});
         }
 

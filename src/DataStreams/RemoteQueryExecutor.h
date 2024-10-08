@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <Common/Logger.h>
+#include <variant>
 #include <Client/ConnectionPool.h>
 #include <Client/IConnections.h>
 #include <Client/ConnectionPoolWithFailover.h>
@@ -29,7 +31,6 @@
 #include <Interpreters/StorageID.h>
 #include <Common/FiberStack.h>
 #include <Common/TimerDescriptor.h>
-#include <variant>
 
 namespace DB
 {
@@ -93,7 +94,7 @@ public:
 
     /// Query is resent to a replica, the query itself can be modified.
     std::atomic<bool> resent_query { false };
-    
+
     /// Read next block of data. Returns empty block if query is finished.
     Block read();
 
@@ -128,7 +129,7 @@ public:
 
     void setMainTable(StorageID main_table_) { main_table = std::move(main_table_); }
 
-    void setLogger(Poco::Logger * logger) { log = logger; }
+    void setLogger(LoggerPtr logger) { log = logger; }
 
     const Block & getHeader() const { return header; }
 
@@ -211,7 +212,7 @@ private:
 
     bool is_server_forwarding {false};
 
-    Poco::Logger * log = nullptr;
+    LoggerPtr log = nullptr;
 
     /// Send all scalars to remote servers
     void sendScalars();

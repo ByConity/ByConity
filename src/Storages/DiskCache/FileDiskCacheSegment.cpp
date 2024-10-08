@@ -21,7 +21,7 @@ String FileDiskCacheSegment::getSegmentName() const
 
 void FileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
 {
-    Poco::Logger * log = disk_cache.getLogger();
+    LoggerPtr log = disk_cache.getLogger();
 
     try
     {

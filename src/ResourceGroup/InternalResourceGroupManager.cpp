@@ -40,10 +40,10 @@ namespace ErrorCodes
 
 void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfiguration &config)
 {
-    LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "Load resource group manager");
+    LOG_DEBUG(getLogger("ResourceGroupManager"), "Load resource group manager");
     if (!root_groups.empty())
     {
-        LOG_WARNING(&Poco::Logger::get("ResourceGroupManager"), "need to restart to reload config.");
+        LOG_WARNING(getLogger("ResourceGroupManager"), "need to restart to reload config.");
         return;
     }
 
@@ -61,7 +61,7 @@ void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfigur
                 throw Exception("Resource group has no name", ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
 
             String name = config.getString(prefixWithKey + ".name");
-            LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "Found resource group {}", name);
+            LOG_DEBUG(getLogger("ResourceGroupManager"), "Found resource group {}", name);
             if (groups.find(name) != groups.end())
                 throw Exception("Resource group name duplicated: " + name, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
 
@@ -164,7 +164,7 @@ void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfigur
         if (key.find("case") == 0)
         {
             ResourceSelectCase select_case;
-            LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "Found resource group case {}", key);
+            LOG_DEBUG(getLogger("ResourceGroupManager"), "Found resource group case {}", key);
             if (!config.has(prefixWithKey + ".resource_group"))
                 throw Exception("Select case " + key + " does not config resource group", ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
             select_case.name = key;
@@ -190,7 +190,7 @@ void InternalResourceGroupManager::initialize(const Poco::Util::AbstractConfigur
             select_cases[select_case.name] = std::move(select_case);
         }
     }
-    LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "Found {} resource groups, {} select cases.",
+    LOG_DEBUG(getLogger("ResourceGroupManager"), "Found {} resource groups, {} select cases.",
               groups.size(), select_cases.size());
 
     select_algorithm = config.getString("resource_groups.select_algorithm", "user_query");

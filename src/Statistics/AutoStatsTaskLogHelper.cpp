@@ -124,7 +124,7 @@ std::vector<TaskInfoLog> batchReadTaskLog(ContextPtr context, DateTime64 min_eve
     }
 
     LOG_DEBUG(
-        &Poco::Logger::get("AutoStatsTaskLogHelper"),
+        getLogger("AutoStatsTaskLogHelper"),
         fmt::format(FMT_STRING("batchReadTaskLog: read {} useful entries with min_event_time='{}'"), result.size(), event_time_str));
 
     return result;

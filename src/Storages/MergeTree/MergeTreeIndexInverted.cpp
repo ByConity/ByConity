@@ -70,7 +70,7 @@ bool MergeTreeConditionInverted::createFunctionTextSearchCondition(
 
     TextSearchQuery tsquery(value);
 
-    LOG_TRACE(&Poco::Logger::get(__func__), tsquery.toString());
+    LOG_TRACE(getLogger(__func__), tsquery.toString());
 
     out.text_search_filter = tsquery.toTextSearchQueryExpression(params, token_extractor, nlp_extractor);
 
@@ -153,7 +153,8 @@ void MergeTreeIndexGranuleInverted::extendGinFilter(const GinFilter& incoming,
                     "between incoming range first row {} and last range's end row {}",
                     current.range_start, last.range_end);
             }
-            if (last.segment_id == current.segment_id)
+            if (last.segment_id == current.segment_id
+                && last.range_end == current.range_start)
             {
                 last.range_end = current.range_end;
                 continue;
@@ -691,7 +692,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
                 token_extractor);
             if (sep_tokenizer == nullptr || !getKey(args[0], key_column_num))
             {
-                LOG_TRACE(&Poco::Logger::get("MergeTreeConditionInverted"),
+                LOG_TRACE(getLogger("MergeTreeConditionInverted"),
                     "Inverted evaluate unknown since query column didn't match index");
                 return false;
             }
@@ -701,7 +702,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             if (!KeyCondition::getConstant(args[1], block_with_constants, const_value, const_type)
                 || !KeyCondition::getConstant(args[2], block_with_constants, seperator_const_value, seperator_const_type))
             {
-                LOG_TRACE(&Poco::Logger::get("MergeTreeConditionInverted"),
+                LOG_TRACE(getLogger("MergeTreeConditionInverted"),
                     "Inverted evaluate unknown since didn't find needle and seperator const");
                 return false;
             }
@@ -709,7 +710,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             std::unordered_set<char> seperator_set(seperators_str.begin(), seperators_str.end());
             if (seperator_set != sep_tokenizer->seperators())
             {
-                LOG_TRACE(&Poco::Logger::get("MergeTreeConditionInverted"),
+                LOG_TRACE(getLogger("MergeTreeConditionInverted"),
                     "Inverted evaluate unknown since tokenizer seperators mismatch, "
                     "query {}, tokenizer {}", seperators_str, String(sep_tokenizer->seperators().begin(),
                         sep_tokenizer->seperators().end()));
@@ -826,7 +827,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
                 ChineseTokenExtractor::stringToGinFilter(value, nlp_extractor, *out.gin_filter);
             }
     
-            LOG_TRACE(&Poco::Logger::get("inverted index"),"search string: {} with token : [ {} ] ", value, out.gin_filter->getTermsInString());
+            LOG_TRACE(getLogger("inverted index"),"search string: {} with token : [ {} ] ", value, out.gin_filter->getTermsInString());
     
             return true;
              

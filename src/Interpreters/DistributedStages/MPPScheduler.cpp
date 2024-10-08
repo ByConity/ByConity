@@ -5,11 +5,6 @@
 namespace DB
 {
 
-void MPPScheduler::genTasks()
-{
-    genBatchTasks();
-}
-
 void MPPScheduler::genBatchTasks()
 {
     LOG_DEBUG(log, "Begin generate batch tasks");
@@ -62,13 +57,64 @@ void MPPScheduler::genBatchTasks()
     LOG_DEBUG(log, "End generate batch tasks");
 }
 
+bool MPPScheduler::getBatchTaskToSchedule(BatchTaskPtr & task)
+{
+    auto now = time_in_milliseconds(std::chrono::system_clock::now());
+    if (query_expiration_ms <= now)
+        return false;
+    else
+        return queue.tryPop(task, query_expiration_ms - now);
+}
+
+PlanSegmentExecutionInfo MPPScheduler::schedule()
+{
+    Stopwatch sw;
+    genTopology();
+    genBatchTasks();
+
+    /// Leave final segment alone.
+    while (!dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start)
+    {
+        auto curr = time_in_milliseconds(std::chrono::system_clock::now());
+        if (curr > query_expiration_ms && !stopped.load(std::memory_order_relaxed))
+        {
+            throw Exception(
+                fmt::format("schedule timeout, current ts {} expire ts {}", curr, query_expiration_ms), ErrorCodes::TIMEOUT_EXCEEDED);
+        }
+        /// nullptr means invalid task
+        BatchTaskPtr batch_task;
+        if (getBatchTaskToSchedule(batch_task) && batch_task)
+        {
+            for (auto task : *batch_task)
+            {
+                LOG_INFO(log, "Schedule segment {}", task.segment_id);
+                if (task.segment_id == 0)
+                {
+                    prepareFinalTask();
+                    break;
+                }
+                auto * plan_segment_ptr = dag_graph_ptr->getPlanSegmentPtr(task.segment_id);
+                plan_segment_ptr->setCoordinatorAddress(local_address);
+                scheduleTask(plan_segment_ptr, task);
+                onSegmentScheduled(task);
+            }
+        }
+        if (batch_schedule)
+            batchScheduleTasks();
+    }
+
+    dag_graph_ptr->joinAsyncRpcAtLast();
+    LOG_DEBUG(log, "Scheduling takes {} ms", sw.elapsedMilliseconds());
+    return generateExecutionInfo(0, 0);
+}
+
 /// MPP schduler logic
 void MPPScheduler::submitTasks(PlanSegment * plan_segment_ptr, const SegmentTask & task)
 {
     const auto & selector_info = node_selector_result[task.segment_id];
     for (size_t idx = 0; idx < selector_info.worker_nodes.size(); idx++)
     {
-        dispatchOrSaveTask(plan_segment_ptr, {task.segment_id, idx});
+        dispatchOrCollectTask(plan_segment_ptr, {task.segment_id, idx});
     }
 }
 
@@ -77,6 +123,11 @@ PlanSegmentExecutionInfo MPPScheduler::generateExecutionInfo(size_t /*task_id*/,
     PlanSegmentExecutionInfo execution_info;
     execution_info.parallel_id = index;
     return execution_info;
+}
+
+bool MPPScheduler::addBatchTask(BatchTaskPtr batch_task)
+{
+    return queue.push(batch_task);
 }
 
 void MPPScheduler::prepareTask(PlanSegment * plan_segment_ptr, NodeSelectorResult & selector_info, const SegmentTask & /*task*/)

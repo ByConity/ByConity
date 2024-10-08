@@ -156,6 +156,12 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             readBinary(value, buf);
             return value;
         }
+        case Field::Types::JSONB:
+        {
+            JsonbField value;
+            readBinary(value, buf);
+            return value;
+        }
     }
     return Field();
 }
@@ -314,6 +320,23 @@ void writeText(const Object & x, WriteBuffer & buf)
     writeFieldText(Field(x), buf);
 }
 
+void readBinary(JsonbField & x, ReadBuffer & buf)
+{
+    std::string value;
+    readStringBinary(value, buf);
+    x = JsonbField(value.data(), value.size());
+}
+
+void writeBinary(const JsonbField & x, WriteBuffer & buf)
+{
+    writeStringBinary(std::string(x.getValue(), x.getSize()), buf);
+}
+
+void writeText(const JsonbField & x, WriteBuffer & buf)
+{
+    writeFieldText(Field(x), buf);
+}
+
 template <typename T>
 void readQuoted(DecimalField<T> & x, ReadBuffer & buf)
 {
@@ -460,6 +483,11 @@ void writeFieldBinaryBlobImpl(const Field & field, Field::Types::Which type, Wri
             writeStringBinary(field.get<AggregateFunctionStateData>().data, buf);
             return;
         }
+        case Field::Types::JSONB:
+        {
+            writeBinary(field.get<JsonbField>(), buf);
+            return;
+        }
         default:
             throw Exception(ErrorCodes::BAD_TYPE_OF_FIELD, "Bad type of Field {} when serializing.", type);
     }
@@ -600,6 +628,13 @@ void readFieldBinaryBlobImpl(Field & field, Field::Types::Which type, ReadBuffer
             AggregateFunctionStateData value;
             readStringBinary(value.name, buf);
             readStringBinary(value.data, buf);
+            field = value;
+            return;
+        }
+        case Field::Types::JSONB:
+        {
+            JsonbField value;
+            readBinary(value, buf);
             field = value;
             return;
         }
@@ -972,6 +1007,7 @@ String fieldTypeToString(Field::Types::Which type)
         case Field::Types::Which::SketchBinary: return "SketchBinary";
         case Field::Types::Which::NegativeInfinity: return "NegativeInfinity";
         case Field::Types::Which::PositiveInfinity: return "PositiveInfinity";
+        case Field::Types::Which::JSONB: return "JSONB";
     }
 
     __builtin_unreachable();

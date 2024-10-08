@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <memory>
 
 #include <Core/QueryProcessingStage.h>
@@ -50,7 +51,7 @@ public:
     : interpreter(interpreter_)
     , query(interpreter.query_for_perfect_shard->clone())
     , context(interpreter.context)
-    , log(&Poco::Logger::get("InterpreterPerfectShard"))
+    , log(getLogger("InterpreterPerfectShard"))
     {
         query_info.query = query;
         processed_stage = determineProcessingStage();
@@ -81,7 +82,7 @@ private:
     InterpreterSelectQuery & interpreter;
     ASTPtr query;
     std::shared_ptr<Context> context;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     SelectQueryInfo query_info;
     bool perfect_shardable = true;

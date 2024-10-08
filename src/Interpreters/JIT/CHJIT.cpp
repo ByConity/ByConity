@@ -425,7 +425,7 @@ CHJIT::CompiledModule CHJIT::compileModule(std::function<void (llvm::Module &)> 
     std::string tmp;
     llvm::raw_string_ostream os(tmp);
     module->print(os, nullptr);
-    LOG_TRACE(&Poco::Logger::get("CompiledModule"), "module: ===\n{}===\n", os.str());
+    LOG_TRACE(getLogger("CompiledModule"), "module: ===\n{}===\n", os.str());
     auto module_info = compileModule(std::move(module));
 
     ++current_module_key;

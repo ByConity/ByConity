@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Catalog/IMetastore.h>
+#include <Common/Logger.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
 
@@ -27,7 +28,7 @@ private:
 
     void cleanStaleLargeKV();
 
-    Poco::Logger * log = &Poco::Logger::get("CatalogBGTask");
+    LoggerPtr log = getLogger("CatalogBGTask");
 
     ContextPtr context;
     std::shared_ptr<IMetaStore> metastore;

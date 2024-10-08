@@ -32,7 +32,7 @@ namespace DB::ResourceManagement
 
 ResourceReporterTask::ResourceReporterTask(ContextPtr global_context_)
     : WithContext(global_context_)
-    , log(&Poco::Logger::get("ResourceReporterTask"))
+    , log(getLogger("ResourceReporterTask"))
     , resource_monitor(std::make_unique<ResourceMonitor>(global_context_))
     , background_task(global_context_->getSchedulePool().createTask("ResourceReporterTask", [&](){ run(); }))
 {

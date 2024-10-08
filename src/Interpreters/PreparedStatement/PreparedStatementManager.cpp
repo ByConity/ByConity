@@ -243,7 +243,7 @@ void PreparedStatementManager::loadStatementsFromCatalog(ContextMutablePtr & con
         catch (...)
         {
             tryLogWarningCurrentException(
-                &Poco::Logger::get("PreparedStatementManager"),
+                getLogger("PreparedStatementManager"),
                 fmt::format("while build prepared statement {} plan", backQuote(statement->name)));
             continue;
         }

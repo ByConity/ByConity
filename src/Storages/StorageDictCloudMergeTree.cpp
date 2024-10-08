@@ -41,7 +41,7 @@ StorageDictCloudMergeTree::StorageDictCloudMergeTree(
     )
     , split_writer(*this, IStorage::StorageLocation::AUXILITY)
 {
-    log = &Poco::Logger::get(table_id_.getNameForLogs() + " (DictCloudMergeTree)");
+    log = ::getLogger(table_id_.getNameForLogs() + " (DictCloudMergeTree)");
 
     init();
 }

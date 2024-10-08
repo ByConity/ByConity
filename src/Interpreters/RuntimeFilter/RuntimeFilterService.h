@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 #include <Protos/runtime_filter.pb.h>
 #include <brpc/server.h>
@@ -26,7 +27,7 @@ namespace DB
 class RuntimeFilterService : public Protos::RuntimeFilterService
 {
 public:
-    explicit RuntimeFilterService(ContextMutablePtr context_) : context(context_), log(&Poco::Logger::get("RuntimeFilterService")) { }
+    explicit RuntimeFilterService(ContextMutablePtr context_) : context(context_), log(getLogger("RuntimeFilterService")) { }
 
     /// transfer dynamic filer (segment executor host --> coordinator host)
     void transferRuntimeFilter(
@@ -44,7 +45,7 @@ public:
 
 private:
     ContextMutablePtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 REGISTER_SERVICE_IMPL(RuntimeFilterService);

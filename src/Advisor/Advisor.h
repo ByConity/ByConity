@@ -2,6 +2,7 @@
 
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/WorkloadTable.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTAdviseQuery.h>
@@ -24,7 +25,7 @@ public:
     static WorkloadAdvisors getAdvisors(ASTAdviseQuery::AdvisorType type);
 
     ASTAdviseQuery::AdvisorType type;
-    Poco::Logger * log = &Poco::Logger::get("Advisor");
+    LoggerPtr log = getLogger("Advisor");
 };
 
 }

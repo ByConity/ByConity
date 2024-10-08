@@ -1,4 +1,5 @@
 #pragma once
+#include <Common/Logger.h>
 #include <hive_metastore_types.h>
 #include <Core/UUID.h>
 #include <Interpreters/Context.h>
@@ -36,7 +37,7 @@ private:
     IMetaClientPtr hms_client;
 
     //TODO(ExternalCatalog):: add storage related field.
-    Poco::Logger * log = &Poco::Logger::get("HiveExternalCatalog");
+    LoggerPtr log = getLogger("HiveExternalCatalog");
 };
 
 }

@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <utility>
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
@@ -58,7 +59,7 @@ public:
 
 private:
     ContextPtr context;
-    Poco::Logger * logger;
+    LoggerPtr logger;
     CatalogAdaptorPtr catalog;
     StatsTableIdentifier table_info;
 

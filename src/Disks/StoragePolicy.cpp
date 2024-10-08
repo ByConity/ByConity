@@ -405,7 +405,7 @@ StoragePolicySelector::StoragePolicySelector(
          */
 
         policies.emplace(name, std::make_shared<StoragePolicy>(name, config, config_prefix + "." + name, disks));
-        LOG_INFO(&Poco::Logger::get("StoragePolicySelector"), "Storage policy {} loaded", backQuote(name));
+        LOG_INFO(getLogger("StoragePolicySelector"), "Storage policy {} loaded", backQuote(name));
     }
 
     /// Add default policy if it isn't explicitly specified.

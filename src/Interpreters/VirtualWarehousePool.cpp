@@ -32,7 +32,7 @@ namespace ErrorCodes
 }
 
 VirtualWarehousePool::VirtualWarehousePool(ContextPtr global_context_)
-    : WithContext(global_context_), log(&Poco::Logger::get("VirtualWarehousePool"))
+    : WithContext(global_context_), log(getLogger("VirtualWarehousePool"))
 {
 }
 

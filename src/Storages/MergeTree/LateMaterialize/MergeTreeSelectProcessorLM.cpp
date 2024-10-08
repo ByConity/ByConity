@@ -62,18 +62,14 @@ bool MergeTreeSelectProcessorLM::getNewTaskImpl()
             return false;
         }
 
-        if (mark_ranges_filter_callback)
-        {
-            part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
-                part_detail.ranges);
-        }
+        firstTaskInitialization();
 
         auto size_predictor = (stream_settings.preferred_block_size_bytes == 0)
             ? nullptr
             : std::make_unique<MergeTreeBlockSizePredictor>(part_detail.data_part, ordered_names, storage_snapshot->metadata->getSampleBlock());
 
         task = std::make_unique<MergeTreeReadTask>(
-            part_detail.data_part, getDeleteBitmap(), part_detail.ranges, part_detail.part_index_in_query, ordered_names, column_name_set, task_columns, false, task_columns.should_reorder, std::move(size_predictor), part_detail.ranges);
+            part_detail.data_part, delete_bitmap, part_detail.ranges, part_detail.part_index_in_query, ordered_names, column_name_set, task_columns, false, task_columns.should_reorder, std::move(size_predictor), part_detail.ranges);
 
         part_detail.ranges.clear();
 
@@ -89,14 +85,32 @@ bool MergeTreeSelectProcessorLM::getNewTaskImpl()
     }
 }
 
-ImmutableDeleteBitmapPtr MergeTreeSelectProcessorLM::getDeleteBitmap()
+void MergeTreeSelectProcessorLM::firstTaskInitialization()
 {
-    if (delete_bitmap_initialized)
-        return delete_bitmap;
-
+    std::unique_ptr<roaring::Roaring> row_filter = nullptr;
+    if (mark_ranges_filter_callback)
+    {
+        if (stream_settings.reader_settings.read_settings.filtered_ratio_to_use_skip_read > 0)
+        {
+            row_filter = std::make_unique<roaring::Roaring>();
+        }
+        part_detail.ranges = mark_ranges_filter_callback(part_detail.data_part,
+            part_detail.ranges, row_filter.get());
+    }
     delete_bitmap = combineFilterBitmap(part_detail, delete_bitmap_getter);
-    delete_bitmap_initialized = true;
-    return delete_bitmap;
+    if (row_filter != nullptr)
+    {
+        flipFilterWithMarkRanges(part_detail.ranges,
+            part_detail.data_part->index_granularity, *row_filter);
+        if (delete_bitmap == nullptr)
+        {
+            delete_bitmap = std::shared_ptr<roaring::Roaring>(row_filter.release());
+        }
+        else
+        {
+            *delete_bitmap &= *row_filter;
+        }
+    }
 }
 
 }

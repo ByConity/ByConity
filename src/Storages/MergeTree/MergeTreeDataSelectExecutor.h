@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <unordered_map>
 #include <Core/QueryProcessingStage.h>
 #include <Storages/SelectQueryInfo.h>
@@ -30,6 +31,7 @@
 #include <QueryPlan/ReadFromMergeTree.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
+#include <Storages/MergeTree/MultiIndexFilterCondition.h>
 
 namespace DB
 {
@@ -88,7 +90,7 @@ public:
 
 private:
     const MergeTreeMetaBase & data;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Get the approximate value (bottom estimate - only by full marks) of the number of rows falling under the index.
     static size_t getApproximateTotalRowsToRead(
@@ -96,14 +98,14 @@ private:
         const StorageMetadataPtr & metadata_snapshot,
         const KeyCondition & key_condition,
         const Settings & settings,
-        Poco::Logger * log);
+        LoggerPtr log);
 
     static MarkRanges markRangesFromPKRange(
         const MergeTreeMetaBase::DataPartPtr & part,
         const StorageMetadataPtr & metadata_snapshot,
         const KeyCondition & key_condition,
         const Settings & settings,
-        Poco::Logger * log);
+        LoggerPtr log);
 
     /// If filter_bitmap is nullptr, then we won't trying to generate read filter
     static MarkRanges filterMarksUsingIndex(
@@ -116,7 +118,7 @@ private:
         size_t & total_granules,
         size_t & granules_dropped,
         roaring::Roaring * filter_bitmap,
-        Poco::Logger * log,
+        LoggerPtr log,
         IndexTimeWatcher & index_time_watcher);
 
     struct PartFilterCounters
@@ -151,7 +153,7 @@ private:
         const PartitionIdToMaxBlock * max_block_numbers_to_read,
         ContextPtr query_context,
         PartFilterCounters & counters,
-        Poco::Logger * log);
+        LoggerPtr log);
 
 public:
     /// For given number rows and bytes, get the number of marks to read.
@@ -188,7 +190,7 @@ public:
         const SelectQueryInfo & query_info,
         const ContextPtr & context,
         const PartitionIdToMaxBlock * max_block_numbers_to_read,
-        Poco::Logger * log,
+        LoggerPtr log,
         ReadFromMergeTree::IndexStats & index_stats);
 
     static DataTypes get_set_element_types(const NamesAndTypesList & source_columns, const String & column_name);
@@ -213,10 +215,10 @@ public:
         const ContextPtr & context,
         const KeyCondition & key_condition,
         const MergeTreeReaderSettings & reader_settings,
-        Poco::Logger * log,
+        LoggerPtr log,
         size_t num_streams,
         ReadFromMergeTree::IndexStats & index_stats,
-        DelayedSkipIndex & delayed_indices_,
+        SkipIndexFilterInfo & delayed_indices_,
         bool use_skip_indexes,
         const MergeTreeMetaBase & data_,
         bool use_sampling,
@@ -226,7 +228,7 @@ public:
         const StorageID & storage_id,
         const SelectQueryInfo & query_info,
         const ContextPtr & context,
-        Poco::Logger * log,
+        LoggerPtr log,
         RangesInDataParts & parts_with_ranges,
         CacheHolderPtr & part_cache_holder);
 
@@ -242,7 +244,7 @@ public:
         const StorageMetadataPtr & metadata_snapshot,
         ContextPtr context,
         bool sample_factor_column_queried,
-        Poco::Logger * log);
+        LoggerPtr log);
 
     static MarkRanges sampleByRange(
         const MergeTreeMetaBase::DataPartPtr & part,
@@ -265,9 +267,15 @@ public:
         const InputOrderInfoPtr& input_order);
 
     static MarkRanges filterMarkRangesForPartByInvertedIndex(
-        const MergeTreeData::DataPartPtr& part, const MarkRanges& mark_ranges,
-        const std::shared_ptr<DelayedSkipIndex>& delayed_index,
-        const ContextPtr& context, const MergeTreeReaderSettings& reader_settings);
+        const MergeTreeData::DataPartPtr& part_, const MarkRanges& mark_ranges_,
+        const std::shared_ptr<SkipIndexFilterInfo>& delayed_index_, const ContextPtr& context_,
+        const MergeTreeReaderSettings& reader_settings_, roaring::Roaring* row_filter_,
+        size_t& total_granules_, size_t& dropped_granules_);
+
+    static MarkRanges filterMarkRangesForPartByMultiInvertedIndex(
+        const MergeTreeData::DataPartPtr& part_, const MarkRanges& mark_ranges_,
+        MultiIndexFilterCondition& multi_idx_cond_, roaring::Roaring* row_filter_,
+        IndexTimeWatcher& idx_timer_, size_t& total_granules_, size_t& dropped_granules_);
 };
 
 struct IndexTimeWatcher

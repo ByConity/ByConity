@@ -141,7 +141,7 @@ namespace
                 size_t max_pool_size_,
                 bool wait_on_pool_size_limit_,
                 bool resolve_host_ = true)
-            : Base(max_pool_size_, &Poco::Logger::get("HTTPSessionPool"), wait_on_pool_size_limit_ ? BehaviourOnLimit::Wait : BehaviourOnLimit::AllocateNewBypassingPool)
+            : Base(max_pool_size_, getLogger("HTTPSessionPool"), wait_on_pool_size_limit_ ? BehaviourOnLimit::Wait : BehaviourOnLimit::AllocateNewBypassingPool)
             , host(host_)
             , port(port_)
             , https(https_)
@@ -251,7 +251,7 @@ namespace
                 auto msg = Poco::AnyCast<std::string>(session_data);
                 if (!msg.empty())
                 {
-                    LOG_TRACE((&Poco::Logger::get("HTTPCommon")), "Failed communicating with {} with error '{}' will try to reconnect session", host, msg);
+                    LOG_TRACE((getLogger("HTTPCommon")), "Failed communicating with {} with error '{}' will try to reconnect session", host, msg);
 
                     if (resolve_host)
                     {

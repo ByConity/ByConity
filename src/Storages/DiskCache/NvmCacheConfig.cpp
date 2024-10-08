@@ -62,7 +62,7 @@ namespace
 
     File openCacheFile(const std::string & file_name, UInt64 size, bool truncate)
     {
-        LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "create file: {} sie: {}, truncate: {}", file_name, size, truncate);
+        LOG_INFO(getLogger("NvmCacheConfig"), "create file: {} sie: {}, truncate: {}", file_name, size, truncate);
         if (file_name.empty())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "file name is empty");
 
@@ -78,7 +78,7 @@ namespace
         {
             if (e.getErrno() == EINVAL)
             {
-                LOG_ERROR(&Poco::Logger::get("NvmCacheConfig"), "failed to open with o_direct, error: {}", e.what());
+                LOG_ERROR(getLogger("NvmCacheConfig"), "failed to open with o_direct, error: {}", e.what());
                 f = File(file_name.c_str(), flags);
             }
             else
@@ -100,7 +100,7 @@ namespace
                     ErrorCodes::CANNOT_TRUNCATE_FILE);
 
             LOG_INFO(
-                &Poco::Logger::get("NvmCacheConfig"),
+                getLogger("NvmCacheConfig"),
                 "cache file {} is ftruncated from {} bytes to {} bytes",
                 file_name,
                 cur_file_size,
@@ -132,7 +132,7 @@ namespace
             catch (const ErrnoException & e)
             {
                 LOG_ERROR(
-                    &Poco::Logger::get("NvmCacheConfig"), "Exception in openCacheFile {}, error: {} errno: {}", path, e.what(), errno);
+                    getLogger("NvmCacheConfig"), "Exception in openCacheFile {}, error: {} errno: {}", path, e.what(), errno);
                 throw;
             }
             file_vec.push_back(std::move(f));
@@ -186,7 +186,7 @@ namespace
             throw std::invalid_argument("NVM cache size is not big enough");
 
         LOG_INFO(
-            &Poco::Logger::get("NvmCacheConfig"),
+            getLogger("NvmCacheConfig"),
             "big_hash_starting_limit: {}, big_hash_cache_offset: {}, big_hash_cache_size: {}",
             big_hash_start_offset_limit,
             big_hash_cache_offset,
@@ -222,7 +222,7 @@ namespace
         }
         block_cache_size = alignDown(block_cache_size, region_size);
 
-        LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "blockcache: starting offset: {}, size: {}", block_cache_offset, block_cache_size);
+        LOG_INFO(getLogger("NvmCacheConfig"), "blockcache: starting offset: {}, size: {}", block_cache_offset, block_cache_size);
 
         auto block_cache = std::make_unique<BlockCacheProto>();
         block_cache->setLayout(block_cache_offset, block_cache_size, region_size);
@@ -276,10 +276,10 @@ namespace
         UInt64 big_hash_end_offset = total_cache_size;
         UInt64 big_hash_start_offset = 0;
 
-        LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "metadata size: {}", metadata_size);
+        LOG_INFO(getLogger("NvmCacheConfig"), "metadata size: {}", metadata_size);
         for (size_t idx = 0; idx < config.enginesConfigs().size(); idx++)
         {
-            LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "setting up engine pair {}", idx);
+            LOG_INFO(getLogger("NvmCacheConfig"), "setting up engine pair {}", idx);
             const auto & engines_config = config.enginesConfigs()[idx];
             UInt64 block_cache_size = engines_config.blockCache().getSize();
             auto engine_pair_proto = std::make_unique<EnginePairProto>();
@@ -294,12 +294,12 @@ namespace
                     big_hash_end_offset,
                     block_cache_start_offset,
                     *engine_pair_proto);
-                LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "block cache size: {}", block_cache_size);
+                LOG_INFO(getLogger("NvmCacheConfig"), "block cache size: {}", block_cache_size);
             }
             else
             {
                 big_hash_start_offset = big_hash_end_offset;
-                LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "-- no bighash. block cache size: {}", block_cache_size);
+                LOG_INFO(getLogger("NvmCacheConfig"), "-- no bighash. block cache size: {}", block_cache_size);
             }
 
             if (block_cache_size > 0)
@@ -389,7 +389,7 @@ std::unique_ptr<AbstractCache> createNvmCache(
     }
 
     if (!cache->recover())
-        LOG_WARNING(&Poco::Logger::get("NvmCacheConfig"), "no recovery data found. setup with clean cache.");
+        LOG_WARNING(getLogger("NvmCacheConfig"), "no recovery data found. setup with clean cache.");
 
     return cache;
 }

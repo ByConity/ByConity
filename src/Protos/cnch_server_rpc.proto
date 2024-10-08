@@ -120,6 +120,7 @@ message CommitPartsReq {
 message CommitPartsResp {
   optional string exception = 1;
   optional uint64 commit_timestamp = 2;
+  optional uint32 dedup_impl_version = 3;
 }
 
 message SubmitPreloadTaskReq {
@@ -527,6 +528,18 @@ message handleRefreshTaskOnFinishResp
   optional string exception = 1;
 }
 
+message GetDedupImplVersionReq
+{
+  required uint64 txn_id = 1;
+  required UUID uuid = 2;
+}
+
+message GetDedupImplVersionResp
+{
+  required uint32 version = 1;
+  optional string exception = 2;
+}
+
 service CnchServerService {
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq)
       returns(ReportTaskHeartbeatResp);
@@ -667,4 +680,7 @@ service CnchServerService {
 
   rpc handleRefreshTaskOnFinish(handleRefreshTaskOnFinishReq) 
       returns (handleRefreshTaskOnFinishResp);
+
+  rpc getDedupImplVersion(GetDedupImplVersionReq)
+      returns (GetDedupImplVersionResp);
 };

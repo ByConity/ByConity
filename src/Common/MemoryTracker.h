@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <common/types.h>
 #include <Common/CurrentMetrics.h>
@@ -79,7 +80,7 @@ private:
     /// In terms of tree nodes it is the list of parents. Lifetime of these trackers should "include" lifetime of current tracker.
     std::atomic<MemoryTracker *> parent {};
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// You could specify custom metric to track memory usage.
     std::atomic<CurrentMetrics::Metric> metric = CurrentMetrics::end();

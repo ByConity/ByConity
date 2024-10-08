@@ -42,7 +42,7 @@ namespace DB::ErrorCodes
 namespace DB::ResourceManagement
 {
 ResourceManagerController::ResourceManagerController(ContextPtr global_context_)
-    : WithContext(global_context_), log(&Poco::Logger::get("ResourceManagerController"))
+    : WithContext(global_context_), log(getLogger("ResourceManagerController"))
 {
     resource_tracker = std::make_unique<ResourceTracker>(*this);
     vw_manager = std::make_unique<VirtualWarehouseManager>(*this);

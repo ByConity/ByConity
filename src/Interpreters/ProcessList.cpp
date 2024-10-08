@@ -178,8 +178,7 @@ static bool isMonitoredCnchQuery(const IAST * ast)
         return isMonitoredCnchTable(ast_update->database);
     else if (const auto * ast_delete = ast->as<ASTDeleteQuery>(); ast_delete && !ast_delete->database.empty() && !ast_delete->table.empty())
         return isMonitoredCnchTable(ast_delete->database);
-    else if (const auto * ast_insert = ast->as<ASTInsertQuery>(); ast_insert && (ast_insert->select || ast_insert->in_file)
-             && !ast_insert->table_id.database_name.empty() && !ast_insert->table_id.database_name.empty())
+    else if (const auto * ast_insert = ast->as<ASTInsertQuery>(); ast_insert && !ast_insert->table_id.database_name.empty() && !ast_insert->table_id.database_name.empty())
         return isMonitoredCnchTable(ast_insert->table_id.database_name);
     else if (const auto * ast_select = ast->as<ASTSelectWithUnionQuery>())
     {
@@ -253,7 +252,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
             if (!is_unlimited_query && max_size && processes_size >= max_size)
             {
                 if (queue_max_wait_ms)
-                    LOG_WARNING(&Poco::Logger::get("ProcessList"), "Too many simultaneous queries, will wait {} ms.", queue_max_wait_ms);
+                    LOG_WARNING(getLogger("ProcessList"), "Too many simultaneous queries, will wait {} ms.", queue_max_wait_ms);
                 if (!queue_max_wait_ms || !have_space.wait_for(lock, std::chrono::milliseconds(queue_max_wait_ms), [&]{ return processes.size() < max_size; }))
                     throw Exception("Too many simultaneous queries. Maximum: " + toString(max_size), ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
             }
@@ -307,7 +306,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
         auto query_it = user_process_list.queries.emplace(client_info.current_query_id, query_status);
         if (!query_it.second)
         {
-            LOG_ERROR(&Poco::Logger::get("ProcessList"), "Logical error: cannot insert Querystatus into user_process_list");
+            LOG_ERROR(getLogger("ProcessList"), "Logical error: cannot insert Querystatus into user_process_list");
         }
         lock.unlock();
 
@@ -378,7 +377,7 @@ void ProcessList::checkRunningQuery(ContextPtr query_context, bool is_unlimited_
       *  like SELECT count() FROM remote('127.0.0.{1,2}', system.numbers)
       *  so they must have different query_ids.
       */
-    
+
     const ClientInfo & client_info = query_context->getClientInfo();
     const Settings & settings = query_context->getSettingsRef();
     std::unique_lock lock(mutex);
@@ -455,13 +454,13 @@ ProcessListEntry::~ProcessListEntry()
     auto user_process_list_it = parent.user_to_queries.find(user);
     if (user_process_list_it == parent.user_to_queries.end())
     {
-        LOG_ERROR(&Poco::Logger::get("ProcessList"), "Logical error: cannot find user in ProcessList");
+        LOG_ERROR(getLogger("ProcessList"), "Logical error: cannot find user in ProcessList");
     }
 
     ProcessListForUser & user_process_list = user_process_list_it->second;
     if (!user_process_list.queries.erase(query_id))
     {
-        LOG_ERROR(&Poco::Logger::get("ProcessList"), "Logical error: cannot find query by query_id and pointer to ProcessListElement in ProcessListForUser");
+        LOG_ERROR(getLogger("ProcessList"), "Logical error: cannot find query by query_id and pointer to ProcessListElement in ProcessListForUser");
     }
 
     parent.have_space.notify_all();
@@ -629,7 +628,7 @@ bool QueryStatus::checkCpuTimeLimit(String node_name)
         double total_query_cpu_seconds = total_query_cpu_micros * 1.0 / 1000000;
         double thread_cpu_seconds = thread_cpu_micros * 1.0 / 1000000;
 
-        LOG_TRACE(&Poco::Logger::get("ThreadStatus"), "node {} checkCpuTimeLimit thread cpu secs = {}, total cpu secs = {}, max = {}",
+        LOG_TRACE(getLogger("ThreadStatus"), "node {} checkCpuTimeLimit thread cpu secs = {}, total cpu secs = {}, max = {}",
                     node_name, thread_cpu_seconds, total_query_cpu_seconds, settings.max_query_cpu_seconds);
         if (total_query_cpu_micros > settings.max_query_cpu_seconds * 1000000)
         {

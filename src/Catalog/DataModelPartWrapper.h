@@ -175,9 +175,13 @@ struct ServerVirtualPart
 {
     const ServerDataPartPtr part;
     std::unique_ptr<MarkRanges> mark_ranges;
+
+    mutable ServerVirtualPartPtr prev_part;
     explicit ServerVirtualPart(const ServerDataPartPtr & part_, std::unique_ptr<MarkRanges> mark_ranges_)
         : part(part_), mark_ranges(std::move(mark_ranges_))
     {}
+
+    const ServerVirtualPartPtr & tryGetPreviousPart() const;
 };
 
 }

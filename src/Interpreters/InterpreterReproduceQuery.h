@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <Parsers/IAST_fwd.h>
 #include <Poco/Logger.h>
@@ -21,7 +22,7 @@ public:
 private:
     ASTPtr query_ptr;
     SelectQueryOptions options;
-    const Poco::Logger * log = &Poco::Logger::get("InterpreterReproduceQuery");
+    const LoggerPtr log = getLogger("InterpreterReproduceQuery");
 
     /// database, table, status
     static BlockIO reproduceDDLImpl(PlanReproducer && reproducer);

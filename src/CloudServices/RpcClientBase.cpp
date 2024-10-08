@@ -31,6 +31,7 @@ namespace ErrorCodes
     extern const int BRPC_TIMEOUT;
     extern const int BRPC_HOST_DOWN;
     extern const int BRPC_CONNECT_ERROR;
+    extern const int BRPC_NO_METHOD;
 }
 
 static auto getDefaultChannelOptions()
@@ -58,7 +59,7 @@ RpcClientBase::RpcClientBase(const String & log_prefix, const String & host_port
 }
 
 RpcClientBase::RpcClientBase(const String & log_prefix, HostWithPorts host_ports_, brpc::ChannelOptions * options)
-    : log(&Poco::Logger::get(log_prefix + "[" + host_ports_.toDebugString() + "]"))
+    : log(getLogger(log_prefix + "[" + host_ports_.toDebugString() + "]"))
     , host_ports(std::move(host_ports_))
     , channel(std::make_unique<brpc::Channel>())
 {
@@ -74,7 +75,7 @@ void RpcClientBase::assertController(const brpc::Controller & cntl)
     if (cntl.Failed())
     {
         auto err = cntl.ErrorCode();
-        const String err_prefix = "Error on connecting " + (!host_ports.id.empty() ? host_ports.id : host_ports.toDebugString()) + " by rpc: ";
+        const String err_prefix = fmt::format("Error on connecting {} by rpc {}: ", (!host_ports.id.empty() ? host_ports.id : host_ports.toDebugString()), cntl.method()->full_name());
 
         if (err == ECONNREFUSED || err == ECONNRESET || err == ENETUNREACH)
         {
@@ -90,6 +91,10 @@ void RpcClientBase::assertController(const brpc::Controller & cntl)
         else if (err == brpc::Errno::ERPCTIMEDOUT)
         {
             throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_TIMEOUT);
+        }
+        else if (err == brpc::Errno::ENOMETHOD)
+        {
+            throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_NO_METHOD);
         }
         else /// Should we throw exception here to cover all other errors?
             throw Exception(err_prefix + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_EXCEPTION);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 #include <Interpreters/Context.h>
 #include <Core/MySQL/PacketEndpoint.h>
@@ -62,7 +63,7 @@ private:
 class Sha256Password : public IPlugin
 {
 public:
-    Sha256Password(RSA & public_key_, RSA & private_key_, Poco::Logger * log_);
+    Sha256Password(RSA & public_key_, RSA & private_key_, const String & log_name_);
 
     String getName() override { return "sha256_password"; }
 
@@ -75,7 +76,7 @@ public:
 private:
     RSA & public_key;
     RSA & private_key;
-    Poco::Logger * log;
+    LoggerPtr log;
     String scramble;
 };
 #endif

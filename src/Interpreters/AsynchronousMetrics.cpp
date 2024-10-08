@@ -107,7 +107,7 @@ AsynchronousMetrics::AsynchronousMetrics(
     int update_period_seconds,
     std::shared_ptr<std::vector<ProtocolServerAdapter>> servers_to_start_before_tables_,
     std::shared_ptr<std::vector<ProtocolServerAdapter>> servers_,
-    Poco::Logger * logger_)
+    LoggerPtr logger_)
     : WithContext(global_context_)
     , update_period(update_period_seconds)
     , servers_to_start_before_tables(servers_to_start_before_tables_)
@@ -769,7 +769,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             Int64 difference = new_amount - amount;
             /// Log only if difference is high. This is for convenience. The threshold is arbitrary.
             // if (difference >= 1048576 || difference <= -1048576)
-            LOG_DEBUG(&Poco::Logger::get("AsynchronousMetrics"),
+            LOG_DEBUG(getLogger("AsynchronousMetrics"),
                 "MemoryTracking: was {}, peak {}, free memory in arenas {}, hard limit will set to {}, RSS: {}, difference: {}, hualloc cache:{}",
                 ReadableSize(amount),
                 ReadableSize(peak),
@@ -782,7 +782,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             Int64 difference = new_amount - amount;
             /// Log only if difference is high. This is for convenience. The threshold is arbitrary.
             if (difference >= 1048576 || difference <= -1048576)
-                LOG_DEBUG(&Poco::Logger::get("AsynchronousMetrics"),
+                LOG_DEBUG(getLogger("AsynchronousMetrics"),
                         "MemoryTracking: was {}, peak {}, will set to {} (RSS), difference: {}",
                         ReadableSize(amount),
                         ReadableSize(peak),

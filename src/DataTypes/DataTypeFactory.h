@@ -116,5 +116,6 @@ void registerDataTypeSet(DataTypeFactory & factory);
 void registerDataTypeSketchBinary(DataTypeFactory & factory);
 void registerDataTypeDomainBool(DataTypeFactory & factory);
 void registerDataTypeObject(DataTypeFactory & factory);
+void registerDataTypeJSONB(DataTypeFactory & factory);
 
 }

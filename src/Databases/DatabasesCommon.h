@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/types.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/IAST.h>
@@ -66,7 +67,7 @@ public:
 
 protected:
     Tables tables;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     /// Information to log broken parts which fails to be loaded
     std::map<String, String> brokenTables;

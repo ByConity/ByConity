@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -77,7 +78,7 @@ public:
 
     DispatchedIOWorkerPool(const Options& opts,
         const std::vector<SchedulerType*>& schedulers):
-            opts_(opts), logger_(&Poco::Logger::get("DispatchedIOWorkerPool")),
+            opts_(opts), logger_(getLogger("DispatchedIOWorkerPool")),
             schedulers_(schedulers), global_context_(opts.global_queue_max_length_),
             worker_pool_(nullptr), dispatcher_pool_(nullptr) {}
 
@@ -203,7 +204,7 @@ private:
             std::atomic<uint64_t> retrieve_non_local_ns_;
         };
 
-        IOWorkerContext(const Options& opts, Poco::Logger* logger, GlobalIOWorkerContext& global_ctx,
+        IOWorkerContext(const Options& opts, LoggerPtr logger, GlobalIOWorkerContext& global_ctx,
             std::vector<std::unique_ptr<IOWorkerContext>>& local_ctx):
                 opts_(opts), logger_(logger), shutdown_(false), global_context_(global_ctx),
                 local_contexts_(local_ctx), request_queue_(opts.worker_queue_max_length_) {}
@@ -315,7 +316,7 @@ private:
 
         const Options& opts_;
 
-        Poco::Logger* logger_;
+        LoggerPtr logger_;
 
         std::atomic<bool> shutdown_;
 
@@ -346,7 +347,7 @@ private:
             std::atomic<uint64_t> request_wait_time_ns_;
         };
 
-        DispatcherContext(const Options& opts, Poco::Logger* logger, SchedulerType* scheduler,
+        DispatcherContext(const Options& opts, LoggerPtr logger, SchedulerType* scheduler,
             GlobalIOWorkerContext& global_ctx, std::vector<std::unique_ptr<IOWorkerContext>>& local_ctx):
                 opts_(opts), logger_(logger), shutdown_(false), scheduler_(scheduler),
                 global_ctx_(global_ctx), local_ctx_(local_ctx) {}
@@ -404,7 +405,7 @@ private:
 
         const Options& opts_;
 
-        Poco::Logger* logger_;
+        LoggerPtr logger_;
 
         std::atomic<bool> shutdown_;
 
@@ -417,7 +418,7 @@ private:
 
     const Options opts_;
 
-    Poco::Logger* logger_;
+    LoggerPtr logger_;
 
     std::vector<SchedulerType*> schedulers_;
 

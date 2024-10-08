@@ -28,7 +28,7 @@ BroadcastStatus IBroadcastSender::send(Chunk chunk) noexcept
     }
     catch (...)
     {
-        tryLogCurrentException(&Poco::Logger::get("IBroadcastSender"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(getLogger("IBroadcastSender"), __PRETTY_FUNCTION__);
         String exception_str = getCurrentExceptionMessage(true);
         BroadcastStatus current_status = finish(BroadcastStatusCode::SEND_UNKNOWN_ERROR, exception_str);
         return current_status;

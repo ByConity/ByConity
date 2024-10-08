@@ -30,7 +30,7 @@ DatabaseExternalHive::DatabaseExternalHive(const String & catalog_, const String
     : IDatabase(name_)
     , WithContext(context_->getGlobalContext())
     , hive_catalog_name(catalog_)
-    , log(&Poco::Logger::get("DatabaseExternalHive(" + database_name + ")"))
+    , log(getLogger("DatabaseExternalHive(" + database_name + ")"))
 {
     // std::optional<String> hive_catalog_opt;
     // std::optional<String> hive_db_opt;

@@ -57,7 +57,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 },
                 IMergeTreeReaderStream::StreamFileMeta {
                     .disk = part_->volume->getDisk(),
-                    .rel_path = part_->index_granularity_info.getMarksFilePath(part_->getFullRelativePath() + index->getFileName() + part_->getMarksFileExtension()),
+                    .rel_path = part_->index_granularity_info.getMarksFilePath(part_->getFullRelativePath() + index->getFileName()),
                     .offset = part_->getFileOffsetOrZero(index->getFileName() + part_->getMarksFileExtension()),
                     .size = part_->getFileSizeOrZero(index->getFileName() + part_->getMarksFileExtension())
                 },
@@ -150,7 +150,7 @@ MergeTreeIndexReader::MergeTreeIndexReader(
             break;
         }
         default:
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeIndexReader"), "Storage type: {} doesn't support secondary indexes", part_->info.storage_type);
+            LOG_DEBUG(getLogger("MergeTreeIndexReader"), "Storage type: {} doesn't support secondary indexes", part_->info.storage_type);
             break;
     }
     if(stream) stream->seekToStart();

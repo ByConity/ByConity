@@ -37,7 +37,7 @@ namespace ErrorCodes
 
 VWResourceGroup::VWResourceGroup(ContextPtr context_)
     : WithContext(context_)
-    , log(&Poco::Logger::get("VWResourceGroup")) {};
+    , log(getLogger("VWResourceGroup")) {};
 
 bool isVWQueueSyncOutdated(const VWResourceGroupManager & manager, UInt64 timeout)
 {

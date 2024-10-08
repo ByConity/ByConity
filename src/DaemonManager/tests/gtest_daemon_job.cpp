@@ -395,7 +395,7 @@ TEST(daemon_job, checkIfServerDiedFalseCase)
 TEST(daemon_job, checkLivenessIfNeed_counter_test_checking_at_right_time)
 {
     auto fetch_bg_thread_from_server = []
-        (Context &, CnchBGThreadType, Poco::Logger *, const std::vector<String> &)
+        (Context &, CnchBGThreadType, LoggerPtr, const std::vector<String> &)
         -> std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>>
     {
         return std::unordered_multimap<UUID, BGJobInfoFromServer>{};
@@ -422,7 +422,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_checking_at_right_time)
 TEST(daemon_job, checkLivenessIfNeed_counter_test_not_checking_when_not_in_time)
 {
     auto fetch_bg_thread_from_server = []
-        (Context &, CnchBGThreadType, Poco::Logger *, const std::vector<String> &)
+        (Context &, CnchBGThreadType, LoggerPtr, const std::vector<String> &)
         -> std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>>
     {
         return std::unordered_multimap<UUID, BGJobInfoFromServer>{};
@@ -449,7 +449,7 @@ TEST(daemon_job, checkLivenessIfNeed_counter_test_not_checking_when_not_in_time)
 TEST(daemon_job, checkLivenessIfNeed_counter_test_fetch_from_server_failed)
 {
     auto fetch_bg_thread_from_server = []
-        (Context &, CnchBGThreadType, Poco::Logger *, const std::vector<String> &)
+        (Context &, CnchBGThreadType, LoggerPtr, const std::vector<String> &)
         -> std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>>
     {
         return {};
@@ -684,7 +684,7 @@ TEST(daemon_job, runMissingAndRemoveDuplicateJob_correct_case3)
 TEST(daemon_job, checkLiveness_run_missing)
 {
     auto fetch_bg_thread_from_server = []
-        (Context &, CnchBGThreadType, Poco::Logger *, const std::vector<String> &)
+        (Context &, CnchBGThreadType, LoggerPtr, const std::vector<String> &)
         -> std::optional<std::unordered_multimap<UUID, BGJobInfoFromServer>>
     {
         return std::unordered_multimap<UUID, BGJobInfoFromServer>{

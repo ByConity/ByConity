@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/Logger.h>
+
 /** Allows to compare two incremental counters of type UInt32 in presence of possible overflow.
   * We assume that we compare values that are not too far away.
   * For example, when we increment 0xFFFFFFFF, we get 0. So, 0xFFFFFFFF is less than 0.
@@ -177,7 +179,7 @@ public:
         auto watch_callback =
                 [stale = stale] (const Coordination::WatchResponse & rsp)
                 {
-                    auto logger = &Poco::Logger::get("ClusterCopier");
+                    auto logger = getLogger("ClusterCopier");
                     if (rsp.error == Coordination::Error::ZOK)
                     {
                         switch (rsp.type)

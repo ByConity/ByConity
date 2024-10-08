@@ -181,7 +181,7 @@ IStorage::ColumnSizeByName ORCBlockInputFormat::getColumnSizes()
     auto * orc_reader = file_reader->GetRawORCReader();
     if (!orc_reader)
     {
-        LOG_INFO(&Poco::Logger::get("ORCBlockInputFormat"), "cannot get columns size, raw reader ptr is nullptr.");
+        LOG_INFO(getLogger("ORCBlockInputFormat"), "cannot get columns size, raw reader ptr is nullptr.");
         return {};
     }
     return getOrcColumnsSize(*orc_reader);

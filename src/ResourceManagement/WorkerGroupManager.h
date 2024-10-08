@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/IWorkerGroup.h>
 #include <Common/ConcurrentMapForCreating.h>
@@ -44,7 +45,7 @@ private:
     WorkerGroupPtr createWorkerGroupObject(const WorkerGroupData & data, std::lock_guard<std::mutex> * lock = nullptr);
 
     ResourceManagerController & rm_controller;
-    Poco::Logger * log{nullptr};
+    LoggerPtr log{nullptr};
     std::atomic_bool need_sync_with_catalog{false};
     /// Use bthread::Mutex but not std::mutex to avoid deadlock issue as we call other rpc API (catalog) in the lock scope.
     mutable bthread::Mutex wg_mgr_mutex;

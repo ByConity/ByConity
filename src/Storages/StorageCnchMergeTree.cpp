@@ -158,6 +158,7 @@ static ASTPtr getBasicSelectQuery(const ASTPtr & original_query)
     else if (select.prewhere())
         select.setExpression(ASTSelectQuery::Expression::WHERE, select.prewhere()->clone());
     select.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
+    LOG_DEBUG(getLogger("getBasicSelectQuery"), "original: {}, result: {}", queryToString(original_query), queryToString(select));
     return query;
 }
 
@@ -1382,7 +1383,7 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTSystemQuery & query, C
         });
     }
 
-    MergeTreeDataDeduper deduper(*this, local_context);
+    MergeTreeDataDeduper deduper(*this, local_context, CnchDedupHelper::DedupMode::UPSERT);
     LocalDeleteBitmaps bitmaps_to_dump
         = deduper.repairParts(txn->getTransactionID(), CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts));
 
@@ -1479,7 +1480,7 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
 
-    server_resource->sendResources(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
+    server_resource->submitCustomTasks(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
         std::vector<brpc::CallId> ids;
         for (const auto & resource : resources)
         {
@@ -1543,7 +1544,7 @@ void StorageCnchMergeTree::sendDropDiskCacheTasks(ContextPtr local_context, cons
         }
         return ids;
     };
-    server_resource->sendResources(local_context, worker_action);
+    server_resource->submitCustomTasks(local_context, worker_action);
 }
 
 void StorageCnchMergeTree::sendDropManifestDiskCacheTasks(ContextPtr local_context, String version, bool sync)
@@ -1768,9 +1769,9 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
 
     NameSet dropped_columns;
 
-    std::map<String, const IDataType *> old_types;
+    std::map<String, const DataTypePtr> old_types;
     for (const auto & column : old_metadata.getColumns().getAllPhysical())
-        old_types.emplace(column.name, column.type.get());
+        old_types.emplace(column.name, column.type);
 
     NameSet columns_already_in_alter;
     auto all_mutations = getContext()->getCnchCatalog()->getAllMutations(getStorageID());
@@ -1797,13 +1798,35 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
             getPartitionIDFromQuery(command.partition, getContext());
         }
 
+        if (command.type == AlterCommand::MODIFY_COLUMN)
+        {
+            const IDataType * new_type = removeLowCardinality(command.data_type).get();
+            const IDataType * old_type = removeLowCardinality(old_types[command.column_name]).get();
+
+            if (new_type && old_type && !settings.mutation_allow_modify_remove_nullable)
+            {
+                auto which_new_type = WhichDataType(new_type);
+                auto which_old_type = WhichDataType(old_type);
+
+                /// forbid:
+                ///   case1: LowCardinality(Nullable(xxx)) -> LowCardinality(xxx)
+                ///   case2: Nullable(xxx) -> xxx
+                /// not limit case:
+                ///   case1: Nullable(xxx) -> LowCardinality(Nullable(xxx))
+                if (which_old_type.isNullable() && !which_new_type.isNullable())
+                    throw Exception(ErrorCodes::CANNOT_ASSIGN_ALTER,
+                        "can not modify column {} from Nullable to non-Nullable, make sure there no NULL value in part, can enable settings mutation_allow_modify_remove_nullable = 1 to force execute it",
+                        command.column_name);
+            }
+        }
+
         if (command.column_name == merging_params.version_column)
         {
             /// Some type changes for version column is allowed despite it's a part of sorting key
             if (command.type == AlterCommand::MODIFY_COLUMN)
             {
                 const IDataType * new_type = command.data_type.get();
-                const IDataType * old_type = old_types[command.column_name];
+                const IDataType * old_type = old_types[command.column_name].get();
 
                 if (new_type)
                     checkVersionColumnTypesConversion(old_type, new_type, command.column_name);
@@ -1912,7 +1935,7 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
                     auto it = old_types.find(command.column_name);
 
                     assert(it != old_types.end());
-                    if (!isSafeForKeyConversion(it->second, command.data_type.get()))
+                    if (!isSafeForKeyConversion(it->second.get(), command.data_type.get()))
                         throw Exception(
                             "ALTER of partition key column " + backQuoteIfNeed(command.column_name) + " from type " + it->second->getName()
                                 + " to type " + command.data_type->getName()
@@ -1924,7 +1947,7 @@ void StorageCnchMergeTree::checkAlterInCnchServer(const AlterCommands & commands
                 {
                     auto it = old_types.find(command.column_name);
                     assert(it != old_types.end());
-                    if (!isSafeForKeyConversion(it->second, command.data_type.get()))
+                    if (!isSafeForKeyConversion(it->second.get(), command.data_type.get()))
                         throw Exception(
                             "ALTER of key column " + backQuoteIfNeed(command.column_name) + " from type " + it->second->getName()
                                 + " to type " + command.data_type->getName()

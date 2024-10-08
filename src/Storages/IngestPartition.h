@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/NamesAndTypes.h>
 
 #include <Interpreters/Context.h>
@@ -138,7 +139,7 @@ private:
     Names key_names;
     Int64 mutation = 0;
     ContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

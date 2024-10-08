@@ -198,7 +198,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
 
     auto db_name = original_db_name;
     auto catalog = createCatalogAdaptor(context);
-    auto logger = &Poco::Logger::get("load stats");
+    auto logger = getLogger("load stats");
 
     auto load_ts = AutoStats::convertToDateTime64(AutoStats::nowTimePoint());
     for (auto & table_pb : db_stats.tables())
@@ -208,7 +208,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
         if (!table_id_opt)
         {
             auto msg = "table " + table_name + " not exist in database " + db_name;
-            logger->warning(msg);
+            LOG_WARNING(logger, msg);
             continue;
         }
 

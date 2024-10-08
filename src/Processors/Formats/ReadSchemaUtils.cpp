@@ -98,7 +98,7 @@ std::pair<ColumnsDescription, String> readSchemaFromFormatImpl(
     const ContextPtr & context)
 try
 {
-    LOG_TRACE(&Poco::Logger::get("readSchemaFromFormatImpl"), " start readSchemaFromFormatImpl");
+    LOG_TRACE(getLogger("readSchemaFromFormatImpl"), " start readSchemaFromFormatImpl");
     NamesAndTypesList names_and_types;
     SchemaInferenceMode mode = context->getSettingsRef().schema_inference_mode;
     // if (format_name && mode == SchemaInferenceMode::UNION && !FormatFactory::instance().checkIfFormatSupportsSubsetOfColumns(*format_name, context, format_settings))
@@ -156,7 +156,7 @@ try
 
                 if (iterator_data.cached_columns)
                 {
-                    LOG_TRACE(&Poco::Logger::get("readSchemaFromFormatImpl"), "iterator_data cached columns...");
+                    LOG_TRACE(getLogger("readSchemaFromFormatImpl"), "iterator_data cached columns...");
 
                     /// If we have schema in cache, we must also know the format.
                     if (!format_name)
@@ -241,7 +241,7 @@ try
 
                 try
                 {
-                    LOG_TRACE(&Poco::Logger::get("readSchemaFromFormatImpl"), "format name = {}", *format_name);
+                    LOG_TRACE(getLogger("readSchemaFromFormatImpl"), "format name = {}", *format_name);
 
                     schema_reader = FormatFactory::instance().getSchemaReader(*format_name, *iterator_data.buf, context, format_settings);
                     schema_reader->setMaxRowsAndBytesToRead(max_rows_to_read, max_bytes_to_read);

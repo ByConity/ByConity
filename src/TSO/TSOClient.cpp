@@ -88,7 +88,7 @@ GetTimestampsResp TSOClient::getTimestamps(UInt32 size)
 
 UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
 {
-    static auto * log = &Poco::Logger::get("getTSOResponse");
+    static auto log = getLogger("getTSOResponse");
     ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::TSORequestMicroseconds);
 
     const auto & config = context.getRootConfig();

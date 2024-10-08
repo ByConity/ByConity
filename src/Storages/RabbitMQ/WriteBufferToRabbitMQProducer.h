@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <IO/WriteBuffer.h>
 #include <Columns/IColumn.h>
 #include <list>
@@ -26,7 +27,7 @@ public:
             const size_t channel_id_base_,
             const bool persistent_,
             std::atomic<bool> & wait_confirm_,
-            Poco::Logger * log_,
+            LoggerPtr log_,
             std::optional<char> delimiter,
             size_t rows_per_message,
             size_t chunk_size_
@@ -110,7 +111,7 @@ private:
     /// Record of pending acknowledgements from the server; its size never exceeds size of returned.queue
     std::map<UInt64, std::pair<UInt64, String>> delivery_record;
 
-    Poco::Logger * log;
+    LoggerPtr log;
     const std::optional<char> delim;
     const size_t max_rows;
     const size_t chunk_size;

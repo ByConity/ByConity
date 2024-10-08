@@ -3,6 +3,7 @@
 #include <Advisor/AdvisorContext.h>
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Analyzers/QualifiedColumnName.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Poco/Logger.h>
 
@@ -17,7 +18,7 @@ public:
 
 private:
     bool isValidColumn(const QualifiedColumnName & column, AdvisorContext & context) const;
-    Poco::Logger * log = &Poco::Logger::get("ClusterKeyAdvisor");
+    LoggerPtr log = getLogger("ClusterKeyAdvisor");
 };
 
 }

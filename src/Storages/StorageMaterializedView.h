@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <common/shared_ptr_helper.h>
 #include <Parsers/IAST_fwd.h>
 
@@ -46,7 +47,7 @@ public:
     bool supportsPrewhere() const override { return getTargetTable()->supportsPrewhere(); }
     bool supportsFinal() const override { return getTargetTable()->supportsFinal(); }
     bool supportsIndexForIn() const override { return getTargetTable()->supportsIndexForIn(); }
-    bool supportsParallelInsert() const override { return getTargetTable()->supportsParallelInsert(); }
+    bool supportsParallelInsert(ContextPtr local_context) const override { return getTargetTable()->supportsParallelInsert(local_context); }
     bool supportsSubcolumns() const override { return getTargetTable()->supportsSubcolumns(); }
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand, ContextPtr query_context, const StorageMetadataPtr & /* metadata_snapshot */) const override
     {
@@ -188,7 +189,7 @@ private:
     // mv meta cache
     MaterializedViewVersionedPartCache & cache;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 protected:
     StorageMaterializedView(

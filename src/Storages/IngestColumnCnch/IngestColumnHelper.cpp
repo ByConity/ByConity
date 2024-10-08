@@ -400,12 +400,12 @@ clusterDataPartWithBucketTable(const StorageCloudMergeTree & table, const IMerge
         for (const auto& data_part : data_parts)
         {
             LOG_TRACE(
-                &Poco::Logger::get("clusterDataPartWithBucketTable"),
+                getLogger("clusterDataPartWithBucketTable"),
                 data_part->name + " bucket_number:" + std::to_string(data_part->bucket_number));
 
             if (data_part->table_definition_hash != table_definition_hash.getDeterminHash())
             {
-                LOG_DEBUG(&Poco::Logger::get("clusterDataPartWithBucketTable"), "data part not match current cluster by definition");
+                LOG_DEBUG(getLogger("clusterDataPartWithBucketTable"), "data part not match current cluster by definition");
                 return {};
             }
             if (data_part->bucket_number >= 0 && static_cast<size_t>(data_part->bucket_number) < data_part_with_bucket.size())

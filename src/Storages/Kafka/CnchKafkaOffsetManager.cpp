@@ -38,7 +38,7 @@ constexpr auto RESET_CONSUME_OFFSET_BREAK_TIME = 1;
 
 CnchKafkaOffsetManager::CnchKafkaOffsetManager(const StorageID & storage_id, ContextMutablePtr context_)
     : WithMutableContext(context_->getGlobalContext())
-    , log(&Poco::Logger::get(storage_id.getFullTableName() + " (CnchKafkaOffsetManager)"))
+    , log(getLogger(storage_id.getFullTableName() + " (CnchKafkaOffsetManager)"))
 {
     storage = getContext()->getCnchCatalog()->getTable(*getContext(), storage_id.database_name, storage_id.table_name, getContext()->getTimestamp());
     kafka_table = dynamic_cast<StorageCnchKafka *>(storage.get());

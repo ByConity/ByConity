@@ -122,7 +122,7 @@ void BNModelManager::fetchImpl()
 #endif
         stats = fetchLocalImpl();
     LOG_INFO(
-        &Poco::Logger::get("BNModelManagerFetcher"),
+        getLogger("BNModelManagerFetcher"),
         "Fetching task runs in {} ms, scan total {} models, having {} reloaded models and {} exception",
         watch.elapsedMilliseconds(),
         stats.total,
@@ -134,7 +134,7 @@ BNModelManager::FetchStats BNModelManager::fetchLocalImpl(const StorageID & tabl
 {
     if (!fs::exists(directory))
     {
-        LOG_WARNING(&Poco::Logger::get("BNModelManagerFetcher"), "Directory {} doesn't exists, skip this run", directory);
+        LOG_WARNING(getLogger("BNModelManagerFetcher"), "Directory {} doesn't exists, skip this run", directory);
         return {};
     }
     int total = 0, reloaded = 0, exception = 0;
@@ -164,13 +164,13 @@ BNModelManager::FetchStats BNModelManager::fetchLocalImpl(const StorageID & tabl
 
             if (updateModel(storage_id, readFileFromLocal(entry.path()), readFileFromLocal(meta_path), last_write_time))
                 ++reloaded;
-            LOG_INFO(&Poco::Logger::get("BNModelManagerFetcher"), "Load BN Models: {}", storage_id.getFullNameNotQuoted());
+            LOG_INFO(getLogger("BNModelManagerFetcher"), "Load BN Models: {}", storage_id.getFullNameNotQuoted());
         }
         catch (const Exception & e)
         {
             ++exception;
             LOG_WARNING(
-                &Poco::Logger::get("BNModelManagerFetcher"),
+                getLogger("BNModelManagerFetcher"),
                 "Having exception <{}> while loading model {}, skip this run",
                 e.what(),
                 entry.path().string());
@@ -179,7 +179,7 @@ BNModelManager::FetchStats BNModelManager::fetchLocalImpl(const StorageID & tabl
         {
             ++exception;
             LOG_WARNING(
-                &Poco::Logger::get("BNModelManagerFetcher"),
+                getLogger("BNModelManagerFetcher"),
                 "Having exception <{}> while loading model {}, skip this run",
                 e.what(),
                 entry.path().string());
@@ -188,7 +188,7 @@ BNModelManager::FetchStats BNModelManager::fetchLocalImpl(const StorageID & tabl
         {
             ++exception;
             LOG_WARNING(
-                &Poco::Logger::get("BNModelManagerFetcher"),
+                getLogger("BNModelManagerFetcher"),
                 "Having unknown exception while loading model {}, skip this run",
                 entry.path().string());
         }
@@ -208,7 +208,7 @@ BNModelManager::FetchStats BNModelManager::fetchHdfsImpl(const StorageID & table
     }
     if (!hdfs_fs->exists(directory))
     {
-        LOG_WARNING(&Poco::Logger::get("BNModelManagerFetcher"), "Directory {} doesn't exists, skip this run", directory);
+        LOG_WARNING(getLogger("BNModelManagerFetcher"), "Directory {} doesn't exists, skip this run", directory);
         return {};
     }
 
@@ -237,13 +237,13 @@ BNModelManager::FetchStats BNModelManager::fetchHdfsImpl(const StorageID & table
 
             if (updateModel(storage_id, readFileFromHdfs(json_path.replace_extension(".bifxml")), readFileFromHdfs(json_path.replace_extension(".json")), last_write_time))
                 ++reloaded;
-            LOG_INFO(&Poco::Logger::get("BNModelManagerFetcher"), "Load BN Models: {}", storage_id.getFullNameNotQuoted());
+            LOG_INFO(getLogger("BNModelManagerFetcher"), "Load BN Models: {}", storage_id.getFullNameNotQuoted());
         }
         catch (const Exception & e)
         {
             ++exception;
             LOG_WARNING(
-                &Poco::Logger::get("BNModelManagerFetcher"),
+                getLogger("BNModelManagerFetcher"),
                 "Having exception <{}> while loading model {}, skip this run",
                 e.what(),
                 file_name);
@@ -252,7 +252,7 @@ BNModelManager::FetchStats BNModelManager::fetchHdfsImpl(const StorageID & table
         {
             ++exception;
             LOG_WARNING(
-                &Poco::Logger::get("BNModelManagerFetcher"),
+                getLogger("BNModelManagerFetcher"),
                 "Having exception <{}> while loading model {}, skip this run",
                 e.what(),
                 file_name);
@@ -261,7 +261,7 @@ BNModelManager::FetchStats BNModelManager::fetchHdfsImpl(const StorageID & table
         {
             ++exception;
             LOG_WARNING(
-                &Poco::Logger::get("BNModelManagerFetcher"), "Having unknown exception while loading model {}, skip this run", file_name);
+                getLogger("BNModelManagerFetcher"), "Having unknown exception while loading model {}, skip this run", file_name);
         }
     }
 
@@ -382,7 +382,7 @@ void BNModelManager::updateRowNumbers()
             for (const auto & part : parts)
                 model.second.row_number += part->rows_count;
 
-            LOG_INFO(&Poco::Logger::get("BNModelManagerUpdater"), "Update row number of table {}: {}",
+            LOG_INFO(getLogger("BNModelManagerUpdater"), "Update row number of table {}: {}",
                      model.first.getFullNameNotQuoted(), model.second.row_number);
         }
 
@@ -402,7 +402,7 @@ void BNModelManager::fetchSync(const StorageID & table_id)
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     LOG_INFO(
-        &Poco::Logger::get("BNModelManagerFetcher"), "Fetch task run in {} ms, reloaded: {}", duration.count(), stats.reloaded);
+        getLogger("BNModelManagerFetcher"), "Fetch task run in {} ms, reloaded: {}", duration.count(), stats.reloaded);
 }
 
 }

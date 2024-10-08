@@ -82,6 +82,6 @@ std::vector<std::tuple<String, String, String>> DB::filterTables(const ContextPt
     for (size_t i = 0; i < database_column_res->size(); ++i)
         res.emplace_back((*database_fullname_column_res)[i].get<String>(), (*database_column_res)[i].get<String>(), (*table_name_column_res)[i].get<String>());
 
-    LOG_DEBUG(&Poco::Logger::get("SystemCnchParts"), "Got {} tables from catalog after filter", res.size());
+    LOG_DEBUG(getLogger("SystemCnchParts"), "Got {} tables from catalog after filter", res.size());
     return res;
 }

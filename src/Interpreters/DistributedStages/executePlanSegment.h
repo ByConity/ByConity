@@ -122,14 +122,14 @@ struct PlanSegmentHeader
     PlanSegmentInstanceId instance_id;
     size_t plan_segment_buf_size = 0;
     std::shared_ptr<butil::IOBuf> plan_segment_buf_ptr;
-    UInt32 retry_id = std::numeric_limits<UInt32>::max();
+    UInt32 attempt_id = std::numeric_limits<UInt32>::max();
     SourceTaskFilter source_task_filter;
     void toProto(Protos::PlanSegmentHeader & proto) const
     {
         proto.set_plan_segment_id(instance_id.segment_id);
-        proto.set_parallel_id(instance_id.parallel_id);
+        proto.set_parallel_id(instance_id.parallel_index);
         proto.set_plan_segment_buf_size(plan_segment_buf_size);
-        proto.set_retry_id(retry_id);
+        proto.set_attempt_id(attempt_id);
         if (source_task_filter.isValid())
             *proto.mutable_source_task_filter() = source_task_filter.toProto();
     }

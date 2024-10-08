@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <variant>
 #include <optional>
 #include <shared_mutex>
@@ -439,7 +440,7 @@ private:
     /// Left table column names that are sources for required_right_keys columns
     std::vector<String> required_right_keys_sources;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     Block totals;
 

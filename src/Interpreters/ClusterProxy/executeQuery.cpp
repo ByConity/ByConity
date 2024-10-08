@@ -52,7 +52,7 @@ namespace ErrorCodes
 namespace ClusterProxy
 {
 
-ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr context, const Settings & settings, Poco::Logger * log)
+ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr context, const Settings & settings, LoggerPtr log)
 {
     Settings new_settings = settings;
     new_settings.queue_max_wait_ms = Cluster::saturate(new_settings.queue_max_wait_ms, settings.max_execution_time);
@@ -169,31 +169,9 @@ ContextMutablePtr removeUserRestrictionsFromSettings(ContextPtr context, const S
     return new_context;
 }
 
-// For distributed query, rewrite sample ast by dividing sample_size.
-// We assume data is evenly distributed and it is reasonable to divided sample_size into several parts.
-ASTPtr rewriteSampleForDistributedTable(const ASTPtr & query_ast, size_t shard_size)
-{
-    ASTPtr rewrite_ast = query_ast->clone();
-    ASTSelectQuery * select = rewrite_ast->as<ASTSelectQuery>();
-    if (select && select->sampleSize())
-    {
-        ASTSampleRatio * sample = select->sampleSize()->as<ASTSampleRatio>();
-        if (!sample)
-            return rewrite_ast;
-
-        ASTSampleRatio::BigNum numerator = sample->ratio.numerator;
-        ASTSampleRatio::BigNum denominator = sample->ratio.denominator;
-        if (numerator <= 1 || denominator > 1)
-            return rewrite_ast;
-
-        sample->ratio.numerator = (sample->ratio.numerator + 1) / shard_size;
-    }
-    return rewrite_ast;
-}
-
 void executeQuery(
     QueryPlan & query_plan,
-    IStreamFactory & stream_factory, Poco::Logger * log,
+    IStreamFactory & stream_factory, LoggerPtr log,
     const ASTPtr & query_ast, ContextPtr context, const SelectQueryInfo & query_info,
     const ExpressionActionsPtr & sharding_key_expr,
     const std::string & sharding_key_column_name,
@@ -322,7 +300,7 @@ void executeQuery(
 /// TODO: replace WorkerGroupHandle with SelectQueryInfo if worker group info is put into SelectQueryInfo
 void executeQuery(
     QueryPlan & query_plan,
-    IStreamFactory & stream_factory, Poco::Logger * log,
+    IStreamFactory & stream_factory, LoggerPtr log,
     const ASTPtr & query_ast, ContextPtr context, const WorkerGroupHandle & cluster)
 {
     assert(log);

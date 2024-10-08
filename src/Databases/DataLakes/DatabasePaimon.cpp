@@ -15,6 +15,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_TABLE;
+    extern const int UNKNOWN_DATABASE;
     extern const int UNSUPPORTED_METHOD;
     extern const int TABLE_IS_DROPPED;
     extern const int TABLE_ALREADY_EXISTS;
@@ -76,12 +77,26 @@ bool DatabasePaimon::empty() const
 
 DatabaseTablesIteratorPtr DatabasePaimon::getTablesIterator(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name)
 {
-    auto all_table_name = catalog_client->listTables(database_name_in_paimon);
+    std::vector<String> all_table_names;
+    try
+    {
+        all_table_names = catalog_client->listTables(database_name_in_paimon);
+    }
+    catch (Exception &)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw Exception(
+            ErrorCodes::UNKNOWN_DATABASE,
+            fmt::format(
+                "Please drop the Paimon Database {}, because the corresponding database {} in paimon catalog not exists.",
+                database_name,
+                database_name_in_paimon));
+    }
     std::vector<StoragePtr> all_tables;
-    all_tables.reserve(all_table_name.size());
+    all_tables.reserve(all_table_names.size());
     std::vector<String> all_names;
-    all_names.reserve(all_table_name.size());
-    for (const auto & table_name : all_table_name)
+    all_names.reserve(all_table_names.size());
+    for (const auto & table_name : all_table_names)
     {
         if (!filter_by_table_name || filter_by_table_name(table_name))
         {
@@ -108,26 +123,26 @@ time_t DatabasePaimon::getObjectMetadataModificationTime(const String & /*table_
 
 ASTPtr DatabasePaimon::getCreateTableQueryImpl(const String & table_name, ContextPtr local_context, bool throw_on_error) const
 {
-    auto error_handler = [&](int ec, const String & msg) -> ASTPtr {
+    try
+    {
+        Protos::Paimon::Schema schema = catalog_client->getPaimonSchema(database_name_in_paimon, table_name);
+        paimon_utils::PaimonSchemaConverter converter(local_context, storage_settings, schema);
+        auto create_query_ast = converter.createQueryAST(catalog_client, getDatabaseName(), database_name_in_paimon, table_name);
+        create_query_ast.database = getDatabaseName();
+        create_query_ast.table = table_name;
+
+        addCreateQuerySettings(create_query_ast, storage_settings);
+        return create_query_ast.clone();
+    }
+    catch (...)
+    {
         if (throw_on_error)
         {
-            throw Exception(ec, msg);
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, fmt::format("Paimon table {}.{} not exists.", database_name_in_paimon, table_name));
         }
         return nullptr;
-    };
-
-    if (!catalog_client->isTableExist(database_name_in_paimon, table_name))
-        return error_handler(ErrorCodes::UNKNOWN_TABLE, fmt::format("Paimon table {}.{} not exists.", database_name_in_paimon, table_name));
-
-    Protos::Paimon::Schema schema = catalog_client->getPaimonSchema(database_name_in_paimon, table_name);
-    paimon_utils::PaimonSchemaConverter converter(local_context, storage_settings, schema);
-    auto create_query_ast = converter.createQueryAST(catalog_client, getDatabaseName(), database_name_in_paimon, table_name);
-    create_query_ast.database = getDatabaseName();
-    create_query_ast.table = table_name;
-    ContextMutablePtr mutable_context = Context::createCopy(local_context);
-
-    addCreateQuerySettings(create_query_ast, storage_settings);
-    return create_query_ast.clone();
+    }
 }
 
 }

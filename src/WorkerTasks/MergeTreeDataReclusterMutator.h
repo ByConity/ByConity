@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MutationCommands.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
@@ -48,7 +49,7 @@ private:
 
     MergeTreeMetaBase & data;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

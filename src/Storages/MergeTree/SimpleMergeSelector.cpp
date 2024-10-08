@@ -295,7 +295,7 @@ SimpleMergeSelector::selectMulti(const PartsRanges & partitions, size_t max_tota
             res.push_back(current_parts);
     }
 
-    LOG_DEBUG(&Poco::Logger::get("SimpleBatchMergeSelector"), "Selected {} groups to merge", res.size());
+    LOG_DEBUG(getLogger("SimpleBatchMergeSelector"), "Selected {} groups to merge", res.size());
 
     return res;
 }

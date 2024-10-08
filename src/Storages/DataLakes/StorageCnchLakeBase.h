@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <common/shared_ptr_helper.h>
@@ -19,7 +20,7 @@ public:
     bool isRemote() const override final { return true; }
     bool supportsOptimizer() const override final { return true; }
     bool supportsDistributedRead() const override final { return true; }
-    bool supportsPrewhere() const override final { return true; }
+    bool supportsPrewhere() const override { return true; }
     bool supportIntermedicateResultCache() const override final { return true; }
 
     StorageCnchLakeBase(
@@ -81,6 +82,6 @@ protected:
     std::shared_ptr<CnchHiveSettings> storage_settings;
 
 private:
-    Poco::Logger * log{&Poco::Logger::get("CnchHive")};
+    LoggerPtr log{getLogger("CnchHive")};
 };
 }

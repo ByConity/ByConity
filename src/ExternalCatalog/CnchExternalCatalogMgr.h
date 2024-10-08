@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <mutex>
 #include <Catalog/MetastoreProxy.h>
 #include <ExternalCatalog/IExternalCatalog.h>
@@ -35,6 +36,6 @@ private:
     std::string name_space;
     std::map<std::string, PlainConfigsPtr> catalog_confs; // use for check whether the catalog has been changed.
     std::map<std::string, ExternalCatalogPtr> catalogs; // map from catalog name to externcal catalog ptr.
-    Poco::Logger * log = &Poco::Logger::get("CnchExternalCatalogMgr");
+    LoggerPtr log = getLogger("CnchExternalCatalogMgr");
 };
 }

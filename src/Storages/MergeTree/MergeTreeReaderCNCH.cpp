@@ -91,7 +91,7 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
         mark_cache_, mark_ranges_, settings_, avg_value_size_hints_, index_executor_)
     , segment_cache_strategy(nullptr)
     , segment_cache(nullptr)
-    , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
+    , log(getLogger("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
     , reader_id(UUIDHelpers::UUIDToString(UUIDHelpers::generateV4()))
 
 {
@@ -554,7 +554,7 @@ size_t MergeTreeReaderCNCH::readIndexColumns(size_t from_mark, bool continue_rea
         String output_names;
         for (const auto & output_name: getBitmapOutputColumns())
             output_names += " " + output_name;
-        LOG_TRACE(&Poco::Logger::get("index_executor"), "read bitmap index file:{} for part:{}", output_names, this->data_part->name);
+        LOG_TRACE(getLogger("index_executor"), "read bitmap index file:{} for part:{}", output_names, this->data_part->name);
 #endif
 
     return bitmap_rows_read;

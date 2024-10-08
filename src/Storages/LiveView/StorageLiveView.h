@@ -11,6 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+#include <Common/Logger.h>
 #include <common/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -193,7 +194,7 @@ private:
     ASTPtr inner_blocks_query; /// query over the mergeable blocks to produce final result
     ContextMutablePtr live_view_context;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     bool is_temporary = false;
     bool is_periodically_refreshed = false;

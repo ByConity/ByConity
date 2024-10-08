@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
 
 
@@ -64,7 +65,7 @@ private:
     /// Names from header. Used in order to order columns in read blocks.
     Names ordered_names;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

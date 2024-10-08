@@ -88,9 +88,9 @@ void HDFSKrb5Params::runKinit() const
 {
     if (need_kinit)
     {
-        LOG_DEBUG(&Poco::Logger::get("HDFSClient"), "Running KerberosInit");
+        LOG_DEBUG(getLogger("HDFSClient"), "Running KerberosInit");
         kerberosInit(hadoop_kerberos_keytab, hadoop_kerberos_principal, hadoop_security_kerberos_ticket_cache_path, kinit_timeout);
-        LOG_DEBUG(&Poco::Logger::get("HDFSClient"), "Finished KerberosInit");
+        LOG_DEBUG(getLogger("HDFSClient"), "Finished KerberosInit");
     }
 }
 

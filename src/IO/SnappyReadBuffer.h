@@ -15,10 +15,10 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/PODArray.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <snappy/snappy.h>
-#include <Poco/Logger.h>
 #include <common/logger_useful.h>
 
 
@@ -56,8 +56,6 @@ inline UInt32 GetInt(const char* buf) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif
-
-using Poco::Logger;
 
 /* The main decompress logic is copied from Impala implementation */
 template <bool SNAPPY_BLOCKED = false>
@@ -288,7 +286,7 @@ protected:
             if (readLen < allocUnit) break;
             own_compressed_buffer.resize(totalLen + allocUnit);
         }
-        LOG_DEBUG((&Logger::get("SnappyReadBuffer")), "Finish read snappy file.");
+        LOG_DEBUG((getLogger("SnappyReadBuffer")), "Finish read snappy file.");
         // set it for BlockDecompress
         size_compressed = totalLen;
         // calculate size_decompressed
@@ -326,7 +324,7 @@ public:
         decompress(working_buffer.begin(), size_decompressed);
         readAndDecompress = true;
 
-        LOG_DEBUG((&Logger::get("SnappyReadBuffer")), "Finish decompress snappy file.");
+        LOG_DEBUG((getLogger("SnappyReadBuffer")), "Finish decompress snappy file.");
     }
 
     ~SnappyReadBuffer() override = default;

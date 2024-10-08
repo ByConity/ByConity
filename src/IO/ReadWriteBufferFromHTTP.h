@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <functional>
 #include <common/types.h>
 #include <IO/ConnectionTimeouts.h>
@@ -124,7 +125,7 @@ namespace detail
             if (!credentials.getUsername().empty())
                 credentials.authenticate(request);
 
-            LOG_TRACE((&Poco::Logger::get("ReadWriteBufferFromHTTP")), "Sending request to {}", uri_.toString());
+            LOG_TRACE((getLogger("ReadWriteBufferFromHTTP")), "Sending request to {}", uri_.toString());
 
             auto sess = session->getSession();
 

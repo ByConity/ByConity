@@ -45,7 +45,7 @@ TTLBlockInputStream::TTLBlockInputStream(
     time_t current_time_,
     bool force_)
     : data_part(data_part_)
-    , log(&Poco::Logger::get(storage_.getLogName() + " (TTLBlockInputStream)"))
+    , log(getLogger(storage_.getLogName() + " (TTLBlockInputStream)"))
 {
     children.push_back(input_);
     header = children.at(0)->getHeader();

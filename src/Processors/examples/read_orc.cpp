@@ -222,7 +222,7 @@ void printBlock(const State & state, Block & block, WriteBuffer & wb)
 void readBySelect(const String & query_str, const String & file_name, size_t limit)
 {
     initLogger("trace");
-    auto * log = &Poco::Logger::get(__PRETTY_FUNCTION__);
+    auto log = getLogger(__PRETTY_FUNCTION__);
     const State & state = State::instance();
     ReadBufferFromFile rb(file_name);
 
@@ -247,7 +247,7 @@ void readBySelect(const String & query_str, const String & file_name, size_t lim
         Status status_read = scanner.readNext(block);
         if (!status_read.ok())
         {
-            LOG_INFO(&Poco::Logger::get(__PRETTY_FUNCTION__), "exit via {}", status_read.ToString());
+            LOG_INFO(getLogger(__PRETTY_FUNCTION__), "exit via {}", status_read.ToString());
             return;
         }
         LOG_DEBUG(log, block.dumpStructure());

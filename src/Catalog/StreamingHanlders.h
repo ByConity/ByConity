@@ -15,6 +15,7 @@
 
 #pragma once
 #include <Catalog/HandlerManager.h>
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Poco/Logger.h>
 #include <brpc/stream.h>
@@ -38,7 +39,7 @@ public:
 
     virtual void on_closed(brpc::StreamId) override;
 
-    Poco::Logger * log = &Poco::Logger::get("StreamingHandler");
+    LoggerPtr log = getLogger("StreamingHandler");
     HandlerManager & manager;
     HandlerIterator handler_it;
 };

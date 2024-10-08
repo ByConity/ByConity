@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -37,7 +38,7 @@ public:
     StorageS3Configuration config;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("StorageCloudS3");
+    LoggerPtr log = getLogger("StorageCloudS3");
 
 public:
     StorageCloudS3(

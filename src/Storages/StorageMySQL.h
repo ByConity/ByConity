@@ -1,6 +1,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
+#include <Common/Logger.h>
 #include "config_core.h"
 #endif
 
@@ -67,7 +68,7 @@ private:
 
     mysqlxx::PoolWithFailoverPtr pool;
 
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

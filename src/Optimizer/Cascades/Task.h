@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Optimizer/Cascades/Group.h>
 #include <Optimizer/Cascades/GroupExpression.h>
 #include <Optimizer/Rule/Rule.h>
@@ -75,7 +76,7 @@ public:
 
 protected:
     OptContextPtr context;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 class OptimizeGroup : public OptimizerTask

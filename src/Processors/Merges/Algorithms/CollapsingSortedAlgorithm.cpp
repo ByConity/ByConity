@@ -27,7 +27,7 @@ CollapsingSortedAlgorithm::CollapsingSortedAlgorithm(
     const String & sign_column,
     bool only_positive_sign_,
     size_t max_block_size,
-    Poco::Logger * log_,
+    LoggerPtr log_,
     WriteBuffer * out_row_sources_buf_,
     bool use_average_block_sizes)
     : IMergingAlgorithmWithSharedChunks(num_inputs, std::move(description_), out_row_sources_buf_, max_row_refs)

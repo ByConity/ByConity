@@ -300,7 +300,7 @@ ASTPtr StorageCnchHive::applyFilter(
                     std::move(column_compressed_sizes),
                     getInMemoryMetadataPtr(),
                     current_info.syntax_analyzer_result->requiredSourceColumns(),
-                    &Poco::Logger::get("OptimizerEarlyPrewherePushdown")};
+                    getLogger("OptimizerEarlyPrewherePushdown")};
             }
         }
         else if (HiveMoveToPrewhereMethod::STATS == settings.hive_move_to_prewhere_method)

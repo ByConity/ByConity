@@ -11,7 +11,7 @@ namespace DB
 {
 
 TCPProgressSender::TCPProgressSender(std::function<void()> send_tcp_progress_, size_t interval_)
-    : logger(&Poco::Logger::get("ProgressManager")), send_tcp_progress(send_tcp_progress_), interval(interval_)
+    : logger(getLogger("ProgressManager")), send_tcp_progress(send_tcp_progress_), interval(interval_)
 {
     if (send_tcp_progress && interval)
     {
@@ -71,7 +71,7 @@ void ProgressManager::onFinalProgress(UInt32 segment_id, UInt32 parallel_index, 
         "on final progress query_id:{} segment_id:{} parallel_index:{} progress:{}",
         query_id,
         instance_id.segment_id,
-        instance_id.parallel_id,
+        instance_id.parallel_index,
         progress_.getValues().toString());
 }
 

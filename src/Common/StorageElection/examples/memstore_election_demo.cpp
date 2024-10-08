@@ -21,9 +21,9 @@
 
 const static int test_nodes = 3;
 
-static Poco::Logger * getLogger()
+static LoggerPtr getLogger()
 {
-    return &Poco::Logger::get("memstore_elector");
+    return getLogger("memstore_elector");
 }
 
 class MemStorage : public DB::IKvStorage

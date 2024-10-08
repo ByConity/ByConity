@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -182,7 +183,7 @@ private:
     // Initializes the eviction policy.
     void resetEvictionPolicy();
 
-    Poco::Logger * log = &Poco::Logger::get("RegionManager");
+    LoggerPtr log = getLogger("RegionManager");
 
     const UInt16 num_priorities{};
     const UInt16 in_mem_buf_flush_retry_limit{};

@@ -55,6 +55,7 @@
 #include <Catalog/CatalogMetricHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchServerClient.h>
+#include <CloudServices/ManifestBroadcaster.h>
 #include <Dictionaries/getDictionaryConfigurationFromAST.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -1181,7 +1182,7 @@ namespace Catalog
                     {
                         // update cache with nullptr and latest table commit_time to prevent an old version be inserted into cache.
                         // the cache will be reloaded in following getTable
-                        cache_manager->insertStorageCache(storage->getStorageID(), nullptr, table->commit_time(), host_port.topology_version);
+                        cache_manager->insertStorageCache(storage->getStorageID(), nullptr, table->commit_time(), host_port.topology_version, query_context);
                     }
                 }
             },
@@ -1277,7 +1278,7 @@ namespace Catalog
                 /// update table name in table meta entry so that we can get table part metrics correctly.
                 if (auto cache_manager = context.getPartCacheManager(); cache_manager && is_local_server)
                 {
-                    cache_manager->insertStorageCache(StorageID{from_database, from_table, UUIDHelpers::toUUID(table_uuid)}, nullptr, ts, host_port.topology_version);
+                    cache_manager->insertStorageCache(StorageID{from_database, from_table, UUIDHelpers::toUUID(table_uuid)}, nullptr, ts, host_port.topology_version, context);
                     cache_manager->updateTableNameInMetaEntry(table_uuid, to_database, to_table);
                 }
 
@@ -1356,9 +1357,9 @@ namespace Catalog
                 if (!host_server.empty())
                     is_host_server = isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort()));
 
-                if (is_host_server && cache_manager && !query_context.hasSessionTimeZone())
+                if (is_host_server && cache_manager)
                 {
-                    auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version);
+                    auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version, query_context);
                     if (cached_storage && cached_storage->commit_time <= ts && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
                     {
                         res = cached_storage;
@@ -1388,7 +1389,7 @@ namespace Catalog
 
                 /// Try insert the storage into cache.
                 if (res && is_host_server && cache_manager)
-                    cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), host_server.topology_version);
+                    cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), host_server.topology_version, query_context);
             },
             ProfileEvents::GetTableSuccess,
             ProfileEvents::GetTableFailed);
@@ -1430,7 +1431,7 @@ namespace Catalog
                 {
                     if (current_topology_version != PairInt64(0, 0))
                     {
-                        auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(uuid), current_topology_version);
+                        auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(uuid), current_topology_version, query_context);
                         if (cached_storage && cached_storage->commit_time <= ts)
                         {
                             auto host_server = current_topology.getTargetServer(uuid, cached_storage->getServerVwName());
@@ -1461,7 +1462,7 @@ namespace Catalog
                 {
                     auto host_server = current_topology.getTargetServer(uuid, res->getServerVwName());
                     if (!host_server.empty() && isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort())))
-                        cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), current_topology_version);
+                        cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), current_topology_version, query_context);
                 }
             },
             ProfileEvents::TryGetTableByUUIDSuccess,
@@ -3536,6 +3537,14 @@ namespace Catalog
                     }
                 }
 
+                // now, try to broadcast manifest to warmup for new parts
+                if (write_manifest && context.getSettingsRef().enable_manifest_cache)
+                {
+                    LOG_DEBUG(log, "Will broadcast manifest for txn {}.", txnID);
+                    ContextPtr session_context = Context::createCopy(context.getGlobalContext());
+                    tryBroadcastManifest(session_context, table, txnID, part_models, commit_data.delete_bitmaps);
+                }
+
                 LOG_DEBUG(log, "Finish write part for txn {}, elapsed {} ms.", txnID, watch.elapsedMilliseconds());
             },
             ProfileEvents::WritePartsSuccess,
@@ -4096,7 +4105,7 @@ namespace Catalog
         return txn_undobuffers;
     }
 
-    Catalog::UndoBufferIterator::UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter_, Poco::Logger * log_)
+    Catalog::UndoBufferIterator::UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter_, LoggerPtr log_)
         : metastore_iter{std::move(metastore_iter_)}, log{log_}
     {}
 
@@ -7340,7 +7349,7 @@ namespace Catalog
 
     void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid)
     {
-        static Poco::Logger * log = &Poco::Logger::get("Catalog::notifyOtherServersOnAccessEntityChange");
+        static LoggerPtr log = getLogger("Catalog::notifyOtherServersOnAccessEntityChange");
         std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
         if (!topology_master)
         {
@@ -7770,7 +7779,7 @@ namespace Catalog
             }
             catch (...)
             {
-                tryLogCurrentException(&Poco::Logger::get("Catalog::getLastModificationTimeHints"));
+                tryLogCurrentException(getLogger("Catalog::getLastModificationTimeHints"));
             }
         }
 

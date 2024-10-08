@@ -110,7 +110,7 @@ TransformResult ExtractBitmapImplicitFilter::transformImpl(PlanNodePtr node, con
         return {};
 
     LOG_DEBUG(
-        &Poco::Logger::get("ExtractBitmapImplicitFilter"),
+        getLogger("ExtractBitmapImplicitFilter"),
         "Extract bitmap implicit filter for plan node {}, extracted filter: {}",
         node->getId(),
         serializeAST(*implicit_filter));

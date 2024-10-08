@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Interpreters/Context.h>
 namespace DB
 {
@@ -21,7 +22,7 @@ namespace DB
 bool createDatabaseInCatalog(
     const ContextPtr & global_context,
     const String & database_name,
-    Poco::Logger * logger);
+    LoggerPtr logger);
 
 /// Detects change in table schema. Does not support modification of primary/partition keys
 String makeAlterColumnQuery(
@@ -35,26 +36,26 @@ bool createCnchTable(
     const String & database,
     const String & table,
     ASTPtr & create_query_ast,
-    Poco::Logger * logger);
+    LoggerPtr logger);
 
 bool prepareCnchTable(
     ContextPtr global_context,
     const String & database,
     const String & table,
     ASTPtr & create_query_ast,
-    Poco::Logger * logger);
+    LoggerPtr logger);
 
 bool syncTableSchema(
     ContextPtr global_context,
     const String & database,
     const String & table,
     const Block & expected_block,
-    Poco::Logger * logger);
+    LoggerPtr logger);
 
 bool createView(
     ContextPtr global_context,
     const String & database,
     const String & table,
-    Poco::Logger * logger);
+    LoggerPtr logger);
 
 }/// end namespace

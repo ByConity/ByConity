@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/SortDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/prepared_statement.h>
@@ -66,7 +67,7 @@ class PruneSortingInfoRewriter : public SimplePlanRewriter<SortInfo>
 {
 public:
     PruneSortingInfoRewriter(ContextMutablePtr context_, CTEInfo & cte_info_)
-        : SimplePlanRewriter(context_, cte_info_), logger(&Poco::Logger::get("PruneSortingInfoRewriter"))
+        : SimplePlanRewriter(context_, cte_info_), logger(getLogger("PruneSortingInfoRewriter"))
     {
     }
 
@@ -79,7 +80,7 @@ public:
     PlanNodePtr visitTableScanNode(TableScanNode &, SortInfo & required) override;
 
 private:
-    Poco::Logger * logger;
+    LoggerPtr logger;
 };
 
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Advisor/Rules/WorkloadAdvisor.h>
 #include <Advisor/AdvisorContext.h>
 #include <Advisor/WorkloadTable.h>
@@ -27,7 +28,7 @@ private:
     std::vector<QualifiedColumnName> getSortedInterestingColumns(AdvisorContext & context) const;
     bool isValidColumn(const QualifiedColumnName & column, AdvisorContext & context) const;
 
-    Poco::Logger * log = &Poco::Logger::get("PartitionKeyAdvisor");
+    LoggerPtr log = getLogger("PartitionKeyAdvisor");
 
     static constexpr bool enable_memo_based_advise = 1;
 };

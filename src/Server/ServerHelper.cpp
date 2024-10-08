@@ -18,7 +18,7 @@ std::string getCanonicalPath(std::string && path)
 }
 
 std::string getUserName(uid_t user_id);
-void setupTmpPath(Poco::Logger * log, const std::string & path)
+void setupTmpPath(LoggerPtr log, const std::string & path)
 {
     LOG_DEBUG(log, "Setting up {} to store temporary data in it", path);
 

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <Catalog/Catalog.h>
@@ -62,7 +63,7 @@ namespace BGJobStatusInCatalog
     class CatalogBGJobStatusPersistentStoreProxy : public IBGJobStatusPersistentStoreProxy
     {
     public:
-        CatalogBGJobStatusPersistentStoreProxy(std::shared_ptr<Catalog::Catalog>, CnchBGThreadType, Poco::Logger *log);
+        CatalogBGJobStatusPersistentStoreProxy(std::shared_ptr<Catalog::Catalog>, CnchBGThreadType, LoggerPtr);
 
         std::optional<CnchBGThreadStatus> createStatusIfNotExist(const UUID & uuid, CnchBGThreadStatus init_status) const override;
         void setStatus(const UUID & table_uuid, CnchBGThreadStatus status) const override;
@@ -71,11 +72,11 @@ namespace BGJobStatusInCatalog
     protected:
         void clearCache() override;
         /// keep member variables protected for testing
-        std::shared_ptr<Catalog::Catalog> catalog;
         std::unordered_map<UUID, CnchBGThreadStatus> statuses_cache;
+        std::shared_ptr<Catalog::Catalog> catalog;
         bool is_cache_prefetched = false;
         CnchBGThreadType type;
-        Poco::Logger * log;
+        LoggerPtr log;
     };
 }
 

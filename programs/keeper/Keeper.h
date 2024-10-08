@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Server/IServer.h>
 #include <daemon/BaseDaemon.h>
 

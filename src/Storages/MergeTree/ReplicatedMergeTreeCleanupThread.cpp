@@ -22,7 +22,7 @@ namespace ErrorCodes
 ReplicatedMergeTreeCleanupThread::ReplicatedMergeTreeCleanupThread(StorageReplicatedMergeTree & storage_)
     : storage(storage_)
     , log_name(storage.getStorageID().getFullTableName() + " (ReplicatedMergeTreeCleanupThread)")
-    , log(&Poco::Logger::get(log_name))
+    , log(getLogger(log_name))
 {
     task = storage.getContext()->getSchedulePool().createTask(log_name, [this]{ run(); });
 }

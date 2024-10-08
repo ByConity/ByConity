@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Processors/Formats/IOutputFormat.h>
 
 #include <Common/Arena.h>
@@ -80,7 +81,7 @@ public:
         {
             collectorThreadFunction(thread_group);
         });
-        LOG_TRACE(&Poco::Logger::get("ParallelFormattingOutputFormat"), "Parallel formatting is being used");
+        LOG_TRACE(getLogger("ParallelFormattingOutputFormat"), "Parallel formatting is being used");
     }
 
     ~ParallelFormattingOutputFormat() override

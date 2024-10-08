@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -60,7 +61,7 @@ public:
 
 private:
     ASTPtr query_ptr;
-    Poco::Logger * log = nullptr;
+    LoggerPtr log = nullptr;
     StorageID table_id = StorageID::createEmpty();      /// Will be set up if query contains table name
     VolumePtr volume_ptr;
 

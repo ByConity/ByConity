@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
@@ -51,7 +52,7 @@ private:
     String node_path;
     ContextPtr context;
     Stopwatch watch;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     Block sample;
 

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/StorageID.h>
 #include <CloudServices/CnchServerClient.h>
 #include <Transaction/ICnchTransaction.h>
@@ -86,14 +87,22 @@ public:
 
     void setIsInitiator(bool is_initiator_) { is_initiator = is_initiator_; }
 
-private:
-    void checkServerClient() const;
+    UInt32 getDedupImplVersion(ContextPtr local_context) override;
+
+    /// This method will be called in commit parts stage for unique table
+    void setDedupImplVersion(const UInt32 & dedup_impl_version_);
 
 private:
+
+    /// It will be called only for the case that dedup impl version is not set in commit parts stage.
+    UInt32 getDedupImplVersionFromServer(ContextPtr local_context);
+
+    void checkServerClient() const;
+
     CnchServerClientPtr server_client;
     StorageID kafka_table_id{StorageID::createEmpty()};
     size_t kafka_consumer_index{SIZE_MAX};
-    Poco::Logger * log {&Poco::Logger::get("CnchWorkerTransaction")};
+    LoggerPtr log {getLogger("CnchWorkerTransaction")};
 
     /// Transaction should only be committed explicitly
     bool enable_explicit_commit{false};

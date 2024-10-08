@@ -185,7 +185,7 @@ private:
     double optimal_cost;
     std::unordered_set<TableLayout, TableLayoutHash> explored;
 
-    Poco::Logger * log = &Poco::Logger::get("PartitionKeyAdvisor");
+    LoggerPtr log = getLogger("PartitionKeyAdvisor");
 };
 
 

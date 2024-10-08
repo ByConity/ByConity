@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/Actions/IAction.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
@@ -31,7 +32,7 @@ public:
     IAction(query_context_, txn_id_),
     txn_record(std::move(record)),
     table(table_),
-    log(&Poco::Logger::get("DropRangeAction"))
+    log(getLogger("DropRangeAction"))
     {}
 
     ~DropRangeAction() override = default;
@@ -52,7 +53,7 @@ public:
 private:
     TransactionRecord txn_record;
     const StoragePtr table;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     MutableMergeTreeDataPartsCNCHVector parts;
     MutableMergeTreeDataPartsCNCHVector staged_parts;

@@ -97,6 +97,8 @@ public:
 
     static bool isBitmapFunctions(const String & name);
 
+    static bool isValidBitMapFunctions(const ASTPtr & ast);
+
     static BitmapIndexReturnType getBitmapIndexReturnType(const String & name);
 
     static std::unique_ptr<MergeTreeBitmapIndexReader> getBitmapIndexReader

@@ -45,7 +45,7 @@ void MetastoreRocksDBImpl::MultiWrite::commit()
 ///MetastoreRocksDBImpl definitions
 MetastoreRocksDBImpl::MetastoreRocksDBImpl(const String & db_path_)
         : IMetaStore(db_path_)
-        , log(&Poco::Logger::get("MetastoreRocksDBImpl"))
+        , log(getLogger("MetastoreRocksDBImpl"))
 {
     init();
 }

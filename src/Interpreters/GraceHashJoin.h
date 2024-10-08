@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/IJoin.h>
 #include <Interpreters/TemporaryDataOnDisk.h>
@@ -131,7 +132,7 @@ private:
 
     void initMaxJoinedBlockBytesInSpill();
 
-    Poco::Logger * log;
+    LoggerPtr log;
     ContextPtr context;
     bool adaptive_spill_mode = false;
     bool join_blk_rows_inited = false;

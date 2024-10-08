@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Analyzers/ASTEquals.h>
 #include <Analyzers/ResolvedWindow.h>
@@ -243,7 +244,7 @@ using ListMultimap = std::unordered_map<Key, std::vector<Val>>;
 struct Analysis
 {
     ScopeFactory scope_factory;
-    Poco::Logger * logger = &Poco::Logger::get("Analysis");
+    LoggerPtr logger = getLogger("Analysis");
 
     /// Scopes
     // Regular scopes in an ASTSelectQuery, kept by below convention:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <chrono>
 
 #include <Poco/Logger.h>
@@ -35,7 +36,7 @@ public:
     size_t memorySize() const override;
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("LruPolicy");
+    LoggerPtr log = getLogger("LruPolicy");
 
     static constexpr UInt32 kInvalidIndex = 0xffffffffu;
 

@@ -38,7 +38,7 @@ DiskPartitionWriter::DiskPartitionWriter(
     , mgr(mgr_)
     , header(std::move(header_))
     , key(std::move(key_))
-    , log(&Poco::Logger::get("DiskPartitionWriter"))
+    , log(getLogger("DiskPartitionWriter"))
     , data_queue(std::make_shared<BoundedDataQueue<Chunk>>(context->getSettingsRef().exchange_remote_receiver_queue_size))
     , enable_disk_writer_metrics(context->getSettingsRef().log_query_exchange)
 {

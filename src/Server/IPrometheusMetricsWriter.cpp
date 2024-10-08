@@ -25,7 +25,7 @@ void IPrometheusMetricsWriter::writeConfigMetrics(WriteBuffer & wb)
         }
         else
         {
-            LOG_WARNING(&Poco::Logger::get("IPrometheusMetricsWriter"), "Unknown config metric found, this should never happen");
+            LOG_WARNING(getLogger("IPrometheusMetricsWriter"), "Unknown config metric found, this should never happen");
             writeOutLine(wb, key_label, 0);
         }
     }

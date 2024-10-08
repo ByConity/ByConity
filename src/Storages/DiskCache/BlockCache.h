@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -119,7 +120,7 @@ public:
     static constexpr UInt32 kMaxItemSize = kMinAllocAlignSize * static_cast<UInt32>(std::numeric_limits<UInt16>::max());
 
 private:
-    Poco::Logger * log = &Poco::Logger::get("BlockCache");
+    LoggerPtr log = getLogger("BlockCache");
 
     static constexpr UInt32 kFormatVersion = 12;
     // Should be at least the next_two_pow(sizeof(EntryDesc)).

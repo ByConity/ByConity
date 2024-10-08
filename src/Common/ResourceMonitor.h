@@ -113,6 +113,11 @@ public:
 
     WorkerNodeResourceData createResourceData(bool init = false);
 
+    inline UInt32 getStartTime() const
+    {
+        return start_time;
+    }
+
 private:
     UInt64 getCPULimit();
     UInt64 getMemoryLimit();
@@ -122,7 +127,6 @@ private:
     UInt64 getManipulationTaskCount();
     UInt64 getConsumerCount();
 
-private:
     MemoryMonitor mem_monitor;
     CPUMonitor cpu_monitor;
     UInt32 start_time;

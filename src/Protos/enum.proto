@@ -142,6 +142,7 @@ message FieldType {
     IPv4 = 31;
     IPv6 = 32;
     Object = 33;
+    JSONB= 34;
     NegativeInfinity = 254;
     PositiveInfinity = 255;
   }

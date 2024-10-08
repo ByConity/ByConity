@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -139,7 +140,7 @@ class CnchServerResource
 {
 public:
     explicit CnchServerResource(TxnTimestamp curr_txn_id)
-        : txn_id(curr_txn_id), log(&Poco::Logger::get("ServerResource"))
+        : txn_id(curr_txn_id), log(getLogger("ServerResource"))
     {
     }
 
@@ -214,7 +215,8 @@ public:
     /// WorkerAction should not throw
     using WorkerAction
         = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, const std::vector<AssignedResource> &, const ExceptionHandlerPtr &)>;
-    void sendResources(const ContextPtr & context, WorkerAction act);
+    /// Submit custom tasks (like "preload", "drop disk cache") to workers with allocated resources.
+    void submitCustomTasks(const ContextPtr & context, WorkerAction act);
     void cleanResource();
 
     void addDynamicObjectSchema(const UUID & storage_id, const ColumnsDescription & object_columns_)
@@ -255,6 +257,12 @@ private:
     void sendDataParts(const ContextPtr & context);
     void sendOffloadingInfo(const ContextPtr & context);
 
+    brpc::CallId doAsyncSend(
+        const ContextPtr & context,
+        const HostWithPorts & worker,
+        const std::vector<AssignedResource> & resources,
+        const ExceptionHandlerWithFailedInfoPtr & handler);
+
     TxnTimestamp txn_id;
     mutable std::mutex mutex; /// mutex for manager resource
 
@@ -266,12 +274,14 @@ private:
     std::unordered_map<UUID, AssignedResource> table_resources_saved_for_retry;
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
     std::unordered_map<UUID, WorkerInfoSet> assigned_storage_workers;
+    /// all workers that we've sent resource to
+    WorkerInfoSet requested_workers;
 
     std::unordered_map<UUID, std::unordered_map<AddressInfo, SourceTaskPayload, AddressInfo::Hash>> source_task_payload;
     ResourceStageInfo resource_stage_info;
 
     bool skip_clean_worker{false};
-    Poco::Logger * log;
+    LoggerPtr log;
     mutable ServerResourceLockManager lock_manager;
 
     bool send_mutations{false};

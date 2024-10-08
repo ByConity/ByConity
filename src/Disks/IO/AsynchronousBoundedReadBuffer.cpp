@@ -53,7 +53,7 @@ AsynchronousBoundedReadBuffer::AsynchronousBoundedReadBuffer(
     , read_settings(settings_)
     , reader(reader_)
     , prefetch_buffer(settings_.remote_fs_buffer_size)
-    , log(&Poco::Logger::get("AsynchronousBoundedReadBuffer"))
+    , log(getLogger("AsynchronousBoundedReadBuffer"))
     , async_read_counters(async_read_counters_)
 {
     ProfileEvents::increment(ProfileEvents::RemoteFSBuffers);

@@ -21,7 +21,7 @@ Chunk DiskExchangeDataSource::generate()
         if (bufs.empty())
             throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format("empty files to read {}", *key));
         initStream();
-        LOG_DEBUG(&Poco::Logger::get("DiskExchangeDataSource"), "Start to read file {}", bufs[0]->getFileName());
+        LOG_DEBUG(getLogger("DiskExchangeDataSource"), "Start to read file {}", bufs[0]->getFileName());
     }
     auto c = stream->readImpl();
     if (!c)
@@ -44,7 +44,7 @@ Chunk DiskExchangeDataSource::readNextFile()
     {
         idx++;
         initStream();
-        LOG_DEBUG(&Poco::Logger::get("DiskExchangeDataSource"), "Start to read file {}", bufs[idx]->getFileName());
+        LOG_DEBUG(getLogger("DiskExchangeDataSource"), "Start to read file {}", bufs[idx]->getFileName());
         res = stream->readImpl();
     }
 

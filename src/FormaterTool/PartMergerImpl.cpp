@@ -79,7 +79,7 @@ auto PartMergerImpl::createStorages(const std::vector<String> & uuids, const Str
     return res;
 }
 
-PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractConfiguration & config, Poco::Logger * log_)
+PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractConfiguration & config, LoggerPtr log_)
     : PartToolkitBase(nullptr, context_), log(log_)
 {
     // Init arguments passed from CLI.

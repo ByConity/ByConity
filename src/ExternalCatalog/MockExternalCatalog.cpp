@@ -33,7 +33,7 @@ StoragePtr createStorageFromCreateQuery([[maybe_unused]] const String & catalog,
         {},
         {},false);
     ret->setCreateTableSql(create_table_query);
-    LOG_DEBUG(&Poco::Logger::get("createStorageFromCreateQuery"), "create table from {} ", create_table_query);
+    LOG_DEBUG(getLogger("createStorageFromCreateQuery"), "create table from {} ", create_table_query);
     return ret;
 }
 

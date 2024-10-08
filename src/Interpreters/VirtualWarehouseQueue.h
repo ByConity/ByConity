@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <array>
 #include <atomic>
 #include <memory>
@@ -79,7 +80,7 @@ using QueueRuleWithRegexVec = std::vector<QueueRuleWithRegex>;
 class VirtualWarehouseQueue
 {
 public:
-    VirtualWarehouseQueue() : log(&Poco::Logger::get("VirtualWarehouseQueue")) { }
+    VirtualWarehouseQueue() : log(getLogger("VirtualWarehouseQueue")) { }
     ~VirtualWarehouseQueue() { shutdown(); }
     void init(const std::string & queue_name_);
     void shutdown();
@@ -125,7 +126,7 @@ private:
     size_t max_concurrency{100};
     size_t current_parallelize_size{0};
     VWQueryQueue vw_query_queue;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     //rules
     mutable std::shared_mutex rule_mutex;
@@ -139,7 +140,7 @@ class VirtualWarehouseQueueManager
 public:
     void init();
 
-    VirtualWarehouseQueueManager() : log(&Poco::Logger::get("VirtualWarehouseQueueManager")) { init(); }
+    VirtualWarehouseQueueManager() : log(getLogger("VirtualWarehouseQueueManager")) { init(); }
     ~VirtualWarehouseQueueManager() { shutdown(); }
     void shutdown();
     void updateQueue(const std::vector<ResourceManagement::QueueData> & queue_datas);
@@ -157,7 +158,7 @@ public:
 private:
     std::array<VirtualWarehouseQueue, static_cast<size_t>(QueueName::Count)> query_queues;
     std::atomic<bool> is_stop{false};
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB

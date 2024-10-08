@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Logger.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
 
@@ -25,7 +26,7 @@ private:
     BlockIO executePartialUpdate(const StoragePtr & storage);
     ASTPtr prepareInsertQueryForPartialUpdate(const StoragePtr & storage, const std::unordered_map<String, ASTPtr> & name_to_expression_map);
     ASTPtr query_ptr;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 }

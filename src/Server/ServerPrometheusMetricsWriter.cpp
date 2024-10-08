@@ -161,7 +161,7 @@ void ServerPrometheusMetricsWriter::writeConfigMetrics(WriteBuffer & wb)
         }
         else
         {
-            LOG_WARNING(&Poco::Logger::get("ServerPrometheusMetricsWriter"), "Unknown config metric found, this should never happen");
+            LOG_WARNING(getLogger("ServerPrometheusMetricsWriter"), "Unknown config metric found, this should never happen");
             writeOutLine(wb, key_label, 0);
         }
     }
@@ -413,7 +413,7 @@ void ServerPrometheusMetricsWriter::writePartMetrics(WriteBuffer & wb)
 
         if (!cnch_catalog)
         {
-            LOG_WARNING(&Poco::Logger::get("ServerPrometheusMetricsWriter"), "Cannot get catalog for part metrics");
+            LOG_WARNING(getLogger("ServerPrometheusMetricsWriter"), "Cannot get catalog for part metrics");
         }
         else
         {

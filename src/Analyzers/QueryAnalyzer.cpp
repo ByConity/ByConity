@@ -145,7 +145,7 @@ private:
     const bool enable_subcolumn_optimization_through_union;
     const bool enable_implicit_arg_type_convert; // MySQL implicit cast rules
 
-    Poco::Logger * logger = &Poco::Logger::get("QueryAnalyzerVisitor");
+    LoggerPtr logger = getLogger("QueryAnalyzerVisitor");
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 
@@ -1325,11 +1325,15 @@ ScopePtr QueryAnalyzerVisitor::analyzeArrayJoin(ASTArrayJoin & array_join, ASTSe
         ArrayJoinDescription array_join_desc;
         array_join_desc.expr = array_join_expr;
 
-        if (col_ref && array_join_expr->tryGetAlias().empty())
+        if (col_ref && array_join_expr->tryGetAlias().empty()) // ARRAY JOIN `arr`
         {
             output_fields[col_ref->local_index] = FieldDescription{output_fields[col_ref->local_index].name, array_type->getNestedType()};
         }
-        else
+         else if (col_ref && !array_join_expr->tryGetAlias().empty() && array_join_expr->tryGetAlias() == output_fields[col_ref->local_index].name) // ARRAY JOIN `arr` as `arr`
+        {
+            output_fields[col_ref->local_index] = FieldDescription{output_fields[col_ref->local_index].name, array_type->getNestedType()};
+        }
+        else // ARRAY JOIN `arr` as `arr2`
         {
             array_join_desc.create_new_field = true;
             output_fields.emplace_back(output_name, array_type->getNestedType());

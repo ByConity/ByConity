@@ -36,7 +36,7 @@ std::optional<DateTime64> getVersion(ContextPtr context, const StatsTableIdentif
     }
     catch (...)
     {
-        tryLogCurrentException(&Poco::Logger::get("Statistics::getVersion"));
+        tryLogCurrentException(getLogger("Statistics::getVersion"));
         return std::nullopt;
     }
 }

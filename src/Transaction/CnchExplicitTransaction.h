@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <Common/Logger.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Interpreters/Context.h>
 #include <Common/HostWithPorts.h>
@@ -30,7 +31,7 @@ namespace DB
     using Base = ICnchTransaction;
 
     private:
-        Poco::Logger * log {&Poco::Logger::get("CnchExplicitTransaction")};
+        LoggerPtr log {getLogger("CnchExplicitTransaction")};
         std::vector<TransactionCnchPtr> secondary_txns;
         std::vector<String> statements;
         static constexpr int MAX_RETRY = 3;
