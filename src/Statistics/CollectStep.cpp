@@ -66,8 +66,8 @@ void CollectStep::collectTable()
     table_handler.registerHandler(std::make_unique<RowCountHandler>(handler_context));
     //  select count(*) from <table>;
     auto sql = table_handler.getFullSql();
-    auto helper = SubqueryHelper::create(context, sql, true);
-    auto block = getOnlyRowFrom(helper);
+    auto query_context = SubqueryHelper::createQueryContext(context);
+    auto block = executeSubQueryWithOneRow(sql, query_context, false, false);
     table_handler.parse(block);
     handler_context.full_count = handler_context.query_row_count.value();
     handler_context.query_row_count = std::nullopt;

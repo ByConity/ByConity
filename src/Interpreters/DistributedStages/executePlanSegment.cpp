@@ -173,6 +173,11 @@ void prepareQueryCommonBuf(
     const String & quota_key = client_info.quota_key;
     if (!client_info.quota_key.empty())
         query_common.set_quota(quota_key);
+    if (!client_info.parent_initial_query_id.empty())
+    {
+        query_common.set_parent_query_id(client_info.parent_initial_query_id);
+        query_common.set_is_internal_query(context->isInternalQuery());
+    }
 
     butil::IOBuf query_common_buf;
     butil::IOBufAsZeroCopyOutputStream wrapper(&common_buf);

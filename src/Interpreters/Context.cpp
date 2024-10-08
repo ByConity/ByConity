@@ -1115,6 +1115,11 @@ void Context::initCnchServerResource(const TxnTimestamp & txn_id)
     server_resource = std::make_shared<CnchServerResource>(txn_id);
 }
 
+void Context::clearCnchServerResource()
+{
+    server_resource = nullptr;
+}
+
 CnchServerResourcePtr Context::getCnchServerResource() const
 {
     if (!server_resource)

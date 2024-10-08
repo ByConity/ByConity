@@ -1,7 +1,7 @@
 #include <Catalog/Catalog.h>
-#include <Statistics/SubqueryHelper.h>
-#include <Interpreters/SQLBinding/SQLBindingCatalog.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
+#include <Interpreters/SQLBinding/SQLBindingCatalog.h>
+#include <Interpreters/executeSubQuery.h>
 
 namespace DB
 {
@@ -34,7 +34,9 @@ void BindingCatalogManager::updateGlobalBindingCache(const ContextPtr & context)
 {
     auto sql = fmt::format(
         FMT_STRING("select host(), updateBindingCache() from cnch(server, system.one) SETTINGS enable_optimizer=0"));
-    DB::Statistics::executeSubQuery(context, sql);
+
+    auto query_context = createContextForSubQuery(context);
+    executeSubQueryWithoutResult(sql, query_context, true);
 }
 
 }

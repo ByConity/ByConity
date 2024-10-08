@@ -2,7 +2,6 @@ syntax = "proto2";
 package DB.Protos;
 
 import "data_models.proto";
-import "data_models_mv.proto";
 import "cnch_common.proto";
 import "auto_statistics.proto";
 

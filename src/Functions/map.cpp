@@ -3,21 +3,10 @@
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/MapHelpers.h>
-#include <DataTypes/getLeastSupertype.h>
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionHelpers.h>
 #include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/MapHelpers.h>
 #include <DataTypes/getLeastSupertype.h>
@@ -27,7 +16,8 @@
 #include <Functions/IFunction.h>
 #include <Functions/array/arrayElement.h>
 #include <Interpreters/castColumn.h>
-#include <Interpreters/executeQuery.h>
+#include <Interpreters/executeSubQuery.h>
+#include <Parsers/ASTLiteral.h>
 #include <Storages/IStorage.h>
 
 #include <Common/assert_cast.h>
@@ -1014,24 +1004,16 @@ public:
             SELECT groupUniqArrayArray(ks) AS keys FROM (
                 SELECT arrayMap(t -> t.2, arrayFilter(t -> t.1 = 'some_map', _map_column_keys)) AS ks
                 FROM some_db.some_table WHERE match(_partition_id, '.*2020.*10.*10.*')
-                SETTINGS early_limit_for_map_virtual_columns = 1, max_threads = 1
-            )
-         */
+            ) SETTINGS early_limit_for_map_virtual_columns = 1, max_threads = 1
+        */
         String inner_query = "SELECT arrayMap(t -> t.2, arrayFilter(t -> t.1 = '" + column_name + "', _map_column_keys)) AS ks" //
             + " FROM `" + db_name + "`.`" + table_name + "`" //
-            + (pattern.empty() ? "" : " WHERE match(_partition_id, '" + pattern + "')") //
-            + " SETTINGS early_limit_for_map_virtual_columns = 1, max_threads = 1";
-        String query = "SELECT groupUniqArrayArray(ks) AS keys FROM ( " + inner_query + " )";
+            + (pattern.empty() ? "" : " WHERE match(_partition_id, '" + pattern + "')");
+        String query = "SELECT groupUniqArrayArray(ks) AS keys FROM ( " + inner_query
+            + " ) SETTINGS early_limit_for_map_virtual_columns = 1, max_threads = 1";
 
-        auto query_context = Context::createCopy(context->getQueryContext());
-        query_context->makeQueryContext();
-        auto query_id = fmt::format("{}_interal", query_context->getCurrentQueryId());
-        query_context->setCurrentQueryId(query_id);
-
-        /// need to hold some shared ptrs in block_io here
-        BlockIO block_io = executeQuery(query, query_context, true);
-        auto stream = block_io.getInputStream();
-        auto res = stream->read();
+        auto query_context = createContextForSubQuery(context);
+        auto res = executeSubQueryWithOneRow(query, query_context, true);
         if (res)
         {
             // TODO(shiyuze): maybe add a new function to get result in different rows, just like arrayJoin(getMapKeys(xxx))
