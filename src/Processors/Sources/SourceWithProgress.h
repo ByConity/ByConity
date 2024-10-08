@@ -55,7 +55,7 @@ public:
     void setProcessListElement(QueryStatus * elem) final;
     void setProgressCallback(const ProgressCallback & callback) final { progress_callback = callback; }
     void addTotalRowsApprox(size_t value) final { total_rows_approx += value; }
-
+    void updateProgress(const Progress & value);
 protected:
     /// Call this method to provide information about progress.
     void progress(const Progress & value);
@@ -66,8 +66,8 @@ private:
     StreamLocalLimits limits;
     SizeLimits leaf_limits;
     std::shared_ptr<const EnabledQuota> quota;
-    ProgressCallback progress_callback;
     QueryStatus * process_list_elem = nullptr;
+    ProgressCallback progress_callback;
 
     /// The approximate total number of rows to read. For progress bar.
     size_t total_rows_approx = 0;

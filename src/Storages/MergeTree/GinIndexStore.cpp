@@ -701,8 +701,7 @@ GinIndexStoreFactory::GinIndexStoreFactory(const GinIndexStoreCacheSettings & se
 
 GinIndexStorePtr GinIndexStoreFactory::get(const String & name, GinDataPartHelperPtr && storage_info)
 {
-    const String & part_path = storage_info->getPartUniqueID();
-    String key = part_path + ":" + name;
+    String key = fmt::format("{}:{}", storage_info->getPartUniqueID(), name);
 
     auto& shard = stores_lru_cache.shard(key);
     GinIndexStorePtr cache_result = shard.get(key);
