@@ -8,6 +8,9 @@ CREATE TABLE t_alter_ids(id Int32) ENGINE = CnchMergeTree ORDER BY id;
 INSERT INTO t_alter_ids select number from numbers(10);
 SYSTEM START MERGES t_alter_d;
 
+SELECT '----- CHECK MUTATION AND ALTER COMMANDS IN SINGLE QUERY -----';
+ALTER TABLE t_alter_d DELETE WHERE k = 100, MODIFY COLUMN m Int64; -- { serverError 36 }
+
 SELECT '----- DELETE WHERE -----';
 -- t_alter_d|1: 5,6,7,8,9,10,11,12,13,14
 INSERT INTO t_alter_d select 1, number from numbers(5, 10);
