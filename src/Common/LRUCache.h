@@ -200,10 +200,13 @@ private:
     using Timestamp = Clock::time_point;
 
 public:
-    explicit LRUCache(const Delay & expiration_delay_ = Delay::zero()) 
+    explicit LRUCache(const Delay & expiration_delay_ = Delay::zero())
         : expiration_delay(expiration_delay_) {}
     explicit LRUCache(size_t max_size_, const Delay & expiration_delay_ = Delay::zero())
         : max_size(std::max(static_cast<size_t>(1), max_size_)), expiration_delay(expiration_delay_) {}
+
+    void setCapacity(size_t max_size_) { max_size = std::max(static_cast<size_t>(1), max_size_); }
+    size_t getCapacity() { return max_size; }
 
     MappedPtr get(const Key & key)
     {
@@ -489,7 +492,7 @@ private:
 
     /// Total weight of values.
     size_t current_size = 0;
-    const size_t max_size;
+    size_t max_size;
     const Delay expiration_delay;
 
     std::atomic<size_t> hits {0};
