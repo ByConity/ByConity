@@ -86,6 +86,18 @@ void SourceWithProgress::work()
     }
 }
 
+void SourceWithProgress::updateProgress(const Progress & value)
+{
+    if (progress_callback)
+        progress_callback(value);
+
+    if (process_list_elem)
+    {
+        if (!process_list_elem->updateProgressIn(value))
+            cancel();
+    }
+}
+
 /// Aggregated copy-paste from IBlockInputStream::progressImpl.
 /// Most of this must be done in PipelineExecutor outside. Now it's done for compatibility with IBlockInputStream.
 void SourceWithProgress::progress(const Progress & value)

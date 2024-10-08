@@ -843,7 +843,7 @@ enum PreloadLevelSettings : UInt64
       "longest one.", \
       0) \
     M(Bool, optimize_read_in_order, true, "Enable ORDER BY optimization for reading data in corresponding order in MergeTree tables.", 0) \
-    M(Bool, optimize_read_in_partition_order, false, "In optimize_read_in_order mode, whether to read parts partition-by-partition if applicable", 0) \
+    M(Bool, optimize_read_in_partition_order, false, "In optimize_read_in_order mode, whether to read parts partition-by-partition if applicable, it will also delay inverted index evaluation till pipeline execution", 0) \
     M(Bool, force_read_in_partition_order, 0, "Similar to optimize_read_in_partition_order, but throw an exception if it cannot be applied to the query, mainly for testing", 0) \
     M(Bool, optimize_aggregation_in_order, false, "Enable GROUP BY optimization for aggregating data in corresponding order in MergeTree tables.", 0) \
     M(UInt64, read_in_order_two_level_merge_threshold, 100, "Minimal number of parts to read to run preliminary merge step during multithread reading in order of primary key.", 0) \
@@ -1875,7 +1875,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, async_mv_enable_mv_meta_cache, true, "whether enable read from mv meta cache.", 0) \
     \
     M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
-    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
     M(Bool, multi_idx_filter_for_ivt, false, "Using multiple inverted index to filter mark ranges at the same time", 0) \
 
 // End of COMMON_SETTINGS

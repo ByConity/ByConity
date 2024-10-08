@@ -480,7 +480,7 @@ Pipe ReadFromMergeTree::readInOrder(
 
             ProfileEvents::increment(ProfileEvents::TotalGranulesCount, total_granules);
             ProfileEvents::increment(ProfileEvents::TotalSkippedGranules, dropped_granules);
-            LOG_DEBUG(part_->storage.getLogger(), "MultiIndex has dropped {}/{} granules for part {}",
+            LOG_DEBUG(part_->storage.getLogger(), "Delayed index has dropped {}/{} granules for part {}",
                 dropped_granules, total_granules, part_->name);
 
             return ret;

@@ -1500,7 +1500,7 @@ std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
 bool MergeTreeDataSelectExecutor::shouldFilterMarkRangesAtPipelineExec(
     const Settings& settings, const InputOrderInfoPtr& input_order)
 {
-    return input_order != nullptr && settings.filter_mark_ranges_with_ivt_when_exec
+    return input_order != nullptr && settings.optimize_read_in_partition_order
         && (settings.optimize_read_in_order || settings.optimize_aggregation_in_order)
         && (settings.optimize_read_in_partition_order || settings.force_read_in_partition_order);
 }
