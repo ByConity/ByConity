@@ -39,44 +39,44 @@ Projection Est. 729 rows
                               │  │  └─ Repartition Exchange Est. 39971301 rows
                               │  │     │     Partition by: {o_custkey}
                               │  │     └─ Inner (PARALLEL_HASH) Join Est. 39971301 rows
-                              │  │        │     Condition: o_orderkey == l_orderkey
-                              │  │        │     Runtime Filters Builder: {l_orderkey}
-                              │  │        ├─ Repartition Exchange Est. 455092109 rows
-                              │  │        │  │     Partition by: {o_orderkey}
-                              │  │        │  └─ Filter Est. 455092109 rows
-                              │  │        │     │     Condition: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
-                              │  │        │     └─ TableScan tpch1000.orders Est. 1500000000 rows
-                              │  │        │              Where: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
-                              │  │        │              Outputs: [o_orderkey, o_custkey, o_orderdate]
-                              │  │        └─ Repartition Exchange Est. 39971301 rows
-                              │  │           │     Partition by: {l_orderkey}
-                              │  │           └─ Inner (PARALLEL_HASH) Join Est. 39971301 rows
-                              │  │              │     Condition: l_suppkey == s_suppkey
-                              │  │              ├─ Repartition Exchange Est. 39971301 rows
-                              │  │              │  │     Partition by: {l_suppkey}
-                              │  │              │  └─ Inner Join Est. 39971301 rows
-                              │  │              │     │     Condition: l_partkey == p_partkey
-                              │  │              │     │     Runtime Filters Builder: {p_partkey}
-                              │  │              │     ├─ Repartition Exchange Est. 5999989709 rows
-                              │  │              │     │  │     Partition by: {l_partkey}
-                              │  │              │     │  └─ Filter Est. 5999989709 rows
-                              │  │              │     │     │     Condition: Runtime Filters: {l_partkey}
-                              │  │              │     │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                              │  │              │     │              Where: Runtime Filters: {l_partkey}
-                              │  │              │     │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
-                              │  │              │     └─ Repartition Exchange Est. 1332379 rows
-                              │  │              │        │     Partition by: {p_partkey}
-                              │  │              │        └─ Projection Est. 1332379 rows
-                              │  │              │           │     Expressions: [p_partkey]
-                              │  │              │           └─ Filter Est. 1332379 rows
-                              │  │              │              │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
-                              │  │              │              └─ TableScan tpch1000.part Est. 200000000 rows
-                              │  │              │                       Where: p_type = 'ECONOMY ANODIZED STEEL'
-                              │  │              │                       Outputs: [p_partkey, p_type]
-                              │  │              └─ Repartition Exchange Est. 10000000 rows
-                              │  │                 │     Partition by: {s_suppkey}
-                              │  │                 └─ TableScan tpch1000.supplier Est. 10000000 rows
-                              │  │                          Outputs: [s_suppkey, s_nationkey]
+                              │  │        │     Condition: l_suppkey == s_suppkey
+                              │  │        ├─ Repartition Exchange Est. 39971301 rows
+                              │  │        │  │     Partition by: {l_suppkey}
+                              │  │        │  └─ Inner (PARALLEL_HASH) Join Est. 39971301 rows
+                              │  │        │     │     Condition: o_orderkey == l_orderkey
+                              │  │        │     │     Runtime Filters Builder: {l_orderkey}
+                              │  │        │     ├─ Repartition Exchange Est. 455092109 rows
+                              │  │        │     │  │     Partition by: {o_orderkey}
+                              │  │        │     │  └─ Filter Est. 455092109 rows
+                              │  │        │     │     │     Condition: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
+                              │  │        │     │     └─ TableScan tpch1000.orders Est. 1500000000 rows
+                              │  │        │     │              Where: (o_orderdate >= cast(9131, 'Date')) AND (o_orderdate <= cast(9861, 'Date')) Runtime Filters: {o_orderkey}
+                              │  │        │     │              Outputs: [o_orderkey, o_custkey, o_orderdate]
+                              │  │        │     └─ Repartition Exchange Est. 39971301 rows
+                              │  │        │        │     Partition by: {l_orderkey}
+                              │  │        │        └─ Inner Join Est. 39971301 rows
+                              │  │        │           │     Condition: l_partkey == p_partkey
+                              │  │        │           │     Runtime Filters Builder: {p_partkey}
+                              │  │        │           ├─ Repartition Exchange Est. 5999989709 rows
+                              │  │        │           │  │     Partition by: {l_partkey}
+                              │  │        │           │  └─ Filter Est. 5999989709 rows
+                              │  │        │           │     │     Condition: Runtime Filters: {l_partkey}
+                              │  │        │           │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                              │  │        │           │              Where: Runtime Filters: {l_partkey}
+                              │  │        │           │              Outputs: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
+                              │  │        │           └─ Repartition Exchange Est. 1332379 rows
+                              │  │        │              │     Partition by: {p_partkey}
+                              │  │        │              └─ Projection Est. 1332379 rows
+                              │  │        │                 │     Expressions: [p_partkey]
+                              │  │        │                 └─ Filter Est. 1332379 rows
+                              │  │        │                    │     Condition: p_type = 'ECONOMY ANODIZED STEEL'
+                              │  │        │                    └─ TableScan tpch1000.part Est. 200000000 rows
+                              │  │        │                             Where: p_type = 'ECONOMY ANODIZED STEEL'
+                              │  │        │                             Outputs: [p_partkey, p_type]
+                              │  │        └─ Repartition Exchange Est. 10000000 rows
+                              │  │           │     Partition by: {s_suppkey}
+                              │  │           └─ TableScan tpch1000.supplier Est. 10000000 rows
+                              │  │                    Outputs: [s_suppkey, s_nationkey]
                               │  └─ Broadcast Exchange Est. 25 rows
                               │     └─ TableScan tpch1000.nation Est. 25 rows
                               │              Outputs: [n_name], n_nationkey_1:=n_nationkey

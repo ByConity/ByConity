@@ -11,21 +11,21 @@ Projection Est. 54134 rows
                └─ Aggregating Est. 54134 rows
                   │     Group by: {n_name, expr#toYear(o_orderdate)}
                   │     Aggregates: expr#sum(amount):=AggNull(sum)(expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)))
-                  └─ Projection Est. 4547880929 rows
+                  └─ Projection Est. 2996036649 rows
                      │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
-                     └─ Inner (PARALLEL_HASH) Join Est. 4547880929 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 2996036649 rows
                         │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
-                        ├─ Repartition Exchange Est. 1462289073 rows
+                        ├─ Repartition Exchange Est. 928912585 rows
                         │  │     Partition by: {l_suppkey}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 1462289073 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 928912585 rows
                         │     │     Condition: o_orderkey == l_orderkey
                         │     ├─ Repartition Exchange Est. 1500000000 rows
                         │     │  │     Partition by: {o_orderkey}
                         │     │  └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
                         │     │           Outputs: [o_orderkey, o_orderdate]
-                        │     └─ Repartition Exchange Est. 949718115 rows
+                        │     └─ Repartition Exchange Est. 928884993 rows
                         │        │     Partition by: {l_orderkey}
-                        │        └─ Inner (PARALLEL_HASH) Join Est. 949718115 rows
+                        │        └─ Inner (PARALLEL_HASH) Join Est. 928884993 rows
                         │           │     Condition: l_partkey == p_partkey
                         │           │     Runtime Filters Builder: {p_partkey}
                         │           ├─ Repartition Exchange Est. 5999989709 rows

@@ -7,27 +7,28 @@ Projection Est. 1 rows
          └─ Aggregating Est. 1 rows
             │     Group by: {}
             │     Aggregates: expr#sum(l_extendedprice):=AggNull(sum)(l_extendedprice)
-            └─ Projection Est. 1583285 rows
+            └─ Projection Est. 1548991 rows
                │     Expressions: [l_extendedprice]
-               └─ Filter Est. 1583285 rows
+               └─ Filter Est. 1548991 rows
                   │     Condition: l_quantity < cast('0.2' * `expr#avg(l_quantity)`, 'Nullable(Float64)')
-                  └─ Window Est. 6333138 rows
-                     └─ Repartition Exchange Est. 6333138 rows
-                        │     Partition by: {l_partkey}
-                        └─ Inner Join Est. 6333138 rows
-                           │     Condition: l_partkey == p_partkey
-                           │     Runtime Filters Builder: {p_partkey}
-                           ├─ Filter Est. 5999989709 rows
-                           │  │     Condition: Runtime Filters: {l_partkey}
-                           │  └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
-                           │           Where: Runtime Filters: {l_partkey}
-                           │           Outputs: [l_partkey, l_quantity, l_extendedprice]
-                           └─ Broadcast Exchange Est. 200053 rows
-                              └─ Projection Est. 200053 rows
-                                 │     Expressions: [p_partkey]
-                                 └─ Filter Est. 200053 rows
-                                    │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
-                                    └─ TableScan tpch1000_sample.part Est. 200000000 rows
-                                             Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
-                                             Outputs: [p_partkey, p_brand, p_container]
+                  └─ Window Est. 6195965 rows
+                     └─ Inner Join Est. 6195965 rows
+                        │     Condition: l_partkey == p_partkey
+                        │     Runtime Filters Builder: {p_partkey}
+                        ├─ Repartition Exchange Est. 5999989709 rows
+                        │  │     Partition by: {l_partkey}
+                        │  └─ Filter Est. 5999989709 rows
+                        │     │     Condition: Runtime Filters: {l_partkey}
+                        │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
+                        │              Where: Runtime Filters: {l_partkey}
+                        │              Outputs: [l_partkey, l_quantity, l_extendedprice]
+                        └─ Repartition Exchange Est. 200111 rows
+                           │     Partition by: {p_partkey}
+                           └─ Projection Est. 200111 rows
+                              │     Expressions: [p_partkey]
+                              └─ Filter Est. 200111 rows
+                                 │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
+                                 └─ TableScan tpch1000_sample.part Est. 200000000 rows
+                                          Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
+                                          Outputs: [p_partkey, p_brand, p_container]
 note: Runtime Filter is applied for 1 times.

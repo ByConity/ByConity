@@ -52,6 +52,7 @@ public:
     static std::vector<RulePtr> extractBitmapImplicitFilterRules();
     static std::vector<RulePtr> pushUnionThroughJoin();
     static std::vector<RulePtr> addRepartitionColumn();
+    static std::vector<RulePtr> joinUsingToJoinOn();
 };
 
 }

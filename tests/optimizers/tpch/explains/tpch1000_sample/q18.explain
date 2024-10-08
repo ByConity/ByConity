@@ -1,18 +1,18 @@
-Projection Est. 6 rows
+Projection Est. 4 rows
 │     Expressions: [c_custkey, c_name, o_orderdate, o_totalprice], o_orderkey:=l_orderkey, sum(l_quantity):=`expr#sum(l_quantity)_1`
-└─ Limit Est. 6 rows
+└─ Limit Est. 4 rows
    │     Limit: 100
-   └─ Sorting Est. 6 rows
+   └─ Sorting Est. 4 rows
       │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 6 rows
-         └─ Sorting Est. 6 rows
+      └─ Gather Exchange Est. 4 rows
+         └─ Sorting Est. 4 rows
             │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 100
-            └─ Aggregating Est. 6 rows
+            └─ Aggregating Est. 4 rows
                │     Group by: {c_name, c_custkey, l_orderkey, o_orderdate, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
-               └─ Inner Join Est. 6 rows
+               └─ Inner Join Est. 4 rows
                   │     Condition: l_orderkey == o_orderkey
                   │     Runtime Filters Builder: {o_orderkey}
                   ├─ Filter Est. 5999989709 rows
@@ -42,7 +42,7 @@ Projection Est. 6 rows
                                  │     Expressions: [l_orderkey_1]
                                  └─ Filter Est. 1 rows
                                     │     Condition: `expr#sum(l_quantity)` > '300'
-                                    └─ Aggregating Est. 968051156 rows
+                                    └─ Aggregating Est. 1459082958 rows
                                        │     Group by: {l_orderkey_1}
                                        │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
                                        └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows

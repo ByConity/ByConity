@@ -97,6 +97,11 @@ public:
     bool getKeyIdNullSafe(size_t key_index) const;
     const ConstASTPtr & getFilter() const { return filter; }
     bool isHasUsing() const { return has_using; }
+    void resetUsing()
+    {
+        has_using = false;
+        require_right_keys = std::nullopt;
+    }
     std::optional<std::vector<bool>> getRequireRightKeys() const { return require_right_keys; }
     ASOF::Inequality getAsofInequality() const { return asof_inequality; }
     DistributionType getDistributionType() const { return distribution_type; }
@@ -104,7 +109,7 @@ public:
 
     bool isCrossJoin() const { return kind == ASTTableJoin::Kind::Cross || (kind == ASTTableJoin::Kind::Inner && left_keys.empty()); }
 
-    bool isInnerJoin() const {return kind == ASTTableJoin::Kind::Inner; }
+    bool isInnerJoin() const { return kind == ASTTableJoin::Kind::Inner; }
 
     bool isOuterJoin() const
     {

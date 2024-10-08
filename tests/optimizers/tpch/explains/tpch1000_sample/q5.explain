@@ -11,18 +11,18 @@ Projection Est. 25 rows
                └─ Aggregating Est. 25 rows
                   │     Group by: {n_name}
                   │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-                  └─ Projection Est. 225679245 rows
+                  └─ Projection Est. 150181531 rows
                      │     Expressions: [n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                     └─ Inner (PARALLEL_HASH) Join Est. 225679245 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 150181531 rows
                         │     Condition: s_nationkey == c_nationkey, o_custkey == c_custkey
-                        ├─ Repartition Exchange Est. 282099053 rows
+                        ├─ Repartition Exchange Est. 187726911 rows
                         │  │     Partition by: {s_nationkey}
-                        │  └─ Inner Join Est. 282099053 rows
+                        │  └─ Inner Join Est. 187726911 rows
                         │     │     Condition: l_suppkey == s_suppkey
                         │     │     Runtime Filters Builder: {s_suppkey}
-                        │     ├─ Repartition Exchange Est. 1410495265 rows
+                        │     ├─ Repartition Exchange Est. 938634557 rows
                         │     │  │     Partition by: {l_suppkey}
-                        │     │  └─ Inner (PARALLEL_HASH) Join Est. 1410495265 rows
+                        │     │  └─ Inner (PARALLEL_HASH) Join Est. 938634557 rows
                         │     │     │     Condition: l_orderkey == o_orderkey
                         │     │     │     Runtime Filters Builder: {o_orderkey}
                         │     │     ├─ Filter Est. 5999989709 rows
@@ -30,9 +30,9 @@ Projection Est. 25 rows
                         │     │     │  └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                         │     │     │           Where: Runtime Filters: {l_orderkey, l_suppkey}
                         │     │     │           Outputs: [l_orderkey, l_suppkey, l_extendedprice, l_discount]
-                        │     │     └─ Projection Est. 227572319 rows
+                        │     │     └─ Projection Est. 228264786 rows
                         │     │        │     Expressions: [o_custkey, o_orderkey]
-                        │     │        └─ Filter Est. 227572319 rows
+                        │     │        └─ Filter Est. 228264786 rows
                         │     │           │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date'))
                         │     │           └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
                         │     │                    Where: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date'))

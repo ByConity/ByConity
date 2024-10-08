@@ -11,7 +11,7 @@ Projection Est. 5 rows
                └─ Aggregating Est. 5 rows
                   │     Group by: {o_orderpriority}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ Right Semi (PARALLEL_HASH) Join Est. 57394253 rows
+                  └─ Right Semi (PARALLEL_HASH) Join Est. 57408060 rows
                      │     Condition: l_orderkey == o_orderkey
                      │     Runtime Filters Builder: {o_orderkey}
                      ├─ Projection Est. 1499997427 rows
@@ -21,9 +21,9 @@ Projection Est. 5 rows
                      │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                      │              Where: l_commitdate < l_receiptdate Runtime Filters: {l_orderkey}
                      │              Outputs: [l_orderkey, l_commitdate, l_receiptdate]
-                     └─ Projection Est. 57394253 rows
+                     └─ Projection Est. 57408060 rows
                         │     Expressions: [o_orderkey, o_orderpriority]
-                        └─ Filter Est. 57394253 rows
+                        └─ Filter Est. 57408060 rows
                            │     Condition: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))
                            └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
                                     Where: (o_orderdate >= cast(8582, 'Date')) AND (o_orderdate < cast(8674, 'Date'))

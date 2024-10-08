@@ -45,6 +45,7 @@
 #include <Optimizer/Rule/Rewrite/SumIfToCountIf.h>
 #include <Optimizer/Rule/Rewrite/SwapAdjacentRules.h>
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
+#include <Optimizer/Rule/Rewrite/JoinUsingToJoinOn.h>
 
 namespace DB
 {
@@ -252,6 +253,11 @@ std::vector<RulePtr> Rules::pushUnionThroughJoin()
 std::vector<RulePtr> Rules::addRepartitionColumn()
 {
     return {std::make_shared<AddRepartitionColumn>()};
+}
+
+std::vector<RulePtr> Rules::joinUsingToJoinOn()
+{
+    return {std::make_shared<JoinUsingToJoinOn>()};
 }
 
 }
