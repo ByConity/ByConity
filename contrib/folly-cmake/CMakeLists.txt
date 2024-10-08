@@ -1322,12 +1322,15 @@ target_compile_definitions(folly PRIVATE FOLLY_SCOPE_DEFINITION)
 target_link_libraries(folly PRIVATE 
     libevent
     boost::headers_only
-    jemalloc
     double-conversion
     gflags::gflags
     glog
     fmt
     gtest)
+
+if (ENABLE_JEMALLOC)
+  target_link_libraries(folly PRIVATE jemalloc)
+endif ()
 
 if (OS_LINUX)
   target_link_libraries(folly PRIVATE liburing)
