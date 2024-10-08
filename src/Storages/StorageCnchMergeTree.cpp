@@ -127,6 +127,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_CNCH_SNAPSHOT;
     extern const int INVALID_CNCH_SNAPSHOT;
     extern const int CANNOT_ASSIGN_ALTER;
+    extern const int NOT_IMPLEMENTED;
 }
 
 static NameSet collectColumnsFromCommands(const AlterCommands & commands)
@@ -2604,6 +2605,15 @@ void StorageCnchMergeTree::dropPartsImpl(
         auto metadata_snapshot = getInMemoryMetadataPtr();
 
         DiskType::Type remote_storage_type = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
+        bool enable_copy_for_partition_operation = local_context->getSettingsRef().cnch_enable_copy_for_partition_operation;
+
+        if (enable_copy_for_partition_operation)
+        {
+            if (staging_area)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "detach staged partition/part is not supported when cnch_enable_copy_for_partition_operation = 1");
+            if (command.specify_bucket)
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Specify bucket in detach is not supported when enable_copy_for_partition_operation = 1");
+        }
 
         switch (remote_storage_type)
         {
@@ -2623,13 +2633,16 @@ void StorageCnchMergeTree::dropPartsImpl(
 
                 UndoResources undo_resources;
                 auto write_undo_callback = [&](const DataPartPtr & part) {
-                    UndoResource ub(
-                        txn->getTransactionID(),
-                        UndoResourceType::FileSystem,
-                        part->getFullRelativePath(),
-                        part->getFullRelativePathForDetachedPart(""));
-                    ub.setDiskName(part->volume->getDisk()->getName());
-                    undo_resources.push_back(ub);
+                    if (!enable_copy_for_partition_operation)
+                    {
+                        UndoResource ub(
+                            txn->getTransactionID(),
+                            UndoResourceType::FileSystem,
+                            part->getFullRelativePath(),
+                            part->getFullRelativePathForDetachedPart(""));
+                        ub.setDiskName(part->volume->getDisk()->getName());
+                        undo_resources.push_back(ub);
+                    }
                 };
                 for (const auto & data_part : parts_to_drop)
                 {
@@ -2642,11 +2655,24 @@ void StorageCnchMergeTree::dropPartsImpl(
                     getDeleteBitmapMetaForParts(parts_to_drop, svr_parts_to_drop_with_dbm.second, /*force_found*/ false);
 
                 ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
-                auto callback = [&pool, &metadata_snapshot, &local_context](const DataPartPtr & part) {
+                auto callback = [&pool, &metadata_snapshot, &local_context, &enable_copy_for_partition_operation](const DataPartPtr & part) {
                     bool create_delete_bitmap = metadata_snapshot->hasUniqueKey()
                         && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap;
-                    pool.scheduleOrThrowOnError([part, create_delete_bitmap]() {
-                        part->renameToDetached("");
+                    pool.scheduleOrThrowOnError([part, create_delete_bitmap, enable_copy_for_partition_operation]() {
+                        if (enable_copy_for_partition_operation)
+                        {
+                            // do copy
+                            auto disk = part->volume->getDisk();
+                            auto part_rel_path = part->getFullRelativePathForDetachedPart("");
+                            if (disk->exists(part_rel_path))
+                                disk->removeRecursive(part_rel_path);
+                            part->copyToDetached("");
+                        }
+                        else
+                        {
+                            part->renameToDetached("");
+                        }
+
                         if (create_delete_bitmap)
                             part->createDeleteBitmapForDetachedPart();
                     });

@@ -86,6 +86,8 @@ public:
 
     void loadFromFileSystem(bool load_hint_mutation = true);
 
+    void copyToDetached(const String & prefix) const override;
+
     UniqueKeyIndexPtr getUniqueKeyIndex() const override;
 
     String getFullRelativePath() const override;

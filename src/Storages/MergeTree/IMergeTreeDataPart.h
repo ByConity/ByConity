@@ -62,6 +62,12 @@ namespace zkutil
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+    extern const int NOT_IMPLEMENTED;
+}
+
 class IMergeTreeDataPart;
 using IMergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
 struct ColumnSize;
@@ -471,6 +477,11 @@ public:
 
     /// Makes clone of a part in detached/ directory via hard links
     virtual void makeCloneInDetached(const String & prefix, const StorageMetadataPtr & metadata_snapshot) const;
+
+    virtual void copyToDetached([[maybe_unused]] const String & prefix) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} does not support copyToDetached", getTypeName());
+    }
 
     /// Makes full clone of part in specified subdirectory (relative to storage data directory, e.g. "detached") on another disk
     void makeCloneOnDisk(const DiskPtr & disk, const String & directory_name) const;

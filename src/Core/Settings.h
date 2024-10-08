@@ -1290,6 +1290,7 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, manifest_cache_min_lifetime, 1800, "Min lifetime for manifest parts", 0) \
     M(Milliseconds, broadcast_manifest_timeout, 5000, "Timeout for broadcasting manifest", 0) \
     M(Bool, enable_manifest_cache, true, "", 0) \
+    M(Bool, cnch_enable_copy_for_partition_operation, false, "whether to copy data for attach/detach/replace partition operations", 0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
     M(Bool, use_hive_cluster_key_filter, true, "", 0) \

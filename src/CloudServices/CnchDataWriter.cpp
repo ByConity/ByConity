@@ -239,7 +239,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
         String relative_path = part_name;
         if (disk->getType() == DiskType::Type::ByteS3)
         {
-            UUID part_id = newPartID(part->info, txn_id.toUInt64());
+            UUID part_id = CnchDataWriter::newPartID(part->info, txn_id.toUInt64());
             part->uuid = part_id;
             relative_path = UUIDHelpers::UUIDToString(part_id);
         }
@@ -259,7 +259,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
         String relative_path = part_name;
         if (disk->getType() == DiskType::Type::ByteS3)
         {
-            UUID part_id = newPartID(staged_part->info, txn_id.toUInt64());
+            UUID part_id = CnchDataWriter::newPartID(staged_part->info, txn_id.toUInt64());
             staged_part->uuid = part_id;
             relative_path = UUIDHelpers::UUIDToString(part_id);
         }
@@ -812,18 +812,6 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
         if (storage.getSettings()->enable_parts_sync_preload)
             throw;
     }
-}
-
-UUID CnchDataWriter::newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
-{
-    UUID random_id = UUIDHelpers::generateV4();
-    UInt64& random_id_low = UUIDHelpers::getHighBytes(random_id);
-    UInt64& random_id_high = UUIDHelpers::getLowBytes(random_id);
-    boost::hash_combine(random_id_low, part_info.min_block);
-    boost::hash_combine(random_id_high, part_info.max_block);
-    boost::hash_combine(random_id_low, part_info.mutation);
-    boost::hash_combine(random_id_high, txn_timestamp);
-    return random_id;
 }
 
 }
