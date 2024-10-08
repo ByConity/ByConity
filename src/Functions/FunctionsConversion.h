@@ -1353,9 +1353,11 @@ inline bool tryParseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, Read
     time_t tmp = 0;
     if (!tryReadDateTimeText(tmp, rb, *time_zone))
         return false;
-    // tryReadDateTimeText gives time that will not exceed UInt32
-    // coverity[store_truncates_time_t]
-    x = tmp;
+    // The maximum value of time_t may represents 2299-12-31 23:59:59, which may cause overflow for DataTypeDateTime::FieldType
+    if (unlikely(tmp > std::numeric_limits<DataTypeDateTime::FieldType>::max()))
+        x = std::numeric_limits<DataTypeDateTime::FieldType>::max();
+    else
+        x = tmp;
     return true;
 }
 
@@ -3906,7 +3908,7 @@ private:
         }
     }
 
-    static WrapperType createJsonbWrapper(const DataTypePtr & from_type, const DataTypeJsonb * /*to_type*/) 
+    static WrapperType createJsonbWrapper(const DataTypePtr & from_type, const DataTypeJsonb * /*to_type*/)
     {
         if (checkAndGetDataType<DataTypeString>(from_type.get()))
         {
