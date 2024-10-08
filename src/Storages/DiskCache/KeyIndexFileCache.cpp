@@ -188,7 +188,9 @@ int KeyIndexFileCache::get(const IndexFile::RemoteFileInfo & file)
         {
             std::weak_ptr<Rep> rep_wp = rep;
             /// start a bg task to cache the file to local disk
-            auto cache_file_task = [rep_wp, file]() {
+            auto cache_file_task = [rep_wp, file, log = this->log]() {
+                Stopwatch watch;
+
                 std::shared_ptr<Rep> rep_inner = rep_wp.lock();
                 if (!rep_inner)
                 {
@@ -217,6 +219,12 @@ int KeyIndexFileCache::get(const IndexFile::RemoteFileInfo & file)
                     Poco::File(tmp_file).renameTo(dst_path);
 
                     rep_inner->cache.set(file.cache_key, CacheValue::Cached(file.size));
+
+                    LOG_DEBUG(
+                        log,
+                        "Cache {} to local disks cost {} ms",
+                        String(std::filesystem::path(file.disk->getPath()) / file.rel_path),
+                        watch.elapsedMilliseconds());
                 }
                 catch (...)
                 {
