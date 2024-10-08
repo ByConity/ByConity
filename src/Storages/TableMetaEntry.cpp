@@ -69,6 +69,15 @@ std::vector<std::shared_ptr<MergeTreePartition>> TableMetaEntry::getPartitionLis
     return partition_list;
 }
 
+PartitionInfoPtr TableMetaEntry::getPartitionInfo(const String & partition_id)
+{
+
+    if (auto it = partitions.find(partition_id); it != partitions.end())
+        return *it;
+    else
+        return nullptr;
+}
+
 void TableMetaEntry::forEachPartition(std::function<void(PartitionInfoPtr)> callback)
 {
     for (auto it = partitions.begin(); it != partitions.end(); it++)

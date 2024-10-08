@@ -91,6 +91,9 @@ public:
     std::atomic<UInt64> gctime = {0};
     std::shared_ptr<PartitionMetrics> metrics_ptr;
 
+    // cache of serialized partition value; only be set when query the MV table
+    mutable std::optional<String> partition_value;
+
     inline PartitionLockHolder readLock() const
     {
         return partition_mutex->getLock(RWLockImpl::Read, RWLockImpl::NO_QUERY);
@@ -99,6 +102,26 @@ public:
     inline PartitionLockHolder writeLock() const
     {
         return partition_mutex->getLock(RWLockImpl::Write, RWLockImpl::NO_QUERY);
+    }
+
+    String getPartitionValue(const MergeTreeMetaBase & storage) const
+    {
+        {
+            auto lock = readLock();
+            if (partition_value)
+                return *partition_value;
+        }
+        {
+            auto lock = writeLock();
+            if (!partition_value)
+            {
+                String partition_value_;
+                WriteBufferFromString write_buffer(partition_value_);
+                partition_ptr->store(storage, write_buffer);
+                partition_value = partition_value_;
+            }
+            return *partition_value;
+        }
     }
 
 private:
