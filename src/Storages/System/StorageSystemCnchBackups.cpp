@@ -3,6 +3,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Protos/RPCHelpers.h>
 #include <Storages/System/StorageSystemCnchBackups.h>

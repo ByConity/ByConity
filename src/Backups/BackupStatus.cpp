@@ -1,6 +1,7 @@
 #include <Backups/BackupStatus.h>
 #include <Common/Exception.h>
 #include <common/types.h>
+#include <common/range.h>
 
 namespace DB
 {
