@@ -1,0 +1,20 @@
+p1
+p2
+p1
+p2
+abd	1
+abe	1
+p2	2
+abd	1
+abe	1
+p2	2
+p1
+p2
+p1
+p2
+test_metric_a	0	2	0	0	0	0	33
+test_metric_a	0	2	0	0	0	0	33
+test_metric_a	0	2	0	0	0	0	33
+test_metric_b	2	0	0	0	0	33	0
+test_metric_b	2	0	0	0	0	33	0
+test_metric_b	2	0	0	0	0	33	0

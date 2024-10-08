@@ -1,0 +1,19 @@
+add drop column user_id
+http://example.com/page7	Australia
+http://example.com/page8	Brazil
+http://example.com/page2	Canada
+http://example.com/page4	Germany
+http://example.com/page3	UK
+rename column
+http://example.com/page7	Australia	0
+http://example.com/page8	Brazil	0
+http://example.com/page2	Canada	0
+http://example.com/page4	Germany	0
+http://example.com/page3	UK	0
+rename column back
+modify settings
+http://example.com/page7	Australia	7
+http://example.com/page8	Brazil	8
+http://example.com/page2	Canada	2
+http://example.com/page4	Germany	4
+http://example.com/page3	UK	3

@@ -167,7 +167,7 @@ SettingsChanges getSettingsChangesFromConfigs(PlainConfigsPtr configs)
         {"lf_metastore_region", "lf_metastore_region"},
         {"lf_metastore_ak_id", "lf_metastore_ak_id"},
         {"lf_metastore_ak_secret", "lf_metastore_ak_secret"},
-        {"c", "lf_metastore_catalog"},
+        {"lf_metastore_catalog", "lf_metastore_catalog"},
         {"aws_glue_catalog_id", "aws.glue.catalog_id"},
         {"aws_glue_ak_id", "aws.glue.access_key"},
         {"aws_glue_ak_secret", "aws.glue.secret_key"},

@@ -131,22 +131,39 @@ void HiveWhereOptimizer::extractKeyConditions(Data & res, const ASTPtr & node, c
         auto right_arg = func.arguments->children.back();
 
         auto opt_col = IdentifierSemantic::getColumnName(left_arg);
-        if (opt_col && isPartitionKey(*opt_col))
+        if (opt_col.has_value() && isPartitionKey(*opt_col))
+
         {
             /// convert a in (1, 2) to (a = 1 or a = 2)
-            if (auto * in_func = right_arg->as<ASTFunction>())
+            /// (1, 2) is stored as ASTExpressionList with children 1 and 2.
+            if (auto * in_parameter = right_arg->as<ASTFunction>())
             {
                 auto or_func = makeASTFunction("or", ASTs{});
-                for (const auto & child : in_func->children)
+                if (in_parameter->getChildren().size() != 1)
                 {
-                    if (child->as<ASTLiteral>())
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR, "cannot convert {}, expecting only one expression list", queryToString(right_arg));
+                }
+                const auto & literal_list = in_parameter->children[0];
+
+                {
+                    if (literal_list->as<ASTExpressionList>())
                     {
-                        auto eq_func = makeASTFunction("equals", ASTs{left_arg, child});
-                        or_func->arguments->children.push_back(std::move(eq_func));
+                        for (const auto & in_literal : literal_list->getChildren())
+                        {
+                            auto eq_func = makeASTFunction("equals", ASTs{left_arg, in_literal});
+                            or_func->arguments->children.push_back(std::move(eq_func));
+                        }
+                        res.partiton_key_conditions.push_back(std::move(or_func));
+                    }
+                    else
+                    {
+                        throw Exception(
+                            ErrorCodes::LOGICAL_ERROR, "cannot convert {},  expecting expression list", queryToString(right_arg));
                     }
                 }
-                res.partiton_key_conditions.push_back(std::move(or_func));
             }
+            return;
         }
 
         if (opt_col && isClusterKey(*opt_col))
@@ -158,6 +175,68 @@ void HiveWhereOptimizer::extractKeyConditions(Data & res, const ASTPtr & node, c
                 if (all_literals)
                     res.cluster_key_conditions.push_back(node);
             }
+            return;
+        }
+
+        bool all_partition_column = false;
+        bool all_cluster_column = false;
+        auto * expr_tuple = left_arg->as<ASTFunction>();
+        auto & identifier_vec = expr_tuple->getChildren()[0]->children;
+
+        if (expr_tuple && expr_tuple->name == "tuple")
+        {
+            all_partition_column = std::all_of(identifier_vec.begin(), identifier_vec.end(), [this](const ASTPtr & child) {
+                auto child_col_name = IdentifierSemantic::getColumnName(child);
+                return child_col_name.has_value() && isPartitionKey(*child_col_name);
+            });
+            all_cluster_column = std::all_of(identifier_vec.begin(), identifier_vec.end(), [this](const ASTPtr & child) {
+                auto child_col_name = IdentifierSemantic::getColumnName(child);
+                return child_col_name.has_value() && isClusterKey(*child_col_name);
+            });
+        }
+        if (all_partition_column)
+        {
+            if (auto * in_parameter = right_arg->as<ASTLiteral>(); in_parameter && in_parameter->value.isTuple())
+            {
+                const auto & literal_tuple_value = in_parameter->value.get<Tuple>();
+                auto or_func = makeASTFunction("or", ASTs{});
+                for (const auto & literal_field : literal_tuple_value)
+                {
+                    if (literal_field.isTuple())
+                    {
+                        const auto & literal_field_vec = literal_field.get<Tuple>();
+                        auto and_func = makeASTFunction("and", ASTs{});
+                        for (size_t i = 0; i < literal_field_vec.size(); i++)
+                        {
+                            auto eq_func
+                                = makeASTFunction("equals", ASTs{identifier_vec[i], std::make_shared<ASTLiteral>(literal_field_vec[i])});
+                            and_func->arguments->children.push_back(std::move(eq_func));
+                        }
+                        or_func->arguments->children.push_back(std::move(and_func));
+                    }
+                    else
+                    {
+                        throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "cannot convert {}, wrong expression", right_arg->dumpTree(0));
+                    }
+                }
+                res.partiton_key_conditions.push_back(std::move(or_func));
+            }
+            return;
+        }
+
+        if (all_cluster_column)
+        {
+            if (auto * in_func = right_arg->as<ASTFunction>())
+            {
+                bool all_literals = std::all_of(in_func->children.begin(), in_func->children.end(), [](const ASTPtr & child) {
+                    return std::all_of(child->children.begin(), child->children.end(), [](const ASTPtr & child_inner) {
+                        return child_inner->as<ASTLiteral>();
+                    });
+                });
+                if (all_literals)
+                    res.cluster_key_conditions.push_back(node);
+            }
+            return;
         }
     }
 }

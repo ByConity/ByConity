@@ -744,7 +744,6 @@ if (ENABLE_TESTS AND USE_GTEST)
         ${GTEST_BOTH_LIBRARIES}
         clickhouse_functions
         clickhouse_aggregate_functions
-        clickhouse_parsers
         clickhouse_storages_system
         dbms
         clickhouse_common_zookeeper

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+set -e
+
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../shell_config.sh
+. "$CURDIR"/../shell_config.sh
+. "$CURDIR"/setup_env.sh
+
+set +x
+
+HIVE_DATABASE="hive_testdb_$RANDOM"
+
+hive-cli "create database if not exists ${HIVE_DATABASE}; \
+create table if not exists ${HIVE_DATABASE}.t (  user_id bigint, page_url string ) partitioned by (country String) stored as parquet; \
+insert into ${HIVE_DATABASE}.t partition(country = 'Australia') values (7,'http://example.com/page7'); \
+insert into ${HIVE_DATABASE}.t partition(country = 'Canada') values (2,'http://example.com/page2'); \
+insert into ${HIVE_DATABASE}.t partition(country = 'Brazil') values (8,'http://example.com/page8'); \
+insert into ${HIVE_DATABASE}.t partition(country = 'Germany') values (4,'http://example.com/page4'); \
+insert into ${HIVE_DATABASE}.t partition(country = 'UK') values (3,'http://example.com/page3')"
+${CLICKHOUSE_CLIENT} --query "drop table if exists ce_t" > /dev/null
+${CLICKHOUSE_CLIENT} --query "create table ce_t (user_id Int64, page_url String, country String) engine = CnchHive('${HIVE_METASTORE}', '${HIVE_DATABASE}', 't') partition by country"
+## add drop column
+${CLICKHOUSE_CLIENT} --query "select 'add drop column user_id'"
+${CLICKHOUSE_CLIENT} --query "alter table ce_t drop column user_id "
+${CLICKHOUSE_CLIENT} --query "select * from ce_t order by country"
+${CLICKHOUSE_CLIENT} --query "alter table ce_t add column user_id Int64"
+
+## rename column
+${CLICKHOUSE_CLIENT} --query "select 'rename column'"
+hive-cli "alter table ${HIVE_DATABASE}.t change column user_id new_user_id bigint" 
+${CLICKHOUSE_CLIENT} --query "alter table ce_t rename column user_id  to new_user_id"
+${CLICKHOUSE_CLIENT} --query "select * from ce_t order by country settings input_format_parquet_allow_missing_columns = 1"
+${CLICKHOUSE_CLIENT} --query "show create table ce_t" > /dev/null
+${CLICKHOUSE_CLIENT} --query "select 'rename column back'"
+hive-cli "alter table ${HIVE_DATABASE}.t change column new_user_id user_id bigint" 
+${CLICKHOUSE_CLIENT} --query "alter table ce_t rename column new_user_id  to user_id"
+${CLICKHOUSE_CLIENT} --query "show create table ce_t" > /dev/null
+
+## modify settings
+${CLICKHOUSE_CLIENT} --query "select 'modify settings'"
+${CLICKHOUSE_CLIENT} --query "alter table ce_t modify setting max_hive_metastore_client_retry = 5 "
+${CLICKHOUSE_CLIENT} --query "select * from ce_t order by country"
+${CLICKHOUSE_CLIENT} --query "show create table ce_t" > /dev/null
+
+hive-cli "drop database if exists ${HIVE_DATABASE} CASCADE"

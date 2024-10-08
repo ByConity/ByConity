@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+set -e
+
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../shell_config.sh
+. "$CURDIR"/../shell_config.sh
+. "$CURDIR"/setup_env.sh
+
+set +x
+
+hive-cli "create database if not exists ${CLICKHOUSE_DATABASE}"
+hive-cli "create table if not exists ${CLICKHOUSE_DATABASE}.t (s String) partitioned by (p String) stored as parquet"
+hive-cli "insert into ${CLICKHOUSE_DATABASE}.t partition(p = 'p1') values ('abc')"
+hive-cli "insert into ${CLICKHOUSE_DATABASE}.t partition(p = 'p2') values ('abd')"
+hive-cli "insert into ${CLICKHOUSE_DATABASE}.t partition(p = 'p2') values ('abe')"
+
+${CLICKHOUSE_CLIENT} --query "create table ce_t (s String, p String) engine = CnchHive('${HIVE_METASTORE}', '${CLICKHOUSE_DATABASE}', 't') partition by p"
+
+${CLICKHOUSE_CLIENT} --query "select p from ce_t group by p order by p settings enable_optimizer=1,wait_intermediate_result_cache=0,enable_optimizer_fallback=0,enable_sharding_optimize=1,enable_intermediate_result_cache_ignore_partition_filter=1,enable_partition_filter_push_down=1,enable_intermediate_result_cache=1"
+${CLICKHOUSE_CLIENT} --query "select p from ce_t group by p order by p settings enable_optimizer=1,wait_intermediate_result_cache=0,enable_optimizer_fallback=0,enable_sharding_optimize=1,enable_intermediate_result_cache_ignore_partition_filter=1,enable_partition_filter_push_down=1,enable_intermediate_result_cache=1, max_bytes_to_read=1"
+
+## cte
+${CLICKHOUSE_CLIENT} --query "DROP VIEW IF EXISTS ${CLICKHOUSE_DATABASE}.cte"
+${CLICKHOUSE_CLIENT} --query "CREATE VIEW  ${CLICKHOUSE_DATABASE}.cte  AS select s, p from ce_t where s > 'abc'"
+
+${CLICKHOUSE_CLIENT} --query "select * from (select toString(s) ts, count(p) from ${CLICKHOUSE_DATABASE}.cte cte1 group by s union all select p, count(s) from ${CLICKHOUSE_DATABASE}.cte cte1 group by p) order by ts settings enable_optimizer=1, enable_intermediate_result_cache=1, wait_intermediate_result_cache=0, enable_batch_send_plan_segment=1, enable_cte_intermediate_result_cache=1, cte_mode='SHARED', enable_share_common_plan_node=0, enable_cte_common_property=0"
+${CLICKHOUSE_CLIENT} --query "select * from (select toString(s) ts, count(p) from ${CLICKHOUSE_DATABASE}.cte cte1 group by s union all select p, count(s) from ${CLICKHOUSE_DATABASE}.cte cte1 group by p) order by ts settings max_bytes_to_read = 1, enable_optimizer=1, enable_intermediate_result_cache=1, wait_intermediate_result_cache=0, enable_batch_send_plan_segment=1, enable_cte_intermediate_result_cache=1, cte_mode='SHARED', enable_share_common_plan_node=0, enable_cte_common_property=0"
+
+## test enable_intermediate_result_cache_by_partition
+${CLICKHOUSE_CLIENT} --query "select /*test_metric_a*/ p from ce_t group by p order by p settings enable_optimizer=1, wait_intermediate_result_cache=0, enable_optimizer_fallback=0, enable_sharding_optimize=1, enable_intermediate_result_cache_ignore_partition_filter=1, enable_partition_filter_push_down=1, enable_intermediate_result_cache=1, enable_intermediate_result_cache_by_partition=1"
+${CLICKHOUSE_CLIENT} --query "select /*test_metric_b*/ p from ce_t group by p order by p settings enable_optimizer=1, wait_intermediate_result_cache=0, enable_optimizer_fallback=0, enable_sharding_optimize=1, enable_intermediate_result_cache_ignore_partition_filter=1, enable_partition_filter_push_down=1, enable_intermediate_result_cache=1, enable_intermediate_result_cache_by_partition=1, max_bytes_to_read=1"
+${CLICKHOUSE_CLIENT} --query "SYSTEM FLUSH LOGS"
+${CLICKHOUSE_CLIENT} --query "SELECT     metric,     Hits,     Misses,     Refuses,     Wait,     Uncompleted,     ReadBytes,     WriteBytes FROM (     SELECT         substring(a.query, 10, 13) metric,         COALESCE(b.ProfileEvents{'IntermediateResultCacheHits'}, 0) AS Hits,         COALESCE(b.ProfileEvents{'IntermediateResultCacheMisses'}, 0) AS Misses,         COALESCE(b.ProfileEvents{'IntermediateResultCacheRefuses'}, 0) AS Refuses,         COALESCE(b.ProfileEvents{'IntermediateResultCacheWait'}, 0) AS Wait,         COALESCE(b.ProfileEvents{'IntermediateResultCacheUncompleted'}, 0) AS Uncompleted,         COALESCE(b.ProfileEvents{'IntermediateResultCacheReadBytes'}, 0) AS ReadBytes,         COALESCE(b.ProfileEvents{'IntermediateResultCacheWriteBytes'}, 0) AS WriteBytes     FROM system.query_log AS a     INNER JOIN system.query_log AS b USING (event_date, initial_query_id)     WHERE (event_date = today()) AND (a.query NOT ILIKE '%system%') AND (a.query ILIKE '%test_metric_%') AND (a.type = 1) AND (Hits + Misses + Refuses + Wait + Uncompleted + ReadBytes + WriteBytes) > 0     ORDER BY a.event_time DESC     LIMIT 6 ) ORDER BY metric ASC"
