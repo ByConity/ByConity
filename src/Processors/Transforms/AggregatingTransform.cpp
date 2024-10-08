@@ -180,7 +180,9 @@ class ConvertingAggregatedToChunksTransform : public IProcessor
 public:
     ConvertingAggregatedToChunksTransform(AggregatingTransformParamsPtr params_, ManyAggregatedDataVariantsPtr data_, size_t num_threads_)
         : IProcessor({}, {params_->getHeader()})
-        , params(std::move(params_)), data(std::move(data_)), num_threads(num_threads_) {}
+        , params(std::move(params_)), data(std::move(data_))
+        , shared_data(std::make_shared<ConvertingAggregatedToChunksSource::SharedData>())
+        , num_threads(num_threads_) {}
 
     String getName() const override { return "ConvertingAggregatedToChunksTransform"; }
 
@@ -239,8 +241,7 @@ public:
             for (auto & input : inputs)
                 input.close();
 
-            if (shared_data)
-                shared_data->is_cancelled.store(true);
+            shared_data->is_cancelled.store(true);
 
             return Status::Finished;
         }
@@ -263,6 +264,11 @@ public:
 
         /// Two-level case.
         return prepareTwoLevel();
+    }
+
+    void onCancel() override
+    {
+        shared_data->is_cancelled.store(true, std::memory_order_seq_cst);
     }
 
 private:
@@ -359,7 +365,7 @@ private:
 
         if (first->type == AggregatedDataVariants::Type::without_key || params->params.overflow_row)
         {
-            params->aggregator.mergeWithoutKeyDataImpl(*data);
+            params->aggregator.mergeWithoutKeyDataImpl(*data, shared_data->is_cancelled);
             auto block = params->aggregator.prepareBlockAndFillWithoutKey(
                 *first, params->final, first->type != AggregatedDataVariants::Type::without_key);
 
@@ -399,7 +405,7 @@ private:
         if (num_threads == 0)
             throw Exception("num_threads can't be zero when use two-level aggregation", ErrorCodes::LOGICAL_ERROR);
         AggregatedDataVariantsPtr & first = data->at(0);
-        shared_data = std::make_shared<ConvertingAggregatedToChunksSource::SharedData>();
+        processors.reserve(num_threads);
 
         for (size_t thread = 0; thread < num_threads; ++thread)
         {
@@ -570,7 +576,7 @@ void AggregatingTransform::consume(Chunk chunk)
     {
         auto block = getInputs().front().getHeader().cloneWithColumns(chunk.detachColumns());
         block = materializeBlock(block);
-        if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
+        if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys, is_cancelled))
             is_consume_finished = true;
     }
     else
@@ -592,7 +598,7 @@ void AggregatingTransform::initGenerate()
     if (variants.empty() && params->params.keys_size == 0 && !params->params.empty_result_for_aggregation_by_empty_set)
     {
         if (params->only_merge)
-            params->aggregator.mergeOnBlock(getInputs().front().getHeader(), variants, no_more_keys);
+            params->aggregator.mergeOnBlock(getInputs().front().getHeader(), variants, no_more_keys, is_cancelled);
         else
             params->aggregator.executeOnBlock(getInputs().front().getHeader(), variants, key_columns, aggregate_columns, no_more_keys);
     }

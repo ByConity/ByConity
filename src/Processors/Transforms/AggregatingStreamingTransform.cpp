@@ -196,7 +196,7 @@ void AggregatingStreamingTransform::transform(DB::Chunk & chunk)
     {
         input_rows += num_rows;
         auto block = inputs.front().getHeader().cloneWithColumns(chunk.getColumns());
-        if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys))
+        if (!params->aggregator.mergeOnBlock(block, variants, no_more_keys, is_cancelled))
         {
             start_generated = true;
             no_more_data_needed = true;

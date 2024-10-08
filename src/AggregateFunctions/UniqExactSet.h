@@ -26,7 +26,7 @@ public:
             asTwoLevel().insert(std::forward<Arg>(arg));
     }
 
-    auto merge(const UniqExactSet & other, ThreadPool * thread_pool = nullptr)
+    auto merge(const UniqExactSet & other, ThreadPool * thread_pool = nullptr, std::atomic<bool> * is_cancelled = nullptr)
     {
         if (isSingleLevel() && other.isTwoLevel())
             convertToTwoLevel();
@@ -49,7 +49,7 @@ public:
             {
                 auto next_bucket_to_merge = std::make_shared<std::atomic_uint32_t>(0);
 
-                auto thread_func = [&lhs, &rhs, next_bucket_to_merge, thread_group = CurrentThread::getGroup()]()
+                auto thread_func = [&lhs, &rhs, next_bucket_to_merge, is_cancelled, thread_group = CurrentThread::getGroup()]()
                 {
                     if (thread_group)
                         CurrentThread::attachToIfDetached(thread_group);
@@ -57,6 +57,8 @@ public:
 
                     while (true)
                     {
+                        if (is_cancelled->load(std::memory_order_seq_cst))
+                            return;
                         const auto bucket = next_bucket_to_merge->fetch_add(1);
                         if (bucket >= rhs.NUM_BUCKETS)
                             return;

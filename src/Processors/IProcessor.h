@@ -357,6 +357,7 @@ public:
 
 protected:
     virtual void onCancel() {}
+    std::atomic<bool> is_cancelled{false};
 
 private:
     /// For:
@@ -364,7 +365,7 @@ private:
     /// - input_wait_elapsed_us
     /// - output_wait_elapsed_us
     friend class PipelineExecutor;
-    std::atomic<bool> is_cancelled{false};
+    friend class ExecutingGraph;
 
     std::string processor_description;
 

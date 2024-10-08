@@ -119,7 +119,7 @@ IMergingAlgorithm::Status FinishAggregatingInOrderAlgorithm::merge()
 
 Chunk FinishAggregatingInOrderAlgorithm::aggregate()
 {
-    auto aggregated = params->aggregator.mergeBlocks(blocks, false);
+    auto aggregated = params->aggregator.mergeBlocks(blocks, false, is_cancelled);
     blocks.clear();
     accumulated_rows = 0;
     return {aggregated.getColumns(), aggregated.rows()};
