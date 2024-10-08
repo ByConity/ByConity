@@ -190,9 +190,9 @@ void SubstituteIdentifierToAnyFunction::visit(ASTIdentifier & node, ASTPtr & ast
     }
     else
     {
-        for (const auto & [name, it_qualified_name] : data.processed_identifier_qualified_names)
+        for (const auto & [name_, it_qualified_name] : data.processed_identifier_qualified_names)
         {
-            if (name == node.name() && node.isShort())
+            if (name_ == node.name() && node.isShort())
                 return;
             else if (it_qualified_name.hasSuffix(qualified_name) || qualified_name.hasSuffix(it_qualified_name))
             {
