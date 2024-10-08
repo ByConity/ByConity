@@ -31,7 +31,6 @@ namespace DB::ResourceManagement
 {
 VirtualWarehouse::VirtualWarehouse(String n, UUID u, const VirtualWarehouseSettings & s) : name(std::move(n)), uuid(u), settings(s)
 {
-    query_scheduler = std::make_unique<QueryScheduler>(*this);
 }
 
 void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & setting_changes, const Catalog::CatalogPtr & catalog)

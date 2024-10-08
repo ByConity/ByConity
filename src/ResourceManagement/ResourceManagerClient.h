@@ -73,9 +73,6 @@ public:
     void registerWorker(const WorkerNodeResourceData & data);
     void removeWorker(const String & worker_id, const String & vw_name, const String & group_id);
 
-    WorkerGroupData pickWorkerGroup(const String & vw_name, VWScheduleAlgo vw_schedule_algo, const ResourceRequirement & requirement);
-    HostWithPorts pickWorker(const String & vw_name, VWScheduleAlgo vw_schedule_algo, const ResourceRequirement & requirement);
-
     AggQueryQueueMap syncQueueDetails(VWQueryQueueMap vw_query_queue_map , std::vector<String> * deleted_vw_list);
 
 private:

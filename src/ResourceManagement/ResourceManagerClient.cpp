@@ -406,69 +406,6 @@ void ResourceManagerClient::removeWorker(const String & worker_id, const String 
     callToLeaderWrapper(response, rpc_func);
 }
 
-WorkerGroupData ResourceManagerClient::pickWorkerGroup(const String & vw_name, VWScheduleAlgo vw_schedule_algo, const ResourceRequirement & requirement)
-{
-    WorkerGroupData res;
-
-    brpc::Controller cntl;
-    Protos::RMScheduleReq request;
-    Protos::PickWorkerGroupResp response;
-    auto rpc_func = [this, &cntl, &request, &response, &vw_name, &vw_schedule_algo, &requirement](const std::unique_ptr<Stub> & stub_)
-    {
-        request.set_vw_name(vw_name);
-        request.set_vw_schedule_algo(vw_schedule_algo);
-        requirement.fillProto(*request.mutable_requirement());
-
-        stub_->pickWorkerGroup(&cntl, &request, &response, nullptr);
-        LOG_TRACE(
-            getLogger("adaptiveScheduler"),
-            "pickWorkerGroup response: {}", response.ShortDebugString().c_str());
-        assertController(cntl);
-        RPCHelpers::checkResponse(response);
-    };
-
-    auto process_response = [&res] (Protos::PickWorkerGroupResp & response_)
-    {
-        res = WorkerGroupData::createFromProto(response_.worker_group_data());
-    };
-
-    callToLeaderWrapper(response, rpc_func, process_response);
-    return res;
-}
-
-HostWithPorts ResourceManagerClient::pickWorker(const String & vw_name, VWScheduleAlgo vw_schedule_algo, const ResourceRequirement & requirement)
-{
-    HostWithPorts res;
-
-    brpc::Controller cntl;
-    Protos::RMScheduleReq request;
-    Protos::PickWorkerResp response;
-
-    auto rpc_func = [this, &cntl, &request, &response, &vw_name, &vw_schedule_algo, &requirement](const std::unique_ptr<Stub> & stub_)
-    {
-        request.set_vw_name(vw_name);
-        request.set_vw_schedule_algo(vw_schedule_algo);
-        requirement.fillProto(*request.mutable_requirement());
-
-        stub_->pickWorker(&cntl, &request, &response, nullptr);
-
-        assertController(cntl);
-        RPCHelpers::checkResponse(response);
-
-    };
-
-    auto process_response = [&res] (Protos::PickWorkerResp & response_)
-    {
-        if ((response_.has_cancel_task() && response_.cancel_task()) || !response_.has_host_ports())
-            throw Exception("No available worker from ResourceManager.", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-
-        res = RPCHelpers::createHostWithPorts(response_.host_ports());
-    };
-
-    callToLeaderWrapper(response, rpc_func, process_response);
-    return res;
-}
-
 AggQueryQueueMap ResourceManagerClient::syncQueueDetails(VWQueryQueueMap vw_query_queue_map
                                                          , std::vector<String> * deleted_vw_list)
 {
@@ -476,26 +413,21 @@ AggQueryQueueMap ResourceManagerClient::syncQueueDetails(VWQueryQueueMap vw_quer
     brpc::Controller cntl;
     Protos::SyncQueueDetailsReq request;
     Protos::SyncQueueDetailsResp response;
-
     auto rpc_func = [this, &cntl, &request, &response, &vw_query_queue_map](const std::unique_ptr<Stub> & stub_)
     {
-
         for (const auto & [key, server_query_queue_info] : vw_query_queue_map)
         {
             Protos::QueryQueueInfo protobuf_entry;
             server_query_queue_info.fillProto(protobuf_entry);
             (*request.mutable_server_query_queue_map())[key] = protobuf_entry;
         }
-
         stub_->syncQueueDetails(&cntl, &request, &response, nullptr);
         assertController(cntl);
         RPCHelpers::checkResponse(response);
     };
-
     auto process_response = [&deleted_vw_list, &res] (Protos::SyncQueueDetailsResp & response_)
     {
         deleted_vw_list->insert(deleted_vw_list->end(), response_.deleted_vws().begin(), response_.deleted_vws().end());
-
         for (const auto & [key, proto_agg_query_queue_info] : response_.agg_query_queue_map())
         {
             QueryQueueInfo agg_query_queue_info;
@@ -503,7 +435,6 @@ AggQueryQueueMap ResourceManagerClient::syncQueueDetails(VWQueryQueueMap vw_quer
             res[key] = agg_query_queue_info;
         }
     };
-
     callToLeaderWrapper(response, rpc_func, process_response);
     return res;
 }

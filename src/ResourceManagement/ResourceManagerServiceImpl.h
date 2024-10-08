@@ -115,24 +115,6 @@ public:
         ::DB::Protos::GetAllWorkerGroupsResp * response,
         ::google::protobuf::Closure * done) override;
 
-    void pickWorker(
-        ::google::protobuf::RpcController * controller,
-        const ::DB::Protos::RMScheduleReq * request,
-        ::DB::Protos::PickWorkerResp * response,
-        ::google::protobuf::Closure * done) override;
-
-    void pickWorkers(
-        ::google::protobuf::RpcController * controller,
-        const ::DB::Protos::RMScheduleReq * request,
-        ::DB::Protos::PickWorkersResp * response,
-        ::google::protobuf::Closure * done) override;
-
-    void pickWorkerGroup(
-        ::google::protobuf::RpcController * controller,
-        const ::DB::Protos::RMScheduleReq * request,
-        ::DB::Protos::PickWorkerGroupResp * response,
-        ::google::protobuf::Closure * done) override;
-
     void syncQueueDetails(
         ::google::protobuf::RpcController * controller,
         const ::DB::Protos::SyncQueueDetailsReq * request,

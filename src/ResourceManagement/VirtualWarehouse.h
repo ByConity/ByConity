@@ -17,7 +17,6 @@
 
 #include <ResourceManagement/CommonData.h>
 #include <ResourceManagement/PhysicalWorkerGroup.h>
-#include <ResourceManagement/QueryScheduler.h>
 #include <ResourceManagement/SharedWorkerGroup.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Protos/resource_manager_rpc.pb.h>
@@ -53,7 +52,6 @@ class VirtualWarehouse : private boost::noncopyable, public std::enable_shared_f
 public:
     auto & getName() const { return name; }
     auto getUUID() const { return uuid; }
-    auto & getQueryScheduler() { return *query_scheduler; }
 
     auto getReadLock() const { return ReadLock(state_mutex); }
     auto getWriteLock() const { return WriteLock(state_mutex); }
@@ -144,8 +142,6 @@ private:
     UInt64 last_lend_timestamp{0};
 
     std::atomic<UInt64> last_settings_timestamp{0};
-
-    std::unique_ptr<QueryScheduler> query_scheduler;
 
     void cleanupQueryQueueMap();
 };
