@@ -617,6 +617,7 @@ size_t CnchPartGCThread::doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMe
             size_t nbitmaps = items_removed.delete_bitmaps.size();
             LOG_DEBUG(log, "[p2] Will remove trash records of {} parts, {} delete bitmaps", nparts, nbitmaps);
             catalog->clearTrashItems(istorage, items_removed);
+            ServerPartLog::addDeleteParts(getContext(), storage_id, items_removed.data_parts);
             LOG_DEBUG(
                 log, "[p2] Completely removed data of {} parts and {} delete bitmaps in {} ms", nparts, nbitmaps, watch.elapsedMilliseconds());
             ntotal += (nparts + nbitmaps);

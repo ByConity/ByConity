@@ -39,6 +39,7 @@ NamesAndTypesList ServerPartLogElement::getNamesAndTypes()
         {"MutatePart", static_cast<Int8>(MUTATE_PART)},
         {"DropRange", static_cast<Int8>(DROP_RANGE)},
         {"RemovePart", static_cast<Int8>(REMOVE_PART)},
+        {"DeleteParts", static_cast<Int8>(DELETE_PARTS)},
     });
 
     return {
@@ -215,6 +216,7 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
             elem.part_id = UUIDToStringIfNotNil(part->get_uuid());
             elem.is_staged_part = is_staged;
             elem.rows = part->rowsCount();
+            elem.bytes = part->size();
             elem.commit_ts = part->getCommitTime();
             elem.end_ts = part->getEndTime();
 
@@ -235,6 +237,49 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
         return false;
     }
 
+}
+
+bool ServerPartLog::addDeleteParts(const ContextPtr & local_context, StorageID storage_id, const ServerDataPartsVector & parts)
+{
+    std::shared_ptr<ServerPartLog> server_part_log = local_context->getServerPartLog();
+    if (parts.empty() || !server_part_log)
+        return false;
+
+    try
+    {
+        auto now = time(nullptr);
+        ServerPartLogElement elem;
+        size_t commit_ts = 0;
+        size_t end_ts = 0;
+        size_t rows = 0;
+        size_t bytes = 0;
+        for (const auto & part : parts)
+        {
+            rows += part->rowsCount();
+            bytes += part->size();
+            commit_ts = std::max(commit_ts, part->getCommitTime());
+            end_ts = std::max(end_ts, part->getEndTime());
+        }
+
+        elem.event_type = ServerPartLogElement::DELETE_PARTS;
+        elem.event_time = now;
+        elem.database_name = storage_id.getDatabaseName();
+        elem.table_name = storage_id.getTableName();
+        elem.uuid = storage_id.uuid;
+        elem.is_staged_part = false;
+        elem.rows = rows;
+        elem.bytes = bytes;
+        elem.commit_ts = commit_ts;
+        elem.end_ts = end_ts;
+
+        server_part_log->add(elem);
+        return true;
+    }
+    catch (...)
+    {
+        tryLogCurrentException(server_part_log->log, __PRETTY_FUNCTION__);
+        return false;
+    }
 }
 
 void ServerPartLog::prepareTable()
