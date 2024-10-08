@@ -1195,19 +1195,40 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 
     /// If user execute 'CREATE TABLE' with query-level setting `virtual_warehouse_write`, we will pass the value to table setting cnch_vw_write if it's not set.
-    if (auto vw_in_query_settings = getContext()->getSettingsRef().virtual_warehouse_write.value; !vw_in_query_settings.empty())
+    if (create.storage && create.storage->engine && startsWith(create.storage->engine->name, "Cnch")
+        && endsWith(create.storage->engine->name, "MergeTree"))
     {
-        auto * storage_settings = create.storage->settings;
-        if (!storage_settings)
+        if (auto vw_in_query_settings = getContext()->getSettingsRef().virtual_warehouse_write.value; !vw_in_query_settings.empty())
         {
-            ASTPtr single_setting = std::make_shared<ASTSetQuery>();
-            single_setting->as<ASTSetQuery &>().is_standalone = false;
-            single_setting->as<ASTSetQuery &>().changes.push_back({"cnch_vw_write", vw_in_query_settings});
-            create.storage->set(create.storage->settings, single_setting);
+            auto * storage_settings = create.storage->settings;
+            if (!storage_settings)
+            {
+                ASTPtr single_setting = std::make_shared<ASTSetQuery>();
+                single_setting->as<ASTSetQuery &>().is_standalone = false;
+                single_setting->as<ASTSetQuery &>().changes.push_back({"cnch_vw_write", vw_in_query_settings});
+                create.storage->set(create.storage->settings, single_setting);
+            }
+            else if (!storage_settings->changes.tryGet("cnch_vw_write"))
+            {
+                storage_settings->changes.setSetting("cnch_vw_write", vw_in_query_settings);
+            }
         }
-        else if (!storage_settings->changes.tryGet("cnch_vw_write"))
+
+        /// If user execute 'CREATE TABLE' with query-level setting `storage_policy`, we will pass the value to table setting storage_policy if it's not set.
+        if (auto storage_policy_setting = getContext()->getSettingsRef().storage_policy.value; !storage_policy_setting.empty())
         {
-            storage_settings->changes.setSetting("cnch_vw_write", vw_in_query_settings);
+            auto * storage_settings = create.storage->settings;
+            if (!storage_settings)
+            {
+                ASTPtr single_setting = std::make_shared<ASTSetQuery>();
+                single_setting->as<ASTSetQuery &>().is_standalone = false;
+                single_setting->as<ASTSetQuery &>().changes.push_back({"storage_policy", storage_policy_setting});
+                create.storage->set(create.storage->settings, single_setting);
+            }
+            else if (!storage_settings->changes.tryGet("storage_policy"))
+            {
+                storage_settings->changes.setSetting("storage_policy", storage_policy_setting);
+            }
         }
     }
 

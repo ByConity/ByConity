@@ -1876,6 +1876,8 @@ enum PreloadLevelSettings : UInt64
     \
     M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
     M(Bool, multi_idx_filter_for_ivt, false, "Using multiple inverted index to filter mark ranges at the same time", 0) \
+    \
+    M(String, storage_policy, "", "Use storage policy name when create table", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.
