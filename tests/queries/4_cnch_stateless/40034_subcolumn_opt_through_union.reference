@@ -1,19 +1,19 @@
 Projection Est. ? rows
 │     Expressions: mapElement(map1, \'a\'):=`__map1__\'a\'`
 └─ Gather Exchange Est. ? rows
-   └─ TableScan test.t40034_t1 Est. ? rows
+   └─ TableScan default.t40034_t1 Est. ? rows
             Outputs: [__map1__\'a\']
 1
 Projection Est. ? rows
 │     Expressions: mapElement(m, \'a\'):=`__map1__\'a\'`
 └─ Gather Exchange Est. ? rows
-   └─ TableScan test.t40034_t1 Est. ? rows
+   └─ TableScan default.t40034_t1 Est. ? rows
             Outputs: [__map1__\'a\']
 1
 Projection Est. ? rows
 │     Expressions: [int1, str1], mapElement(map1, \'a\'):=`__map1__\'a\'`
 └─ Gather Exchange Est. ? rows
-   └─ TableScan test.t40034_t1 Est. ? rows
+   └─ TableScan default.t40034_t1 Est. ? rows
             Outputs: [int1, str1, __map1__\'a\']
 str1	100	1
 Projection Est. ? rows
@@ -25,14 +25,14 @@ Projection Est. ? rows
       │  │     Expressions: [__map2__\'y\', int1, str1]
       │  └─ Filter Est. ? rows
       │     │     Condition: `__map1__\'a\'` > 1
-      │     └─ TableScan test.t40034_t1 Est. ? rows
+      │     └─ TableScan default.t40034_t1 Est. ? rows
       │              Where: `__map1__\'a\'` > 1
       │              Outputs: [int1, str1, __map1__\'a\', __map2__\'y\']
       └─ Projection Est. ? rows
          │     Expressions: [__map3__\'y\', int2, str2]
          └─ Filter Est. ? rows
             │     Condition: `__map4__\'a\'` > 1
-            └─ TableScan test.t40034_t2 Est. ? rows
+            └─ TableScan default.t40034_t2 Est. ? rows
                      Where: `__map4__\'a\'` > 1
                      Outputs: [int2, str2, __map3__\'y\', __map4__\'a\']
 200	str2	40
@@ -45,28 +45,28 @@ Projection Est. ? rows
       │  │     Expressions: [__map1__\'a\', int1, str1]
       │  └─ Filter Est. ? rows
       │     │     Condition: `__map2__\'x\'` > 1
-      │     └─ TableScan test.t40034_t1 Est. ? rows
+      │     └─ TableScan default.t40034_t1 Est. ? rows
       │              Where: `__map2__\'x\'` > 1
       │              Outputs: [int1, str1, __map1__\'a\', __map2__\'x\']
       ├─ Projection Est. ? rows
       │  │     Expressions: [__map4__\'a\', int2, str2]
       │  └─ Filter Est. ? rows
       │     │     Condition: `__map3__\'x\'` > 1
-      │     └─ TableScan test.t40034_t2 Est. ? rows
+      │     └─ TableScan default.t40034_t2 Est. ? rows
       │              Where: `__map3__\'x\'` > 1
       │              Outputs: [int2, str2, __map3__\'x\', __map4__\'a\']
       ├─ Projection Est. ? rows
       │  │     Expressions: [__map2__\'a\', int1_2, str1_2]
       │  └─ Filter Est. ? rows
       │     │     Condition: `__map1__\'a\'_2` > 1
-      │     └─ TableScan test.t40034_t1 Est. ? rows
+      │     └─ TableScan default.t40034_t1 Est. ? rows
       │              Where: `__map1__\'a\'` > 1
       │              Outputs: [__map2__\'a\'], int1_2:=int1, str1_2:=str1, __map1__\'a\'_2:=__map1__\'a\'
       └─ Projection Est. ? rows
          │     Expressions: [__map3__\'a\', int2_1, str2_1]
          └─ Filter Est. ? rows
             │     Condition: `__map4__\'a\'_1` > 1
-            └─ TableScan test.t40034_t2 Est. ? rows
+            └─ TableScan default.t40034_t2 Est. ? rows
                      Where: `__map4__\'a\'` > 1
                      Outputs: [__map3__\'a\'], int2_1:=int2, str2_1:=str2, __map4__\'a\'_1:=__map4__\'a\'
 100	str1	1

@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS test48024;
 set enable_optimizer=1;
 set enable_sharding_optimize=1;

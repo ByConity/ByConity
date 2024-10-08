@@ -1,6 +1,6 @@
 SET enable_optimizer=1;
 set enable_auto_query_forwarding=0;
-use test;
+
 DROP TABLE IF EXISTS aeolus_data_table_177956_prod;
 
 CREATE TABLE aeolus_data_table_177956_prod

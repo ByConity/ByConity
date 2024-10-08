@@ -1,5 +1,4 @@
 set enable_optimizer=1;
-use test;
 
 drop table if exists t48025_abl;
 create table t48025_abl(x UInt8) ENGINE=CnchMergeTree() order by x;

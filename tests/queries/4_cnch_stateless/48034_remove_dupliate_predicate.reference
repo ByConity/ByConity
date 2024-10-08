@@ -3,7 +3,7 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: (str = \'a\') AND (id = 1)
-      └─ TableScan test.48038_table Est. ? rows
+      └─ TableScan default.48038_table Est. ? rows
                Where: (str = \'a\') AND (id = 1)
                Outputs: [id, str]
 Projection Est. ? rows
@@ -11,6 +11,6 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: (id = 1) OR (str = \'a\')
-      └─ TableScan test.48038_table Est. ? rows
+      └─ TableScan default.48038_table Est. ? rows
                Where: (id = 1) OR (str = \'a\')
                Outputs: [id, str]

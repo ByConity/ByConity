@@ -1,6 +1,5 @@
 SET enable_optimizer = 1;
 
-USE test;
 drop table if exists X;
 drop table if exists Y;
 create table X (id Int32, x_name String) engine = CnchMergeTree ORDER BY id;

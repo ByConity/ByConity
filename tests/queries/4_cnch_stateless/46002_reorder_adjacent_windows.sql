@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 DROP TABLE IF EXISTS students;
 CREATE TABLE students (id Int, major String, age Int) ENGINE = CnchMergeTree() PRIMARY KEY id order by id;
 

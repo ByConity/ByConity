@@ -13,7 +13,7 @@ Projection Est. ? rows
             │  │  │     Expressions: [p_date, user_id]
             │  │  └─ Filter Est. ? rows
             │  │     │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │  │     └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
+            │  │     └─ TableScan default.idm_ana_xz_rpt_user_evt Est. ? rows
             │  │              Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
             │  │              Outputs: [user_id, channel, p_date]
             │  └─ Broadcast Exchange Est. ? rows
@@ -26,7 +26,7 @@ Projection Est. ? rows
             │                 │     Expressions: [user_id_5], expr#toDate(hdfs_par)_4:=toDate(hdfs_par_2)
             │                 └─ Filter Est. ? rows
             │                    │     Condition: toDate(hdfs_par_2) >= cast(18359, \'Date\')
-            │                    └─ TableScan test.idm_ods_ods_inst_user_tags Est. ? rows
+            │                    └─ TableScan default.idm_ods_ods_inst_user_tags Est. ? rows
             │                             Where: toDate(hdfs_par) >= cast(18359, \'Date\')
             │                             Outputs: user_id_5:=user_id, hdfs_par_2:=hdfs_par
             └─ Broadcast Exchange Est. ? rows
@@ -41,6 +41,6 @@ Projection Est. ? rows
                               │     Expressions: [user_id_6], expr#toDate(hdfs_par)_5:=toDate(hdfs_par_3)
                               └─ Filter Est. ? rows
                                  │     Condition: toDate(hdfs_par_3) >= cast(18359, \'Date\')
-                                 └─ TableScan test.idm_ods_ods_inst_user_tags Est. ? rows
+                                 └─ TableScan default.idm_ods_ods_inst_user_tags Est. ? rows
                                           Where: toDate(hdfs_par) >= cast(18359, \'Date\')
                                           Outputs: user_id_6:=user_id, hdfs_par_3:=hdfs_par

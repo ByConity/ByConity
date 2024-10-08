@@ -60,9 +60,8 @@ SELECT ADDTIME(DATE '2022-01-01', '25:00:00'); -- { serverError 6 }
 SELECT SUBTIME(DATE '2022-12-31', '24:00:00');  -- { serverError 6 }
 SELECT SUBTIME(DATE '2022-01-01', '25:00:00');  -- { serverError 6 }
 
-use test;
-DROP TABLE IF EXISTS test.time_table;
-CREATE TABLE test.time_table
+DROP TABLE IF EXISTS time_table;
+CREATE TABLE time_table
 (
     val1 UInt64, 
     val2 TIME,
@@ -70,11 +69,11 @@ CREATE TABLE test.time_table
     val4 DATETIME
 ) ENGINE=CnchMergeTree() ORDER BY val1;
 
-INSERT INTO test.time_table VALUES(0, '01:02:03', '2022-01-01', '2022-01-01 00:00:00');
-INSERT INTO test.time_table VALUES(1, '23:02:03', '2022-01-01', '2022-12-31 23:00:00');
-INSERT INTO test.time_table VALUES(2, '23:02:03', '2022-01-01', '2022-01-01 00:00:00');
-SELECT val1, ADDTIME(val2, val2), ADDTIME(val3, val2), ADDTIME(val4, val2) FROM test.time_table ORDER BY val1 ASC;
-SELECT val1, SUBTIME(val2, val2), SUBTIME(val3, val2), SUBTIME(val4, val2) FROM test.time_table ORDER BY val1 ASC;
-DROP TABLE test.time_table;
+INSERT INTO time_table VALUES(0, '01:02:03', '2022-01-01', '2022-01-01 00:00:00');
+INSERT INTO time_table VALUES(1, '23:02:03', '2022-01-01', '2022-12-31 23:00:00');
+INSERT INTO time_table VALUES(2, '23:02:03', '2022-01-01', '2022-01-01 00:00:00');
+SELECT val1, ADDTIME(val2, val2), ADDTIME(val3, val2), ADDTIME(val4, val2) FROM time_table ORDER BY val1 ASC;
+SELECT val1, SUBTIME(val2, val2), SUBTIME(val3, val2), SUBTIME(val4, val2) FROM time_table ORDER BY val1 ASC;
+DROP TABLE time_table;
 
 

@@ -1,4 +1,3 @@
-use test;
 drop table if exists test_join_in_table_123;
 create table test_join_in_table_123 (p_date Date, id Int32) engine = CnchMergeTree partition by p_date order by id;
 select count() from 

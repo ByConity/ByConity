@@ -1,5 +1,5 @@
 SET enable_optimizer = 1;
-use test;
+
 DROP TABLE IF EXISTS unwrap_cast_expr_core;
 
 CREATE TABLE unwrap_cast_expr_core(a Int32)

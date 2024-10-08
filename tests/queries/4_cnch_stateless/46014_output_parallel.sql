@@ -1,6 +1,5 @@
-use test;
-DROP TABLE IF EXISTS test.consumer_hour;
-DROP TABLE IF EXISTS test.sender_hour;
+DROP TABLE IF EXISTS consumer_hour;
+DROP TABLE IF EXISTS sender_hour;
 
 CREATE TABLE consumer_hour
 (
@@ -77,5 +76,5 @@ FROM
     )
         SETTINGS enable_optimizer = 1;
 
-DROP TABLE IF EXISTS test.consumer_hour;
-DROP TABLE IF EXISTS test.sender_hour;
+DROP TABLE IF EXISTS consumer_hour;
+DROP TABLE IF EXISTS sender_hour;

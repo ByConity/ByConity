@@ -1,4 +1,3 @@
-USE test;
 set bsp_max_retry_num=0; -- disable bsp retry
 
 DROP TABLE IF EXISTS 11011_reorganize_data_layout;

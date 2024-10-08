@@ -1,5 +1,3 @@
-use test;
-create database if not exists test;
 drop table if exists uniform_sample;
 CREATE TABLE uniform_sample(`x` UInt8) Engine = CnchMergeTree() order by x;
 

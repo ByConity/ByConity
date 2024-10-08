@@ -1,5 +1,3 @@
-create database if not exists test engine = Cnch;
-use test;
 SET enable_optimizer = 1;
 SET enable_common_expression_sharing = 1;
 

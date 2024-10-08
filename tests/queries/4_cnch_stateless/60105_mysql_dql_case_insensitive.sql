@@ -1,4 +1,3 @@
-use test;
 set dialect_type='MYSQL';
 set enable_optimizer=1;
 set text_case_option = 'LOWERCASE';

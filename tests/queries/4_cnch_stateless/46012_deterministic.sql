@@ -1,6 +1,3 @@
-create database if not exists test;
-use test;
-
 DROP TABLE IF EXISTS sales_transaction;
 DROP TABLE IF EXISTS items;
 

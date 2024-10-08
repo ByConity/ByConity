@@ -7,9 +7,9 @@ Projection Est. ? rows
       │  │     Expressions: [item_code]
       │  └─ Filter Est. ? rows
       │     │     Condition: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = 7
-      │     └─ TableScan test.sales_transaction Est. ? rows
+      │     └─ TableScan default.sales_transaction Est. ? rows
       │              Where: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = 7
       │              Outputs: [item_code, transaction_time]
       └─ Broadcast Exchange Est. ? rows
-         └─ TableScan test.items Est. ? rows
+         └─ TableScan default.items Est. ? rows
                   Outputs: item_code_1:=item_code

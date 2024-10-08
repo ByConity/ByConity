@@ -1,5 +1,5 @@
-CREATE TABLE test.t_no_vw\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.t_query_setting\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_write\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.t_table_setting\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_default\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.t_table_setting2\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_default\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.t_table_setting3\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_write\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.t_no_vw\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.t_query_setting\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_write\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.t_table_setting\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_default\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.t_table_setting2\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_default\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.t_table_setting3\n(\n    `k` Int32\n)\nENGINE = CnchMergeTree\nORDER BY k\nSETTINGS cnch_vw_write = \'vw_write\', storage_policy = \'cnch_default_hdfs\', index_granularity = 8192

@@ -29,8 +29,8 @@ SELECT '我很喜欢狗和猫。' RLIKE '^[^猫]*$';
 SELECT '熊猫喜欢吃竹子' RLIKE '大熊猫|小熊猫|熊猫猫|熊猫熊';
 
 CREATE DATABASE IF NOT EXISTS test;
-DROP TABLE IF EXISTS test.regexp_table;
-CREATE TABLE test.regexp_table
+DROP TABLE IF EXISTS regexp_table;
+CREATE TABLE regexp_table
 (
     id Int64,
     name String
@@ -38,21 +38,21 @@ CREATE TABLE test.regexp_table
 ENGINE = CnchMergeTree()
 ORDER BY id;
 
-INSERT INTO test.regexp_table (id, name) VALUES (1, '张三'), (2, 'John Doe'), (3, '李四'), (4, 'María García'), (5, '王五'), (6, 'François Dupont'), (7, '123-45-6789 (SSN)'), (8, '赵六'), (9, 'Kim Min-ji'), (10, '555-1234 (phone number)');
+INSERT INTO regexp_table (id, name) VALUES (1, '张三'), (2, 'John Doe'), (3, '李四'), (4, 'María García'), (5, '王五'), (6, 'François Dupont'), (7, '123-45-6789 (SSN)'), (8, '赵六'), (9, 'Kim Min-ji'), (10, '555-1234 (phone number)');
     
 SELECT name
-FROM test.regexp_table
+FROM regexp_table
 WHERE name RLIKE '张|李|王|赵';
 
 SELECT name
-FROM test.regexp_table
+FROM regexp_table
 WHERE name RLIKE '张|John|李|María|王|François|赵|Kim';
 
 SELECT name
-FROM test.regexp_table
+FROM regexp_table
 WHERE name RLIKE '555|1234|6789';
 
-DROP TABLE IF EXISTS test.regexp_table;
+DROP TABLE IF EXISTS regexp_table;
 
 SET dialect_type='MYSQL';
 SELECT 'new*\n*line' RLIKE 'new\\*.\\*line';

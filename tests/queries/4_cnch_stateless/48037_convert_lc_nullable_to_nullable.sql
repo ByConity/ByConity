@@ -1,6 +1,3 @@
-create database if not exists test;
-USE test;
-
 set data_type_default_nullable=1;
 
 drop table if exists 48037_table;

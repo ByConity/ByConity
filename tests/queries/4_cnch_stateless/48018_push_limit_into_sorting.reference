@@ -10,7 +10,7 @@ Projection Est. 3 rows, cost 2.220000e-01
             │     Order by: {a ASC NULLS FIRST}
             │     Prefix Order: {a}
             │     Limit: 7
-            └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {a ASC NULLS FIRST}
                      Outputs: [k, a, b, c]
 Projection Est. 3 rows, cost 2.220000e-01
@@ -25,7 +25,7 @@ Projection Est. 3 rows, cost 2.220000e-01
             │     Order by: {a ASC NULLS LAST}
             │     Prefix Order: {a}
             │     Limit: 7
-            └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {a ASC NULLS FIRST}
                      Outputs: [k, a, b, c]
 Projection Est. 10 rows, cost 7.400000e-01
@@ -40,7 +40,7 @@ Projection Est. 10 rows, cost 7.400000e-01
             │     Order by: {a ASC NULLS LAST}
             │     Prefix Order: {a}
             │     Limit: 10
-            └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {a ASC NULLS FIRST}
                      Outputs: [a]
 Projection Est. 3 rows, cost 2.220000e-01
@@ -55,7 +55,7 @@ Projection Est. 3 rows, cost 2.220000e-01
             │     Order by: {b ASC NULLS FIRST}
             │     Prefix Order: {b}
             │     Limit: 7
-            └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {b ASC ANY}
                      Outputs: [k, b, c]
 Projection Est. 3 rows, cost 2.220000e-01
@@ -70,7 +70,7 @@ Projection Est. 3 rows, cost 2.220000e-01
             │     Order by: {b ASC NULLS LAST}
             │     Prefix Order: {b}
             │     Limit: 7
-            └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {b ASC ANY}
                      Outputs: [k, b, c]
 Projection Est. 3 rows, cost 2.220000e-01
@@ -85,7 +85,7 @@ Projection Est. 3 rows, cost 2.220000e-01
             │     Order by: {c ASC NULLS FIRST}
             │     Prefix Order: {c}
             │     Limit: 7
-            └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {c ASC NULLS FIRST}
                      Outputs: [k, c]
 Projection Est. 3 rows, cost 2.220000e-01
@@ -100,6 +100,6 @@ Projection Est. 3 rows, cost 2.220000e-01
             │     Order by: {c ASC NULLS LAST}
             │     Prefix Order: {c}
             │     Limit: 7
-            └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.t1 Est. ? rows, cost 0.000000e+00
                      Input Order Info: {c ASC NULLS FIRST}
                      Outputs: [k, c]

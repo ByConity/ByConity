@@ -29,12 +29,12 @@ Projection Est. 100 rows, cost 1.773333e+01
                         │        │     │     Expressions: [ss_item_sk]
                         │        │     └─ Filter Est. ? rows, cost 0.000000e+00
                         │        │        │     Condition: isNull(ss_store_sk)
-                        │        │        └─ TableScan test.store_sales Est. ? rows, cost 0.000000e+00
+                        │        │        └─ TableScan default.store_sales Est. ? rows, cost 0.000000e+00
                         │        │                 Where: isNull(ss_store_sk)
                         │        │                 Outputs: [ss_item_sk, ss_store_sk]
                         │        └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                         │           │     Partition by: {i_item_sk}
-                        │           └─ TableScan test.item Est. ? rows, cost 0.000000e+00
+                        │           └─ TableScan default.item Est. ? rows, cost 0.000000e+00
                         │                    Outputs: [i_item_sk, i_category]
                         ├─ Aggregating Est. ? rows, cost 3.000000e+00
                         │  │     Group by: {expr#\'web\', i_category_1}
@@ -49,12 +49,12 @@ Projection Est. 100 rows, cost 1.773333e+01
                         │        │     │     Expressions: [ws_item_sk]
                         │        │     └─ Filter Est. ? rows, cost 0.000000e+00
                         │        │        │     Condition: isNull(ws_ship_customer_sk)
-                        │        │        └─ TableScan test.web_sales Est. ? rows, cost 0.000000e+00
+                        │        │        └─ TableScan default.web_sales Est. ? rows, cost 0.000000e+00
                         │        │                 Where: isNull(ws_ship_customer_sk)
                         │        │                 Outputs: [ws_item_sk, ws_ship_customer_sk]
                         │        └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                         │           │     Partition by: {i_item_sk_1}
-                        │           └─ TableScan test.item Est. ? rows, cost 0.000000e+00
+                        │           └─ TableScan default.item Est. ? rows, cost 0.000000e+00
                         │                    Outputs: i_item_sk_1:=i_item_sk, i_category_1:=i_category
                         └─ Aggregating Est. ? rows, cost 3.000000e+00
                            │     Group by: {expr#\'catalog\', i_category_2}
@@ -69,10 +69,10 @@ Projection Est. 100 rows, cost 1.773333e+01
                                  │     │     Expressions: [cs_item_sk]
                                  │     └─ Filter Est. ? rows, cost 0.000000e+00
                                  │        │     Condition: isNull(cs_ship_addr_sk)
-                                 │        └─ TableScan test.catalog_sales Est. ? rows, cost 0.000000e+00
+                                 │        └─ TableScan default.catalog_sales Est. ? rows, cost 0.000000e+00
                                  │                 Where: isNull(cs_ship_addr_sk)
                                  │                 Outputs: [cs_ship_addr_sk, cs_item_sk]
                                  └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                                     │     Partition by: {i_item_sk_2}
-                                    └─ TableScan test.item Est. ? rows, cost 0.000000e+00
+                                    └─ TableScan default.item Est. ? rows, cost 0.000000e+00
                                              Outputs: i_item_sk_2:=i_item_sk, i_category_2:=i_category

@@ -1,6 +1,6 @@
-drop table if exists test.aeolus_data_table_8_1759573_prod;
+drop table if exists aeolus_data_table_8_1759573_prod;
 set rewrite_unknown_left_join_identifier = 1;
-CREATE TABLE test.aeolus_data_table_8_1759573_prod
+CREATE TABLE aeolus_data_table_8_1759573_prod
 (
     `row_id_kmtq3k` Int64,
     `p_date` Date,
@@ -53,7 +53,7 @@ FROM
         SELECT
             payment_applicant_name_zh AS _1700039697333,
             countDistinct(payment_num) AS _countdistinct_1700039697325
-        FROM test.aeolus_data_table_8_1759573_prod
+        FROM aeolus_data_table_8_1759573_prod
         GROUP BY payment_applicant_name_zh
     ) AS table_0
 )
@@ -62,8 +62,8 @@ ALL FULL OUTER JOIN
     SELECT
         payment_applicant_name_zh AS _1700039697333,
         countDistinct(payment_num) AS _countdistinct_1700039697325
-    FROM test.aeolus_data_table_8_1759573_prod
+    FROM aeolus_data_table_8_1759573_prod
     GROUP BY payment_applicant_name_zh
 ) AS table_2 USING (_1700039697333);
 
-drop table if exists test.aeolus_data_table_8_1759573_prod;
+drop table if exists aeolus_data_table_8_1759573_prod;

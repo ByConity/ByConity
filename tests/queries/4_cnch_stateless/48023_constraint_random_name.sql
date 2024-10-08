@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 set dialect_type='MYSQL';
 
 drop table if exists child_random_constraint;

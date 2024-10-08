@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE if exists test_stack;
 
 set parse_literal_as_decimal=0;

@@ -1,5 +1,3 @@
-create database if not exists test;
-use test;
 drop table if exists t40029;
 
 create table t40029 (uid String, platform Int64 )

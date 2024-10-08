@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS using1;
 DROP TABLE IF EXISTS using2;
 CREATE TABLE using1(a UInt8, b UInt8) ENGINE=CnchMergeTree ORDER BY a;

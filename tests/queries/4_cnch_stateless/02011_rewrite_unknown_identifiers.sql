@@ -49,13 +49,13 @@ INNER JOIN
     SELECT 1 AS id
 ) AS t3 USING (id);
 
-drop table if exists test.t_12432;
-drop table if exists test.t_12433;
-drop table if exists test.t_12434;
+drop table if exists t_12432;
+drop table if exists t_12433;
+drop table if exists t_12434;
 
-create table test.t_12432 (id Int32) Engine = CnchMergeTree order by id;
-create table test.t_12433 (id Int32) Engine = CnchMergeTree order by id;
-create table test.t_12434 (id Int32) Engine = CnchMergeTree order by id;
+create table t_12432 (id Int32) Engine = CnchMergeTree order by id;
+create table t_12433 (id Int32) Engine = CnchMergeTree order by id;
+create table t_12434 (id Int32) Engine = CnchMergeTree order by id;
 
 SELECT t1.id
 FROM
@@ -63,18 +63,18 @@ FROM
     SELECT *
     FROM
     (
-        SELECT id from test.t_12432
+        SELECT id from t_12432
     ) AS t1
     INNER JOIN
     (
-        SELECT id from test.t_12433
+        SELECT id from t_12433
     ) AS t2 ON t1.id = t2.id
 )
 INNER JOIN
 (
-    SELECT id from test.t_12434
+    SELECT id from t_12434
 ) AS t3 USING (id);
 
-drop table test.t_12432;
-drop table test.t_12433;
-drop table test.t_12434;
+drop table t_12432;
+drop table t_12433;
+drop table t_12434;

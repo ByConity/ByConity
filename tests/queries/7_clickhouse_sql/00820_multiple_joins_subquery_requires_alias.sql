@@ -1,4 +1,3 @@
-USE test;
 set max_threads = 1;
 DROP TABLE IF EXISTS table1;
 DROP TABLE IF EXISTS table2;

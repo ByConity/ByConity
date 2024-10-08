@@ -16,8 +16,8 @@ SELECT from_utf8(to_utf8('This is a long string with multiple words and some spe
 
 SELECT from_utf8(to_utf8('这是一个很长的字符串，其中包含多个单词和一些特殊字符，如：@＃$％^＆*()-=_+[]{}|;：，. <>？/`~')) as result;
 
-DROP TABLE IF EXISTS test.utf8;
-CREATE TABLE test.utf8
+DROP TABLE IF EXISTS utf8;
+CREATE TABLE utf8
 (
     a Nullable(String),
     b String
@@ -25,8 +25,8 @@ CREATE TABLE test.utf8
 ENGINE = CnchMergeTree()
 ORDER BY b;
 
-INSERT INTO test.utf8 (a, b) VALUES ('my name is www', 'age:9999'), ('why, is, this, format, stupid', 'look:normal'), ('let-me-do-it', 'country:Singapore'), (NULL, 'country:China'), (NULL, 'country:us'), ('sing', 'city:tokyo'), ('gojira,is,king', 'city:tokyo'), ('gojira--are--king', 'city:tokyo');
+INSERT INTO utf8 (a, b) VALUES ('my name is www', 'age:9999'), ('why, is, this, format, stupid', 'look:normal'), ('let-me-do-it', 'country:Singapore'), (NULL, 'country:China'), (NULL, 'country:us'), ('sing', 'city:tokyo'), ('gojira,is,king', 'city:tokyo'), ('gojira--are--king', 'city:tokyo');
 
-SELECT from_utf8(to_utf8(a)), from_utf8(to_utf8(b)) FROM test.utf8 ORDER BY b;
+SELECT from_utf8(to_utf8(a)), from_utf8(to_utf8(b)) FROM utf8 ORDER BY b;
 
-DROP TABLE IF EXISTS test.utf8;
+DROP TABLE IF EXISTS utf8;

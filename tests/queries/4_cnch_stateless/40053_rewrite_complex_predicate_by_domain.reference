@@ -14,12 +14,12 @@ Projection Est. ? rows
                │  │     Expressions: [l_discount, l_extendedprice, l_partkey, l_quantity]
                │  └─ Filter Est. ? rows
                │     │     Condition: (l_shipinstruct = \'DELIVER IN PERSON\') AND (l_shipmode IN (\'AIR\', \'AIR REG\')) AND (l_quantity >= 1.) AND (l_quantity <= 30.)
-               │     └─ TableScan test.lineitem40053 Est. ? rows
+               │     └─ TableScan default.lineitem40053 Est. ? rows
                │              Where: (l_shipinstruct = \'DELIVER IN PERSON\') AND (l_shipmode IN (\'AIR\', \'AIR REG\')) AND (l_quantity >= 1.) AND (l_quantity <= 30.)
                │              Outputs: [l_partkey, l_quantity, l_extendedprice, l_discount, l_shipinstruct, l_shipmode]
                └─ Broadcast Exchange Est. ? rows
                   └─ Filter Est. ? rows
                      │     Condition: (p_size >= 1) AND (p_size <= 15) AND (p_container IN (\'LG BOX\', \'LG CASE\', \'LG PACK\', \'LG PKG\', \'MED BAG\', \'MED BOX\', \'MED PACK\', \'MED PKG\', \'SM BOX\', \'SM CASE\', \'SM PACK\', \'SM PKG\')) AND (p_brand IN (\'Brand#12\', \'Brand#23\', \'Brand#34\'))
-                     └─ TableScan test.part40053 Est. ? rows
+                     └─ TableScan default.part40053 Est. ? rows
                               Where: (p_size >= 1) AND (p_size <= 15) AND (p_container IN (\'LG BOX\', \'LG CASE\', \'LG PACK\', \'LG PKG\', \'MED BAG\', \'MED BOX\', \'MED PACK\', \'MED PKG\', \'SM BOX\', \'SM CASE\', \'SM PACK\', \'SM PKG\')) AND (p_brand IN (\'Brand#12\', \'Brand#23\', \'Brand#34\'))
                               Outputs: [p_partkey, p_brand, p_size, p_container]

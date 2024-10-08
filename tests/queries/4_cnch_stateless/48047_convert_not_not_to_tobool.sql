@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 DROP TABLE IF EXISTS 48047_table;
 
 create table 48047_table (a Int64) ENGINE=CnchMergeTree() order by a;

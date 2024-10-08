@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS t48029;
 set enable_optimizer=1;
 

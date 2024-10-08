@@ -7,10 +7,10 @@ Projection Est. ? rows
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Inner Join Est. ? rows
             │     Condition: event_date == p_date, hash_uid == hash_uid_1
-            ├─ TableScan test.table_misc Est. ? rows
+            ├─ TableScan default.table_misc Est. ? rows
             │        Outputs: [hash_uid, event_date]
             └─ Broadcast Exchange Est. ? rows
-               └─ TableScan test.daily_misc Est. ? rows
+               └─ TableScan default.daily_misc Est. ? rows
                         Outputs: [p_date], hash_uid_1:=hash_uid
 Projection Est. ? rows
 │     Expressions: count(a):=`expr#count(a)`
@@ -23,8 +23,8 @@ Projection Est. ? rows
             │     Condition: event_date == p_date, hash_uid == hash_uid_1
             ├─ Projection Est. ? rows
             │  │     Expressions: [event_date, hash_uid], expr#plus(hash_uid, hash_uid):=hash_uid + hash_uid
-            │  └─ TableScan test.table_misc Est. ? rows
+            │  └─ TableScan default.table_misc Est. ? rows
             │           Outputs: [hash_uid, event_date]
             └─ Broadcast Exchange Est. ? rows
-               └─ TableScan test.daily_misc Est. ? rows
+               └─ TableScan default.daily_misc Est. ? rows
                         Outputs: [p_date], hash_uid_1:=hash_uid

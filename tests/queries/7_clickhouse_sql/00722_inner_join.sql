@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS one;
 CREATE TABLE one(dummy UInt8) ENGINE = CnchMergeTree ORDER BY dummy;
 

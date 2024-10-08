@@ -3,5 +3,5 @@ TableFinish
    └─ TableWrite
       └─ Local Exchange
          └─ Projection
-            └─ TableScan test.t480282
+            └─ TableScan default.t480282
 6

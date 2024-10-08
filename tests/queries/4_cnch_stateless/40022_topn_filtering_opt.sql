@@ -26,8 +26,8 @@ ORDER BY n
 LIMIT 10;
 
 CREATE DATABASE IF NOT EXISTS test;
-DROP TABLE IF EXISTS test.polygon_tx_v87;
-CREATE TABLE test.polygon_tx_v87
+DROP TABLE IF EXISTS polygon_tx_v87;
+CREATE TABLE polygon_tx_v87
 (
     block_number UInt64,
     gas UInt64,
@@ -38,10 +38,10 @@ ENGINE = CnchMergeTree() ORDER BY block_number;
 explain select
             block_number,
             sum(gas * gas_price) as gas_fee
-        from test.polygon_tx_v87
+        from polygon_tx_v87
         where block_number > 10000000 and block_number < 20000000
         group by block_number
         order by block_number
             limit 10;
 
-DROP TABLE IF EXISTS test.polygon_tx_v87;
+DROP TABLE IF EXISTS polygon_tx_v87;

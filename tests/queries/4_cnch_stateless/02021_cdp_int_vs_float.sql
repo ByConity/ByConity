@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
-
 DROP TABLE IF EXISTS tag_bitmaps_did_cdp_local;
 
 CREATE TABLE tag_bitmaps_did_cdp_local

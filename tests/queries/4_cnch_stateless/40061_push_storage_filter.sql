@@ -1,8 +1,5 @@
 SET enable_optimizer = 1;
 
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
-
 DROP TABLE IF EXISTS t40061 ;
 
 CREATE TABLE t40061 (p_date Date, a Int32, b Int32) engine = CnchMergeTree() PARTITION BY p_date ORDER BY a;

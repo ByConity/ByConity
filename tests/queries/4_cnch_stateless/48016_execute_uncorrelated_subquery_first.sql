@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS uncorrelated;
 DROP TABLE IF EXISTS uncorrelated2;
 set enable_optimizer=1;
@@ -44,8 +43,8 @@ explain select a from uncorrelated WHERE NOT EXISTS(select a from uncorrelated2 
 DROP TABLE IF EXISTS uncorrelated;
 DROP TABLE IF EXISTS uncorrelated2;
 
-DROP TABLE IF EXISTS test.dm_mint_crm_creator_stats_df;
-CREATE TABLE test.dm_mint_crm_creator_stats_df
+DROP TABLE IF EXISTS dm_mint_crm_creator_stats_df;
+CREATE TABLE dm_mint_crm_creator_stats_df
 (
     `date` Date,
     `followed_counter_td` Nullable(Int64),
@@ -56,14 +55,14 @@ CREATE TABLE test.dm_mint_crm_creator_stats_df
 PARTITION BY date
 ORDER BY (ops_owner_id, intHash64(user_id))
 SAMPLE BY intHash64(user_id);
-insert into test.dm_mint_crm_creator_stats_df values('2023-07-13',1,2,3)('2023-07-13',2,3,4)('2023-07-12',3,4,5)('2023-07-11',4,5,6)
+insert into dm_mint_crm_creator_stats_df values('2023-07-13',1,2,3)('2023-07-13',2,3,4)('2023-07-12',3,4,5)('2023-07-11',4,5,6)
 
 SELECT `user_id`
-FROM `test`.`dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
+FROM `dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
 WHERE `date` =
       (
           SELECT MAX(`date`)
-          FROM `test`.`dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
+          FROM `dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
       )
 ORDER BY `followed_counter_td` DESC
     LIMIT 0, 1000
@@ -71,11 +70,11 @@ SETTINGS enable_optimize_predicate_expression = 0, distributed_product_mode = 'g
 
 set enable_optimizer=1;
 explain SELECT `user_id`
-FROM `test`.`dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
+FROM `dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
 WHERE `date` =
       (
           SELECT MAX(`date`)
-          FROM `test`.`dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
+          FROM `dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
       )
 ORDER BY `followed_counter_td` DESC
     LIMIT 0, 1000
@@ -83,13 +82,13 @@ SETTINGS enable_execute_uncorrelated_subquery=1, enable_optimize_predicate_expre
 
 set enable_execute_uncorrelated_subquery=0;
 explain SELECT `user_id`
-        FROM `test`.`dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
+        FROM `dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
         WHERE `date` =
               (
                   SELECT MAX(`date`)
-                  FROM `test`.`dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
+                  FROM `dm_mint_crm_creator_stats_df` AS dm_mint_crm_creator_stats_df
               )
         ORDER BY `followed_counter_td` DESC
                 LIMIT 0, 1000
 SETTINGS enable_optimize_predicate_expression = 0, distributed_product_mode = 'global', enable_optimize_predicate_expression = 1, distributed_product_mode = 'local';
-DROP TABLE IF EXISTS `test`.`dm_mint_crm_creator_stats_df`;
+DROP TABLE IF EXISTS `dm_mint_crm_creator_stats_df`;

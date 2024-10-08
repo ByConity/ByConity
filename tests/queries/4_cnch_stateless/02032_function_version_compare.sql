@@ -178,7 +178,6 @@ SELECT versionCompare('.1.', '1..', '>');
 SELECT versionCompare('.1.', '1..', '<');
 SELECT versionCompare('.1.', '1..', '');
 
-USE test;
 DROP TABLE IF EXISTS test_app_version;
 CREATE TABLE test_app_version (version_1 String, version_2 String) Engine = CnchMergeTree ORDER BY tuple();
 INSERT INTO test_app_version VALUES ('', '');

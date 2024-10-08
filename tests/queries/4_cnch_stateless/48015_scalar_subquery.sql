@@ -1,4 +1,3 @@
-use test;
 set dialect_type='ANSI';
 
 DROP TABLE IF EXISTS t;

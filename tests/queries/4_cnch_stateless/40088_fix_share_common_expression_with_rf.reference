@@ -16,14 +16,14 @@ Projection
             │        │     Condition: `expr#toInt32(plus(plus(plus(a, 1), 1), 1))_1` > 1 Runtime Filters: {`expr#toInt32(plus(plus(plus(a, 1), 1), 1))_1`}
             │        └─ Projection
             │           │     Expressions: expr#toInt32(plus(plus(plus(a, 1), 1), 1))_1:=toInt32(((a + 1) + 1) + 1)
-            │           └─ TableScan test.t40088_1
+            │           └─ TableScan default.t40088_1
             │                    Where: toInt32(((a + 1) + 1) + 1) > 1 Runtime Filters: {toInt32(((a + 1) + 1) + 1)}
             │                    Outputs: [a]
             └─ Repartition Exchange
                │     Partition by: {x}
                └─ Filter
                   │     Condition: x > 1
-                  └─ TableScan test.t40088_2
+                  └─ TableScan default.t40088_2
                            Where: x > 1
                            Outputs: [x]
 note: Runtime Filter is applied for 1 times.

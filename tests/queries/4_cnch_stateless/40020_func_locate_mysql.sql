@@ -14,7 +14,6 @@ SELECT LOCATE(NULL, 'hello world');
 SELECT LOCATE('world', NULL);
 SELECT LOCATE(NULL, NULL);
 
-use test;
 set enable_optimizer=1;
 set dialect_type='MYSQL';
 DROP TABLE IF EXISTS table_locate_1;

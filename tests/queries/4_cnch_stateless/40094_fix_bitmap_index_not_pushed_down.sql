@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS test;
-DROP TABLE IF EXISTS test.t40094_bitmap_index;
+DROP TABLE IF EXISTS t40094_bitmap_index;
 
-CREATE TABLE test.t40094_bitmap_index
+CREATE TABLE t40094_bitmap_index
 (
     `row_id_kmtq3k` Int64,
     `req_time` Int64,
@@ -63,10 +63,10 @@ SELECT
     avg(model_label{'staytime'}) AS _avg_1700031876697_4700826bc6c9c490e9a7756937dd1f6e,
     CAST(avg(multiIf(model_label{'staytime'} >= 30000, 1, 0)), 'Nullable(Float64)') AS _1700031897102,
     CAST(avg(multiIf(model_label{'staytime'} >= 60000, 1, 0)), 'Nullable(Float64)') AS _1700047638968
-FROM test.t40094_bitmap_index
+FROM t40094_bitmap_index
 WHERE ((toDateTime(req_time) >= '2024-04-12 00:00:00') AND (toDateTime(req_time) <= '2024-04-12 09:59:59')) AND (app_id = '13') AND (string_params{'chnid'} = '94349560412') AND (if(arraySetCheck(vids, '8683112'), '8683112', if(arraySetCheck(vids, '8683113'), '8683113', 'other')) IN ('8683112', '8683113')) AND (arrayJoin(assumeNotNull(split(string_params{'g_recall_reasons'}, ',') AS src)) = 'aaebvr') AND ((toDate(req_time) >= '2024-04-12') AND (toDate(req_time) <= '2024-04-12'))
 GROUP BY if(arraySetCheck(vids, '8683112'), '8683112', if(arraySetCheck(vids, '8683113'), '8683113', 'other'))
 LIMIT 1000
 SETTINGS max_memory_usage = 21474836480, max_bytes_to_read = 2147483648000, max_execution_time = 100, max_bytes_to_read_local = 32212254720, enable_optimizer = 1, enable_ab_index_optimization = 1;
 
-DROP TABLE IF EXISTS test.t40094_bitmap_index;
+DROP TABLE IF EXISTS t40094_bitmap_index;

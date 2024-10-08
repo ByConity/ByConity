@@ -1,4 +1,3 @@
-use test;
 drop table if exists t;
 create table t(iclass_lvl_1 String, iclass_lvl_2 String) engine = CnchMergeTree() order by tuple();
 

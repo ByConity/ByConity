@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 drop table if exists cust;
 drop table if exists cust_local;
 drop table if exists web;

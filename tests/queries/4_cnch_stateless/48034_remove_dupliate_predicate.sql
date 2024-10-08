@@ -1,7 +1,3 @@
-
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 drop table if exists 48038_table;
 create table 48038_table (
     id UInt64,

@@ -41,7 +41,7 @@ Projection Est. ? rows
 CTEDef [0]
    Projection Est. ? rows
    │     Expressions: [__m__\'aa\', __m__\'bb\', __m__\'cc\', m], __m__\'foo\'_1:=`__m__\'foo\'`
-   └─ TableScan test.t40075_subcol_cte Est. ? rows
+   └─ TableScan default.t40075_subcol_cte Est. ? rows
             Outputs: [m, __m__\'cc\', __m__\'aa\', __m__\'bb\', __m__\'foo\']
 note: CTE(Common Table Expression) is applied for 5 times.
 
@@ -58,17 +58,17 @@ Projection Est. ? rows
             │  │     Condition: __m__\'foo\' == __m__\'cc\'_2
             │  ├─ Inner Join Est. ? rows
             │  │  │     Condition: __m__\'aa\' == __m__\'bb\'
-            │  │  ├─ TableScan test.t40075_subcol_cte Est. ? rows
+            │  │  ├─ TableScan default.t40075_subcol_cte Est. ? rows
             │  │  │        Outputs: [__m__\'aa\', __m__\'foo\']
             │  │  └─ Broadcast Exchange Est. ? rows
-            │  │     └─ TableScan test.t40075_subcol_cte Est. ? rows
+            │  │     └─ TableScan default.t40075_subcol_cte Est. ? rows
             │  │              Outputs: [__m__\'bb\'], __m__\'foo\'_2:=__m__\'foo\'
             │  └─ Broadcast Exchange Est. ? rows
             │     └─ Union Est. ? rows
             │        │     OutputToInputs: __m__\'cc\'_2 = [__m__\'cc\',__m__\'cc\'_1]
-            │        ├─ TableScan test.t40075_subcol_cte Est. ? rows
+            │        ├─ TableScan default.t40075_subcol_cte Est. ? rows
             │        │        Outputs: [__m__\'cc\']
-            │        └─ TableScan test.t40075_subcol_cte Est. ? rows
+            │        └─ TableScan default.t40075_subcol_cte Est. ? rows
             │                 Outputs: __m__\'cc\'_1:=__m__\'cc\'
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
@@ -80,7 +80,7 @@ Projection Est. ? rows
                      │     │     Expressions: [m_5]
                      │     └─ Filter Est. ? rows
                      │        │     Condition: `__m__\'cc\'_3` != \'\'
-                     │        └─ TableScan test.t40075_subcol_cte Est. ? rows
+                     │        └─ TableScan default.t40075_subcol_cte Est. ? rows
                      │                 Where: `__m__\'cc\'` != \'\'
                      │                 Outputs: m_5:=m, __m__\'cc\'_3:=__m__\'cc\'
                      └─ Projection Est. 1 rows

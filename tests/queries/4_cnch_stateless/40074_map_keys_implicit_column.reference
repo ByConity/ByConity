@@ -4,7 +4,7 @@ explain select mapKeys(m) AS a, mapValues(m) AS b FROM test40074_map_keys;
 Projection Est. ? rows
 │     Expressions: a:=`m.key`, b:=`m.value`
 └─ Gather Exchange Est. ? rows
-   └─ TableScan test.test40074_map_keys Est. ? rows
+   └─ TableScan default.test40074_map_keys Est. ? rows
             Outputs: [m.value, m.key]
 select mapKeys(m) AS a, mapValues(m) AS b FROM test40074_map_keys;
 ['foo','bar']	[1,10]

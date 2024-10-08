@@ -1,6 +1,3 @@
-USE test;
-USE test;
-
 DROP TABLE IF EXISTS table_a;
 DROP TABLE IF EXISTS table_b;
 

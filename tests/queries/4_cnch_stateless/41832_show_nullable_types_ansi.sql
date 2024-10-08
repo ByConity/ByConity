@@ -1,5 +1,4 @@
 -- case 1. Create and Describe with ANSI dialect
-use test;
 SET dialect_type='ANSI';
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1

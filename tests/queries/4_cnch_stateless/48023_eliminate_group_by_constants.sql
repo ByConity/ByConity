@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 drop table if exists store_sales;
 drop table if exists store_sales_local;
 drop table if exists web_sales;

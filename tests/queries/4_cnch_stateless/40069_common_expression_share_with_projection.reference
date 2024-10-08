@@ -2,7 +2,7 @@ Projection Est. ? rows
 │     Expressions: sum(val):=`expr#sum(val)`
 └─ MergingAggregated Est. ? rows
    └─ Gather Exchange Est. ? rows
-      └─ TableScan test.t40069_ces Est. ? rows
+      └─ TableScan default.t40069_ces Est. ? rows
                Where: (multiIf(((((key + 1) + 2) + 3) % 10) = 1, \'a\', \'b\') != \'xx\') AND (multiIf(((((key + 1) + 2) + 3) % 10) = 2, \'c\', \'d\') != \'xx\')
                Prewhere: multiIf(((((key + 1) + 2) + 3) % 10) = 1, \'a\', \'b\') != \'xx\'
                Inline expressions: [expr#modulo(plus(plus(plus(key, 1), 2), 3), 10):=(((key + 1) + 2) + 3) % 10]

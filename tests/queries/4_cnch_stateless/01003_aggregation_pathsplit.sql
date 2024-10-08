@@ -1,4 +1,3 @@
-use test;
 drop table if exists test_pathcount;
 
 create table test_pathcount

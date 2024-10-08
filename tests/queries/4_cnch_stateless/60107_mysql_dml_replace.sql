@@ -1,4 +1,3 @@
-use test;
 drop table if exists 60107_mysql_dml_replace_non_unique_table;
 drop table if exists 60107_mysql_dml_replace_unique_table;
 

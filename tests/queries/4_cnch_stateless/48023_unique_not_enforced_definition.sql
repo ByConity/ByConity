@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 drop table if exists pp;
 drop table if exists c;
 drop table if exists c1;

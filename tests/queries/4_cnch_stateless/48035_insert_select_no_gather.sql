@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 DROP TABLE IF EXISTS test_insert_bucket;
 DROP TABLE IF EXISTS test_insert_bucket_source;
 

@@ -5,7 +5,7 @@ Projection Est. ? rows
       └─ Aggregating Est. ? rows
          │     Group by: {}
          │     Aggregates: expr#count():=AggNull(count)()
-         └─ TableScan test.store1_1 Est. ? rows
+         └─ TableScan default.store1_1 Est. ? rows
                   Outputs: [str_col_11.null]
 Projection Est. ? rows
 │     Expressions: count():=`expr#count()`
@@ -14,7 +14,7 @@ Projection Est. ? rows
       └─ Aggregating Est. ? rows
          │     Group by: {}
          │     Aggregates: expr#count():=AggNull(count)()
-         └─ TableScan test.store1_1 Est. ? rows
+         └─ TableScan default.store1_1 Est. ? rows
                   Outputs: [str_col_11.null]
 Projection Est. ? rows
 │     Expressions: count(int_col_1):=`expr#count(int_col_1)`
@@ -23,5 +23,5 @@ Projection Est. ? rows
       └─ Aggregating Est. ? rows
          │     Group by: {}
          │     Aggregates: expr#count(int_col_1):=AggNull(count)(int_col)
-         └─ TableScan test.store1_1 Est. ? rows
+         └─ TableScan default.store1_1 Est. ? rows
                   Outputs: int_col:=int_col_1

@@ -5,9 +5,6 @@ SET enable_optimizer_fallback=0;
 set enable_materialized_view_union_rewriting = 0;
 set materialized_view_consistency_check_method='NONE';
 
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
-
 DROP TABLE IF EXISTS mv40045;
 DROP TABLE IF EXISTS base40045;
 DROP TABLE IF EXISTS target40045;

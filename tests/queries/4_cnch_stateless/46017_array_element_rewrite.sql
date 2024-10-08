@@ -1,8 +1,6 @@
 set dialect_type='CLICKHOUSE';
 set enable_optimizer = 1;
-create database if not exists test;
 
-use test;
 drop table if exists array_element_rewrite_46017;
 CREATE TABLE array_element_rewrite_46017
 (

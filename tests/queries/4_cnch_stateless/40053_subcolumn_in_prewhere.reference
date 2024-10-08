@@ -7,7 +7,7 @@ Projection Est. ? rows
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Filter Est. ? rows
             │     Condition: `__string_params__\'enter_from\'` = \'homepage_fresh\'
-            └─ TableScan test.t40053 Est. ? rows
+            └─ TableScan default.t40053 Est. ? rows
                      Where: `__string_params__\'enter_from\'` = \'homepage_fresh\'
                      Prewhere: `__string_params__\'enter_from\'` IN (\'homepage_fresh\')
                      Outputs: [__string_params__\'enter_from\']
@@ -22,7 +22,7 @@ Projection Est. ? rows
    │        │     Aggregates: expr#count():=AggNull(count)()
    │        └─ Filter Est. ? rows
    │           │     Condition: `__string_params__\'enter_from\'` = \'homepage_fresh\'
-   │           └─ TableScan test.t40053 Est. ? rows
+   │           └─ TableScan default.t40053 Est. ? rows
    │                    Where: `__string_params__\'enter_from\'` = \'homepage_fresh\'
    │                    Prewhere: `__string_params__\'enter_from\'` IN (\'homepage_fresh\')
    │                    Outputs: [__string_params__\'enter_from\']
@@ -34,7 +34,7 @@ Projection Est. ? rows
                │     Aggregates: expr#count()_1:=AggNull(count)()
                └─ Filter Est. ? rows
                   │     Condition: `__string_params__\'enter_to\'` = \'homepage_click\'
-                  └─ TableScan test.t40053 Est. ? rows
+                  └─ TableScan default.t40053 Est. ? rows
                            Where: `__string_params__\'enter_to\'` = \'homepage_click\'
                            Prewhere: `__string_params__\'enter_to\'` IN (\'homepage_click\')
                            Outputs: [__string_params__\'enter_to\']

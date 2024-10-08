@@ -11,7 +11,7 @@ Projection Est. ? rows
                │     Partition by: {l_suppkey}
                └─ Aggregating Est. ? rows
                   │     Group by: {l_suppkey, l_partkey}
-                  └─ TableScan test.test48024 Est. ? rows
+                  └─ TableScan default.test48024 Est. ? rows
                            Outputs: [l_partkey, l_suppkey]
 Projection Est. ? rows
 │     Expressions: a:=`expr#10`, t2.a:=`expr#uniqExact(l_partkey)`
@@ -33,7 +33,7 @@ Projection Est. ? rows
                      │     Partition by: {l_suppkey}
                      └─ Aggregating Est. ? rows
                         │     Group by: {l_suppkey, l_partkey}
-                        └─ TableScan test.test48024 Est. ? rows
+                        └─ TableScan default.test48024 Est. ? rows
                                  Outputs: [l_partkey, l_suppkey]
 Projection Est. ? rows
 │     Expressions: a:=`expr#uniqExact(l_partkey)`
@@ -48,7 +48,7 @@ Projection Est. ? rows
                │     Partition by: {l_suppkey}
                └─ Aggregating Est. ? rows
                   │     Group by: {l_suppkey, l_partkey}
-                  └─ TableScan test.test48024 Est. ? rows
+                  └─ TableScan default.test48024 Est. ? rows
                            Outputs: [l_partkey, l_suppkey]
 Projection Est. ? rows
 │     Expressions: a:=`expr#10`, t2.a:=`expr#uniqExact(l_partkey)`
@@ -70,7 +70,7 @@ Projection Est. ? rows
                      │     Partition by: {l_suppkey}
                      └─ Aggregating Est. ? rows
                         │     Group by: {l_suppkey, l_partkey}
-                        └─ TableScan test.test48024 Est. ? rows
+                        └─ TableScan default.test48024 Est. ? rows
                                  Outputs: [l_partkey, l_suppkey]
 Projection Est. ? rows
 │     Expressions: a:=`expr#10`, t2.a:=`expr#uniqExact(l_orderkey)`
@@ -92,5 +92,5 @@ Projection Est. ? rows
                      │     Partition by: {l_suppkey}
                      └─ Aggregating Est. ? rows
                         │     Group by: {l_suppkey, l_orderkey}
-                        └─ TableScan test.test48024 Est. ? rows
+                        └─ TableScan default.test48024 Est. ? rows
                                  Outputs: [l_orderkey, l_suppkey]

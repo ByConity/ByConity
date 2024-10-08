@@ -1,8 +1,6 @@
 -- https://stackoverflow.com/questions/53416531/clickhouse-moving-average
 
-DROP TABLE IF EXISTS test.bm;
-
-USE test;
+DROP TABLE IF EXISTS bm;
 
 CREATE TABLE bm (amount float, business_dttm DateTime) engine = CnchMergeTree() ORDER BY amount;
 
@@ -42,4 +40,4 @@ FROM
             )
     );
 
-DROP TABLE test.bm;
+DROP TABLE bm;

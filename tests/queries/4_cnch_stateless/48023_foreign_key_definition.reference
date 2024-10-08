@@ -1,5 +1,5 @@
-CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192
-CREATE TABLE test.child1\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `parent_id1` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT parent_id_fk FOREIGN KEY (parent_id) REFERENCES parent(id),\n    CONSTRAINT parent_id1_fk FOREIGN KEY (parent_id1) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192
+CREATE TABLE default.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192
+CREATE TABLE default.child1\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `parent_id1` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT parent_id_fk FOREIGN KEY (parent_id) REFERENCES parent(id),\n    CONSTRAINT parent_id1_fk FOREIGN KEY (parent_id1) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192
 Projection Est. ? rows
 │     Expressions: [description, id, parent_id]
 └─ Sorting Est. ? rows
@@ -10,7 +10,7 @@ Projection Est. ? rows
          │     Prefix Order: {id}
          └─ Filter Est. ? rows
             │     Condition: isNotNull(parent_id)
-            └─ TableScan test.child Est. ? rows
+            └─ TableScan default.child Est. ? rows
                      Input Order Info: {id ASC NULLS FIRST}
                      Where: isNotNull(parent_id)
                      Outputs: [id, parent_id, description]
@@ -18,5 +18,5 @@ Projection Est. ? rows
 2	1	CHILD ONE
 3	2	CHILD TWO
 4	2	CHILD TWO
-CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id),\n    CONSTRAINT my_name_1 FOREIGN KEY (id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192
-CREATE TABLE test.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192
+CREATE TABLE default.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL,\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id),\n    CONSTRAINT my_name_1 FOREIGN KEY (id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192
+CREATE TABLE default.child\n(\n    `id` UInt8 NULL,\n    `parent_id` UInt8 NULL,\n    `description` String NULL\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', allow_nullable_key = 1, storage_dialect_type = \'ANSI\', index_granularity = 8192

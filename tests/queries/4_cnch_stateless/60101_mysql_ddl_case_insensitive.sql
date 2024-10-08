@@ -1,5 +1,4 @@
 -- lower case
-use test;
 set dialect_type='MYSQL';
 set text_case_option = 'LOWERCASE';
 set enable_optimizer=1;
@@ -52,14 +51,14 @@ partition by toYYYYMM(EVENT_DATE)
 order by (EVENT_type, EVENT_count);
 
 
-INSERT INTO TEST.test_cte_CASE1 (EVENT_DATE, EVENT_TYPE, EVENT_COUNT) VALUES
+INSERT INTO test_cte_CASE1 (EVENT_DATE, EVENT_TYPE, EVENT_COUNT) VALUES
 ('2022-01-01', 'Type1', 10), ('2022-01-02', 'Type2', 20), ('2022-01-03', 'Type3', 30);
 
 -- Test Case 1: Simple Select with CTE
 WITH cte_events AS
 (
     SELECT EVENT_DATE, EVENT_TYPE
-    FROM TEST.test_cte_CASE1
+    FROM test_cte_CASE1
 )
 SELECT * FROM cte_events ORDER BY EVENT_DATE;
 
@@ -67,7 +66,7 @@ SELECT * FROM cte_events ORDER BY EVENT_DATE;
 WITH cte_event_counts AS
 (
     SELECT EVENT_TYPE, SUM(EVENT_COUNT) AS total_count
-    FROM TEST.test_cte_CASE1
+    FROM test_cte_CASE1
     GROUP BY EVENT_TYPE
 )
 SELECT EVENT_TYPE, total_count FROM cte_event_counts ORDER BY total_count;
@@ -76,7 +75,7 @@ SELECT EVENT_TYPE, total_count FROM cte_event_counts ORDER BY total_count;
 WITH cte_dates AS
 (
     SELECT EVENT_DATE
-    FROM TEST.test_cte_CASE1
+    FROM test_cte_CASE1
 ),
 cte_event_counts AS
 (
@@ -90,10 +89,10 @@ SELECT * FROM cte_event_counts order by event_date;
 WITH cte_types AS
 (
     SELECT EVENT_TYPE
-    FROM TEST.test_cte_CASE1
+    FROM test_cte_CASE1
     WHERE EVENT_COUNT > 15
 )
-SELECT * FROM TEST.test_cte_CASE1
+SELECT * FROM test_cte_CASE1
 WHERE EVENT_TYPE IN (SELECT EVENT_TYPE FROM cte_types) order by event_type;
 DROP TABLE test_CTE_CASE1;
 

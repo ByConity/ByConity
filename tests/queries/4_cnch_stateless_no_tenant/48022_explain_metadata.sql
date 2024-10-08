@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS metadata;
 DROP TABLE IF EXISTS metadata2;
 CREATE TABLE metadata(a UInt32, b UInt32) ENGINE = CnchMergeTree() partition by a order by a;

@@ -1,4 +1,3 @@
-use test;
 drop table if exists tealimit_ansi;
 CREATE TABLE tealimit_ansi
 (

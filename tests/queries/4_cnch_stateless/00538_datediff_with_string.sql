@@ -24,8 +24,8 @@ SELECT dateDiff('second', '2017-12-31', '2017-01-01');
 SELECT dateDiff('second', '2017-12-31', '2018-01-01');
 
 CREATE DATABASE IF NOT EXISTS test;
-DROP TABLE IF EXISTS test.test_datediff;
-CREATE TABLE test.test_datediff (
+DROP TABLE IF EXISTS test_datediff;
+CREATE TABLE test_datediff (
   id Int64,
   date1 String,
   date2 String
@@ -33,8 +33,8 @@ CREATE TABLE test.test_datediff (
 ENGINE = CnchMergeTree()
 ORDER BY id;
 
-INSERT INTO test.test_datediff VALUES (0, '2017-12-31', '2016-01-01'), (1, '2017-12-31', '2017-01-01'), (2, '2017-12-31', '2018-01-01');
-SELECT id, dateDiff('year', date1, date2) FROM test.test_datediff ORDER BY id;
+INSERT INTO test_datediff VALUES (0, '2017-12-31', '2016-01-01'), (1, '2017-12-31', '2017-01-01'), (2, '2017-12-31', '2018-01-01');
+SELECT id, dateDiff('year', date1, date2) FROM test_datediff ORDER BY id;
 
 SET enable_optimizer=1;
 SET dialect_type='MYSQL';
@@ -133,5 +133,5 @@ select timestampdiff('year', '2024-01-01 12:34:55', '2022-01-01 12:34:56');
 select timestampdiff('year', '2024-01-01 12:34:56', '2022-01-01 12:34:56');
 select timestampdiff('year', '2024-01-01 12:34:57', '2022-01-01 12:34:56');
 
-SELECT id, dateDiff(date1, date2) FROM test.test_datediff ORDER BY id;
-SELECT id, timestampdiff('day', date1, date2) FROM test.test_datediff ORDER BY id;
+SELECT id, dateDiff(date1, date2) FROM test_datediff ORDER BY id;
+SELECT id, timestampdiff('day', date1, date2) FROM test_datediff ORDER BY id;

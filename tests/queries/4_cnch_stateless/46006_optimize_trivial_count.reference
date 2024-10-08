@@ -49,41 +49,41 @@ Projection
    └─ Gather Exchange
       └─ Aggregating
          └─ Filter
-            └─ TableScan test.test46006
+            └─ TableScan default.test46006
 non-optimized:
 Projection
 └─ MergingAggregated
    └─ Gather Exchange
       └─ Aggregating
          └─ Filter
-            └─ TableScan test.test46006
+            └─ TableScan default.test46006
 non-optimized:
 Projection
 └─ Gather Exchange
    └─ MergingAggregated
       └─ Repartition Exchange
          └─ Aggregating
-            └─ TableScan test.test46006
+            └─ TableScan default.test46006
 non-optimized:
 Projection
 └─ MergingAggregated
    └─ Gather Exchange
       └─ Aggregating
          └─ Left Join
-            ├─ TableScan test.test46006
+            ├─ TableScan default.test46006
             └─ Broadcast Exchange
-               └─ TableScan test.test46006
+               └─ TableScan default.test46006
 Projection
 └─ MergingAggregated
    └─ Gather Exchange
       └─ Aggregating
          └─ Filter
             └─ Projection
-               └─ TableScan test.test46006
+               └─ TableScan default.test46006
 Projection
 └─ MergingAggregated
    └─ Gather Exchange
       └─ Aggregating
          └─ Filter
             └─ Projection
-               └─ TableScan test.test46006
+               └─ TableScan default.test46006

@@ -1,7 +1,3 @@
-
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-
 drop table if EXISTS mydata;
 CREATE TABLE mydata (`A` Int64, `B` Int8, `C` String)
 ENGINE = CnchMergeTree

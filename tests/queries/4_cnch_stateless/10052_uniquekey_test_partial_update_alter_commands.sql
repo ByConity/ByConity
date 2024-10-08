@@ -1,4 +1,3 @@
-use test;
 set enable_unique_partial_update = 1;
 drop table if exists unique_partial_update_alter;
 

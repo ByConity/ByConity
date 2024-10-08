@@ -1,5 +1,3 @@
-USE test;
-
 DROP TABLE IF EXISTS test_date;
 CREATE TABLE test_date (`a` DateTime, `b` DateTime, `c` Date, `d` Date) Engine = CnchMergeTree PARTITION BY c ORDER BY d;
 INSERT INTO test_date VALUES (now(), now() - interval 1 day, today(), yesterday());

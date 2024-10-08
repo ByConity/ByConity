@@ -1,6 +1,6 @@
 drop table if exists test_max_parallel_replicas_lr;
 
--- If you wonder why the table is named with "_lr" suffix in this test.
+-- If you wonder why the table is named with "_lr" suffix in this 
 -- No reason. Actually it is the name of the table in Yandex.Market and they provided this test case for us.
 
 CREATE TABLE test_max_parallel_replicas_lr (timestamp UInt64) ENGINE = CnchMergeTree ORDER BY (intHash32(timestamp)) SAMPLE BY intHash32(timestamp) SETTINGS enable_late_materialize = 1;

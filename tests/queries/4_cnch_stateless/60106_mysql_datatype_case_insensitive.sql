@@ -1,7 +1,6 @@
 -- not setting dialect type mysql due to map type
-use test;
 set text_case_option='LOWERCASE';
-CREATE TABLE test.TeSt_1
+CREATE TABLE TeSt_1
 (
     `boOl` BOOLEan,
     `tinY` TinYinT,

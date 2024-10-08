@@ -4,6 +4,6 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: iclass_lvl = \'a\'
-      └─ TableScan test.t Est. ? rows
+      └─ TableScan default.t Est. ? rows
                Where: iclass_lvl_1 = \'a\'
                Outputs: iclass_lvl:=iclass_lvl_1, iclass_lvl_1:=iclass_lvl_2

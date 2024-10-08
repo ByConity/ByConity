@@ -1,5 +1,4 @@
 set enable_optimizer=1;
-use test;
 
 DROP TABLE IF EXISTS test46008;
 DROP TABLE IF EXISTS test460082;

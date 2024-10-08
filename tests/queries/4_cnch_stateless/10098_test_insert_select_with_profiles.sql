@@ -1,5 +1,3 @@
-USE test;
-
 set enable_optimizer=0;
 
 DROP TABLE IF EXISTS test_insert_all;

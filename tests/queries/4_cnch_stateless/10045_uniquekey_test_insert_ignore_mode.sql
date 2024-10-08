@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS test_unique_ignore_mode;
 DROP TABLE IF EXISTS test_unique_ignore_mode_version;
 

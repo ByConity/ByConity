@@ -1,4 +1,3 @@
-use test;
 drop TABLE if exists fensishu_local;
 
 CREATE TABLE fensishu_local (`createdTime` DateTime, `total` Int64) ENGINE = CnchMergeTree PRIMARY KEY `createdTime` ORDER BY `createdTime`;

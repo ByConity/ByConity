@@ -1,4 +1,3 @@
-use test;
 CREATE TABLE 00396_test_uuid
 (
     `id` Nullable(Int32),
