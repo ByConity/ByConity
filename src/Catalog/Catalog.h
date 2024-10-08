@@ -51,7 +51,7 @@
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
 #include <common/getFQDNOrHostName.h>
-// #include <Access/MaskingPolicyDataModel.h>
+#include <Storages/TableMetaEntry.h>
 
 namespace DB::ErrorCodes
 {
@@ -355,8 +355,9 @@ public:
 
     std::vector<Protos::LastModificationTimeHint> getLastModificationTimeHints(const ConstStoragePtr & table);
 
-    template<typename Map>
-    void getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list);
+    /// Caller should garrantee that `lock_holder` lives longer than this call.
+    template <typename Map>
+    void getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list, std::shared_ptr<MetaLockHolder> lock_holder);
 
     Strings getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context);
 
