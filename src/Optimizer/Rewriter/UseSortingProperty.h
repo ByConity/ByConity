@@ -31,7 +31,7 @@ private:
     bool rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override
     {
-        return context->getSettingsRef().enable_sorting_property;
+        return context->getSettingsRef().enable_sorting_property && context->getSettingsRef().optimize_read_in_order;
     }   
     class Rewriter;
 };
