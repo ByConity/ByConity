@@ -95,6 +95,8 @@ static inline auto createHandlersFactoryFromConfig(
                 main_handler_factory->addHandler(createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key, context));
             else if (handler_type == "replicas_status")
                 main_handler_factory->addHandler(createReplicasStatusHandlerFactory(server, prefix + "." + key));
+            else if (handler_type == "api")
+                main_handler_factory->addHandler(createAPIRequestHandlerFactory(server, prefix + "." + key));
             else
                 throw Exception("Unknown handler type '" + handler_type + "' in config here: " + prefix + "." + key + ".handler.type",
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
@@ -176,7 +178,7 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     factory.addHandler(ping_handler);
 
     auto api_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<APIRequestHandler>>(server);
-    api_handler->attachStrictPath("/api");
+    api_handler->attachNonStrictPath("/api");
     api_handler->allowGetAndHeadRequest();
     factory.addHandler(api_handler);
 
