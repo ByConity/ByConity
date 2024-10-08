@@ -77,7 +77,7 @@ public:
     const ExecutingGraphPtr & getExecutingGraph() const { return graph; }
 
     /// Cancel execution. May be called from another thread.
-    void cancel();
+    void cancel(bool has_exception = false);
 
     /// Checks the query time limits (cancelled or timeout). Throws on cancellation or when time limit is reached and the query uses "break"
     bool checkTimeLimit();

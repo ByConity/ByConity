@@ -214,6 +214,15 @@ void ThreadStatus::onFatalError()
         fatal_error_callback();
 }
 
+void ThreadStatus::flushUntrackedMemory()
+{
+    if (untracked_memory == 0)
+        return;
+
+    memory_tracker.adjustWithUntrackedMemory(untracked_memory);
+    untracked_memory = 0;
+}
+
 ThreadStatus * MainThreadStatus::main_thread = nullptr;
 MainThreadStatus & MainThreadStatus::getInstance()
 {

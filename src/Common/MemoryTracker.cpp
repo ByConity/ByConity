@@ -26,7 +26,6 @@
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
 #include <common/logger_useful.h>
-#include <Common/ProfileEvents.h>
 #include <Common/thread_local_rng.h>
 
 #include <atomic>
@@ -136,7 +135,6 @@ MemoryTracker::~MemoryTracker()
         }
     }
 }
-
 
 void MemoryTracker::logPeakMemoryUsage() const
 {
@@ -414,3 +412,22 @@ bool canEnqueueBackgroundTask()
     auto amount = background_memory_tracker.get();
     return limit == 0 || amount < limit;
 }
+
+void MemoryTracker::adjustWithUntrackedMemory(Int64 untracked_memory)
+{
+    if (untracked_memory > 0)
+        allocImpl(untracked_memory, /*throw_if_memory_exceeded*/ false);
+    else
+        free(-untracked_memory);
+}
+
+void MemoryTracker::setParent(MemoryTracker * elem)
+{
+    /// Untracked memory shouldn't be accounted to a query or a user if it was allocated before the thread was attached
+    /// to a query thread group or a user group, because this memory will be (🤞) freed outside of these scopes.
+    if (level == VariableContext::Thread && DB::current_thread)
+        DB::current_thread->flushUntrackedMemory();
+
+    parent.store(elem, std::memory_order_relaxed);
+}
+

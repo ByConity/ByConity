@@ -92,7 +92,6 @@ public:
         else if (alignment <= HUMALLOC_MIN_ALIGNMENT)
         {
             /// Resize malloc'd memory region with no special alignment requirement.
-            CurrentMemoryTracker::free(old_size);
             CurrentMemoryTracker::alloc(new_size);
             void * new_buf = hu_realloc(buf, new_size);
             if (nullptr == new_buf)
@@ -102,7 +101,7 @@ public:
             }
 
             buf = new_buf;
-
+            CurrentMemoryTracker::free(old_size);
             if constexpr (clear_memory)
                 if (new_size > old_size)
                     memset(reinterpret_cast<char *>(buf) + old_size, 0, new_size - old_size);
