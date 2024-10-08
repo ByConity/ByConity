@@ -31,6 +31,7 @@ namespace DB
 
 struct PrepareContextResult;
 class ASTSystemQuery;
+class MergeTreeBgTaskStatistics;
 
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {

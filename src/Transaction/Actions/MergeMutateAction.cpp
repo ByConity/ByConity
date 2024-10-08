@@ -17,6 +17,7 @@
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <Common/ProfileEvents.h>
+#include <Storages/MergeTree/MergeTreeBgTaskStatistics.h>
 #include <Storages/StorageCnchMergeTree.h>
 
 namespace ProfileEvents

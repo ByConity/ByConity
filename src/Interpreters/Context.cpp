@@ -466,7 +466,6 @@ struct ContextSharedPart
     ActionLocksManagerPtr action_locks_manager; /// Set of storages' action lockers
     std::unique_ptr<SystemLogs> system_logs; /// Used to log queries and operations on parts
     std::unique_ptr<CnchSystemLogs> cnch_system_logs; /// Used to log queries, kafka etc. Stores data in CnchMergeTree table
-    PartitionSelectorPtr bg_partition_selector; /// Partition selector for GC and Merge threads.
 
     std::optional<StorageS3Settings> storage_s3_settings; /// Settings of S3 storage
 
@@ -3904,17 +3903,6 @@ void Context::initializeTraceCollector()
 bool Context::hasTraceCollector() const
 {
     return shared->hasTraceCollector();
-}
-
-void Context::initBGPartitionSelector()
-{
-    if (shared->server_type == ServerType::cnch_server && !shared->bg_partition_selector)
-        shared->bg_partition_selector = std::make_shared<CnchBGThreadPartitionSelector>(getGlobalContext());
-}
-
-PartitionSelectorPtr Context::getBGPartitionSelector() const
-{
-    return shared->bg_partition_selector;
 }
 
 std::shared_ptr<QueryLog> Context::getQueryLog() const

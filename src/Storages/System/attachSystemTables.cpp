@@ -167,6 +167,7 @@
 #include <Storages/System/StorageSystemCnchMaterializedMySQL.h>
 #include <Storages/System/StorageSystemCnchTransactionCleanTasks.h>
 #include <Storages/System/StorageSystemSchemaInferenceCache.h>
+#include <Storages/System/StorageSystemBGTaskStatistics.h>
 
 namespace DB
 {
@@ -320,6 +321,8 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 #endif
     attach<StorageSystemCnchTransactionCleanTasks>(system_database, "cnch_transaction_clean_tasks");
     attach<StorageSystemSchemaInferenceCache>(system_database, "schema_inference_cache");
+    attach<StorageSystemBGTaskStatistics>(system_database, "bg_task_statistics");
+
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

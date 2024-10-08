@@ -25,6 +25,7 @@
 #include <ctime>
 #include <vector>
 #include <functional>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartTTLInfo.h>
 #include <Parsers/IAST_fwd.h>
 
@@ -79,6 +80,11 @@ public:
 
         /// The depth of the part chain. Convert the part chain to a new base part when the chain is long.
         size_t chain_depth = 0;
+
+        const MergeTreeDataPartPtr & getDataPartPtr() const
+        {
+            return *static_cast<const MergeTreeDataPartPtr *>(data);
+        }
     };
 
     /// Parts are belong to partitions. Only parts within same partition could be merged.
@@ -91,12 +97,12 @@ public:
       * If better not to do any merge, it returns empty result.
       */
     virtual PartsRange select(
-        const PartsRanges & parts_ranges,
+        PartsRanges & parts_ranges,
         const size_t max_total_size_to_merge,
         [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr) = 0;
 
     virtual PartsRanges selectMulti(
-        const PartsRanges & partitions,
+        PartsRanges & partitions,
         const size_t max_total_size_to_merge,
         [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr)
     {

@@ -41,7 +41,7 @@ public:
     explicit LevelMergeSelector(const Settings & settings_) : settings(settings_) {}
 
     PartsRange select(
-        const PartsRanges & parts_ranges,
+        PartsRanges & parts_ranges,
         const size_t max_total_size_to_merge,
         [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr) override;
 

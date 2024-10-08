@@ -14,9 +14,10 @@
  */
 
 #pragma once
-#include <CloudServices/ICnchBGThread.h>
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <CloudServices/CnchBGThreadPartitionSelector.h>
+#include <CloudServices/ICnchBGThread.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
@@ -35,8 +36,6 @@ using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 
 class CnchMergeMutateThread;
 struct PartMergeLogElement;
-class CnchBGThreadPartitionSelector;
-using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
 
 struct ManipulationTaskRecord
 {
@@ -225,15 +224,13 @@ private:
 
     bool needCollectExtendedMergeMetrics();
 
-    auto copyCurrentlyMergingMutatingParts()
+    NameSet copyCurrentlyMergingMutatingParts()
     {
         std::lock_guard lock(currently_merging_mutating_parts_mutex);
         return currently_merging_mutating_parts;
     }
 
     Strings removeLockedPartition(const Strings & partitions);
-
-    PartitionSelectorPtr partition_selector;
 
     std::mutex currently_merging_mutating_parts_mutex;
     NameSet currently_merging_mutating_parts;
@@ -246,7 +243,12 @@ private:
     std::unordered_map<String, TaskRecordPtr> task_records;
 
     std::mutex try_merge_parts_mutex; /// protect tryMergeParts(), triggerPartMerge()
+    /// protected by try_merge_parts_mutex
     std::queue<std::unique_ptr<FutureManipulationTask>> merge_pending_queue;
+    /// round robin states used by partition selector, protected by try_merge_parts_mutex
+    CnchBGThreadPartitionSelector::RoundRobinState partition_round_robin_state{};
+    /// Partitions that postponed from merge for a while, protected by try_merge_parts_mutex
+    std::unordered_map<String, time_t> postponed_partitions{};
 
     std::mutex try_mutate_parts_mutex; /// protect tryMutateParts(), getMutationStatus()
     /// Partitions that all parts are mutated or under mutating.
@@ -272,11 +274,9 @@ private:
     String pick_worker_algo;
     VirtualWarehouseHandle vw_handle;
 
-    std::atomic_bool shutdown_called{false};
+    UInt64 num_default_workers_in_vw_settings{0};
 
-    /// Index for round-robin strategy when picking worker.
-    std::atomic<size_t> merge_worker_round_robin_index = 0;
-    std::atomic<size_t> mutation_worker_round_robin_index = 0;
+    std::atomic_bool shutdown_called{false};
 };
 
 

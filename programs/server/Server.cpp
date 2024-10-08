@@ -1581,7 +1581,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             /// Load digest information from system.server_part_log for partition selector.
             if (auto server_part_log = global_context->getServerPartLog())
                 server_part_log->prepareTable();
-            global_context->initBGPartitionSelector();
         }
     }
     catch (...)

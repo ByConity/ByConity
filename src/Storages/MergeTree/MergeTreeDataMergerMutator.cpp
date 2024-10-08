@@ -613,7 +613,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
             if (!(0 < max_rows && max_rows <= std::numeric_limits<UInt32>::max()))
                 max_rows = std::numeric_limits<UInt32>::max();
         }
-        merge_selector = std::make_unique<DanceMergeSelector>(data, merge_settings);
+        merge_selector = std::make_unique<DanceMergeSelector>(merge_settings);
     }
     else
     {

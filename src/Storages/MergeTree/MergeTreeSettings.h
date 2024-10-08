@@ -446,7 +446,7 @@ enum StealingCacheMode : UInt64
     M(Bool, enable_addition_bg_task, false, "", 0) \
     M(UInt64, max_addition_bg_task_num, 32, "", 0) \
     M(Int64, max_addition_mutation_task_num, 10, "", 0) \
-    M(UInt64, max_partition_for_multi_select, 3, "", 0) \
+    M(UInt64, max_partition_for_multi_select, 10, "", 0) \
     \
     /** Settings for parts cache on server for MergeTasks. Cache speed up the task scheduling. */             \
     M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0)                                  \
@@ -454,6 +454,7 @@ enum StealingCacheMode : UInt64
     M(UInt64, cnch_merge_max_total_rows_to_merge, 50000000, "", 0) \
     M(UInt64, cnch_merge_max_total_bytes_to_merge, 150ULL * 1024 * 1024 * 1024, "", 0) \
     M(UInt64, cnch_merge_max_parts_to_merge, 100, "", 0) \
+    M(Int64, cnch_merge_expected_parts_number, 0, "Expected part numbers per partition, used to control merge selecting frequency and task size. 0 means using worker numbers in vw settings, negative value means disable this feature.", 0) \
     M(UInt64, cnch_mutate_max_parts_to_mutate, 100, "", 0) \
     M(UInt64, cnch_mutate_max_total_bytes_to_mutate, 50UL * 1024 * 1024 * 1024, "", 0) \
     \
@@ -531,7 +532,7 @@ enum StealingCacheMode : UInt64
       "Select nonadjacent parts is allowed in the original design. Remove this when the feature is fully verified", \
       0) \
     M(String, cnch_merge_pick_worker_algo, "RM", "RM - using RM, RoundRobin: - local round robin strategy", 0) \
-    M(UInt64, cnch_merge_round_robin_partitions_interval, 600, "", 0) \
+    M(UInt64, cnch_merge_round_robin_partitions_interval, 300, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_number, 10, "", 0) \
     M(UInt64, cnch_meta_rpc_timeout_ms, 8000, "", 0) \

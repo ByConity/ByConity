@@ -24,7 +24,6 @@
 #include <Common/Logger.h>
 #include <Access/RowPolicy.h>
 #include <CloudServices/CnchBGThreadCommon.h>
-#include <CloudServices/CnchBGThreadPartitionSelector.h>
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
@@ -228,8 +227,6 @@ class CnchWorkerClientPools;
 class ICnchBGThread;
 using CnchBGThreadPtr = std::shared_ptr<ICnchBGThread>;
 class CnchBGThreadsMap;
-class CnchBGThreadPartitionSelector;
-using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
 struct ClusterTaskProgress;
 
 class IOutputFormat;
@@ -1334,9 +1331,6 @@ public:
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
-
-    void initBGPartitionSelector();
-    PartitionSelectorPtr getBGPartitionSelector() const;
 
     /// Call after initialization before using trace collector.
     void initializeTraceCollector();

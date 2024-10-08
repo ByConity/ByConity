@@ -241,7 +241,7 @@ void selectWithinPartition(
 
 
 SimpleMergeSelector::PartsRange SimpleMergeSelector::select(
-    const PartsRanges & parts_ranges,
+    PartsRanges & parts_ranges,
     const size_t max_total_size_to_merge,
     MergeScheduler * merge_scheduler)
 {
@@ -258,7 +258,7 @@ SimpleMergeSelector::PartsRange SimpleMergeSelector::select(
 }
 
 SimpleMergeSelector::PartsRanges
-SimpleMergeSelector::selectMulti(const PartsRanges & partitions, size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
+SimpleMergeSelector::selectMulti(PartsRanges & partitions, size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     // Fall back to default behavior when enable_batch_select is not turned on.
     if (!settings.enable_batch_select)

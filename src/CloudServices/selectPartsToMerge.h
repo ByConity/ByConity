@@ -30,18 +30,25 @@ enum class ServerSelectPartsDecision
     NOTHING_TO_MERGE = 2,
 };
 
+struct SelectPartsToMergeSettings
+{
+    size_t max_total_size_to_merge{150ULL * 1024 * 1024 * 1024}; /// same with cnch_merge_max_total_bytes_to_merge
+    size_t num_default_workers{0};
+    bool aggressive{0};
+    bool enable_batch_select{0};
+    bool final{0};
+    // bool merge_with_ttl_allowed{0};
+};
+
 using ServerCanMergeCallback = std::function<bool(const ServerDataPartPtr &, const ServerDataPartPtr &)>;
 
 ServerSelectPartsDecision selectPartsToMerge(
     const MergeTreeMetaBase & data,
     std::vector<ServerDataPartsVector> & res,
     const ServerDataPartsVector & data_parts,
+    const std::multimap<String, UInt64> & unselectable_part_rows,
     ServerCanMergeCallback can_merge_callback,
-    size_t max_total_size_to_merge,
-    bool aggressive,
-    bool enable_batch_select,
-    bool final,
-    bool merge_with_ttl_allowed,
+    const SelectPartsToMergeSettings & settings,
     LoggerPtr log);
 
 /**

@@ -25,6 +25,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/MergeTreeBgTaskStatistics.h>
 
 #include <Common/CurrentThread.h>
 
@@ -135,7 +136,7 @@ bool ServerPartLog::addNewParts(
         return false;
 
     auto event_time = time(nullptr);
-    std::unordered_map<String, size_t> count_by_partition;
+    std::unordered_map<String, std::pair<UInt64, UInt64> > parts_and_bytes_by_partition;
 
     auto add = [&](const MutableMergeTreeDataPartCNCHPtr & part, bool is_staged)
     {
@@ -164,7 +165,12 @@ bool ServerPartLog::addNewParts(
         elem.error = error;
 
         server_part_log->add(elem);
-        count_by_partition[elem.partition_id] += static_cast<int>(type == ServerPartLogElement::INSERT_PART && !is_staged);
+
+        if (!is_staged)
+        {
+            parts_and_bytes_by_partition[elem.partition_id].first++;
+            parts_and_bytes_by_partition[elem.partition_id].second += part->bytes_on_disk;
+        }
     };
 
     try
@@ -173,14 +179,26 @@ bool ServerPartLog::addNewParts(
             add(part, false);
         for (const auto & part : staged_parts)
             add(part, true);
-
-        if (auto partition_selector = local_context->getBGPartitionSelector())
+        
+        if (auto bg_task_stats = MergeTreeBgTaskStatisticsInitializer::instance().getOrCreateTableStats(storage_id))
         {
-            for (const auto & [partition, count] : count_by_partition)
-                partition_selector->addInsertParts(storage_id.uuid, partition, count, event_time);
+            if (type == ServerPartLogElement::INSERT_PART && !parts.empty())
+            {
+                for (const auto & [partition_id, parts_bytes] : parts_and_bytes_by_partition)
+                    bg_task_stats->addInsertedParts(partition_id, parts_bytes.first, parts_bytes.second, event_time);
+            }
 
             if (type == ServerPartLogElement::MERGE_PARTS && !parts.empty())
-                partition_selector->addMergeParts(storage_id.uuid, parts.front()->info.partition_id, source_part_names.size(), event_time);
+            {
+                /// Assume only have one merged part
+                bg_task_stats->addMergedParts(parts.front()->info.partition_id, source_part_names.size(), parts.front()->bytes_on_disk, event_time);
+            }
+
+            if (type == ServerPartLogElement::DROP_RANGE && !parts.empty())
+            {
+                for (const auto & [partition_id, _] : parts_and_bytes_by_partition)
+                    bg_task_stats->dropPartition(partition_id);
+            }
         }
 
         return true;
@@ -201,6 +219,7 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
     try
     {
         auto now = time(nullptr);
+
         std::unordered_map<String, size_t> count_by_partition;
 
         for (const auto & part: parts)
@@ -224,11 +243,12 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
             count_by_partition[elem.partition_id] += static_cast<int>(elem.rows > 0);
         }
 
-        if (auto partition_selector = local_context->getBGPartitionSelector())
+        if (auto bg_task_stats = MergeTreeBgTaskStatisticsInitializer::instance().getOrCreateTableStats(storage_id))
         {
-            for (const auto & [partition, count] : count_by_partition)
-                partition_selector->addRemoveParts(storage_id.uuid, partition, count, now);
+            for (const auto & [partition_id, count] : count_by_partition)
+                bg_task_stats->addRemovedParts(partition_id, count);
         }
+
         return true;
     }
     catch (...)
