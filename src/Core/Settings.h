@@ -1400,7 +1400,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, block_json_query_in_optimizer, true, "Whether block json query in optimizer", 0) \
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
     M(Bool, send_cacheable_table_definitions, true, "Whether to send cacheable table definitions to worker, which reduces parsing overhead and is particularly beneficial for high concurrency workload", 0) \
-    M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
+    M(Bool, enable_optimizer_for_create_select, true, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \

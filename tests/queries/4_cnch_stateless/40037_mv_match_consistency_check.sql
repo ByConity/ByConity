@@ -2,8 +2,9 @@ SET enable_optimizer = 1;
 SET enable_materialized_view_rewrite = 1;
 SET enforce_materialized_view_rewrite = 1;
 SET enable_optimizer_fallback=0;
-set enable_materialized_view_union_rewriting = 0;
+SET enable_materialized_view_union_rewriting = 0;
 SET materialized_view_consistency_check_method = 'PARTITION';
+SET enable_optimizer_for_create_select = 0;
 
 CREATE DATABASE IF NOT EXISTS test_40037;
 USE test_40037;

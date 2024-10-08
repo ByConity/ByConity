@@ -2,6 +2,7 @@ set enable_optimizer=1;
 set materialized_view_consistency_check_method='NONE';
 set enforce_materialized_view_rewrite=1;
 set enable_optimizer_fallback=0;
+set enable_optimizer_for_create_select=0;
 
 DROP TABLE IF EXISTS mv_define;
 DROP TABLE IF EXISTS mv_data;
