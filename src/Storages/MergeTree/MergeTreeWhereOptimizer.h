@@ -184,6 +184,7 @@ private:
     mutable std::vector<ASTPtr> atomic_predicates_expr;
 
     size_t max_prewhere_or_expression_size {0};
+    NameSet skip_functions;
 };
 
 

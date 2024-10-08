@@ -1685,6 +1685,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, execute_subquery_in_lambda, true, "Whether to execute subquery in lambda", 0) \
     M(Bool, early_execute_scalar_subquery, false, "Whether to early execute scalar subquery", 0) \
     M(Bool, early_execute_in_subquery, false, "Whether to early execute in subquery", 0) \
+    M(String, prewhere_skip_functions, "", "A collection of functions which are not choosen as prewhere, use ',' to seperate", 0) \
     \
     /** Hive settings */ \
     M(Bool, hive_allow_missing_columns, true, "Allow missing columns while reading Hive tables", 0) \
