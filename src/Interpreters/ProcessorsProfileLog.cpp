@@ -35,7 +35,7 @@ NamesAndTypesList ProcessorProfileLogElement::getNamesAndTypes()
 {
     return
     {
-        {"event_date", std::make_shared<DataTypeDate>()},       
+        {"event_date", std::make_shared<DataTypeDate>()},
         {"event_time", std::make_shared<DataTypeDateTime>()},
         {"event_time_microseconds", std::make_shared<DataTypeDateTime64>(6)},
 
@@ -94,21 +94,11 @@ ProcessorsProfileLog::ProcessorsProfileLog(ContextPtr context_, const String & d
 {
 }
 
-static UInt64 time_in_microseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::microseconds>(timepoint.time_since_epoch()).count();
-}
-
-static UInt64 time_in_seconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
-}
-
-void ProcessorsProfileLog::addLogs(const QueryPipeline *pipeline, const String& query_id, std::chrono::time_point<std::chrono::system_clock> finish_time, int segment_id)
+void ProcessorsProfileLog::addLogs(const QueryPipeline *pipeline, const String& query_id, UInt64 event_time, UInt64 event_time_microseconds, int segment_id)
 {
     ProcessorProfileLogElement processor_elem;
-    processor_elem.event_time = time_in_seconds(finish_time);
-    processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
+    processor_elem.event_time = event_time;
+    processor_elem.event_time_microseconds = event_time_microseconds;
     processor_elem.query_id = query_id;
 
     auto get_proc_id = [](const IProcessor & proc) -> UInt64
@@ -131,7 +121,7 @@ void ProcessorsProfileLog::addLogs(const QueryPipeline *pipeline, const String& 
         processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
         /// plan_group is set differently to community CH,
         /// which is processor->getQueryPlanStepGroup();
-        /// here, it is combined with the segment_id and 
+        /// here, it is combined with the segment_id and
         /// invoking count for visualizing processors in the profiling website
         uint64_t count = processor->getWorkCount();
         processor_elem.plan_group = processor->getQueryPlanStepGroup() | (segment_id << 16) | (count << 32);

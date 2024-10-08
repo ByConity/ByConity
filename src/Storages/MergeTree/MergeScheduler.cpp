@@ -43,8 +43,8 @@ void MergeScheduler::prepareCountQueries()
             if (low_query.find("system.") == std::string::npos)
             {
                 ++queries_info.num_of_user_queries;
-                queries_info.avg_user_query_time += process.elapsed_seconds;
-                if (critical > 0 && (process.elapsed_seconds * 1000) > critical)
+                queries_info.avg_user_query_time += process.elapsed_microseconds / 1000;
+                if (critical > 0 && process.elapsed_microseconds > critical)
                     ++queries_info.num_of_timeout;
             }
         }

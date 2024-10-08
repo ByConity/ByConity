@@ -77,9 +77,10 @@ public:
     /// the final segment (id=0) is added by PlanSegmentExecutor;
     /// The final segment's log is added in executeQuery.cpp.
     void addLogs(const QueryPipeline *pipeline,
-                 const String& query_id,
-                 std::chrono::time_point<std::chrono::system_clock> finish_time,
-                 int segment_id = 0);
+            const String& query_id,
+            UInt64 event_time,
+            UInt64 event_time_microseconds,
+            int segment_id = 0);
 };
 
 }

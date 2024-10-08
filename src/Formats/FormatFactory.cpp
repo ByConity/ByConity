@@ -4,6 +4,7 @@
 #include <Common/Exception.h>
 #include <Common/KnownObjectNames.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ProcessList.h>
 #include <Core/Settings.h>
 #include <DataStreams/MaterializingBlockOutputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -382,6 +383,18 @@ InputFormatPtr FormatFactory::getInputFormat(
     return format;
 }
 
+static void addExistingProgressToOutputFormat(OutputFormatPtr format, ContextPtr context)
+{
+    auto element_id = context->getProcessListElement();
+    if (element_id)
+    {
+        /// community ck called format->onProgress to update the progress
+        /// but it leads to duplicated counting in cnch; so we skip it here.
+        /// Update the start of the statistics to use the start of the query, and not the creation of the format class
+        format->setStartTime(element_id->getQueryCPUStartTime(), true);
+    }
+}
+
 OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
     const String & name,
     WriteBuffer & buf,
@@ -412,7 +425,9 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
         if (context->hasQueryContext() && settings.log_queries)
             context->getQueryContext()->addQueryFactoriesInfo(Context::QueryLogFactories::Format, name);
 
-        return std::make_shared<ParallelFormattingOutputFormat>(builder);
+        auto format = std::make_shared<ParallelFormattingOutputFormat>(builder);
+        addExistingProgressToOutputFormat(format, context);
+        return format;
     }
 
     return getOutputFormat(name, buf, sample, context, callback, _format_settings);
@@ -455,6 +470,8 @@ OutputFormatPtr FormatFactory::getOutputFormat(
     /// It's a kludge. Because I cannot remove context from MySQL format.
     if (auto * mysql = typeid_cast<MySQLOutputFormat *>(format.get()))
         mysql->setContext(context);
+
+    addExistingProgressToOutputFormat(format, context);
 
     return format;
 }

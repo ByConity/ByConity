@@ -47,6 +47,8 @@ protected:
     bool auto_flush = false;
 
     RowsBeforeLimitCounterPtr rows_before_limit_counter;
+    // for output query duration
+    Stopwatch watch;
 
     friend class ParallelFormattingOutputFormat;
 
@@ -62,7 +64,6 @@ protected:
     virtual void customReleaseBuffer() { }
 
     void processMultiOutFileIfNeeded(size_t bytes);
-
 public:
     IOutputFormat(const Block & header_, WriteBuffer & out_);
 
@@ -113,6 +114,15 @@ public:
     void setMPPQueryCoordinator(MPPQueryCoordinatorPtr coordinator_)
     {
         coordinator = std::move(coordinator_);
+    }
+
+    /// Reset the watch to a specific point in time
+    /// If set to not running it will stop on the call (elapsed = now() - given start)
+    void setStartTime(UInt64 start, bool is_running)
+    {
+        watch = Stopwatch(CLOCK_MONOTONIC, start, true);
+        if (!is_running)
+            watch.stop();
     }
 
 private:

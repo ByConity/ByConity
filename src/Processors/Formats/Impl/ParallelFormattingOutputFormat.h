@@ -168,6 +168,7 @@ private:
         ProcessingUnitType type{ProcessingUnitType::START};
         Chunk chunk;
         Memory<> segment;
+        Stopwatch watch;
         size_t actual_memory_size{0};
     };
 
