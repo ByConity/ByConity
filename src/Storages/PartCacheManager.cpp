@@ -1904,31 +1904,28 @@ PartCacheManager::getLastModificationTimeHints(const ConstStoragePtr & storage, 
             };
         }
 
-        auto & meta_partitions = table_meta->partitions;
+        const auto * meta_storage = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+        auto meta_partitions = table_meta->getPartitionList();
+
+        // Skip if it passes TTL
+        meta_storage->filterPartitionByTTL(meta_partitions, now);
+
         ret.reserve(meta_partitions.size());
         for (auto it = meta_partitions.begin(); it != meta_partitions.end(); it++)
         {
-            Protos::LastModificationTimeHint hint = Protos::LastModificationTimeHint{};
+            auto partition_info = table_meta->getPartitionInfo((*it)->getID(*meta_storage));
+            if (!partition_info)
+                continue;
 
-            const auto * meta_storage = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+            Protos::LastModificationTimeHint hint = Protos::LastModificationTimeHint{};
             if (!meta_storage)
                 throw Exception("Table is not a Meta Based MergeTree", ErrorCodes::UNKNOWN_TABLE);
-            String partition;
-            {
-                WriteBufferFromString write_buffer(partition);
-                (*it)->partition_ptr->store(*meta_storage, write_buffer);
-            }
 
-            // Skip if it passes TTL
-            auto ttl = meta_storage->getTTLForPartition(*(*it)->partition_ptr);
 
-            if (ttl && ttl < now) {
-                continue;
-            }
-
+            String partition = partition_info->getPartitionValue(*meta_storage);
             hint.set_partition_id(partition);
 
-            std::optional<std::pair<PartitionMetrics::PartitionMetricsStore, bool>> data = load_func(*it);
+            std::optional<std::pair<PartitionMetrics::PartitionMetricsStore, bool>> data = load_func(partition_info);
 
             if (!data.has_value() || (data->first.total_parts_number < 0 || data->first.total_rows_count < 0))
             {

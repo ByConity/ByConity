@@ -91,6 +91,7 @@ struct TableMetaEntry
     std::unordered_set<String> getDeletingPartitions();
     Strings getPartitionIDs();
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList();
+    PartitionInfoPtr getPartitionInfo(const String & partition_id);
 
     void forEachPartition(std::function<void(PartitionInfoPtr)> callback);
 };
