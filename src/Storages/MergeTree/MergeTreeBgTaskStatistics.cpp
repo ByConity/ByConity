@@ -153,7 +153,6 @@ void MergeTreeBgTaskStatisticsInitializer::initStatsByPartLog()
         {
             if (filter_uuids_in_query)
                 uuid_strings.push_back(fmt::format("\'{}\'", UUIDHelpers::UUIDToString(uuid)));
-            t->setInitializeState(MergeTreeBgTaskStatistics::InitializeState::Initializing);
         }
 
         String load_sql = fmt::format(SQL_LOAD_PARTITION_DIGEST_INFO_TEMPLATE, 
@@ -265,6 +264,7 @@ MergeTreeBgTaskStatisticsPtr MergeTreeBgTaskStatisticsInitializer::getOrCreateTa
             return res;
 
         res = std::make_shared<MergeTreeBgTaskStatistics>(storage_id);
+        res->setInitializeState(MergeTreeBgTaskStatistics::InitializeState::Initializing);
         table_stats_map.try_emplace_l(storage_id.uuid, [&res](auto & kv) { res = kv.second; }, res);
 
         initialize_tasks_map.emplace(storage_id.uuid, res);

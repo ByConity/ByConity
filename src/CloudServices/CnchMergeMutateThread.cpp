@@ -668,6 +668,31 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
     return result;
 }
 
+void removeUnselectableParts(
+    ServerDataPartsVector & visible_parts,
+    NameSet & merging_mutating_parts_snapshot,
+    std::multimap<String, UInt64> & unselectable_part_rows,
+    UInt64 max_bytes,
+    UInt64 max_rows)
+{
+    visible_parts.erase(
+        std::remove_if(
+            visible_parts.begin(),
+            visible_parts.end(),
+            [&merging_mutating_parts_snapshot, &unselectable_part_rows, max_bytes, max_rows](const auto & p) {
+                if (merging_mutating_parts_snapshot.erase(p->name())
+                        || p->part_model().rows_count() >= max_rows * 0.9
+                        || p->part_model().size() >= max_bytes * 0.9)
+                {
+                    unselectable_part_rows.emplace(p->info().partition_id, p->part_model().rows_count());
+                    return true;
+                }
+                return false;
+            }),
+        visible_parts.end()
+    );
+}
+
 /// Merge task selection is done by multiple roles.
 /// Firstly, we use PartitionSelector to select a few partitions that most recently ingested or have slowlest merge speed.
 /// Then, we get all visible parts in these partitions, and use MergeSelector to get some merge(manipulation) tasks.
@@ -799,19 +824,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     if (storage.getSettings()->cnch_merge_select_nonadjacent_parts)
     {
         size_t max_rows = storage_settings->cnch_merge_max_total_rows_to_merge;
-        auto removed_begin = std::remove_if(
-            visible_parts.begin(),
-            visible_parts.end(),
-            [&merging_mutating_parts_snapshot, max_bytes, max_rows](const auto & p) {
-                return merging_mutating_parts_snapshot.erase(p->name())
-                        || p->part_model().rows_count() >= max_rows * 0.9
-                        || p->part_model().size() >= max_bytes * 0.9;
-            });
-        
-        for (auto it = removed_begin; it != visible_parts.end(); it++)
-            unselectable_part_rows.emplace((*it)->info().partition_id, (*it)->part_model().rows_count());
-
-        visible_parts.erase(removed_begin, visible_parts.end());
+        removeUnselectableParts(visible_parts, merging_mutating_parts_snapshot, unselectable_part_rows, max_bytes, max_rows);
 
         if (visible_parts.empty())
         {
@@ -1146,19 +1159,7 @@ String CnchMergeMutateThread::triggerPartMerge(
     if (storage_settings->cnch_merge_select_nonadjacent_parts)
     {
         auto max_rows = storage_settings->cnch_merge_max_total_rows_to_merge.value;
-        auto removed_begin = std::remove_if(
-            visible_parts.begin(),
-            visible_parts.end(),
-            [&merging_mutating_parts_snapshot, max_bytes, max_rows](const auto & p) {
-                return merging_mutating_parts_snapshot.erase(p->name())
-                        || p->part_model().rows_count() >= max_rows * 0.9
-                        || p->part_model().size() >= max_bytes * 0.9;
-            });
-        
-        for (auto it = removed_begin; it != visible_parts.end(); it++)
-            unselectable_part_rows.emplace((*it)->info().partition_id, (*it)->part_model().rows_count());
-
-        visible_parts.erase(removed_begin, visible_parts.end());
+        removeUnselectableParts(visible_parts, merging_mutating_parts_snapshot, unselectable_part_rows, max_bytes, max_rows);
     }
     else
     {
