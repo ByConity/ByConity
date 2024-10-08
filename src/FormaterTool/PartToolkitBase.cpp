@@ -22,6 +22,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
 #include <Poco/JSON/Template.h>
+#include <DataTypes/DataTypeBitMap64.h>
 
 namespace DB
 {
