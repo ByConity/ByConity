@@ -99,11 +99,13 @@ namespace
                     *from_local = false;
                 try
                 {
-                    std::unique_ptr<ReadBufferFromFileBase> buffer = file.disk->readFile(
-                        file.rel_path, ReadSettings().initializeReadSettings(n)
-                    );
-
+                    /// currently there are no concurrent calls, use lock only to maintain the thread safe semantics here
+                    std::lock_guard lock(remote_fd_mutex);
+                    /// when the offset is smaller or the buffer is not initialized, reset the buffer
                     auto seek_off = static_cast<off_t>(file.start_offset + offset);
+                    if (!buffer || seek_off < remote_fd_offset)
+                        buffer = file.disk->readFile(file.rel_path, ReadSettings().initializeReadSettings(n));
+
                     auto res_off = buffer->seek(seek_off);
                     if (res_off != seek_off)
                         throw Exception(
@@ -111,6 +113,7 @@ namespace
                             ErrorCodes::LOGICAL_ERROR);
 
                     buffer->readStrict(scratch, n);
+                    remote_fd_offset = seek_off + n;
 
                     *result = Slice(scratch, n);
                 }
@@ -141,6 +144,9 @@ namespace
     private:
         RemoteFileInfo file;
         RemoteFileCachePtr cache;
+        mutable std::unique_ptr<ReadBufferFromFileBase> buffer;
+        mutable std::mutex remote_fd_mutex;
+        mutable off_t remote_fd_offset = 0;
     };
 
     class PosixWritableFile : public WritableFile
