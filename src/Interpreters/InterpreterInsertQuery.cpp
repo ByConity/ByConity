@@ -220,8 +220,37 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
     else
     {
         query.table_id = getContext()->resolveStorageID(query.table_id);
-        return DatabaseCatalog::instance().getTable(query.table_id, getContext());
+        auto storage = DatabaseCatalog::instance().tryGetTable(query.table_id, getContext());
+        if (storage)
+            return storage;
+
+        storage = tryGetTableInWorkerResource(query.table_id);
+        if (storage)
+            return storage;
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Cannot find table {} in server", query.table_id.getNameForLogs());
     }
+}
+
+StoragePtr InterpreterInsertQuery::tryGetTableInWorkerResource(const StorageID & table_id)
+{
+    /// in some case of bitengine, server will write data into dict table and the targe table
+    /// can only be found in worker_resource
+    auto try_get_table_from_worker_resource = [&table_id](const auto & context) -> StoragePtr {
+        if (auto worker_resource = context->tryGetCnchWorkerResource(); worker_resource)
+            return worker_resource->getTable(table_id);
+        else
+            return nullptr;
+    };
+    auto storage = try_get_table_from_worker_resource(getContext());
+    if (storage)
+        return storage;
+    else if (auto query_context = getContext()->getQueryContext())
+    {
+        storage = try_get_table_from_worker_resource(query_context);
+        if (storage)
+            return storage;
+    }
+    return nullptr;
 }
 
 Block InterpreterInsertQuery::getSampleBlock(
