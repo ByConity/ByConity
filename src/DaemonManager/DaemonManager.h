@@ -17,7 +17,9 @@
 
 #include <Common/Logger.h>
 #include <Server/IServer.h>
+#include <Poco/Net/ServerSocket.h>
 #include <daemon/BaseDaemon.h>
+#include <Server/HTTP/HTTPServer.h>
 
 namespace DB::DaemonManager
 {
@@ -61,6 +63,20 @@ protected:
     std::string getDefaultCorePath() const override;
 
 private:
+    std::vector<std::unique_ptr<HTTPServer>> http_servers;
+
+    /**
+     * @brief Binds metrics HTTP server to the given hosts and port.
+     * After binding, caller need to explicitly start the servers.
+     *
+     * @param host Addresses to bind to.
+     * @param port Port number.
+     * @param server_pool Poco Thread pool for handling requests.
+     * @param listen_try If true, catch and log errors. Throws otherwise.
+     */
+    void initMetricsHandler(const std::vector<String> & host, const UInt16 & port, Poco::ThreadPool & server_pool, bool listen_try);
+    /// A copied logic to bind and listen a socket.
+    Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;
     ContextMutablePtr global_context;
 };
 
