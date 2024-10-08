@@ -55,9 +55,9 @@ void RpcClient::assertController(const brpc::Controller & cntl, int error_code)
     if (cntl.Failed())
     {
         auto err = cntl.ErrorCode();
-        if (err == ECONNREFUSED || err == ECONNRESET || err == ENOTCONN)
+        if (err == ECONNREFUSED || err == ECONNRESET)
             setOk(false);
-        else if (err == EHOSTDOWN || err == ENETUNREACH)
+        else if (err == EHOSTDOWN || err == ENETUNREACH || err == ENOTCONN)
             reportError();
         throw Exception(
             fmt::format("Fail to call {}, error code: {}, msg: {}", cntl.method()->full_name(), err, cntl.ErrorText()), error_code);
