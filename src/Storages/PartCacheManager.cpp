@@ -178,7 +178,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
             // No need to load from catalog in dummy mode.
             if (likely(!dummy_mode))
             {
-                getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
+                getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions, meta_ptr->lock_holder);
                 getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
                 getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
                 meta_loaded = true;
@@ -231,7 +231,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
                     nullptr,
                     on_table_creation);
                 /// insert the new meta lock into lock container.
-                meta_lock_container.emplace(uuid, meta_ptr->meta_mutex);
+                meta_lock_container.emplace(uuid, meta_ptr->lock_holder);
             }
             meta_ptr->server_vw_name = server_vw_name;
             active_tables.emplace(uuid, meta_ptr);
@@ -852,7 +852,11 @@ void PartCacheManager::insertDataIntoCache(
                           .emplace(
                               partition_id,
                               std::make_shared<CnchPartitionInfo>(
-                                  UUIDHelpers::UUIDToString(uuid), partitionid_to_partition[partition_id], partition_id, true))
+                                  UUIDHelpers::UUIDToString(uuid),
+                                  partitionid_to_partition[partition_id],
+                                  partition_id,
+                                  meta_ptr->lock_holder->getPartitionLock(partition_id),
+                                  true))
                           .first;
             meta_partitions.emplace(partition_id, *it);
         }

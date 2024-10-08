@@ -59,12 +59,13 @@ DeleteBitmapMetaPtrVector createDeleteBitmaps(const MergeTreeMetaBase & storage,
     return ret;
 }
 
-Protos::DataModelPartVector createPartBatch(const String & partition_id, size_t count, size_t start_block_index = 0)
+Protos::DataModelPartVector createPartBatch(const String & partition_id, size_t count, size_t start_block_index = 0, size_t commit_time = 0)
 {
     Protos::DataModelPartVector res;
     for (size_t i = start_block_index; i < start_block_index + count; i++)
     {
         DataModelPartPtr part_model = createPart(partition_id, i, i, 0);
+        part_model->set_commit_time(commit_time);
         *(res.mutable_parts()->Add()) = *part_model;
     }
     return res;
@@ -311,9 +312,9 @@ TEST_F(CacheManagerTest, GetPartsFromCache)
     auto ts1 = cache_manager->getTableLastUpdateTime(storage->getStorageUUID());
     EXPECT_NE(ts1, 0);
 
-    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1000")).first;
-    auto it_p1 = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001")).first;
-    auto it_p2 = entry->partitions.emplace("1002", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1002")).first;
+    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1000", RWLockImpl::create())).first;
+    auto it_p1 = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001", RWLockImpl::create())).first;
+    auto it_p2 = entry->partitions.emplace("1002", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1002", RWLockImpl::create())).first;
 
     // mock insert part into cache
     Protos::DataModelPartVector parts_models = CacheTestMock::createPartBatch("1001", 10, 0);
@@ -452,7 +453,7 @@ TEST_F(CacheManagerTest, getAndSetStatus) {
 
     auto topology_version = PairInt64{1, 1};
     TableMetaEntryPtr entry = cache_manager->getTableMeta(storage_1->getStorageUUID());
-    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(storage_1_uuid, nullptr, "1000")).first;
+    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(storage_1_uuid, nullptr, "1000", RWLockImpl::create())).first;
     Protos::DataModelPartVector parts_models = CacheTestMock::createPartBatch("1000", 10, 0);
     (*it_p0)->part_cache_status.setToLoading();
     cache_manager->insertDataPartsIntoCache(*storage_1, parts_models.parts(), false, false, topology_version);
@@ -505,7 +506,7 @@ TEST_F(CacheManagerTest, InvalidPartCache) {
     auto current_topology_version = PairInt64{1, 1};
     cache_manager->mayUpdateTableMeta(*storage, current_topology_version);
     TableMetaEntryPtr entry = cache_manager->getTableMeta(storage->getStorageUUID());
-    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(UUIDHelpers::UUIDToString(storage->getStorageUUID()), nullptr, "1000")).first;
+    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(UUIDHelpers::UUIDToString(storage->getStorageUUID()), nullptr, "1000", RWLockImpl::create())).first;
 
     Protos::DataModelPartVector parts_models = CacheTestMock::createPartBatch("1000", 10, 0);
     EXPECT_EQ(parts_models.parts().size(), 10);
@@ -576,7 +577,7 @@ TEST_F(CacheManagerTest, DelayTest) {
     auto current_topology_version = PairInt64{1, 1};
     cache_manager->mayUpdateTableMeta(*storage, current_topology_version);
     TableMetaEntryPtr entry = cache_manager->getTableMeta(storage->getStorageUUID());
-    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(UUIDHelpers::UUIDToString(storage->getStorageUUID()), nullptr, "1000")).first;
+    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(UUIDHelpers::UUIDToString(storage->getStorageUUID()), nullptr, "1000", RWLockImpl::create())).first;
 
     // THREAD 1                             THREAD 2
     // 1.1 try load parts into cache.
@@ -635,7 +636,7 @@ TEST_F(CacheManagerTest, AsyncReset) {
 
     cache_manager->mayUpdateTableMeta(*storage, current_topology_version);
     TableMetaEntryPtr entry = cache_manager->getTableMeta(storage->getStorageUUID());
-    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(UUIDHelpers::UUIDToString(storage->getStorageUUID()), nullptr, "1000")).first;
+    auto it_p0 = entry->partitions.emplace("1000", std::make_shared<CnchPartitionInfo>(UUIDHelpers::UUIDToString(storage->getStorageUUID()), nullptr, "1000", RWLockImpl::create())).first;
 
     EXPECT_EQ(cache_manager->getAllActiveTables().size(), 1);
 
@@ -744,7 +745,7 @@ TEST_F(CacheManagerTest, DeleteBitmapsCacheShouldBeImmutable) {
     auto topology_version = PairInt64{1, 1};
     cache_manager->mayUpdateTableMeta(*storage, topology_version);
     auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
-    auto it_p0 = entry->partitions.emplace("123", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "123")).first;
+    auto it_p0 = entry->partitions.emplace("123", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "123", RWLockImpl::create())).first;
 
     auto bitmaps = CacheTestMock::createDeleteBitmaps(merge_tree, "123");
 
@@ -779,4 +780,77 @@ TEST_F(CacheManagerTest, DeleteBitmapsCacheShouldBeImmutable) {
     EXPECT_EQ(bitmaps_from_cache[0]->tryGetPrevious(), nullptr);
     EXPECT_EQ(bitmaps_from_cache[1]->tryGetPrevious(), nullptr);
     EXPECT_EQ(bitmaps_from_cache[2]->tryGetPrevious(), nullptr);
+}
+
+/// Due to the high coupling within the PartCacheManager,
+/// this test case does not fully reflect lock conflicts caused by concurrent insertions.
+TEST_F(CacheManagerTest, ConcurrentlyInsertNewCache) {
+    auto context = getContext().context;
+    auto topology_version = PairInt64{1, 1};
+    auto topology_version_2 = PairInt64{1, 100};
+
+    {
+        // Mock storage.
+        String query = "create table gztest.test (id Int32) ENGINE=CnchMergeTree partition by id order by tuple()";
+        StoragePtr storage = CacheTestMock::createTable(query, context);
+        auto parts_models = CacheTestMock::createPartsBatch("1001", 10, storage);
+        Protos::DataModelPartVector parts_models_with_commit_time = CacheTestMock::createPartBatch("1001", 10, 0, 9999);
+        String storage_uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        std::shared_ptr<PartCacheManager> cache_manager = std::make_shared<PartCacheManager>(context, 0, true);
+
+        // add table entry in cache manager and mock load partitions
+        auto lock = RWLockImpl::create();
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            cache_manager->mayUpdateTableMeta(*storage, topology_version);
+            auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
+            cache_manager->insertDataPartsIntoCache(*storage, parts_models_with_commit_time.parts(), false, false, topology_version);
+            auto it = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001", lock)).first;
+
+            entry = cache_manager->getTableMeta(storage->getStorageUUID());
+            it = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001", lock)).first;
+            cache_manager->invalidPartAndDeleteBitmapCache(storage->getStorageUUID());
+            lock = (*it)->getPartitionLock();
+        }
+
+
+        std::thread t1([&]() {
+            cache_manager->mayUpdateTableMeta(*storage, topology_version_2);
+            auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
+            auto it_p1_other
+                = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001", lock)).first;
+            auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                return parts_models;
+            };
+            cache_manager->getOrSetServerDataPartsInPartitions(*storage, {"1001"}, load_func, TxnTimestamp::maxTS(), topology_version_2);
+        });
+
+        std::thread t2([&]() {
+            cache_manager->mayUpdateTableMeta(*storage, topology_version_2);
+            cache_manager->insertDataPartsIntoCache(*storage, parts_models_with_commit_time.parts(), false, false, topology_version_2);
+        });
+
+
+        t2.join();
+        t1.join();
+
+        bool load_from_func = false;
+        auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
+            load_from_func = true;
+            return {};
+        };
+        // test get parts from cache
+        auto entry = cache_manager->getTableMeta(storage->getStorageUUID());
+        auto it = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001", lock)).first;
+        (*it)->part_cache_status.setToLoaded();
+        ServerDataPartsVector parts_from_cache
+            = cache_manager->getOrSetServerDataPartsInPartitions(*storage, {"1001"}, load_func, TxnTimestamp::maxTS(), topology_version_2);
+        EXPECT_EQ(load_from_func, false);
+        ASSERT_EQ(parts_from_cache.size(), 10);
+        ASSERT_EQ(parts_from_cache.front()->getCommitTime(), 9999);
+
+
+        cache_manager->shutDown();
+    }
 }

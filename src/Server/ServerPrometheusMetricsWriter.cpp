@@ -451,7 +451,7 @@ void ServerPrometheusMetricsWriter::writePartMetrics(WriteBuffer & wb)
                         continue;
 
                     Catalog::PartitionMap partitions;
-                    cnch_catalog->getPartitionsFromMetastore(*cnch_table, partitions);
+                    cnch_catalog->getPartitionsFromMetastore(*cnch_table, partitions, nullptr);
 
                     for (auto & partition : partitions)
                     {
