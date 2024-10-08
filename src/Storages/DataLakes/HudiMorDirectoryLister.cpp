@@ -1,8 +1,8 @@
 #include "Storages/DataLakes/HudiMorDirectoryLister.h"
 #if USE_HIVE and USE_JAVA_EXTENSIONS
 
-#include <jni/JNIMetaClient.h>
 #include <Protos/lake_models.pb.h>
+#include <jni/JNIMetaClient.h>
 #include "Common/StringUtils/StringUtils.h"
 #include "Storages/DataLakes/HiveFile/HiveHudiFile.h"
 #include "Storages/DataLakes/StorageCnchHudi.h"
@@ -22,21 +22,8 @@ namespace ErrorCodes
 static constexpr auto HUDI_CLASS_FACTORY_CLASS = "org/byconity/hudi/HudiClassFactory";
 static constexpr auto HUDI_CLIENT_CLASS = "org/byconity/hudi/HudiMetaClient";
 
-static String getRelativePartitionPath(const String & _base_path, const String & _partition_path)
-{
-    String base_path = HiveUtil::getPath(_base_path);
-    String partition_path = HiveUtil::getPath(_partition_path);
-    if (!startsWith(partition_path, base_path))
-    {
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Partition path {} does not belong to base path {}", partition_path, base_path);
-    }
-    else
-    {
-        return std::filesystem::relative(partition_path, base_path);
-    }
-}
-
-HudiMorDirectoryLister::HudiMorDirectoryLister(const DiskPtr & disk_, const String & base_path, const StorageCnchHudi & hudi_table)
+HudiMorDirectoryLister::HudiMorDirectoryLister(
+    const DiskPtr & disk_, const String & base_path, const StorageCnchHudi & hudi_table)
     : DiskDirectoryLister(disk_, IHiveFile::FileFormat::HUDI)
 {
     table_properties["input_format"] = "org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat";
@@ -45,20 +32,43 @@ HudiMorDirectoryLister::HudiMorDirectoryLister(const DiskPtr & disk_, const Stri
     table_properties["hive_column_types"] = fmt::format("{}", fmt::join(hudi_table.getHiveColumnTypes(), "#"));
     table_properties["base_path"] = base_path;
 
+    // S3 properties
+    if (!hudi_table.getSettings()->endpoint.value.empty() || !hudi_table.getSettings()->ak_id.value.empty()
+        || !hudi_table.getSettings()->ak_secret.value.empty())
+    {
+        table_properties["fs.s3.impl"] = "org.apache.hadoop.fs.s3a.S3AFileSystem";
+        table_properties["fs.s3a.impl"] = "org.apache.hadoop.fs.s3a.S3AFileSystem";
+        table_properties["fs.s3a.endpoint"] = hudi_table.getSettings()->endpoint.value;
+        table_properties["fs.s3a.access.key"] = hudi_table.getSettings()->ak_id.value;
+        table_properties["fs.s3a.secret.key"] = hudi_table.getSettings()->ak_secret.value;
+        table_properties["fs.s3a.path.style.access"] = std::to_string(hudi_table.getSettings()->s3_use_virtual_hosted_style.value);
+        if (!hudi_table.getSettings()->s3_extra_options.value.empty())
+        {
+            std::vector<String> s3_extra_option_pairs = CnchHiveSettings::splitStr(hudi_table.getSettings()->s3_extra_options.value, ",");
+            for (const auto & pair : s3_extra_option_pairs)
+            {
+                auto kv = CnchHiveSettings::splitStr(pair, "=");
+                if (kv.size() != 2)
+                    throw Exception("Invalid s3 extra option: " + pair, ErrorCodes::BAD_ARGUMENTS);
+                table_properties[kv[0].c_str()] = kv[1];
+            }
+        }
+    }
     Protos::HudiMetaClientParams params;
-    auto add_kv = [&](const char * key, const String & value) {
+    for (const auto & [key, value] : table_properties)
+    {
         auto * property = params.mutable_properties()->add_properties();
         property->set_key(key);
         property->set_value(value);
-    };
-    add_kv("base_path", basePath());
-    params.PrintDebugString();
+    }
     jni_client = std::make_shared<JNIMetaClient>(HUDI_CLASS_FACTORY_CLASS, HUDI_CLIENT_CLASS, params.SerializeAsString());
 }
 
 HiveFiles HudiMorDirectoryLister::list(const HivePartitionPtr & partition)
 {
-    String files = jni_client->getFilesInPartition(getRelativePartitionPath(basePath(), partition->location));
+    Protos::PartitionPaths required_partitions;
+    required_partitions.add_paths(partition->location);
+    String files = jni_client->getFilesInPartition(required_partitions.SerializeAsString());
     Protos::HudiFileSlices file_slices;
     file_slices.ParseFromString(files);
     std::filesystem::path full_path(partition->location);

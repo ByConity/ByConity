@@ -13,7 +13,8 @@ class StorageCnchHudi;
 class HudiMorDirectoryLister : public DB::DiskDirectoryLister
 {
 public:
-    explicit HudiMorDirectoryLister(const DiskPtr & disk, const String & base_path, const StorageCnchHudi & hudi_table);
+    explicit HudiMorDirectoryLister(
+        const DiskPtr & disk, const String & base_path, const StorageCnchHudi & hudi_table);
     HiveFiles list(const HivePartitionPtr & partition) override;
 
 private:
