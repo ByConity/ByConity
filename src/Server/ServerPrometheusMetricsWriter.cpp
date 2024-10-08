@@ -233,13 +233,9 @@ void ServerPrometheusMetricsWriter::writeLabelledMetrics(WriteBuffer & wb)
     {
         String metric_name { LabelledMetrics::getSnakeName(metric) };
         String metric_doc { LabelledMetrics::getDocumentation(metric) };
-        LabelledMetrics::LabelledCounter labelled_counter = LabelledMetrics::getCounter(metric);
-        for (const auto & item : labelled_counter)
-        {
-            String key;
-            MetricLabels labels = item.first;
-            LabelledMetrics::Count counter = item.second;
 
+        auto write_metric = [&](MetricLabels labels, LabelledMetrics::Count counter) {
+            String key;
             if (metric == LabelledMetrics::VwQuery || metric == LabelledMetrics::UnlimitedQuery)
             {
                 labels.insert({"resource_type", metric == LabelledMetrics::VwQuery ? "vw" : "unlimited"});
@@ -254,15 +250,31 @@ void ServerPrometheusMetricsWriter::writeLabelledMetrics(WriteBuffer & wb)
             }
             else
             {
-                continue;
+               return;
             }
 
             String key_label = key + getLabel(labels);
             writeOutLine(wb, "# HELP", key, metric_doc);
             writeOutLine(wb, "# TYPE", key, COUNTER_TYPE);
             writeOutLine(wb, key_label, counter);
-        }
+        };
 
+        LabelledMetrics::LabelledCounter labelled_counter = LabelledMetrics::getCounter(metric);
+        if (!labelled_counter.empty())
+        {
+            for (const auto & item : labelled_counter)
+            {
+                
+                MetricLabels labels = item.first;
+                LabelledMetrics::Count counter = item.second;
+
+                write_metric(labels, counter);
+            }
+        }
+        else
+        {
+            write_metric({}, 0);
+        }
     }
 }
 
