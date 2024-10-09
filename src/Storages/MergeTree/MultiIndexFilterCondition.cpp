@@ -211,7 +211,7 @@ MultiIndexFilterCondition::IndexReaderAndStore::IndexReaderAndStore(
         gin_part_helper = std::make_unique<GinDataLocalPartHelper>(*part_);
     }
     cache_and_store = std::make_unique<PostingsCacheForStore>();
-    cache_and_store->store = context_->getGinIndexStoreFactory()->get(
+    cache_and_store->store = context_->getGINStoreReaderFactory()->get(
         index_->getFileName(), std::move(gin_part_helper));
     cache_and_store->filter_result_cache = context_->getGinIndexFilterResultCache();
 }

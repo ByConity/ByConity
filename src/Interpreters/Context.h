@@ -335,8 +335,8 @@ class IOUringReader;
 class NexusFS;
 using NexusFSPtr = std::shared_ptr<NexusFS>;
 
-class GinIndexStoreFactory;
-struct GinIndexStoreCacheSettings;
+class GINStoreReaderFactory;
+struct GINStoreReaderFactorySettings;
 
 class GlobalTxnCommitter;
 using GlobalTxnCommitterPtr = std::shared_ptr<GlobalTxnCommitter>;
@@ -1576,8 +1576,8 @@ public:
     void setGinIndexFilterResultCache(size_t cache_size_in_bytes);
     GinIdxFilterResultCache* getGinIndexFilterResultCache() const;
 
-    void setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_);
-    std::shared_ptr<GinIndexStoreFactory> getGinIndexStoreFactory() const;
+    void setGINStoreReaderFactory(const GINStoreReaderFactorySettings & settings_);
+    std::shared_ptr<GINStoreReaderFactory> getGINStoreReaderFactory() const;
 
     void setPrimaryIndexCache(size_t cache_size_in_bytes);
     std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;

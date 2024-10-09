@@ -43,7 +43,7 @@ concept LRUCacheWeightType = requires (T lhs, T rhs) {
 };
 
 template <typename T, typename TValue, typename TWeight>
-concept LRUCacheWeighterType = requires (T weighter, TValue value) {
+concept LRUCacheWeighterType = requires (T weighter, const TValue& value) {
     { weighter(value) } -> std::same_as<TWeight>;
 };
 

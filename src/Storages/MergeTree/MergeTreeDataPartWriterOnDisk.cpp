@@ -28,8 +28,7 @@
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/MapHelpers.h>
-#include <Storages/MergeTree/GinIndexDataPartHelper.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreWriter.h>
 #include <Storages/MergeTree/MergeTreeIndexInverted.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Common/escapeForFileName.h>
@@ -276,8 +275,9 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
                         part_path + stream_name, marks_file_extension,
                         default_codec, settings.max_compress_block_size));
 
-        GinIndexStorePtr store = nullptr;
-        if (typeid_cast<const MergeTreeIndexInverted *>(&*skip_index) != nullptr)
+        GINStoreWriter* store = nullptr;
+        if (const auto* ivt_idx = typeid_cast<const MergeTreeIndexInverted*>(skip_index.get());
+            ivt_idx != nullptr)
         {
             std::unique_ptr<IGinDataPartHelper> gin_part_helper = nullptr;
             if (data_part->getType() == IMergeTreeDataPart::Type::CNCH)
@@ -289,12 +289,17 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
             {
                 gin_part_helper = std::make_unique<GinDataLocalPartHelper>(*data_part);
             }
-            store = std::make_shared<GinIndexStore>(
-                stream_name, std::move(gin_part_helper), storage.getSettings()->max_digestion_size_per_segment);
-            gin_index_stores[stream_name] = store;
+            auto store_writer = GINStoreWriter::open(ivt_idx->version, stream_name,
+                std::move(gin_part_helper), storage.getSettings()->max_digestion_size_per_segment,
+                ivt_idx->params.density);
+            store = store_writer.get();
+            gin_store_writers.emplace(stream_name, std::move(store_writer));
         }
 
-        skip_indices_aggregators.push_back(skip_index->createIndexAggregatorForPart(store));
+        {
+            skip_indices_aggregators.push_back(skip_index->createIndexAggregatorForPart(*store));
+        }
+
         skip_index_accumulated_marks.push_back(0);
     }
 }
@@ -486,14 +491,18 @@ void MergeTreeDataPartWriterOnDisk::calculateAndSerializeSkipIndices(const Block
         const auto index_helper = skip_indices[i];
         auto & stream = *skip_indices_streams[i];
 
-        GinIndexStorePtr store;
+        GINStoreWriter* writer = nullptr;
         if (typeid_cast<const MergeTreeIndexInverted *>(&*index_helper) != nullptr)
         {
             String stream_name = index_helper->getFileName();
-            auto it = gin_index_stores.find(stream_name);
-            if (it == gin_index_stores.end())
+            if (auto iter = gin_store_writers.find(stream_name); iter != gin_store_writers.end())
+            {
+                writer = iter->second.get();
+            }
+            else
+            {
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Index '{}' does not exist", stream_name);
-            store = it->second;
+            }
         }
 
         for (const auto & granule : granules_to_write)
@@ -506,7 +515,23 @@ void MergeTreeDataPartWriterOnDisk::calculateAndSerializeSkipIndices(const Block
 
             if (skip_indices_aggregators[i]->empty() && granule.mark_on_start)
             {
+<<<<<<< HEAD
                 skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(store);
+=======
+                if (index_helper->isBHANNIndex())
+                {
+                    skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(
+                        part_rows_count,
+                        data_part->getFullPath(),
+                        settings.vector_index_build_threads != 0
+                            ? settings.vector_index_build_threads
+                            : data_part->storage.getContext()->getSettings().vector_index_build_threads);
+                }
+                else
+                {
+                    skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(*writer);
+                }
+>>>>>>> 8212ddca40 (Merge 'sst_gin_dict' into 'cnch-dev')
 
                 if (stream.compressed.offset() >= settings.min_compress_block_size)
                     stream.compressed.next();
@@ -567,10 +592,10 @@ void MergeTreeDataPartWriterOnDisk::finishSkipIndicesSerialization(
         if (!skip_indices_aggregators[i]->empty())
             skip_indices_aggregators[i]->getGranuleAndReset()->serializeBinary(stream.compressed);
     }
-    for (auto & store : gin_index_stores)
+    for (auto & writer : gin_store_writers)
     {
-        store.second->finalize();
-        store.second->addToChecksums(checksums);
+        writer.second->finalize();
+        writer.second->addToChecksums(checksums);
     }
 
     for (auto & stream : skip_indices_streams)
@@ -581,7 +606,7 @@ void MergeTreeDataPartWriterOnDisk::finishSkipIndicesSerialization(
             stream->sync();
     }
 
-    gin_index_stores.clear();
+    gin_store_writers.clear();
     skip_indices_streams.clear();
     skip_indices_aggregators.clear();
     skip_index_accumulated_marks.clear();

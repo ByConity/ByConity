@@ -132,10 +132,9 @@
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/MergeTree/CloudTableDefinitionCache.h>
-#include <Storages/MergeTree/GinIndexStore.h>
 #include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreReader.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
@@ -429,7 +428,7 @@ struct ContextSharedPart
 
     mutable std::unique_ptr<GinIdxFilterResultCache> gin_idx_filter_result_cache;
 
-    mutable std::shared_ptr<GinIndexStoreFactory> ginindex_store_factory;
+    mutable std::shared_ptr<GINStoreReaderFactory> gin_store_reader_factory;
 
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
@@ -5165,17 +5164,18 @@ GinIdxFilterResultCache* Context::getGinIndexFilterResultCache() const
     return shared->gin_idx_filter_result_cache.get();
 }
 
-void Context::setGinIndexStoreFactory(const GinIndexStoreCacheSettings & settings_)
+void Context::setGINStoreReaderFactory(const GINStoreReaderFactorySettings & settings_)
 {
-    if (shared->ginindex_store_factory)
-        throw Exception("ginindex_store_factory has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->ginindex_store_factory = std::make_shared<GinIndexStoreFactory>(settings_);
+    if (shared->gin_store_reader_factory)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "GINStoreReaderFactory has already "
+            "been created");
+    
+    shared->gin_store_reader_factory = std::make_shared<GINStoreReaderFactory>(settings_);
 }
 
-std::shared_ptr<GinIndexStoreFactory> Context::getGinIndexStoreFactory() const
+std::shared_ptr<GINStoreReaderFactory> Context::getGINStoreReaderFactory() const
 {
-    return shared->ginindex_store_factory;
+    return shared->gin_store_reader_factory;
 }
 
 void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)

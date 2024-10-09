@@ -14,12 +14,14 @@
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IndicesDescription.h>
 #include <Storages/MergeTree/BoolMask.h>
-#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/GINStoreReader.h>
+#include <Storages/MergeTree/GINStoreWriter.h>
 #include <Storages/MergeTree/MergeTreeIndexInverted.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/MergeTree/RPNBuilder.h>
 #include <Interpreters/ITokenExtractor.h>
 #include <Common/config.h>
+#include "Storages/MergeTree/GINStoreCommon.h"
 
 #if USE_TSQUERY
 #include <Common/TextSreachQuery.h>
@@ -195,13 +197,13 @@ std::pair<UInt32, UInt32> MergeTreeIndexGranuleInverted::rowExtreme() const
 }
 
 MergeTreeIndexAggregatorInverted::MergeTreeIndexAggregatorInverted(
-    GinIndexStorePtr store_,
+    GINStoreWriter& writer_,
     const Names & index_columns_,
     const String & index_name_,
     const GinFilterParameters & params_,
     TokenExtractorPtr token_extractor_,
     ChineseTokenExtractorPtr nlp_extractor_)
-    : store(store_)
+    : writer(writer_)
     , index_columns(index_columns_)
     , index_name(index_name_)
     , params(params_)
@@ -229,7 +231,7 @@ void MergeTreeIndexAggregatorInverted::addToGinFilter(UInt32 rowID, const char *
     {
         while (cur < length && token_extractor->nextInStringPadded(data, length, &cur, &token_start, &token_len))
         {
-            gin_filter.add(data + token_start, token_len, rowID, store);
+            gin_filter.add(data + token_start, token_len, rowID, writer);
         }
     }
     else 
@@ -241,7 +243,7 @@ void MergeTreeIndexAggregatorInverted::addToGinFilter(UInt32 rowID, const char *
 
         while (ChineseTokenExtractor::nextInCutString(token_start, token_len, iterator))
         {
-            gin_filter.add(data + token_start, token_len, rowID, store);
+            gin_filter.add(data + token_start, token_len, rowID, writer);
         }
     }
 
@@ -258,8 +260,9 @@ void MergeTreeIndexAggregatorInverted::update(const Block & block, size_t * pos,
             block.rows());
 
     size_t rows_read = std::min(limit, block.rows() - *pos);
-    auto row_id = store->getNextRowIDRange(rows_read);
-    auto start_row_id = row_id;
+    auto start_row_id = writer.rowID();
+    writer.incrementRows(rows_read);
+    auto row_id = start_row_id;
 
     for (size_t col = 0; col < index_columns.size(); ++col)
     {
@@ -267,26 +270,23 @@ void MergeTreeIndexAggregatorInverted::update(const Block & block, size_t * pos,
         const auto & column = column_with_type.column;
         size_t current_position = *pos;
 
-        bool need_to_write = false;
-
+        size_t processed_bytes = 0;
         for (size_t i = 0; i < rows_read; ++i)
         {
             auto ref = column->getDataAt(current_position + i);
             addToGinFilter(row_id, ref.data, ref.size, granule->gin_filters[col]);
-            store->incrementCurrentSizeBy(ref.size);
+            processed_bytes += ref.size;
             row_id++;
-            if (store->needToWrite())
-                need_to_write = true;
         }
 
-        granule->gin_filters[col].addRowRangeToGinFilter(
-            store->getCurrentSegmentID(), start_row_id, static_cast<UInt32>(start_row_id + rows_read - 1));
+        writer.incrementProcessedBytes(processed_bytes);
 
-        store->setStoreDensity(params.density);
-        
-        if (need_to_write)
+        granule->gin_filters[col].addRowRangeToGinFilter(
+            writer.segmentID(), start_row_id, static_cast<UInt32>(start_row_id + rows_read - 1));
+
+        if (writer.needToWrite())
         {
-            store->writeSegment();
+            writer.writeSegment();
         }
     }
 
@@ -994,14 +994,12 @@ MergeTreeIndexGranulePtr MergeTreeIndexInverted::createIndexGranule() const
 
 MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregator() const
 {
-    /// should not be called: createIndexAggregatorForPart should be used
-    assert(false);
-    return nullptr;
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "MergeTreeIndexInverted should call createIndexAggregatorForPart");
 }
 
-MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregatorForPart(const GinIndexStorePtr & store) const
+MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregatorForPart(GINStoreWriter& writer) const
 {
-    return std::make_shared<MergeTreeIndexAggregatorInverted>(store, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get());
+    return std::make_shared<MergeTreeIndexAggregatorInverted>(writer, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get());
 }
 
 MergeTreeIndexConditionPtr MergeTreeIndexInverted::createIndexCondition(const SelectQueryInfo & query, ContextPtr context) const
@@ -1026,7 +1024,8 @@ MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
         GinFilterParameters params(0, density);
 
         auto nlp_extractor = std::make_unique<ChineseTokenExtractor>(config_name);
-        return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(nlp_extractor));
+        return std::make_shared<MergeTreeIndexInverted>(index, GINStoreVersion::v0,
+            params, std::move(nlp_extractor));
     }
     else
     {
@@ -1037,25 +1036,40 @@ MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
             String config_value = index.arguments[1].get<String>();
             Poco::JSON::Parser parser;
             Poco::JSON::Object::Ptr parsed_obj = parser.parse(config_value).extract<Poco::JSON::Object::Ptr>();
+
+            GINStoreVersion version = GINStoreVersion::v0;
+            if (parsed_obj->has("version"))
+            {
+                version = str2GINStoreVersion(parsed_obj->getValue<String>("version"));
+            }
+
+            std::unique_ptr<ITokenExtractor> tokenizer;
             if (config_type == "char_sep")
             {
                 String raw_seperators = parsed_obj->getValue<String>("seperators");
                 std::unordered_set<char> seperators(raw_seperators.begin(), raw_seperators.end());
-                auto tokenizer = std::make_unique<CharSeperatorTokenExtractor>(seperators);
-                return std::make_unique<MergeTreeIndexInverted>(index, GinFilterParameters(0, 1.0),
-                    std::move(tokenizer));
+                tokenizer = std::make_unique<CharSeperatorTokenExtractor>(seperators);
+            }
+            else if (config_type == "token")
+            {
+                tokenizer = std::make_unique<SplitTokenExtractor>();
+            }
+            else if (config_type == "ngram")
+            {
+                UInt32 ngram_size = parsed_obj->getValue<UInt32>("ngram_size");
+                tokenizer = std::make_unique<NgramTokenExtractor>(ngram_size);
             }
             else if (config_type == StandardTokenExtractor::getName())
             {
-                auto tokenizer = std::make_unique<StandardTokenExtractor>();
-                return std::make_unique<MergeTreeIndexInverted>(index,
-                    GinFilterParameters(0, 1.0), std::move(tokenizer));
+                tokenizer = std::make_unique<StandardTokenExtractor>();
             }
             else
             {
                 throw Exception(fmt::format("Unknown config type {} in inverted index defintion", config_type),
                     ErrorCodes::INVALID_CONFIG_PARAMETER);
             }
+            return std::make_unique<MergeTreeIndexInverted>(index, version,
+                GinFilterParameters(0, 1.0), std::move(tokenizer));
         }
         else
         {
@@ -1066,12 +1080,14 @@ MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
             if (n > 0)
             {
                 auto tokenizer = std::make_unique<NgramTokenExtractor>(n);
-                return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
+                return std::make_shared<MergeTreeIndexInverted>(index, GINStoreVersion::v0,
+                    params, std::move(tokenizer));
             }
             else
             {
                 auto tokenizer = std::make_unique<SplitTokenExtractor>();
-                return std::make_shared<MergeTreeIndexInverted>(index, params, std::move(tokenizer));
+                return std::make_shared<MergeTreeIndexInverted>(index, GINStoreVersion::v0,
+                    params, std::move(tokenizer));
             }
         }
     }
@@ -1123,6 +1139,14 @@ void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
                 if (parsed_obj->get("seperators").isEmpty())
                 {
                     throw Exception("seperators config is mandatory for char_sep inverted index",
+                        ErrorCodes::INVALID_CONFIG_PARAMETER);
+                }
+            }
+            else if (config_type == "ngram")
+            {
+                if (parsed_obj->get("ngram_size").isEmpty())
+                {
+                    throw Exception("ngram_size config is mandatory for ngram inverted index",
                         ErrorCodes::INVALID_CONFIG_PARAMETER);
                 }
             }
