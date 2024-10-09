@@ -1531,8 +1531,8 @@ String ColumnPruningVisitor::selectColumnWithMinSize(NamesAndTypesList source_co
             }
 
             // tmp fix for 40113_lowcard_nullable_subcolumn
-            auto metadata_snapshot = storage->getInMemoryMetadata();
-            const auto & columns_desc = metadata_snapshot.getColumns();
+            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+            const auto & columns_desc = metadata_snapshot->getColumns();
             source_columns.erase(
                 std::remove_if(
                     source_columns.begin(),
