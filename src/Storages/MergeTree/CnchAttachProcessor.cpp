@@ -1181,46 +1181,51 @@ void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
     auto volume = std::make_shared<SingleDiskVolume>("single_disk_vol", disk);
     for (auto iter = disk->iterateDirectory(path); iter->isValid(); iter->next())
     {
+        /// We first check whether the part matches filter, then we only issue HDFS requests for matching parts.
         String current_entry_path = std::filesystem::path(path) / iter->name();
-        if (disk->isDirectory(current_entry_path))
+        if (MergeTreePartInfo::tryParsePartName(iter->name(), &part_info, tbl.format_version))
         {
-            if (MergeTreePartInfo::tryParsePartName(iter->name(), &part_info,
-                tbl.format_version))
+            if (filter.filter(part_info))
             {
-                if (filter.filter(part_info))
+                if (!disk->isDirectory(current_entry_path))
                 {
-                    // HACK here, since part's relative path to disk is related to storage's
-                    // so, have a relative path here
-                    founded_parts.push_back(std::make_shared<MergeTreeDataPartCNCH>(
-                        tbl, iter->name(), volume,
-                        relativePathTo(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN), current_entry_path)));
-                    // load delete bitmap for unique table
-                    if (is_unique_tbl)
-                    {
-                        std::lock_guard<std::mutex> lock(unique_table_info_mutex);
-                        part_delete_file_relative_paths[iter->name()] = relativePathTo(
-                            target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN),
-                            std::filesystem::path(path) / DeleteBitmapMeta::delete_files_dir);
-                    }
+                    LOG_TRACE(logger, fmt::format("When collect parts from disk {}, path {} is a file, skip",
+                        disk->getName(), std::string(std::filesystem::path(disk->getPath()) / iter->path())));
+                    continue;
                 }
-            }
-            else
-            {
-                LOG_TRACE(logger, fmt::format("Failed to parse part name from {}, "
-                    "drill down with limit {}", std::string(std::filesystem::path(disk->getPath()) / current_entry_path),
-                    max_drill_down_level - 1));
 
-                String dir_name = iter->name() + '/';
-                path += dir_name;
-                collectPartsFromUnit(tbl, disk, path, max_drill_down_level - 1,
-                    filter, founded_parts);
-                path.resize(path.size() - dir_name.size());
+                // HACK here, since part's relative path to disk is related to storage's
+                // so, have a relative path here
+                founded_parts.push_back(std::make_shared<MergeTreeDataPartCNCH>(
+                    tbl, iter->name(), volume,
+                    relativePathTo(tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN), current_entry_path)));
+                // load delete bitmap for unique table
+                if (is_unique_tbl)
+                {
+                    std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                    part_delete_file_relative_paths[iter->name()] = relativePathTo(
+                        target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN),
+                        std::filesystem::path(path) / DeleteBitmapMeta::delete_files_dir);
+                }
             }
         }
         else
         {
-            LOG_TRACE(logger, fmt::format("When collect parts from disk {}, path {} "
-                "is a file, skip", disk->getName(), std::string(std::filesystem::path(disk->getPath()) / iter->path())));
+            if (!disk->isDirectory(current_entry_path))
+            {
+                LOG_TRACE(logger, fmt::format("When collect parts from disk {}, path {} is a file, skip",
+                    disk->getName(), std::string(std::filesystem::path(disk->getPath()) / iter->path())));
+                continue;
+            }
+
+            LOG_TRACE(logger, fmt::format("Failed to parse part name from {}, drill down with limit {}",
+                std::string(std::filesystem::path(disk->getPath()) / current_entry_path), max_drill_down_level - 1));
+
+            String dir_name = iter->name() + '/';
+            path += dir_name;
+            collectPartsFromUnit(tbl, disk, path, max_drill_down_level - 1,
+                filter, founded_parts);
+            path.resize(path.size() - dir_name.size());
         }
     }
 }
