@@ -121,6 +121,7 @@ private:
     static ASTTableJoin::Kind useInnerForLeftSide(ASTTableJoin::Kind kind);
     static ASTTableJoin::Kind useInnerForRightSide(ASTTableJoin::Kind kind);
     static bool isRegularJoin(const JoinStep & step);
+    static DataTypePtr getCommonType(const DataTypes & types, bool allow_extended_type_conversion, bool enable_implicit_arg_type_convert);
 };
 
 struct InnerJoinResult
