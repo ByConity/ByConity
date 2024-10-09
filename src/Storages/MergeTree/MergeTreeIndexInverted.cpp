@@ -1142,6 +1142,9 @@ void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
                         ErrorCodes::INVALID_CONFIG_PARAMETER);
                 }
             }
+            else if (config_type == "token")
+            {
+            }
             else if (config_type == "ngram")
             {
                 if (parsed_obj->get("ngram_size").isEmpty())
