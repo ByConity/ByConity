@@ -136,6 +136,7 @@ namespace ErrorCodes
     extern const int CANNOT_ASSIGN_ALTER;
     extern const int UNKNOWN_FORMAT_VERSION;
     extern const int NOT_IMPLEMENTED;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
 }
 
 static NameSet collectColumnsFromCommands(const AlterCommands & commands)
@@ -1407,6 +1408,8 @@ ServerDataPartsWithDBM StorageCnchMergeTree::getAllPartsWithDBM(ContextPtr local
     if (local_context->getCnchCatalog())
     {
         TransactionCnchPtr cur_txn = local_context->getCurrentTransaction();
+        if (!cur_txn)
+            throw Exception("Current transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
         if (cur_txn->isSecondary())
         {
             /// Get all parts in the partition list
