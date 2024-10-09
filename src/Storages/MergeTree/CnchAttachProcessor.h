@@ -27,6 +27,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Storages/MergeTree/AttachContext.h>
 
 namespace DB
 {
@@ -108,75 +109,6 @@ public:
     std::vector<Unit> units;
 };
 
-class AttachContext
-{
-public:
-    struct TempResource
-    {
-        TempResource(): disk(nullptr) {}
-
-        DiskPtr disk;
-        std::map<String, String> rename_map;
-        std::vector<String> copy_part; // destination part_names
-        std::map<String, String> copy_bitmap; // delete bitmap name ==> to_path
-    };
-
-    AttachContext(const Context& qctx, int pool_expand_thres, int max_thds, LoggerPtr log):
-        query_ctx(qctx), expand_thread_pool_threshold(pool_expand_thres),
-        max_worker_threads(max_thds), new_txn(nullptr), logger(log) {}
-
-    void writeRenameRecord(const DiskPtr& disk, const String& from, const String& to);
-    // Persist rename map and other temporary resource to kv in form of undo-buffer
-    void writeRenameMapToKV(Catalog::Catalog & catalog, const StorageID & storage_id, const TxnTimestamp & txn_id);
-    // Record delete Meta files name to delete for attaching unique table parts
-    void writeMetaFilesNameRecord(const DiskPtr& disk, const String& meta_file_name);
-    // Record copy part operations into copy_part
-    void writeCopyPartRecord(const DiskPtr & disk, const String & part_name);
-    // Record copy bitmap operations into copy_bitmap
-    void writeCopyBitmapRecord(const DiskPtr & disk, const String & bitmap_name, const String & to_path);
-    // Record relative part path in detached directory
-    void writeDetachedPartRecord(const DiskPtr & disk, const String & part_path);
-    // Persist copy_part and copy_bitmap to kv in form of undo-buffer
-    void writeCopyRecordToKV(Catalog::Catalog & catalog, const StorageID & storage_id, const TxnTimestamp & txn_id);
-
-    void commit(bool has_exception = false);
-    void rollback();
-
-    // Get worker pool, argument is job number, if job_nums is large enough
-    // it may reallocate worker pool
-    ThreadPool& getWorkerPool(int job_nums);
-
-    // For attach from other table's active partition, we may start a new transaction
-    void setAdditionalTxn(const TransactionCnchPtr& txn)
-    {
-        new_txn = txn;
-    }
-
-
-    void setSourceDirectory(const String& dir)
-    {
-        src_directory = dir;
-    }
-
-private:
-    const Context& query_ctx;
-    const int expand_thread_pool_threshold;
-    const int max_worker_threads;
-
-    TransactionCnchPtr new_txn;
-    String src_directory;
-
-    std::unique_ptr<ThreadPool> worker_pool;
-
-    std::mutex mu;
-    /// Temporary resource created during ATTACH, including temp dictionary, file movement records...
-    std::map<String, TempResource> resources;
-    std::map<String, TempResource> meta_files_to_delete;
-    std::map<String, TempResource> detached_parts_to_delete;
-
-    LoggerPtr logger;
-};
-
 // Attach will follow such process
 // 1. Find all candidate parts which match filter from source(path/table etc)
 // 2. Load these parts and calculate visibility
@@ -226,21 +158,23 @@ private:
     PartsFromSources collectPartsFromSources(const StorageCnchMergeTree& tbl,
         const std::vector<CollectSource>& sources, const AttachFilter& filter,
         int max_drill_down_level, AttachContext& attach_ctx);
+    PartsFromSources collectPartsFromS3Path(
+        StorageCnchMergeTree & target_table, const String & path, const AttachFilter & filter, AttachContext & attach_ctx);
     PartsFromSources collectPartsFromS3TaskMeta(StorageCnchMergeTree& tbl,
         const String& task_id, const AttachFilter& filter, AttachContext& attach_ctx);
     void collectPartsFromUnit(const StorageCnchMergeTree& tbl,
         const DiskPtr& disk, String& path, int max_drill_down_level,
         const AttachFilter& filter, MutableMergeTreeDataPartsCNCHVector& founded_parts);
     PartsFromSources collectPartsFromActivePartition(StorageCnchMergeTree& tbl,
-        AttachContext& attach_ctx);
+        AttachContext & attach_ctx);
     std::pair<String, DiskPtr> findBestDiskForHDFSPath(const String& from_path);
 
     void checkOperationValid() const;
 
     // Rename parts to attach to destination with new part name
     PartsWithHistory prepareParts(const PartsFromSources & parts_from_sources, AttachContext & attach_ctx);
-    void commitPartsFromS3(const PartsWithHistory & prepared_parts, NameSet & staged_parts_name);
-    void genPartsDeleteMark(PartsWithHistory & prepared_parts);
+    void commitPartsFromS3(const PartsWithHistory & parts_with_history, NameSet & staged_parts_name);
+    void genPartsDeleteMark(PartsWithHistory & parts_to_writes);
 
     void genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write);
     void refreshView(const std::vector<ASTPtr>& attached_partitions, AttachContext& attach_ctx);
@@ -260,7 +194,7 @@ private:
     // If attach from self/other table, set to source storage
     StoragePtr from_storage;
     const bool is_unique_tbl;
-    const PartitionCommand& command;
+    const PartitionCommand & command;
     ContextMutablePtr query_ctx;
 
     LoggerPtr logger;
@@ -270,7 +204,7 @@ private:
     // For unique table
     std::mutex unique_table_info_mutex;
     std::unordered_map<String, String> part_delete_file_relative_paths;  // part_name -> relative path(related to path of target_tbl)
-    std::unordered_map<String, DataModelDeleteBitmapPtr> attach_metas;   // part_name -> attach meta of delete bitmap
+    std::unordered_map<String, DataModelDeleteBitmapPtr> attach_metas; // part_name -> model of delete bitmap
 };
 
 }

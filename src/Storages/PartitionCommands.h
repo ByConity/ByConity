@@ -78,7 +78,7 @@ struct PartitionCommand
     /// true for ATTACH PART and DROP DETACHED PART (and false for PARTITION)
     bool part = false;
 
-    /// true for ATTACH PARTS from hdfs directory
+    /// true for ATTACH PARTS from directory
     bool parts = false;
 
     /// true for DROP/DETACH PARTITION [WHERE]
