@@ -202,9 +202,10 @@ KeyDescription KeyDescription::getSortingKeyFromAST(
     for (size_t i = 0; i < result.sample_block.columns(); ++i)
     {
         result.data_types.emplace_back(result.sample_block.getByPosition(i).type);
-        if (!result.data_types.back()->isComparable())
+        /// ByteMap column should not be used as key columns.
+        if (result.data_types.back()->isByteMap() || !result.data_types.back()->isComparable())
             throw Exception(ErrorCodes::DATA_TYPE_CANNOT_BE_USED_IN_KEY,
-                            "Column {} with type {} is not allowed in key expression, it's not comparable",
+                            "Column {} with type {} is not allowed in key expression, it's not comparable or not suitable (like ByteMap)",
                             backQuote(result.sample_block.getByPosition(i).name), result.data_types.back()->getName());
     }
 

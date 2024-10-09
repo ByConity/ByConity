@@ -120,6 +120,7 @@ public:
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
     void insert(const Field & x) override;
+    void insertFrom(const IColumn & src_, size_t n) override;
     void insertDefault() override;
     void popBack(size_t n) override;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
@@ -214,6 +215,9 @@ public:
     ColumnPtr createEmptyImplicitColumn() const;
 
     ColumnPtr compress() const override;
+
+    /// Map can be inside Nullable, but in storage all nullable map column will be KV Map.
+    bool canBeInsideNullable() const override { return true; }
 };
 
 }

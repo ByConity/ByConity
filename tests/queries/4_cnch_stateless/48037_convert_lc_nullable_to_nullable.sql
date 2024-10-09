@@ -16,9 +16,9 @@ CREATE TABLE 48037_table
     `date_col_1` Date32 NOT NULL,
     `date_col_2` DateTime('Asia/Istanbul'),
     `enum_col_1` Enum('a' = 1, 'b' = 2, 'c' = 3, 'd' = 4),
-    `map_col_1` Map(String, String),
-    `map_col_2` Map(String, UInt64),
-    `map_col_3` Map(String, LowCardinality(Nullable(String)))
+    `map_col_1` Map(String, String) KV,
+    `map_col_2` Map(String, UInt64) KV,
+    `map_col_3` Map(String, LowCardinality(Nullable(String))) KV
 )
 ENGINE = CnchMergeTree
 PARTITION BY (toDate(toStartOfDay(date_col_1)), int_col_5)

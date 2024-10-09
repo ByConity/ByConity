@@ -37,6 +37,8 @@ public:
 
     bool canBeInsideNullable() const override { return false; }
 
+    bool hasNestedMap() const override;
+
     MutableColumnPtr createColumn() const override;
 
     Field getDefault() const override;

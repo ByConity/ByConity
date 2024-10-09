@@ -102,15 +102,8 @@ select getMapKeys(currentDatabase(0), '00745_merge_tree_map_data_type', 'enums_m
 DROP TABLE 00745_merge_tree_map_data_type;
 
 
--- unsupported key types
-CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(Array(String), String)) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
-CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(Array(String), String) KV) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
-
 select '';
-select 'unsupported value types in kv map :';
-CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(String, Array(Tuple(String, String)))) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
-CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(String, LowCardinality(String))) ENGINE = CnchMergeTree ORDER BY a; -- { serverError 36 }
-
+select 'kv map value types :';
 CREATE TABLE 00745_merge_tree_map_data_type (a Int32, b Map(String, Array(Tuple(String, String))) KV) ENGINE = CnchMergeTree ORDER BY a SETTINGS index_granularity = 2;
 INSERT INTO 00745_merge_tree_map_data_type VALUES (0, {'k1': [('k', 'v')]}) (1, {'k2': [('k', 'v')]}) (2, {'k3': [('k', 'v')]});
 SELECT * FROM 00745_merge_tree_map_data_type ORDER BY a;

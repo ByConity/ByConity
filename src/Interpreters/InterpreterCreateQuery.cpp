@@ -1686,8 +1686,21 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
 
     try
     {
+        /// Some tables created in earlier versions may be invalid under new constraints, but we need to attach before fixing them.
         if (!create.attach)
+        {
             res->checkMetadataValidity(properties.columns);
+
+            /// We only want to check some recommended usages when creating table or modify corresponding column, so we need to check
+            /// this outside of MergeTreeMetaBase::checkMetadataValidity.
+            if (auto * storage = dynamic_cast<MergeTreeMetaBase *>(res.get()))
+            {
+                auto columns_physical = properties.columns.getAllPhysical();
+                for (const auto & column: columns_physical)
+                    MergeTreeMetaBase::checkTypeInComplianceWithRecommendedUsage(column.type);
+            }
+        }
+
     }
     catch (...)
     {

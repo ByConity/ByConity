@@ -427,6 +427,10 @@ public:
 
     MergeTreeSettingsPtr getChangedSettings(const ASTPtr new_settings) const;
     void checkMetadataValidity(const ColumnsDescription & columns, const ASTPtr & new_settings = nullptr) const override;
+    
+    /// Some data types (like Map) may have extra constrains in storage and need to be compatible with tables in earlier versions. 
+    /// We only check this when creating tables and adding/modifying these columns.
+    static void checkTypeInComplianceWithRecommendedUsage(const DataTypePtr & type);
 
     virtual bool supportsOptimizer() const override { return true; }
 

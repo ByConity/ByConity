@@ -20,6 +20,9 @@ skip_case_list = (
     ## unstable case, ok to skip
     '00696_system_columns_limit',
 
+    ## nullable(map) maybe not supported in clickhouse_driver
+    '03034_nullable_map',
+    '52018_mysql_map',
 )
 
 skip_keyword_list = (

@@ -172,17 +172,6 @@ bool DataTypeMap::equals(const IDataType & rhs) const
     return nested->equals(*rhs_map.nested);
 }
 
-bool DataTypeMap::isComparable() const
-{
-    if (isKVMap())
-        return key_type->isComparable() && value_type->isComparable();
-
-    /// always return false in ByteMap to prevent ByteMap type be used as sorting key,
-    /// which may lead to performance issues.
-    /// Order by Map column in select query is always allowed, see ColumnMap::compareAt
-    return false;
-}
-
 bool DataTypeMap::textCanContainOnlyValidUTF8() const
 {
     return key_type->textCanContainOnlyValidUTF8() && value_type->textCanContainOnlyValidUTF8();

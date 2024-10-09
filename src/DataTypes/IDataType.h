@@ -354,6 +354,9 @@ public:
     /// If this is byte map type
     virtual bool isByteMap() const { return false; }
 
+    /// If nested data type is or contains map type
+    virtual bool hasNestedMap() const { return false; }
+
     /// Updates avg_value_size_hint for newly read column. Uses to optimize deserialization. Zero expected for first column.
     static void updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint);
 

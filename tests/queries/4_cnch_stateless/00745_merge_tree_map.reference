@@ -27,7 +27,6 @@ m2	Map(LowCardinality(String), LowCardinality(Nullable(String)))	 KV
 1	['k1']	['k1']
 2	['k2']	['k2']
 3	['k3','k3.1']	['k3','k3.1']
-OK
 1	{'k1':'v1'}	{'k1':'v1'}
 2	{}	{}
 3	{'k3':'v3','k3.1':'v3.1'}	{'k3':'v3','k3.1':'v3.1'}

@@ -1,0 +1,173 @@
+0	{}	{}
+1	\N	{'k1':{}}
+2	{'k1':1}	{'k1':{'kk1':1}}
+mapElement
+\N	\N
+\N	{}
+1	{'kk1':1}
+\N	\N
+\N	\N
+\N	\N
+\N	\N
+\N	{}
+1	{'kk1':1}
+\N	\N
+\N	\N
+\N	\N
+\N	\N
+\N	\N
+\N	\N
+arrayElement
+0	{}
+\N	{}
+1	{'kk1':1}
+0	{}
+\N	{}
+0	{}
+0	{}
+\N	{}
+1	{'kk1':1}
+0	{}
+\N	{}
+0	{}
+\N	\N
+\N	\N
+\N	\N
+cast
+{}	{}	{}
+\N	{'k1':{}}	{'k1':'{}'}
+{'k1':'1'}	{'k1':{'kk1':'1'}}	{'k1':'{\'kk1\':1}'}
+mapKeys
+['k1']	Array(String)
+['k1']	Nullable(Array(String))
+[]	Nullable(Array(String))	[]	Array(String)
+\N	Nullable(Array(String))	['k1']	Array(String)
+['k1']	Nullable(Array(String))	['k1']	Array(String)
+mapValues
+['k2']	Array(String)
+['k2']	Nullable(Array(String))
+[]	Nullable(Array(Int32))	[]	Array(Map(String, Int32))
+\N	Nullable(Array(Int32))	[{}]	Array(Map(String, Int32))
+[1]	Nullable(Array(Int32))	[{'kk1':1}]	Array(Map(String, Int32))
+mapContains
+0	Nullable(UInt8)	0	UInt8
+\N	Nullable(UInt8)	1	UInt8
+1	Nullable(UInt8)	1	UInt8
+0	Nullable(UInt8)	0	UInt8
+\N	Nullable(UInt8)	0	UInt8
+0	Nullable(UInt8)	0	UInt8
+0	Nullable(UInt8)	0	Nullable(UInt8)
+\N	Nullable(UInt8)	1	Nullable(UInt8)
+1	Nullable(UInt8)	1	Nullable(UInt8)
+0	Nullable(UInt8)	0	Nullable(UInt8)
+\N	Nullable(UInt8)	0	Nullable(UInt8)
+0	Nullable(UInt8)	0	Nullable(UInt8)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+mapContainsKeyLike
+0	Nullable(UInt8)	0	UInt8
+\N	Nullable(UInt8)	1	UInt8
+1	Nullable(UInt8)	1	UInt8
+0	Nullable(UInt8)	0	UInt8
+\N	Nullable(UInt8)	1	UInt8
+1	Nullable(UInt8)	1	UInt8
+0	Nullable(UInt8)	0	Nullable(UInt8)
+\N	Nullable(UInt8)	1	Nullable(UInt8)
+1	Nullable(UInt8)	1	Nullable(UInt8)
+0	Nullable(UInt8)	0	Nullable(UInt8)
+\N	Nullable(UInt8)	1	Nullable(UInt8)
+1	Nullable(UInt8)	1	Nullable(UInt8)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+mapExtractKeyLike
+{}	Nullable(Map(String, Int32))	{}	Map(String, Map(String, Int32))
+\N	Nullable(Map(String, Int32))	{'k1':{}}	Map(String, Map(String, Int32))
+{'k1':1}	Nullable(Map(String, Int32))	{'k1':{'kk1':1}}	Map(String, Map(String, Int32))
+{}	Nullable(Map(String, Int32))	{}	Map(String, Map(String, Int32))
+\N	Nullable(Map(String, Int32))	{'k1':{}}	Map(String, Map(String, Int32))
+{'k1':1}	Nullable(Map(String, Int32))	{'k1':{'kk1':1}}	Map(String, Map(String, Int32))
+{}	Nullable(Map(String, Int32))	{}	Nullable(Map(String, Map(String, Int32)))
+\N	Nullable(Map(String, Int32))	{'k1':{}}	Nullable(Map(String, Map(String, Int32)))
+{'k1':1}	Nullable(Map(String, Int32))	{'k1':{'kk1':1}}	Nullable(Map(String, Map(String, Int32)))
+{}	Nullable(Map(String, Int32))	{}	Nullable(Map(String, Map(String, Int32)))
+\N	Nullable(Map(String, Int32))	{'k1':{}}	Nullable(Map(String, Map(String, Int32)))
+{'k1':1}	Nullable(Map(String, Int32))	{'k1':{'kk1':1}}	Nullable(Map(String, Map(String, Int32)))
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+\N	Nullable(Nothing)	\N	Nullable(Nothing)
+mapAdd
+{'k1':3}	Map(String, Int64)
+{'k1':3}	Nullable(Map(String, Int64))
+{'k1':3}	Nullable(Map(String, Int64))
+{'k1':3}	Nullable(Map(String, Int64))
+{'k1':3}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':4}	Nullable(Map(String, Int64))
+{'k1':3}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':4}	Nullable(Map(String, Int64))
+{'k1':3}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':4}	Nullable(Map(String, Int64))
+{'k1':3}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':4}	Nullable(Map(String, Int64))
+mapSubtract
+{'k1':-1}	Map(String, Int64)
+{'k1':-1}	Nullable(Map(String, Int64))
+{'k1':-1}	Nullable(Map(String, Int64))
+{'k1':-1}	Nullable(Map(String, Int64))
+{'k1':-1}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':-2}	Nullable(Map(String, Int64))
+{'k1':-1}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':-2}	Nullable(Map(String, Int64))
+{'k1':-1}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':-2}	Nullable(Map(String, Int64))
+{'k1':-1}	Nullable(Map(String, Int64))
+\N	Nullable(Map(String, Int64))
+{'k1':-2}	Nullable(Map(String, Int64))
+mapApply
+{}	Nullable(Map(String, Int64))	{}	Map(UInt64, Map(String, Int64))
+\N	Nullable(Map(String, Int64))	{2:{'kk1':1}}	Map(UInt64, Map(String, Int64))
+{'k1__k1':2}	Nullable(Map(String, Int64))	{2:{'kk1':2}}	Map(UInt64, Map(String, Int64))
+mapFilter
+{}	Nullable(Map(String, Int32))	{}	Map(String, Map(String, Int32))
+\N	Nullable(Map(String, Int32))	{'k1':{}}	Map(String, Map(String, Int32))
+{'k1':1}	Nullable(Map(String, Int32))	{}	Map(String, Map(String, Int32))
+mapUpdate
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k1':0,'k2':0}	Nullable(Map(String, Int32))
+\N	Nullable(Map(String, Int32))	\N	Nullable(Map(String, Int32))
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k2':0,'k1':1}	Nullable(Map(String, Int32))
+{'k1':{'kk2':0}}	Map(String, Map(String, Int32))	{'k1':{'kk2':0}}	Map(String, Map(String, Int32))
+{'k1':{'kk2':0}}	Map(String, Map(String, Int32))	{'k1':{}}	Map(String, Map(String, Int32))
+{'k1':{'kk2':0}}	Map(String, Map(String, Int32))	{'k1':{'kk1':1}}	Map(String, Map(String, Int32))
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k1':0,'k2':0}	Nullable(Map(String, Int32))
+\N	Nullable(Map(String, Int32))	\N	Nullable(Map(String, Int32))
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k2':0,'k1':1}	Nullable(Map(String, Int32))
+{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))	{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))
+{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))	{'k1':{}}	Nullable(Map(String, Map(String, Int32)))
+{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))	{'k1':{'kk1':1}}	Nullable(Map(String, Map(String, Int32)))
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k1':0,'k2':0}	Nullable(Map(String, Int32))
+\N	Nullable(Map(String, Int32))	\N	Nullable(Map(String, Int32))
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k2':0,'k1':1}	Nullable(Map(String, Int32))
+{'k1':{'kk2':0}}	Map(String, Map(String, Int32))	{'k1':{'kk2':0}}	Map(String, Map(String, Int32))
+{'k1':{'kk2':0}}	Map(String, Map(String, Int32))	{'k1':{}}	Map(String, Map(String, Int32))
+{'k1':{'kk2':0}}	Map(String, Map(String, Int32))	{'k1':{'kk1':1}}	Map(String, Map(String, Int32))
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k1':0,'k2':0}	Nullable(Map(String, Int32))
+\N	Nullable(Map(String, Int32))	\N	Nullable(Map(String, Int32))
+{'k1':0,'k2':0}	Nullable(Map(String, Int32))	{'k2':0,'k1':1}	Nullable(Map(String, Int32))
+{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))	{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))
+{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))	{'k1':{}}	Nullable(Map(String, Map(String, Int32)))
+{'k1':{'kk2':0}}	Nullable(Map(String, Map(String, Int32)))	{'k1':{'kk1':1}}	Nullable(Map(String, Map(String, Int32)))
+0	{}
+1	\N
+2	{2:10,5:20}
+mapPopulateSeries
+{}	Nullable(Map(Int32, Int32))	{}	Nullable(Map(Int32, Int32))
+\N	Nullable(Map(Int32, Int32))	\N	Nullable(Map(Int32, Int32))
+{2:10,3:0,4:0,5:20}	Nullable(Map(Int32, Int32))	{2:10,3:0}	Nullable(Map(Int32, Int32))

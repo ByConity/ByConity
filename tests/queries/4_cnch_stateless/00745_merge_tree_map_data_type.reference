@@ -56,7 +56,7 @@ select getMapKeys :
 ['13fd2f47-4567-4eb8-9e7b-0e17f4c77837','93fd2f47-4567-4eb8-9e7b-0e17f4c77837']
 ['world','foo','hello']
 
-unsupported value types in kv map :
+kv map value types :
 0	{'k1':[('k','v')]}
 1	{'k2':[('k','v')]}
 2	{'k3':[('k','v')]}

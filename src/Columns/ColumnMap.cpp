@@ -206,6 +206,12 @@ void ColumnMap::insert(const Field & x)
     getOffsets().push_back(getOffsets().back() + size);
 }
 
+void ColumnMap::insertFrom(const IColumn & src_, size_t n)
+{
+    const ColumnMap & src = assert_cast<const ColumnMap &>(src_);
+    nested->insertFrom(*src.nested, n);
+}
+
 void ColumnMap::insertDefault()
 {
     nested->insertDefault();

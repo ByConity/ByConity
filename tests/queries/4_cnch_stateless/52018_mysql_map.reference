@@ -1,10 +1,13 @@
 element_at
-v1	v1	Nullable(String)	Nullable(String)
-v1	v1	Nullable(String)	Nullable(String)
-v2	v2	Nullable(String)	Nullable(String)
-v2	v2	Nullable(String)	Nullable(String)
-\N	\N	Nullable(String)	Nullable(String)
-\N	\N	Nullable(String)	Nullable(String)
+\N	\N	\N	\N	Nullable(Nothing)	Nullable(Nothing)	Nullable(Nothing)	Nullable(Nothing)
+\N	\N	\N	\N	Nullable(Nothing)	Nullable(Nothing)	Nullable(Nothing)	Nullable(Nothing)
+\N	\N	\N	\N	Nullable(Nothing)	Nullable(Nothing)	Nullable(Nothing)	Nullable(Nothing)
+v1	v1	v1	{}	Nullable(String)	Nullable(String)	Nullable(String)	Nullable(Map(String, String))
+v1	v1	v1	{'k1':'v1'}	Nullable(String)	Nullable(String)	Nullable(String)	Nullable(Map(String, String))
+\N	\N	\N	\N	Nullable(String)	Nullable(String)	Nullable(String)	Nullable(Map(String, String))
+\N	\N	\N	\N	Nullable(String)	Nullable(String)	Nullable(String)	Nullable(Map(String, String))
+\N	\N	\N	\N	Nullable(String)	Nullable(String)	Nullable(String)	Nullable(Map(String, String))
+\N	\N	\N	\N	Nullable(String)	Nullable(String)	Nullable(String)	Nullable(Map(String, String))
 \N
 \N
 \N
@@ -33,17 +36,20 @@ v2	v2	Nullable(String)	Nullable(String)
 \N	Nullable(UInt8)
 \N	Nullable(UInt8)
 map_keys
-['k1','k2']	['k1','k2']
-['k1','k2']	['k1','k2']
+['k1']	['k1']	['k1']	['k1']
+['k1']	['k1']	['k1']	['k1']
+[]	[]	\N	[]
 []
 \N
 map_values
-['v1','v2']	['v1','v2']
-['v1','v2']	['v1','v2']
+['v1']	['v1']	['v1']	[{}]
+['v1']	['v1']	['v1']	[{'k1':'v1'}]
+[]	[]	\N	[]
 []
 \N
 size
-4	4
-4	4
+2	2	2	2
+2	2	2	2
+0	0	\N	0
 0
 \N

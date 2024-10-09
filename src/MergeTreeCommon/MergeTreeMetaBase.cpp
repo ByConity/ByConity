@@ -1914,7 +1914,7 @@ void MergeTreeMetaBase::checkMetadataValidity(const ColumnsDescription & columns
         /// block implicit key name for MergeTree family
         if (isMapImplicitKey(column.name))
             throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::BAD_ARGUMENTS);
-
+        
         /// Block implicit key name for MergeTree family
         if (column.type && column.type->isMap())
         {
@@ -1955,13 +1955,6 @@ void MergeTreeMetaBase::checkMetadataValidity(const ColumnsDescription & columns
                         backQuoteIfNeed(column.name),
                         backQuoteIfNeed(escape_name),
                         getMapSeparator());
-
-                if (current_settings->enable_compact_map_data && type_map.getValueType()->lowCardinality())
-                    throw Exception(
-                        "Column " + backQuoteIfNeed(column.name)
-                            + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable "
-                              "enable_compact_map_data",
-                        ErrorCodes::BAD_ARGUMENTS);
             }
         }
         else
@@ -1991,6 +1984,14 @@ void MergeTreeMetaBase::checkMetadataValidity(const ColumnsDescription & columns
         if (column.name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
             throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
     }
+}
+
+void MergeTreeMetaBase::checkTypeInComplianceWithRecommendedUsage(const DataTypePtr & type)
+{
+    /// Check kv flags if contains nested map
+    if (!(type->getFlags() & TYPE_MAP_KV_STORE_FLAG) && type->hasNestedMap())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Data type {} contains nested map type but KV flags is not set, use \"{} KV\" instead.",
+            type->getName(), type->getName());
 }
 
 bool MergeTreeMetaBase::commitTxnInWriteSuffixStage(const UInt32 & deup_impl_version, ContextPtr query_context) const
