@@ -7602,7 +7602,7 @@ namespace Catalog
 
         //check schema compatibility and merge part schema
         auto partial_schema = DB::getConcreteObjectColumns(
-            parts.begin(), parts.end(), table->getInMemoryMetadata().columns, [](const auto & part) { return part->getColumns(); });
+            parts.begin(), parts.end(), table->getInMemoryMetadataPtr()->getColumns(), [](const auto & part) { return part->getColumns(); });
 
         // compare with existed schema , check if it need to insert
         // Attention: this comparison will scan existed partial schema from meta store, it may cost too many meta store resource.
@@ -7630,14 +7630,14 @@ namespace Catalog
         auto existed_assembled_schema = DB::getConcreteObjectColumns(
             committed_partial_schema_list.begin(),
             committed_partial_schema_list.end(),
-            cnch_table->getInMemoryMetadata().getColumns(),
+            cnch_table->getInMemoryMetadataPtr()->getColumns(),
             [](const auto & partial_schema_) { return partial_schema_; });
 
         committed_partial_schema_list.emplace_back(partial_schema);
         auto new_assembled_schema = DB::getConcreteObjectColumns(
             committed_partial_schema_list.begin(),
             committed_partial_schema_list.end(),
-            cnch_table->getInMemoryMetadata().getColumns(),
+            cnch_table->getInMemoryMetadataPtr()->getColumns(),
             [](const auto & partial_schema_) { return partial_schema_; });
 
         if (new_assembled_schema != existed_assembled_schema)

@@ -397,7 +397,7 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
         StoragePtr storage = table_scan_step->getStorage();
         if (storage && storage->isBucketTable() && storage->isTableClustered(plan_segment_context.context))
         {
-            auto num_of_buckets = storage->getInMemoryMetadata().getBucketNumberFromClusterByKey();
+            auto num_of_buckets = storage->getInMemoryMetadataPtr()->getBucketNumberFromClusterByKey();
             input->setNumOfBuckets(num_of_buckets);
         }
         return {input};

@@ -1062,7 +1062,7 @@ void StorageMaterializedView::dropInnerTableIfAny(bool, ContextPtr)
             auto & txn_coordinator = getContext()->getCnchTransactionCoordinator();
             auto server_txn = txn_coordinator.createTransaction(CreateTransactionOption().setType(CnchTransactionType::Implicit));
             drop_context->setCurrentTransaction(server_txn);
-        }       
+        }
         InterpreterDropQuery(drop_query, drop_context).execute();
     }
 }
@@ -1116,8 +1116,8 @@ void StorageMaterializedView::alter(
     TableLockHolder &)
 {
     auto table_id = getStorageID();
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
     params.apply(new_metadata, local_context);
 
     /// start modify query

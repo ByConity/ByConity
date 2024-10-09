@@ -1343,8 +1343,8 @@ void checkVersionColumnTypesConversion(const IDataType * old_type, const IDataTy
 void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const
 {
     /// Check that needed transformations can be applied to the list of columns without considering type conversions.
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
 
     const auto & settings = local_context->getSettingsRef();
 
@@ -1524,7 +1524,7 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
 
             dropped_columns.emplace(command.column_name);
         }
-        else if (command.isRequireMutationStage(getInMemoryMetadata()))
+        else if (command.isRequireMutationStage(*getInMemoryMetadataPtr()))
         {
             /// This alter will override data on disk. Let's check that it doesn't
             /// modify immutable column.
@@ -1721,7 +1721,7 @@ void MergeTreeData::changeSettings(
         copy->sanityCheck(getContext()->getSettingsRef());
 
         storage_settings.set(std::move(copy));
-        StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+        StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
         new_metadata.setSettingsChanges(new_settings);
         setInMemoryMetadata(new_metadata);
 

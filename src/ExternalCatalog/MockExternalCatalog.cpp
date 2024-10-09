@@ -57,7 +57,7 @@ DB::StoragePtr MockExternalCatalog::getTable(
             "created mock table {}.{} {}",
             storage_ptr->getStorageID().database_name,
             storage_ptr->getStorageID().table_name,
-            storage_ptr->getInMemoryMetadata().getColumns().toString()));
+            storage_ptr->getInMemoryMetadataPtr()->getColumns().toString()));
     return storage_ptr;
 }
 

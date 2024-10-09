@@ -237,8 +237,8 @@ BlockOutputStreamPtr IStorageCnchFile::writeByLocal(const ASTPtr & /*query*/, co
 void IStorageCnchFile::alter(const AlterCommands & commands, ContextPtr query_context, TableLockHolder & /*table_lock_holder*/)
 {
     auto table_id = getStorageID();
-        StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
 
     TransactionCnchPtr txn = query_context->getCurrentTransaction();
     auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef(), query_context->getCurrentQueryId());

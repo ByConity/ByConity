@@ -211,7 +211,7 @@ BlockIO InterpreterAlterQuery::executeToTable(const ASTAlterQuery & alter)
         /// Make sure cnch table also accquire lock for DDL
         if (!alter_lock)
             alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
-        StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
+        StorageInMemoryMetadata metadata = table->getInMemoryMetadataCopy();
         alter_commands.validate(metadata, getContext());
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());

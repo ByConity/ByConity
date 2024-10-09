@@ -142,7 +142,7 @@ protected:
         : IStorage(getIDFromPart(part_))
         , parts({part_})
     {
-        setInMemoryMetadata(part_->storage.getInMemoryMetadata());
+        setInMemoryMetadata(part_->storage.getInMemoryMetadataCopy());
         delete_bitmaps.insert({part_, without_delete_bitmap ? nullptr : part_->getDeleteBitmap()});
     }
 
@@ -150,7 +150,7 @@ protected:
         : IStorage(getIDFromParts(parts_))
         , parts(std::move(parts_))
     {
-        setInMemoryMetadata(parts.front()->storage.getInMemoryMetadata());
+        setInMemoryMetadata(parts.front()->storage.getInMemoryMetadataCopy());
         for (auto & part : parts)
             delete_bitmaps.insert({part, without_delete_bitmap ? nullptr : part->getDeleteBitmap()});
     }

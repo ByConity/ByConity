@@ -302,8 +302,8 @@ void StorageMergeTree::alter(
     auto table_id = getStorageID();
     auto old_storage_settings = getSettings();
 
-    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
-    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadataCopy();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadataCopy();
     auto maybe_mutation_commands = commands.getMutationCommands(new_metadata, local_context->getSettingsRef().materialize_ttl_after_modify, local_context);
     /// Handle CLEAR COLUMN IN PARTITION WHERE command seperately.
     handleClearColumnInPartitionWhere(maybe_mutation_commands, commands);
