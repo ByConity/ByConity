@@ -117,6 +117,7 @@ public:
     {
         for (const auto & command : *this)
         {
+            /// List all commands which not change schema here.
             if (command.type != MutationCommand::DELETE &&
                 command.type != MutationCommand::UPDATE &&
                 command.type != MutationCommand::FAST_DELETE &&
