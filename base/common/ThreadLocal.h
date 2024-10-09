@@ -102,7 +102,10 @@ template<class T, class I>
 class ThreadLocalManagedBase {
 public:
     ThreadLocalManagedBase() noexcept {
-        bthread_key_create(&key, [](void *obj) { delete static_cast<T *>(obj); });
+        bthread_key_create(&key, [](void * obj) {
+            static_cast<T *>(obj)->~T();
+            free(obj);
+        });
     }
 
     ~ThreadLocalManagedBase() noexcept { bthread_key_delete(key); }
@@ -127,10 +130,4 @@ public:
 
 private:
     bthread_key_t key;
-};
-
-template<class T>
-class ThreadLocalManaged : public ThreadLocalManagedBase<T, ThreadLocalManaged<T>> {
-public:
-    static void *create() { return new T(); }
 };

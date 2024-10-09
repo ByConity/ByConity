@@ -209,7 +209,7 @@ void MemoryTracker::allocImpl(Int64 size, bool throw_if_memory_exceeded)
 #endif
 
     std::bernoulli_distribution fault(fault_probability);
-    if (unlikely(fault_probability && fault(thread_local_rng)) && memoryTrackerCanThrow(level, true) && throw_if_memory_exceeded)
+    if (unlikely(fault_probability && fault(thread_local_rng)) && throw_if_memory_exceeded && memoryTrackerCanThrow(level, true))
     {
         ProfileEvents::increment(ProfileEvents::QueryMemoryLimitExceeded);
         amount.fetch_sub(size, std::memory_order_relaxed);
@@ -248,7 +248,7 @@ void MemoryTracker::allocImpl(Int64 size, bool throw_if_memory_exceeded)
         DB::TraceCollector::collect(DB::TraceType::MemorySample, StackTrace(), size);
     }
 
-    if (unlikely(current_hard_limit && will_be > current_hard_limit) && memoryTrackerCanThrow(level, false) && throw_if_memory_exceeded)
+    if (unlikely(current_hard_limit && will_be > current_hard_limit) && throw_if_memory_exceeded && memoryTrackerCanThrow(level, false))
     {
         /// Prevent recursion. Exception::ctor -> std::string -> new[] -> MemoryTracker::alloc
         BlockerInThread untrack_lock(VariableContext::Global);
