@@ -77,10 +77,7 @@
 #include <Common/LocalFilePathMatcher.h>
 #include <Common/S3FilePathMatcher.h>
 #include <Common/checkStackSize.h>
-#include "Interpreters/Context_fwd.h"
-#include <Databases/DatabasesCommon.h>
-#include <CloudServices/CnchWorkerResource.h>
-#include <CloudServices/CnchCreateQueryHelper.h>
+#include <Interpreters/Context_fwd.h>
 
 
 namespace DB
