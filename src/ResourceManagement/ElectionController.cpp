@@ -21,7 +21,6 @@
 #include <ResourceManagement/ResourceTracker.h>
 #include <ResourceManagement/VirtualWarehouseManager.h>
 #include <ResourceManagement/WorkerGroupManager.h>
-#include <ResourceManagement/WorkerGroupResourceCoordinator.h>
 
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Storages/PartCacheManager.h>
@@ -92,9 +91,6 @@ bool ElectionController::onLeader()
         return false;
     }
 
-    auto & coordinator = rm_controller.getWorkerGroupResourceCoordinator();
-    coordinator.setMode(getContext()->getRootConfig().resource_manager.resource_coordinate_mode);
-    coordinator.start();
     LOG_INFO(log, "Current RM node {} has become leader.", current_address);
     return true;
 }
@@ -135,7 +131,6 @@ bool ElectionController::pullState()
 
 void ElectionController::shutDown()
 {
-    rm_controller.getWorkerGroupResourceCoordinator().stop();
 }
 
 }
