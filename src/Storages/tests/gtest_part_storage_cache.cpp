@@ -813,6 +813,7 @@ TEST_F(CacheManagerTest, ConcurrentlyInsertNewCache) {
             lock = (*it)->getPartitionLock();
         }
 
+        std::mutex m;
 
         std::thread t1([&]() {
             cache_manager->mayUpdateTableMeta(*storage, topology_version_2);
@@ -821,6 +822,7 @@ TEST_F(CacheManagerTest, ConcurrentlyInsertNewCache) {
                 = entry->partitions.emplace("1001", std::make_shared<CnchPartitionInfo>(storage_uuid, nullptr, "1001", lock)).first;
             auto load_func = [&](const Strings &, const Strings &) -> DataModelPartWrapperVector {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::unique_lock<std::mutex> l(m);
                 return parts_models;
             };
             cache_manager->getOrSetServerDataPartsInPartitions(*storage, {"1001"}, load_func, TxnTimestamp::maxTS(), topology_version_2);
@@ -828,6 +830,14 @@ TEST_F(CacheManagerTest, ConcurrentlyInsertNewCache) {
 
         std::thread t2([&]() {
             cache_manager->mayUpdateTableMeta(*storage, topology_version_2);
+            {
+                /// Commit to KV.
+                std::unique_lock<std::mutex> l(m);
+                for (std::shared_ptr<DB::DataModelPartWrapper> & part : parts_models)
+                {
+                    part->part_model->set_commit_time(9999);
+                }
+            }
             cache_manager->insertDataPartsIntoCache(*storage, parts_models_with_commit_time.parts(), false, false, topology_version_2);
         });
 
