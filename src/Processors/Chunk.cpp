@@ -22,6 +22,7 @@
 #include <Processors/Chunk.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
+#include <Columns/ColumnConst.h>
 
 namespace DB
 {
@@ -275,4 +276,17 @@ void Chunk::setOwnerInfo(OwnerInfo owner_info_)
 {
     owner_info = std::move(owner_info_);
 }
+
+Chunk cloneConstWithDefault(const Chunk & chunk, size_t num_rows)
+{
+    auto columns = chunk.cloneEmptyColumns();
+    for (auto & column : columns)
+    {
+        column->insertDefault();
+        column = ColumnConst::create(std::move(column), num_rows);
+    }
+
+    return Chunk(std::move(columns), num_rows);
+}
+
 }

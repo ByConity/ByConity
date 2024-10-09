@@ -199,4 +199,7 @@ private:
     RowsMaskByColumnId rows_mask_by_column_id;
 };
 
+/// Creates a chunk with the same columns but makes them constants with a default value and a specified number of rows.
+Chunk cloneConstWithDefault(const Chunk & chunk, size_t num_rows);
+
 }

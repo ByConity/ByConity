@@ -65,12 +65,9 @@ void ParallelDecodingBlockInputFormat::setQueryInfo(const SelectQueryInfo & quer
                 getPort().getHeader().getColumnsWithTypeAndName())));
 }
 
-void ParallelDecodingBlockInputFormat::initializeIfNeeded()
+void ParallelDecodingBlockInputFormat::initializeFileReaderIfNeeded()
 {
     if (std::exchange(is_initialized, true))
-        return;
-
-    if (is_stopped)
         return;
 
     initializeFileReader();
@@ -219,9 +216,26 @@ void ParallelDecodingBlockInputFormat::scheduleMoreWorkIfNeeded(std::optional<si
 
 Chunk ParallelDecodingBlockInputFormat::generate()
 {
-    initializeIfNeeded();
+    initializeFileReaderIfNeeded();
 
     std::unique_lock lock(mutex);
+
+    if (is_stopped || row_groups_completed == row_groups.size())
+        return {};
+
+    if (need_only_count)
+    {
+        /// We should not return single chunk with all number of rows,
+        /// because there is a chance that this chunk will be materialized later
+        /// (it can cause memory problems even with default values in columns or when virtual columns are requested).
+        /// Instead, we use special ConstChunkGenerator that will generate chunks
+        /// with max_block_size rows until total number of rows is reached.
+        size_t row_count = getRowCount();
+        if (!const_chunk_source)
+            const_chunk_source.emplace(getPort().getHeader(), row_count, format_settings.parquet.max_block_size);
+
+        return const_chunk_source->generate();
+    }
 
     while (true)
     {

@@ -2112,6 +2112,10 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         if (!query.prewhere() && !query.where() && !query_info.partition_filter && atomic_predicates_expr.empty())
         {
+            /// Some storages can optimize trivial count in read() method instead of totalRows() because it still can
+            /// require reading some data (but much faster than reading columns).
+            /// Set a special flag in query info so the storage will see it and optimize count in read() method.
+            query_info.optimize_trivial_count = true;
             num_rows = storage->totalRows(context);
         }
         else // It's possible to optimize count() given only partition predicates
@@ -2124,6 +2128,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 temp_query_info.partition_filter = query_info.partition_filter->clone();
             temp_query_info.atomic_predicates_expr = atomic_predicates_expr;
 
+            query_info.optimize_trivial_count = true; /// see comment above
             num_rows = storage->totalRowsByPartitionPredicate(temp_query_info, context);
         }
 
