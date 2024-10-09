@@ -59,6 +59,7 @@ using WorkerNodes = std::vector<WorkerNode>;
 
 struct ClusterNodes
 {
+    ClusterNodes() = default;
     explicit ClusterNodes(ContextPtr & query_context)
     {
         // Pick workers per policy.
@@ -70,6 +71,8 @@ struct ClusterNodes
         const auto & worker_group = query_context->tryGetCurrentWorkerGroup();
         if (worker_group)
         {
+            vw_name = worker_group->getVWName();
+            worker_group_id = worker_group->getID();
             for (size_t i = 0; i < rank_worker_ids.size(); i++)
             {
                 const auto & worker_endpoint = worker_group->getHostWithPortsVec()[i];
@@ -79,6 +82,8 @@ struct ClusterNodes
             }
         }
     }
+    String vw_name;
+    String worker_group_id;
     std::vector<size_t> rank_worker_ids;
     std::vector<WorkerNode> all_workers;
     HostWithPortsVec all_hosts;

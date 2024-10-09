@@ -137,40 +137,6 @@ PlanSegmentPtr MockPlanSegment(ContextPtr context)
     return plan_segment;
 }
 
-void MockSendPlanSegment(ContextPtr query_context)
-{
-    auto plan_segment = MockPlanSegment(query_context);
-
-    auto cluster = query_context->getCluster("test_shard_localhost");
-
-    /**
-     * only get the current node
-     */
-    auto node = cluster->getShardsAddresses().back()[0];
-
-    auto connection = std::make_shared<Connection>(
-                    node.host_name, node.port, node.default_database,
-                    node.user, node.password, node.cluster, node.cluster_secret,
-                    "MockSendPlanSegment", node.compression, node.secure);
-
-    const auto & settings = query_context->getSettingsRef();
-    auto connection_timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
-    connection->sendPlanSegment(connection_timeouts, plan_segment.get(), &settings, &query_context->getClientInfo());
-    connection->poll(1000);
-    Packet packet = connection->receivePacket();
-    LOG_TRACE(getLogger("MockSendPlanSegment"), "sendPlanSegmentToLocal finish:" + std::to_string(packet.type));
-    switch (packet.type)
-    {
-        case Protocol::Server::Exception:
-            throw *packet.exception;
-        case Protocol::Server::EndOfStream:
-            break;
-        default:
-            throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
-    }
-    connection->disconnect();
-}
-
 void checkPlan(PlanSegment * lhs, PlanSegment * rhs)
 {
     auto lhs_str = lhs->toString();

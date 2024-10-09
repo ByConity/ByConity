@@ -685,14 +685,17 @@ SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_context, 
         std::shared_ptr<Scheduler> scheduler;
         if (query_context->getSettingsRef().bsp_mode)
         {
+            auto bsp_scheduler = std::make_shared<BSPScheduler>(query_id, query_context, dag_graph_ptr);
             std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
-            scheduler
-                = bsp_scheduler_map.emplace(query_id, std::make_shared<BSPScheduler>(query_id, query_context, dag_graph_ptr)).first->second;
+            scheduler = bsp_scheduler_map.emplace(query_id, std::move(bsp_scheduler)).first->second;
         }
         else
         {
             scheduler = std::make_shared<MPPScheduler>(
-                query_id, query_context, dag_graph_ptr, query_context->getSettingsRef().enable_batch_send_plan_segment);
+                query_id,
+                query_context,
+                dag_graph_ptr,
+                query_context->getSettingsRef().enable_batch_send_plan_segment);
         }
         execution_info = scheduler->schedule();
     }
@@ -748,7 +751,9 @@ void SegmentScheduler::workerRestarted(const WorkerId & id, const HostWithPorts 
     std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
     for (auto & iter : bsp_scheduler_map)
     {
-        const auto & [vw_name, wg_name] = iter.second->tryGetWorkerGroupName();
+        const auto & cluster_nodes = iter.second->getClusterNodes();
+        const auto & vw_name = cluster_nodes.vw_name;
+        const auto & wg_name = cluster_nodes.worker_group_id;
         if (!wg_name.empty() && wg_name == id.wg_name && vw_name == id.vw_name)
         {
             iter.second->workerRestarted(id, host_ports, register_time);

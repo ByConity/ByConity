@@ -3,13 +3,17 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <Interpreters/DistributedStages/ExchangeDataTracker.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
 #include <Interpreters/DistributedStages/RuntimeSegmentsStatus.h>
 #include <Interpreters/DistributedStages/ScheduleEvent.h>
 #include <Interpreters/DistributedStages/Scheduler.h>
 #include <Interpreters/DistributedStages/SourceTask.h>
-#include "common/types.h"
 #include <Common/HostWithPorts.h>
+#include <common/types.h>
+#include "Catalog/Catalog.h"
+#include "Interpreters/NodeSelector.h"
+#include "Interpreters/WorkerStatusManager.h"
 
 namespace DB
 {
@@ -53,6 +57,87 @@ class BSPScheduler : public Scheduler
         std::unordered_set<SegmentTaskInstance, SegmentTaskInstance::Hash> no_prefs;
     };
 
+public:
+    BSPScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
+        : BSPScheduler(
+            query_id_,
+            query_context_->getCurrentTransactionID(),
+            query_context_,
+            ClusterNodes(query_context_),
+            dag_graph_ptr_,
+            query_context_->getCnchCatalog(),
+            query_context_->getWorkerStatusManager())
+    {
+    }
+    BSPScheduler(
+        const String & query_id_,
+        size_t query_unique_id_,
+        ContextPtr query_context_,
+        ClusterNodes cluster_nodes_,
+        std::shared_ptr<DAGGraph> dag_graph_ptr_,
+        std::shared_ptr<Catalog::Catalog> catalog_,
+        std::shared_ptr<WorkerStatusManager> worker_status_manager)
+        : Scheduler(query_id_, query_context_, std::move(cluster_nodes_), dag_graph_ptr_)
+        , running_instances(std::make_shared<RunningInstances>(worker_status_manager))
+        , query_unique_id(query_unique_id_)
+        , catalog(catalog_)
+    {
+        ResourceOption option;
+        if (auto bitengine_tables = query_context->getBitEngineTables())
+        {
+            for (const auto & entry : bitengine_tables->underlying_dict_tables)
+            {
+                option.table_ids.emplace(entry.second.cnch_storage_id.uuid);
+                LOG_TRACE(log, "Dict table storage id {}", entry.second.cnch_storage_id.getFullTableName());
+            }
+            for (const auto & entry : bitengine_tables->tables_in_function)
+            {
+                option.table_ids.emplace(entry.second.cnch_storage_id.uuid);
+                LOG_TRACE(log, "Table in function storage id {}", entry.second.cnch_storage_id.getFullTableName());
+            }
+        }
+
+        if (!option.table_ids.empty())
+        {
+            query_context->getCnchServerResource()->setSendMutations(true);
+            query_context->getCnchServerResource()->sendResources(this->query_context, option);
+        }
+    }
+    ~BSPScheduler() override;
+
+    PlanSegmentExecutionInfo schedule() override;
+
+    // We do nothing on task scheduled.
+    void onSegmentScheduled(const SegmentTask & task) override
+    {
+        (void)task;
+    }
+    void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override;
+    void onQueryFinished() override;
+
+    SegmentInstanceStatusUpdateResult
+    segmentInstanceFinished(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
+    void workerRestarted(const WorkerId & id, const HostWithPorts & host_ports, UInt32 register_time);
+    bool getEventToProcess(std::shared_ptr<ScheduleEvent> & event);
+    bool processEvent(const ScheduleEvent & event);
+    bool hasEvent() const;
+    const ClusterNodes & getClusterNodes() const
+    {
+        return cluster_nodes;
+    }
+    size_t getAttemptId(const PlanSegmentInstanceId & instance_id) const
+    {
+        return segment_instance_attempts[instance_id];
+    }
+    const std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> & getFailedSegmentToWorkers()
+    {
+        return failed_segment_to_workers;
+    }
+
+protected:
+    bool addBatchTask(BatchTaskPtr batch_task) override;
+
+private:
     struct RunningInstances
     {
         explicit RunningInstances(std::shared_ptr<WorkerStatusManager> worker_status_manager_)
@@ -94,49 +179,8 @@ class BSPScheduler : public Scheduler
         std::shared_ptr<WorkerStatusManager> worker_status_manager;
     };
 
-public:
-    BSPScheduler(const String & query_id_, ContextPtr query_context_, std::shared_ptr<DAGGraph> dag_graph_ptr_)
-        : Scheduler(query_id_, query_context_, dag_graph_ptr_), running_instances(query_context_->getWorkerStatusManager())
-    {
-        ResourceOption option;
-        if (!option.table_ids.empty())
-        {
-            query_context->getCnchServerResource()->setSendMutations(true);
-            query_context->getCnchServerResource()->sendResources(query_context, option);
-        }
-    }
-
-    PlanSegmentExecutionInfo schedule() override;
-
-    // We do nothing on task scheduled.
-    void onSegmentScheduled(const SegmentTask & task) override
-    {
-        (void)task;
-    }
-    void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override;
-    void onQueryFinished() override;
-
-    SegmentInstanceStatusUpdateResult
-    segmentInstanceFinished(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
-    void workerRestarted(const WorkerId & id, const HostWithPorts & host_ports, UInt32 register_time);
-
-    std::pair<String, String> tryGetWorkerGroupName()
-    {
-        if (auto wg = query_context->tryGetCurrentWorkerGroup(); wg)
-        {
-            return std::make_pair(wg->getVWName(), wg->getID());
-        }
-        return std::make_pair("", "");
-    }
-
-protected:
-    bool addBatchTask(BatchTaskPtr batch_task) override;
-
-private:
     bool postEvent(std::shared_ptr<ScheduleEvent> event);
     bool postHighPriorityEvent(std::shared_ptr<ScheduleEvent> event);
-    bool getEventToProcess(std::shared_ptr<ScheduleEvent> & event);
-
     std::pair<bool, SegmentTaskInstance> getInstanceToSchedule(const AddressInfo & worker);
     void triggerDispatch(const std::vector<WorkerNode> & available_workers);
     void sendResources(PlanSegment * plan_segment_ptr) override;
@@ -150,10 +194,10 @@ private:
     bool isOutdated(const RuntimeSegmentStatus & status);
     bool isTaintNode(size_t task_id, const AddressInfo & worker, TaintLevel & taint_level);
 
-    void handleScheduleBatchTaskEvent(std::shared_ptr<ScheduleEvent> event);
-    void handleTriggerDispatchEvent(std::shared_ptr<ScheduleEvent> event);
-    void handleWorkerRestartedEvent(std::shared_ptr<ScheduleEvent> event);
-    void handleSegmentInstanceFinishedEvent(std::shared_ptr<ScheduleEvent> event);
+    void handleScheduleBatchTaskEvent(const ScheduleEvent& event);
+    void handleTriggerDispatchEvent(const ScheduleEvent& event);
+    void handleWorkerRestartedEvent(const ScheduleEvent& event);
+    void handleSegmentInstanceFinishedEvent(const ScheduleEvent& event);
 
     SegmentInstanceStatusUpdateResult
     onSegmentInstanceFinished(size_t segment_id, UInt64 parallel_index, const RuntimeSegmentStatus & status);
@@ -178,12 +222,12 @@ private:
     // segment id -> nodes running its instance, to avoid instances of same segment to be running on one same worker.
     std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> running_segment_to_workers;
     // nodes -> instances running on it, used to retry them when worker restarted.
-    RunningInstances running_instances;
+    std::shared_ptr<RunningInstances> running_instances;
     // segment id -> nodes failed its instance, used to check if the node was tainted.
     std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> failed_segment_to_workers;
     // segment id -> [segment instance, node]
     std::unordered_map<size_t, std::unordered_map<UInt64, WorkerNode>> segment_parallel_locations;
-    std::unordered_map<PlanSegmentInstanceId, size_t> segment_instance_attempts;
+    mutable std::unordered_map<PlanSegmentInstanceId, size_t> segment_instance_attempts;
 
     PendingTaskIntances pending_task_instances;
     // segment task instance -> <index, total> count in this worker
@@ -191,6 +235,8 @@ private:
     std::unordered_map<SegmentTaskInstance, std::set<Int64>, SegmentTaskInstance::Hash> source_task_buckets;
 
     /// Error reasons which can not be recovered by retry. We need quit right now.
-    std::unordered_set<int> unrecoverable_reasons{ErrorCodes::LOGICAL_ERROR, ErrorCodes::QUERY_WAS_CANCELLED};
+    static std::unordered_set<int> unrecoverable_reasons;
+    size_t query_unique_id = {};
+    std::shared_ptr<Catalog::Catalog> catalog;
 };
 }
