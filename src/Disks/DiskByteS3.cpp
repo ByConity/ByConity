@@ -15,6 +15,7 @@
 
 #include <filesystem>
 #include <Disks/DiskByteS3.h>
+#include <Disks/DiskFactory.h>
 #include <common/logger_useful.h>
 #include <Common/filesystemHelpers.h>
 #include <Common/quoteString.h>
