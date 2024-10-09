@@ -513,7 +513,7 @@ StepAndOutputOrder StepNormalizer::visitTableWriteStep(const TableWriteStep & st
         }
     }
     auto normal_table_write_step
-        = std::make_shared<TableWriteStep>(symbol_mapper.map(step.getInputStreams()[0]), new_target, step.isOutputProfiles());
+        = std::make_shared<TableWriteStep>(symbol_mapper.map(step.getInputStreams()[0]), new_target, step.isOutputProfiles(), "inserted_rows");
 
 
     // replace the input_stream because of reordering

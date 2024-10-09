@@ -626,7 +626,9 @@ BlockIO InterpreterInsertQuery::execute()
                 auto stream = std::move(out_streams.back());
                 out_streams.pop_back();
 
-                return std::make_shared<ProcessorToOutputStream>(std::move(stream));
+                auto res_stream = std::make_shared<ProcessorToOutputStream>(std::move(stream), "inserted_rows");
+                res_stream->setProgressCallback(this->getContext()->getProgressCallback());
+                return res_stream;
             });
         }
         else

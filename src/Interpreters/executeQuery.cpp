@@ -64,6 +64,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
+#include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/Lexer.h>
@@ -2149,6 +2150,13 @@ void executeQuery(
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
 
+            /// for delete/update/insert from mysql, do not return data rows -- Null format
+            auto ast_type = ast->getType();
+            String old_format_name = format_name;
+            if (context->getSettingsRef().insert_select_with_profiles && format_name == "MySQLWire"
+                    && (ast_type == ASTType::ASTInsertQuery || ast_type == ASTType::ASTUpdateQuery || ast_type == ASTType::ASTDeleteQuery || ast->as<ASTUpdateQuery>()))
+                format_name = "Null";
+
             OutfileTargetPtr outfile_target;
             BlockOutputStreamPtr out;
             if (ast_query_with_output && ast_query_with_output->out_file)
@@ -2177,7 +2185,9 @@ void executeQuery(
             };
             streams.in->setProgressCallback(std::move(progress_callback));
 
-            if (set_result_details)
+            /// for update/delete/insert from mysql, do not call set_result_details
+            /// so that the affected_rows can be passed to mysql client by MySqlHandler
+            if (set_result_details && (format_name != "Null" || old_format_name != "MySQLWire"))
                 set_result_details(
                     context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::serverTimezoneInstance().getTimeZone(), streams.coordinator);
 
@@ -2194,6 +2204,13 @@ void executeQuery(
             String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
+            auto ast_type = ast->getType();
+
+            /// for delete/update/insert from mysql, do not return data rows -- Null format
+            String old_format_name = format_name;
+            if (context->getSettingsRef().insert_select_with_profiles && format_name == "MySQLWire"
+                    && (ast_type == ASTType::ASTInsertQuery || ast_type == ASTType::ASTUpdateQuery || ast_type == ASTType::ASTDeleteQuery || ast->as<ASTUpdateQuery>()))
+                format_name = "Null";
 
             OutfileTargetPtr outfile_target;
             std::shared_ptr<WriteBuffer> out_buf;
@@ -2234,7 +2251,9 @@ void executeQuery(
                 };
                 pipeline.setProgressCallback(std::move(progress_callback));
 
-                if (set_result_details)
+                /// for update/delete/insert from mysql, do not call set_result_details
+                /// so that the affected_rows can be passed to mysql client by MySqlHandler
+                if (set_result_details && (format_name != "Null" || old_format_name != "MySQLWire"))
                     set_result_details(
                         context->getClientInfo().current_query_id, out->getContentType(), format_name, DateLUT::serverTimezoneInstance().getTimeZone(), streams.coordinator);
 

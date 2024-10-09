@@ -674,7 +674,7 @@ TEST_F(ProtobufTest, TableWriteStep)
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
-        auto s = std::make_shared<TableWriteStep>(base_input_stream, target, false);
+        auto s = std::make_shared<TableWriteStep>(base_input_stream, target, false, "inserted_rows");
         s->setStepDescription(step_description);
         return s;
     }();
