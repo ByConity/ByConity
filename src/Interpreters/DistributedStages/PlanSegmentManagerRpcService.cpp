@@ -499,6 +499,8 @@ void PlanSegmentManagerRpcService::executePlanSegment(
             if (!process_plan_segment_entry)
                 process_plan_segment_entry = query_context->getPlanSegmentProcessList().insertGroup(query_context, segment_id);
 
+            process_plan_segment_entry->prepareQueryScope(query_context);
+
             /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
             butil::IOBufAsZeroCopyInputStream plansegment_buf_wrapper(*plan_segment_buf);
             Protos::PlanSegment plan_segment_proto;

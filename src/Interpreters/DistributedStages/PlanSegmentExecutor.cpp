@@ -249,7 +249,7 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
         throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
 
     res.plan_segment_process_entry = context->getPlanSegmentProcessList().insertGroup(context, plan_segment->getPlanSegmentId());
-    context->getPlanSegmentProcessList().insertProcessList(res.plan_segment_process_entry, *plan_segment, context);
+    context->getPlanSegmentProcessList().insertProcessList(res.plan_segment_process_entry, plan_segment->getPlanSegmentId(), context);
 
     // set entry before buildPipeline to control memory usage of exchange queue
     context->setPlanSegmentProcessListEntry(res.plan_segment_process_entry);
@@ -348,7 +348,7 @@ void PlanSegmentExecutor::doExecute()
             collectSegmentQueryRuntimeMetric(process_plan_segment_entry->getQueryStatus().get());
     });
 
-    context->getPlanSegmentProcessList().insertProcessList(process_plan_segment_entry, *plan_segment, context);
+    context->getPlanSegmentProcessList().insertProcessList(process_plan_segment_entry, plan_segment->getPlanSegmentId(), context);
     context->setPlanSegmentProcessListEntry(process_plan_segment_entry);
 
     if (context->getSettingsRef().bsp_mode)
