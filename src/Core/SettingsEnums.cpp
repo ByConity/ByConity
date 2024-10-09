@@ -249,7 +249,18 @@ IMPLEMENT_SETTING_ENUM(ShortCircuitFunctionEvaluation, ErrorCodes::BAD_ARGUMENTS
 IMPLEMENT_SETTING_ENUM(
     DedupKeyMode,
     ErrorCodes::BAD_ARGUMENTS,
-    {{"replace", DedupKeyMode::REPLACE}, {"append", DedupKeyMode::APPEND}, {"throw", DedupKeyMode::THROW}, {"ignore", DedupKeyMode::IGNORE}})
+    {{"replace", DedupKeyMode::REPLACE},
+     {"append", DedupKeyMode::APPEND},
+     {"throw", DedupKeyMode::THROW},
+     {"ignore", DedupKeyMode::IGNORE}})
+
+IMPLEMENT_SETTING_ENUM(
+    DedupPickWorkerAlgo,
+    ErrorCodes::BAD_ARGUMENTS,
+    {{"random", DedupPickWorkerAlgo::RANDOM},
+     {"pick_first", DedupPickWorkerAlgo::PICK_FIRST},
+     {"sequential", DedupPickWorkerAlgo::SEQUENTIAL},
+     {"consistent_hash", DedupPickWorkerAlgo::CONSISTENT_HASH}})
 
 IMPLEMENT_SETTING_ENUM(
     DedupImplVersion,

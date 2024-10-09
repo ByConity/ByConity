@@ -221,8 +221,4 @@ void assertCompatibleHeader(const Block & actual, const Block & desired, const s
 void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out_lhs_diff, std::string & out_rhs_diff);
 
 Block concatenateBlocks(const std::vector<Block> & blocks);
-
-/// For partial update, generate a fake block as a backup when there is no row for a particular _part_id_.
-/// The fake block uses the first line of the src_block.
-Block generateFakeBlock(const Block & src_block);
 }

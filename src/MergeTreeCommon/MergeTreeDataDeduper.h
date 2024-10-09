@@ -104,7 +104,14 @@ private:
 
     /// Handling the case when new parts have partial update parts.
     /// Differentiate into different sub-iterations according to the type of part(normal_parts or partial_update_parts)
-    DeleteBitmapVector processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task);
+    DeleteBitmapVector processDedupSubTaskInPartialUpdateMode(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts, DedupTaskPtr & dedup_task, std::vector<bool> & need_dump_bitmap);
+
+    /// For partial update mode: Restore block from new parts
+    std::vector<Block> restoreBlockFromNewParts(
+        const IMergeTreeDataPartsVector & current_dedup_new_parts,
+        const DedupTaskPtr & dedup_task,
+        bool & optimize_for_same_update_columns,
+        NameSet & same_update_column_set);
 
     /// For partial update mode: Remove duplicate keys in block and get replace info.
     size_t removeDupKeysInPartialUpdateMode(
@@ -121,7 +128,10 @@ private:
 
     /// For partial update mode: read data from part.
     void readColumnsFromStorage(const IMergeTreeDataPartPtr & part, RowidPairs & rowid_pairs,
-        Block & to_block, PaddedPODArray<UInt32> & to_block_rowids);
+        Block & to_block, PaddedPODArray<UInt32> & to_block_rowids, const DedupTaskPtr & dedup_task);
+
+    void readColumnsFromStorageParallel(const IMergeTreeDataPartPtr & part, const RowidPairs & rowid_pairs,
+        Block & to_block, PaddedPODArray<UInt32> & to_block_rowids, const DedupTaskPtr & dedup_task);
 
     /// For partial update mode: replace data in block.
     void replaceColumnsAndFilterData(
@@ -132,7 +142,10 @@ private:
         PaddedPODArray<UInt32> & block_rowids,
         PaddedPODArray<UInt32> & replace_dst_indexes,
         PaddedPODArray<UInt32> & replace_src_indexes,
-        const IMergeTreeDataPartsVector & current_dedup_new_parts);
+        const IMergeTreeDataPartsVector & current_dedup_new_parts,
+        const DedupTaskPtr & dedup_task,
+        const bool & optimize_for_same_update_columns,
+        const NameSet & same_update_column_set);
 
     /// For partial update mode: parse update columns & fill default filter
     void parseUpdateColumns(
@@ -145,10 +158,8 @@ private:
     /// For partial update mode: generate & commit partial part with data and unique index.
     IMergeTreeDataPartsVector generateAndCommitPartialPartInPartialUpdateMode(
         Block & block,
-        Block & fake_block,
         const IMergeTreeDataPartsVector & new_parts,
-        DeleteCallback delete_cb,
-        TxnTimestamp txn_id);
+        const DedupTaskPtr & dedup_task);
 
     DeleteBitmapVector repairImpl(const IMergeTreeDataPartsVector & parts);
 
@@ -179,7 +190,8 @@ private:
         const IMergeTreeDataPartsVector & new_parts,
         const DeleteBitmapVector & bitmaps,
         TxnTimestamp txn_id,
-        LocalDeleteBitmaps & res);
+        LocalDeleteBitmaps & res,
+        const std::vector<bool> & need_dump_bitmap);
 
     DeleteBitmapVector generateNextIterationBitmaps(
         const IMergeTreeDataPartsVector & visible_parts,

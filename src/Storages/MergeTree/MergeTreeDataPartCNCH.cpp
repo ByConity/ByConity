@@ -783,12 +783,7 @@ ColumnPtr MergeTreeDataPartCNCH::loadDedupSort() const
     /// Load dedup sort from remote disk
     auto checksums = getChecksums();
     if (!checksums->has("_dedup_sort_"))
-    {
-        auto res = ColumnUInt64::create();
-        for (size_t i = 0; i < rows_count; i++)
-            res->insertValue(i);
-        return res;
-    }
+        return nullptr;
 
     auto [file_offset, file_size] = getFileOffsetAndSize(*this, "_dedup_sort_");
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;

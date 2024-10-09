@@ -436,12 +436,14 @@ bool ColumnMap::replaceRow(
 
     const auto & rhs_map_column = static_cast<const ColumnMap &>(rhs);
     RowValue row;
-    mergeRowValue(row, current_pos);
+    if (is_default_filter && !(*is_default_filter)[current_pos])
+        mergeRowValue(row, current_pos);
     while (first_part_pos < indexes.size() && indexes[first_part_pos] == current_pos)
     {
         if (rhs_indexes[first_part_pos] >= size())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "rhs_index {} is out of this column size {}", rhs_indexes[first_part_pos], size());
-        mergeRowValue(row, rhs_indexes[first_part_pos]);
+        if (is_default_filter && !(*is_default_filter)[rhs_indexes[first_part_pos]])
+            mergeRowValue(row, rhs_indexes[first_part_pos]);
         first_part_pos++;
     }
     if (second_part_pos < indexes.size() && indexes[second_part_pos] - size() == current_pos)

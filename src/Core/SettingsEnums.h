@@ -416,6 +416,16 @@ enum class DedupImplVersion : int8_t
 
 DECLARE_SETTING_ENUM(DedupImplVersion)
 
+enum class DedupPickWorkerAlgo
+{
+    RANDOM,
+    PICK_FIRST,
+    SEQUENTIAL,
+    CONSISTENT_HASH,
+};
+
+DECLARE_SETTING_ENUM(DedupPickWorkerAlgo);
+
 enum class RefreshViewTaskStatus : int8_t
 {
     START = 1,

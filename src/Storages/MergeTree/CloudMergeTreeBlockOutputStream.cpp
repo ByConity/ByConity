@@ -619,6 +619,7 @@ CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::ded
         return FilterInfo{};
 
     /// TODO: remove invalid update rows with version
+    /// TODO: optimize partial update to normal upsert if simplify_update_columns are all equal to "" and not filtered
     if (dedup_parameters.enable_partial_update)
     {
         CnchDedupHelper::simplifyFunctionColumns(storage, metadata_snapshot, const_cast<Block &>(block));
