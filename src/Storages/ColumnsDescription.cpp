@@ -56,6 +56,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/ExpressionActions.h>
 
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -939,4 +940,22 @@ bool ColumnsDescription::isBitEngineKeyStringColumn(const String & column_name) 
     return false;
 }
 
+String ColumnsDescription::toDebugString() const
+{
+    WriteBufferFromOwnString buf;
+
+    DB::writeText(columns.size(), buf);
+    writeCString(" columns:\n", buf);
+
+    for (const ColumnDescription & column : columns)
+        column.writeText(buf);
+
+    DB::writeText(subcolumns.size(), buf);
+    writeCString(" subcolumns:\n", buf);
+
+    for (const auto & subcolumn : subcolumns)
+        writeString(fmt::format("{} {}\n", subcolumn.name, subcolumn.type->getName()), buf);
+
+    return buf.str();
+}
 }
