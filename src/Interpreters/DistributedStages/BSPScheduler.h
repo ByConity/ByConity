@@ -1,5 +1,6 @@
 #include <atomic>
 #include <cstddef>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -226,7 +227,7 @@ private:
     // segment id -> nodes failed its instance, used to check if the node was tainted.
     std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> failed_segment_to_workers;
     // segment id -> [segment instance, node]
-    std::unordered_map<size_t, std::unordered_map<UInt64, WorkerNode>> segment_parallel_locations;
+    std::unordered_map<size_t, std::unordered_map<UInt64, std::optional<WorkerNode>>> segment_parallel_locations;
     mutable std::unordered_map<PlanSegmentInstanceId, size_t> segment_instance_attempts;
 
     PendingTaskIntances pending_task_instances;

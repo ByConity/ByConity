@@ -277,7 +277,13 @@ BSPScheduler::onSegmentInstanceFinished(size_t segment_id, UInt64 parallel_index
         WorkerNode running_worker;
         {
             std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            running_worker = segment_parallel_locations[segment_id][parallel_index];
+            auto running_worker_maybe = segment_parallel_locations[segment_id][parallel_index];
+            if (!running_worker_maybe.has_value())
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    fmt::format(
+                        "Segment {} parallel {} hasn't run yet, this is a erroreous segment status message", segment_id, parallel_index));
+            running_worker = running_worker_maybe.value();
             running_segment_to_workers[segment_id].erase(running_worker.address);
             running_instances->erase(running_worker.address, instance_id);
         }
@@ -309,10 +315,15 @@ BSPScheduler::onSegmentInstanceFinished(size_t segment_id, UInt64 parallel_index
         {
             /// if a task has failed in a node, we wont schedule this segment to it anymore
             std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
-            auto worker = segment_parallel_locations[segment_id][parallel_index].address;
-            running_segment_to_workers[segment_id].erase(worker);
-            running_instances->erase(worker, instance_id);
-            failed_segment_to_workers[segment_id].insert(worker);
+            auto worker_maybe = segment_parallel_locations[segment_id][parallel_index];
+            if (!worker_maybe.has_value())
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    fmt::format(
+                        "Segment {} parallel {} hasn't run yet, this is a erroreous segment status message", segment_id, parallel_index));
+            running_segment_to_workers[segment_id].erase(worker_maybe.value().address);
+            running_instances->erase(worker_maybe.value().address, instance_id);
+            failed_segment_to_workers[segment_id].insert(worker_maybe.value().address);
         }
         bool retry_success = retryTaskIfPossible(segment_id, parallel_index, status);
         return retry_success ? SegmentInstanceStatusUpdateResult::RetrySuccess : SegmentInstanceStatusUpdateResult::RetryFailed;
@@ -335,7 +346,13 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
         attempt_id = segment_instance_attempts[instance_id];
         if (attempt_id >= query_context->getSettingsRef().bsp_max_retry_num)
             return false;
-        rpc_address = extractExchangeHostPort(segment_parallel_locations[instance_id.segment_id][instance_id.parallel_index].address);
+        auto running_worker_maybe = segment_parallel_locations[segment_id][parallel_index];
+        if (!running_worker_maybe.has_value())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                fmt::format(
+                    "Segment {} parallel {} hasn't run yet, this is a erroreous segment status message", segment_id, parallel_index));
+        rpc_address = extractExchangeHostPort(running_worker_maybe.value().address);
     }
 
     /// currently disable retry for TableFinish
@@ -390,10 +407,15 @@ bool BSPScheduler::retryTaskIfPossible(size_t segment_id, UInt64 parallel_index,
             // in case all workers except servers are occupied, simply retry at last node
             failed_segment_to_workers[segment_id].size() == cluster_nodes.all_workers.size())
         {
-            auto available_worker = segment_parallel_locations[segment_id][parallel_index];
-            pending_task_instances.for_nodes[available_worker.address].insert({segment_id, parallel_index});
+            auto available_worker_maybe = segment_parallel_locations[segment_id][parallel_index];
+            if (!available_worker_maybe.has_value())
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    fmt::format(
+                        "Segment {} parallel {} hasn't run yet, this is a erroreous segment status message", segment_id, parallel_index));
+            pending_task_instances.for_nodes[available_worker_maybe.value().address].insert({segment_id, parallel_index});
             lk.unlock();
-            std::vector<WorkerNode> workers{available_worker};
+            std::vector<WorkerNode> workers{available_worker_maybe.value()};
             postEvent(std::make_shared<TriggerDispatchEvent>(workers));
         }
         else
