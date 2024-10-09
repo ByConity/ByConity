@@ -1458,7 +1458,14 @@ void CnchServerServiceImpl::redirectAttachDetachedS3Parts(
                         bitmaps.emplace_back(createFromModel(*to_cnch, bitmap_model));
 
                     global_context->getCnchCatalog()->attachDetachedParts(
-                        from_table, to_table, detached_part_names, commit_parts, commit_staged_parts, detached_bitmaps, bitmaps);
+                        from_table,
+                        to_table,
+                        detached_part_names,
+                        commit_parts,
+                        commit_staged_parts,
+                        detached_bitmaps,
+                        bitmaps,
+                        request->has_txn_id() ? request->txn_id() : 0);
                     break;
                 }
                 case Protos::DetachAttachType::ATTACH_DETACHED_RAW:
@@ -1546,7 +1553,15 @@ void CnchServerServiceImpl::redirectDetachAttachedS3Parts(
                     for (auto & bitmap_model : request->bitmaps())
                         bitmaps.emplace_back(createFromModel(*to_cnch, bitmap_model));
 
-                    global_context->getCnchCatalog()->detachAttachedParts(from_table, to_table, attached_parts, attached_staged_parts, commit_parts, attached_bitmaps, bitmaps);
+                    global_context->getCnchCatalog()->detachAttachedParts(
+                        from_table,
+                        to_table,
+                        attached_parts,
+                        attached_staged_parts,
+                        commit_parts,
+                        attached_bitmaps,
+                        bitmaps,
+                        request->has_txn_id() ? request->txn_id() : 0);
                     break;
                 }
                 case Protos::DetachAttachType::DETACH_ATTACHED_RAW:

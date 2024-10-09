@@ -718,30 +718,36 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
 
     for (const auto & staged_part : staged_parts)
     {
-        // new part that shares the data file with the staged part
-        Protos::DataModelPart new_part_model;
-        fillPartModel(storage, *staged_part, new_part_model);
-        new_part_model.mutable_part_info()->set_mutation(txn_id);
-        new_part_model.set_txnid(txn_id);
-        new_part_model.set_delete_flag(false);
-        new_part_model.set_staging_txn_id(staged_part->info.mutation);
-        // storage may not have part columns info (CloudMergeTree), so set columns/columns_commit_time manually
-        auto new_part = createPartFromModelCommon(storage, new_part_model);
-        /// Attention: commit time has been force set in createPartFromModelCommon method, we must clear commit time here. Otherwise, it will be visible event if the txn rollback.
-        new_part->commit_time = IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME;
-        new_part->setColumnsPtr(std::make_shared<NamesAndTypesList>(staged_part->getColumns()));
-        new_part->columns_commit_time = staged_part->columns_commit_time;
+        UInt64 new_mutation = txn_id;
+        for (IMergeTreeDataPartPtr current_part = staged_part; current_part != nullptr; current_part = current_part->tryGetPreviousPart())
+        {
+            // new part that shares the data file with the staged part
+            Protos::DataModelPart new_part_model;
+            fillPartModel(storage, *current_part, new_part_model);
+            new_part_model.mutable_part_info()->set_mutation(new_mutation--);
+            if (current_part->isPartial())
+                new_part_model.mutable_part_info()->set_hint_mutation(new_mutation);
+            new_part_model.set_txnid(txn_id);
+            new_part_model.set_delete_flag(false);
+            new_part_model.set_staging_txn_id(current_part->info.mutation);
+            // storage may not have part columns info (CloudMergeTree), so set columns/columns_commit_time manually
+            auto new_part = createPartFromModelCommon(storage, new_part_model);
+            /// Attention: commit time has been force set in createPartFromModelCommon method, we must clear commit time here. Otherwise, it will be visible event if the txn rollback.
+            new_part->commit_time = IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME;
+            new_part->setColumnsPtr(std::make_shared<NamesAndTypesList>(current_part->getColumns()));
+            new_part->columns_commit_time = current_part->columns_commit_time;
 
-        /// staged drop part
-        MergeTreePartInfo drop_part_info = staged_part->info.newDropVersion(txn_id, StorageType::HDFS);
-        auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
-            storage, drop_part_info.getPartName(), drop_part_info, staged_part->volume, std::nullopt);
-        drop_part->partition = staged_part->partition;
-        drop_part->bucket_number = staged_part->bucket_number;
-        drop_part->deleted = true;
+            /// staged drop part
+            MergeTreePartInfo drop_part_info = current_part->info.newDropVersion(txn_id, StorageType::HDFS);
+            auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
+                storage, drop_part_info.getPartName(), drop_part_info, current_part->volume, std::nullopt);
+            drop_part->partition = current_part->partition;
+            drop_part->bucket_number = current_part->bucket_number;
+            drop_part->deleted = true;
 
-        items.parts.emplace_back(std::move(new_part));
-        items.staged_parts.emplace_back(std::move(drop_part));
+            items.parts.emplace_back(std::move(new_part));
+            items.staged_parts.emplace_back(std::move(drop_part));
+        }
     }
 
     /// prepare undo resources

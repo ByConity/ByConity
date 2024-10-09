@@ -418,6 +418,7 @@ message RedirectAttachDetachedS3PartsReq {
   repeated DataModelDeleteBitmap bitmaps = 9;
   required uint32 detached_visible_part_size = 10;
   required uint32 detached_staged_part_size = 11;
+  optional uint64 txn_id = 12;
 }
 
 message RedirectAttachDetachedS3PartsResp { optional string exception = 1; }
@@ -435,6 +436,7 @@ message RedirectDetachAttachedS3PartsReq {
   repeated DataModelDeleteBitmap bitmaps = 10;
   repeated DetachMeta detached_part_metas = 11;
   repeated DetachMeta detached_bitmap_metas = 12;
+  optional uint64 txn_id = 13;
 }
 
 message RedirectDetachAttachedS3PartsResp { optional string exception = 1; }

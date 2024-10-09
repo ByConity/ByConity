@@ -142,6 +142,9 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
             /// this part shares the same relative path with the corresponding staged part
             MergeTreePartInfo staged_part_info = part->info;
             staged_part_info.mutation = part->staging_txn_id;
+            /// If it has staging txn id and is a partial part, it must be published in same dedup task which hint mutation version is mutation version - 1, please refer to more detail in CnchAttachProcessor.
+            if (staged_part_info.hint_mutation)
+                staged_part_info.hint_mutation = part->staging_txn_id - 1;
             part->relative_path = staged_part_info.getPartNameWithHintMutation();
         }
     }

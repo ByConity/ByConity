@@ -874,7 +874,8 @@ public:
         const IMergeTreeDataPartsVector & parts,
         const IMergeTreeDataPartsVector & staged_parts,
         const DeleteBitmapMetaPtrVector & detached_bitmaps,
-        const DeleteBitmapMetaPtrVector & bitmaps);
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        const UInt64 & txn_id);
     // Delete parts from `from_tbl` with `attached_parts` and `attached_staged_parts`, write detached part meta to `to_tbl` with parts, if parts is nullptr, skip this write
     // Delete bitmaps from `from_tbl` with `attached_bitmaps`, write detached bitmaps to `to_tbl` with `bitmaps`
     void detachAttachedParts(
@@ -884,7 +885,8 @@ public:
         const IMergeTreeDataPartsVector & attached_staged_parts,
         const IMergeTreeDataPartsVector & parts,
         const DeleteBitmapMetaPtrVector & attached_bitmaps,
-        const DeleteBitmapMetaPtrVector & bitmaps);
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        const UInt64 & txn_id);
     // Rename part's meta for `tbl`, from detached to active
     // Rename delete bitmap's meta for `tbl`, from detached to active
     void attachDetachedPartsRaw(

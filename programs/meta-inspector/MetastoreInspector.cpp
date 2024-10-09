@@ -141,7 +141,7 @@ void dumpMetadata(const std::string & key, const std::string & metadata)
         std::cout << formatDataModel<DB::Protos::DataModelTable>(metadata) << std::endl;
     else if (key.starts_with("TP_"))
         std::cout << formatDataModel<DB::Protos::PartitionMeta>(metadata) << std::endl;
-    else if (key.starts_with("PT_"))
+    else if (key.starts_with("PT_") || key.starts_with("STG_PT_") || key.starts_with("DP_"))
         std::cout << formatDataModel<DB::Protos::DataModelPart>(metadata) << std::endl;
     else if (key.starts_with("DLB_") || key.starts_with("DDLB_"))
         std::cout << formatDataModel<DB::Protos::DataModelDeleteBitmap>(metadata) << std::endl;

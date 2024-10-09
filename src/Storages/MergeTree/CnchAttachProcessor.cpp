@@ -907,7 +907,8 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
             load_pool.scheduleOrThrowOnError([this, part]() {
                 injectFailure(AttachFailurePoint::LOAD_PART);
 
-                part->loadFromFileSystem(true);
+                /// After attach, hint mutation from part name is mismatch with that from file, we can not load hint mutation from file here.
+                part->loadFromFileSystem(false);
             });
         }
     }
@@ -917,7 +918,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
     for (MutableMergeTreeDataPartsCNCHVector& parts : parts_from_sources)
     {
         auto const_parts = fromCNCHPartsVec(parts);
-        parts = toCNCHPartsVec(CnchPartsHelper::calcVisibleParts(const_parts, false));
+        parts = toCNCHPartsVec(CnchPartsHelper::calcVisibleParts(const_parts, false, CnchPartsHelper::getLoggingOption(*query_ctx)));
     }
 
     return parts_from_sources;
@@ -1425,6 +1426,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
     auto remote_disk = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
     DiskType::Type remote_disk_type = remote_disk->getType();
 
+    TxnTimestamp txn_id = query_ctx->getCurrentTransaction()->getTransactionID();
     switch (remote_disk_type)
     {
         case DiskType::Type::ByteHDFS:
@@ -1526,7 +1528,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                 for (auto & part_and_info : parts_and_infos)
                 {
                     worker_pool.scheduleOrThrowOnError(
-                        [&parts_with_history, table_def_hash, is_user_defined_cluster_by_expression, offset, part = part_and_info.first, part_info = part_and_info.second, &remote_disk, this]() {
+                        [&parts_with_history, table_def_hash, is_user_defined_cluster_by_expression, offset, part = part_and_info.first, part_info = part_and_info.second, &remote_disk, &txn_id, this]() {
                             String part_name = part_info.getPartNameWithHintMutation();
                             String tbl_rel_path = target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN);
                             String target_path = std::filesystem::path(tbl_rel_path) / part_name / "";
@@ -1582,7 +1584,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             }
 
                             Protos::DataModelPart part_model;
-                            fillPartModel(target_tbl, *part, part_model, true);
+                            fillPartModel(target_tbl, *part, part_model, true, txn_id);
                             // Assign new part info
                             auto part_info_model = part_model.mutable_part_info();
                             part_info_model->set_partition_id(part_info.partition_id);
@@ -1617,7 +1619,6 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
         case DiskType::Type::ByteS3:
         {
             UndoResources undo_resources;
-            TxnTimestamp txn_id = query_ctx->getCurrentTransaction()->getTransactionID();
 
             size_t offset = 0;
             UInt64 table_def_hash = target_tbl.getTableHashForClusterBy().getDeterminHash();
@@ -1652,7 +1653,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             // Write part's origin meta into undo buffer, so when we rollback
                             // we can revert changes like part's column commit time
                             Protos::DataModelPart origin_part_model;
-                            fillPartModel(*from_storage, *part, origin_part_model);
+                            fillPartModel(*from_storage, *part, origin_part_model, false, txn_id);
                             undo_resources.emplace_back(txn_id, UndoResourceType::S3AttachPart,
                                 from_storage_uuid, part->info.getPartNameWithHintMutation(), part->info.getPartName(),
                                 origin_part_model.SerializeAsString(), part_info.getPartName());
@@ -1665,7 +1666,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                     }
 
                     Protos::DataModelPart part_model;
-                    fillPartModel(target_tbl, *part, part_model, true);
+                    fillPartModel(target_tbl, *part, part_model, true, txn_id);
                     // Assign new part info
                     auto part_info_model = part_model.mutable_part_info();
                     part_info_model->set_partition_id(part_info.partition_id);

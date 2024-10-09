@@ -21,3 +21,9 @@ part chain detach/attach
 1
 1
 1
+
+part chain detach/attach for unique table
+11	2024-08-14	1	10
+11	2024-08-14	2	20
+11	2024-08-14	2	20
+11	2024-08-14	2	20

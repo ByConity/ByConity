@@ -1013,6 +1013,8 @@ IndexFile::RemoteFileInfo MergeTreeDataPartCNCH::getRemoteFileInfo()
     IMergeTreeDataPartPtr uki_index_part = shared_from_this();
     while (uki_index_part && uki_index_part->isPartial() && uki_index_part->partial_update_state != PartialUpdateState::RWProcessFinished)
         uki_index_part = uki_index_part->tryGetPreviousPart();
+    if (!uki_index_part)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique key index part {} is nullptr", name);
 
     String data_path = uki_index_part->getFullPath() + "/data";
     off_t offset = 0;

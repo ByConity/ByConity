@@ -118,7 +118,8 @@ public:
         const Strings & detached_bitmap_names,
         const DeleteBitmapMetaPtrVector & detached_bitmaps,
         const DeleteBitmapMetaPtrVector & bitmaps,
-        const DB::Protos::DetachAttachType & type);
+        const DB::Protos::DetachAttachType & type,
+        const UInt64 & txn_id);
 
     void redirectDetachAttachedS3Parts(
         const StoragePtr & to_table,
@@ -133,7 +134,8 @@ public:
         const DeleteBitmapMetaPtrVector & bitmaps,
         const std::vector<std::pair<String, String>> & detached_part_metas,
         const std::vector<std::pair<String, String>> & detached_bitmap_metas,
-        const DB::Protos::DetachAttachType & type);
+        const DB::Protos::DetachAttachType & type,
+        const UInt64 & txn_id);
 
     UInt32 commitParts(
         const TxnTimestamp & txn_id,

@@ -401,18 +401,19 @@ void CnchServerClient::redirectSetCommitTime(
 }
 
 void CnchServerClient::redirectAttachDetachedS3Parts(
-        const StoragePtr & to_table,
-        const UUID & from_table_uuid,
-        const UUID & to_table_uuid,
-        const IMergeTreeDataPartsVector & commit_parts,
-        const IMergeTreeDataPartsVector & commit_staged_parts,
-        const Strings & detached_part_names,
-        size_t detached_visible_part_size,
-        size_t detached_staged_part_size,
-        const Strings & detached_bitmap_names,
-        const DeleteBitmapMetaPtrVector & detached_bitmaps,
-        const DeleteBitmapMetaPtrVector & bitmaps,
-        const DB::Protos::DetachAttachType & type)
+    const StoragePtr & to_table,
+    const UUID & from_table_uuid,
+    const UUID & to_table_uuid,
+    const IMergeTreeDataPartsVector & commit_parts,
+    const IMergeTreeDataPartsVector & commit_staged_parts,
+    const Strings & detached_part_names,
+    size_t detached_visible_part_size,
+    size_t detached_staged_part_size,
+    const Strings & detached_bitmap_names,
+    const DeleteBitmapMetaPtrVector & detached_bitmaps,
+    const DeleteBitmapMetaPtrVector & bitmaps,
+    const DB::Protos::DetachAttachType & type,
+    const UInt64 & txn_id)
 {
     brpc::Controller cntl;
     Protos::RedirectAttachDetachedS3PartsReq request;
@@ -422,6 +423,8 @@ void CnchServerClient::redirectAttachDetachedS3Parts(
         RPCHelpers::fillUUID(from_table_uuid, *request.mutable_from_table_uuid());
 
     RPCHelpers::fillUUID(to_table_uuid, *request.mutable_to_table_uuid());
+    if (txn_id > 0)
+        request.set_txn_id(txn_id);
 
     if (to_table)
     {
@@ -462,19 +465,20 @@ void CnchServerClient::redirectAttachDetachedS3Parts(
 
 
 void CnchServerClient::redirectDetachAttachedS3Parts(
-        const StoragePtr & to_table,
-        const UUID & from_table_uuid,
-        const UUID & to_table_uuid,
-        const IMergeTreeDataPartsVector & attached_parts,
-        const IMergeTreeDataPartsVector & attached_staged_parts,
-        const IMergeTreeDataPartsVector & commit_parts,
-        const Strings & attached_part_names,
-        const Strings & attached_bitmap_names,
-        const DeleteBitmapMetaPtrVector & attached_bitmaps,
-        const DeleteBitmapMetaPtrVector & bitmaps,
-        const std::vector<std::pair<String, String>> & detached_part_metas,
-        const std::vector<std::pair<String, String>> & detached_bitmap_metas,
-        const DB::Protos::DetachAttachType & type)
+    const StoragePtr & to_table,
+    const UUID & from_table_uuid,
+    const UUID & to_table_uuid,
+    const IMergeTreeDataPartsVector & attached_parts,
+    const IMergeTreeDataPartsVector & attached_staged_parts,
+    const IMergeTreeDataPartsVector & commit_parts,
+    const Strings & attached_part_names,
+    const Strings & attached_bitmap_names,
+    const DeleteBitmapMetaPtrVector & attached_bitmaps,
+    const DeleteBitmapMetaPtrVector & bitmaps,
+    const std::vector<std::pair<String, String>> & detached_part_metas,
+    const std::vector<std::pair<String, String>> & detached_bitmap_metas,
+    const DB::Protos::DetachAttachType & type,
+    const UInt64 & txn_id)
 {
     brpc::Controller cntl;
     Protos::RedirectDetachAttachedS3PartsReq request;
@@ -484,6 +488,8 @@ void CnchServerClient::redirectDetachAttachedS3Parts(
         RPCHelpers::fillUUID(from_table_uuid, *request.mutable_from_table_uuid());
 
     RPCHelpers::fillUUID(to_table_uuid, *request.mutable_to_table_uuid());
+    if (txn_id > 0)
+        request.set_txn_id(txn_id);
 
     if (to_table)
     {

@@ -89,7 +89,8 @@ void S3AttachMetaAction::executeV2()
         {parts.begin(), parts.end()},
         {staged_parts.begin(), staged_parts.end()},
         detached_bitmaps,
-        bitmaps);
+        bitmaps,
+        txn_id);
     executed = true;
 }
 
@@ -102,7 +103,8 @@ void S3AttachMetaAction::abort()
         {staged_parts.begin(), staged_parts.end()},
         former_parts,
         bitmaps,
-        detached_bitmaps);
+        detached_bitmaps,
+        txn_id);
 
     /// Since bitmaps are all new bitmap that have been regenerated, simply delete it
     for (auto & new_bitmap: bitmaps)
