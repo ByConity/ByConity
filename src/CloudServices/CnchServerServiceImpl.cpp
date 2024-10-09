@@ -76,6 +76,7 @@ namespace ErrorCodes
     extern const int CNCH_KAFKA_TASK_NEED_STOP;
     extern const int UNKNOWN_TABLE;
     extern const int CNCH_TOPOLOGY_NOT_MATCH_ERROR;
+    extern const int TOO_MANY_PARTS;
 }
 namespace AutoStats = Statistics::AutoStats;
 
@@ -2063,6 +2064,38 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
     });
 }
 
+void CnchServerServiceImpl::checkDelayInsertOrThrowIfNeeded(
+        google::protobuf::RpcController * cntl,
+        const Protos::checkDelayInsertOrThrowIfNeededReq * request,
+        Protos::checkDelayInsertOrThrowIfNeededResp * response,
+        google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, context = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            UUID uuid = RPCHelpers::createUUID(request->storage_uuid());
+            auto storage = context->getCnchCatalog()->getTableByUUID(*context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS());
+            auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree*>(storage.get());
+            if (!cnch_merge_tree)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "CnchMergeTree is expected for checkDelayInsertOrThrowIfNeeded but got " + storage->getName());
+
+            cnch_merge_tree->cnchDelayInsertOrThrowIfNeeded();
+        }
+        catch (Exception & e)
+        {
+            /// Only TOO_MANY_PARTS matters
+            if (e.code() == ErrorCodes::TOO_MANY_PARTS)
+                RPCHelpers::handleException(response->mutable_exception());
+            else
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+    });
+}
 
 #if defined(__clang__)
     #pragma clang diagnostic pop

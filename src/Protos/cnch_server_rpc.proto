@@ -563,6 +563,9 @@ message GetDedupImplVersionResp
   optional string exception = 2;
 }
 
+message checkDelayInsertOrThrowIfNeededReq { required UUID storage_uuid = 1; }
+message checkDelayInsertOrThrowIfNeededResp { optional string exception = 1; }
+
 service CnchServerService {
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq)
       returns(ReportTaskHeartbeatResp);
@@ -715,4 +718,7 @@ service CnchServerService {
 
   rpc getDedupImplVersion(GetDedupImplVersionReq)
       returns (GetDedupImplVersionResp);
+  
+  rpc checkDelayInsertOrThrowIfNeeded(checkDelayInsertOrThrowIfNeededReq)
+    returns (checkDelayInsertOrThrowIfNeededResp);
 };

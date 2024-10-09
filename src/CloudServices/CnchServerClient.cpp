@@ -1342,4 +1342,17 @@ MergeTreeDataPartsCNCHVector CnchServerClient::fetchCloudTableMeta(
     RPCHelpers::checkResponse(response);
     return createPartVectorFromModelsForSend<MergeTreeDataPartCNCHPtr>(storage, response.parts());
 }
+
+void CnchServerClient::checkDelayInsertOrThrowIfNeeded(UUID storage_uuid)
+{
+    brpc::Controller cntl;
+    Protos::checkDelayInsertOrThrowIfNeededReq req;
+    Protos::checkDelayInsertOrThrowIfNeededResp resp;
+
+    RPCHelpers::fillUUID(storage_uuid, *req.mutable_storage_uuid());
+    stub->checkDelayInsertOrThrowIfNeeded(&cntl, &req, &resp, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(resp);
+}
 }

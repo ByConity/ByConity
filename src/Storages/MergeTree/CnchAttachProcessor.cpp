@@ -1002,6 +1002,7 @@ void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prep
 
     TxnTimestamp commit_time;
     CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+    cnch_writer.setFromAttach();
 
     std::set<String> attached_partition_ids;
     ParserPartition parser;
@@ -1941,6 +1942,7 @@ void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & parts_with_
     if (command.from_table.empty() && !command.from_zookeeper_path.empty())
     {
         CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+        cnch_writer.setFromAttach();
         if (is_unique_tbl)
         {
             cnch_writer.commitPreparedCnchParts(DumpedData{
@@ -1960,6 +1962,7 @@ void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & parts_with_
     }
 
     CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Attach);
+    cnch_writer.setFromAttach();
     std::unique_ptr<S3AttachPartsInfo> s3_parts_info;
 
     if (!command.from_table.empty())

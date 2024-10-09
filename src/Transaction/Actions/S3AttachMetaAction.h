@@ -66,6 +66,8 @@ public:
     static void collectUndoResourcesForCommit(const UndoResources & resources, UndoResourceNames & resource_names);
     static void abortByUndoBuffer(const Context & ctx, const StoragePtr & tbl, const UndoResources & resources);
 
+    void setFromAttach() { from_attach = true; }
+
 private:
     StoragePtr from_tbl;
     StoragePtr to_tbl;
@@ -80,6 +82,7 @@ private:
     DeleteBitmapMetaPtrVector bitmaps;
 
     bool executed{false};
+    bool from_attach{false};
 
     LoggerPtr log{getLogger("S3AttachMetaAction")};
 };

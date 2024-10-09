@@ -133,6 +133,7 @@ public:
 
     void invalidCacheWithNewTopology(const CnchServerTopology & topology);
 
+    std::pair<Int64, Int64> getTotalAndMaxPartsNumber(const IStorage & storage);
 
     /**
      * @brief Evict all parts specified.

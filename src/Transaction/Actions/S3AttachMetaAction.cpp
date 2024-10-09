@@ -110,7 +110,8 @@ void S3AttachMetaAction::abort()
     for (auto & new_bitmap: bitmaps)
         new_bitmap->removeFile();
 
-    ServerPartLog::addNewParts(getContext(), to_tbl->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ true);
+    ServerPartLog::addNewParts(getContext(), to_tbl->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts,
+                                 txn_id, /*error=*/ true, {}, 0, 0, from_attach);
 }
 
 void S3AttachMetaAction::postCommit(TxnTimestamp commit_time)
@@ -127,7 +128,8 @@ void S3AttachMetaAction::postCommit(TxnTimestamp commit_time)
     for (auto & detached_bitmap: detached_bitmaps)
         detached_bitmap->removeFile();
 
-    ServerPartLog::addNewParts(getContext(), to_tbl->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts, txn_id, /*error=*/ false);
+    ServerPartLog::addNewParts(getContext(), to_tbl->getStorageID(), ServerPartLogElement::INSERT_PART, parts, staged_parts,
+                                 txn_id, /*error=*/ false, {}, 0, 0, from_attach);
 }
 
 void S3AttachMetaAction::collectUndoResourcesForCommit(const UndoResources & resources, UndoResourceNames & resource_names)

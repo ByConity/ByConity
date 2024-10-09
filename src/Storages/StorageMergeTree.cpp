@@ -260,8 +260,8 @@ BlockOutputStreamPtr
 StorageMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
     const auto & settings = local_context->getSettingsRef();
-    return std::make_shared<MergeTreeBlockOutputStream>(
-        *this, metadata_snapshot, settings.max_partitions_per_insert_block, local_context);
+    UInt64 max_parts = getSettings()->max_partitions_per_insert_block.changed ? getSettings()->max_partitions_per_insert_block : settings.max_partitions_per_insert_block;
+    return std::make_shared<MergeTreeBlockOutputStream>(*this, metadata_snapshot, max_parts, local_context);
 }
 
 void StorageMergeTree::checkTableCanBeDropped() const

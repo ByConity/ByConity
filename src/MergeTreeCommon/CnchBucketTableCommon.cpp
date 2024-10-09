@@ -94,7 +94,14 @@ void buildBucketScatterSelector(
         if (inserted)
         {
             if (max_parts && partitions_count >= max_parts)
-                throw Exception("Too many partitions for single INSERT block (more than " + std::to_string(max_parts) + "). The limit is controlled by 'max_partitions_per_insert_block' setting. Large number of partitions is a common misconception. It will lead to severe negative performance impact, including slow server startup, slow INSERT queries and slow SELECT queries. Recommended total number of partitions for a table is under 1000..10000. Please note, that partitioning is not intended to speed up SELECT queries (ORDER BY key is sufficient to make range queries fast). Partitions are intended for data manipulation (DROP PARTITION, etc).", ErrorCodes::TOO_MANY_PARTS);
+                throw Exception(ErrorCodes::TOO_MANY_PARTS,
+                         "Too many partitions for single INSERT block (more than " + std::to_string(max_parts)
+                                 + "). The limit is controlled by 'max_partitions_per_insert_block' setting."
+                                 + " Large number of partitions & parts is a common misconception."
+                                 + " It will lead to severe negative performance impact, including slow SELECT queries and more MERGEs."
+                                 + " Recommended to insert as few partitions/parts as possible each time."
+                                 + " Pls check your PARTITION BY or CLUSTER BY. If you DO make sure that you need INSERT so many parts in each block,"
+                                 + " you can modify the 'max_partitions_per_insert_block' setting for your table by ALTER clause");
 
             partition_num_to_first_row.push_back(i);
             it->second = partitions_count;

@@ -222,6 +222,8 @@ public:
     void notifyTableCreated(const UUID & storage_uuid, int64_t cnch_notify_table_created_rpc_timeout_ms);
 
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid);
+
+    void checkDelayInsertOrThrowIfNeeded(UUID storage_uuid);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;
 };

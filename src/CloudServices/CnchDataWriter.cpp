@@ -616,6 +616,8 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             auto action
                 = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
             action->as<InsertAction>()->checkAndSetDedupMode(dumped_data.dedup_mode);
+            if (from_attach)
+                action->as<InsertAction>()->setFromAttach();
             txn->appendAction(action);
             action->executeV2();
         }
@@ -686,6 +688,8 @@ void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, con
             }
 
             auto action = txn->createAction<S3AttachMetaAction>(storage_ptr, *s3_parts_info);
+            if (from_attach)
+                action->as<S3AttachMetaAction>()->setFromAttach();
             txn->appendAction(action);
             action->executeV2();
         }

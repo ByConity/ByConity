@@ -4596,7 +4596,7 @@ BlockOutputStreamPtr StorageReplicatedMergeTree::write(const ASTPtr & /*query*/,
     return std::make_shared<ReplicatedMergeTreeBlockOutputStream>(
         *this, metadata_snapshot, query_settings.insert_quorum,
         query_settings.insert_quorum_timeout.totalMilliseconds(),
-        query_settings.max_partitions_per_insert_block,
+        storage_settings_ptr->max_partitions_per_insert_block.changed ? storage_settings_ptr->max_partitions_per_insert_block : query_settings.max_partitions_per_insert_block,
         query_settings.insert_quorum_parallel,
         deduplicate,
         local_context);

@@ -54,6 +54,9 @@ private:
     DictReadLock getDictReadLock() const { return DictReadLock(dict_lock); }
     DictWriteLock getDictWriteLock() const { return DictWriteLock(dict_lock); }
 
+    template <typename KEY_TYPE>
+    MutableColumnPtr generateKeyConstraintColumn(const ColumnBitMap64 & bitmap_column);
+
     TxnTimestamp last_update_timestamp{0};
     std::map<Int64, String> dict_bucket_versions;
 

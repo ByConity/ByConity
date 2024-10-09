@@ -2571,6 +2571,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "max_addition_bg_task_num",
         "max_addition_mutation_task_num",
         "max_partition_for_multi_select",
+        "max_partitions_per_insert_block",
 
         "cnch_merge_parts_cache_timeout",
         "cnch_merge_parts_cache_min_count",

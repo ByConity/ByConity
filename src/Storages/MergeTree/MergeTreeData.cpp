@@ -2450,7 +2450,7 @@ void MergeTreeData::delayInsertOrThrowIfNeeded(Poco::Event * until) const
 {
     const auto settings = getSettings();
     const size_t parts_count_in_total = getPartsCount();
-    if (parts_count_in_total >= settings->max_parts_in_total)
+    if (settings->max_parts_in_total > 0 && parts_count_in_total >= settings->max_parts_in_total)
     {
         ProfileEvents::increment(ProfileEvents::RejectedInserts);
         throw Exception("Too many parts (" + toString(parts_count_in_total) + ") in all partitions in total. This indicates wrong choice of partition key. The threshold can be modified with 'max_parts_in_total' setting in <merge_tree> element in config.xml or with per-table setting.", ErrorCodes::TOO_MANY_PARTS);
@@ -2472,7 +2472,7 @@ void MergeTreeData::delayInsertOrThrowIfNeeded(Poco::Event * until) const
         k_inactive = ssize_t(inactive_parts_count_in_partition) - ssize_t(settings->inactive_parts_to_delay_insert);
     }
 
-    if (parts_count_in_partition >= settings->parts_to_throw_insert)
+    if (settings->parts_to_throw_insert > 0 && parts_count_in_partition >= settings->parts_to_throw_insert)
     {
         ProfileEvents::increment(ProfileEvents::RejectedInserts);
         throw Exception(
