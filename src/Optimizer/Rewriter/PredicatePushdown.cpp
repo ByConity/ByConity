@@ -649,7 +649,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
                 try
                 {
                     common_type
-                        = getCommonType(DataTypes{left_type, right_type}, allow_extended_type_conversion, enable_implicit_arg_type_convert);
+                        = getCommonType(DataTypes{left_type, right_type}, enable_implicit_arg_type_convert, allow_extended_type_conversion);
                 }
                 catch (DB::Exception & ex)
                 {
@@ -804,14 +804,6 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         output_node = output_expression_node;
     }
     return output_node;
-}
-
-DataTypePtr PredicateVisitor::getCommonType(const DataTypes & types, bool allow_extended_type_conversion, bool enable_implicit_arg_type_convert)
-{
-    if (enable_implicit_arg_type_convert)
-        return getLeastSupertype<LeastSupertypeOnError::String>(types, true);
-    else
-        return getLeastSupertype(types, allow_extended_type_conversion);
 }
 
 PlanNodePtr PredicateVisitor::visitArrayJoinNode(ArrayJoinNode & node, PredicateContext & predicate_context)

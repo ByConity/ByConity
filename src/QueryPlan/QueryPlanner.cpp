@@ -2303,8 +2303,10 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
                                               .sub_column_symbols.at(field_sub_col_id.second);
                     sub_col_types.push_back(sub_plan_types[select_id].at(sub_col_symbol));
                 }
-                sub_column_type_coercions.emplace_back(
-                    getLeastSupertype(sub_col_types, context->getSettingsRef().allow_extended_type_conversion));
+                sub_column_type_coercions.emplace_back(getCommonType(
+                    sub_col_types,
+                    context->getSettingsRef().enable_implicit_arg_type_convert,
+                    context->getSettingsRef().allow_extended_type_conversion));
             }
         }
     }

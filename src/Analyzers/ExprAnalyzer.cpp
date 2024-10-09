@@ -102,6 +102,7 @@ public:
         , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
+        , enable_implicit_arg_type_convert(context->getSettingsRef().enable_implicit_arg_type_convert)
         , scopes({scope_})
     {
     }
@@ -115,6 +116,7 @@ private:
     const bool use_ansi_semantic;
     const bool enable_implicit_type_conversion;
     const bool allow_extended_conversion;
+    const bool enable_implicit_arg_type_convert;
 
     std::vector<ScopePtr> scopes;
     // whether we are in an aggregate function
@@ -683,7 +685,7 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
                 }
             }
             else
-                super_type = getLeastSupertype(DataTypes{lhs_type, rhs_type}, allow_extended_conversion);
+                super_type = getCommonType(DataTypes{lhs_type, rhs_type}, enable_implicit_arg_type_convert, allow_extended_conversion);
         }
         if (!super_type)
             throw Exception("Incompatible types for IN prediacte", ErrorCodes::TYPE_MISMATCH);
