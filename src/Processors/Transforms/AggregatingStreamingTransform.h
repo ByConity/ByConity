@@ -11,6 +11,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+
 /** Aggregates streaming transform
   */
 class AggregatingStreamingTransform : public ISimpleTransform
@@ -43,6 +48,21 @@ private:
     ALWAYS_INLINE bool checkAggregationRatio() const
     {
         return (aggregation_ratio > 0) && variants.size() / (input_rows * 1.0) < aggregation_ratio;
+    }
+
+    ALWAYS_INLINE Chunk & fetchNewChunk()
+    {
+        if (chunk_idx >= chunks.size())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "No chunk can be fetch, chunk_idx:{}, chunks_size:{}, has_left:{}, is_generated:{}, start_generated:{}, is_two_level:{}",
+                chunk_idx,
+                chunks.size(),
+                has_left,
+                is_generated,
+                start_generated,
+                is_two_level);
+        return chunks[chunk_idx++];
     }
 
     //    bool continueLocalAgg(size_t chunk_rows);
