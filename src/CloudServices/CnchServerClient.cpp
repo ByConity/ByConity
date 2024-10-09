@@ -948,6 +948,7 @@ UInt32 CnchServerClient::getDedupImplVersion(const TxnTimestamp & txn_id, const 
     stub->getDedupImplVersion(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
+    RPCHelpers::checkResponse(response);
     return response.version();
 }
 

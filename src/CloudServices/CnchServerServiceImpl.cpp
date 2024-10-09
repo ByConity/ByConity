@@ -1108,11 +1108,22 @@ void CnchServerServiceImpl::getDedupImplVersion(
     Protos::GetDedupImplVersionResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    auto cnch_txn = getContext()->getCnchTransactionCoordinator().getTransaction(request->txn_id());
-    if (cnch_txn->getMainTableUUID() == UUIDHelpers::Nil)
-        cnch_txn->setMainTableUUID(RPCHelpers::createUUID(request->uuid()));
-    response->set_version(cnch_txn->getDedupImplVersion(getContext()));
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            auto cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(request->txn_id());
+            if (cnch_txn->getMainTableUUID() == UUIDHelpers::Nil)
+                cnch_txn->setMainTableUUID(RPCHelpers::createUUID(request->uuid()));
+            response->set_version(cnch_txn->getDedupImplVersion(gc));
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+            response->set_version(1);
+        }
+    });
 }
 
 // About Auto Statistics
