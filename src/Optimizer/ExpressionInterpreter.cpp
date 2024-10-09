@@ -779,7 +779,7 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
     //   In cnch, constant folding requires `function_base->isDeterministic() == true` and `function_base->isSuitableForConstantFolding() == true`
     // This is because some functions do not satisfy `isColumnConst(*res_col)` in cnch, which cause constant folding not work and
     // furthermore block other optimizations(e.g. outer join to inner join)
-    if (function_base->isSuitableForConstantFolding() && !has_lambda_argument
+    if (function_base->isSuitableForConstantFoldingInOptimizer() && !has_lambda_argument
         && (context->getSettingsRef().enable_evaluate_constant_for_nondeterministic || function_base->isDeterministic()))
     {
         ColumnPtr res_col;

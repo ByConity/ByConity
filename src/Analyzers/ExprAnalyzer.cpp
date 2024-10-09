@@ -424,9 +424,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
 
     ColumnPtr res_col;
     auto function_ret_type = function_base->getResultType();
-    if (options.evaluate_constant_expression && function_base->isSuitableForConstantFolding()
-        && !functionIsDictGet(function->name) // 01852_dictionary_found_rate_long
-        && !functionIsInOrGlobalInOperator(function->name))
+    if (options.evaluate_constant_expression && function_base->isSuitableForConstantFoldingInOptimizer())
     {
         if (all_const)
             res_col = function_base->execute(processed_arguments, function_ret_type, 1, false);
@@ -658,7 +656,7 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
                 coll.push_back(nested_tuple);
             }
         }
-            
+
         rhs_ast = std::make_shared<ASTLiteral>(std::move(coll));
         return;
     }
