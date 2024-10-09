@@ -84,7 +84,7 @@ public:
 
     void loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency) override;
 
-    void loadFromFileSystem(bool load_hint_mutation = true);
+    void loadFromFileSystem();
 
     void copyToDetached(const String & prefix) const override;
 
@@ -148,7 +148,7 @@ private:
     /// Loads marks index granularity into memory
     void loadIndexGranularity() override;
 
-    void loadMetaInfoFromBuffer(ReadBuffer & buffer, bool load_hint_mutation);
+    void loadMetaInfoFromBuffer(ReadBuffer & buffer);
 
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
     ColumnSize getColumnSizeImpl(const NameAndTypePair & column, const ChecksumsPtr & checksums, std::unordered_set<String> * processed_substreams) const;

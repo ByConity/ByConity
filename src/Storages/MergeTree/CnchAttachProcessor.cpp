@@ -906,9 +906,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
         {
             load_pool.scheduleOrThrowOnError([this, part]() {
                 injectFailure(AttachFailurePoint::LOAD_PART);
-
-                /// After attach, hint mutation from part name is mismatch with that from file, we can not load hint mutation from file here.
-                part->loadFromFileSystem(false);
+                part->loadFromFileSystem();
             });
         }
     }
@@ -978,7 +976,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
     {
         worker_pool.scheduleOrThrowOnError([this, part]() {
             injectFailure(AttachFailurePoint::LOAD_PART);
-            part->loadFromFileSystem(false);
+            part->loadFromFileSystem();
         });
     }
     worker_pool.wait();

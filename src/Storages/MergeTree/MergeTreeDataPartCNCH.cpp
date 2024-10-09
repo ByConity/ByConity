@@ -350,7 +350,7 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes(
     default_codec = CompressionCodecFactory::instance().getDefaultCodec();
 }
 
-void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
+void MergeTreeDataPartCNCH::loadFromFileSystem()
 {
     if (parent_part && enableDiskCache())
     {
@@ -362,7 +362,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
             if (cache_disk && cache_disk->exists(segment_path))
             {
                 auto reader = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
-                loadMetaInfoFromBuffer(*reader, load_hint_mutation);
+                loadMetaInfoFromBuffer(*reader);
 
                 return;
             }
@@ -381,7 +381,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     DiskPtr disk = volume->getDisk();
     auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size, "metainfo.txt");
     LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_pos.file_offset, meta_info_pos.file_size);
-    loadMetaInfoFromBuffer(limit_reader, load_hint_mutation);
+    loadMetaInfoFromBuffer(limit_reader);
 
     // We should load the projection's name list from the disk when loading part from the file system, e.g., attach partion.
     if (!parent_part)
@@ -1094,7 +1094,7 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
     index_granularity.setInitialized();
 }
 
-void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_hint_mutation)
+void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf)
 {
     assertString("CHPT", buf);
     UInt8 version{0};
@@ -1113,12 +1113,12 @@ void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_h
     size_t marks_count = 0;
     readVarUInt(marks_count, buf);
 
-    Int64 hint_mutation = 0;
-    readVarUInt(hint_mutation, buf);
-    if (load_hint_mutation)
-    {
-        info.hint_mutation = hint_mutation;
-    }
+    /// NOTE: zuochuang.zema, litianan: The MR 5260389562 fixed some bugs of ATTACH/DETACH.
+    /// After this, all callers pass `load_hint_mutation = false` when calling @loadMetaInfoFromBuffer or @loadFromFileSystem.
+    /// So currently `hint_mutation` in MetaInfo is useless.
+    /// Actually, hint_mutation is loaded when creating MergeTreePartInfo, see MergeTreePartInfo::fromPartName().
+    Int64 skip_hint_mutation = 0;
+    readVarUInt(skip_hint_mutation, buf);
 
     columns_ptr->readText(buf);
     if (parent_part)

@@ -530,7 +530,7 @@ void CnchWorkerServiceImpl::checkDataParts(
                 try
                 {
                     // TODO: checkDataParts(part);
-                    dynamic_cast<MergeTreeDataPartCNCH*>(part.get())->loadFromFileSystem(storage.get());
+                    dynamic_cast<MergeTreeDataPartCNCH*>(part.get())->loadFromFileSystem();
                     is_passed = true;
                     message.clear();
                 }

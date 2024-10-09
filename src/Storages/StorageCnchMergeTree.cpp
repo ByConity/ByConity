@@ -1380,7 +1380,7 @@ void StorageCnchMergeTree::restoreDataFromBackup(
         for (const auto & cnch_part : restore_parts)
         {
             // TODO: Parallel load parts
-            cnch_part->loadFromFileSystem(/* load_hint_mutation */false);
+            cnch_part->loadFromFileSystem();
         }
 
         // 4. Commit part to catalog
