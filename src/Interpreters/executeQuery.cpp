@@ -925,7 +925,28 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     getLogger("executeQuery"), "Will reroute query {} to {}", query, host_ports.toDebugString());
                 context->initializeExternalTablesIfSet();
                 context->setSetting("enable_auto_query_forwarding", Field(0));
-                executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
+
+                // If `outfile_in_server_with_tcp` is set to true, we need change it to false to make sure the query forward to host server.
+                // When need to write to the outfile, reset the setting in the query so that remote server able to write the outfile.
+                if (context->getSettingsRef().outfile_in_server_with_tcp)
+                {
+                    context->applySettingChange({"outfile_in_server_with_tcp", false});
+                    auto ast_with_output = dynamic_cast<ASTQueryWithOutput *>(ast.get());
+                    if (ast_with_output && ast_with_output->out_file)
+                    {
+                        auto cloned = ast_with_output->clone();
+                        auto cloned_ast_with_output = dynamic_cast<ASTQueryWithOutput *>(cloned.get());
+                        if (!cloned_ast_with_output->settings_ast)
+                            cloned_ast_with_output->settings_ast = std::make_shared<ASTSetQuery>();
+                        auto settings_ast = dynamic_cast<ASTSetQuery *>(cloned_ast_with_output->settings_ast.get());
+                        settings_ast->changes.insertSetting("outfile_in_server_with_tcp", Field(1));
+                        executeQueryByProxy(context, host_ports, cloned, res, in_interactive_txn, serializeAST(*cloned));
+                    }
+                    else
+                        executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
+                }
+                else
+                    executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
                 LOG_DEBUG(getLogger("executeQuery"), "Query forwarded to remote server done");
                 return std::make_tuple(ast, std::move(res));
             }
