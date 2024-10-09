@@ -87,5 +87,10 @@ namespace DB::DaemonManager::BRPCMetrics
     bvar::Adder< int > g_executeImpl_PartMover;
     bvar::Window<bvar::Adder<int>> g_executeImpl_PartMover_error_minute("DaemonManager_Internal", "executeImpl_PartMover_error", & g_executeImpl_PartMover_error, 60);
     bvar::Window<bvar::Adder<int>> g_executeImpl_PartMover_minute("DaemonManager_Internal", "executeImpl_PartMover", & g_executeImpl_PartMover, 60);
+
+    bvar::Adder< int > g_executeImpl_Backup_error;
+    bvar::Adder< int > g_executeImpl_Backup;
+    bvar::Window<bvar::Adder<int>> g_executeImpl_Backup_error_minute("DaemonManager_Internal", "executeImpl_Backup_error", & g_executeImpl_Backup_error, 60);
+    bvar::Window<bvar::Adder<int>> g_executeImpl_Backup_minute("DaemonManager_Internal", "executeImpl_Backup", & g_executeImpl_Backup, 60);
 }/// end namespace
 

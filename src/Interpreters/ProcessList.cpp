@@ -168,7 +168,7 @@ static CurrentMetrics::Metric getQueryTypeMetric(ProcessListQueryType & query_ty
 static bool isMonitoredCnchQuery(const IAST * ast)
 {
     if (!ast)
-        return false;
+        return true;
 
     if (const auto * create_ast = ast->as<ASTCreateQuery>(); create_ast && create_ast->select)
     {

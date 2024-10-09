@@ -16,6 +16,7 @@
 #pragma once
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <CloudServices/CnchBGThreadPartitionSelector.h>
 #include <CloudServices/ICnchBGThread.h>
 #include <Core/Names.h>
 #include <Storages/IStorage_fwd.h>
@@ -27,8 +28,7 @@
 
 namespace DB
 {
-class CnchBGThreadPartitionSelector;
-using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
+struct MergeTreeSettings;
 
 /// A thread clean up the stale stuff (like parts, deleted bitmaps, labels) for table
 /// Also, mark expired parts accord to table level TTL
@@ -90,7 +90,7 @@ private:
     void runDataRemoveTask();
 
     TxnTimestamp calculateGCTimestamp(UInt64 delay_second, bool in_wakeup);
-    Strings selectPartitions(const StoragePtr & istorage);
+    Strings selectPartitions(const StoragePtr & istorage, std::shared_ptr<const MergeTreeSettings> & storage_settings);
 
     void tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts);
 
@@ -107,11 +107,11 @@ private:
     size_t phase_one_continuous_hits = 0;
     size_t phase_two_continuous_hits = 0;
 
-
     /// Delete data files in the trash state in background.
     BackgroundSchedulePool::TaskHolder data_remover;
 
-    PartitionSelectorPtr partition_selector;
+    CnchBGThreadPartitionSelector::RoundRobinState partition_round_robin_state{};
+
     BackgroundSchedulePool::TaskHolder checkpoint_task;
 
     pcg64 rng;

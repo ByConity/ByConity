@@ -1,6 +1,5 @@
 SET max_threads=1;
 SET exchange_source_pipeline_threads=1;
-use test;
 
 DROP TABLE IF EXISTS t40055;
 

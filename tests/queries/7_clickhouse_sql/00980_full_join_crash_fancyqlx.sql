@@ -1,4 +1,3 @@
-USE test;
 drop table if exists test_join;
 
 create table test_join (date Date, id Int32, name Nullable(String)) engine = CnchMergeTree partition by date order by id;

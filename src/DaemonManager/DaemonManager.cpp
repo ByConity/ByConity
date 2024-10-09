@@ -24,18 +24,22 @@
 #include <DaemonManager/DaemonHelper.h>
 #include <DaemonManager/DaemonJobGlobalGC.h>
 #include <DaemonManager/DaemonManager.h>
+#include <DaemonManager/Metrics/MetricsWriter.h>
 #include <DaemonManager/DaemonManagerServiceImpl.h>
 #include <DaemonManager/FixCatalogMetaDataTask.h>
 #include <DaemonManager/registerDaemons.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <Functions/registerFunctions.h>
+#include <Server/HTTPHandlerFactory.h>
+#include <Server/PrometheusRequestHandler.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <brpc/server.h>
 #include <gflags/gflags.h>
 #include <Poco/Environment.h>
+#include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Common/Brpc/BrpcApplication.h>
 #include <Common/Config/MetastoreConfig.h>
@@ -145,7 +149,8 @@ std::vector<DaemonJobPtr> createLocalDaemonJobs(
     std::map<std::string, unsigned int> default_config = {
         { "GLOBAL_GC", 5000},
         { "AUTO_STATISTICS", 10000},
-        { "TXN_GC", 5 * 60 * 1000}
+        { "TXN_GC", 5 * 60 * 1000},
+        { "BACKUP", 10000}
     };
 
     std::map<std::string, unsigned int> config = updateConfig(std::move(default_config), app_config);
@@ -201,6 +206,119 @@ std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJob
     );
 
     return res;
+}
+
+Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, Poco::Logger * log)
+{
+    Poco::Net::SocketAddress socket_address;
+    try
+    {
+        socket_address = Poco::Net::SocketAddress(host, port);
+    }
+    catch (const Poco::Net::DNSException & e)
+    {
+        const auto code = e.code();
+        if (code == EAI_FAMILY
+#if defined(EAI_ADDRFAMILY)
+                    || code == EAI_ADDRFAMILY
+#endif
+           )
+        {
+            LOG_ERROR(log, "Cannot resolve listen_host ({}), error {}: {}. "
+                "If it is an IPv6 address and your host has disabled IPv6, then consider to "
+                "specify IPv4 address to listen in <listen_host> element of configuration "
+                "file. Example: <listen_host>0.0.0.0</listen_host>",
+                host, e.code(), e.message());
+        }
+
+        throw;
+    }
+    return socket_address;
+}
+
+
+Poco::Net::SocketAddress DaemonManager::socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure) const
+{
+    auto address = makeSocketAddress(host, port, &logger());
+#if !defined(POCO_CLICKHOUSE_PATCH) || POCO_VERSION < 0x01090100
+    if (secure)
+        /// Bug in old (<1.9.1) poco, listen() after bind() with reusePort param will fail because have no implementation in SecureServerSocketImpl
+        /// https://github.com/pocoproject/poco/pull/2257
+        socket.bind(address, /* reuseAddress = */ true);
+    else
+#endif
+#if POCO_VERSION < 0x01080000
+    socket.bind(address, /* reuseAddress = */ true);
+#else
+    socket.bind(address, /* reuseAddress = */ true, /* reusePort = */ config().getBool("listen_reuse_port", false));
+#endif
+
+    /// If caller requests any available port from the OS, discover it after binding.
+    if (port == 0)
+    {
+        address = socket.address();
+        LOG_DEBUG(&logger(), "Requested any available port (port == 0), actual port is {:d}", address.port());
+    }
+
+    socket.listen(/* backlog = */ config().getUInt("listen_backlog", 64));
+
+    return address;
+}
+
+void DaemonManager::initMetricsHandler(
+    const std::vector<String> & hosts, const UInt16 & port, Poco::ThreadPool & server_pool, const bool listen_try)
+{
+    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+    Poco::Timespan keep_alive_timeout(config().getUInt("daemon_manager.http.keep_alive_timeout", 10), 0);
+    http_params->setKeepAliveTimeout(keep_alive_timeout);
+
+    auto create_server = [&](const String & host) {
+        try
+        {
+            Poco::Net::ServerSocket socket;
+
+            auto address = socketBindListen(socket, host, port);
+            socket.setReceiveTimeout(config().getInt("daemon_amanger_service.http.receive_timeout", DEFAULT_HTTP_READ_BUFFER_TIMEOUT));
+            socket.setSendTimeout(config().getInt("daemon_amanger_service.http.send_timeout", DEFAULT_HTTP_READ_BUFFER_TIMEOUT));
+
+            auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>("DM-PrometheusHandler-factory");
+            auto handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
+                *this, std::make_shared<DaemonManagerPrometheusMetricsWriter>());
+            handler->attachStrictPath(config().getString("prometheus.endpoint", "/metrics"));
+            handler->allowGetAndHeadRequest();
+            factory->addHandler(handler);
+
+            http_servers.emplace_back(std::make_unique<HTTPServer>(global_context, factory, server_pool, socket, http_params));
+
+            http_servers.back()->start();
+
+            LOG_INFO(&logger(), "Listening http://{}", address.toString());
+        }
+        catch (const Poco::Exception &)
+        {
+            std::string message = "Listen [" + host + "]:" + std::to_string(port) + " failed: " + getCurrentExceptionMessage(false);
+
+            if (listen_try)
+            {
+                LOG_WARNING(
+                    &logger(),
+                    "{}. If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
+                    "specify not disabled IPv4 or IPv6 address to listen in <listen_host> element of configuration "
+                    "file. Example for disabled IPv6: <listen_host>0.0.0.0</listen_host> ."
+                    " Example for disabled IPv4: <listen_host>::</listen_host>",
+                    message);
+            }
+            else
+            {
+                throw Exception{message, ErrorCodes::NETWORK_ERROR};
+            }
+        }
+    };
+
+    for (const auto& host : hosts)
+    {
+        create_server(host);
+    }
 }
 
 int DaemonManager::main(const std::vector<std::string> &)
@@ -329,46 +447,38 @@ int DaemonManager::main(const std::vector<std::string> &)
         thread_pool.wait();
     }
 
-    bool listen_try = config().getBool("listen_try", false);
-    auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
+    brpc::Server server;
 
-    if (listen_hosts.empty())
-    {
-        listen_hosts.emplace_back("::");
-        listen_hosts.emplace_back("0.0.0.0");
-        listen_try = true;
-    }
-
-    /// launch brpc service on multiple interface
+    // launch brpc service
     int port = config().getInt("daemon_manager.port", 8090);
     std::unique_ptr<DaemonManagerServiceImpl> daemon_manager_service =
         std::make_unique<DaemonManagerServiceImpl>(daemon_jobs_for_bg_thread_in_server);
-    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
 
-    for (const auto & listen : listen_hosts)
+    if (server.AddService(daemon_manager_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+        throw Exception("Fail to add daemon manager service.", ErrorCodes::SYSTEM_ERROR);
+
+    brpc::ServerOptions options;
+    options.idle_timeout_sec = -1;
+    std::string host_port = createHostPortString("::", port);
+    if (server.Start(host_port.c_str(), &options) != 0)
+        throw Exception("Fail to start Daemon Manager RPC server.", ErrorCodes::SYSTEM_ERROR);
+
+    /// Default port for HTTP services is at 9000.
+    auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
+    bool listen_try = config().getBool("listen_try", true);
+    if (listen_hosts.empty())
     {
-        rpc_servers.push_back(std::make_unique<brpc::Server>());
-        auto & rpc_server = rpc_servers.back();
-
-        if (rpc_server->AddService(daemon_manager_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
-            throw Exception("Fail to add daemon manager service.", ErrorCodes::SYSTEM_ERROR);
-
-        LOG_INFO(log, "Added rpc service");
-
-        brpc::ServerOptions options;
-        options.idle_timeout_sec = -1;
-
-        const std::string brpc_listen_interface = createHostPortString(listen, port);
-        if (rpc_server->Start(brpc_listen_interface.c_str(), &options) != 0)
-        {
-            if (listen_try)
-                LOG_WARNING(log, "Failed to start Daemon manager server on address: {}", brpc_listen_interface);
-            else
-                throw Exception("Failed to start Daemon manager server on address: " + brpc_listen_interface, ErrorCodes::NETWORK_ERROR);
-        }
-        else
-            LOG_INFO(log, "Daemon manager service is listening on address {}", brpc_listen_interface);
+        listen_hosts.emplace_back("::1");
+        listen_hosts.emplace_back("127.0.0.1");
+        listen_hosts.emplace_back("::");
+        /// We want to have back compactibility for those DM who don't have such configs.
+        listen_try = true;
     }
+    Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
+    int metrics_port = config().getInt("daemon_manager.http.port", 9000);
+    initMetricsHandler(listen_hosts, metrics_port, server_pool, listen_try);
+
+    LOG_INFO(log, "Daemon manager service starts on address {}", host_port);
 
     std::for_each(
         daemon_jobs_for_bg_thread_in_server.begin(),
@@ -391,20 +501,17 @@ int DaemonManager::main(const std::vector<std::string> &)
 
     LOG_INFO(log, "Shutting down!");
     LOG_INFO(log, "BRPC servers stop accepting new connections and requests from existing connections");
-    std::for_each(rpc_servers.begin(), rpc_servers.end(),
-        [& log] (auto & server)
-        {
-            if (0 == server->Stop(5000))
-                LOG_INFO(log, "BRPC server stop succesfully");
-            else
-                LOG_INFO(log, "BRPC server doesn't stop succesfully with in 5 second");
+    if (0 == server.Stop(5000))
+        LOG_INFO(log, "BRPC server stop succesfully");
+    else
+        LOG_INFO(log, "BRPC server doesn't stop succesfully with in 5 second");
 
-            LOG_INFO(log, "Wait until brpc requests in progress are done");
-            if (0 == server->Join())
-                LOG_INFO(log, "brpc joins succesfully");
-            else
-                LOG_INFO(log, "brpc doesn't join succesfully");
-        });
+    LOG_INFO(log, "Wait until brpc requests in progress are done");
+    if (0 == server.Join())
+        LOG_INFO(log, "brpc joins succesfully");
+    else
+        LOG_INFO(log, "brpc doesn't join succesfully");
+
 
     LOG_INFO(log, "Wait for daemons for bg thread to finish.");
     std::for_each(
@@ -422,6 +529,18 @@ int DaemonManager::main(const std::vector<std::string> &)
             daemon_job->stop();
         }
     );
+
+    SCOPE_EXIT({
+        std::for_each(http_servers.begin(), http_servers.end(), [log](const std::unique_ptr<HTTPServer> & http_server) {
+            if (http_server)
+            {
+                http_server->stop();
+                LOG_INFO(log, "Stop HTTP metrics server.");
+            }
+        });
+        /// Wait server pool to avoid use-after-free of destroyed context in the handlers
+        server_pool.joinAll();
+    });
 
     LOG_INFO(log, "daemons for local job finish succesfully.");
 

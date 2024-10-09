@@ -5,23 +5,23 @@ Projection Est. 10 rows
    └─ Sorting Est. 10 rows
       │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. 658348100 rows
+      └─ Gather Exchange Est. 469121647 rows
          └─ Sorting Est. 10 rows
             │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 10
-            └─ Aggregating Est. 658348100 rows
+            └─ Aggregating Est. 469121647 rows
                │     Group by: {l_orderkey, o_orderdate, o_shippriority}
                │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-               └─ Projection Est. 658348100 rows
+               └─ Projection Est. 469121647 rows
                   │     Expressions: [l_orderkey, o_orderdate, o_shippriority], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                  └─ Inner (PARALLEL_HASH) Join Est. 658348100 rows
+                  └─ Inner (PARALLEL_HASH) Join Est. 469121647 rows
                      │     Condition: l_orderkey == o_orderkey
                      │     Runtime Filters Builder: {o_orderkey}
-                     ├─ Repartition Exchange Est. 3236895089 rows
+                     ├─ Repartition Exchange Est. 3236894786 rows
                      │  │     Partition by: {l_orderkey}
-                     │  └─ Projection Est. 3236895089 rows
+                     │  └─ Projection Est. 3236894786 rows
                      │     │     Expressions: [l_discount, l_extendedprice, l_orderkey]
-                     │     └─ Filter Est. 3236895089 rows
+                     │     └─ Filter Est. 3236894786 rows
                      │        │     Condition: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
                      │        └─ TableScan tpch1000.lineitem Est. 5999989709 rows
                      │                 Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}

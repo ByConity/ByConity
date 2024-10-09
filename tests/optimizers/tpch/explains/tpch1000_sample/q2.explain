@@ -5,18 +5,18 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, ps_partkey ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 119753 rows
+      └─ Gather Exchange Est. 120958 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, ps_partkey ASC NULLS LAST}
             │     Limit: 100
-            └─ Projection Est. 119753 rows
+            └─ Projection Est. 120958 rows
                │     Expressions: [n_name, p_mfgr, ps_partkey, s_acctbal, s_address, s_comment, s_name, s_phone]
-               └─ Filter Est. 119753 rows
+               └─ Filter Est. 120958 rows
                   │     Condition: ps_supplycost = cast(`expr#min(ps_supplycost)`, 'Nullable(Decimal(15, 2))')
-                  └─ Window Est. 479011 rows
-                     └─ Repartition Exchange Est. 479011 rows
+                  └─ Window Est. 483832 rows
+                     └─ Repartition Exchange Est. 483832 rows
                         │     Partition by: {ps_partkey}
-                        └─ Inner (PARALLEL_HASH) Join Est. 479011 rows
+                        └─ Inner (PARALLEL_HASH) Join Est. 483832 rows
                            │     Condition: s_suppkey == ps_suppkey
                            │     Runtime Filters Builder: {ps_suppkey}
                            ├─ Repartition Exchange Est. 2000000 rows
@@ -42,9 +42,9 @@ Projection Est. 100 rows
                            │                    └─ TableScan tpch1000_sample.region Est. 5 rows
                            │                             Where: r_name = 'EUROPE'
                            │                             Outputs: [r_regionkey, r_name]
-                           └─ Repartition Exchange Est. 2391125 rows
+                           └─ Repartition Exchange Est. 2415190 rows
                               │     Partition by: {ps_suppkey}
-                              └─ Inner Join Est. 2391125 rows
+                              └─ Inner Join Est. 2415190 rows
                                  │     Condition: ps_partkey == p_partkey
                                  │     Runtime Filters Builder: {p_partkey}
                                  ├─ Filter Est. 800000000 rows
@@ -52,9 +52,9 @@ Projection Est. 100 rows
                                  │  └─ TableScan tpch1000_sample.partsupp Est. 800000000 rows
                                  │           Where: Runtime Filters: {ps_partkey}
                                  │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-                                 └─ Projection Est. 599112 rows
+                                 └─ Projection Est. 598998 rows
                                     │     Expressions: [p_mfgr, p_partkey]
-                                    └─ Filter Est. 599112 rows
+                                    └─ Filter Est. 598998 rows
                                        │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS')
                                        └─ TableScan tpch1000_sample.part Est. 200000000 rows
                                                 Where: (p_size = 15) AND (p_type LIKE '%BRASS')

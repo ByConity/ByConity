@@ -1,7 +1,7 @@
 Nullable(Int32)	Int32	Nullable(Int32)	Int32
-CREATE TABLE test.data_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Int32\n)\nENGINE = CnchMergeTree\nORDER BY b\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.data_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Int32\n)\nENGINE = CnchMergeTree\nORDER BY b\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
 Nullable(Int32)	Int32	Nullable(Int32)	Nullable(Int32)	Nullable(UInt8)
-CREATE TABLE test.set_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Nullable(Int32),\n    `f` Nullable(UInt8) DEFAULT 1\n)\nENGINE = CnchMergeTree\nORDER BY b\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.set_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Nullable(Int32),\n    `f` Nullable(UInt8) DEFAULT 1\n)\nENGINE = CnchMergeTree\nORDER BY b\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.cannot_be_nullable\n(\n    `n` Nullable(Int8),\n    `a` Array(UInt8),\n    `c` Int8\n)\nENGINE = CnchMergeTree\nORDER BY c\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.cannot_be_nullable\n(\n    `n` Nullable(Int8),\n    `a` Array(UInt8),\n    `c` Int8\n)\nENGINE = CnchMergeTree\nORDER BY c\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.set_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Nullable(Int32),\n    `f` Nullable(UInt8) DEFAULT 1\n)\nENGINE = CnchMergeTree\nORDER BY b\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.set_null\n(\n    `a` Nullable(Int32),\n    `b` Int32,\n    `c` Nullable(Int32),\n    `d` Nullable(Int32),\n    `f` Nullable(UInt8) DEFAULT 1\n)\nENGINE = CnchMergeTree\nORDER BY b\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.cannot_be_nullable\n(\n    `n` Nullable(Int8),\n    `a` Array(UInt8),\n    `c` Int8\n)\nENGINE = CnchMergeTree\nORDER BY c\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.cannot_be_nullable\n(\n    `n` Nullable(Int8),\n    `a` Array(UInt8),\n    `c` Int8\n)\nENGINE = CnchMergeTree\nORDER BY c\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192

@@ -657,8 +657,6 @@ void InterpreterSelectQueryUseOptimizer::setUnsupportedSettings(ContextMutablePt
         return;
 
     SettingsChanges setting_changes;
-    setting_changes.emplace_back("distributed_aggregation_memory_efficient", false);
-
     context->applySettingsChanges(setting_changes);
 }
 

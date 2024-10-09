@@ -259,6 +259,7 @@ private:
 
     bool hasFunctionCanUseBitmapIndex() const;
     void initMetadataAndStorageSnapshot(ContextPtr context);
+    Names getRequiredColumnsAndPartitionColumns() const;
 };
 
 }

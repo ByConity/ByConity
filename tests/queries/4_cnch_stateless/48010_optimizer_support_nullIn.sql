@@ -1,8 +1,5 @@
 SET transform_null_in = 0;
 
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
-
 select nullIn(null, tuple(1, 2, null));
 select in(null, tuple(1, 2, null));
 select nullIn(null, null);

@@ -9,7 +9,7 @@ SELECT LOCATE('bar', 'foobarbar'); -- mysql locate
 SELECT INSTR('bar', 'foobar');
 SELECT INSTR('xbar', NULL);
 SELECT INSTR(NULL, 'foobar');
-USE test;
+
 DROP TABLE IF EXISTS table_instr_0;
 CREATE TABLE table_instr_0(val1 UInt64, val2 String,val3 String) ENGINE=CnchMergeTree() ORDER BY val1;
 INSERT INTO table_instr_0 VALUES(0, 'foobarbar', 'bar');

@@ -82,8 +82,8 @@ WorkloadExtendedStatsPtr WorkloadTableStats::collectExtendedStats(
 
     LOG_DEBUG(getLogger("WorkloadTableStats"), "Collecting extended stats for table: {}", query);
 
-    Statistics::SubqueryHelper subquery_helper = Statistics::SubqueryHelper::create(context, query);
-    Block result = Statistics::getOnlyRowFrom(subquery_helper);
+    auto query_context = Statistics::SubqueryHelper::createQueryContext(context);
+    auto result = executeSubQueryWithOneRow(query, query_context, true);
 
     auto column_it = result.cbegin();
 

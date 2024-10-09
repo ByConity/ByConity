@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
-
 DROP TABLE IF EXISTS t40075_subcol_cte;
 
 CREATE TABLE t40075_subcol_cte

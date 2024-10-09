@@ -1,4 +1,3 @@
-use test;
 drop table if exists test_func_retention2;
 
 CREATE TABLE test_func_retention2 (`hash_uid` String, `server_time` Int64, `profile` String, first_day UInt8) ENGINE = CnchMergeTree PARTITION BY toDate(server_time) ORDER BY server_time;
@@ -105,4 +104,4 @@ FROM
     ) AS b USING (hash_uid)
 );
 
-drop table if exists test.test_func_retention2;
+drop table if exists test_func_retention2;

@@ -1,6 +1,7 @@
 #include <memory>
 #include <IO/HTTPCommon.h>
 #include <IO/S3Common.h>
+#include <aws/s3/model/CopyObjectRequest.h>
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -74,6 +75,7 @@ namespace ProfileEvents
     extern const Event S3UploadPart;
     extern const Event S3PutObject;
     extern const Event S3GetObject;
+    extern const Event S3CopyObject;
 
     extern const Event DiskS3HeadObject;
     extern const Event DiskS3CreateMultipartUpload;
@@ -81,6 +83,7 @@ namespace ProfileEvents
     extern const Event DiskS3CompleteMultipartUpload;
     extern const Event DiskS3UploadPart;
     extern const Event DiskS3PutObject;
+    extern const Event DiskS3CopyObject;
 }
 
 namespace
@@ -174,7 +177,7 @@ namespace ErrorCodes
 }
 
 bool isS3URIScheme(const String& scheme) {
-    return (strcasecmp(scheme.c_str(), "s3") == 0) || (strcasecmp(scheme.c_str(), "http") == 0) || (strcasecmp(scheme.c_str(), "https") == 0);
+    return S3::URI::isS3Scheme(scheme) || (strcasecmp(scheme.c_str(), "http") == 0) || (strcasecmp(scheme.c_str(), "https") == 0);
 }
 
 namespace S3
@@ -321,24 +324,29 @@ namespace S3
         }
     }
 
+
+        static constexpr auto S3 = "S3";
+        static constexpr auto S3A = "S3A";
+        static constexpr auto COSN = "COSN";
+        static constexpr auto COS = "COS";
+        static constexpr auto OBS = "OBS";
+        static constexpr auto OSS = "OSS";
+        static constexpr auto TOS = "TOS";
+        static std::set<String> supported_storage_names {S3, S3A, COSN, COS, OBS, OSS, TOS};
+
     URI::URI(const Poco::URI & uri_, bool parse_region)
     {
         /// Case when bucket name represented in domain name of S3 URL.
         /// E.g. (https://bucket-name.s3.Region.amazonaws.com/key)
         /// https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html#virtual-hosted-style-access
 
-        static const RE2 virtual_hosted_style_pattern(R"((.+)\.(s3|cos|tos)([.\-][a-z0-9\-.:]+))");
+        static const RE2 virtual_hosted_style_pattern(R"((.+)\.(s3|s3a|cos|obs|oss|tos)([.\-][a-z0-9\-.:]+))");
 
 
         /// Case when bucket name and key represented in path of S3 URL.
         /// E.g. (https://s3.Region.amazonaws.com/bucket-name/key)
         /// https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html#path-style-access
         static const RE2 path_style_pattern("^/([^/]*)/(.*)");
-
-        static constexpr auto S3 = "S3";
-        static constexpr auto COSN = "COSN";
-        static constexpr auto COS = "COS";
-        static constexpr auto TOS = "TOS";
 
 
         uri = uri_;
@@ -393,17 +401,11 @@ namespace S3
                     + quoteString(name) + "(" + uri.toString() + ")",
                     ErrorCodes::BAD_ARGUMENTS);
             }
-            if (name == S3)
+            if (name == S3 || name == S3A)
             {
+                storage_name = S3;
+            } else {
                 storage_name = name;
-            }
-            else if (name == TOS)
-            {
-                storage_name = TOS;
-            }
-            else
-            {
-                storage_name = COSN;
             }
         }
         else if (re2::RE2::PartialMatch(uri.getPath(), path_style_pattern, &bucket, &key))
@@ -434,7 +436,7 @@ namespace S3
         }
         else if (endpoint_splices[0].starts_with("tos"))
         {
-            if (endpoint_splices.size() < 1)
+            if (endpoint_splices.empty())
                 return;
             region = endpoint_splices[0].starts_with("tos-s3") ? endpoint_splices[0].substr(7) : endpoint_splices[0].substr(4);
         }
@@ -448,6 +450,18 @@ namespace S3
         if (bucket.length() < 3 || bucket.length() > 63)
             throw Exception("Bucket name length is out of bounds in virtual hosted style S3 URI:" + quoteString(bucket)
                 + (!uri.empty() ? " (" + uri.toString() + ")" : ""), ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    bool URI::isS3Scheme(const Poco::URI &uri)
+    {
+        return URI::isS3Scheme(uri.getScheme());
+    }
+
+    bool URI::isS3Scheme(const String & scheme)
+    {
+        auto scheme_upper_case = scheme;
+        boost::to_upper(scheme_upper_case);
+        return supported_storage_names.contains(scheme_upper_case);
     }
 
     S3Config::S3Config(const String & ini_file_path)
@@ -922,6 +936,22 @@ namespace S3
             ProfileEvents::increment(ProfileEvents::DiskS3PutObject);
         auto outcome = client->PutObject(req);
 
+        if (!outcome.IsSuccess())
+        {
+            ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);
+            throw S3Exception(outcome.GetError());
+        }
+    }
+
+    void S3Util::copyObject(const String & from_key, const String & to_bucket, const String & to_key)
+    {
+        Aws::S3::Model::CopyObjectRequest request;
+        request.WithCopySource(bucket + "/" + from_key).WithBucket(to_bucket).WithKey(to_key);
+
+        Aws::S3::Model::CopyObjectOutcome outcome = client->CopyObject(request);
+        ProfileEvents::increment(ProfileEvents::S3CopyObject);
+        if (for_disk_s3)
+            ProfileEvents::increment(ProfileEvents::DiskS3CopyObject);
         if (!outcome.IsSuccess())
         {
             ProfileEvents::increment(ProfileEvents::S3WriteRequestsErrors, 1);

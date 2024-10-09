@@ -3,6 +3,7 @@
 #include <Common/Logger.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
+#include <Storages/Hive/CnchHiveSettings.h>
 #include <common/shared_ptr_helper.h>
 
 namespace DB
@@ -60,6 +61,7 @@ public:
     void alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &) override final;
 
     virtual void serializeHiveFiles(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files);
+    CnchHiveSettingsPtr getSettings() const { return storage_settings; }
 
 protected:
     virtual size_t maxStreams(ContextPtr local_context) const { return local_context->getSettingsRef().max_threads; }
@@ -79,7 +81,7 @@ protected:
     String db_name;
     String table_name;
 
-    std::shared_ptr<CnchHiveSettings> storage_settings;
+    CnchHiveSettingsPtr storage_settings;
 
 private:
     LoggerPtr log{getLogger("CnchHive")};

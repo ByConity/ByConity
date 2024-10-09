@@ -30,10 +30,6 @@ namespace DB
 {
 class RemoteHostFilter;
 
-inline bool isS3Scheme(const std::string & scheme)
-{
-    return strcasecmp(scheme.c_str(), "s3") == 0;
-}
 
 bool isS3URIScheme(const String & scheme);
 }
@@ -130,6 +126,8 @@ struct URI
     }
 
     static void validateBucket(const String & bucket, const Poco::URI & uri);
+    static bool isS3Scheme(const Poco::URI & uri);
+    static bool isS3Scheme(const String & scheme);
 };
 
 class S3Config
@@ -252,6 +250,8 @@ public:
         const std::shared_ptr<Aws::StringStream> & stream,
         const std::optional<std::map<String, String>> & metadata = std::nullopt,
         const std::optional<std::map<String, String>> & tags = std::nullopt) const;
+
+    void copyObject(const String & from_key, const String & to_bucket, const String & to_key);
 
     // Delete object
     void deleteObject(const String & key, bool check_existence = true) const;

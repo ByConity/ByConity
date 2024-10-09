@@ -11,9 +11,9 @@ Projection Est. 2368 rows
                └─ Aggregating Est. 2368 rows
                   │     Group by: {n_name, n_name_1, expr#toYear(l_shipdate)}
                   │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-                  └─ Projection Est. 8110002 rows
+                  └─ Projection Est. 5778976 rows
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
-                     └─ Inner (PARALLEL_HASH) Join Est. 8110002 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 5778976 rows
                         │     Condition: l_orderkey == o_orderkey
                         │     Filter: ((n_name = 'GERMANY') OR (n_name_1 = 'GERMANY')) AND ((n_name_1 = 'FRANCE') OR (n_name = 'FRANCE'))
                         │     Runtime Filters Builder: {o_orderkey}

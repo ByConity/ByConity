@@ -1,17 +1,17 @@
-Projection Est. 89074167 rows
+Projection Est. 89536523 rows
 │     Expressions: c_count:=`expr#count(o_orderkey)`, custdist:=`expr#count()`
-└─ Sorting Est. 89074167 rows
+└─ Sorting Est. 89536523 rows
    │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
-   └─ Gather Exchange Est. 89074167 rows
-      └─ Sorting Est. 89074167 rows
+   └─ Gather Exchange Est. 89536523 rows
+      └─ Sorting Est. 89536523 rows
          │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
-         └─ MergingAggregated Est. 89074167 rows
-            └─ Repartition Exchange Est. 89074167 rows
+         └─ MergingAggregated Est. 89536523 rows
+            └─ Repartition Exchange Est. 89536523 rows
                │     Partition by: {expr#count(o_orderkey)}
-               └─ Aggregating Est. 89074167 rows
+               └─ Aggregating Est. 89536523 rows
                   │     Group by: {expr#count(o_orderkey)}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ Aggregating Est. 89074167 rows
+                  └─ Aggregating Est. 89536523 rows
                      │     Group by: {c_custkey}
                      │     Aggregates: expr#count(o_orderkey):=AggNull(count)(o_orderkey)
                      └─ Left (PARALLEL_HASH) Join Est. 1274999991 rows

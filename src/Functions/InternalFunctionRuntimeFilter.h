@@ -41,10 +41,12 @@ public:
         return false;
     }
 
-    ColumnPtr executeImpl(
-        const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const override
+    ColumnPtr
+    executeImpl(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/, size_t input_rows_count) const override
     {
-        throw Exception("Unexpected internal function: runtime Filter", ErrorCodes::NOT_IMPLEMENTED);
+        // just used to let VirtualColumnUtils::prepareFilterBlockWithQuery handle runtime filters well
+        auto result = ColumnConst::create(ColumnUInt8::create(/* size */ 1, /* value */ 1U), input_rows_count);
+        return result;
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override { return std::make_shared<DataTypeUInt8>(); }

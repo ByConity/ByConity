@@ -1,8 +1,5 @@
 SET enable_optimizer = 1;
 
-CREATE DATABASE IF NOT EXISTS test;
-
-use test;
 DROP TABLE IF EXISTS t40047;
 CREATE TABLE t40047 (a Int32, b Nullable(UInt32), c String) ENGINE = CnchMergeTree() ORDER BY a;
 

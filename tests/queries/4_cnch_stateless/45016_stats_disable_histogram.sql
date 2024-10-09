@@ -1,4 +1,3 @@
-use test;
 set create_stats_time_output=0;
 drop table if exists stats_disable_hist;
 create table stats_disable_hist(x UInt64, y Float64) Engine=CnchMergeTree() order by x;

@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS test_session;
 CREATE TABLE test_session (`server_time` UInt64, `time` UInt64, `event` String, `start_time` Nullable(UInt64), `end_time` Nullable(UInt64), `url` Nullable(String), `referer_type` Nullable(String), `referer_site_name` Nullable(String), `hash_uid` UInt64) ENGINE = CnchMergeTree PARTITION BY toYYYYMM(toDateTime(server_time)) ORDER BY time SETTINGS index_granularity = 8192;
 -- test split by mSplitTime

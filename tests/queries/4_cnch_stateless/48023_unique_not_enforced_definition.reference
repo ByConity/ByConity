@@ -1,4 +1,4 @@
-CREATE TABLE test.c1\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `parent_id1` UInt8,\n    `description` String,\n    CONSTRAINT parent_id_uk UNIQUE (parent_id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.c1\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `parent_id1` UInt8,\n    `description` String,\n    CONSTRAINT parent_id_uk UNIQUE (parent_id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
 1	1	CHILD ONE
 2	1	CHILD ONE
 3	2	CHILD TWO
@@ -15,12 +15,12 @@ Projection Est. ? rows
                │     Condition: parent_id == id_1
                ├─ Filter Est. ? rows
                │  │     Condition: id = 1
-               │  └─ TableScan test.c Est. ? rows
+               │  └─ TableScan default.c Est. ? rows
                │           Where: id = 1
                │           Outputs: [id, parent_id]
                └─ Broadcast Exchange Est. ? rows
-                  └─ TableScan test.pp Est. ? rows
+                  └─ TableScan default.pp Est. ? rows
                            Outputs: id_1:=id
 1
-CREATE TABLE test.c\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `description` String,\n    CONSTRAINT unq1 UNIQUE (parent_id),\n    CONSTRAINT my_name_1 UNIQUE (id, description)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
-CREATE TABLE test.c\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `description` String\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.c\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `description` String,\n    CONSTRAINT unq1 UNIQUE (parent_id),\n    CONSTRAINT my_name_1 UNIQUE (id, description)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE default.c\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `description` String\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192

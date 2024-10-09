@@ -1,4 +1,3 @@
-use test;
 drop table if exists any_func;
 set dialect_type='MYSQL';
 set enable_optimizer=1;

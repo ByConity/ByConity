@@ -843,7 +843,7 @@ enum PreloadLevelSettings : UInt64
       "longest one.", \
       0) \
     M(Bool, optimize_read_in_order, true, "Enable ORDER BY optimization for reading data in corresponding order in MergeTree tables.", 0) \
-    M(Bool, optimize_read_in_partition_order, false, "In optimize_read_in_order mode, whether to read parts partition-by-partition if applicable", 0) \
+    M(Bool, optimize_read_in_partition_order, false, "In optimize_read_in_order mode, whether to read parts partition-by-partition if applicable, it will also delay inverted index evaluation till pipeline execution", 0) \
     M(Bool, force_read_in_partition_order, 0, "Similar to optimize_read_in_partition_order, but throw an exception if it cannot be applied to the query, mainly for testing", 0) \
     M(Bool, optimize_aggregation_in_order, false, "Enable GROUP BY optimization for aggregating data in corresponding order in MergeTree tables.", 0) \
     M(UInt64, read_in_order_two_level_merge_threshold, 100, "Minimal number of parts to read to run preliminary merge step during multithread reading in order of primary key.", 0) \
@@ -1105,9 +1105,8 @@ enum PreloadLevelSettings : UInt64
       "Limit the total number of optimizations applied to query plan. If zero, ignored. If limit reached, throw exception", \
       0) \
     M(Bool, query_plan_filter_push_down, true, "Allow to push down filter by predicate query plan step", 0) \
-    M(Bool, enable_partition_filter_push_down, false, "Allow to push down partition filter to query info", 0) \
+    M(Bool, enable_partition_filter_push_down, true, "Allow to push down partition filter to query info", 0) \
     M(Bool, external_enable_partition_filter_push_down, true, "Allow to push down partition filter to query info for external table. Consider to merge into enable_partition_filter_push_down when mergetree bug is fixed", 0) \
-    M(Bool, remove_partition_filter_on_worker, true, "Remove partition filter before worker execution, since partition pruning has been done on the server. This temp fix is used for not selecting partition key as prewhere", 0) \
     M(Bool, enable_optimizer_early_prewhere_push_down, false, "Allow to push down prewhere in the optimizer phase", 0) \
     M(HiveMoveToPrewhereMethod, hive_move_to_prewhere_method, HiveMoveToPrewhereMethod::COLUMN_SIZE, "Move WHERE to PREWHERE based on which method. Used in hive external table", 0) \
     M(UInt64, regexp_max_matches_per_row, 1000, "Max matches of any single regexp per row, used to safeguard 'extractAllGroupsHorizontal' against consuming too much memory with greedy RE.", 0) \
@@ -1136,13 +1135,14 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
     M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
     M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to execute merge", 0)\
     M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
     M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
-    M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not avaiable", 0) \
+    M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not available", 0) \
     M(BackupVWMode, backup_vw_mode, BackupVWMode::BACKUP, "backup vw mode. backup round_robin backup_only", 0) \
+    M(UInt64, backup_copy_tasks_per_worker, 8, "The batch size of backup copy tasks that send to worker each time", 0) \
     M(String, virtual_warehouse_write, "", "When executing CREATE TABLE query, if this is set, the value will be treated as table setting `cnch_vw_write`", 0) \
     M(String, vw_schedule_algo, "Unknown", "algorithm for picking a worker group from vw. {Random(1),LocalRoundRobin(2),LocalLowCpu(3),LocalLowMem(4),LocalLowDisk(5),GlobalRoundRobin(102),GlobalLowCpu(103),GlobalLowMem(104),GlobalLowDisk(105)}", 0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
@@ -1162,28 +1162,11 @@ enum PreloadLevelSettings : UInt64
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
     M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
-    M(String, \
-      blocklist_for_merge_thread_regex, \
-      "", \
-      "A blacklist for merge thread, to prevent the generation of MergeTasks for some tables.", \
-      0) \
-    M(Bool, \
-      decimal_division_use_extended_scale, \
-      false, \
-      "If enabled, the result scale of decimal division is determined by: max(6, S1)", \
-      0) \
-    M(Bool, \
-      decimal_arithmetic_promote_storage, \
-      false, \
-      "Promote storage for some cases of decimal arithmetic operation(e.g. Decimal32 * Decimal32 -> Decimal64)", \
-      0) \
-    M(Bool, \
-      allow_extended_type_conversion, \
-      false, \
-      "When enabled, implicit type conversion is allowed for more input types(e.g. UInt64 & Ints, Decimal & Float, Float & Int64)", \
-      0) \
-    M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0) \
-\
+    M(String, blocklist_for_merge_thread_regex, "CHTMP$", "A blacklist for merge thread, to prevent the generation of MergeTasks for some tables.", 0) \
+    M(Bool, decimal_division_use_extended_scale, false, "If enabled, the result scale of decimal division is determined by: max(6, S1)", 0) \
+    M(Bool, decimal_arithmetic_promote_storage, false, "Promote storage for some cases of decimal arithmetic operation(e.g. Decimal32 * Decimal32 -> Decimal64)", 0) \
+    M(Bool, allow_extended_type_conversion, false, "When enabled, implicit type conversion is allowed for more input types(e.g. UInt64 & Ints, Decimal & Float, Float & Int64)", 0) \
+    M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0)  \
     M(Bool, use_query_cache, false, "Enable the query cache", 0) \
     M(Bool, enable_transactional_query_cache, true, "Enable transactional query cache for CNCH engine table", IMPORTANT) \
     M(Bool, enable_writes_to_query_cache, true, "Enable storing results of SELECT queries in the query cache", 0) \
@@ -1290,6 +1273,7 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, manifest_cache_min_lifetime, 1800, "Min lifetime for manifest parts", 0) \
     M(Milliseconds, broadcast_manifest_timeout, 5000, "Timeout for broadcasting manifest", 0) \
     M(Bool, enable_manifest_cache, true, "", 0) \
+    M(Bool, cnch_enable_copy_for_partition_operation, false, "whether to copy data for attach/detach/replace partition operations", 0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
     M(Bool, use_hive_cluster_key_filter, true, "", 0) \
@@ -1359,6 +1343,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_replace_group_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
     M(Bool, enable_replace_order_by_literal_to_symbol, false, "Obsolete setting, does nothing.", 0) \
     M(Bool, enable_topn_filtering_optimization, false, "Obsolete setting, Whether enable TopNFilterting optimization", 0) \
+    M(Bool, remove_partition_filter_on_worker, true, "Obsolete setting, remove partition filter before worker execution, since partition pruning has been done on the server. This temp fix is used for not selecting partition key as prewhere", 0) \
     /** Ingestion */ \
     M(Seconds, ingest_column_memory_lock_timeout, 5, "The time that spend on wait for memory lock", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
@@ -1400,7 +1385,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, block_json_query_in_optimizer, true, "Whether block json query in optimizer", 0) \
     M(Bool, enable_prune_source_plan_segment, false, "Whether prune source plan segment", 0) \
     M(Bool, send_cacheable_table_definitions, true, "Whether to send cacheable table definitions to worker, which reduces parsing overhead and is particularly beneficial for high concurrency workload", 0) \
-    M(Bool, enable_optimizer_for_create_select, false, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
+    M(Bool, enable_optimizer_for_create_select, true, "Whether enable query optimizer for CREATE TABLE SELECT queries", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \
@@ -1565,6 +1550,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
     M(Bool, extract_bitmap_implicit_filter, false, "Whether to extract implicit filter for bitmap functions, e.g. for bitmapCount('1 | 2 & 3')(a, b), extract 'a in (1, 2, 3)'", 0) \
     M(Bool, enable_add_local_exchange, false, "Whether to add local exchange", 0) \
+    M(Bool, enable_join_using_to_join_on, false, "Whether rewrite Join Using to Join On to make reordering possible", 0) \
     M(Bool, enable_ab_test, false, "Whether to open ab test for settings, If true, the settings for some queries are set in the ab_test_profile profile.", 0) \
     M(Float, ab_test_traffic_factor, 0, "Proportion of queries that perform ab test, meaningful between 0 and 1", 0) \
     M(String, ab_test_profile, "default", "Profile name for ab test", 0) \
@@ -1700,6 +1686,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, execute_subquery_in_lambda, true, "Whether to execute subquery in lambda", 0) \
     M(Bool, early_execute_scalar_subquery, false, "Whether to early execute scalar subquery", 0) \
     M(Bool, early_execute_in_subquery, false, "Whether to early execute in subquery", 0) \
+    M(String, prewhere_skip_functions, "", "A collection of functions which are not choosen as prewhere, use ',' to seperate", 0) \
     \
     /** Hive settings */ \
     M(Bool, hive_allow_missing_columns, true, "Allow missing columns while reading Hive tables", 0) \
@@ -1875,8 +1862,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, async_mv_enable_mv_meta_cache, true, "whether enable read from mv meta cache.", 0) \
     \
     M(Bool, filter_with_inverted_index_segment, false, "Enable inverted index filter with segment", 0) \
-    M(Bool, filter_mark_ranges_with_ivt_when_exec, false, "Delay mark ranges filter with inverted index at pipeline exec", 0) \
     M(Bool, multi_idx_filter_for_ivt, false, "Using multiple inverted index to filter mark ranges at the same time", 0) \
+    \
+    M(String, storage_policy, "", "Use storage policy name when create table", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS and move obsolete settings to OBSOLETE_SETTINGS.
@@ -2070,7 +2058,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
     M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
-    M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
+    M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert total number of part rows to attach.", 0) \
     M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
@@ -2094,6 +2082,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cache_reader_buffer_reuse, false, "Decpreated settings, only a place holder", 0) \
     M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
     M(Bool, enable_select_query_forwarding, false, "Auto forward select query to target server when having multiple servers", 0) \
+    M(Bool, enable_multiple_table_select_query_forwarding, false, "Auto forward select query with multiple tables to target server when having multiple servers", 0) \
+    M(String, explicit_main_table, "", "User specified main table for query forwarding when select multiple tables", 0) \
     \
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \

@@ -21,7 +21,7 @@
 #include <Columns/FilterDescription.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/OneBlockInputStream.h>
-#include <DataStreams/TemporaryFileStream.h>
+#include <DataStreams/TemporaryFileStreamLegacy.h>
 #include <DataStreams/materializeBlock.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/NestedLoopJoin.h>

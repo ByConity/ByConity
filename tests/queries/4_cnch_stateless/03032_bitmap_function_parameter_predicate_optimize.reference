@@ -12,13 +12,12 @@ Projection Est. ? rows
    │     Group by: {}
    │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
    └─ Gather Exchange Est. ? rows
-      └─ Projection Est. ? rows
-         │     Expressions: [f1, uids]
-         └─ Filter Est. ? rows
-            │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
-                     Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-                     Outputs: [f1, uids, p_date]
+      └─ Filter Est. ? rows
+         │     Condition: f1 = 1
+         └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                  Partition filter: p_date = cast(19723, \'Date\')
+                  Where: f1 = 1
+                  Outputs: [f1, uids]
 explain select bitmapMultiCount('1|2','2','3')(f1, uids) as r2
 from test_tag_bitmap_v2 where p_date='2024-01-01'
 settings enable_optimizer=1;
@@ -28,13 +27,12 @@ Projection Est. ? rows
    │     Group by: {}
    │     Aggregates: expr#BitMapMultiCount(\'1|2\', \'2\', \'3\')(f1, uids):=AggNull(bitmapMultiCount)(f1,uids)
    └─ Gather Exchange Est. ? rows
-      └─ Projection Est. ? rows
-         │     Expressions: [f1, uids]
-         └─ Filter Est. ? rows
-            │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 IN (1, 2, 3))
-            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
-                     Where: (p_date = cast(19723, \'Date\')) AND (f1 IN (1, 2, 3))
-                     Outputs: [f1, uids, p_date]
+      └─ Filter Est. ? rows
+         │     Condition: f1 IN (1, 2, 3)
+         └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                  Partition filter: p_date = cast(19723, \'Date\')
+                  Where: f1 IN (1, 2, 3)
+                  Outputs: [f1, uids]
 explain select
   bitmapCount('1')(f1, uids) as r1,
   bitmapMultiCount('1|2','2','3')(f1, uids) as r2,
@@ -55,10 +53,11 @@ Projection Est. ? rows
       └─ Projection Est. ? rows
          │     Expressions: [f1, f4, uids], expr#toInt64(f2):=toInt64(f2)
          └─ Filter Est. ? rows
-            │     Condition: (p_date = cast(19723, \'Date\')) AND ((f4 IN (10, 20, 30)) OR (f1 IN (1, 2, 3)))
+            │     Condition: (f4 IN (10, 20, 30)) OR (f1 IN (1, 2, 3))
             └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
-                     Where: (p_date = cast(19723, \'Date\')) AND ((f4 IN (10, 20, 30)) OR (f1 IN (1, 2, 3)))
-                     Outputs: [f1, f2, f4, uids, p_date]
+                     Partition filter: p_date = cast(19723, \'Date\')
+                     Where: (f4 IN (10, 20, 30)) OR (f1 IN (1, 2, 3))
+                     Outputs: [f1, f2, f4, uids]
 explain select 1
 from test_tag_bitmap_v2 where p_date='2024-01-01'
 having bitmapCount('1')(f1, uids) > 1
@@ -73,13 +72,12 @@ Projection Est. ? rows
          │     Group by: {}
          │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
          └─ Gather Exchange Est. ? rows
-            └─ Projection Est. ? rows
-               │     Expressions: [f1, uids]
-               └─ Filter Est. ? rows
-                  │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-                  └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
-                           Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-                           Outputs: [f1, uids, p_date]
+            └─ Filter Est. ? rows
+               │     Condition: f1 = 1
+               └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                        Partition filter: p_date = cast(19723, \'Date\')
+                        Where: f1 = 1
+                        Outputs: [f1, uids]
 explain
 select 1
 union all
@@ -97,13 +95,12 @@ Projection Est. 1 rows, cost 1.222000e+00
       │     Group by: {}
       │     Aggregates: expr#BitMapCount(\'1\')(f1, uids):=AggNull(bitmapCount)(f1,uids)
       └─ Gather Exchange Est. ? rows, cost 1.000000e+00
-         └─ Projection Est. ? rows, cost 0.000000e+00
-            │     Expressions: [f1, uids]
-            └─ Filter Est. ? rows, cost 0.000000e+00
-               │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-               └─ TableScan default.test_tag_bitmap_v2 Est. ? rows, cost 0.000000e+00
-                        Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-                        Outputs: [f1, uids, p_date]
+         └─ Filter Est. ? rows, cost 0.000000e+00
+            │     Condition: f1 = 1
+            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows, cost 0.000000e+00
+                     Partition filter: p_date = cast(19723, \'Date\')
+                     Where: f1 = 1
+                     Outputs: [f1, uids]
 explain
 select bitmapCount('1')(x, y) as r1
 from (
@@ -117,13 +114,12 @@ Projection Est. ? rows
    │     Group by: {}
    │     Aggregates: expr#BitMapCount(\'1\')(x, y):=AggNull(bitmapCount)(f1,uids)
    └─ Gather Exchange Est. ? rows
-      └─ Projection Est. ? rows
-         │     Expressions: [f1, uids]
-         └─ Filter Est. ? rows
-            │     Condition: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-            └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
-                     Where: (p_date = cast(19723, \'Date\')) AND (f1 = 1)
-                     Outputs: [f1, uids, p_date]
+      └─ Filter Est. ? rows
+         │     Condition: f1 = 1
+         └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+                  Partition filter: p_date = cast(19723, \'Date\')
+                  Where: f1 = 1
+                  Outputs: [f1, uids]
 explain
 select bitmapCount('1')(x, y) as r1
 from (
@@ -139,13 +135,9 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Inner Join Est. ? rows
          │     Condition: 
-         ├─ Projection Est. ? rows
-         │  │     Expressions: [f1, uids]
-         │  └─ Filter Est. ? rows
-         │     │     Condition: p_date = cast(19723, \'Date\')
-         │     └─ TableScan default.test_tag_bitmap_v2 Est. ? rows
-         │              Where: p_date = cast(19723, \'Date\')
-         │              Outputs: [f1, uids, p_date]
+         ├─ TableScan default.test_tag_bitmap_v2 Est. ? rows
+         │        Partition filter: p_date = cast(19723, \'Date\')
+         │        Outputs: [f1, uids]
          └─ Broadcast Exchange Est. 1 rows
             └─ Values Est. 1 rows
 explain

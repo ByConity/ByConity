@@ -1,4 +1,3 @@
-use test;
 drop table if exists test_48046;
 drop table if exists test_48046_local;
 

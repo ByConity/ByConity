@@ -4,6 +4,6 @@ CREATE DICTIONARY testip
     `test_field` String
 )
 PRIMARY KEY network
-SOURCE(FILE(PATH '/tmp/test.csv' FORMAT CSVWithNames))
+SOURCE(FILE(PATH '/tmp/csv' FORMAT CSVWithNames))
 LIFETIME(MIN 0 MAX 300)
 LAYOUT(IPTRIE()); -- { serverError 137 }

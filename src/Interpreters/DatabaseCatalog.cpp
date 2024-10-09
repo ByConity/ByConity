@@ -622,14 +622,7 @@ bool DatabaseCatalog::isTableExist(const DB::StorageID & table_id, ContextPtr co
     if (table_id.hasUUID())
         return tryGetByUUID(table_id.uuid, context_).second != nullptr;
 
-    DatabasePtr db;
-    {
-        String tenant_db = formatTenantDatabaseName(table_id.database_name);
-        std::lock_guard lock{databases_mutex};
-        auto iter = databases.find(tenant_db);
-        if (iter != databases.end())
-            db = iter->second;
-    }
+    DatabasePtr db = tryGetDatabase(table_id.getDatabaseName(), context_);
     return db && db->isTableExist(table_id.table_name, context_);
 }
 
@@ -781,7 +774,7 @@ DatabasePtr DatabaseCatalog::getDatabase(const String & database_name, ContextPt
 
     if (preferCnchCatalog(*local_context))
     {
-        DatabasePtr res = tryGetDatabaseCnch(database_name, local_context);
+        DatabasePtr res = tryGetDatabaseCnch(resolved_database, local_context);
         if (res)
             return res;
     }

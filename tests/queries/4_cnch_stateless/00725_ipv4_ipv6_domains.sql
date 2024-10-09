@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS ipv4_test;
 
 -- Only valid values for IPv4

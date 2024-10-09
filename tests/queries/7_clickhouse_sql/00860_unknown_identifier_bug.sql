@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS appointment_events;
 CREATE TABLE appointment_events
 (

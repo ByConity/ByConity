@@ -27,10 +27,8 @@ SELECT TIME_TO_SEC(TIME'10:45:30');
 SELECT TIME_TO_SEC(DATETIME'2023-05-21 10:30:00');
 SELECT TIME_TO_SEC(DATE'2023-05-21');
 
-CREATE DATABASE IF NOT EXISTS test;
-use test;
-DROP TABLE IF EXISTS test.time_to_sec_table;
-CREATE TABLE test.time_to_sec_table
+DROP TABLE IF EXISTS time_to_sec_table;
+CREATE TABLE time_to_sec_table
 (
     val1 UInt64, 
     val2 TIME,
@@ -41,10 +39,10 @@ CREATE TABLE test.time_to_sec_table
     fraction UInt64
 ) ENGINE=CnchMergeTree() ORDER BY val1;
 
-INSERT INTO test.time_to_sec_table VALUES(0, '01:02:03', '2022-01-01', '2022-01-01 00:00:00', 22, 34, 999);
-INSERT INTO test.time_to_sec_table VALUES(1, '23:02:03', '2022-01-01', '2022-12-31 23:00:00', 57, 58, 999);
-INSERT INTO test.time_to_sec_table VALUES(2, '23:02:03', '2022-01-01', '2022-01-01 00:00:00', 12, 00, 88888);
-SELECT val1, TIME_TO_SEC(val2), SEC_TO_TIME(TIME_TO_SEC(val2)), TIME_TO_SEC(MAKETIME(val1, val5, val6)), TIME_TO_SEC(val3), TIME_TO_SEC(val4) FROM test.time_to_sec_table ORDER BY val1 ASC;
-SELECT val1, MAKETIME(val1, val5, val6, fraction, 6) FROM test.time_to_sec_table ORDER BY val1 ASC;
-DROP TABLE test.time_to_sec_table;
+INSERT INTO time_to_sec_table VALUES(0, '01:02:03', '2022-01-01', '2022-01-01 00:00:00', 22, 34, 999);
+INSERT INTO time_to_sec_table VALUES(1, '23:02:03', '2022-01-01', '2022-12-31 23:00:00', 57, 58, 999);
+INSERT INTO time_to_sec_table VALUES(2, '23:02:03', '2022-01-01', '2022-01-01 00:00:00', 12, 00, 88888);
+SELECT val1, TIME_TO_SEC(val2), SEC_TO_TIME(TIME_TO_SEC(val2)), TIME_TO_SEC(MAKETIME(val1, val5, val6)), TIME_TO_SEC(val3), TIME_TO_SEC(val4) FROM time_to_sec_table ORDER BY val1 ASC;
+SELECT val1, MAKETIME(val1, val5, val6, fraction, 6) FROM time_to_sec_table ORDER BY val1 ASC;
+DROP TABLE time_to_sec_table;
 

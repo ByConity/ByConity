@@ -28,6 +28,7 @@ void PlanCheck::checkInitPlan(QueryPlan & plan, ContextMutablePtr context)
 void PlanCheck::checkFinalPlan(QueryPlan & plan, ContextMutablePtr context)
 {
     SymbolChecker::check(plan, context, true);
+    TableScanChecker::check(plan, context);
 }
 
 void ReadNothingChecker::check(PlanNodePtr plan)
@@ -103,4 +104,35 @@ Void SymbolChecker::visitFilterNode(FilterNode & node, ContextMutablePtr & conte
     return {};
 }
 
+void TableScanChecker::check(QueryPlan & plan, ContextMutablePtr & context)
+{
+    TableScanChecker tablescan_check;
+    VisitorUtil::accept(plan.getPlanNode(), tablescan_check, context);
+}
+
+Void TableScanChecker::visitPlanNode(PlanNodeBase & node, ContextMutablePtr & context)
+{
+    for (const auto & item : node.getChildren())
+    {
+        VisitorUtil::accept(*item, *this, context);
+    }
+    return {};
+}
+
+Void TableScanChecker::visitTableScanNode(TableScanNode & node, ContextMutablePtr & context)
+{
+    auto & step = node.getStep();
+    if (!context->getSettingsRef().allow_map_access_without_key && step->getStorage() && step->getStorage()->supportsMapImplicitColumn())
+    {
+        if (!step->getStorageSnapshot())
+            throw Exception("StorageSnapshot is nullptr in TableScan", ErrorCodes::LOGICAL_ERROR);
+        Block header = step->getStorageSnapshot()->getSampleBlockForColumns(step->getRequiredColumns());
+        for (auto & col : header)
+        {
+            if (col.type->isByteMap())
+                throw Exception("Map column access without key is not allowed for ByteMap", ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
+    return {};
+}
 }

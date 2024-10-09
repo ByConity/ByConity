@@ -1,5 +1,3 @@
-USE test;
-
 DROP TABLE IF EXISTS types;
 CREATE TABLE types(I16 Int16, I32 Int32, I64 Int64, F32 Float32, F64 Float64, D Date, DT DateTime) Engine = CnchMergeTree ORDER BY tuple();
 INSERT INTO TABLE types VALUES (1, 2, 4, 1.0, 2.0, '2021-01-01', '2021-01-01 00:00:00'), (8, 16, 32, 8.0, 16.0, '2021-01-01', '2021-01-01 00:00:00');

@@ -1,6 +1,5 @@
 SET enable_optimizer = 1, enable_filter_window_to_sorting_limit = 1;
 
-use test;
 DROP TABLE IF EXISTS t40080_tfpoc;
 
 CREATE TABLE t40080_tfpoc

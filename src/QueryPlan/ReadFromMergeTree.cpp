@@ -480,7 +480,7 @@ Pipe ReadFromMergeTree::readInOrder(
 
             ProfileEvents::increment(ProfileEvents::TotalGranulesCount, total_granules);
             ProfileEvents::increment(ProfileEvents::TotalSkippedGranules, dropped_granules);
-            LOG_DEBUG(part_->storage.getLogger(), "MultiIndex has dropped {}/{} granules for part {}",
+            LOG_DEBUG(part_->storage.getLogger(), "Delayed index has dropped {}/{} granules for part {}",
                 dropped_granules, total_granules, part_->name);
 
             return ret;
@@ -1280,7 +1280,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             if (!query_data.table_rewrite_info.empty())
                 RewriteDistributedQueryVisitor(query_data).visit(copy_select);
             auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
-            interpreter->execute();
+            interpreter->execute(true);
             LOG_TRACE(getLogger("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
 
             MergeTreeDataSelectExecutor::filterPartsByPartition(

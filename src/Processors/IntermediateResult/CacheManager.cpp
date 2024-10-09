@@ -28,7 +28,8 @@ void CacheManager::validateIntermediateCache(
     CacheHolderPtr cache_holder,
     const ContextPtr & context,
     const String & digest,
-    const StorageID & storage_id,
+    const String & full_table_name,
+    bool has_unique_key,
     UInt64 last_modified_timestamp,
     time_t now,
     const String & name,
@@ -36,8 +37,13 @@ void CacheManager::validateIntermediateCache(
     std::vector<Type> & new_vectors)
 {
     auto wait_time = context->getSettingsRef().wait_intermediate_result_cache.totalSeconds();
-
-    if (wait_time && last_modified_timestamp + wait_time > static_cast<UInt64>(now))
+    UInt64 time = 0;
+    // unique table's last_modified_timestamp is TxnTimestamp, see TxnTimestamp::toMillisecond
+    if (has_unique_key)
+        time = (last_modified_timestamp >> 18) / 1000;
+    else
+        time = last_modified_timestamp;
+    if (wait_time && time + wait_time > static_cast<UInt64>(now))
     {
         new_vectors.emplace_back(std::move(element));
         ProfileEvents::increment(ProfileEvents::IntermediateResultCacheWait);
@@ -45,9 +51,7 @@ void CacheManager::validateIntermediateCache(
     }
 
     OwnerInfo owner_info{name, static_cast<time_t>(last_modified_timestamp)};
-    // tpcds1.item_449936491680890882 -> tpcds1.item
-    auto table_name = storage_id.getFullTableName().substr(0, storage_id.getFullTableName().rfind("_"));
-    CacheKey key{digest, table_name, owner_info};
+    CacheKey key{digest, full_table_name, owner_info};
     auto value = getCache(key);
     if (value != nullptr)
     {
@@ -99,17 +103,27 @@ CacheHolderPtr CacheManager::createCacheHolder(
 {
     auto part_cache_holder = std::make_shared<CacheHolder>();
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto storage = DatabaseCatalog::instance().tryGetTable(storage_id, context);
+    UInt64 last_modified_timestamp = 0;
+    // tpcds1.item_449936491680890882 -> tpcds1.item
+    auto table_name =storage_id.getFullTableName().substr(0,storage_id.getFullTableName().rfind("_"));
 
     for (auto & part_with_ranges : parts_with_ranges)
     {
         auto & data_part = part_with_ranges.data_part;
 
+        if (storage->getInMemoryMetadataPtr()->hasUniqueKey())
+            last_modified_timestamp = data_part->getDeleteBitmapVersion();
+        else
+            last_modified_timestamp = data_part->commit_time.toSecond();
+
         validateIntermediateCache<RangesInDataPart>(
             part_cache_holder,
             context,
             digest,
-            storage_id,
-            data_part->commit_time.toSecond(),
+            table_name,
+            storage->getInMemoryMetadataPtr()->hasUniqueKey(),
+            last_modified_timestamp,
             now,
             data_part->name,
             part_with_ranges,
@@ -133,6 +147,7 @@ CacheHolderPtr CacheManager::createCacheHolder(
 {
     auto hive_file_cache_holder = std::make_shared<CacheHolder>();
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto storage = DatabaseCatalog::instance().tryGetTable(storage_id, context);
 
     for (auto & file : hive_files)
     {
@@ -140,7 +155,8 @@ CacheHolderPtr CacheManager::createCacheHolder(
             hive_file_cache_holder,
             context,
             digest,
-            storage_id,
+            storage_id.getFullTableName(),
+            false,
             file->getLastModifiedTimestamp(),
             now,
             file->file_path,

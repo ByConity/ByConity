@@ -53,10 +53,14 @@ void DanceMergeSelectorSettings::loadFromConfig(const Poco::Util::AbstractConfig
     }
 }
 
-
-inline auto toPart(const void * data)
+static void reorderPartsRange(IMergeSelector::PartsRange & parts)
 {
-    return *static_cast<const std::shared_ptr<IMergeTreeDataPart> *>(data);
+    /// Sort parts by size/rows/age to select smaller merge tasks
+    std::sort(parts.begin(), parts.end(), [](const IMergeSelector::Part & lhs, const IMergeSelector::Part & rhs)
+    {
+        time_t max_age = std::numeric_limits<time_t>::max();
+        return std::make_tuple(lhs.size, lhs.rows, max_age - lhs.age) < std::make_tuple(rhs.size, rhs.rows, max_age - rhs.age);
+    });
 }
 
 static double score(double count, double sum_size, double sum_size_fixed_cost, double count_exp)
@@ -69,7 +73,7 @@ static double mapPiecewiseLinearToUnit(double value, double min, double max)
     return value <= min ? 0 : (value >= max ? 1 : ((value - min) / (max - min)));
 }
 
-IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
+IMergeSelector::PartsRange DanceMergeSelector::select(PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     if (settings.enable_batch_select)
     {
@@ -77,10 +81,14 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
         return {};
     }
 
-    for (const auto & partition : partitions)
+    for (auto & partition : partitions)
     {
         if (partition.size() >= 2)
-            num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
+        {
+            num_parts_of_partitions[getPartitionID(partition.front())] += partition.size();
+            if (settings.select_nonadjacent_parts_allowed)
+                reorderPartsRange(partition);
+        }
     }
 
     for (const auto & partition : partitions)
@@ -88,6 +96,8 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
         if (partition.size() >= 2)
             selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
     }
+
+    /// Because of using iterator in best_ranges, should not modify part ranges vector after selectWithPartition.
 
     BestRangeWithScore res{};
     for (const auto & [_, ranges_in_partition] : best_ranges)
@@ -104,18 +114,24 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
     return {};
 }
 
-IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
+IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
-    for (const auto & partition : partitions)
+    for (auto & partition : partitions)
     {
         if (partition.size() >= 2)
-            num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
+        {
+            num_parts_of_partitions[getPartitionID(partition.front())] += partition.size();
+            if (settings.select_nonadjacent_parts_allowed)
+                reorderPartsRange(partition);
+        }
     }
 
     for (const auto & partition : partitions)
     {
         selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
     }
+
+    /// Because of using iterator in best_ranges, should not modify part ranges vector after selectWithPartition.
 
     std::vector<BestRangeWithScore *> range_vec;
     for (auto & [_, ranges] : best_ranges)
@@ -195,6 +211,12 @@ void DanceMergeSelector::selectRangesFromScoreTable(
         selectRangesFromScoreTable(parts, score_table, min_j + 1, j, num_max_out, max_width, out);
 }
 
+/// Like std::min, but treat 0 as infinity
+static size_t minValueWithoutZero(size_t a, size_t b)
+{
+    return a == 0 ? b : (b == 0 ? a : std::min(a, b));
+}
+
 void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, [[maybe_unused]] MergeScheduler * merge_scheduler)
 {
     if (parts.empty())
@@ -215,12 +237,17 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
     size_t max_begin = parts.size() < max_parts_to_break ? parts.size() - 1 : max_parts_to_break - 1;
     size_t max_end = max_begin + 1;
 
-    auto & partition_id = toPart(parts.front().data)->info.partition_id;
+    const String & partition_id = getPartitionID(parts.front());
     bool enable_batch_select = enable_batch_select_for_partition(partition_id);
+
+    double base = getModifiedBaseByController(partition_id);
+    const auto & [max_parts_, max_rows_] =
+        controller ? controller->getMaxPartsAndRows(partition_id) : std::make_pair(settings.max_parts_to_merge_base, 0);
+    size_t max_parts_to_merge = std::min(max_parts_, settings.max_parts_to_merge_base.value);
+    size_t max_rows_to_merge = minValueWithoutZero(max_rows_, settings.max_total_rows_to_merge);
 
     /// score_table[i][j] means begin with i and length is j --> range [i, i + j - 1]
     std::vector<std::vector<double>> score_table;
-    size_t max_parts_to_merge = settings.max_parts_to_merge_base;
     if (enable_batch_select)
     {
         for (size_t i = 0; i <= max_begin; i++)
@@ -255,9 +282,9 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
             min_age = std::min(min_age, cur_age);
             max_size = std::max(max_size, cur_size);
 
-            /// LOG_TRACE(data.getLogger(), "begin " << toPart(parts[end-1].data)->name << " size " << sum_size << " rows " << sum_rows);
+            /// LOG_TRACE(data.getLogger(), "begin " << getPartitionID(parts[end-1])->name << " size " << sum_size << " rows " << sum_rows);
 
-            if (settings.max_total_rows_to_merge && sum_rows > settings.max_total_rows_to_merge)
+            if (max_rows_to_merge && sum_rows > max_rows_to_merge)
                 break;
 
             if (max_total_size_to_merge && sum_size > max_total_size_to_merge)
@@ -287,7 +314,7 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
                 need_check = !(settings.final || cur_age >= 3600);
             }
 
-            if (need_check && !allow(sum_size, max_size, min_age, end - begin))
+            if (need_check && !allow(base, sum_size, max_size, min_age, end - begin))
                 continue;
 
             double current_score = score(end - begin, sum_size, settings.size_fixed_cost_to_add, settings.score_count_exp);
@@ -355,44 +382,76 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
     }
 }
 
-bool DanceMergeSelector::allow(double sum_size, double max_size, double min_age, double range_size)
+bool DanceMergeSelector::allow(double base, double sum_size, double max_size, double min_age, double range_size)
 {
-    static size_t min_size_to_lower_base_log = log1p(1024 * 1024);
-    static size_t max_size_to_lower_base_log = log1p(100ULL * 1024 * 1024 * 1024);
+    double lowered_base = base;
 
-    constexpr time_t min_age_to_lower_base_at_min_size = 10;
-    constexpr time_t min_age_to_lower_base_at_max_size = 10;
-    constexpr time_t max_age_to_lower_base_at_min_size = 3600;
-    constexpr time_t max_age_to_lower_base_at_max_size = 30 * 86400;
+    /// If base > 2, it can be lowered by total size or min age. For example, smaller total size and larger min age will lead to
+    /// a lower base, which means when size is smaller and min age is larger, parts can be merge more frequently.
+    /// But if base < 2, according to the formula, smaller size and larger age will lead to a higher base. So we skip all the
+    /// linear interpolate below.
+    if (lowered_base > 2.0)
+    {
+        static size_t min_size_to_lower_base_log = log1p(1024 * 1024);
+        static size_t max_size_to_lower_base_log = log1p(100ULL * 1024 * 1024 * 1024);
 
-    /// Map size to 0..1 using logarithmic scale
-    double size_normalized = mapPiecewiseLinearToUnit(log1p(sum_size), min_size_to_lower_base_log, max_size_to_lower_base_log);
+        constexpr time_t min_age_to_lower_base_at_min_size = 10;
+        constexpr time_t min_age_to_lower_base_at_max_size = 10;
+        constexpr time_t max_age_to_lower_base_at_min_size = 3600;
+        constexpr time_t max_age_to_lower_base_at_max_size = 30 * 86400;
 
-    //    std::cerr << "size_normalized: " << size_normalized << "\n";
+        /// Map size to 0..1 using logarithmic scale
+        double size_normalized = mapPiecewiseLinearToUnit(log1p(sum_size), min_size_to_lower_base_log, max_size_to_lower_base_log);
 
-    /// Calculate boundaries for age
-    double min_age_to_lower_base = interpolateLinear(min_age_to_lower_base_at_min_size, min_age_to_lower_base_at_max_size, size_normalized);
-    double max_age_to_lower_base = interpolateLinear(max_age_to_lower_base_at_min_size, max_age_to_lower_base_at_max_size, size_normalized);
+        //    std::cerr << "size_normalized: " << size_normalized << "\n";
 
-    //    std::cerr << "min_age_to_lower_base: " << min_age_to_lower_base << "\n";
-    //    std::cerr << "max_age_to_lower_base: " << max_age_to_lower_base << "\n";
+        /// Calculate boundaries for age
+        double min_age_to_lower_base = interpolateLinear(min_age_to_lower_base_at_min_size, min_age_to_lower_base_at_max_size, size_normalized);
+        double max_age_to_lower_base = interpolateLinear(max_age_to_lower_base_at_min_size, max_age_to_lower_base_at_max_size, size_normalized);
 
-    /// Map age to 0..1
-    double age_normalized = mapPiecewiseLinearToUnit(min_age, min_age_to_lower_base, max_age_to_lower_base);
+        //    std::cerr << "min_age_to_lower_base: " << min_age_to_lower_base << "\n";
+        //    std::cerr << "max_age_to_lower_base: " << max_age_to_lower_base << "\n";
 
-    //    std::cerr << "age: " << min_age << "\n";
-    //    std::cerr << "age_normalized: " << age_normalized << "\n";
+        /// Map age to 0..1
+        double age_normalized = mapPiecewiseLinearToUnit(min_age, min_age_to_lower_base, max_age_to_lower_base);
 
-    double combined_ratio = std::min(1.0, age_normalized);
+        //    std::cerr << "age: " << min_age << "\n";
+        //    std::cerr << "age_normalized: " << age_normalized << "\n";
 
-    //    std::cerr << "combined_ratio: " << combined_ratio << "\n";
+        double combined_ratio = std::min(1.0, age_normalized);
 
-    double lowered_base = interpolateLinear(settings.min_parts_to_merge_base, 2.0, combined_ratio);
+        //    std::cerr << "combined_ratio: " << combined_ratio << "\n";
+
+        lowered_base = interpolateLinear(base, 2.0, combined_ratio);
+    }
 
     //    std::cerr << "------- lowered_base: " << lowered_base << "\n";
 
     return (sum_size + range_size * settings.size_fixed_cost_to_add) / (max_size + settings.size_fixed_cost_to_add) >= lowered_base;
+}
 
+String DanceMergeSelector::getPartitionID(const Part & part)
+{
+    if (get_partition_id)
+        return get_partition_id(part);
+    return part.getDataPartPtr()->info.partition_id;
+}
+
+double DanceMergeSelector::getModifiedBaseByController(const String & partition_id)
+{
+    if (controller && controller->needControlWriteAmplification(partition_id))
+    {
+        double base = settings.min_parts_to_merge_base;
+        const auto & [wa, wa_min, wa_max] = controller->getWriteAmplification(partition_id);
+        if (wa > wa_min)
+        {
+            double ratio = mapPiecewiseLinearToUnit(log1p(wa), log1p(wa_min), log1p(wa_max));
+            base = interpolateLinear(base, std::max(base, settings.max_parts_to_merge_base.value / 5.0), ratio);
+        }
+        return base;
+    }
+
+    return settings.min_parts_to_merge_base;
 }
 
 }

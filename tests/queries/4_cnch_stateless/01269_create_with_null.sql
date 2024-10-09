@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS data_null;
 DROP TABLE IF EXISTS set_null;
 DROP TABLE IF EXISTS cannot_be_nullable;

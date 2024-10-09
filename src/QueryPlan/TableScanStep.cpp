@@ -432,47 +432,6 @@ ExecutePlan TableScanExecutor::buildExecutePlan(const DistributedPipelineSetting
             execute_plan.push_back(ExecutePlanElement(part_group, std::move(normal_read_result), part_group.parts));
     }
 
-    if (log->debug())
-    {
-        size_t total_parts = 0;
-        size_t total_marks = 0;
-        size_t normal_parts = 0;
-        size_t projection_parts = 0;
-        size_t marks_of_normal_parts = 0;
-        size_t marks_of_projection_parts = 0;
-        for (const auto & e: execute_plan)
-        {
-            size_t parts = e.part_group.partsNum();
-            size_t marks = e.read_analysis->marks();
-
-            total_parts += parts;
-            total_marks += marks;
-            if (e.projection_desc)
-            {
-                projection_parts += parts;
-                marks_of_projection_parts += marks;
-            }
-            else
-            {
-                normal_parts += parts;
-                marks_of_normal_parts += marks;
-            }
-        }
-        String str = fmt::format(
-            "data input pipeline with projection(summary): total {} parts, total {} marks, "
-            "{} normal parts, {} projection parts, {} marks of normal parts, {} marks of projection parts",
-            total_parts, total_marks, normal_parts, projection_parts, marks_of_normal_parts, marks_of_projection_parts);
-        LOG_DEBUG(log, str);
-
-        str = "data input pipeline with projection(detail): ";
-        for (const auto & e: execute_plan)
-        {
-            str.push_back('\n');
-            str.append(e.toString());
-        }
-        LOG_DEBUG(log, str);
-    }
-
     return execute_plan;
 }
 
@@ -620,60 +579,8 @@ void TableScanExecutor::prunePartsByIndex(MergeTreeData::DataPartsVector & parts
     }
 
     ReadFromMergeTree::AnalysisResult result;
-    if (select_query_info.partition_filter)
-    {
-        /// If partition filter exist reconstruct query info
-        SelectQueryOptions options;
-        auto mutable_context = Context::createCopy(context);
-        ASTPtr copy_select = select_query_info.query->clone();
-        auto & copy_select_query = copy_select->as<ASTSelectQuery &>();
-        std::vector<String> setting_names{"enable_partition_filter_push_down"};
-        for (auto & setting_name : setting_names)
-        {
-            SettingChange setting;
-            setting.name = setting_name;
-            setting.value = Field(false);
-            if (copy_select_query.settings())
-            {
-                auto * set_ast = copy_select_query.settings()->as<ASTSetQuery>();
-                auto it = std::find_if(set_ast->changes.begin(), set_ast->changes.end(), [&](const SettingChange & change) {
-                    return change.name == setting_name;
-                });
-                if (it != set_ast->changes.end())
-                    it->value = Field(false);
-                else
-                    set_ast->changes.emplace_back(setting);
-            }
-            else
-            {
-                ASTSetQuery set_ast;
-                set_ast.is_standalone = false;
-                set_ast.changes.emplace_back(setting);
-                copy_select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::make_shared<ASTSetQuery>(set_ast));
-            }
-        }
-
-        copy_select_query.setExpression(ASTSelectQuery::Expression::WHERE, select_query_info.partition_filter->clone());
-        copy_select_query.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
-        auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
-        interpreter->execute();
-        LOG_TRACE(log, "Construct partition filter query {}", queryToString(copy_select));
-        MergeTreeDataSelectExecutor::filterPartsByPartition(
-            parts, part_values, storage_metadata, storage, interpreter->getQueryInfo(), context, max_added_blocks.get(), log, result.index_stats);
-    }
-    else
-    {
-        MergeTreeDataSelectExecutor::filterPartsByPartition(
-            parts,
-            part_values,
-            storage_metadata,
-            storage,
-            select_query_info,
-            context,
-            max_added_blocks.get(),
-            log,
-            result.index_stats);
-    }
+    MergeTreeDataSelectExecutor::filterPartsByPartition(
+        parts, part_values, storage_metadata, storage, select_query_info, context, max_added_blocks.get(), log, result.index_stats);
 }
 
 PartGroups TableScanExecutor::groupPartsBySchema(const MergeTreeData::DataPartsVector & parts)
@@ -919,9 +826,9 @@ TableScanStep::TableScanStep(
 SelectQueryInfo TableScanStep::fillQueryInfo(ContextPtr context)
 {
     SelectQueryInfo copy_query_info = query_info;
-    makeSetsForIndex(getFilterFromQueryInfo(query_info), context, copy_query_info.sets);
-    if (query_info.partition_filter)
-        makeSetsForIndex(query_info.partition_filter, context, copy_query_info.sets);
+    makeSetsForIndex(query_info.getSelectQuery()->where(), context, copy_query_info.sets);
+    makeSetsForIndex(query_info.getSelectQuery()->prewhere(), context, copy_query_info.sets);
+    // partition_filter shouldn't be included, since it won't be used in the QueryPipeline
     return copy_query_info;
 }
 
@@ -1253,24 +1160,16 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     }
     else
     {
-        ASTPtr partition_filter;
         auto mutable_context = Context::createCopy(build_context.context);
-        if (query_info.partition_filter)
-            partition_filter = query_info.partition_filter->clone();
-        // FIXME: It is used to work around partition keys being chosen as PREWHERE. In long term, we should rely on
-        // enable_partition_filter_push_down = 1 to do the stuff
-        if (mutable_context->getSettingsRef().remove_partition_filter_on_worker)
-            mutable_context->setSetting("enable_partition_filter_push_down", 1U);
-
         options.cache_info = query_info.cache_info;
         auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, mutable_context, options);
         interpreter->execute(true);
+        auto backup_partition_filter = query_info.partition_filter;
         auto backup_input_order_info = query_info.input_order_info;
         query_info = interpreter->getQueryInfo();
         query_info = fillQueryInfo(build_context.context);
         query_info.input_order_info = backup_input_order_info;
-        if (partition_filter)
-            query_info.partition_filter = partition_filter;
+        query_info.partition_filter = backup_partition_filter;
     }
     LOG_DEBUG(log, "init pipeline stage run time: make up query info, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
@@ -1782,7 +1681,7 @@ void TableScanStep::allocate(ContextPtr context)
     // init query_info.syntax_analyzer
     if (!query_info.syntax_analyzer_result)
     {
-        Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumns());
+        Block header = storage_snapshot->getSampleBlockForColumns(getRequiredColumnsAndPartitionColumns());
 
         auto tree_rewriter_result
             = std::make_shared<TreeRewriterResult>(header.getNamesAndTypesList(), storage, storage_snapshot);
@@ -2089,13 +1988,11 @@ void TableScanStep::fillQueryInfoV2(ContextPtr context)
     query_info.syntax_analyzer_result = syntax_analyzer_result;
 
     /// 2. build prepared sets
-    if (auto where = query_info.getSelectQuery()->where())
-        makeSetsForIndex(where, context, query_info.sets);
-    if (auto prewhere = query_info.getSelectQuery()->prewhere())
-        makeSetsForIndex(prewhere, context, query_info.sets);
+    makeSetsForIndex(query_info.getSelectQuery()->where(), context, query_info.sets);
+    makeSetsForIndex(query_info.getSelectQuery()->prewhere(), context, query_info.sets);
+
+    // partition_filter shouldn't be included, since it won't be used in the QueryPipeline
     // TODO: atomic_predicates_expr
-    if (query_info.partition_filter)
-        makeSetsForIndex(query_info.partition_filter, context, query_info.sets);
 
     /// 3. build prewhere info
     if (auto prewhere = query_info.getSelectQuery()->prewhere())
@@ -2160,5 +2057,13 @@ void TableScanStep::initMetadataAndStorageSnapshot(ContextPtr context)
         }
     }
     */
+}
+
+Names TableScanStep::getRequiredColumnsAndPartitionColumns() const
+{
+    auto columns = getRequiredColumns();
+    auto columns_of_partition_filter = SymbolsExtractor::extract(query_info.partition_filter);
+    columns.insert(columns.end(), columns_of_partition_filter.begin(), columns_of_partition_filter.end());
+    return columns;
 }
 }

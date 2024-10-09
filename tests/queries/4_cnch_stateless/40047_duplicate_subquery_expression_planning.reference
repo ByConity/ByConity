@@ -5,7 +5,7 @@ Projection Est. ? rows
       │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=`expr#max(c)_1` + 1
       └─ Inner Join Est. ? rows
          │     Condition: 
-         ├─ TableScan test.t40047_x Est. ? rows
+         ├─ TableScan default.t40047_x Est. ? rows
          │        Outputs: [a]
          └─ Broadcast Exchange Est. ? rows
             └─ Projection Est. ? rows
@@ -15,7 +15,7 @@ Projection Est. ? rows
                      └─ Aggregating Est. ? rows
                         │     Group by: {}
                         │     Aggregates: expr#max(c):=AggNull(max)(c)
-                        └─ TableScan test.t40047_y Est. ? rows
+                        └─ TableScan default.t40047_y Est. ? rows
                                  Outputs: [c]
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
@@ -24,7 +24,7 @@ Projection Est. ? rows
       │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=`expr#max(c)_1` + 1
       └─ Inner Join Est. ? rows
          │     Condition: 
-         ├─ TableScan test.t40047_x Est. ? rows
+         ├─ TableScan default.t40047_x Est. ? rows
          │        Outputs: [a]
          └─ Broadcast Exchange Est. ? rows
             └─ Projection Est. ? rows
@@ -34,7 +34,7 @@ Projection Est. ? rows
                      └─ Aggregating Est. ? rows
                         │     Group by: {}
                         │     Aggregates: expr#max(c):=AggNull(max)(c)
-                        └─ TableScan test.t40047_y Est. ? rows
+                        └─ TableScan default.t40047_y Est. ? rows
                                  Outputs: [c]
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(_subquery1)`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
@@ -43,7 +43,7 @@ Projection Est. ? rows
       │     Expressions: [expr#max(_subquery1)], expr#plus(_subquery2, 1):=`expr#max(_subquery1)` + 1
       └─ Inner Join Est. ? rows
          │     Condition: 
-         ├─ TableScan test.t40047_x Est. ? rows
+         ├─ TableScan default.t40047_x Est. ? rows
          │        Outputs: [a]
          └─ Broadcast Exchange Est. ? rows
             └─ MergingAggregated Est. ? rows
@@ -53,7 +53,7 @@ Projection Est. ? rows
                      │     Aggregates: expr#max(_subquery1):=AggNull(max)(expr#max(a)_1)
                      └─ Inner Join Est. ? rows
                         │     Condition: 
-                        ├─ TableScan test.t40047_y Est. ? rows
+                        ├─ TableScan default.t40047_y Est. ? rows
                         │        Outputs: a_1:=a
                         └─ Broadcast Exchange Est. ? rows
                            └─ Projection Est. ? rows
@@ -63,7 +63,7 @@ Projection Est. ? rows
                                     └─ Aggregating Est. ? rows
                                        │     Group by: {}
                                        │     Aggregates: expr#max(a):=AggNull(max)(a_2)
-                                       └─ TableScan test.t40047_x Est. ? rows
+                                       └─ TableScan default.t40047_x Est. ? rows
                                                 Outputs: a_2:=a
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
@@ -72,7 +72,7 @@ Projection Est. ? rows
       │     Expressions: [expr#max(c)_1], expr#plus(_subquery2, 1):=`expr#max(c)_1` + 1
       └─ Inner Join Est. ? rows
          │     Condition: 
-         ├─ TableScan test.t40047_x Est. ? rows
+         ├─ TableScan default.t40047_x Est. ? rows
          │        Outputs: [a]
          └─ Broadcast Exchange Est. ? rows
             └─ Projection Est. ? rows
@@ -82,7 +82,7 @@ Projection Est. ? rows
                      └─ Aggregating Est. ? rows
                         │     Group by: {}
                         │     Aggregates: expr#max(c):=AggNull(max)(c)
-                        └─ TableScan test.t40047_y Est. ? rows
+                        └─ TableScan default.t40047_y Est. ? rows
                                  Outputs: [c]
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_7`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
@@ -93,7 +93,7 @@ Projection Est. ? rows
          │     Condition: 
          ├─ Inner Join Est. ? rows
          │  │     Condition: 
-         │  ├─ TableScan test.t40047_x Est. ? rows
+         │  ├─ TableScan default.t40047_x Est. ? rows
          │  │        Outputs: [a]
          │  └─ Broadcast Exchange Est. ? rows
          │     └─ Projection Est. ? rows
@@ -103,7 +103,7 @@ Projection Est. ? rows
          │              └─ Aggregating Est. ? rows
          │                 │     Group by: {}
          │                 │     Aggregates: expr#max(c)_6:=AggNull(max)(c_4)
-         │                 └─ TableScan test.t40047_y Est. ? rows
+         │                 └─ TableScan default.t40047_y Est. ? rows
          │                          Outputs: c_4:=c
          └─ Broadcast Exchange Est. ? rows
             └─ Projection Est. ? rows
@@ -113,7 +113,7 @@ Projection Est. ? rows
                      └─ Aggregating Est. ? rows
                         │     Group by: {}
                         │     Aggregates: expr#max(c)_8:=AggNull(max)(c_5)
-                        └─ TableScan test.t40047_y Est. ? rows
+                        └─ TableScan default.t40047_y Est. ? rows
                                  Outputs: c_5:=c
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_2`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
@@ -122,7 +122,7 @@ Projection Est. ? rows
       │     Expressions: [expr#max(c)_2], expr#plus(_subquery2, 1):=`expr#max(c)_2` + 1
       └─ Left Join Est. ? rows
          │     Condition: b == c
-         ├─ TableScan test.t40047_x Est. ? rows
+         ├─ TableScan default.t40047_x Est. ? rows
          │        Outputs: [b]
          └─ Broadcast Exchange Est. ? rows
             └─ MergingAggregated Est. ? rows
@@ -133,7 +133,7 @@ Projection Est. ? rows
                      │     Aggregates: expr#max(c)_2:=AggNull(maxIf)(c,build_side_non_null_symbol)
                      └─ Projection Est. ? rows
                         │     Expressions: [c], build_side_non_null_symbol:=1
-                        └─ TableScan test.t40047_y Est. ? rows
+                        └─ TableScan default.t40047_y Est. ? rows
                                  Outputs: [c]
 Projection Est. ? rows
 │     Expressions: _subquery1:=`expr#max(c)_1`, plus(_subquery2, 1):=`expr#plus(_subquery2, 1)`
@@ -144,7 +144,7 @@ Projection Est. ? rows
          │     Condition: a == c_1
          ├─ Inner Join Est. ? rows
          │  │     Condition: 
-         │  ├─ TableScan test.t40047_x Est. ? rows
+         │  ├─ TableScan default.t40047_x Est. ? rows
          │  │        Outputs: [a]
          │  └─ Broadcast Exchange Est. ? rows
          │     └─ Projection Est. ? rows
@@ -158,7 +158,7 @@ Projection Est. ? rows
          │                    │     Expressions: [c]
          │                    └─ Filter Est. ? rows
          │                       │     Condition: c = a_1
-         │                       └─ TableScan test.t40047_y Est. ? rows
+         │                       └─ TableScan default.t40047_y Est. ? rows
          │                                Where: c = a
          │                                Outputs: [c], a_1:=a
          └─ Broadcast Exchange Est. ? rows
@@ -170,5 +170,5 @@ Projection Est. ? rows
                      │     Aggregates: expr#max(c)_4:=AggNull(maxIf)(c_1,build_side_non_null_symbol)
                      └─ Projection Est. ? rows
                         │     Expressions: [c_1], build_side_non_null_symbol:=1
-                        └─ TableScan test.t40047_y Est. ? rows
+                        └─ TableScan default.t40047_y Est. ? rows
                                  Outputs: c_1:=c

@@ -91,21 +91,19 @@
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 
-#include <TableFunctions/TableFunctionFactory.h>
-#include <common/logger_useful.h>
+#include <DataStreams/BlockIO.h>
 #include <DataTypes/ObjectUtils.h>
-#include <Parsers/queryToString.h>
-#include <Interpreters/executeQuery.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/executeSubQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
-#include <IO/NullWriteBuffer.h>
-#include <IO/ReadBufferFromString.h>
+#include <Parsers/ASTForeignKeyDeclaration.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
+#include <Parsers/queryToString.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Parsers/ASTForeignKeyDeclaration.h>
-#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
+#include <common/logger_useful.h>
 
 #include <Catalog/Catalog.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
@@ -1197,19 +1195,40 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 
     /// If user execute 'CREATE TABLE' with query-level setting `virtual_warehouse_write`, we will pass the value to table setting cnch_vw_write if it's not set.
-    if (auto vw_in_query_settings = getContext()->getSettingsRef().virtual_warehouse_write.value; !vw_in_query_settings.empty())
+    if (create.storage && create.storage->engine && startsWith(create.storage->engine->name, "Cnch")
+        && endsWith(create.storage->engine->name, "MergeTree"))
     {
-        auto * storage_settings = create.storage->settings;
-        if (!storage_settings)
+        if (auto vw_in_query_settings = getContext()->getSettingsRef().virtual_warehouse_write.value; !vw_in_query_settings.empty())
         {
-            ASTPtr single_setting = std::make_shared<ASTSetQuery>();
-            single_setting->as<ASTSetQuery &>().is_standalone = false;
-            single_setting->as<ASTSetQuery &>().changes.push_back({"cnch_vw_write", vw_in_query_settings});
-            create.storage->set(create.storage->settings, single_setting);
+            auto * storage_settings = create.storage->settings;
+            if (!storage_settings)
+            {
+                ASTPtr single_setting = std::make_shared<ASTSetQuery>();
+                single_setting->as<ASTSetQuery &>().is_standalone = false;
+                single_setting->as<ASTSetQuery &>().changes.push_back({"cnch_vw_write", vw_in_query_settings});
+                create.storage->set(create.storage->settings, single_setting);
+            }
+            else if (!storage_settings->changes.tryGet("cnch_vw_write"))
+            {
+                storage_settings->changes.setSetting("cnch_vw_write", vw_in_query_settings);
+            }
         }
-        else if (!storage_settings->changes.tryGet("cnch_vw_write"))
+
+        /// If user execute 'CREATE TABLE' with query-level setting `storage_policy`, we will pass the value to table setting storage_policy if it's not set.
+        if (auto storage_policy_setting = getContext()->getSettingsRef().storage_policy.value; !storage_policy_setting.empty())
         {
-            storage_settings->changes.setSetting("cnch_vw_write", vw_in_query_settings);
+            auto * storage_settings = create.storage->settings;
+            if (!storage_settings)
+            {
+                ASTPtr single_setting = std::make_shared<ASTSetQuery>();
+                single_setting->as<ASTSetQuery &>().is_standalone = false;
+                single_setting->as<ASTSetQuery &>().changes.push_back({"storage_policy", storage_policy_setting});
+                create.storage->set(create.storage->settings, single_setting);
+            }
+            else if (!storage_settings->changes.tryGet("storage_policy"))
+            {
+                storage_settings->changes.setSetting("storage_policy", storage_policy_setting);
+            }
         }
     }
 
@@ -1756,45 +1775,11 @@ BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
         }
         else
         {
-            String insert_query_id = fmt::format("{}_insert", getContext()->getCurrentQueryId());
-            auto insert_context = Context::createCopy(getContext());
-            insert_context->makeSessionContext();
-            insert_context->makeQueryContext();
-            insert_context->setCurrentTransaction(nullptr, false);
-            insert_context->setCurrentVW(nullptr);
-            insert_context->setCurrentWorkerGroup(nullptr);
-            insert_context->setCurrentQueryId(insert_query_id);
+            auto insert_context = createContextForSubQuery(getContext(), "insert");
             if (!insert_context->getSettingsRef().enable_optimizer_for_create_select)
                 insert_context->setSetting("enable_optimizer", false);
 
-            /// Execute INSERT in a separate thread so that it has a clean ThreadStatus attached to its local context
-            /// Pros: a) supports running INSERT in both optimizer and non-optimizer mode (not all inserts are supported by optimizer)
-            ///       b) ThreadStatus for the outer query won't get polutated
-            /// Cons: a) user facing query (CTAS) cannot get progress update
-            ///       b) cancel CTAS won't affect INSERT
-            ///       c) we'll have two process list items (CTAS & INSERT) for the query which might be confusing
-            std::exception_ptr exception;
-            auto thread = ThreadFromGlobalPool([insert_context = std::move(insert_context), &exception, &insert]() {
-                try
-                {
-                    CurrentThread::QueryScope query_scope {insert_context};
-                    ReadBufferFromOwnString in(insert->formatForErrorMessage());
-                    NullWriteBuffer out;
-                    executeQuery(in, out, /*allow_into_outfile=*/false, insert_context, /*set_result_details=*/{});
-                }
-                catch (...)
-                {
-                    exception = std::current_exception();
-                }
-
-            });
-            thread.join();
-
-            if (exception)
-                std::rethrow_exception(exception);
-
-            /// NOTE: cannot return BlockIO from the inner query because fields like process_list_entry
-            /// and finish_callback will be overwrite by the outer executeQuery, which leads to subtle bugs
+            executeSubQueryWithoutResult(insert->formatForErrorMessage(), insert_context, false);
             return {};
         }
     }

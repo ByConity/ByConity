@@ -15,13 +15,13 @@
 
 #include <CloudServices/CnchMergeMutateThread.h>
 
+#include <common/logger_useful.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
-#include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/selectPartsToMerge.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
-#include "common/logger_useful.h"
 #include <Common/Configurations.h>
 #include <Common/ProfileEvents.h>
 #include <Common/TestUtils.h>
@@ -295,7 +295,6 @@ std::unique_ptr<ManipulationTaskRecord> FutureManipulationTask::moveRecord()
 CnchMergeMutateThread::CnchMergeMutateThread(ContextPtr context_, const StorageID & id)
     : ICnchBGThread(context_->getGlobalContext(), CnchBGThreadType::MergeMutate, id)
 {
-    partition_selector = getContext()->getBGPartitionSelector();
 }
 
 CnchMergeMutateThread::~CnchMergeMutateThread()
@@ -514,6 +513,11 @@ void CnchMergeMutateThread::runImpl()
             vw_name = storage.getSettings()->cnch_vw_write;
             /// TODO: pick_worker_algo = storage.getSettings()->cnch_merge_pick_worker_algo;
             vw_handle = getContext()->getVirtualWarehousePool().get(vw_name);
+
+            /// Update default worker number, used to set expected_parts_number
+            const String default_vw_name = storage.getSettings()->cnch_vw_default;
+            auto default_vw_handle = getContext()->getVirtualWarehousePool().get(default_vw_name);
+            num_default_workers_in_vw_settings = default_vw_handle->getSettingsRef().num_workers;
         }
 
         bool merge_success = false;
@@ -664,6 +668,39 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
     return result;
 }
 
+void removeUnselectableParts(
+    ServerDataPartsVector & visible_parts,
+    NameSet & merging_mutating_parts_snapshot,
+    std::multimap<String, UInt64> & unselectable_part_rows,
+    UInt64 max_bytes,
+    UInt64 max_rows)
+{
+    visible_parts.erase(
+        std::remove_if(
+            visible_parts.begin(),
+            visible_parts.end(),
+            [&merging_mutating_parts_snapshot, &unselectable_part_rows, max_bytes, max_rows](const auto & p) {
+                if (merging_mutating_parts_snapshot.erase(p->name())
+                        || p->part_model().rows_count() >= max_rows * 0.9
+                        || p->part_model().size() >= max_bytes * 0.9)
+                {
+                    unselectable_part_rows.emplace(p->info().partition_id, p->part_model().rows_count());
+                    return true;
+                }
+                return false;
+            }),
+        visible_parts.end()
+    );
+}
+
+/// Merge task selection is done by multiple roles.
+/// Firstly, we use PartitionSelector to select a few partitions that most recently ingested or have slowlest merge speed.
+/// Then, we get all visible parts in these partitions, and use MergeSelector to get some merge(manipulation) tasks.
+/// However, both PartitionSelector and MergeSelector will need some information about the historical statistics of insertion
+///     and merge, which is stored in BgTaskStatistics.
+/// What's more, there are some difference MergeSelector implimentations, e.g. simple, dance, and they may have different behavior.
+///     So we use a extra role AdaptiveController as the interface of BgTaskStatistics. It need a input of expected parts, and
+///     will controll the MergeSelector not be too aggressive.
 bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, StorageCnchMergeTree & storage, MergeSelectionMetrics & metrics)
 {
     /// 6 steps of selecting parts to merge. (the order is important)
@@ -682,16 +719,33 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     /// Step 1: copy currently_merging_mutating_parts
     /// Must do it before getting data parts so that the copy won't change during selection.
     /// Because we can accept stale data parts but cannot accept stale merging_mutating_parts
-    auto merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
+    NameSet merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
     /// Step 2: get parts & calculate visible parts.
     Stopwatch watch;
     ServerDataPartsVector data_parts;
 
-    size_t num_partitions = storage_settings->max_partition_for_multi_select.value;
-    bool only_realtime_partition = storage_settings->cnch_merge_only_realtime_partition;
+    /// Step 2.1: select partitions by bg_task_stats, round_robin_state and postponed_partitions
+    auto bg_task_stats = MergeTreeBgTaskStatisticsInitializer::instance().getOrCreateTableStats(storage.getStorageID());
+    auto get_all_partitions_callback = [&istorage, &storage, &bg_task_stats, this] () {
+        auto partition_list = getContext()->getCnchCatalog()->getPartitionList(istorage, nullptr);
+        storage.filterPartitionByTTL(partition_list, time(nullptr));
+        Strings partition_ids;
+        for (const auto & partition : partition_list)
+            partition_ids.emplace_back(partition->getID(storage));
 
-    auto partitions = partition_selector->selectForMerge(istorage, num_partitions, only_realtime_partition);
+        /// Add all unknown partitions to bg task stats, so these partitions can be selected by partition selector next time.
+        bg_task_stats->fillMissingPartitions(partition_ids);
+        return partition_ids;
+    };
+
+    CnchBGThreadPartitionSelector partition_selector(storage.getStorageID(), bg_task_stats, postponed_partitions, get_all_partitions_callback);
+    auto partitions = partition_selector.selectForMerge(
+        /* n = */ storage_settings->max_partition_for_multi_select.value,
+        /* round_robin_interval = */ storage_settings->cnch_merge_round_robin_partitions_interval.value,
+        partition_round_robin_state,
+        /* only_realtime_partitions = */ storage_settings->cnch_merge_only_realtime_partition);
+
     if (partitions.empty())
     {
         LOG_TRACE(log, "Skip empty table");
@@ -702,6 +756,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     partitions = removeLockedPartition(partitions);
     metrics.num_unlock_partitions = partitions.size();
 
+    /// Step 2.2: get all visible parts in selected partitions
     if (partitions.empty())
     {
         LOG_TRACE(log, "There is no partition to merge");
@@ -715,10 +770,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
 
     if (data_parts.empty())
     {
+        time_t now = time(nullptr);
         for (const auto & p : partitions)
-        {
-            partition_selector->postponeMerge(storage_id.uuid, p);
-        }
+            postponed_partitions[p] = now;
     }
 
     metrics.elapsed_get_data_parts = watch.elapsedMicroseconds();
@@ -757,6 +811,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
 
     /// TODO: support checkpoints
 
+    /// Used to calculate total rows of each partition so we can prevent generating huge merge tasks.
+    std::multimap<String, UInt64> unselectable_part_rows;
+
     auto max_bytes = std::min(
         storage_settings->cnch_merge_max_total_bytes_to_merge.value,
         storage_settings->max_bytes_to_merge_at_max_space_in_pool.value);
@@ -767,41 +824,46 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     if (storage.getSettings()->cnch_merge_select_nonadjacent_parts)
     {
         size_t max_rows = storage_settings->cnch_merge_max_total_rows_to_merge;
-        visible_parts.erase(
-            std::remove_if(
-                visible_parts.begin(),
-                visible_parts.end(),
-                [&merging_mutating_parts_snapshot, max_bytes, max_rows](const auto & p) {
-                    return merging_mutating_parts_snapshot.erase(p->name())
-                           || p->part_model().rows_count() >= max_rows * 0.9
-                           || p->part_model().size() >= max_bytes * 0.9;
-                }),
-            visible_parts.end()
-        );
+        removeUnselectableParts(visible_parts, merging_mutating_parts_snapshot, unselectable_part_rows, max_bytes, max_rows);
 
         if (visible_parts.empty())
         {
             LOG_TRACE(log, "There is no visible parts, exit merge selection.");
             return false;
         }
-
     }
+    else
+    {
+        for (const auto & p: visible_parts)
+        {
+            if (merging_mutating_parts_snapshot.count(p->name()) > 0)
+                unselectable_part_rows.emplace(p->info().partition_id, p->part_model().rows_count());
+        }
+    }
+
     metrics.num_legal_visible_parts = visible_parts.size();
 
+    /// Step 4: create merge predicate
+    auto can_merge_callback = getMergePred(merging_mutating_parts_snapshot, mutation_timestamps);
+
+    SelectPartsToMergeSettings select_settings = SelectPartsToMergeSettings {
+        .max_total_size_to_merge = max_bytes,
+        .num_default_workers = num_default_workers_in_vw_settings,
+        .aggressive = false,
+        .enable_batch_select = storage_settings->cnch_merge_enable_batch_select,
+        .final = false,
+        // .merge_with_ttl_allowed = false,
+    };
+
     /// Step 5: do selecting.
-    const bool enable_batch_select = storage_settings->cnch_merge_enable_batch_select;
     std::vector<ServerDataPartsVector> res;
     [[maybe_unused]] auto decision = selectPartsToMerge(
         storage,
         res,
         visible_parts,
-        /// Step 4: create merge predicate
-        getMergePred(merging_mutating_parts_snapshot, mutation_timestamps),
-        max_bytes,
-        false, /// aggressive
-        enable_batch_select,
-        false, /// final
-        false, /// merge_with_ttl_allowed
+        unselectable_part_rows,
+        can_merge_callback,
+        select_settings,
         log); /// log
 
     metrics.elapsed_select_parts = watch.elapsedMicroseconds();
@@ -809,18 +871,22 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
 
     LOG_DEBUG(log, "Selected {} candidate groups", res.size());
 
+    time_t now = time(nullptr);
     if (res.empty())
     {
         for (const auto & p : partitions)
-            partition_selector->postponeMerge(storage_id.uuid, p);
+            postponed_partitions[p] = now;
         return false;
     }
 
     /// Step 6: push tasks to pending queue
-    std::unordered_set<String> postpone_partitions(partitions.begin(), partitions.end());
+    std::unordered_map<String, UInt32> selected_tasks_by_partition{};
+    for (const auto & p : partitions)
+        selected_tasks_by_partition.emplace(p, 0);
+
     for (auto & selected_parts : res)
     {
-        postpone_partitions.erase(selected_parts.front()->info().partition_id);
+        selected_tasks_by_partition[selected_parts.front()->info().partition_id]++;
 
         auto future_task = std::make_unique<FutureManipulationTask>(*this, ManipulationType::Merge);
         future_task->tagSourceParts(std::move(selected_parts));
@@ -828,8 +894,11 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         merge_pending_queue.push(std::move(future_task));
     }
 
-    for (const auto & p : postpone_partitions)
-        partition_selector->postponeMerge(storage_id.uuid, p);
+    for (const auto & [p, t] : selected_tasks_by_partition)
+    {
+        if (t == 0)
+            postponed_partitions[p] = now;
+    }
 
     LOG_DEBUG(log, "Push {} tasks to pending queue.", res.size());
 
@@ -857,8 +926,9 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
 
     auto txn_id = transaction->getTransactionID();
     Strings res;
+    time_t now = time(nullptr);
     std::for_each(partitions.begin(), partitions.end(),
-        [& res, txn_id, this] (const String & partition)
+        [& res, txn_id, now, this] (const String & partition)
         {
             LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
             partition_lock->setMode(LockMode::X);
@@ -874,7 +944,7 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
             else
             {
                 LOG_TRACE(log, "partition {} is lock", partition);
-                partition_selector->postponeMerge(storage_id.uuid, partition);
+                postponed_partitions[partition] = now;
             }
         });
 
@@ -1045,11 +1115,10 @@ String CnchMergeMutateThread::triggerPartMerge(
     std::lock_guard lock(try_merge_parts_mutex);
 
     /// Step 1: copy currently_merging_mutating_parts
-    NameSet merging_mutating_parts_snapshot;
-    merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
+    NameSet merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
     if (try_select)
-        LOG_TRACE(log, fmt::format("merging_mutating_parts:\n{}", fmt::join(merging_mutating_parts_snapshot, "\n")));
+        LOG_TRACE(log, "merging_mutating_parts:\n{}", fmt::join(merging_mutating_parts_snapshot, "\n"));
 
     /// Step 2: get parts & calculate visible parts.
     ServerDataPartsVector data_parts;
@@ -1073,6 +1142,9 @@ String CnchMergeMutateThread::triggerPartMerge(
     mutation_timestamps.reserve(mutation_entries.size());
     for (const auto & [_, mutation_entry] : mutation_entries)
         mutation_timestamps.emplace_back(mutation_entry.commit_time, mutation_entry.commands.changeSchema());
+    
+    /// Used to calculate total rows of each partition so we can prevent generating huge merge tasks.
+    std::multimap<String, UInt64> unselectable_part_rows;
 
     auto & storage = checkAndGetCnchTable(istorage);
     auto storage_settings = storage.getSettings();
@@ -1087,18 +1159,28 @@ String CnchMergeMutateThread::triggerPartMerge(
     if (storage_settings->cnch_merge_select_nonadjacent_parts)
     {
         auto max_rows = storage_settings->cnch_merge_max_total_rows_to_merge.value;
-        visible_parts.erase(
-            std::remove_if(
-                visible_parts.begin(),
-                visible_parts.end(),
-                [&merging_mutating_parts_snapshot, max_bytes, max_rows](const auto & p) {
-                    return merging_mutating_parts_snapshot.erase(p->name())
-                        || p->part_model().rows_count() >= max_rows * 0.9
-                        || p->part_model().rows_count() >= max_bytes * 0.9;
-                }),
-            visible_parts.end()
-        );
+        removeUnselectableParts(visible_parts, merging_mutating_parts_snapshot, unselectable_part_rows, max_bytes, max_rows);
     }
+    else
+    {
+        for (const auto & p: visible_parts)
+        {
+            if (merging_mutating_parts_snapshot.count(p->name()) > 0)
+                unselectable_part_rows.emplace(p->info().partition_id, p->part_model().rows_count());
+        }
+    }
+
+    /// Step 4: create merge predicate
+    auto can_merge_callback = getMergePred(merging_mutating_parts_snapshot, mutation_timestamps);
+
+    SelectPartsToMergeSettings select_settings = SelectPartsToMergeSettings {
+        .max_total_size_to_merge = max_bytes,
+        .num_default_workers = num_default_workers_in_vw_settings,
+        .aggressive = true,
+        .enable_batch_select = false,
+        .final = final,
+        // .merge_with_ttl_allowed = false,
+    };
 
     /// Step 5: do selecting
     std::vector<ServerDataPartsVector> res;
@@ -1106,13 +1188,9 @@ String CnchMergeMutateThread::triggerPartMerge(
         storage,
         res,
         visible_parts,
-        /// Step 4: create merge predicate
-        getMergePred(merging_mutating_parts_snapshot, mutation_timestamps),
-        max_bytes, /// max_total_size_to_merge
-        true, /// aggressive
-        false, /// enable_batch_select
-        final, /// final
-        false, /// merge_with_ttl_allowed
+        unselectable_part_rows,
+        can_merge_callback,
+        select_settings,
         log);
 
     LOG_DEBUG(log, "triggerPartMerge(): Selected {} groups from {} parts.", res.size(), visible_parts.size());

@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS table1;
 DROP TABLE IF EXISTS table2;
 CREATE TABLE table1 (a UInt32, b UInt32) ENGINE = CnchMergeTree ORDER BY a;

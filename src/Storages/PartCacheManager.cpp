@@ -178,7 +178,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
             // No need to load from catalog in dummy mode.
             if (likely(!dummy_mode))
             {
-                getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
+                getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions, meta_ptr->lock_holder);
                 getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
                 getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
                 meta_loaded = true;
@@ -231,7 +231,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
                     nullptr,
                     on_table_creation);
                 /// insert the new meta lock into lock container.
-                meta_lock_container.emplace(uuid, meta_ptr->meta_mutex);
+                meta_lock_container.emplace(uuid, meta_ptr->lock_holder);
             }
             meta_ptr->server_vw_name = server_vw_name;
             active_tables.emplace(uuid, meta_ptr);
@@ -852,7 +852,11 @@ void PartCacheManager::insertDataIntoCache(
                           .emplace(
                               partition_id,
                               std::make_shared<CnchPartitionInfo>(
-                                  UUIDHelpers::UUIDToString(uuid), partitionid_to_partition[partition_id], partition_id, true))
+                                  UUIDHelpers::UUIDToString(uuid),
+                                  partitionid_to_partition[partition_id],
+                                  partition_id,
+                                  meta_ptr->lock_holder->getPartitionLock(partition_id),
+                                  true))
                           .first;
             meta_partitions.emplace(partition_id, *it);
         }
@@ -1904,31 +1908,28 @@ PartCacheManager::getLastModificationTimeHints(const ConstStoragePtr & storage, 
             };
         }
 
-        auto & meta_partitions = table_meta->partitions;
+        const auto * meta_storage = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+        auto meta_partitions = table_meta->getPartitionList();
+
+        // Skip if it passes TTL
+        meta_storage->filterPartitionByTTL(meta_partitions, now);
+
         ret.reserve(meta_partitions.size());
         for (auto it = meta_partitions.begin(); it != meta_partitions.end(); it++)
         {
-            Protos::LastModificationTimeHint hint = Protos::LastModificationTimeHint{};
+            auto partition_info = table_meta->getPartitionInfo((*it)->getID(*meta_storage));
+            if (!partition_info)
+                continue;
 
-            const auto * meta_storage = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+            Protos::LastModificationTimeHint hint = Protos::LastModificationTimeHint{};
             if (!meta_storage)
                 throw Exception("Table is not a Meta Based MergeTree", ErrorCodes::UNKNOWN_TABLE);
-            String partition;
-            {
-                WriteBufferFromString write_buffer(partition);
-                (*it)->partition_ptr->store(*meta_storage, write_buffer);
-            }
 
-            // Skip if it passes TTL
-            auto ttl = meta_storage->getTTLForPartition(*(*it)->partition_ptr);
 
-            if (ttl && ttl < now) {
-                continue;
-            }
-
+            String partition = partition_info->getPartitionValue(*meta_storage);
             hint.set_partition_id(partition);
 
-            std::optional<std::pair<PartitionMetrics::PartitionMetricsStore, bool>> data = load_func(*it);
+            std::optional<std::pair<PartitionMetrics::PartitionMetricsStore, bool>> data = load_func(partition_info);
 
             if (!data.has_value() || (data->first.total_parts_number < 0 || data->first.total_rows_count < 0))
             {

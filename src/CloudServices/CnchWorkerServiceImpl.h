@@ -128,6 +128,12 @@ public:
         Protos::DropDedupWorkerResp * response,
         google::protobuf::Closure * done) override;
 
+    void sendBackupCopyTask(
+        google::protobuf::RpcController *,
+        const Protos::SendBackupCopyTaskReq * request,
+        Protos::SendBackupCopyTaskResp * response,
+        google::protobuf::Closure * done) override;
+
     void getDedupWorkerStatus(
         google::protobuf::RpcController *,
         const Protos::GetDedupWorkerStatusReq * request,
@@ -241,6 +247,9 @@ private:
     // std::shared_ptr<PreloadHandler> preload_handler;
 
     ThreadPool thread_pool;
+
+    std::mutex backup_lock;
+    std::unique_ptr<ThreadPool> backup_rpc_pool;
 };
 
 REGISTER_SERVICE_IMPL(CnchWorkerServiceImpl);

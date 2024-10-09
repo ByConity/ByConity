@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS visits1;
 CREATE TABLE visits1
 (

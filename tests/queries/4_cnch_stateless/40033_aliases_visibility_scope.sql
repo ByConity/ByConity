@@ -1,5 +1,4 @@
 set dialect_type='CLICKHOUSE';
-use test;
 set enable_optimizer=1;
 SELECT a as x FROM (select 1 as a) WHERE x = 1;
 SELECT (1 + 1 > 2) as a WHERE a;

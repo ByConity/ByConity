@@ -62,6 +62,8 @@ bvar::Adder<int> & getExecuteMetric(CnchBGThreadType type)
             return g_executeImpl_CnchRefreshMaterializedView;
         case CnchBGThreadType::PartMover:
             return g_executeImpl_PartMover;
+        case CnchBGThreadType::Backup:
+            return g_executeImpl_Backup;
         case CnchBGThreadType::ManifestCheckpoint:
             return g_executeImpl_ManifestCheckpoint;
         default:
@@ -98,6 +100,8 @@ bvar::Adder<int> & getExecuteErrorMetric(CnchBGThreadType type)
             return g_executeImpl_CnchRefreshMaterializedView_error;
         case DB::CnchBGThreadType::PartMover:
             return g_executeImpl_PartMover_error;
+        case CnchBGThreadType::Backup:
+            return g_executeImpl_Backup_error;
         case DB::CnchBGThreadType::ManifestCheckpoint:
             return g_executeImpl_ManifestCheckpoint_error;
         default:

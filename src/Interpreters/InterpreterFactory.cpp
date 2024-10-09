@@ -23,6 +23,7 @@
 #include <Parsers/ASTAdviseQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAlterWarehouseQuery.h>
+#include <Parsers/ASTBackupQuery.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateQueryAnalyticalMySQL.h>
@@ -85,6 +86,7 @@
 #include <Interpreters/InterpreterAlterDiskCacheQuery.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterAlterWarehouseQuery.h>
+#include <Interpreters/InterpreterBackupQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateBindingQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -551,6 +553,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTDropPreparedStatementQuery>())
     {
         return std::make_unique<InterpreterDropPreparedStatementQuery>(query, context);
+    }
+    else if (query->as<ASTBackupQuery>())
+    {
+        return std::make_unique<InterpreterBackupQuery>(query, context);
     }
     else
     {

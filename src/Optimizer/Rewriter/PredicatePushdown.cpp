@@ -1430,7 +1430,8 @@ void PredicateVisitor::tryNormalizeOuterToInnerJoin(JoinNode & node, const Const
         return;
 
     // TODO: ANTI JOINs also can be optimized
-    if (strictness != Strictness::All && strictness != Strictness::Any)
+    // left any join CANNOT be converted to inner any join
+    if (strictness != Strictness::All)
         return;
 
     auto column_types = step.getOutputStream().header.getNamesToTypes();

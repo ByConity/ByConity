@@ -1,11 +1,10 @@
 set join_use_nulls=1;
-create database if not exists test;
-use test;
-drop table if exists test.ad_positions;
-drop table if exists test.ad_request_logs;
-drop table if exists test.scenes;
 
-CREATE TABLE test.ad_positions
+drop table if exists ad_positions;
+drop table if exists ad_request_logs;
+drop table if exists scenes;
+
+CREATE TABLE ad_positions
 (
     `id` UInt64,
     `scene_id` UInt8 COMMENT '广告场景ID'
@@ -13,7 +12,7 @@ CREATE TABLE test.ad_positions
 ENGINE = CnchMergeTree
 ORDER BY id;
 
-CREATE TABLE test.ad_request_logs
+CREATE TABLE ad_request_logs
 (
     `id` UInt64,
     `ad_position_id` UInt16 COMMENT '广告位ID'
@@ -21,24 +20,24 @@ CREATE TABLE test.ad_request_logs
 ENGINE = CnchMergeTree
 ORDER BY id;
 
-CREATE TABLE test.scenes
+CREATE TABLE scenes
 (
     `id` UInt64
 )
 ENGINE = CnchMergeTree
 ORDER BY id;
 
-insert into test.ad_positions values(1,2)(2,3)(3,4)(9,1);
-insert into test.ad_request_logs values(1,2)(2,3)(3,4)(6,7)(11,12);
-insert into test.scenes values(1)(2)(3)(7)(9)(10);
+insert into ad_positions values(1,2)(2,3)(3,4)(9,1);
+insert into ad_request_logs values(1,2)(2,3)(3,4)(6,7)(11,12);
+insert into scenes values(1)(2)(3)(7)(9)(10);
 
 SELECT
     count(*)
-FROM test.ad_request_logs
-    LEFT JOIN test.ad_positions ON ad_request_logs.ad_position_id = ad_positions.id
-    LEFT JOIN test.scenes ON ad_positions.scene_id = scenes.id;
+FROM ad_request_logs
+    LEFT JOIN ad_positions ON ad_request_logs.ad_position_id = ad_positions.id
+    LEFT JOIN scenes ON ad_positions.scene_id = scenes.id;
 
-drop TABLE if exists test.`51005_share_common_plan_node`;
+drop TABLE if exists `51005_share_common_plan_node`;
 CREATE TABLE 51005_share_common_plan_node
 (
     `id` UInt32,

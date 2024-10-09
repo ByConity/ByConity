@@ -33,7 +33,7 @@ public:
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
         const IMergeTreeDataPart * parent_part_ = nullptr,
-        const UUID& part_id = UUIDHelpers::Nil);
+        const UUID & part_id = UUIDHelpers::Nil);
 
     MergeTreeDataPartCNCH(
         const MergeTreeMetaBase & storage_,
@@ -85,6 +85,8 @@ public:
     void loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency) override;
 
     void loadFromFileSystem(bool load_hint_mutation = true);
+
+    void copyToDetached(const String & prefix) const override;
 
     UniqueKeyIndexPtr getUniqueKeyIndex() const override;
 

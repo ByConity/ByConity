@@ -367,6 +367,25 @@ message DropDedupWorkerResp
   optional string exception = 1;
 }
 
+message BackupCopyTask
+{
+  required string source_disk = 1;
+  required string source_path = 2;
+  required string destination_disk = 3;
+  required string destination_path = 4;
+}
+
+message SendBackupCopyTaskReq
+{
+  required string id = 1;
+  repeated BackupCopyTask backup_task = 2;
+}
+
+message SendBackupCopyTaskResp
+{
+  optional string exception = 1;
+}
+
 message GetDedupWorkerStatusReq
 {
   required StorageID table = 1;
@@ -644,6 +663,8 @@ service CnchWorkerService
   rpc assignRepairGran(AssignRepairGranReq) returns (AssignRepairGranResp);
   rpc dropDedupWorker(DropDedupWorkerReq) returns (DropDedupWorkerResp);
   rpc getDedupWorkerStatus(GetDedupWorkerStatusReq) returns (GetDedupWorkerStatusResp);
+
+  rpc sendBackupCopyTask(SendBackupCopyTaskReq) returns (SendBackupCopyTaskResp);
 
   rpc sendCreateQuery(SendCreateQueryReq) returns (SendCreateQueryResp);
   rpc checkDataParts(CheckDataPartsReq) returns (CheckDataPartsResp);

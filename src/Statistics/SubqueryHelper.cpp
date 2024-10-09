@@ -13,31 +13,17 @@
  * limitations under the License.
  */
 
-#include <Access/AccessControlManager.h>
-#include <IO/ReadBufferFromString.h>
-#include <Interpreters/executeQuery.h>
-#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
-#include <Processors/Executors/PullingPipelineExecutor.h>
+#include <Core/SettingsEnums.h>
 #include <Statistics/SubqueryHelper.h>
-#include "Common/ThreadStatus.h"
-#include <Common/CurrentThread.h>
-#include "Core/SettingsEnums.h"
-#include "Core/UUID.h"
 
 namespace DB::Statistics
 {
 
-static ContextMutablePtr createQueryContext(ContextPtr context, bool large_sql)
+ContextMutablePtr SubqueryHelper::createQueryContext(ContextPtr context)
 {
-    auto query_context = Context::createCopy(context);
-    query_context->makeQueryContext();
-    auto old_query_id = context->getInitialQueryId();
-    auto new_query_id = old_query_id + "__create_stats_internal__" + UUIDHelpers::UUIDToString(UUIDHelpers::generateV4());
-    query_context->setCurrentQueryId(new_query_id); // generate random query_id
-    query_context->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
+    auto query_context = createContextForSubQuery(context, "_create_stats_internal_");
+
     SettingsChanges changes;
-    auto enable_optimizer = large_sql;
-    changes.emplace_back("enable_optimizer", enable_optimizer);
     changes.emplace_back("dialect_type", "CLICKHOUSE");
     changes.emplace_back("database_atomic_wait_for_drop_and_detach_synchronously", true);
     changes.emplace_back("enable_deterministic_sample_by_range", true);
@@ -45,6 +31,7 @@ static ContextMutablePtr createQueryContext(ContextPtr context, bool large_sql)
     changes.emplace_back("ensure_one_mark_in_part_when_sample_by_range", false);
     changes.emplace_back("insert_distributed_sync", true);
     changes.emplace_back("aggregate_functions_null_for_empty", false);
+    changes.emplace_back("empty_result_for_aggregation_by_empty_set", false);
     changes.emplace_back("enable_final_sample", false);
     changes.emplace_back("statistics_return_row_count_if_empty", false);
     changes.emplace_back("limit", 0);
@@ -71,93 +58,4 @@ static ContextMutablePtr createQueryContext(ContextPtr context, bool large_sql)
     return query_context;
 }
 
-struct SubqueryHelper::DataImpl
-{
-    ContextPtr old_context;
-    ContextMutablePtr subquery_context;
-    // std::unique_ptr<CurrentThread::QueryScope> query_scope;
-    std::unique_ptr<BlockIO> block_io;
-    std::unique_ptr<PullingAsyncPipelineExecutor> executor;
-    String old_query_id;
-    bool large_sql;
-
-    ~DataImpl()
-    {
-        if (this->block_io)
-        {
-            this->block_io->onFinish();
-        }
-        this->executor.reset();
-        this->block_io.reset();
-
-        if (this->large_sql)
-        {
-            auto & thread_status = CurrentThread::get();
-            thread_status.attachQueryContext(this->old_context);
-
-            // to make ThreadStatus destructor happy, we have to reset query_id to the old one
-            // before we destruct subquery_context
-            this->subquery_context->setCurrentQueryId(this->old_query_id);
-        }
-        this->subquery_context.reset();
-    }
-};
-
-SubqueryHelper::SubqueryHelper(std::unique_ptr<DataImpl> impl_) : impl(std::move(impl_))
-{
-}
-
-SubqueryHelper SubqueryHelper::create(ContextPtr context, const String & sql, bool large_sql)
-{
-    LOG_TRACE(getLogger("create stats subquery"), "collect stats with sql: " + sql);
-    auto impl = std::make_unique<SubqueryHelper::DataImpl>();
-    impl->large_sql = large_sql;
-    impl->old_context = context;
-    impl->old_query_id = context->getCurrentQueryId();
-    impl->subquery_context = createQueryContext(context, large_sql);
-
-    bool use_internal = !large_sql;
-    if (large_sql)
-    {
-        // we need to replace CurrentThead context to the using one
-        // when executeQuery(internal=0)
-        auto & thread_status = CurrentThread::get();
-        thread_status.attachQueryContext(impl->subquery_context);
-    }
-
-    impl->block_io
-        = std::make_unique<BlockIO>(executeQuery(sql, impl->subquery_context, use_internal, QueryProcessingStage::Complete, false));
-
-    impl->executor = std::make_unique<PullingAsyncPipelineExecutor>(impl->block_io->pipeline);
-    return SubqueryHelper(std::move(impl));
-}
-
-SubqueryHelper::~SubqueryHelper()
-{
-}
-
-Block SubqueryHelper::getNextBlock()
-{
-    if (!impl->executor)
-    {
-        throw Exception("uninitialized SubqueryHelper", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    Block block;
-    while (!block && impl->executor->pull(block, 0))
-    {
-    }
-    return block;
-}
-
-void executeSubQuery(ContextPtr old_context, const String & sql)
-{
-    ContextMutablePtr subquery_context = createQueryContext(old_context, false);
-
-    String res;
-    ReadBufferFromString is1(sql);
-    WriteBufferFromString os1(res);
-
-    executeQuery(is1, os1, false, subquery_context, {}, {}, true);
-}
 }

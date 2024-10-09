@@ -1,7 +1,5 @@
-CREATE DATABASE IF NOT EXISTS test;
 set send_logs_level='none';
 set optimize_trivial_count_query=0;
-use test;
 
 DROP TABLE IF EXISTS mv1;
 DROP TABLE IF EXISTS `.inner.mv1`;

@@ -75,7 +75,13 @@ private:
     void cleanUndoBuffers(const TransactionRecords & records);
     void cleanTxnRecord(const TransactionRecord & record, TxnTimestamp current_time, std::vector<TxnTimestamp> & cleanTxnIds, TxnGCLog & summary);
     bool triggerCleanUndoBuffers();
-private:
+    /**
+     * @brief Get Oldest Timestamp of Transaction Record, for metrics purpose.
+     *
+     * @return Seconds since epoch.
+     */
+    int64_t getOldestTxnTimestamp();
+
     std::chrono::time_point<std::chrono::system_clock> lastCleanUBtime {std::chrono::system_clock::now()};
 };
 

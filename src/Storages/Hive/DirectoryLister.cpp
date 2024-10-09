@@ -1,6 +1,5 @@
 #include "Storages/Hive/DirectoryLister.h"
-#include <Interpreters/Context.h>
-#include <Poco/Util/MapConfiguration.h>
+#include <boost/algorithm/string/predicate.hpp>
 #if USE_HIVE
 
 #include "Poco/URI.h"
@@ -38,9 +37,9 @@ String getPath(const String & path)
     {
         return uri.getPath();
     }
-    else if (scheme == "s3a" || scheme == "s3")
+    else if (S3::URI::isS3Scheme(scheme))
     {
-        uri.setScheme("s3"); /// to correctly parse uri
+        // uri.setScheme("s3"); /// to correctly parse uri
         S3::URI s3_uri(uri);
         return s3_uri.key;
     }
@@ -82,10 +81,10 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
         return std::make_shared<DiskByteHDFS>("hive_hdfs", "/", *params);
     }
 #if USE_AWS_S3
-    else if (scheme == "s3a" || scheme == "s3")
+    else if (S3::URI::isS3Scheme(scheme))
     {
         LOG_DEBUG(log, "sd_url: {}", sd_url);
-        uri.setScheme("s3"); /// to correctly parse uri
+        // uri.setScheme("s3"); /// to correctly parse uri
         if (!endsWith(uri.getPath(), "/"))
             uri.setPath(uri.getPath() + "/");
 
@@ -103,6 +102,7 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
         configuration->setString(config_prefix + ".ak_secret", settings.ak_secret);
         // configuration->setString(config_prefix + ".skip_access_check",false);
         configuration->setBool(config_prefix + ".skip_access_check", true);
+        configuration->setBool(config_prefix + ".is_virtual_hosted_style", context->getSettingsRef().s3_use_virtual_hosted_style || settings.s3_use_virtual_hosted_style);
         return DiskFactory::instance().create("hive_s3_disk", *configuration, config_prefix, context);
     }
 #endif
@@ -127,6 +127,17 @@ HiveFiles DiskDirectoryLister::list(const HivePartitionPtr & partition)
     {
         if (it->size() == 0)
             continue;
+        // SKIP marker file
+
+        auto pos =  it->path().find_last_of('/');
+        if(pos == std::string::npos)
+            pos = -1;
+        auto file_name = std::string_view{it->path()}.substr(pos+1);
+
+        if ((boost ::iequals(file_name, "_SUCCESS") ||file_name.starts_with('.')))
+        {
+            continue;
+        }
         HiveFilePtr file = IHiveFile::create(file_format, it->path(), it->size(), disk, partition);
         hive_files.push_back(std::move(file));
     }

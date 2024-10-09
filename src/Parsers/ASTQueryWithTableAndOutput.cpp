@@ -7,7 +7,27 @@
 namespace DB
 {
 
-void ASTQueryWithTableAndOutput::setTableInfo(const StorageID & storage_id)
+String ASTQueryWithTableAndOutput::getDatabase() const
+{
+    return database;
+}
+
+String ASTQueryWithTableAndOutput::getTable() const
+{
+    return table;
+}
+
+void ASTQueryWithTableAndOutput::setDatabase(const String & name)
+{
+    database = name;
+}
+
+void ASTQueryWithTableAndOutput::setTable(const String & name)
+{
+    table = name;
+}
+
+void ASTQueryWithTableAndOutput::setTableInfo(const StorageID &storage_id)
 {
     database = storage_id.database_name;
     table = storage_id.table_name;

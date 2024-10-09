@@ -3,7 +3,7 @@ Projection Est. 1001 rows, cost 6.123551e+05
 └─ Gather Exchange Est. 1001 rows, cost 6.122810e+05
    └─ Filter Est. 1001 rows, cost 5.912600e+05
       │     Condition: (C = \'x\') AND (B = 0)
-      └─ TableScan test.mydata Est. 10000 rows, cost 5.905200e+05
+      └─ TableScan default.mydata Est. 10000 rows, cost 5.905200e+05
                Where: (C = \'x\') AND (B = 0)
                Outputs: [A, B, C]
 Projection Est. 10000 rows, cost 8.020000e+05
@@ -11,7 +11,7 @@ Projection Est. 10000 rows, cost 8.020000e+05
 └─ Gather Exchange Est. 10000 rows, cost 8.012600e+05
    └─ Filter Est. 10000 rows, cost 5.912600e+05
       │     Condition: B = 0
-      └─ TableScan test.mydata Est. 10000 rows, cost 5.905200e+05
+      └─ TableScan default.mydata Est. 10000 rows, cost 5.905200e+05
                Where: B = 0
                Prewhere: C = \'x\'
                Outputs: [A, B, C]

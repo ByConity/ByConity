@@ -49,6 +49,7 @@
 #include <QueryPlan/Void.h>
 #include <Poco/String.h>
 #include <Common/StringUtils/StringUtils.h>
+#include "Core/Field.h"
 
 #include <memory>
 
@@ -646,7 +647,18 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
         }
         // TODO: better handle empty set
         if (coll.empty())
-            coll.push_back(Null{});
+        {
+            if (set_columns.size() == 1)
+            {
+                coll.push_back(Null{});
+            }
+            else
+            {
+                Tuple nested_tuple(set_columns.size(), Field());
+                coll.push_back(nested_tuple);
+            }
+        }
+            
         rhs_ast = std::make_shared<ASTLiteral>(std::move(coll));
         return;
     }

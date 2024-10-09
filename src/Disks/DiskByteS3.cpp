@@ -340,6 +340,13 @@ void DiskByteS3::removeRecursive(const String& path)
     s3_util.deleteObjectsWithPrefix(prefix, [](const S3::S3Util&, const String&){return true;});
 }
 
+void DiskByteS3::copyFile(const String & from_path, const String & to_bucket, const String & to_path)
+{
+    String full_from_path = std::filesystem::path(root_prefix) / from_path;
+    s3_util.copyObject(full_from_path, to_bucket, to_path);
+    LOG_TRACE(log, "Copy file from {} to {}", from_path, to_path);
+}
+
 static void checkWriteAccess(IDisk & disk)
 {
     auto file = disk.writeFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE, .mode = WriteMode::Rewrite});

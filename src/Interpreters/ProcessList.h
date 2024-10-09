@@ -319,6 +319,7 @@ public:
 
     bool isKilled() const { return is_killed; }
 
+    void setKilled() { is_killed = true; }
     bool isInternalKill() const { return is_killed & 0x80; }
 
     /// Adds a pipeline to the QueryStatus

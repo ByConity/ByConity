@@ -1,5 +1,5 @@
 set dialect_type='MYSQL';
-use test;
+
 DROP TABLE IF EXISTS 60108_mysql_create_ddl;
 DROP TABLE IF EXISTS 60108_mysql_create_ddl1;
 DROP TABLE IF EXISTS 60108_mysql_create_ddl2;

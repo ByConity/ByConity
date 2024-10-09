@@ -2,10 +2,10 @@
 Projection Est. 1 rows, cost 2.220000e-01
 │     Expressions: a:=`expr#getMapKeys(currentDatabase(), \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60)`
 └─ Projection Est. 1 rows, cost 1.480000e-01
-   │     Expressions: expr#getMapKeys(currentDatabase(), \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60):=getMapKeys(\'test\', \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60)
+   │     Expressions: expr#getMapKeys(currentDatabase(), \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60):=getMapKeys(\'default\', \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60)
    └─ Values Est. 1 rows, cost 7.400000e-02
 Projection Est. 1 rows, cost 2.220000e-01
 │     Expressions: a:=`expr#arrayJoin(getMapKeys(currentDatabase(), \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60))`
 └─ Projection Est. 1 rows, cost 1.480000e-01
-   │     Expressions: expr#arrayJoin(getMapKeys(currentDatabase(), \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60)):=arrayJoin(getMapKeys(\'test\', \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60))
+   │     Expressions: expr#arrayJoin(getMapKeys(currentDatabase(), \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60)):=arrayJoin(getMapKeys(\'default\', \'aeolus_data_table_177956_prod\', \'group_vals\', \'.*2023.*2.*7.*\', 60))
    └─ Values Est. 1 rows, cost 7.400000e-02

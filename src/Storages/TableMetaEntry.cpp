@@ -1,3 +1,4 @@
+#include <mutex>
 #include <Catalog/Catalog.h>
 #include <Storages/TableMetaEntry.h>
 #include <Storages/PartCacheManager.h>
@@ -69,9 +70,28 @@ std::vector<std::shared_ptr<MergeTreePartition>> TableMetaEntry::getPartitionLis
     return partition_list;
 }
 
+PartitionInfoPtr TableMetaEntry::getPartitionInfo(const String & partition_id)
+{
+
+    if (auto it = partitions.find(partition_id); it != partitions.end())
+        return *it;
+    else
+        return nullptr;
+}
+
 void TableMetaEntry::forEachPartition(std::function<void(PartitionInfoPtr)> callback)
 {
     for (auto it = partitions.begin(); it != partitions.end(); it++)
         callback(*it);
+}
+RWLock MetaLockHolder::getPartitionLock(const String & partition_id)
+{
+    std::scoped_lock<std::mutex> lock(lock_of_partition_locks);
+    if (partition_locks.find(partition_id) != partition_locks.end())
+    {
+        return partition_locks[partition_id];
+    }
+    partition_locks.emplace(partition_id, RWLockImpl::create());
+    return partition_locks[partition_id];
 }
 }

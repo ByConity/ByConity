@@ -22,6 +22,7 @@
 #include <Parsers/ParserAdviseQuery.h>
 #include <Parsers/ParserAlterQuery.h>
 #include <Parsers/ParserAlterWarehouseQuery.h>
+#include <Parsers/ParserBackupQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserCreateQuotaQuery.h>
 #include <Parsers/ParserCreateRoleQuery.h>
@@ -91,6 +92,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserDropBinding drop_binding(dt);
     ParserAlterQuery alter_p(dt);
     ParserAlterAnalyticalMySQLQuery alter_mysql_p(dt);
+    ParserBackupQuery backup_p;
 
     bool res = query_with_output_p.parse(pos, node, expected) || insert_p.parse(pos, node, expected) || use_p.parse(pos, node, expected)
         || switch_p.parse(pos, node, expected) || set_role_p.parse(pos, node, expected) || set_p.parse(pos, node, expected) || set_sensitive_p.parse(pos, node, expected)
@@ -105,7 +107,8 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || update_query_p.parse(pos, node, expected) || create_binding.parse(pos, node, expected)
         || show_bindings.parse(pos, node, expected) || drop_binding.parse(pos, node, expected)
         || (dt.parse_mysql_ddl && alter_mysql_p.parse(pos, node, expected)) || alter_p.parse(pos, node, expected)
-        || prepare.parse(pos, node, expected) || drop_prepare.parse(pos, node, expected);
+        || prepare.parse(pos, node, expected) || drop_prepare.parse(pos, node, expected)
+        || backup_p.parse(pos, node, expected);
     return res;
 }
 

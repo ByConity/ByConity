@@ -779,6 +779,7 @@ message DataModelAccessEntity
     optional string create_sql = 2; // contains CREATE and GRANT queries of the entity
     optional uint64 commit_time = 3;
     optional UUID uuid = 4;
+    optional string sensitive_sql = 5; // contains GRANT queries that explicitly state the resource
 }
 
 message DataModelSensitiveDatabase
@@ -803,6 +804,32 @@ message DataModelSnapshot {
   // absent if the snapshot binds to all tables in the database
   optional UUID table_uuid = 4;
 };
+
+message DataModelBackupEntry {
+  // If entry_type is memory, inline_value will be used. Otherwise source_disk and source_path will be used
+  required uint32 entry_type = 1;
+  required uint64 file_size = 2;
+  // if metadata, store value in inline_value
+  optional bytes inline_value = 3;
+  optional string source_disk = 4;
+  optional string source_path = 5;
+}
+
+message DataModelBackupTask {
+  required string id = 1;
+  required uint64 create_time = 2;
+  required uint64 status = 3;
+  // Expect serialized_ast will take less storage space than storing all tables directly
+  required string serialized_ast = 4;
+  required string server_address = 5;
+  required bool enable_auto_recover = 6;
+  optional string progress = 7;
+  repeated string finished_tables = 8;
+  optional uint64 reschedule_times = 9;
+  optional string last_error = 10;
+  optional uint64 total_backup_size = 11;
+  optional uint64 end_time = 12;
+}
 
 message LastModificationTimeHint {
   required bytes partition_id = 1;

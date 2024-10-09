@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/config.h"
+#include "Storages/Hive/CnchHiveSettings.h"
 #if USE_HIVE
 
 #include "Core/Types.h"
@@ -42,6 +43,16 @@ public:
 };
 using IMetaClientPtr = std::shared_ptr<IMetaClient>;
 
+class LakeMetaClientFactory
+{
+public:
+    LakeMetaClientFactory() = delete;
+    static std::shared_ptr<IMetaClient> create(const String & name, const std::shared_ptr<CnchHiveSettings> & settings);
+};
+
+
+
 }
+
 
 #endif

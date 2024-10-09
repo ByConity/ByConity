@@ -79,7 +79,7 @@ protected:
         const StorageMetadataPtr & metadata_snapshot) const;
 
     /// DirectoryList is not multi-threaded
-    virtual std::shared_ptr<IDirectoryLister> getDirectoryLister();
+    virtual std::shared_ptr<IDirectoryLister> getDirectoryLister(ContextPtr local_context);
 
     String hive_metastore_url;
 

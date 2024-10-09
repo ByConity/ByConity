@@ -454,6 +454,12 @@ ContextMutablePtr PlanSegmentManagerRpcService::createQueryContext(
 
     query_context->setQueryExpirationTimeStamp();
 
+    if (query_common->has_parent_query_id())
+    {
+        client_info.parent_initial_query_id = query_common->parent_query_id();
+        query_context->setInternalQuery(query_common->is_internal_query());
+    }
+
     return query_context;
 }
 

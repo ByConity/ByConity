@@ -351,6 +351,7 @@ public:
     void detachQuery(bool exit_if_already_detached = false, bool thread_exits = false);
 
     void tryUpdateMaxIOThreadProfile(bool use_async_read);
+    void flushUntrackedMemory();
 
 protected:
     void applyQuerySettings();

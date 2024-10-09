@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
-
 -- this issue happens in 2-nodes cluster
 
 DROP TABLE IF EXISTS t40058;

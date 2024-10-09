@@ -45,7 +45,9 @@
 #include <Storages/System/CollectWhereClausePredicate.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include <Processors/Sources/SourceFromSingleChunk.h>
 #include <Parsers/formatTenantDatabaseName.h>
+#include <Backups/BackupUtils.h>
 
 
 namespace DB
@@ -322,6 +324,72 @@ BlockIO InterpreterKillQueryQuery::execute()
             throw Exception(
                 "Not allowed to kill mutation. To execute this query it's necessary to have the grant " + required_access_rights.toString(),
                 ErrorCodes::ACCESS_DENIED);
+
+        res_io.in = std::make_shared<OneBlockInputStream>(header.cloneWithColumns(std::move(res_columns)));
+
+        break;
+    }
+    case ASTKillQueryQuery::Type::Backup:
+    {
+        Block backup_block = getSelectResult("id, command", "system.cnch_backups");
+        if (!backup_block)
+            return res_io;
+
+        const ColumnString & id_col = typeid_cast<const ColumnString &>(*backup_block.getByName("id").column);
+
+        auto header = backup_block.cloneEmpty();
+        header.insert(0, {ColumnString::create(), std::make_shared<DataTypeString>(), "kill_status"});
+        MutableColumns res_columns = header.cloneEmptyColumns();
+
+        for (size_t i = 0; i < backup_block.rows(); ++i)
+        {
+            CancellationCode code = CancellationCode::Unknown;
+
+            String backup_id = id_col.getDataAt(i).toString();
+            if (!backup_id.empty())
+            {
+                std::shared_ptr<Catalog::Catalog> catalog = getContext()->getCnchCatalog();
+                // get latest status
+                BackupTaskModel backup_task_model = catalog->tryGetBackupJob(backup_id);
+                if (!backup_task_model)
+                    continue;
+                BackupStatus status = getBackupStatus(backup_task_model->status());
+                if (status == BackupStatus::ABORTED)
+                {
+                    code = CancellationCode::NotFound;
+                    LOG_INFO(logger, "Backup task {} is already killed", backup_id);
+                }
+                else if (status == BackupStatus::COMPLETED || status == BackupStatus::FAILED)
+                {
+                    code = CancellationCode::CancelCannotBeSent;
+                    LOG_INFO(logger, "Backup task {} can't be killed since it's already finished", backup_id);
+                }
+                else
+                {
+                    code = CancellationCode::CancelSent;
+                    // Mark the task as aborted
+                    BackupTaskPtr backup_task = std::make_shared<BackupTask>(backup_task_model);
+                    backup_task->updateStatusAndProgress(BackupStatus::ABORTED, "Backup job killed by user", getContext());
+                    LOG_INFO(logger, "Mark backup task {} as aborted", backup_id);
+
+                    // Remove running backup task in memory of server
+                    String backup_server_address = backup_task_model->server_address();
+                    if (backup_server_address == getContext()->getHostWithPorts().getRPCAddress())
+                    {
+                        getContext()->removeRunningBackupTask(backup_id);
+                    }
+                    else
+                    {
+                        auto client = getContext()->getCnchServerClient(backup_server_address);
+                        if (!client)
+                            LOG_WARNING(logger, "Failed to get client for backup server {}", backup_server_address);
+                        else
+                            client->removeRunningBackupTask(backup_id);
+                    }
+                }
+            }
+            insertResultRow(i, code, backup_block, header, res_columns);
+        }
 
         res_io.in = std::make_shared<OneBlockInputStream>(header.cloneWithColumns(std::move(res_columns)));
 

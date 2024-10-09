@@ -44,6 +44,7 @@ namespace DB
 namespace Protos
 {
     class CnchWorkerService_Stub;
+    class BackupCopyTask;
 }
 
 namespace IngestColumnCnch
@@ -161,6 +162,8 @@ public:
     void assignRepairGran(const StorageID & storage_id, const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time);
     void dropDedupWorker(const StorageID & storage_id);
     DedupWorkerStatus getDedupWorkerStatus(const StorageID & storage_id);
+
+    brpc::CallId sendBackupCopyTask(const ContextPtr & context, const String & backup_id, const std::vector<Protos::BackupCopyTask> & copy_tasks, const ExceptionHandlerPtr & handler);
 
 #if USE_RDKAFKA
     void submitKafkaConsumeTask(const KafkaTaskCommand & command);

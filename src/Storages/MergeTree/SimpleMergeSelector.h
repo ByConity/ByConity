@@ -191,7 +191,7 @@ public:
     }
 
     PartsRange
-    select(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
+    select(PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
 
     /**
      * Implement multi-merge-select in a very naive way.
@@ -201,7 +201,7 @@ public:
      * Will fallback to single-select otherwise.
      */
     virtual PartsRanges
-    selectMulti(const PartsRanges & partitions, size_t max_total_size_to_merge, MergeScheduler * merge_scheduler) override;
+    selectMulti(PartsRanges & partitions, size_t max_total_size_to_merge, MergeScheduler * merge_scheduler) override;
 
 private:
     const Settings settings;

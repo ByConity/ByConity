@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS test_pathfind_bytimes;
 
 CREATE TABLE test_pathfind_bytimes (`uid` String, `event` String, `time` UInt64, `prop` String, `extra_prop_1` String, `extra_prop_2` String) ENGINE = CnchMergeTree() ORDER BY uid SETTINGS index_granularity = 8192;

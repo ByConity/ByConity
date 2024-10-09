@@ -1,4 +1,3 @@
-use test;
 drop table if exists tuple_test;
 
 set enable_optimizer = 1;

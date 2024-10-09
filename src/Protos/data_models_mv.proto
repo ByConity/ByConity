@@ -2,7 +2,6 @@ syntax = "proto2";
 package DB.Protos;
 
 import "cnch_common.proto";
-import "data_models.proto";
 
 message VersionedPartition {
     required StorageID storage_id = 1;

@@ -2177,7 +2177,7 @@ void NO_INLINE Aggregator::mergeDataOnlyExistingKeysImpl(
 
 
 void NO_INLINE Aggregator::mergeWithoutKeyDataImpl(
-    ManyAggregatedDataVariants & non_empty_data) const
+    ManyAggregatedDataVariants & non_empty_data, std::atomic<bool> & is_cancelled) const
 {
     ThreadPool thread_pool{params.max_threads};
 
@@ -2195,6 +2195,7 @@ void NO_INLINE Aggregator::mergeWithoutKeyDataImpl(
                     res_data + offsets_of_aggregate_states[i],
                     current_data + offsets_of_aggregate_states[i],
                     thread_pool,
+                    is_cancelled,
                     res->aggregates_pool);
             else
                 aggregate_functions[i]->merge(
@@ -2454,7 +2455,8 @@ void NO_INLINE Aggregator::mergeStreamsImpl(
 
 void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
     Block & block,
-    AggregatedDataVariants & result) const
+    AggregatedDataVariants & result,
+    std::atomic<bool> & is_cancelled [[maybe_unused]]) const
 {
     AggregateColumnsConstData aggregate_columns(params.aggregates_size);
 
@@ -2484,7 +2486,8 @@ void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
     block.clear();
 }
 
-bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const
+
+bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys, std::atomic<bool> & is_cancelled) const
 {
     /// `result` will destroy the states of aggregate functions in the destructor
     result.aggregator = this;
@@ -2499,7 +2502,7 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
     }
 
     if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
-        mergeWithoutKeyStreamsImpl(block, result);
+        mergeWithoutKeyStreamsImpl(block, result, is_cancelled);
 
 #define M(NAME, IS_TWO_LEVEL) \
     else if (result.type == AggregatedDataVariants::Type::NAME) \
@@ -2587,7 +2590,7 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
 }
 
 
-void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads)
+void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads, std::atomic<bool> & is_cancelled)
 {
     if (bucket_to_blocks.empty())
         return;
@@ -2634,7 +2637,7 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
 
         LOG_TRACE(log, "Merging partially aggregated two-level data.");
 
-        auto merge_bucket = [&bucket_to_blocks, &result, this](Int32 bucket, Arena * aggregates_pool, ThreadGroupStatusPtr thread_group)
+        auto merge_bucket = [&bucket_to_blocks, &result, this, &is_cancelled](Int32 bucket, Arena * aggregates_pool, ThreadGroupStatusPtr thread_group)
         {
             if (thread_group)
                 CurrentThread::attachToIfDetached(thread_group);
@@ -2643,6 +2646,8 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
             {
                 for (Block & block : bucket_to_blocks[bucket])
                 {
+                    if (is_cancelled.load(std::memory_order_seq_cst))
+                        break;
 #define M(NAME, IS_TWO_LEVEL) \
     else if (result.type == AggregatedDataVariants::Type::NAME) \
         mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data, nullptr, false);
@@ -2658,6 +2663,8 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
             {
                 for (Block & block : bucket_to_blocks[bucket])
                 {
+                    if (is_cancelled.load(std::memory_order_seq_cst))
+                        break;
 #define M(NAME) \
                 else if (result.type == AggregatedDataVariants::Type::NAME) \
                     mergeStreamsImpl(block, aggregates_pool, *result.NAME, result.NAME->data.impls[bucket], nullptr, false);
@@ -2711,9 +2718,10 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
         {
             if (!checkLimits(result.sizeWithoutOverflowRow(), no_more_keys))
                 break;
-
+            if (is_cancelled.load(std::memory_order_seq_cst))
+                break;
             if (result.type == AggregatedDataVariants::Type::without_key || block.info.is_overflows)
-                mergeWithoutKeyStreamsImpl(block, result);
+                mergeWithoutKeyStreamsImpl(block, result, is_cancelled);
 
         #define M(NAME, IS_TWO_LEVEL) \
             else if (result.type == AggregatedDataVariants::Type::NAME) \
@@ -2730,7 +2738,7 @@ void Aggregator::mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVari
 }
 
 
-Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
+Block Aggregator::mergeBlocks(BlocksList & blocks, bool final, std::atomic<bool> & is_cancelled)
 {
     if (blocks.empty())
         return {};
@@ -2778,9 +2786,10 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     {
         if (bucket_num >= 0 && block.info.bucket_num != bucket_num)
             bucket_num = -1;
-
+        if (is_cancelled.load(std::memory_order_seq_cst))
+            break;
         if (result.type == AggregatedDataVariants::Type::without_key || is_overflows)
-            mergeWithoutKeyStreamsImpl(block, result);
+            mergeWithoutKeyStreamsImpl(block, result, is_cancelled);
 
     #define M(NAME, IS_TWO_LEVEL) \
         else if (result.type == AggregatedDataVariants::Type::NAME) \

@@ -56,8 +56,19 @@ struct MinimumDataPart
     }
 
     // for working with PartComparator
+    String get_name() const { return name; }
+
     const MergeTreePartInfo & get_info() const { return info; }
+
     UInt64 get_commit_time() const { return commit_time; }
+
+    std::shared_ptr<MinimumDataPart> get_prev() const { return prev; }
+
+    bool get_deleted() const { return is_deleted; }
+
+    std::shared_ptr<MinimumDataPart> tryGetPreviousPart() const { return prev; }
+
+    void setPreviousPart(std::shared_ptr<MinimumDataPart> prev_) { prev = prev_; }
 
     /////////////////////////////
     /// Fields
@@ -111,6 +122,7 @@ IMergeTreeDataPartsVector calcVisibleParts(IMergeTreeDataPartsVector& all_parts,
 ServerDataPartsVector calcVisibleParts(ServerDataPartsVector& all_parts,
     bool collect_on_chain, bool skip_drop_ranges, ServerDataPartsVector* visible_alone_drop_ranges,
     ServerDataPartsVector* invisible_dropped_parts, LoggingOption logging);
+MinimumDataParts calcVisibleParts(MinimumDataParts & all_parts, bool flatten, LoggingOption logging = DisableLogging);
 
 /**
  * Compute end time for committed parts.

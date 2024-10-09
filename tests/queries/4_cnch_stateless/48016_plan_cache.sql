@@ -1,7 +1,6 @@
 set enable_optimizer=1;
 set enable_plan_cache=1;
 
-use test;
 DROP TABLE IF EXISTS cache;
 DROP TABLE IF EXISTS cache2;
 CREATE TABLE cache (a UInt32, b UInt32, c Nullable(UInt64)) ENGINE = CnchMergeTree() partition by a order by a;

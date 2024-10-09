@@ -19,10 +19,10 @@ Projection Est. ? rows
          │     Order by: {x ASC NULLS LAST}
          └─ Inner (GRACE_HASH) Join Est. ? rows
             │     Condition: x == x_1
-            ├─ TableScan test.t48025 Est. ? rows
+            ├─ TableScan default.t48025 Est. ? rows
             │        Outputs: [x, s]
             └─ Broadcast Exchange Est. ? rows
-               └─ TableScan test.t480252 Est. ? rows
+               └─ TableScan default.t480252 Est. ? rows
                         Outputs: x_1:=x, s_1:=s
 2	a3	2	b1	2	a3
 2	a3	2	b1	2	a6
@@ -55,11 +55,11 @@ Projection Est. ? rows
             │     Condition: x == x_2
             ├─ Inner Join Est. ? rows
             │  │     Condition: x == x_1
-            │  ├─ TableScan test.t48025 Est. ? rows
+            │  ├─ TableScan default.t48025 Est. ? rows
             │  │        Outputs: [x, s]
             │  └─ Broadcast Exchange Est. ? rows
-            │     └─ TableScan test.t480252 Est. ? rows
+            │     └─ TableScan default.t480252 Est. ? rows
             │              Outputs: x_1:=x, s_1:=s
             └─ Broadcast Exchange Est. ? rows
-               └─ TableScan test.t48025 Est. ? rows
+               └─ TableScan default.t48025 Est. ? rows
                         Outputs: x_2:=x, s_2:=s

@@ -30,19 +30,44 @@ private:
     mutable std::shared_mutex mutex_;
 };
 
+
+/// Table level lock holder, to ensure all the version of table meta are holding the same lock.
+/// e.g. For different version of same partition of table in different thread(transient),
+/// we need to make sure they all hold the same lock.
+class MetaLockHolder
+{
+    /// Table level lock.
+    RWLock table_lock;
+    /// <partition_id, lock>.
+    std::unordered_map<String, RWLock> partition_locks;
+    /// Protect partition_locks.
+    std::mutex lock_of_partition_locks;
+
+public:
+    explicit MetaLockHolder(RWLock table_lock_) : table_lock(table_lock_) { }
+    RWLock getTableLock() { return table_lock; }
+    RWLock getPartitionLock(const String & partition_id);
+};
+
 struct TableMetaEntry
 {
     using TableLockHolder = RWLockImpl::LockHolder;
 
-    TableLockHolder readLock() const { return meta_mutex->getLock(RWLockImpl::Read, CurrentThread::getQueryId().toString()); }
+    TableLockHolder readLock() const
+    {
+        return lock_holder->getTableLock()->getLock(RWLockImpl::Read, CurrentThread::getQueryId().toString());
+    }
 
-    TableLockHolder writeLock() const { return meta_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString()); }
+    TableLockHolder writeLock() const
+    {
+        return lock_holder->getTableLock()->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString());
+    }
 
     TableMetaEntry(
         const String & database_,
         const String & table_,
         const String & table_uuid_,
-        const RWLock & lock = nullptr,
+        const std::shared_ptr<MetaLockHolder> & lock_holder_ = nullptr,
         const bool on_table_creation = false)
         : database(database_)
         , table(table_)
@@ -50,10 +75,10 @@ struct TableMetaEntry
         , partition_metrics_loaded(on_table_creation)
         , trash_item_metrics(std::make_shared<TableMetrics>(table_uuid_))
     {
-        if (!lock)
-            meta_mutex = RWLockImpl::create();
+        if (!lock_holder)
+            lock_holder = std::make_shared<MetaLockHolder>(RWLockImpl::create());
         else
-            meta_mutex = lock;
+            lock_holder = lock_holder_;
     }
 
     String database;
@@ -72,7 +97,7 @@ struct TableMetaEntry
     bool is_clustered{true};
     TableDefinitionHash table_definition_hash;
     String preallocate_vw;
-    mutable RWLock meta_mutex;
+    std::shared_ptr<MetaLockHolder> lock_holder;
     std::atomic_bool partition_metrics_loaded = false;
     std::atomic_bool loading_metrics = false;
     std::atomic_bool load_parts_by_partition = false;
@@ -91,11 +116,10 @@ struct TableMetaEntry
     std::unordered_set<String> getDeletingPartitions();
     Strings getPartitionIDs();
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList();
+    PartitionInfoPtr getPartitionInfo(const String & partition_id);
 
     void forEachPartition(std::function<void(PartitionInfoPtr)> callback);
 };
 
 using TableMetaEntryPtr = std::shared_ptr<TableMetaEntry>;
-
-
 }

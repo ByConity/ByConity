@@ -25,6 +25,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/MergeTreeBgTaskStatistics.h>
 
 #include <Common/CurrentThread.h>
 
@@ -39,6 +40,7 @@ NamesAndTypesList ServerPartLogElement::getNamesAndTypes()
         {"MutatePart", static_cast<Int8>(MUTATE_PART)},
         {"DropRange", static_cast<Int8>(DROP_RANGE)},
         {"RemovePart", static_cast<Int8>(REMOVE_PART)},
+        {"DeleteParts", static_cast<Int8>(DELETE_PARTS)},
     });
 
     return {
@@ -134,7 +136,7 @@ bool ServerPartLog::addNewParts(
         return false;
 
     auto event_time = time(nullptr);
-    std::unordered_map<String, size_t> count_by_partition;
+    std::unordered_map<String, std::pair<UInt64, UInt64> > parts_and_bytes_by_partition;
 
     auto add = [&](const MutableMergeTreeDataPartCNCHPtr & part, bool is_staged)
     {
@@ -163,7 +165,12 @@ bool ServerPartLog::addNewParts(
         elem.error = error;
 
         server_part_log->add(elem);
-        count_by_partition[elem.partition_id] += static_cast<int>(type == ServerPartLogElement::INSERT_PART && !is_staged);
+
+        if (!is_staged)
+        {
+            parts_and_bytes_by_partition[elem.partition_id].first++;
+            parts_and_bytes_by_partition[elem.partition_id].second += part->bytes_on_disk;
+        }
     };
 
     try
@@ -172,14 +179,26 @@ bool ServerPartLog::addNewParts(
             add(part, false);
         for (const auto & part : staged_parts)
             add(part, true);
-
-        if (auto partition_selector = local_context->getBGPartitionSelector())
+        
+        if (auto bg_task_stats = MergeTreeBgTaskStatisticsInitializer::instance().getOrCreateTableStats(storage_id))
         {
-            for (const auto & [partition, count] : count_by_partition)
-                partition_selector->addInsertParts(storage_id.uuid, partition, count, event_time);
+            if (type == ServerPartLogElement::INSERT_PART && !parts.empty())
+            {
+                for (const auto & [partition_id, parts_bytes] : parts_and_bytes_by_partition)
+                    bg_task_stats->addInsertedParts(partition_id, parts_bytes.first, parts_bytes.second, event_time);
+            }
 
             if (type == ServerPartLogElement::MERGE_PARTS && !parts.empty())
-                partition_selector->addMergeParts(storage_id.uuid, parts.front()->info.partition_id, source_part_names.size(), event_time);
+            {
+                /// Assume only have one merged part
+                bg_task_stats->addMergedParts(parts.front()->info.partition_id, source_part_names.size(), parts.front()->bytes_on_disk, event_time);
+            }
+
+            if (type == ServerPartLogElement::DROP_RANGE && !parts.empty())
+            {
+                for (const auto & [partition_id, _] : parts_and_bytes_by_partition)
+                    bg_task_stats->dropPartition(partition_id);
+            }
         }
 
         return true;
@@ -200,6 +219,7 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
     try
     {
         auto now = time(nullptr);
+
         std::unordered_map<String, size_t> count_by_partition;
 
         for (const auto & part: parts)
@@ -215,6 +235,7 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
             elem.part_id = UUIDToStringIfNotNil(part->get_uuid());
             elem.is_staged_part = is_staged;
             elem.rows = part->rowsCount();
+            elem.bytes = part->size();
             elem.commit_ts = part->getCommitTime();
             elem.end_ts = part->getEndTime();
 
@@ -222,11 +243,12 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
             count_by_partition[elem.partition_id] += static_cast<int>(elem.rows > 0);
         }
 
-        if (auto partition_selector = local_context->getBGPartitionSelector())
+        if (auto bg_task_stats = MergeTreeBgTaskStatisticsInitializer::instance().getOrCreateTableStats(storage_id))
         {
-            for (const auto & [partition, count] : count_by_partition)
-                partition_selector->addRemoveParts(storage_id.uuid, partition, count, now);
+            for (const auto & [partition_id, count] : count_by_partition)
+                bg_task_stats->addRemovedParts(partition_id, count);
         }
+
         return true;
     }
     catch (...)
@@ -235,6 +257,49 @@ bool ServerPartLog::addRemoveParts(const ContextPtr & local_context, StorageID s
         return false;
     }
 
+}
+
+bool ServerPartLog::addDeleteParts(const ContextPtr & local_context, StorageID storage_id, const ServerDataPartsVector & parts)
+{
+    std::shared_ptr<ServerPartLog> server_part_log = local_context->getServerPartLog();
+    if (parts.empty() || !server_part_log)
+        return false;
+
+    try
+    {
+        auto now = time(nullptr);
+        ServerPartLogElement elem;
+        size_t commit_ts = 0;
+        size_t end_ts = 0;
+        size_t rows = 0;
+        size_t bytes = 0;
+        for (const auto & part : parts)
+        {
+            rows += part->rowsCount();
+            bytes += part->size();
+            commit_ts = std::max(commit_ts, part->getCommitTime());
+            end_ts = std::max(end_ts, part->getEndTime());
+        }
+
+        elem.event_type = ServerPartLogElement::DELETE_PARTS;
+        elem.event_time = now;
+        elem.database_name = storage_id.getDatabaseName();
+        elem.table_name = storage_id.getTableName();
+        elem.uuid = storage_id.uuid;
+        elem.is_staged_part = false;
+        elem.rows = rows;
+        elem.bytes = bytes;
+        elem.commit_ts = commit_ts;
+        elem.end_ts = end_ts;
+
+        server_part_log->add(elem);
+        return true;
+    }
+    catch (...)
+    {
+        tryLogCurrentException(server_part_log->log, __PRETTY_FUNCTION__);
+        return false;
+    }
 }
 
 void ServerPartLog::prepareTable()

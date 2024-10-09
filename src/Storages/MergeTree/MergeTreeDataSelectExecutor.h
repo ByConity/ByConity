@@ -181,6 +181,11 @@ public:
         const SelectQueryInfo & query_info,
         ContextPtr context);
 
+    static std::optional<bool> isValidPartitionFilter(
+        const StoragePtr & storage,
+        ASTPtr filter,
+        ContextPtr context);
+
     /// Filter parts using minmax index and partition key.
     static void filterPartsByPartition(
         MergeTreeMetaBase::DataPartsVector & parts,
@@ -317,7 +322,7 @@ struct IndexTimeWatcher
         }
     }
 
-    void watch(IndexTimeWatcher::Type type, std::function<void()> func) 
+    void watch(IndexTimeWatcher::Type type, std::function<void()> func)
     {
         begin(type);
         func();

@@ -13,7 +13,7 @@ Projection
                │     Expressions: [package_name, recv_timestamp]
                └─ Filter
                   │     Condition: (uuid = \'xx\') AND (recv_timestamp > 100000000)
-                  └─ TableScan test.t40080_tfpoc
+                  └─ TableScan default.t40080_tfpoc
                            Where: (uuid = \'xx\') AND (recv_timestamp > 100000000)
                            Outputs: [uuid, package_name, recv_timestamp]
 Projection
@@ -31,7 +31,7 @@ Projection
                │     Limit: 10
                └─ Filter
                   │     Condition: recv_timestamp > 100000000
-                  └─ TableScan test.t40080_tfpoc
+                  └─ TableScan default.t40080_tfpoc
                            Where: recv_timestamp > 100000000
                            Outputs: [uuid, package_name, recv_timestamp]
 Projection
@@ -53,9 +53,9 @@ Projection
    │                 │     Limit: 10
    │                 └─ Filter
    │                    │     Condition: recv_timestamp > 100000000
-   │                    └─ TableScan test.t40080_tfpoc
+   │                    └─ TableScan default.t40080_tfpoc
    │                             Where: recv_timestamp > 100000000
    │                             Outputs: [uuid, package_name, recv_timestamp]
    └─ Broadcast Exchange
-      └─ TableScan test.t40080_tfpoc
+      └─ TableScan default.t40080_tfpoc
                Outputs: package_name_1:=package_name

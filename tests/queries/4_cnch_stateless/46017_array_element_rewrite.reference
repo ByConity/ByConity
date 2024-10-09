@@ -5,7 +5,7 @@ Projection Est. ? rows
       │     Expressions: expr#arrayElement(kv, \'456\'):=kv[\'456\']
       └─ Filter Est. ? rows
          │     Condition: (kv[\'123\']) = 1
-         └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+         └─ TableScan default.array_element_rewrite_46017 Est. ? rows
                   Where: (kv[\'123\']) = 1
                   Outputs: [kv]
 Projection Est. ? rows
@@ -15,7 +15,7 @@ Projection Est. ? rows
       │     Expressions: expr#arrayElement(byte, \'456\'):=byte[\'456\']
       └─ Filter Est. ? rows
          │     Condition: (byte[\'123\']) = 1
-         └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+         └─ TableScan default.array_element_rewrite_46017 Est. ? rows
                   Where: (byte[\'123\']) = 1
                   Outputs: [byte]
 Projection Est. ? rows
@@ -27,12 +27,12 @@ Projection Est. ? rows
          │     Condition: 
          │     Filter: ((kv[\'789\']) + (kv_1[\'789\'])) = 0
          ├─ Gather Exchange Est. ? rows
-         │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+         │  └─ TableScan default.array_element_rewrite_46017 Est. ? rows
          │           Outputs: [kv]
          └─ Gather Exchange Est. ? rows
             └─ Filter Est. ? rows
                │     Condition: (kv_1[\'123\']) = 1
-               └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+               └─ TableScan default.array_element_rewrite_46017 Est. ? rows
                         Where: (kv[\'123\']) = 1
                         Outputs: kv_1:=kv
 Projection Est. ? rows
@@ -44,12 +44,12 @@ Projection Est. ? rows
          │     Condition: 
          │     Filter: ((byte[\'789\']) + (byte_1[\'789\'])) = 0
          ├─ Gather Exchange Est. ? rows
-         │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+         │  └─ TableScan default.array_element_rewrite_46017 Est. ? rows
          │           Outputs: [byte]
          └─ Gather Exchange Est. ? rows
             └─ Filter Est. ? rows
                │     Condition: (byte_1[\'123\']) = 1
-               └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+               └─ TableScan default.array_element_rewrite_46017 Est. ? rows
                         Where: (byte[\'123\']) = 1
                         Outputs: byte_1:=byte
 Projection Est. ? rows
@@ -61,12 +61,12 @@ Projection Est. ? rows
          │     Condition: 
          │     Filter: ((kv[\'789\']) + (kv_1[\'789\'])) = 0
          ├─ Gather Exchange Est. ? rows
-         │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+         │  └─ TableScan default.array_element_rewrite_46017 Est. ? rows
          │           Outputs: [kv]
          └─ Gather Exchange Est. ? rows
             └─ Filter Est. ? rows
                │     Condition: (kv_1[\'123\']) = 1
-               └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+               └─ TableScan default.array_element_rewrite_46017 Est. ? rows
                         Where: (kv[\'123\']) = 1
                         Outputs: kv_1:=kv
 Projection Est. ? rows
@@ -78,11 +78,11 @@ Projection Est. ? rows
          │     Condition: 
          │     Filter: ((byte[\'789\']) + (byte_1[\'789\'])) = 0
          ├─ Gather Exchange Est. ? rows
-         │  └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+         │  └─ TableScan default.array_element_rewrite_46017 Est. ? rows
          │           Outputs: [byte]
          └─ Gather Exchange Est. ? rows
             └─ Filter Est. ? rows
                │     Condition: (byte_1[\'123\']) = 1
-               └─ TableScan test.array_element_rewrite_46017 Est. ? rows
+               └─ TableScan default.array_element_rewrite_46017 Est. ? rows
                         Where: (byte[\'123\']) = 1
                         Outputs: byte_1:=byte

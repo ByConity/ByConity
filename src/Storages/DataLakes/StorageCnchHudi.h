@@ -24,7 +24,7 @@ public:
         std::shared_ptr<CnchHiveSettings> settings_,
         IMetaClientPtr client_from_catalog = nullptr);
 
-    virtual std::shared_ptr<IDirectoryLister> getDirectoryLister() override;
+    virtual std::shared_ptr<IDirectoryLister> getDirectoryLister(ContextPtr local_context) override;
 
     Strings getHiveColumnTypes() const;
     Strings getHiveColumnNames() const;

@@ -93,7 +93,7 @@ ExternalCatalogPtr CnchExternalCatalogMgr::tryGetCatalog(const std::string & cat
     {
         ret = std::make_shared<MockExternalCatalog>(catalog_name);
     }
-    else if (boost::iequals(type, "hive") || boost::iequals(type, "glue"))
+    else if (boost::iequals(type, "hive") || boost::iequals(type, "glue") ||boost::iequals(type, "lf"))
     {
         PlainConfigsPtr catalog_conf(new PlainConfigs());
         protoToConfig(catalog_model, *catalog_conf);

@@ -13,38 +13,37 @@ Projection
                │     Group by: {c_name, c_custkey, l_orderkey, o_orderdate, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
                └─ Inner Join
-                  │     Condition: l_orderkey == o_orderkey
-                  │     Runtime Filters Builder: {o_orderkey}
+                  │     Condition: c_custkey == o_custkey
+                  │     Runtime Filters Builder: {o_custkey}
                   ├─ Filter
-                  │  │     Condition: Runtime Filters: {l_orderkey}
-                  │  └─ TableScan tpch1000.lineitem
-                  │           Where: Runtime Filters: {l_orderkey}
-                  │           Outputs: [l_orderkey, l_quantity]
+                  │  │     Condition: Runtime Filters: {c_custkey}
+                  │  └─ TableScan tpch1000.customer
+                  │           Where: Runtime Filters: {c_custkey}
+                  │           Outputs: [c_custkey, c_name]
                   └─ Broadcast Exchange
                      └─ Inner Join
-                        │     Condition: c_custkey == o_custkey
-                        │     Runtime Filters Builder: {o_custkey}
+                        │     Condition: l_orderkey == o_orderkey
+                        │     Runtime Filters Builder: {o_orderkey}
                         ├─ Filter
-                        │  │     Condition: Runtime Filters: {c_custkey}
-                        │  └─ TableScan tpch1000.customer
-                        │           Where: Runtime Filters: {c_custkey}
-                        │           Outputs: [c_custkey, c_name]
-                        └─ Broadcast Exchange
-                           └─ Left Semi Join
-                              │     Condition: o_orderkey == l_orderkey_1
-                              │     Runtime Filters Builder: {l_orderkey_1}
-                              ├─ Filter
-                              │  │     Condition: Runtime Filters: {o_orderkey}
-                              │  └─ TableScan tpch1000.orders
-                              │           Where: Runtime Filters: {o_orderkey}
-                              │           Outputs: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
-                              └─ Projection
-                                 │     Expressions: [l_orderkey_1]
-                                 └─ Filter
-                                    │     Condition: `expr#sum(l_quantity)` > '300'
-                                    └─ Aggregating
-                                       │     Group by: {l_orderkey_1}
-                                       │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
-                                       └─ TableScan tpch1000.lineitem
-                                                Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
+                        │  │     Condition: Runtime Filters: {l_orderkey}
+                        │  └─ TableScan tpch1000.lineitem
+                        │           Where: Runtime Filters: {l_orderkey}
+                        │           Outputs: [l_orderkey, l_quantity]
+                        └─ Left Semi Join
+                           │     Condition: o_orderkey == l_orderkey_1
+                           │     Runtime Filters Builder: {l_orderkey_1}
+                           ├─ Filter
+                           │  │     Condition: Runtime Filters: {o_orderkey}
+                           │  └─ TableScan tpch1000.orders
+                           │           Where: Runtime Filters: {o_orderkey}
+                           │           Outputs: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
+                           └─ Projection
+                              │     Expressions: [l_orderkey_1]
+                              └─ Filter
+                                 │     Condition: `expr#sum(l_quantity)` > '300'
+                                 └─ Aggregating
+                                    │     Group by: {l_orderkey_1}
+                                    │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
+                                    └─ TableScan tpch1000.lineitem
+                                             Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
 note: Runtime Filter is applied for 3 times.

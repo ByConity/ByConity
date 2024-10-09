@@ -1,50 +1,49 @@
-Projection Est. 8 rows
+Projection Est. 3 rows
 │     Expressions: [c_custkey, c_name, o_orderdate, o_totalprice], o_orderkey:=l_orderkey, sum(l_quantity):=`expr#sum(l_quantity)_1`
-└─ Limit Est. 8 rows
+└─ Limit Est. 3 rows
    │     Limit: 100
-   └─ Sorting Est. 8 rows
+   └─ Sorting Est. 3 rows
       │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. 8 rows
-         └─ Sorting Est. 8 rows
+      └─ Gather Exchange Est. 3 rows
+         └─ Sorting Est. 3 rows
             │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 100
-            └─ Aggregating Est. 8 rows
+            └─ Aggregating Est. 3 rows
                │     Group by: {c_name, c_custkey, l_orderkey, o_orderdate, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
-               └─ Inner Join Est. 8 rows
-                  │     Condition: l_orderkey == o_orderkey
-                  │     Runtime Filters Builder: {o_orderkey}
-                  ├─ Filter Est. 5999989709 rows
-                  │  │     Condition: Runtime Filters: {l_orderkey}
-                  │  └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                  │           Where: Runtime Filters: {l_orderkey}
-                  │           Outputs: [l_orderkey, l_quantity]
-                  └─ Broadcast Exchange Est. 2 rows
-                     └─ Inner Join Est. 2 rows
-                        │     Condition: c_custkey == o_custkey
-                        │     Runtime Filters Builder: {o_custkey}
-                        ├─ Filter Est. 150000000 rows
-                        │  │     Condition: Runtime Filters: {c_custkey}
-                        │  └─ TableScan tpch1000.customer Est. 150000000 rows
-                        │           Where: Runtime Filters: {c_custkey}
-                        │           Outputs: [c_custkey, c_name]
-                        └─ Broadcast Exchange Est. 1 rows
-                           └─ Left Semi Join Est. 1 rows
-                              │     Condition: o_orderkey == l_orderkey_1
-                              │     Runtime Filters Builder: {l_orderkey_1}
-                              ├─ Filter Est. 1500000000 rows
-                              │  │     Condition: Runtime Filters: {o_orderkey}
-                              │  └─ TableScan tpch1000.orders Est. 1500000000 rows
-                              │           Where: Runtime Filters: {o_orderkey}
-                              │           Outputs: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
-                              └─ Projection Est. 1 rows
-                                 │     Expressions: [l_orderkey_1]
-                                 └─ Filter Est. 1 rows
-                                    │     Condition: `expr#sum(l_quantity)` > '300'
-                                    └─ Aggregating Est. 1077412840 rows
-                                       │     Group by: {l_orderkey_1}
-                                       │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
-                                       └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                                                Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
+               └─ Inner Join Est. 3 rows
+                  │     Condition: c_custkey == o_custkey
+                  │     Runtime Filters Builder: {o_custkey}
+                  ├─ Filter Est. 150000000 rows
+                  │  │     Condition: Runtime Filters: {c_custkey}
+                  │  └─ TableScan tpch1000.customer Est. 150000000 rows
+                  │           Where: Runtime Filters: {c_custkey}
+                  │           Outputs: [c_custkey, c_name]
+                  └─ Broadcast Exchange Est. 3 rows
+                     └─ Inner Join Est. 3 rows
+                        │     Condition: l_orderkey == o_orderkey
+                        │     Runtime Filters Builder: {o_orderkey}
+                        ├─ Filter Est. 5999989709 rows
+                        │  │     Condition: Runtime Filters: {l_orderkey}
+                        │  └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                        │           Where: Runtime Filters: {l_orderkey}
+                        │           Outputs: [l_orderkey, l_quantity]
+                        └─ Left Semi Join Est. 1 rows
+                           │     Condition: o_orderkey == l_orderkey_1
+                           │     Runtime Filters Builder: {l_orderkey_1}
+                           ├─ Filter Est. 1500000000 rows
+                           │  │     Condition: Runtime Filters: {o_orderkey}
+                           │  └─ TableScan tpch1000.orders Est. 1500000000 rows
+                           │           Where: Runtime Filters: {o_orderkey}
+                           │           Outputs: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
+                           └─ Projection Est. 1 rows
+                              │     Expressions: [l_orderkey_1]
+                              └─ Filter Est. 1 rows
+                                 │     Condition: `expr#sum(l_quantity)` > '300'
+                                 └─ Aggregating Est. 1512001491 rows
+                                    │     Group by: {l_orderkey_1}
+                                    │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
+                                    └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                                             Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
 note: Runtime Filter is applied for 3 times.

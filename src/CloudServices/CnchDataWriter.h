@@ -105,6 +105,18 @@ public:
 
     DumpedData res;
 
+    static UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
+    {
+        UUID random_id = UUIDHelpers::generateV4();
+        UInt64& random_id_low = UUIDHelpers::getHighBytes(random_id);
+        UInt64& random_id_high = UUIDHelpers::getLowBytes(random_id);
+        boost::hash_combine(random_id_low, part_info.min_block);
+        boost::hash_combine(random_id_high, part_info.max_block);
+        boost::hash_combine(random_id_low, part_info.mutation);
+        boost::hash_combine(random_id_high, txn_timestamp);
+        return random_id;
+    }
+
 private:
     MergeTreeMetaBase & storage;
     ContextPtr context;
@@ -126,8 +138,6 @@ private:
     UInt64 peak_memory_usage;
 
     CnchDedupHelper::DedupMode dedup_mode = CnchDedupHelper::DedupMode::APPEND;
-
-    UUID newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp);
 };
 
 }

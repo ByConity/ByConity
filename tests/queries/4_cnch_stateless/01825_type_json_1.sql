@@ -1,5 +1,4 @@
 -- Tags: no-fasttest
-use test;
 set enable_optimizer = 0;
 SET allow_experimental_object_type = 1;
 

@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS test_parse_json_object_as_strings;
 
 CREATE TABLE test_parse_json_object_as_strings (obj String, params Array(String)) ENGINE = CnchMergeTree() ORDER BY tuple();

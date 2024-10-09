@@ -124,7 +124,8 @@ PlanSegmentExecutor::PlanSegmentExecutor(
     , query_log_element(std::make_unique<QueryLogElement>())
 {
     options = ExchangeUtils::getExchangeOptions(context);
-    prepareSegmentInfo();
+    if (plan_segment->getPlanSegmentId() > 0)
+        prepareSegmentInfo();
 }
 
 PlanSegmentExecutor::PlanSegmentExecutor(
@@ -141,14 +142,16 @@ PlanSegmentExecutor::PlanSegmentExecutor(
     , logger(getLogger("PlanSegmentExecutor"))
     , query_log_element(std::make_unique<QueryLogElement>())
 {
-    prepareSegmentInfo();
+    if (plan_segment->getPlanSegmentId() > 0)
+        prepareSegmentInfo();
 }
 
 PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
 {
     try
     {
-        if (context->getSettingsRef().log_queries && query_log_element->type >= context->getSettingsRef().log_queries_min_type)
+        if (context->getSettingsRef().log_queries && !context->isInternalQuery()
+            && query_log_element->type >= context->getSettingsRef().log_queries_min_type && plan_segment->getPlanSegmentId() > 0)
         {
             if (auto query_log = context->getQueryLog())
                 query_log->add(*query_log_element);
@@ -341,7 +344,7 @@ void fillPlanSegmentProfile(
 void PlanSegmentExecutor::doExecute()
 {
     SCOPE_EXIT_SAFE({
-        if (context->getSettingsRef().log_queries && process_plan_segment_entry->getQueryStatus())
+        if (context->getSettingsRef().log_queries && !context->isInternalQuery() && process_plan_segment_entry->getQueryStatus())
             collectSegmentQueryRuntimeMetric(process_plan_segment_entry->getQueryStatus().get());
     });
 

@@ -34,7 +34,7 @@ public:
 private:
     std::string catalog_name;
     PlainConfigsPtr configs;
-    IMetaClientPtr hms_client;
+    IMetaClientPtr lake_client;
 
     //TODO(ExternalCatalog):: add storage related field.
     LoggerPtr log = getLogger("HiveExternalCatalog");

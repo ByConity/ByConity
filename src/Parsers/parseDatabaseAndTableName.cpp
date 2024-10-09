@@ -7,7 +7,7 @@
 namespace DB
 {
 
-bool parseDatabaseAndTableName(IParser::Pos & pos, Expected & expected, String & database_str, String & table_str)
+bool parseDatabaseAndTableName(IParser::Pos & pos, Expected & expected, String & database_str, String & table_str, bool rewrite_db)
 {
     ParserToken s_dot(TokenType::Dot);
     ParserIdentifier table_parser;
@@ -28,7 +28,9 @@ bool parseDatabaseAndTableName(IParser::Pos & pos, Expected & expected, String &
             database_str = "";
             return false;
         }
-        tryRewriteCnchDatabaseName(database, pos.getContext());
+        if (rewrite_db)
+            tryRewriteCnchDatabaseName(database, pos.getContext());
+
         tryGetIdentifierNameInto(database, database_str);
         tryGetIdentifierNameInto(table, table_str);
     }

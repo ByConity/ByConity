@@ -17,11 +17,11 @@ Projection Est. 1 rows
                └─ Inner Join Est. 1 rows
                   │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2 == expr#max(total_revenue)_1
                   │     Runtime Filters Builder: {expr#max(total_revenue)_1}
-                  ├─ Filter Est. 9951889 rows
+                  ├─ Filter Est. 9848486 rows
                   │  │     Condition: Runtime Filters: {`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2`}
-                  │  └─ Local Exchange Est. 9951889 rows
-                  │     └─ Buffer Est. 9951889 rows
-                  │        └─ CTERef[0] Est. 9951889 rows
+                  │  └─ Local Exchange Est. 9848486 rows
+                  │     └─ Buffer Est. 9848486 rows
+                  │        └─ CTERef[0] Est. 9848486 rows
                   └─ Broadcast Exchange Est. 1 rows
                      └─ Projection Est. 1 rows
                         │     Expressions: expr#max(total_revenue)_1:=cast(`expr#max(total_revenue)`, 'Nullable(Decimal(38, 4))')
@@ -30,18 +30,18 @@ Projection Est. 1 rows
                               └─ Aggregating Est. 1 rows
                                  │     Group by: {}
                                  │     Aggregates: expr#max(total_revenue):=AggNull(max)(expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3)
-                                 └─ Buffer Est. 9951889 rows
-                                    └─ CTERef[0] Est. 9951889 rows
+                                 └─ Buffer Est. 9848486 rows
+                                    └─ CTERef[0] Est. 9848486 rows
 CTEDef [0]
-   MergingAggregated Est. 9951889 rows
-   └─ Repartition Exchange Est. 9951889 rows
+   MergingAggregated Est. 9848486 rows
+   └─ Repartition Exchange Est. 9848486 rows
       │     Partition by: {l_suppkey_1}
-      └─ Aggregating Est. 9951889 rows
+      └─ Aggregating Est. 9848486 rows
          │     Group by: {l_suppkey_1}
          │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_1)
-         └─ Projection Est. 229083524 rows
+         └─ Projection Est. 240225578 rows
             │     Expressions: [l_suppkey_1], expr#multiply(l_extendedprice, minus(1, l_discount))_1:=l_extendedprice_1 * (1 - l_discount_1)
-            └─ Filter Est. 229083524 rows
+            └─ Filter Est. 240225578 rows
                │     Condition: (l_shipdate_1 >= cast(9496, 'Date')) AND (l_shipdate_1 < cast(9587, 'Date'))
                └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                         Where: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))

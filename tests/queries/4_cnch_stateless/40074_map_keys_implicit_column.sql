@@ -1,5 +1,3 @@
-USE test;
-
 SET enable_optimizer=1;
 
 DROP TABLE IF EXISTS test40074_map_keys;

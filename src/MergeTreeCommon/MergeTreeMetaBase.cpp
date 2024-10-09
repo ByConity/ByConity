@@ -1993,7 +1993,8 @@ ASTPtr MergeTreeMetaBase::applyFilter(
         Names virtual_key_names = getSampleBlockWithVirtualColumns().getNames();
         partition_key_names.insert(partition_key_names.end(), virtual_key_names.begin(), virtual_key_names.end());
         auto iter = std::stable_partition(conjuncts.begin(), conjuncts.end(), [&](const auto & predicate) {
-            PartitionPredicateVisitor::Data visitor_data{query_context, partition_key_names};
+            PartitionPredicateVisitor::Data visitor_data{
+                query_context, (const_cast<MergeTreeMetaBase *>(this))->shared_from_this(), predicate};
             PartitionPredicateVisitor(visitor_data).visit(predicate);
             return visitor_data.getMatch();
         });
@@ -2207,10 +2208,17 @@ void MergeTreeMetaBase::filterPartitionByTTL(std::vector<std::shared_ptr<MergeTr
 Strings MergeTreeMetaBase::selectPartitionsByPredicate(
     const SelectQueryInfo & query_info,
     std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
-    const Names & column_names_to_return,
+    const Names & /* column_names_to_return */,
     ContextPtr local_context,
     const bool & ignore_ttl) const
 {
+    // LOG_TRACE(
+    //     log,
+    //     "selectPartitionsByPredicate, query: {}, partition_filter: {}, partition size before pruning: {}",
+    //     query_info.query->formatForErrorMessage(),
+    //     query_info.partition_filter ? query_info.partition_filter->formatForErrorMessage() : "NULL",
+    //     partition_list.size());
+
     /// Coarse grained partition pruner: filter out the partition which will definitely not satisfy the query predicate. The benefit
     /// is 2-folded: (1) we can prune data parts and (2) we can reduce numbers of calls to catalog to get parts 's metadata.
     /// Note that this step still leaves false-positive parts. For example, the partition key is `toMonth(date)` and the query
@@ -2238,6 +2246,7 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
         }
 
         KeyCondition partition_condition(query_info, local_context, partition_key_columns, partition_key_expr);
+        // LOG_TRACE(log, "partition_condition: {}", partition_condition.toString());
         DataTypes result;
         result.reserve(partition_key_sample.getDataTypes().size());
         for (const auto & data_type : partition_key_sample.getDataTypes())
@@ -2261,25 +2270,28 @@ Strings MergeTreeMetaBase::selectPartitionsByPredicate(
         if (partition_list.size() < prev_sz)
             LOG_DEBUG(log, "Query predicates on physical columns dropped {} partitions", prev_sz - partition_list.size());
 
-        /// (3) Prune partitions if there's `_partition_id` or `_partition_value` in query predicate
-        bool has_partition_column = std::any_of(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) {
-            return name == "_partition_id" || name == "_partition_value";
-        });
-
-        if (has_partition_column && !partition_list.empty())
+        if (!partition_list.empty())
         {
             Block partition_block = getPartitionBlockWithVirtualColumns(partition_list);
             ASTPtr expression_ast;
 
             /// Generate valid expressions for filtering
-            VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
+            VirtualColumnUtils::prepareFilterBlockWithQuery(
+                query_info.query, local_context, partition_block, expression_ast, query_info.partition_filter);
+
+            // LOG_TRACE(
+            //     log,
+            //     "prepared filter {} is prepared, by block {}",
+            //     expression_ast ? expression_ast->formatForErrorMessage() : "NULL",
+            //     partition_block.dumpStructure());
 
             /// Generate list of partition id that fit the query predicate
             NameSet partition_ids;
-            if (expression_ast)
+            if (expression_ast && !KeyDescription::moduloToModuloLegacyRecursive(expression_ast->clone()))
             {
                 replace_func_with_known_column(expression_ast, NameSet{partition_key_columns.begin(), partition_key_columns.end()});
-                VirtualColumnUtils::filterBlockWithQuery(query_info.query, partition_block, local_context, expression_ast);
+                VirtualColumnUtils::filterBlockWithQuery(
+                    query_info.query, partition_block, local_context, expression_ast, query_info.partition_filter);
                 partition_ids = VirtualColumnUtils::extractSingleValueFromBlock<String>(partition_block, "_partition_id");
                 /// Prunning
                 prev_sz = partition_list.size();

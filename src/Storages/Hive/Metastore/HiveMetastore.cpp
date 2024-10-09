@@ -233,14 +233,17 @@ HiveMetastoreClientFactory & HiveMetastoreClientFactory::instance()
 
 HiveMetastoreClientPtr HiveMetastoreClientFactory::getOrCreate(const String & name, const std::shared_ptr<CnchHiveSettings> & settings)
 {
+    auto settings_hash =  std::hash<std::string>{}(settings->toString());
+    auto key = name + "#" + std::to_string(settings_hash);
     std::lock_guard lock(mutex);
-    auto it = clients.find(name);
+    auto it = clients.find(key);
+
     if (it == clients.end())
     {
         auto builder = [name, settings]() { return createThriftHiveMetastoreClient(name, settings); };
 
         auto client = std::make_shared<HiveMetastoreClient>(builder);
-        clients.emplace(name, client);
+        clients.emplace(key, client);
         return client;
     }
 

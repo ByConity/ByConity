@@ -10,7 +10,7 @@ Projection Est. ? rows
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Filter Est. ? rows
             │     Condition: isNotNull(sk)
-            └─ TableScan test.web Est. ? rows
+            └─ TableScan default.web Est. ? rows
                      Where: isNotNull(sk)
                      Outputs: [sk]
 2
@@ -24,7 +24,7 @@ Projection Est. ? rows
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Filter Est. ? rows
             │     Condition: price < 2000.
-            └─ TableScan test.web Est. ? rows
+            └─ TableScan default.web Est. ? rows
                      Where: price < 2000.
                      Outputs: [price]
 1
@@ -40,7 +40,7 @@ Projection Est. 10 rows, cost 7.400000e-01
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
-            └─ TableScan test.web Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.web Est. ? rows, cost 0.000000e+00
                      Outputs: [price]
 1000.2
 2000.3
@@ -57,7 +57,7 @@ Projection Est. 10 rows, cost 7.400000e-01
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
-            └─ TableScan test.web Est. ? rows, cost 0.000000e+00
+            └─ TableScan default.web Est. ? rows, cost 0.000000e+00
                      Outputs: [price]
 1000.2
 2000.3
@@ -78,13 +78,13 @@ Projection Est. 10 rows, cost 3.740000e+00
                │     Condition: sk == expr#cast(sk_1, \'Nullable(Int64)\')
                ├─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                │  │     Partition by: {sk}
-               │  └─ TableScan test.web Est. ? rows, cost 0.000000e+00
+               │  └─ TableScan default.web Est. ? rows, cost 0.000000e+00
                │           Outputs: [sk, price]
                └─ Repartition Exchange Est. ? rows, cost 1.500000e+00
                   │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
                   └─ Projection Est. ? rows, cost 0.000000e+00
                      │     Expressions: expr#cast(sk_1, \'Nullable(Int64)\'):=cast(sk_1, \'Nullable(Int64)\')
-                     └─ TableScan test.cust Est. ? rows, cost 0.000000e+00
+                     └─ TableScan default.cust Est. ? rows, cost 0.000000e+00
                               Outputs: sk_1:=sk
 1000.2
 2000.3
@@ -105,7 +105,7 @@ Projection Est. 10 rows, cost 7.400000e-01
                │     Expressions: [price]
                └─ Filter Est. ? rows, cost 0.000000e+00
                   │     Condition: isNotNull(sk)
-                  └─ TableScan test.web Est. ? rows, cost 0.000000e+00
+                  └─ TableScan default.web Est. ? rows, cost 0.000000e+00
                            Where: isNotNull(sk)
                            Outputs: [sk, price]
 1000.2
@@ -130,7 +130,7 @@ Projection Est. ? rows
             │        │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
             │        │  └─ Projection Est. ? rows
             │        │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
-            │        │     └─ TableScan test.cust Est. ? rows
+            │        │     └─ TableScan default.cust Est. ? rows
             │        │              Outputs: [sk]
             │        └─ Repartition Exchange Est. ? rows
             │           │     Partition by: {expr#sum(sk)}
@@ -142,13 +142,13 @@ Projection Est. ? rows
             │                    └─ Aggregating Est. ? rows
             │                       │     Group by: {c_customer_id}
             │                       │     Aggregates: expr#sum(sk):=AggNull(sum)(sk_1)
-            │                       └─ TableScan test.cust Est. ? rows
+            │                       └─ TableScan default.cust Est. ? rows
             │                                Outputs: [c_customer_id], sk_1:=sk
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {expr#cast(sk_2, \'Nullable(Int64)\')}
                └─ Projection Est. ? rows
                   │     Expressions: [price, sk_2, ws_item_sk], expr#cast(sk_2, \'Nullable(Int64)\'):=sk_2
-                  └─ TableScan test.web Est. ? rows
+                  └─ TableScan default.web Est. ? rows
                            Outputs: [ws_item_sk, price], sk_2:=sk
 1	100	1	1000.2
 2	200	2	2000.3
@@ -172,19 +172,19 @@ Projection Est. ? rows
             │        │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
             │        │  └─ Projection Est. ? rows
             │        │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
-            │        │     └─ TableScan test.cust Est. ? rows
+            │        │     └─ TableScan default.cust Est. ? rows
             │        │              Outputs: [sk]
             │        └─ Repartition Exchange Est. ? rows
             │           │     Partition by: {expr#cast(ws_item_sk, \'Nullable(Int64)\')}
             │           └─ Projection Est. ? rows
             │              │     Expressions: expr#cast(ws_item_sk, \'Nullable(Int64)\'):=cast(ws_item_sk, \'Nullable(Int64)\')
-            │              └─ TableScan test.web Est. ? rows
+            │              └─ TableScan default.web Est. ? rows
             │                       Outputs: [ws_item_sk]
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
                └─ Projection Est. ? rows
                   │     Expressions: [price, sk_1, ws_item_sk_1], expr#cast(sk_1, \'Nullable(Int64)\'):=sk_1
-                  └─ TableScan test.web Est. ? rows
+                  └─ TableScan default.web Est. ? rows
                            Outputs: [price], ws_item_sk_1:=ws_item_sk, sk_1:=sk
 not OK: unique self join with select *
 Projection Est. ? rows
@@ -194,11 +194,11 @@ Projection Est. ? rows
       │     Condition: sk == sk_1
       ├─ Repartition Exchange Est. ? rows
       │  │     Partition by: {sk}
-      │  └─ TableScan test.cust Est. ? rows
+      │  └─ TableScan default.cust Est. ? rows
       │           Outputs: [sk, c_customer_id, item]
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {sk_1}
-         └─ TableScan test.cust Est. ? rows
+         └─ TableScan default.cust Est. ? rows
                   Outputs: sk_1:=sk, c_customer_id_1:=c_customer_id, item_1:=item
 OK: with top union
 Projection Est. ? rows
@@ -242,7 +242,7 @@ CTEDef [1]
       │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
       │  └─ Projection Est. ? rows
       │     │     Expressions: [c_customer_id, sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
-      │     └─ TableScan test.cust Est. ? rows
+      │     └─ TableScan default.cust Est. ? rows
       │              Outputs: [sk, c_customer_id]
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
@@ -250,7 +250,7 @@ CTEDef [1]
             │     Expressions: [price, sk_1], expr#cast(sk_1, \'Nullable(Int64)\'):=sk_1
             └─ Filter Est. ? rows
                │     Condition: (price < 2000.) OR (price < 3000.) OR (price < 4000.)
-               └─ TableScan test.web Est. ? rows
+               └─ TableScan default.web Est. ? rows
                         Where: (price < 2000.) OR (price < 3000.) OR (price < 4000.)
                         Outputs: [price], sk_1:=sk
 note: CTE(Common Table Expression) is applied for 3 times.
@@ -298,7 +298,7 @@ CTEDef [1]
       │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
       │  └─ Projection Est. ? rows
       │     │     Expressions: [c_customer_id, sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
-      │     └─ TableScan test.cust Est. ? rows
+      │     └─ TableScan default.cust Est. ? rows
       │              Outputs: [sk, c_customer_id]
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
@@ -306,7 +306,7 @@ CTEDef [1]
             │     Expressions: [price, sk_1], expr#cast(sk_1, \'Nullable(Int64)\'):=sk_1
             └─ Filter Est. ? rows
                │     Condition: (price < 2001.) OR (price < 3001.) OR (price < 4001.)
-               └─ TableScan test.web Est. ? rows
+               └─ TableScan default.web Est. ? rows
                         Where: (price < 2001.) OR (price < 3001.) OR (price < 4001.)
                         Outputs: [price], sk_1:=sk
 note: CTE(Common Table Expression) is applied for 3 times.

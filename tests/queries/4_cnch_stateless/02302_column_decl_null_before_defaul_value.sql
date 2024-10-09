@@ -1,4 +1,3 @@
-use test;
 select 'create table, column +type +NULL';
 DROP TABLE IF EXISTS null_before1;
 CREATE TABLE null_before1 (id INT NULL, pid Int32 NOT NULL) ENGINE=CnchMergeTree() ORDER BY pid;

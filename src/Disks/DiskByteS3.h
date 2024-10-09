@@ -66,7 +66,7 @@ public:
     // If you want to check if a file exists, we strongly suggest using this function
     virtual bool fileExists(const String & file_path) const override;
 
-    virtual bool isFile(const String & ) const override { throw Exception("isFile is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual bool isFile(const String & ) const override { return true; }
 
     virtual bool isDirectory(const String & ) const override { throw Exception("isDirecotry is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
@@ -88,7 +88,7 @@ public:
 
     virtual void replaceFile(const String & , const String & ) override { throw Exception("replaceFile is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
-    virtual void copy(const String & , const std::shared_ptr<IDisk> & , const String & ) override { throw Exception("copy is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
+    // virtual void copy(const String & , const std::shared_ptr<IDisk> & , const String & ) override { throw Exception("copy is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
     virtual void listFiles(const String & path, std::vector<String> & file_names) override;
 
@@ -125,6 +125,8 @@ public:
     virtual bool supportRenameTo() override { return false; }
 
     virtual String getTableRelativePathOnDisk(const String &) override {return "";}
+
+    void copyFile(const String & from_path, const String & to_bucket, const String & to_path);
 
     // Non virtual functions
     const String & getS3Bucket() const { return s3_util.getBucket(); }

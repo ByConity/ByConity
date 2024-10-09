@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS nested;
 CREATE TABLE nested (x UInt8, n Nested(a UInt64, b String)) ENGINE = CnchMergeTree ORDER BY x;
 INSERT INTO nested VALUES (1, [2, 3], ['Hello', 'World']);

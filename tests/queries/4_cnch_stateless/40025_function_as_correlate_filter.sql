@@ -1,9 +1,6 @@
 set dialect_type='ANSI';
 set enable_optimizer=1;
 
-create database if not exists test;
-use test;
-
 drop table if exists tt1;
 drop table if exists tt2;
 

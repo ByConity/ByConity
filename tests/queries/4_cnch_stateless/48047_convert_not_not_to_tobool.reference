@@ -3,7 +3,7 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: NOT a
-      └─ TableScan test.48047_table Est. ? rows
+      └─ TableScan default.48047_table Est. ? rows
                Where: NOT a
                Outputs: [a]
 Projection Est. ? rows
@@ -11,6 +11,6 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: toBool(a)
-      └─ TableScan test.48047_table Est. ? rows
+      └─ TableScan default.48047_table Est. ? rows
                Where: toBool(a)
                Outputs: [a]

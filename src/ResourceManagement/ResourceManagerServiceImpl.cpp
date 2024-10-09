@@ -389,116 +389,6 @@ void ResourceManagerServiceImpl::getAllWorkerGroups(
     }
 }
 
-void ResourceManagerServiceImpl::pickWorker(
-    [[maybe_unused]] ::google::protobuf::RpcController * controller,
-    const ::DB::Protos::RMScheduleReq * request,
-    ::DB::Protos::PickWorkerResp * response,
-    ::google::protobuf::Closure * done)
-{
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
-
-        if (!checkForLeader(response))
-            return;
-
-        auto vw = vw_manager.getVirtualWarehouse(request->vw_name());
-        auto & query_scheduler = vw->getQueryScheduler();
-        auto vw_schedule_algo = VWScheduleAlgo(request->vw_schedule_algo());
-        auto requirement = ResourceRequirement::createFromProto(request->requirement());
-        if (requirement.expected_workers == 0)
-            requirement.expected_workers = 1;
-        auto host_ports = query_scheduler.pickWorker(vw_schedule_algo, requirement);
-
-        if (!host_ports.empty())
-        {
-            RPCHelpers::fillHostWithPorts(host_ports, *response->mutable_host_ports());
-            LOG_TRACE(log, "Picked worker {} from vw {}", host_ports.getHost(), request->vw_name());
-        }
-        else
-            throw Exception("No available worker!", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-}
-
-void ResourceManagerServiceImpl::pickWorkers(
-    [[maybe_unused]] ::google::protobuf::RpcController * controller,
-    const ::DB::Protos::RMScheduleReq * request,
-    ::DB::Protos::PickWorkersResp * response,
-    ::google::protobuf::Closure * done)
-{
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
-
-        if (!checkForLeader(response))
-            return;
-
-        auto vw = vw_manager.getVirtualWarehouse(request->vw_name());
-        auto & query_scheduler = vw->getQueryScheduler();
-        auto vw_schedule_algo = VWScheduleAlgo(request->vw_schedule_algo());
-        auto requirement = ResourceRequirement::createFromProto(request->requirement());
-        if (requirement.expected_workers == 0)
-            throw Exception("Call pickWorkers() without setting 'expected_workers'!", ErrorCodes::LOGICAL_ERROR);
-
-        auto workers = query_scheduler.pickWorkers(vw_schedule_algo, requirement);
-
-        if (!workers.empty())
-        {
-            for (const auto & worker : workers)
-            {
-                RPCHelpers::fillHostWithPorts(worker, *response->add_workers());
-            }
-            LOG_TRACE(log, "Picked {} workers from vw {}", workers.size(), request->vw_name());
-        }
-        else
-            throw Exception("No available worker!", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-}
-
-void ResourceManagerServiceImpl::pickWorkerGroup(
-    [[maybe_unused]] ::google::protobuf::RpcController * controller,
-    const ::DB::Protos::RMScheduleReq * request,
-    ::DB::Protos::PickWorkerGroupResp * response,
-    ::google::protobuf::Closure * done)
-{
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
-        if (!checkForLeader(response))
-            return;
-
-        auto vw = vw_manager.getVirtualWarehouse(request->vw_name());
-        auto & query_scheduler = vw->getQueryScheduler();
-        auto vw_schedule_algo = VWScheduleAlgo(request->vw_schedule_algo());
-        auto requirement = ResourceRequirement::createFromProto(request->requirement());
-        /// Default: at least a half of workers should be active.
-        if (requirement.expected_workers == 0)
-            requirement.expected_workers = vw->getExpectedNumWorkers() >> 1;
-        auto group = query_scheduler.pickWorkerGroup(vw_schedule_algo, requirement);
-        const auto & group_data = group->getData(/*with_metrics*/false, /*only_running_state*/true);
-        if (group_data.host_ports_vec.empty() && group_data.psm.empty())
-            throw Exception("No available worker group for " + request->vw_name(), ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER_GROUP);
-
-        LOG_TRACE(log, "Selected group {} with {} workers", group->getID(), std::to_string(group->getNumWorkers()));
-        group_data.fillProto(*response->mutable_worker_group_data(), true, true);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-}
-
 void ResourceManagerServiceImpl::syncQueueDetails(
     ::google::protobuf::RpcController * controller,
     const ::DB::Protos::SyncQueueDetailsReq * request,
@@ -510,10 +400,8 @@ void ResourceManagerServiceImpl::syncQueueDetails(
     {
         if (!checkForLeader(response))
             return;
-
         brpc::Controller * cntl =  static_cast<brpc::Controller*>(controller);
         String server_hostport = butil::endpoint2str(cntl->remote_side()).c_str();
-
         auto proto_server_query_queue_map = request->server_query_queue_map();
         ServerQueryQueueMap server_query_queue_map;
         UInt64 time_now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()
@@ -525,23 +413,17 @@ void ResourceManagerServiceImpl::syncQueueDetails(
             entry.last_sync = time_now;
             server_query_queue_map[name] = entry;
         }
-
         LOG_DEBUG(log, "Received vw queue update from {}", server_hostport);
-
         std::vector<String> deleted_vw_list;
-
         vw_manager.updateQueryQueueMap(server_hostport, server_query_queue_map, deleted_vw_list);
         auto agg_query_queue_map = vw_manager.getAggQueryQueueMap();
-
         for (const auto & [key, agg_query_queue_info] : agg_query_queue_map)
         {
             Protos::QueryQueueInfo protobuf_entry;
             agg_query_queue_info.fillProto(protobuf_entry);
             (*response->mutable_agg_query_queue_map())[key] = protobuf_entry;
         }
-
         *response->mutable_deleted_vws() = {deleted_vw_list.begin(), deleted_vw_list.end()};
-
     }
     catch (...)
     {

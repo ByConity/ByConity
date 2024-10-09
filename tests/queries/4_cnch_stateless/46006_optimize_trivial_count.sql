@@ -1,4 +1,3 @@
-use test;
 drop table if exists test46006;
 set optimize_trivial_count_query = 1;
 set enable_optimizer = 1;

@@ -1,0 +1,28 @@
+Projection
+└─ Gather Exchange
+   └─ Inner Join
+      ├─ TableScan default.x
+      └─ Broadcast Exchange
+         └─ Filter
+            └─ TableScan default.y
+Projection
+└─ Gather Exchange
+   └─ Inner Join
+      ├─ TableScan default.x
+      └─ Broadcast Exchange
+         └─ Filter
+            └─ TableScan default.y
+Projection
+└─ Gather Exchange
+   └─ Inner Any Join
+      ├─ TableScan default.x
+      └─ Broadcast Exchange
+         └─ Filter
+            └─ TableScan default.y
+Projection
+└─ Gather Exchange
+   └─ Filter
+      └─ Left Any Join
+         ├─ TableScan default.x
+         └─ Broadcast Exchange
+            └─ TableScan default.y

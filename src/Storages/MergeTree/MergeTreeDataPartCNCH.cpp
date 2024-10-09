@@ -1235,6 +1235,19 @@ String MergeTreeDataPartCNCH::getRelativePathForDetachedPart(const String & pref
     return fs::path("detached") / part_dir;
 }
 
+// only used for cnch part and copy operation
+void MergeTreeDataPartCNCH::copyToDetached(const String & prefix) const
+{
+    auto disk = volume->getDisk();
+    auto part_dir = fs::path(storage.getRelativeDataPath(location)) / getRelativePathForDetachedPart(prefix);
+    disk->createDirectories(part_dir);
+    auto target_data_path = fs::path(part_dir) / "data";
+    auto source_data_path = fs::path(getFullRelativePath()) / "data";
+    std::vector<std::pair<std::string, std::string>> files_to_copy;
+    files_to_copy.emplace_back(source_data_path, target_data_path);
+    disk->copyFiles(files_to_copy, disk);
+}
+
 void MergeTreeDataPartCNCH::updateCommitTimeForProjection()
 {
     if (parent_part)

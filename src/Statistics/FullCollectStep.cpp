@@ -233,8 +233,9 @@ public:
 
         auto sql = table_handler.getFullSql();
 
-        auto helper = SubqueryHelper::create(context, sql, true);
-        auto block = getOnlyRowFrom(helper);
+        auto query_context = SubqueryHelper::createQueryContext(context);
+        auto block = executeSubQueryWithOneRow(sql, query_context, false, false);
+
         table_handler.parse(block);
     }
 
@@ -260,8 +261,9 @@ public:
         }
         auto sql = table_handler.getFullSql();
 
-        auto helper = SubqueryHelper::create(context, sql, true);
-        auto block = getOnlyRowFrom(helper);
+        auto query_context = SubqueryHelper::createQueryContext(context);
+        auto block = executeSubQueryWithOneRow(sql, query_context, false, false);
+
         table_handler.parse(block);
     }
 

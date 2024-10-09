@@ -14,8 +14,9 @@ Projection Est. 100 rows, cost 8.900000e+00
                   └─ Projection Est. ? rows, cost 0.000000e+00
                      │     Expressions: [__int_params__\'predict_step\'], expr#multiIf(arraySetCheck(splitByChar(\',\', mapElement(string_params, \'local_life_deboost_ab_list\')), \'33\'), \'AA\', \'-1\'):=multiIf(arraySetCheck(splitByChar(\',\', `__string_params__\'local_life_deboost_ab_list\'`), \'33\'), \'AA\', \'-1\')
                      └─ Filter Est. ? rows, cost 0.000000e+00
-                        │     Condition: (multiIf(`arraySetCheck(ab_vids, 8586431)`, \'对照\', `arraySetCheck(ab_vids, 8586432)`, \'实验组1\', \'else\') = \'实验组1\') AND (chn_id = 0) AND (app_id = 1128) AND (toDate(ts) = cast(19816, \'Date\'))
-                        └─ TableScan test.aweme_sort_debug_gamma Est. ? rows, cost 0.000000e+00
-                                 Where: (chn_id = 0) AND (app_id = 1128) AND (toDate(ts) = cast(19816, \'Date\'))
+                        │     Condition: (multiIf(`arraySetCheck(ab_vids, 8586431)`, \'对照\', `arraySetCheck(ab_vids, 8586432)`, \'实验组1\', \'else\') = \'实验组1\') AND (chn_id = 0) AND (app_id = 1128)
+                        └─ TableScan default.aweme_sort_debug_gamma Est. ? rows, cost 0.000000e+00
+                                 Partition filter: toDate(ts) = cast(19816, \'Date\')
+                                 Where: (chn_id = 0) AND (app_id = 1128)
                                  Inline expressions: [arraySetCheck(ab_vids, 8586431):=arraySetCheck(ab_vids, 8586431), arraySetCheck(ab_vids, 8586432):=arraySetCheck(ab_vids, 8586432)]
-                                 Outputs: [ts, app_id, chn_id, __int_params__\'predict_step\', __string_params__\'local_life_deboost_ab_list\']
+                                 Outputs: [app_id, chn_id, __int_params__\'predict_step\', __string_params__\'local_life_deboost_ab_list\']

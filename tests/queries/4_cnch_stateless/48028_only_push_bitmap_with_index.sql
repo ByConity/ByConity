@@ -1,5 +1,3 @@
-use test;
-
 DROP TABLE if exists aweme_sort_debug_gamma;
 CREATE TABLE aweme_sort_debug_gamma 
 (`ts` Int64, `uid` Int64, `app_id` Int64, `chn_id` Int64, `rid` String, `data_type` Int64, `ab_vids` Array(Int64) BLOOM, `gid` Int64, `int_params` Map(String, Int64), `float_params` Map(String, Float64), `string_params` Map(String, String))

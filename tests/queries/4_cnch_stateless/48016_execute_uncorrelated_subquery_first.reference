@@ -60,7 +60,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: a < 5
-            └─ TableScan test.uncorrelated Est. ? rows
+            └─ TableScan default.uncorrelated Est. ? rows
                      Input Order Info: {a ASC ANY}
                      Where: a < 5
                      Outputs: [a, b]
@@ -74,7 +74,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: a < 10
-            └─ TableScan test.uncorrelated Est. ? rows
+            └─ TableScan default.uncorrelated Est. ? rows
                      Input Order Info: {a ASC ANY}
                      Where: a < 10
                      Outputs: [a, b]
@@ -88,7 +88,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: a < 11
-            └─ TableScan test.uncorrelated Est. ? rows
+            └─ TableScan default.uncorrelated Est. ? rows
                      Input Order Info: {a ASC ANY}
                      Where: a < 11
                      Outputs: [a, b]
@@ -100,7 +100,7 @@ Projection Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {a ASC NULLS LAST}
          │     Prefix Order: {a}
-         └─ TableScan test.uncorrelated Est. ? rows
+         └─ TableScan default.uncorrelated Est. ? rows
                   Input Order Info: {a ASC ANY}
                   Outputs: [a]
 Projection Est. 0 rows, cost 0.000000e+00
@@ -121,13 +121,9 @@ Projection Est. 1000 rows, cost 7.400000e+01
          └─ Sorting Est. 1000 rows, cost 0.000000e+00
             │     Order by: {followed_counter_td DESC NULLS LAST}
             │     Limit: 1000
-            └─ Projection Est. ? rows, cost 0.000000e+00
-               │     Expressions: [followed_counter_td, user_id]
-               └─ Filter Est. ? rows, cost 0.000000e+00
-                  │     Condition: date = cast(19551, \'Date\')
-                  └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
-                           Where: date = cast(19551, \'Date\')
-                           Outputs: [date, followed_counter_td, user_id]
+            └─ TableScan default.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
+                     Partition filter: date = cast(19551, \'Date\')
+                     Outputs: [followed_counter_td, user_id]
 Projection Est. 1000 rows, cost 7.600000e+01
 │     Expressions: [user_id]
 └─ Limit Est. 1000 rows, cost 2.000000e+00
@@ -141,7 +137,7 @@ Projection Est. 1000 rows, cost 7.600000e+01
             │     Limit: 1000
             └─ Inner Join Est. ? rows, cost 2.000000e+00
                │     Condition: date == expr#max(date)_1
-               ├─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
+               ├─ TableScan default.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
                │        Outputs: [date, followed_counter_td, user_id]
                └─ Broadcast Exchange Est. ? rows, cost 2.000000e+00
                   └─ Projection Est. ? rows, cost 1.000000e+00
@@ -151,5 +147,5 @@ Projection Est. 1000 rows, cost 7.600000e+01
                            └─ Aggregating Est. ? rows, cost 0.000000e+00
                               │     Group by: {}
                               │     Aggregates: expr#max(date):=AggNull(max)(date_1)
-                              └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
+                              └─ TableScan default.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
                                        Outputs: date_1:=date

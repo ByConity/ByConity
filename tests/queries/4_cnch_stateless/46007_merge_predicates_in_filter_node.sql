@@ -1,5 +1,5 @@
 set enable_optimizer=1;
-use test;
+
 DROP TABLE IF EXISTS nation_info;
 
 CREATE TABLE nation_info

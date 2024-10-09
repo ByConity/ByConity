@@ -109,21 +109,29 @@ namespace
 
 
     /// Reads a file containing ATTACH queries and then parses it to build an access entity.
-    AccessEntityPtr convertFromSqlToEntity(const String & create_sql)
+    AccessEntityPtr convertFromSqlToEntity(const String & create_sql, const String & sensitive_sql)
     {
 
         /// Parse the create sql.
         ASTs queries;
-        ParserAttachAccessEntity parser;
-        const char * begin = create_sql.data(); /// begin of current query
-        const char * pos = begin; /// parser moves pos from begin to the end of current query
-        const char * end = begin + create_sql.size();
-        while (pos < end)
-        {
-            queries.emplace_back(parseQueryAndMovePosition(parser, pos, end, "", true, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH));
-            while (isWhitespaceASCII(*pos) || *pos == ';')
-                ++pos;
-        }
+        auto parse_sql = [&](const String & sql, bool sensitive_mode) {
+            ParserAttachAccessEntity parser;
+            const char * begin = sql.data(); /// begin of current query
+            const char * pos = begin; /// parser moves pos from begin to the end of current query
+            const char * end = begin + sql.size();
+            while (pos < end)
+            {
+                ASTPtr ast = parseQueryAndMovePosition(parser, pos, end, "", true, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+                /* ignore ATTACH queries in sensitive mode */
+                if (!sensitive_mode || ast->as<ASTGrantQuery>())
+                    queries.emplace_back(ast);
+                while (isWhitespaceASCII(*pos) || *pos == ';')
+                    ++pos;
+            }
+        };
+
+        parse_sql(create_sql, false);
+        parse_sql(sensitive_sql, true);
 
         /// Interpret the AST to build an access entity.
         std::shared_ptr<User> user;
@@ -132,7 +140,7 @@ namespace
         std::shared_ptr<Quota> quota;
         std::shared_ptr<SettingsProfile> profile;
         AccessEntityPtr res;
-        bool sensitive_tenant = false;
+        bool sensitive_tenant = !sensitive_sql.empty();
 
         for (const auto & query : queries)
         {
@@ -196,16 +204,17 @@ namespace
 
 
     /// Writes ATTACH queries for building a specified access entity to a file.
-    String convertFromEntityToSql(const IAccessEntity & entity)
+    String convertFromEntityToSql(const IAccessEntity & entity, bool sensitive_mode)
     {
         /// Build list of ATTACH queries.
         ASTs queries;
         queries.push_back(InterpreterShowCreateAccessEntityQuery::getAttachQuery(entity));
         if ((entity.getType() == EntityType::USER) || (entity.getType() == EntityType::ROLE))
         {
-            /* The true/false order must be kept, to be used for detecting sensitive tenant in KVAccessStorage.cpp */
-            boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity, true));
-            boost::range::push_back(queries, InterpreterShowGrantsQuery::getAttachGrantQueries(entity, false));
+            ASTs grants = InterpreterShowGrantsQuery::getAttachGrantQueries(entity, sensitive_mode);
+            if (grants.empty() && sensitive_mode)
+                return {};
+            boost::range::push_back(queries, grants);
         }
 
         /// Serialize the list of ATTACH queries to a string.
@@ -215,6 +224,7 @@ namespace
             formatAST(*query, buf, false, true);
             buf.write(";\n", 2);
         }
+
         return buf.str();
     }
 
@@ -361,7 +371,7 @@ UUID KVAccessStorage::updateCache(EntityType type, const AccessEntityModel & ent
     lock.unlock();
     auto name_shard = getShard(entity_model.name());
     auto & name_map = entries_by_name_and_type[static_cast<size_t>(type)][name_shard];
-    const auto & entity = entity_ ? entity_ : convertFromSqlToEntity(entity_model.create_sql());
+    const auto & entity = entity_ ? entity_ : convertFromSqlToEntity(entity_model.create_sql(), entity_model.sensitive_sql());
 
     lock.lock();
     auto & entry = uuid_map[uuid];
@@ -494,7 +504,10 @@ UUID KVAccessStorage::insertImpl(const AccessEntityPtr & new_entity, bool replac
     AccessEntityModel new_entity_model;
     RPCHelpers::fillUUID(uuid, *(new_entity_model.mutable_uuid()));
     new_entity_model.set_name(name);
-    new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity));
+    new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity, false));
+    auto sensitive_sql = convertFromEntityToSql(*new_entity, true);
+    if (!sensitive_sql.empty())
+        new_entity_model.set_sensitive_sql(sensitive_sql);
     catalog->putAccessEntity(type, new_entity_model, old_entity_model, replace_if_exists);
 
     updateCache(type, new_entity_model, new_entity);
@@ -547,7 +560,10 @@ void KVAccessStorage::updateImpl(const UUID & uuid, const UpdateFunc & update_fu
     AccessEntityModel new_entity_model;
     RPCHelpers::fillUUID(uuid, *(new_entity_model.mutable_uuid()));
     new_entity_model.set_name(new_name);
-    new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity));
+    new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity, false));
+    auto sensitive_sql = convertFromEntityToSql(*new_entity, true);
+    if (!sensitive_sql.empty())
+        new_entity_model.set_sensitive_sql(sensitive_sql);
     catalog->putAccessEntity(old_entry.type, new_entity_model, old_entry.entity_model);
 
     Notifications notifications;

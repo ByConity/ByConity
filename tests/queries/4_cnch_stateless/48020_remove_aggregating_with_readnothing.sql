@@ -1,5 +1,3 @@
-use test;
-
 drop table if exists t48020;
 
 create table t48020 (

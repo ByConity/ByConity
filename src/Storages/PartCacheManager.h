@@ -238,7 +238,7 @@ private:
 
     /// We manage the table meta locks here to make sure each table has only one meta lock no matter how many different table meta entry it has.
     /// The lock is cleaned by a background task if it is no longer be used by any table meta entry.
-    std::unordered_map<UUID, RWLock> meta_lock_container;
+    std::unordered_map<UUID, std::shared_ptr<MetaLockHolder>> meta_lock_container;
 
     BackgroundSchedulePool::TaskHolder active_table_loader; // Used to load table when server start up, only execute once;
     BackgroundSchedulePool::TaskHolder meta_lock_cleaner; // remove unused meta lock periodically;

@@ -34,12 +34,13 @@ Projection
                         │        │     Filter: l_suppkey_2 != l_suppkey
                         │        ├─ Inner (PARALLEL_HASH) Join
                         │        │  │     Condition: l_orderkey == o_orderkey
+                        │        │  │     Runtime Filters Builder: {o_orderkey}
                         │        │  ├─ Projection
                         │        │  │  │     Expressions: [l_orderkey, l_suppkey]
                         │        │  │  └─ Filter
-                        │        │  │     │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                        │        │  │     │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey, l_suppkey}
                         │        │  │     └─ TableScan tpch1000.lineitem
-                        │        │  │              Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                        │        │  │              Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey, l_suppkey}
                         │        │  │              Outputs: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
                         │        │  └─ Projection
                         │        │     │     Expressions: [o_orderkey]
@@ -73,4 +74,4 @@ Projection
                                        └─ TableScan tpch1000.nation
                                                 Where: n_name = 'SAUDI ARABIA'
                                                 Outputs: [n_nationkey, n_name]
-note: Runtime Filter is applied for 3 times.
+note: Runtime Filter is applied for 4 times.

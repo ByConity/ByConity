@@ -1,5 +1,3 @@
-USE test;
-
 DROP TABLE IF EXISTS test_inverted_with_token;
 
 CREATE TABLE test_inverted_with_token

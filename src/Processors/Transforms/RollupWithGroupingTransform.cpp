@@ -53,7 +53,7 @@ Chunk RollupWithGroupingTransform::merge(Chunks && chunks, bool final)
     for (auto & chunk : chunks)
         rollup_blocks.emplace_back(getOutputPort().getHeader().cloneWithColumns(chunk.detachColumns()));
 
-    auto rollup_block = params->aggregator.mergeBlocks(rollup_blocks, final);
+    auto rollup_block = params->aggregator.mergeBlocks(rollup_blocks, final, is_cancelled);
     auto num_rows = rollup_block.rows();
     return Chunk(rollup_block.getColumns(), num_rows);
 }

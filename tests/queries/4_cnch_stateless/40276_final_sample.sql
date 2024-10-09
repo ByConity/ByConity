@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS sample_40276;
 DROP TABLE IF EXISTS sample_40276_local;
 

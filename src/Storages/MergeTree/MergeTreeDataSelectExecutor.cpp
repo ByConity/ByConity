@@ -745,6 +745,43 @@ std::optional<std::unordered_set<String>> MergeTreeDataSelectExecutor::filterPar
     return {};
 }
 
+std::optional<bool> MergeTreeDataSelectExecutor::isValidPartitionFilter(
+    const StoragePtr & storage,
+    ASTPtr filter,
+    ContextPtr context)
+{
+    if (!filter)
+        return std::nullopt;
+
+    /// Implementation of modulo function was changed from 8bit result type to 16bit. For backward compatibility partition by expression is always
+    /// calculated according to previous version - `moduloLegacy`.
+    if (KeyDescription::moduloToModuloLegacyRecursive(filter->clone()))
+    {
+        return std::nullopt;
+    }
+
+    auto * data = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+    if (!data)
+        return std::nullopt;
+
+    auto catalog = context->getCnchCatalog();
+    if (!catalog)
+        return std::nullopt;
+
+    auto partition_list = catalog->getPartitionList(storage, context.get());
+
+    if (partition_list.empty())
+        return std::nullopt;
+
+    if (partition_list.size() > 1)
+        partition_list.resize(1);
+
+    ASTPtr expression_ast;
+    auto block = data->getPartitionBlockWithVirtualColumns(partition_list);
+    VirtualColumnUtils::prepareFilterBlockWithQuery(nullptr, context, block, expression_ast, filter);
+    return expression_ast != nullptr;
+}
+
 void MergeTreeDataSelectExecutor::filterPartsByPartition(
     MergeTreeMetaBase::DataPartsVector & parts,
     const std::optional<std::unordered_set<String>> & part_values,
@@ -1500,7 +1537,7 @@ std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
 bool MergeTreeDataSelectExecutor::shouldFilterMarkRangesAtPipelineExec(
     const Settings& settings, const InputOrderInfoPtr& input_order)
 {
-    return input_order != nullptr && settings.filter_mark_ranges_with_ivt_when_exec
+    return input_order != nullptr && settings.optimize_read_in_partition_order
         && (settings.optimize_read_in_order || settings.optimize_aggregation_in_order)
         && (settings.optimize_read_in_partition_order || settings.force_read_in_partition_order);
 }

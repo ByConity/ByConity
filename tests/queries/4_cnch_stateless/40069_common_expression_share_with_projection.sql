@@ -1,5 +1,3 @@
-create database if not exists test engine = Cnch;
-use test;
 SET enable_optimizer=1;
 SET optimizer_projection_support=1;
 SET max_threads=8;

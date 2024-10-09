@@ -1,1 +1,1 @@
-CREATE TABLE test.mysql_test\n(\n    `x` Int32\n)\nENGINE = MySQL(\'127.0.0.2:3306\', \'test_db\', \'test_tb\', \'user\', \'[HIDDEN]\')
+CREATE TABLE default.mysql_test\n(\n    `x` Int32\n)\nENGINE = MySQL(\'127.0.0.2:3306\', \'test_db\', \'test_tb\', \'user\', \'[HIDDEN]\')

@@ -184,39 +184,6 @@ message GetAllWorkerGroupsResp
   repeated WorkerGroupData worker_group_data = 4;
 }
 
-/// for rpc pickWorkerGroup, pickWorker.
-message RMScheduleReq
-{
-  required string vw_name = 1;
-  required uint32 vw_schedule_algo = 2;
-  optional ResourceRequirement requirement = 3;
-}
-
-message PickWorkerResp
-{
-  optional bool is_leader = 1;
-  optional string leader_host_port = 2;
-  optional string exception = 3;
-  optional HostWithPorts host_ports = 4;
-  optional int32 cancel_task = 5;
-}
-
-message PickWorkersResp
-{
-  optional bool is_leader = 1;
-  optional string leader_host_port = 2;
-  optional string exception = 3;
-  repeated HostWithPorts workers = 4;
-}
-
-message PickWorkerGroupResp
-{
-  optional bool is_leader = 1;
-  optional string leader_host_port = 2;
-  optional string exception = 3;
-  optional WorkerGroupData worker_group_data = 4;
-}
-
 message SyncQueueDetailsReq
 {
     map<string, QueryQueueInfo> server_query_queue_map = 1;
@@ -244,9 +211,6 @@ service ResourceManagerService
   rpc getAllVirtualWarehouses(GetAllVirtualWarehousesReq) returns (GetAllVirtualWarehousesResp);
 
   rpc getAllWorkers(GetAllWorkersReq) returns (GetAllWorkersResp);
-  rpc pickWorkerGroup(RMScheduleReq) returns (PickWorkerGroupResp);
-  rpc pickWorker(RMScheduleReq) returns (PickWorkerResp);
-  rpc pickWorkers(RMScheduleReq) returns (PickWorkersResp);
 
   rpc createWorkerGroup(CreateWorkerGroupReq) returns (CreateWorkerGroupResp);
   rpc dropWorkerGroup(DropWorkerGroupReq) returns (DropWorkerGroupResp);

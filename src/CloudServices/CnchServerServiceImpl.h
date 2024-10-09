@@ -336,6 +336,24 @@ public:
         Protos::ExecuteOptimizeQueryResp * response,
         google::protobuf::Closure * done) override;
 
+    void submitBackupTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitBackupTaskReq * request,
+        Protos::SubmitBackupTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getRunningBackupTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetRunningBackupTaskReq * request,
+        Protos::GetRunningBackupTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void removeRunningBackupTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::RemoveRunningBackupTaskReq * request,
+        Protos::RemoveRunningBackupTaskResp * response,
+        google::protobuf::Closure * done) override;
+
     void notifyAccessEntityChange(
         google::protobuf::RpcController *,
         const Protos::notifyAccessEntityChangeReq * request,

@@ -1,7 +1,7 @@
 TableFinish Est. 1 rows, cost 1.114800e+01
 └─ Gather Exchange Est. 1 rows, cost 1.114800e+01
    └─ TableWrite Est. 1 rows, cost 1.148000e+00
-      │     Insert test.profile_map_tags_test_348590820934
+      │     Insert default.profile_map_tags_test_348590820934
       └─ Local Exchange Est. 1 rows, cost 1.148000e+00
          └─ Projection Est. 1 rows, cost 1.148000e+00
             │     Expressions: [base_id], double_map:=`expr#map(\'1427\', CAST(label_value, \'Float64\'))`, id_type:=`expr#2296`, p_date:=`expr#\'2023-04-26\'`
@@ -19,21 +19,13 @@ TableFinish Est. 1 rows, cost 1.114800e+01
                            │  └─ Aggregating Est. ? rows, cost 0.000000e+00
                            │     │     Group by: {base_id, date}
                            │     │     Aggregates: expr#max(tenant_dau_au_rate):=AggNull(max)(tenant_dau_au_rate)
-                           │     └─ Projection Est. ? rows, cost 0.000000e+00
-                           │        │     Expressions: [base_id, date, tenant_dau_au_rate]
-                           │        └─ Filter Est. ? rows, cost 0.000000e+00
-                           │           │     Condition: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
-                           │           └─ TableScan test.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
-                           │                    Where: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
-                           │                    Outputs: [tenant_dau_au_rate, base_id, date, p_date]
+                           │     └─ TableScan default.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
+                           │              Partition filter: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
+                           │              Outputs: [tenant_dau_au_rate, base_id, date]
                            └─ Broadcast Exchange Est. ? rows, cost 1.000000e+00
                               └─ Aggregating Est. ? rows, cost 0.000000e+00
                                  │     Group by: {base_id_1}
                                  │     Aggregates: expr#max(date):=AggNull(max)(date_1)
-                                 └─ Projection Est. ? rows, cost 0.000000e+00
-                                    │     Expressions: [base_id_1, date_1]
-                                    └─ Filter Est. ? rows, cost 0.000000e+00
-                                       │     Condition: (p_date_1 >= cast(19384, \'Date\')) AND (p_date_1 <= cast(19473, \'Date\'))
-                                       └─ TableScan test.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
-                                                Where: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
-                                                Outputs: base_id_1:=base_id, date_1:=date, p_date_1:=p_date
+                                 └─ TableScan default.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
+                                          Partition filter: (p_date >= cast(19384, \'Date\')) AND (p_date <= cast(19473, \'Date\'))
+                                          Outputs: base_id_1:=base_id, date_1:=date

@@ -76,6 +76,8 @@ ASTPtr getFilterFromQueryInfo(const SelectQueryInfo & query_info, bool clone)
         conjuncts.emplace_back(clone ? select.where()->clone() : select.where());
     if (select.prewhere())
         conjuncts.emplace_back(clone ? select.prewhere()->clone() : select.prewhere());
+    if (query_info.partition_filter)
+        conjuncts.emplace_back(clone ? query_info.partition_filter->clone() : query_info.partition_filter);
     if (!conjuncts.empty())
         return PredicateUtils::combineConjuncts(conjuncts);
     if (!query_info.atomic_predicates_expr.empty())

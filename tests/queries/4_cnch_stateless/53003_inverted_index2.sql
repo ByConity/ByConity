@@ -1,5 +1,3 @@
-USE test;
-
 DROP TABLE IF EXISTS test_inverted_with_ngram_chinese;
 
 CREATE TABLE test_inverted_with_ngram_chinese

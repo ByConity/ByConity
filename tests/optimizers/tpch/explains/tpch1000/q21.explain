@@ -15,12 +15,12 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 9989343 rows
                      │     Group by: {s_name}
                      │     Aggregates: expr#count():=AggNull(count)()
-                     └─ Inner Join Est. 24418678 rows
+                     └─ Inner Join Est. 17539362 rows
                         │     Condition: l_suppkey == s_suppkey
                         │     Runtime Filters Builder: {s_suppkey}
-                        ├─ Repartition Exchange Est. 610466944 rows
+                        ├─ Repartition Exchange Est. 438484064 rows
                         │  │     Partition by: {l_suppkey}
-                        │  └─ Right Semi (PARALLEL_HASH) Join Est. 610466944 rows
+                        │  └─ Right Semi (PARALLEL_HASH) Join Est. 438484064 rows
                         │     │     Condition: l_orderkey_1 == l_orderkey
                         │     │     Filter: l_suppkey_1 != l_suppkey
                         │     │     Runtime Filters Builder: {l_orderkey}
@@ -29,17 +29,18 @@ Projection Est. 100 rows
                         │     │  └─ TableScan tpch1000.lineitem Est. 5999989709 rows
                         │     │           Where: Runtime Filters: {l_orderkey}
                         │     │           Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
-                        │     └─ Left Anti (PARALLEL_HASH) Join Est. 610466944 rows
+                        │     └─ Left Anti (PARALLEL_HASH) Join Est. 438484064 rows
                         │        │     Condition: l_orderkey == l_orderkey_2
                         │        │     Filter: l_suppkey_2 != l_suppkey
-                        │        ├─ Inner (PARALLEL_HASH) Join Est. 1017444887 rows
+                        │        ├─ Inner (PARALLEL_HASH) Join Est. 730806711 rows
                         │        │  │     Condition: l_orderkey == o_orderkey
+                        │        │  │     Runtime Filters Builder: {o_orderkey}
                         │        │  ├─ Projection Est. 1499997427 rows
                         │        │  │  │     Expressions: [l_orderkey, l_suppkey]
                         │        │  │  └─ Filter Est. 1499997427 rows
-                        │        │  │     │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                        │        │  │     │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey, l_suppkey}
                         │        │  │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
-                        │        │  │              Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
+                        │        │  │              Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey, l_suppkey}
                         │        │  │              Outputs: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
                         │        │  └─ Projection Est. 730806711 rows
                         │        │     │     Expressions: [o_orderkey]
@@ -73,4 +74,4 @@ Projection Est. 100 rows
                                        └─ TableScan tpch1000.nation Est. 25 rows
                                                 Where: n_name = 'SAUDI ARABIA'
                                                 Outputs: [n_nationkey, n_name]
-note: Runtime Filter is applied for 3 times.
+note: Runtime Filter is applied for 4 times.

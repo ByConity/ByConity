@@ -1,0 +1,23 @@
+{"parts":2,"marks":4}
+test40112_case1_bitmap_index	2	1	1
+test40112_case1_bitmap_index	2	1
+test40112_case1_normal_read	2	1	1
+test40112_case1_normal_read	2	1
+	\N	\N	\N
+	\N	\N
+test40112_case2_normal_read	2	1	1
+test40112_case2_normal_read	2	1
+test40112_case3_bitmap_index	2	1	1
+test40112_case3_bitmap_index	2	1
+test40112_case3_normal_read	2	1	1
+test40112_case3_normal_read	2	1
+	\N	\N	\N
+	\N	\N
+test40112_case4_normal_read	2	1	1
+test40112_case4_normal_read	2	1
+test40112_case5_multiIf_optimize_enabled	2	1	1
+test40112_case5_multiIf_optimize_enabled	2	1
+test40112_case6_normal_read	2	1	1
+test40112_case6_normal_read	2	1
+test40112_case7_normal_read	2	2	2
+test40112_case7_normal_read	2	1

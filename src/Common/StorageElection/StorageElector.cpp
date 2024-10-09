@@ -304,8 +304,8 @@ void StorageElector::tryUpdateRemoteRecord(bool refreshed, bool yield)
                 "It is updated successfully and not expired: time cost : {}ms, {}",
                 getCurrentTimeMs() - now,
                 new_leader_info.DebugString());
-        else
-            LOG_TRACE(logger, "It is refreshed successfully and not expired: {}", new_leader_info.DebugString());
+        // else
+            // LOG_TRACE(logger, "It is refreshed successfully and not expired: {}", new_leader_info.DebugString());
     }
     else
     {

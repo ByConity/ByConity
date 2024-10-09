@@ -13,19 +13,19 @@ namespace DB
 {
 
 /// To read the data that was flushed into the temporary data file.
-struct TemporaryFileStream
+struct TemporaryFileStreamLegacy
 {
     ReadBufferFromFile file_in;
     CompressedReadBuffer compressed_in;
     BlockInputStreamPtr block_in;
 
-    explicit TemporaryFileStream(const std::string & path)
+    explicit TemporaryFileStreamLegacy(const std::string & path)
         : file_in(path)
         , compressed_in(file_in)
         , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, DBMS_TCP_PROTOCOL_VERSION))
     {}
 
-    TemporaryFileStream(const std::string & path, const Block & header_)
+    TemporaryFileStreamLegacy(const std::string & path, const Block & header_)
         : file_in(path)
         , compressed_in(file_in)
         , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, header_, 0))
@@ -63,7 +63,7 @@ protected:
             return {};
 
         if (!stream)
-            stream = std::make_unique<TemporaryFileStream>(path, header);
+            stream = std::make_unique<TemporaryFileStreamLegacy>(path, header);
 
         auto block = stream->block_in->read();
         if (!block)
@@ -78,7 +78,7 @@ private:
     const std::string path;
     Block header;
     bool done;
-    std::unique_ptr<TemporaryFileStream> stream;
+    std::unique_ptr<TemporaryFileStreamLegacy> stream;
 };
 
 }

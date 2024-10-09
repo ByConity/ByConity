@@ -1,4 +1,3 @@
-USE test;
 DROP TABLE IF EXISTS t_no_vw;
 DROP TABLE IF EXISTS t_query_setting;
 DROP TABLE IF EXISTS t_table_setting;

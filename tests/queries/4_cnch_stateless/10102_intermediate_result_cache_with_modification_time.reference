@@ -1,0 +1,56 @@
+1
+2
+3
+4
+1
+2
+3
+4
+0
+5
+6
+7
+8
+5
+6
+7
+8
+6
+7
+8
+6
+7
+8
+1
+2
+3
+4
+1
+2
+3
+4
+0
+1
+3
+4
+1
+3
+4
+1
+3
+4
+0
+0
+0
+0
+0
+test_modification_a	0	4	0	0	0	0	32
+test_modification_b	4	0	0	0	0	32	0
+test_modification_c	0	8	4	0	0	0	32
+test_modification_d	4	0	4	0	0	32	0
+test_modification_e	3	2	6	0	0	24	0
+test_modification_f	3	0	6	0	0	24	0
+test_modification_g	0	4	0	0	0	0	32
+test_modification_h	4	0	0	0	0	32	0
+test_modification_i	0	4	1	0	0	0	24
+test_modification_j	3	0	1	0	0	24	0

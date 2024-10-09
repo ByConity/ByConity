@@ -24,7 +24,6 @@
 #include <Common/Logger.h>
 #include <Access/RowPolicy.h>
 #include <CloudServices/CnchBGThreadCommon.h>
-#include <CloudServices/CnchBGThreadPartitionSelector.h>
 #include <Core/Block.h>
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
@@ -228,8 +227,6 @@ class CnchWorkerClientPools;
 class ICnchBGThread;
 using CnchBGThreadPtr = std::shared_ptr<ICnchBGThread>;
 class CnchBGThreadsMap;
-class CnchBGThreadPartitionSelector;
-using PartitionSelectorPtr = std::shared_ptr<CnchBGThreadPartitionSelector>;
 struct ClusterTaskProgress;
 
 class IOutputFormat;
@@ -1017,7 +1014,7 @@ public:
 
     /// I/O formats.
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size) const;
-   BlockInputStreamPtr getInputStreamByFormatNameAndBuffer(
+    BlockInputStreamPtr getInputStreamByFormatNameAndBuffer(
         const String & name, ReadBuffer & buf, const Block & sample, UInt64 max_block_size, const ColumnsDescription& columns) const;
 
     /// Don't use streams. Better look at getOutputFormat...
@@ -1081,6 +1078,7 @@ public:
     std::shared_ptr<NamedCnchSession> acquireNamedCnchSession(const UInt64 & txn_id, size_t timeout, bool session_check, bool return_null_if_not_found = false) const;
 
     void initCnchServerResource(const TxnTimestamp & txn_id);
+    void clearCnchServerResource();
     CnchServerResourcePtr getCnchServerResource() const;
     CnchServerResourcePtr tryGetCnchServerResource() const;
     CnchWorkerResourcePtr getCnchWorkerResource() const;
@@ -1254,7 +1252,7 @@ public:
     void setFooterCache(size_t max_size_in_bytes);
 
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
-    void setUncompressedCache(size_t max_size_in_bytes);
+    void setUncompressedCache(size_t max_size_in_bytes, bool shard_mode = false);
     std::shared_ptr<UncompressedCache> getUncompressedCache() const;
     void dropUncompressedCache() const;
 
@@ -1333,9 +1331,6 @@ public:
 
     /// Call after initialization before using system logs. Call for global context.
     void initializeSystemLogs();
-
-    void initBGPartitionSelector();
-    PartitionSelectorPtr getBGPartitionSelector() const;
 
     /// Call after initialization before using trace collector.
     void initializeTraceCollector();
@@ -1755,6 +1750,12 @@ public:
 
     void setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager);
     PlanCacheManager* getPlanCacheManager();
+
+    bool trySetRunningBackupTask(const String & backup_id);
+    bool hasRunningBackupTask() const;
+    std::optional<String> getRunningBackupTask() const;
+    bool checkRunningBackupTask(const String & backup_id) const;
+    void removeRunningBackupTask(const String & backup_id);
 
     UInt32 getQueryMaxExecutionTime() const;
     timespec getQueryExpirationTimeStamp() const { return query_expiration_timestamp; }

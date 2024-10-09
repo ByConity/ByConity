@@ -11,9 +11,9 @@ Projection Est. 2 rows
                └─ Aggregating Est. 2 rows
                   │     Group by: {l_shipmode}
                   │     Aggregates: expr#sum(multiIf(or(equals(o_orderpriority, '1-URGENT'), equals(o_orderpriority, '2-HIGH')), 1, 0)):=AggNull(sum)(expr#multiIf(or(equals(o_orderpriority, '1-URGENT'), equals(o_orderpriority, '2-HIGH')), 1, 0)), expr#sum(multiIf(and(notEquals(o_orderpriority, '1-URGENT'), notEquals(o_orderpriority, '2-HIGH')), 1, 0)):=AggNull(sum)(expr#multiIf(and(notEquals(o_orderpriority, '1-URGENT'), notEquals(o_orderpriority, '2-HIGH')), 1, 0))
-                  └─ Projection Est. 25131050 rows
+                  └─ Projection Est. 15095577 rows
                      │     Expressions: [l_shipmode], expr#multiIf(and(notEquals(o_orderpriority, '1-URGENT'), notEquals(o_orderpriority, '2-HIGH')), 1, 0):=multiIf((o_orderpriority != '1-URGENT') AND (o_orderpriority != '2-HIGH'), 1, 0), expr#multiIf(or(equals(o_orderpriority, '1-URGENT'), equals(o_orderpriority, '2-HIGH')), 1, 0):=multiIf((o_orderpriority = '1-URGENT') OR (o_orderpriority = '2-HIGH'), 1, 0)
-                     └─ Inner (PARALLEL_HASH) Join Est. 25131050 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 15095577 rows
                         │     Condition: o_orderkey == l_orderkey
                         │     Runtime Filters Builder: {l_orderkey}
                         ├─ Filter Est. 1500000000 rows
@@ -21,9 +21,9 @@ Projection Est. 2 rows
                         │  └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
                         │           Where: Runtime Filters: {o_orderkey}
                         │           Outputs: [o_orderkey, o_orderpriority]
-                        └─ Projection Est. 16321953 rows
+                        └─ Projection Est. 15095129 rows
                            │     Expressions: [l_orderkey, l_shipmode]
-                           └─ Filter Est. 16321953 rows
+                           └─ Filter Est. 15095129 rows
                               │     Condition: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
                               └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
                                        Where: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)

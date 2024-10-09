@@ -77,8 +77,15 @@ class CnchPartitionInfo
 {
 public:
     explicit CnchPartitionInfo(
-        const String & table_uuid_, const std::shared_ptr<MergeTreePartition> & partition_, const std::string & partition_id_, bool newly_inserted = false)
-        : partition_ptr(partition_), partition_id(partition_id_), metrics_ptr(std::make_shared<PartitionMetrics>(table_uuid_, partition_id, newly_inserted))
+        const String & table_uuid_,
+        const std::shared_ptr<MergeTreePartition> & partition_,
+        const std::string & partition_id_,
+        RWLock partition_lock,
+        bool newly_inserted = false)
+        : partition_ptr(partition_)
+        , partition_id(partition_id_)
+        , metrics_ptr(std::make_shared<PartitionMetrics>(table_uuid_, partition_id, newly_inserted))
+        , partition_mutex(partition_lock)
     {
     }
 
@@ -91,6 +98,9 @@ public:
     std::atomic<UInt64> gctime = {0};
     std::shared_ptr<PartitionMetrics> metrics_ptr;
 
+    // cache of serialized partition value; only be set when query the MV table
+    mutable std::optional<String> partition_value;
+
     inline PartitionLockHolder readLock() const
     {
         return partition_mutex->getLock(RWLockImpl::Read, RWLockImpl::NO_QUERY);
@@ -101,8 +111,33 @@ public:
         return partition_mutex->getLock(RWLockImpl::Write, RWLockImpl::NO_QUERY);
     }
 
+    String getPartitionValue(const MergeTreeMetaBase & storage) const
+    {
+        {
+            auto lock = readLock();
+            if (partition_value)
+                return *partition_value;
+        }
+        {
+            auto lock = writeLock();
+            if (!partition_value)
+            {
+                String partition_value_;
+                WriteBufferFromString write_buffer(partition_value_);
+                partition_ptr->store(storage, write_buffer);
+                partition_value = partition_value_;
+            }
+            return *partition_value;
+        }
+    }
+
+    /// For test only.
+    RWLock getPartitionLock() {
+        return partition_mutex;
+    }
+
 private:
-    RWLock partition_mutex = RWLockImpl::create();
+    RWLock partition_mutex;
 };
 
 /***

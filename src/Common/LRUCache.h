@@ -172,6 +172,13 @@ public:
     }
 };
 
+template <
+    typename TKey,
+    typename TMapped,
+    typename HashFunction,
+    typename WeightFunction,
+    size_t BITS_FOR_SHARDS>
+class ShardedLRUCache;
 
 /// Thread-safe cache that evicts entries which are not used for a long time.
 /// WeightFunction is a functor that takes Mapped as a parameter and returns "weight" (approximate size)
@@ -187,13 +194,19 @@ public:
     using MappedPtr = std::shared_ptr<Mapped>;
     using Delay = std::chrono::seconds;
 
+    friend class ShardedLRUCache<TKey, TMapped, HashFunction, WeightFunction, 8>;
 private:
     using Clock = std::chrono::steady_clock;
     using Timestamp = Clock::time_point;
 
 public:
-    LRUCache(size_t max_size_, const Delay & expiration_delay_ = Delay::zero())
+    explicit LRUCache(const Delay & expiration_delay_ = Delay::zero())
+        : expiration_delay(expiration_delay_) {}
+    explicit LRUCache(size_t max_size_, const Delay & expiration_delay_ = Delay::zero())
         : max_size(std::max(static_cast<size_t>(1), max_size_)), expiration_delay(expiration_delay_) {}
+
+    void setCapacity(size_t max_size_) { max_size = std::max(static_cast<size_t>(1), max_size_); }
+    size_t getCapacity() { return max_size; }
 
     MappedPtr get(const Key & key)
     {
@@ -479,7 +492,7 @@ private:
 
     /// Total weight of values.
     size_t current_size = 0;
-    const size_t max_size;
+    size_t max_size;
     const Delay expiration_delay;
 
     std::atomic<size_t> hits {0};
@@ -567,6 +580,4 @@ private:
     virtual void removeExternal(const Key & /*key*/, const MappedPtr &/*value*/, size_t /*weight*/) {}
     virtual MappedPtr loadExternal(const Key &) { return MappedPtr(); }
 };
-
-
 }

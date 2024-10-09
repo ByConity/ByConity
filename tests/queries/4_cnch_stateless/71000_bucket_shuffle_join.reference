@@ -65,9 +65,9 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Left Join Est. ? rows
       │     Condition: d == d_1
-      ├─ TableScan test.bucket_dtspartition Est. ? rows
+      ├─ TableScan default.bucket_dtspartition Est. ? rows
       │        Outputs: [c, d]
-      └─ TableScan test.bucket_dtspartition_bucket_2 Est. ? rows
+      └─ TableScan default.bucket_dtspartition_bucket_2 Est. ? rows
                Outputs: c_1:=c, d_1:=d
 disable bucket shuffle
 dtspartition

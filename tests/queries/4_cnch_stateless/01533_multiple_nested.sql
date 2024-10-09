@@ -1,5 +1,3 @@
-use test;
-
 DROP TABLE IF EXISTS nested;
 
 SET flatten_nested = 0;

@@ -12,7 +12,7 @@ namespace DB
 {
 
 static constexpr auto HUDI_CLASS_FACTORY_CLASS = "org/byconity/hudi/HudiClassFactory";
-static constexpr auto HUDI_ARROW_READER_CLASS = "org/byconity/hudi/reader/HudiFileSliceArrowReaderBuilder";
+static constexpr auto HUDI_ARROW_READER_CLASS = "org/byconity/hudi/reader/HudiArrowReaderBuilder";
 
 HiveHudiFile::HiveHudiFile(
     const String & base_file_path,

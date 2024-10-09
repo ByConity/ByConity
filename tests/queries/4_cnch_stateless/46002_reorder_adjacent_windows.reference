@@ -13,7 +13,7 @@ Projection Est. ? rows
                   └─ Window Est. ? rows
                      └─ Repartition Exchange Est. ? rows
                         │     Partition by: {major}
-                        └─ TableScan test.students Est. ? rows
+                        └─ TableScan default.students Est. ? rows
                                  Outputs: [id, major, age]
 ----test no swap to adjacent windows
 Projection Est. ? rows
@@ -30,5 +30,5 @@ Projection Est. ? rows
                   └─ Window Est. ? rows
                      └─ Repartition Exchange Est. ? rows
                         │     Partition by: {major}
-                        └─ TableScan test.students Est. ? rows
+                        └─ TableScan default.students Est. ? rows
                                  Outputs: [id, major, age]

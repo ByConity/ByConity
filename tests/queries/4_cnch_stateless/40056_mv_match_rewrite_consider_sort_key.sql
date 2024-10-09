@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
-
 SET enable_optimizer=1;
 SET enable_materialized_view_rewrite=1;
 

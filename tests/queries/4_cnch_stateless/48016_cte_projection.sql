@@ -1,4 +1,3 @@
-use test;
 DROP TABLE IF EXISTS idm_ods_ods_inst_user_tags;
 DROP TABLE IF EXISTS idm_ana_xz_rpt_user_evt;
  CREATE TABLE idm_ods_ods_inst_user_tags

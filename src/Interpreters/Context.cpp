@@ -271,6 +271,8 @@ namespace ErrorCodes
     extern const int CATALOG_SERVICE_INTERNAL_ERROR;
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
+    extern const int BACKUP_JOB_CREATE_FAILED;
+    extern const int BACKUP_JOB_CLEAR_FAILED;
     extern const int DATABASE_ACCESS_DENIED;
     extern const int QUERY_WAS_CANCELLED;
 }
@@ -466,7 +468,6 @@ struct ContextSharedPart
     ActionLocksManagerPtr action_locks_manager; /// Set of storages' action lockers
     std::unique_ptr<SystemLogs> system_logs; /// Used to log queries and operations on parts
     std::unique_ptr<CnchSystemLogs> cnch_system_logs; /// Used to log queries, kafka etc. Stores data in CnchMergeTree table
-    PartitionSelectorPtr bg_partition_selector; /// Partition selector for GC and Merge threads.
 
     std::optional<StorageS3Settings> storage_s3_settings; /// Settings of S3 storage
 
@@ -521,6 +522,7 @@ struct ContextSharedPart
 
     std::unique_ptr<PreparedStatementManager> prepared_statement_manager;
 
+    std::optional<String> running_backup_task;
 #if USE_LIBURING
     mutable std::once_flag io_uring_reader_initialized;
     mutable std::vector<std::unique_ptr<IOUringReader>> io_uring_reader;
@@ -1113,6 +1115,11 @@ void Context::initCnchServerResource(const TxnTimestamp & txn_id)
         return;
 
     server_resource = std::make_shared<CnchServerResource>(txn_id);
+}
+
+void Context::clearCnchServerResource()
+{
+    server_resource = nullptr;
 }
 
 CnchServerResourcePtr Context::getCnchServerResource() const
@@ -2301,7 +2308,7 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     std::function<void(const SettingsChanges &)> find_dialect_type_if_any = [&](const SettingsChanges & setting_changes) {
         for (const auto & change : setting_changes)
         {
-            if (change.name == "profile")
+            if (change.name == "profile" && getClientInfo().query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
             {
                 UUID profile_id = getAccessControlManager().getID<SettingsProfile>(change.value.safeGet<String>());
                 auto profile_info = getAccessControlManager().getSettingsProfileInfo(profile_id);
@@ -2348,7 +2355,11 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     }
 
     for (const SettingChange & change : changes)
+    {
+        if (change.name == "profile" && getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+            continue;
         applySettingChangeWithLock(change, lock);
+    }
     applySettingsQuirks(settings);
 
     if (apply_ansi_related_settings)
@@ -2958,14 +2969,13 @@ void Context::setFooterCache(size_t max_size_in_bytes)
         ArrowFooterCache::initialize(max_size_in_bytes);
 }
 
-void Context::setUncompressedCache(size_t max_size_in_bytes)
+void Context::setUncompressedCache(size_t max_size_in_bytes, bool shard_mode)
 {
     auto lock = getLock(); // checked
 
     if (shared->uncompressed_cache)
         throw Exception("Uncompressed cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->uncompressed_cache = std::make_shared<UncompressedCache>(max_size_in_bytes);
+    shared->uncompressed_cache = std::make_shared<UncompressedCache>(max_size_in_bytes, shard_mode);
 }
 
 
@@ -3896,17 +3906,6 @@ void Context::initializeTraceCollector()
 bool Context::hasTraceCollector() const
 {
     return shared->hasTraceCollector();
-}
-
-void Context::initBGPartitionSelector()
-{
-    if (shared->server_type == ServerType::cnch_server && !shared->bg_partition_selector)
-        shared->bg_partition_selector = std::make_shared<CnchBGThreadPartitionSelector>(getGlobalContext());
-}
-
-PartitionSelectorPtr Context::getBGPartitionSelector() const
-{
-    return shared->bg_partition_selector;
 }
 
 std::shared_ptr<QueryLog> Context::getQueryLog() const
@@ -6103,6 +6102,55 @@ PlanCacheManager* Context::getPlanCacheManager()
 {
     auto lock = getLock(); // checked
     return shared->plan_cache_manager ? shared->plan_cache_manager.get() : nullptr;
+}
+
+bool Context::trySetRunningBackupTask(const String & backup_id)
+{
+    auto lock = getLock();
+    if (!shared->running_backup_task)
+    {
+        shared->running_backup_task = backup_id;
+        return true;
+    }
+    else if (shared->running_backup_task != backup_id)
+    {
+        LOG_INFO(
+            shared->log,
+            "Cannot create new backup task {} because there is one running backup task {}",
+            backup_id,
+            shared->running_backup_task.value());
+        return false;
+    }
+    return true;
+}
+
+bool Context::hasRunningBackupTask() const
+{
+    auto lock = getLock();
+    return shared->running_backup_task.has_value();
+}
+
+std::optional<String> Context::getRunningBackupTask() const
+{
+    auto lock = getLock();
+    return shared->running_backup_task;
+}
+
+bool Context::checkRunningBackupTask(const String & backup_id) const
+{
+    auto lock = getLock();
+    return shared->running_backup_task && shared->running_backup_task == backup_id;
+}
+
+void Context::removeRunningBackupTask(const String & backup_id)
+{
+    auto lock = getLock();
+    if (!shared->running_backup_task || shared->running_backup_task != backup_id)
+    {
+        LOG_WARNING(shared->log, "Cannot remove backup task {}, which is not running in current server", backup_id);
+        return;
+    }
+    shared->running_backup_task.reset();
 }
 
 void Context::setPreparedStatementManager(std::unique_ptr<PreparedStatementManager> && manager)

@@ -614,17 +614,23 @@ void PipelineExecutor::setReadProgressCallback(ReadProgressCallbackPtr callback)
     read_progress_callback = std::move(callback);
 }
 
-void PipelineExecutor::cancel()
+void PipelineExecutor::cancel(bool has_exception)
 {
     cancelled = true;
     finish();
-
     std::lock_guard guard(processors_mutex);
 
     if (report_processors_profile)
         reportProcessorProfileOnCancel(processors);
     for (auto & processor : processors)
         processor->cancel();
+
+    /// Parts of executors throw exceptions need kill whole query
+    if (has_exception && process_list_element)
+    {
+        LOG_WARNING(log, "The query is throwing exceptions, just set killed");
+        process_list_element->setKilled();
+    }
 }
 
 void PipelineExecutor::finish()
@@ -888,7 +894,7 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
             }
 
             if (node->exception)
-                cancel();
+                cancel(true);
 
             if (finished)
                 break;

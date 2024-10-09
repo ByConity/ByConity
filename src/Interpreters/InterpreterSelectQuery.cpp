@@ -626,7 +626,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         required_columns = syntax_analyzer_result->requiredSourceColumns();
 
         // disable map column access if not explcit set to avoid "select *" query
-        if (storage && storage->supportsMapImplicitColumn() && !settings.allow_map_access_without_key && query_analyzer->hasByteMapColumn())
+        if (storage && storage->supportsMapImplicitColumn() && (!settings.allow_map_access_without_key && !settings.enable_optimizer)
+            && query_analyzer->hasByteMapColumn())
             throw Exception("Map column access without key is not allowed for ByteMap", ErrorCodes::NOT_IMPLEMENTED);
 
         if (storage)

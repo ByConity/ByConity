@@ -18,7 +18,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: multiIf(a = 6, a + a, b + a) > 10
-            └─ TableScan test.multiIf Est. ? rows
+            └─ TableScan default.multiIf Est. ? rows
                      Input Order Info: {a ASC ANY}
                      Where: multiIf(a = 6, a + a, b + a) > 10
                      Outputs: [a, b]
@@ -32,7 +32,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: multiIf(a = 3, b + b, a * a) > 10
-            └─ TableScan test.multiIf Est. ? rows
+            └─ TableScan default.multiIf Est. ? rows
                      Input Order Info: {a ASC ANY}
                      Where: multiIf(a = 3, b + b, a * a) > 10
                      Outputs: [a, b]
@@ -54,7 +54,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: (a + 2) < 10
-            └─ TableScan test.multiIf Est. ? rows
+            └─ TableScan default.multiIf Est. ? rows
                      Input Order Info: {a ASC ANY}
                      Where: (a + 2) < 10
                      Outputs: [a, b]
@@ -66,7 +66,7 @@ Projection Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {a ASC NULLS LAST}
          │     Prefix Order: {a}
-         └─ TableScan test.multiIf Est. ? rows
+         └─ TableScan default.multiIf Est. ? rows
                   Input Order Info: {a ASC ANY}
                   Outputs: [a, b]
 5	6
@@ -85,7 +85,7 @@ Projection Est. ? rows
          │     Prefix Order: {a}
          └─ Filter Est. ? rows
             │     Condition: (a + 4) < 10
-            └─ TableScan test.multiIf Est. ? rows
+            └─ TableScan default.multiIf Est. ? rows
                      Input Order Info: {a ASC ANY}
                      Where: (a + 4) < 10
                      Outputs: [a, b]
@@ -97,6 +97,6 @@ Projection Est. ? rows
       └─ Sorting Est. ? rows
          │     Order by: {a ASC NULLS LAST}
          │     Prefix Order: {a}
-         └─ TableScan test.multiIf Est. ? rows
+         └─ TableScan default.multiIf Est. ? rows
                   Input Order Info: {a ASC ANY}
                   Outputs: [a, b]

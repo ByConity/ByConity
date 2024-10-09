@@ -15,6 +15,7 @@
 
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include "Parsers/ASTBackupQuery.h"
 // #include <Parsers/ASTCreateMaskingPolicyQuery.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTAlterQuery.h>
@@ -138,6 +139,9 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
     else if (const auto * ast_reproduce = ast->as<ASTReproduceQuery>();
              ast_reproduce && ast_reproduce->mode == ASTReproduceQuery::Mode::DDL)
         return ResourceSelectCase::QueryType::DDL;
+    else if (const auto * ast_backup = ast->as<ASTBackupQuery>();
+            ast_backup && ast_backup->kind == ASTBackupQuery::Kind::RESTORE)
+        return ResourceSelectCase::QueryType::DATA;
 
     return ResourceSelectCase::QueryType::OTHER;
 }

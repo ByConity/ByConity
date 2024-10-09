@@ -16,9 +16,12 @@
 #include <CloudServices/selectPartsToMerge.h>
 
 #include <Catalog/DataModelPartWrapper.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/DanceMergeSelector.h>
 #include <Storages/MergeTree/SimpleMergeSelector.h>
+#include <Storages/MergeTree/MergeSelectorAdaptiveController.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -27,12 +30,9 @@ ServerSelectPartsDecision selectPartsToMerge(
     const MergeTreeMetaBase & data,
     std::vector<ServerDataPartsVector> & res,
     const ServerDataPartsVector & data_parts,
+    const std::multimap<String, UInt64> & unselectable_part_rows,
     ServerCanMergeCallback can_merge_callback,
-    size_t max_total_size_to_merge,
-    bool aggressive,
-    bool enable_batch_select,
-    bool final,
-    [[maybe_unused]] bool merge_with_ttl_allowed,
+    const SelectPartsToMergeSettings & settings,
     LoggerPtr log)
 {
     const auto data_settings = data.getSettings();
@@ -44,6 +44,13 @@ ServerSelectPartsDecision selectPartsToMerge(
             LOG_DEBUG(log, "There are no parts in the table");
         return ServerSelectPartsDecision::NOTHING_TO_MERGE;
     }
+
+    size_t max_total_size_to_merge = settings.max_total_size_to_merge;
+    size_t num_default_workers = settings.num_default_workers;
+    bool aggressive = settings.aggressive;
+    bool enable_batch_select = settings.enable_batch_select;
+    bool final = settings.final;
+    // bool merge_with_ttl_allowed = settings.merge_with_ttl_allowed
 
     time_t current_time = std::time(nullptr);
 
@@ -203,7 +210,8 @@ ServerSelectPartsDecision selectPartsToMerge(
         }
 
         auto parts = toDataPartsVector(parts_to_merge);
-        LOG_DEBUG(log, "Selected {} parts from {} to {}", parts.size(), parts.front()->name(), parts.back()->name());
+        if (log)
+            LOG_DEBUG(log, "Selected {} parts from {} to {}", parts.size(), parts.front()->name(), parts.back()->name());
         future_parts.back().assign(std::move(parts));
         return ServerSelectPartsDecision::SELECTED;
     }
@@ -230,12 +238,35 @@ ServerSelectPartsDecision selectPartsToMerge(
         merge_settings.min_parts_to_merge_base = 1;
     merge_settings.final = final;
     merge_settings.max_age_for_single_part_chain = data_settings->merge_with_ttl_timeout;
-    auto merge_selector = std::make_unique<DanceMergeSelector>(data, merge_settings);
+    merge_settings.select_nonadjacent_parts_allowed = data_settings->cnch_merge_select_nonadjacent_parts;
+    auto merge_selector = std::make_unique<DanceMergeSelector>(merge_settings);
+
+    /// Using adaptive controller
+    if (auto expected_parts_number = data_settings->cnch_merge_expected_parts_number.value;
+        expected_parts_number >= 0 && !aggressive && !final)
+    {
+        if (auto bg_task_stats = MergeTreeBgTaskStatisticsInitializer::instance().getOrCreateTableStats(data.getStorageID()))
+        {
+            if (expected_parts_number == 0)
+                expected_parts_number = num_default_workers;
+
+            if (expected_parts_number > 0)
+            {
+                auto adaptive_controller = std::make_shared<MergeSelectorAdaptiveController>(
+                    data.isBucketTable(),
+                    expected_parts_number,
+                    merge_settings.max_parts_to_merge_base.value);
+                adaptive_controller->init(bg_task_stats, parts_ranges, unselectable_part_rows);
+                merge_selector->setAdaptiveController(adaptive_controller);
+            }
+        }
+    }
 
     auto ranges = merge_selector->selectMulti(parts_ranges, max_total_size_to_merge, nullptr);
     if (ranges.empty())
     {
-        LOG_DEBUG(log, "Get empty result from merge selector.");
+        if (log)
+            LOG_DEBUG(log, "Get empty result from merge selector.");
         return ServerSelectPartsDecision::CANNOT_SELECT;
     }
 
@@ -247,16 +278,22 @@ ServerSelectPartsDecision selectPartsToMerge(
             /// double check.
             if (range.front().chain_depth == 0)
             {
-                LOG_ERROR(log, "merge selector returned only one part to merge {}, skip this range.",
-                    (*static_cast<const ServerDataPartPtr *>(range.front().data))->name());
+                if (log)
+                    LOG_ERROR(log, "merge selector returned only one part to merge {}, skip this range.",
+                        (*static_cast<const ServerDataPartPtr *>(range.front().data))->name());
                 continue;
             }
             // throw Exception("Logical error: merge selector returned only one part to merge", ErrorCodes::LOGICAL_ERROR);
         }
-        res.emplace_back();
-        res.back().reserve(range.size());
+        auto & emplaced_parts = res.emplace_back();
+        emplaced_parts.reserve(range.size());
         for (auto & part : range)
-            res.back().push_back(*static_cast<const ServerDataPartPtr *>(part.data));
+            emplaced_parts.push_back(*static_cast<const ServerDataPartPtr *>(part.data));
+        
+        /// When enable selct nonadjacent parts, merge selector can sort parts by rows/size/age to get a
+        /// better selection. After selection, we need to sort parts again to get right result part name.
+        if (data_settings->cnch_merge_select_nonadjacent_parts.value)
+            std::sort(emplaced_parts.begin(), emplaced_parts.end(), CnchPartsHelper::PartComparator<ServerDataPartPtr>{});
     }
 
     return ServerSelectPartsDecision::SELECTED;

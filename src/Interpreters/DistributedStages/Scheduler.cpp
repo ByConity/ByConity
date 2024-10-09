@@ -25,7 +25,6 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-    extern const int WAIT_FOR_RESOURCE_TIMEOUT;
 }
 
 void Scheduler::dispatchOrCollectTask(PlanSegment * plan_segment_ptr, const SegmentTaskInstance & task)
