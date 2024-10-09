@@ -2,6 +2,7 @@
 
 #include <Common/Logger.h>
 #include <Common/config.h>
+#include <IO/S3Common.h>
 
 #if USE_AWS_S3
 #    include <Storages/DataPart_fwd.h>
@@ -19,7 +20,10 @@ public:
     class FileBufferClient : public IFileClient
     {
     public:
-        FileBufferClient(const ContextPtr & query_context_, const StorageS3Configuration & config_) : context(query_context_), config(config_){}
+        FileBufferClient(const ContextPtr & query_context_, const std::shared_ptr<S3::S3Util> & s3_util_)
+            : context(query_context_), s3_util(s3_util_)
+        {
+        }
 
         ~FileBufferClient() override = default;
 
@@ -27,15 +31,15 @@ public:
         std::unique_ptr<WriteBuffer> createWriteBuffer(const DB::String & key) override;
 
         bool exist(const DB::String & key) override;
-        std::string type() override {return "S3";}
+        std::string type() override { return "S3"; }
 
         ContextPtr context;
-        StorageS3Configuration config;
+        std::shared_ptr<S3::S3Util> s3_util;
     };
 
     ~StorageCloudS3() override = default;
 
-    StorageS3Configuration config;
+    std::shared_ptr<S3::S3Util> s3_util;
 
 private:
     LoggerPtr log = getLogger("StorageCloudS3");
@@ -50,18 +54,18 @@ public:
         const ASTPtr & setting_changes_,
         const CnchFileArguments & arguments_,
         const CnchFileSettings & settings_,
-        const StorageS3Configuration & config_)
+        const std::shared_ptr<S3::S3Util> & s3_util_)
         : IStorageCloudFile(
             context_,
             table_id_,
             required_columns_,
             constraints_,
-            std::make_shared<FileBufferClient>(context_, config_),
+            std::make_shared<FileBufferClient>(context_, s3_util_),
             files,
             setting_changes_,
             arguments_,
             settings_)
-        , config(config_)
+        , s3_util(s3_util_)
     {
     }
 };

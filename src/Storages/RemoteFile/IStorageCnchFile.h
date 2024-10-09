@@ -80,8 +80,6 @@ public:
 
     virtual NamesAndTypesList getVirtuals() const override;
 
-    virtual void tryUpdateFSClient(const ContextPtr & /*query_context*/) { }
-
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr query_context, QueryProcessingStage::Enum stage, const StorageSnapshotPtr & storage_snapshot, SelectQueryInfo & query_info) const override;
     

@@ -48,25 +48,30 @@ void StorageS3Settings::loadFromConfig(
 
             auto auth_settings = S3::AuthSettings::loadFromConfig(config_elem + "." + key, config);
 
-            S3Settings::ReadWriteSettings rw_settings;
-            rw_settings.max_single_read_retries
+            S3Settings::RequestSettings request_settings;
+            request_settings.max_single_read_retries
                 = get_uint_for_key(key, "max_single_read_retries", true, settings.s3_max_single_read_retries);
-            rw_settings.min_upload_part_size = get_uint_for_key(key, "min_upload_part_size", true, settings.s3_min_upload_part_size);
-            rw_settings.upload_part_size_multiply_factor
+            request_settings.min_upload_part_size = get_uint_for_key(key, "min_upload_part_size", true, settings.s3_min_upload_part_size);
+            request_settings.upload_part_size_multiply_factor
                 = get_uint_for_key(key, "upload_part_size_multiply_factor", true, settings.s3_upload_part_size_multiply_factor);
-            rw_settings.upload_part_size_multiply_parts_count_threshold = get_uint_for_key(
+            request_settings.upload_part_size_multiply_parts_count_threshold = get_uint_for_key(
                 key, "upload_part_size_multiply_parts_count_threshold", true, settings.s3_upload_part_size_multiply_parts_count_threshold);
-            rw_settings.max_single_part_upload_size
+            request_settings.max_single_part_upload_size
                 = get_uint_for_key(key, "max_single_part_upload_size", true, settings.s3_max_single_part_upload_size);
-            rw_settings.max_connections = get_uint_for_key(key, "max_connections", true, settings.s3_max_connections);
-            rw_settings.check_objects_after_upload = get_bool_for_key(key, "check_objects_after_upload", true, false);
-            rw_settings.max_list_nums = get_uint_for_key(key, "max_list_nums", true, settings.s3_max_list_nums);
-            rw_settings.max_timeout_ms = get_uint_for_key(key, "max_timeout_ms", true, settings.s3_max_request_ms);
+            request_settings.max_connections = get_uint_for_key(key, "max_connections", true, settings.s3_max_connections);
+            request_settings.check_objects_after_upload = get_bool_for_key(key, "check_objects_after_upload", true, false);
+            request_settings.max_list_nums = get_uint_for_key(key, "max_list_nums", true, settings.s3_max_list_nums);
+            request_settings.max_timeout_ms = get_uint_for_key(key, "max_timeout_ms", true, settings.s3_max_request_ms);
+            request_settings.max_unexpected_write_error_retries
+                = get_uint_for_key(key, "max_unexpected_write_error_retries", true, settings.s3_max_unexpected_write_error_retries);
+            request_settings.s3_use_parallel_upload = get_bool_for_key(key, "s3_use_parallel_upload", true, false);
+            request_settings.s3_parallel_upload_pool_size
+                = get_uint_for_key(key, "s3_parallel_upload_pool_size", true, settings.s3_parallel_upload_pool_size);
 
             if (key == "default")
-                s3_settings.emplace("default", S3Settings{endpoint, auth_settings, rw_settings});
+                s3_settings.emplace("default", S3Settings{endpoint, auth_settings, request_settings});
 
-            s3_settings.emplace(endpoint, S3Settings{endpoint, std::move(auth_settings), std::move(rw_settings)});
+            s3_settings.emplace(endpoint, S3Settings{endpoint, std::move(auth_settings), std::move(request_settings)});
         }
     }
 }
@@ -92,7 +97,7 @@ S3Settings StorageS3Settings::getSettings(const String & endpoint) const
     return {};
 }
 
-S3Settings::ReadWriteSettings::ReadWriteSettings(const Settings & settings)
+S3Settings::RequestSettings::RequestSettings(const Settings & settings)
 {
     max_single_read_retries = settings.s3_max_single_read_retries;
     min_upload_part_size = settings.s3_min_upload_part_size;
@@ -104,9 +109,11 @@ S3Settings::ReadWriteSettings::ReadWriteSettings(const Settings & settings)
     max_unexpected_write_error_retries = settings.s3_max_unexpected_write_error_retries;
     max_list_nums = settings.s3_max_list_nums;
     max_timeout_ms = settings.s3_max_request_ms;
+    s3_use_parallel_upload = settings.s3_use_parallel_upload;
+    s3_parallel_upload_pool_size = settings.s3_parallel_upload_pool_size;
 }
 
-void S3Settings::ReadWriteSettings::updateFromSettingsIfEmpty(const Settings & settings)
+void S3Settings::RequestSettings::updateFromSettingsIfEmpty(const Settings & settings)
 {
     if (!max_single_read_retries)
         max_single_read_retries = settings.s3_max_single_read_retries;
@@ -126,7 +133,12 @@ void S3Settings::ReadWriteSettings::updateFromSettingsIfEmpty(const Settings & s
         max_list_nums = settings.s3_max_list_nums;
     if (!max_timeout_ms)
         max_timeout_ms = settings.s3_max_request_ms;
-    check_objects_after_upload = settings.s3_check_objects_after_upload;
+    if (!check_objects_after_upload)
+        check_objects_after_upload = settings.s3_check_objects_after_upload;
+    if (!s3_use_parallel_upload)
+        s3_use_parallel_upload = settings.s3_use_parallel_upload;
+    if (!s3_parallel_upload_pool_size)
+        s3_parallel_upload_pool_size = settings.s3_parallel_upload_pool_size;
 }
 
 }

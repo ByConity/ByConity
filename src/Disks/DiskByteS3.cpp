@@ -31,9 +31,7 @@
 #include <IO/ReadBufferFromS3.h>
 #include <IO/PFRAWSReadBufferFromFS.h>
 #include <IO/WSReadBufferFromFS.h>
-#include <Disks/DiskFactory.h>
-#include <IO/RAReadBufferFromS3.h>
-#include <IO/WriteBufferFromByteS3.h>
+#include <IO/WriteBufferFromS3.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -294,7 +292,7 @@ std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & pa
     }
 
     {
-        return std::make_unique<WriteBufferFromByteS3>(
+        return std::make_unique<WriteBufferFromS3>(
             s3_util.getClient(),
             s3_util.getBucket(),
             std::filesystem::path(root_prefix) / path,
@@ -303,8 +301,8 @@ std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String & pa
             settings.file_meta,
             settings.buffer_size,
             false,
-            nullptr,
-            0,
+            false,
+            8,
             true);
     }
 }

@@ -502,9 +502,9 @@ void TCPHandler::runImpl()
                 if (!state.plan_segment)
                 {
                     state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
-                    
-                    if (OutfileTarget::checkOutfileWithTcpOnServer(query_context))
-                    {   
+
+                    if (query_context->isAlreadyOutfile())
+                    {
                         sendEndOfStream();
                         return; // all data already outfile in executequery()
                     }

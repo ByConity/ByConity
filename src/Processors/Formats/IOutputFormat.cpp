@@ -142,6 +142,12 @@ void IOutputFormat::flush()
     out.next();
 }
 
+void IOutputFormat::closeFile()
+{
+    if (outfile_target)
+        outfile_target->flushFile();
+}
+
 void IOutputFormat::write(const Block & block)
 {
     auto bytes = block.allocatedBytes();

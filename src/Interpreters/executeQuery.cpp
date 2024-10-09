@@ -1977,6 +1977,7 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
         throw;
     }
     streams.onFinish();
+    context->setAlreadyOutfile(true);
 }
 
 BlockIO

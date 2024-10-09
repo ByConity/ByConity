@@ -171,55 +171,52 @@ void OutfileTarget::getRawBuffer()
     }
 #endif
 #if USE_AWS_S3
-    else if (scheme == "vetos")
+    else if (scheme == "vetos" || scheme == "oss" || isS3URIScheme(scheme))
     {
-        VETosConnectionParams vetos_connect_params = VETosConnectionParams::getVETosSettingsFromContext(context);
-        auto tos_uri = verifyTosURI(real_outfile_path);
-        std::string bucket = tos_uri.getHost();
-        std::string key = getTosKeyFromURI(tos_uri);
-        S3::S3Config s3_config = VETosConnectionParams::getS3Config(vetos_connect_params, bucket);
+        std::optional<S3::S3Config> s3_config;
+        String key;
+        if (scheme == "vetos")
+        {
+            VETosConnectionParams vetos_connect_params = VETosConnectionParams::getVETosSettingsFromContext(context);
+            auto tos_uri = verifyTosURI(real_outfile_path);
+            std::string bucket = tos_uri.getHost();
+            key = getTosKeyFromURI(tos_uri);
+            s3_config = VETosConnectionParams::getS3Config(vetos_connect_params, bucket);
+        }
+        else if (scheme == "oss")
+        {
+            OSSConnectionParams oss_connect_params = OSSConnectionParams::getOSSSettingsFromContext(context);
+            auto oss_uri = verifyOSSURI(real_outfile_path);
+            std::string bucket = oss_uri.getHost();
+            key = getOSSKeyFromURI(oss_uri);
+            s3_config = OSSConnectionParams::getS3Config(oss_connect_params, bucket);
+        }
+        else
+        {
+            S3::URI s3_uri(out_uri);
+            String endpoint = s3_uri.endpoint.empty() ? context->getSettingsRef().s3_endpoint.toString() : s3_uri.endpoint;
+            s3_config = S3::S3Config(
+                endpoint,
+                context->getSettingsRef().s3_region.toString(),
+                s3_uri.bucket,
+                context->getSettingsRef().s3_ak_id,
+                context->getSettingsRef().s3_ak_secret,
+                "",
+                "",
+                context->getSettingsRef().s3_use_virtual_hosted_style);
+            key = s3_uri.key;
+        }
         out_buf_raw = std::make_unique<WriteBufferFromS3>(
-            s3_config.create(),
-            bucket,
+            s3_config->create(),
+            s3_config->bucket,
             key,
             context->getSettingsRef().s3_min_upload_part_size,
-            context->getSettingsRef().s3_max_single_part_upload_size);
-    }
-    // use s3 protocol to support outfile to oss
-    else if (scheme == "oss")
-    {
-        OSSConnectionParams oss_connect_params = OSSConnectionParams::getOSSSettingsFromContext(context);
-        auto oss_uri = verifyOSSURI(real_outfile_path);
-        std::string bucket = oss_uri.getHost();
-        std::string key = getOSSKeyFromURI(oss_uri);
-        S3::S3Config s3_config = OSSConnectionParams::getS3Config(oss_connect_params, bucket);
-        out_buf = std::make_unique<WriteBufferFromS3>(
-            s3_config.create(),
-            bucket,
-            key,
-            context->getSettingsRef().s3_min_upload_part_size,
-            context->getSettingsRef().s3_max_single_part_upload_size);
-    }
-    else if (isS3URIScheme(scheme))
-    {
-        S3::URI s3_uri(out_uri);
-        String endpoint = s3_uri.endpoint.empty() ? context->getSettingsRef().s3_endpoint.toString() : s3_uri.endpoint;
-        S3::S3Config s3_cfg(
-            endpoint,
-            context->getSettingsRef().s3_region.toString(),
-            s3_uri.bucket,
-            context->getSettingsRef().s3_ak_id,
-            context->getSettingsRef().s3_ak_secret,
-            "",
-            "",
-            context->getSettingsRef().s3_use_virtual_hosted_style);
-
-        out_buf_raw = std::make_unique<WriteBufferFromS3>(
-            s3_cfg.create(),
-            s3_cfg.bucket,
-            s3_uri.key,
-            context->getSettingsRef().s3_min_upload_part_size,
-            context->getSettingsRef().s3_max_single_part_upload_size);
+            context->getSettingsRef().s3_max_single_part_upload_size,
+            std::nullopt,
+            DBMS_DEFAULT_BUFFER_SIZE,
+            true,
+            context->getSettingsRef().s3_use_parallel_upload,
+            context->getSettingsRef().s3_parallel_upload_pool_size);
     }
 #endif
     else

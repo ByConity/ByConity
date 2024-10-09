@@ -130,12 +130,9 @@ public:
         const std::string & version_id_,
         const std::vector<String> & keys_,
         const String & bucket_,
-        const S3Settings::ReadWriteSettings & request_settings_,
+        const S3Settings::RequestSettings & request_settings_,
         KeysWithInfo * read_keys_)
-        : keys(keys_)
-        , version_id(version_id_)
-        , bucket(bucket_)
-        , request_settings(request_settings_)
+        : keys(keys_), version_id(version_id_), bucket(bucket_), request_settings(request_settings_)
     {
         client = std::unique_ptr<Aws::S3::S3Client>(new Aws::S3::S3Client(client_));
 
@@ -167,7 +164,7 @@ private:
     std::unique_ptr<Aws::S3::S3Client> client;
     String version_id;
     String bucket;
-    S3Settings::ReadWriteSettings request_settings;
+    S3Settings::RequestSettings request_settings;
 };
 
 StorageS3Source::KeysIterator::KeysIterator(
@@ -175,10 +172,9 @@ StorageS3Source::KeysIterator::KeysIterator(
     const std::string & version_id_,
     const std::vector<String> & keys_,
     const String & bucket_,
-    const S3Settings::ReadWriteSettings & request_settings_,
+    const S3Settings::RequestSettings & request_settings_,
     KeysWithInfo * read_keys)
-    : pimpl(std::make_shared<StorageS3Source::KeysIterator::Impl>(
-        client_, version_id_, keys_, bucket_, request_settings_, read_keys))
+    : pimpl(std::make_shared<StorageS3Source::KeysIterator::Impl>(client_, version_id_, keys_, bucket_, request_settings_, read_keys))
 {
 }
 
@@ -200,7 +196,7 @@ public:
         const NamesAndTypesList & virtual_columns_,
         ContextPtr context_,
         KeysWithInfo * read_keys_,
-        const S3Settings::ReadWriteSettings & request_settings_)
+        const S3Settings::RequestSettings & request_settings_)
         : WithContext(context_)
         , globbed_uri(globbed_uri_)
         , virtual_columns(virtual_columns_)
@@ -453,7 +449,7 @@ private:
     KeysWithInfo * read_keys;
 
     Aws::S3::Model::ListObjectsV2Request request;
-    S3Settings::ReadWriteSettings request_settings;
+    S3Settings::RequestSettings request_settings;
 
     ThreadPool list_objects_pool;
     ThreadPoolCallbackRunner<ListObjectsOutcome> list_objects_scheduler;
@@ -468,8 +464,9 @@ StorageS3Source::DisclosedGlobIterator::DisclosedGlobIterator(
     const NamesAndTypesList & virtual_columns,
     ContextPtr context,
     KeysWithInfo * read_keys_,
-    const S3Settings::ReadWriteSettings & request_settings_)
-    : pimpl(std::make_shared<StorageS3Source::DisclosedGlobIterator::Impl>(client_, globbed_uri_, virtual_columns, context, read_keys_, request_settings_))
+    const S3Settings::RequestSettings & request_settings_)
+    : pimpl(std::make_shared<StorageS3Source::DisclosedGlobIterator::Impl>(
+        client_, globbed_uri_, virtual_columns, context, read_keys_, request_settings_))
 {
 }
 
@@ -540,7 +537,7 @@ StorageS3Source::StorageS3Source(
     const ContextPtr & context_,
     std::optional<FormatSettings> format_settings_,
     UInt64 max_block_size_,
-    const S3Settings::ReadWriteSettings & request_settings_,
+    const S3Settings::RequestSettings & request_settings_,
     String compression_hint_,
     const std::shared_ptr<Aws::S3::S3Client> & client_,
     const String & bucket_,
@@ -568,7 +565,8 @@ StorageS3Source::StorageS3Source(
     , file_iterator(file_iterator_)
     , max_parsing_threads(max_parsing_threads_)
     , need_only_count(need_only_count_)
-    , create_reader_pool(CurrentMetrics::StorageS3Threads, CurrentMetrics::StorageS3ThreadsActive, CurrentMetrics::StorageS3ThreadsScheduled, 1)
+    , create_reader_pool(
+          CurrentMetrics::StorageS3Threads, CurrentMetrics::StorageS3ThreadsActive, CurrentMetrics::StorageS3ThreadsScheduled, 1)
 {
     initialize();
 }

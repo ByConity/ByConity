@@ -649,6 +649,7 @@ protected:
     bool has_tenant_id_in_username = false;
     String tenant_id;
     String current_catalog;
+    bool already_outfile = false;
 };
 
 /** A set of known objects that can be used in the query.
@@ -1160,6 +1161,9 @@ public:
 
     void setIsExplainQuery(const bool & is_explain_query_);
     bool isExplainQuery() const;
+
+    void setAlreadyOutfile(const bool & already_outfile_) { already_outfile = already_outfile_; }
+    bool isAlreadyOutfile() const { return already_outfile; }
 
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;

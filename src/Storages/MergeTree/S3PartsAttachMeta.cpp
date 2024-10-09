@@ -20,7 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
 #include <IO/RAReadBufferFromS3.h>
-#include <IO/WriteBufferFromByteS3.h>
+#include <IO/WriteBufferFromS3.h>
 #include <Common/ThreadPool.h>
 
 namespace DB
@@ -144,7 +144,7 @@ void S3PartsAttachMeta::Writer::write(const std::vector<PartMeta> & metas_)
     String meta_file_key = meta.data_key_prefix + metaFileKey(meta.generator_id.id, next_write_idx++);
 
     {
-        WriteBufferFromByteS3 writer(meta.s3_util.getClient(), meta.s3_util.getBucket(), meta_file_key);
+        WriteBufferFromS3 writer(meta.s3_util.getClient(), meta.s3_util.getBucket(), meta_file_key);
         writeVectorBinary(metas_, writer);
         writer.finalize();
     }
