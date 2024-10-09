@@ -1399,6 +1399,7 @@ enum PreloadLevelSettings : UInt64
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, print_graphviz_ast, false, "Whether print graphviz", 0) \
     M(Bool, print_graphviz_planner, false, "Whether print graphviz", 0) \
+    M(LogExplainAnalyzeType, log_explain_analyze_type, LogExplainAnalyzeType::NONE, "Log explain analyze result. Type: NONE|QUERY_PIPELINE|AGGREGATED_QUERY_PIPELINE.", 0) \
     M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
     M(Bool, enable_active_prewhere, false, "Whether to actively generate prewhere by statistics", 0) \
     M(Float, max_active_prewhere_selectivity, 0.3, "Max Selectivity of actively generated prewheres", 0) \

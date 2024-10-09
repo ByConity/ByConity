@@ -74,12 +74,13 @@ public:
         SegIdAndAddrToPipelineProfile & worker_grouped_profiles,
         const QueryPlanSettings & settings = {},
         const std::unordered_map<size_t, PlanSegmentProfiles> & segment_profile = {});
+    static String textQueryPipelineProfiles(ContextMutablePtr context);
     static String jsonPipelineProfile(PlanSegmentDescriptions & segment_descs, SegIdAndAddrToPipelineProfile & worker_grouped_profiles);
     static void getPlanNodes(const PlanNodePtr & parent, std::unordered_map<PlanNodeId, PlanNodePtr> & id_to_node);
     static std::unordered_map<PlanNodeId, PlanNodePtr>  getPlanNodeMap(const QueryPlan & query_plan);
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
     static String getPlanSegmentHeaderText(
-        PlanSegmentDescriptionPtr & segment_desc,
+        const PlanSegmentDescriptionPtr & segment_desc,
         bool print_profile = false,
         const std::unordered_map<size_t, PlanSegmentProfiles> & segment_profile = {});
 

@@ -98,7 +98,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
             
     }
     {
-        if (query_context->isExplainQuery() && query_context->getSettingsRef().report_segment_profiles)
+        if (query_context->getSettingsRef().report_segment_profiles)
         {
             std::unique_lock<bthread::Mutex> lock(segment_profile_mutex);
             segment_profile_map[query_id];

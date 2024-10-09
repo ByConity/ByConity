@@ -155,6 +155,13 @@ IMPLEMENT_SETTING_ENUM(ExpandMode, ErrorCodes::BAD_ARGUMENTS,
      {"UNION", ExpandMode::UNION},
      {"CTE", ExpandMode::CTE}})
 
+IMPLEMENT_SETTING_ENUM(
+    LogExplainAnalyzeType,
+    ErrorCodes::BAD_ARGUMENTS,
+    {{"NONE", LogExplainAnalyzeType::NONE},
+     {"QUERY_PIPELINE", LogExplainAnalyzeType::QUERY_PIPELINE},
+     {"AGGREGATED_QUERY_PIPELINE", LogExplainAnalyzeType::AGGREGATED_QUERY_PIPELINE}})
+
 IMPLEMENT_SETTING_ENUM(SpillMode, ErrorCodes::BAD_ARGUMENTS,
     {{"manual", SpillMode::MANUAL},
      {"auto", SpillMode::AUTO}})

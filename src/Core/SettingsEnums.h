@@ -255,6 +255,15 @@ enum class CTEMode
 
 DECLARE_SETTING_ENUM(CTEMode)
 
+enum class LogExplainAnalyzeType
+{
+    NONE,
+    QUERY_PIPELINE,
+    AGGREGATED_QUERY_PIPELINE,
+};
+
+DECLARE_SETTING_ENUM(LogExplainAnalyzeType)
+
 enum class ExpandMode
 {
     EXPAND,

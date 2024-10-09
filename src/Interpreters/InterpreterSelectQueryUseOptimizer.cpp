@@ -282,7 +282,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     ProfileEvents::increment(ProfileEvents::PlanSegmentSplitterTime, stage_watch.elapsedMilliseconds());
 
     resetFinalSampleSize(plan_segment_tree);
-    setPlanSegmentInfoForExplainAnalyze(plan_segment_tree);
+    setPlanSegmentInfoForExplainAnalyze(plan_segment_tree, context);
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
@@ -587,8 +587,15 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     return res;
 }
 
-void InterpreterSelectQueryUseOptimizer::setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree)
+void InterpreterSelectQueryUseOptimizer::setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree, ContextMutablePtr context)
 {
+    if (context->getSettingsRef().log_explain_analyze_type == LogExplainAnalyzeType::QUERY_PIPELINE
+        || context->getSettingsRef().log_explain_analyze_type == LogExplainAnalyzeType::AGGREGATED_QUERY_PIPELINE)
+    {
+        context->setSetting("report_segment_profiles", true);
+        for (auto & segment_node : plan_segment_tree->getNodes())
+            segment_node.plan_segment->setProfileType(ReportProfileType::QueryPipeline);
+    }
     auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
     if (final_segment->getQueryPlan().getRoot())
     {

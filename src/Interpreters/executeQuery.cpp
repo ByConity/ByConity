@@ -154,7 +154,7 @@
 #include <Optimizer/OptimizerMetrics.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Protos/cnch_common.pb.h>
-#include <Optimizer/OptimizerMetrics.h>
+#include <QueryPlan/PlanPrinter.h>
 
 using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
 #include  <map>
@@ -1735,6 +1735,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                             && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
                             logQuery(context, elem);
 
+                        if (context->getSettingsRef().log_explain_analyze_type != LogExplainAnalyzeType::NONE)
+                        {
+                            auto explain_result_string = PlanPrinter::textQueryPipelineProfiles(context);
+                            LOG_INFO(getLogger("executeQuery"), "Explain Analyze Result:\n{}", explain_result_string);
+                        }
                         if (log_processors_profiles)
                         {
                             auto processors_profile_log = context->getProcessorsProfileLog();

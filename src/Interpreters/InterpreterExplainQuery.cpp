@@ -717,12 +717,8 @@ BlockIO InterpreterExplainQuery::explainAnalyze()
     BlockIO res;
 
     auto context_ptr = getContext();
-    if (!context_ptr->getSettingsRef().log_processors_profiles || !context_ptr->getSettingsRef().report_processors_profiles)
-    {
-        context_ptr->setSetting("log_processors_profiles", true);
-        context_ptr->setSetting("report_processors_profiles", true);
-        context_ptr->setSetting("report_segment_profiles", true);
-    }
+    context_ptr->setSetting("report_segment_profiles", true);
+    context_ptr->setSetting("log_explain_analyze_type", Field("NONE"));
     context_ptr->setIsExplainQuery(true);
     try
     {
