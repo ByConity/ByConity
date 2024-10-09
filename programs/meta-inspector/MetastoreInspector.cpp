@@ -351,7 +351,7 @@ private:
         {
             MetaCommand cmd = MetaCommand::parse(command);
             std::string full_key = name_space.empty() ? cmd.key : Catalog::escapeString(name_space) + '_' + cmd.key;
-            size_t key_offset = name_space.empty() ? 0 : name_space.size() + 1;
+            size_t key_offset = name_space.empty() ? 0 : Catalog::escapeString(name_space).size() + 1;
             switch (cmd.type)
             {
                 case MetaCommandType::HELP:
