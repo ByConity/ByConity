@@ -1540,7 +1540,7 @@ String ColumnPruningVisitor::selectColumnWithMinSize(NamesAndTypesList source_co
                     [&](const auto & type_and_name) {
                         auto column_opt = columns_desc.tryGetColumnOrSubcolumn(GetColumnsOptions::Ordinary, type_and_name.name);
                         return column_opt && column_opt->isSubcolumn()
-                            && !!(typeid_cast<const DataTypeLowCardinality *>(column_opt->getTypeInStorage().get()));
+                            && !!(dynamic_cast<const DataTypeLowCardinality *>(column_opt->getTypeInStorage().get()));
                     }),
                 source_columns.end());
         }
