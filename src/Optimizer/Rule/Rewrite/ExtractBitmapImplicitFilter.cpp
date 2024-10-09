@@ -102,7 +102,8 @@ TransformResult ExtractBitmapImplicitFilter::transformImpl(PlanNodePtr node, con
     for (const auto & parameter : parameters_map)
     {
         auto [in_ast, elem_size] = createInFunctionForBitMapParameter(parameter.first, parameter.second);
-        functions.push_back(in_ast);
+        if (in_ast)
+            functions.push_back(in_ast);
         total_in_elems += elem_size;
     }
 

@@ -1537,7 +1537,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_rows_to_use_topn_filtering, 0, "The maximum N of TopN to use topn filtering optimization. Set 0 to choose this value adaptively.", 0) \
     M(String, topn_filtering_algorithm_for_unsorted_stream, "SortAndLimit", "The default topn filtering algorithm for unsorted stream, can be one of: 'SortAndLimit', 'Heap'", 0) \
     M(Bool, enable_create_topn_filtering_for_aggregating, false, "Whether to enable CreateTopNFilteringForAggregating rules", 0) \
-    M(Bool, enable_push_topn_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
+    M(Bool, enable_push_sort_through_projection, true, "Whether to enable PushTopNThroughProjection rules", 0) \
+    M(Bool, enable_push_topn_through_projection, false, "Whether to enable PushTopNThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_push_topn_filtering_through_union, true, "Whether to enable PushTopNFilteringThroughUnion rules", 0) \
     M(Bool, enable_optimize_aggregate_memory_efficient, false, "Whether to enable OptimizeMemoryEfficientAggregation rules", 0) \
@@ -1549,7 +1550,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
     M(Bool, enable_unalias_symbol_references, true, "Whether to enable unalias symbol references", 0) \
     M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
-    M(Bool, extract_bitmap_implicit_filter, false, "Whether to extract implicit filter for bitmap functions, e.g. for bitmapCount('1 | 2 & 3')(a, b), extract 'a in (1, 2, 3)'", 0) \
+    M(Bool, extract_bitmap_implicit_filter, true, "Whether to extract implicit filter for bitmap functions, e.g. for bitmapCount('1 | 2 & 3')(a, b), extract 'a in (1, 2, 3)'", 0) \
     M(Bool, enable_add_local_exchange, false, "Whether to add local exchange", 0) \
     M(Bool, enable_join_using_to_join_on, false, "Whether rewrite Join Using to Join On to make reordering possible", 0) \
     M(Bool, enable_ab_test, false, "Whether to open ab test for settings, If true, the settings for some queries are set in the ab_test_profile profile.", 0) \
