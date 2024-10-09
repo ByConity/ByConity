@@ -53,6 +53,8 @@ public:
     static std::vector<RulePtr> pushUnionThroughJoin();
     static std::vector<RulePtr> addRepartitionColumn();
     static std::vector<RulePtr> joinUsingToJoinOn();
+    static std::vector<RulePtr> markTopNDistinct();
+    static std::vector<RulePtr> pushTopNDistinct();
 };
 
 }

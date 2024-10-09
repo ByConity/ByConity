@@ -104,4 +104,32 @@ public:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+class PushPartialTopNDistinctThroughExchange : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_PARTIAL_TOPN_DISTINCT_THROUGH_EXCHANGE; }
+    String getName() const override { return "PUSH_PARTIAL_TOPN_DISTINCT_THROUGH_EXCHANGE"; }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_push_partial_topn_distinct_through_exchange;
+    }
+    ConstRefPatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class MarkTopNDistinctThroughExchange : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::MARK_TOPN_DISTINCT_THROUGH_EXCHANGE; }
+    String getName() const override { return "MARK_TOPN_DISTINCT_THROUGH_EXCHANGE"; }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_push_partial_topn_distinct_through_exchange;
+    }
+    ConstRefPatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
 }

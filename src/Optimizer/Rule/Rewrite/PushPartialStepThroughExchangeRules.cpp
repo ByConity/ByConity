@@ -76,7 +76,7 @@ ConstRefPatternPtr PushPartialAggThroughExchange::getPattern() const
 
 TransformResult split(const PlanNodePtr & node, RuleContext & context)
 {
-    const auto *step = dynamic_cast<const AggregatingStep *>(node->getStep().get());
+    const auto * step = dynamic_cast<const AggregatingStep *>(node->getStep().get());
     QueryPlanStepPtr partial_agg = std::make_shared<AggregatingStep>(
         node->getChildren()[0]->getStep()->getOutputStream(),
         step->getKeys(),
@@ -233,7 +233,7 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         }
     }
 
-    if(step->isFinal())
+    if (step->isFinal())
         return split(node, context);
     else
         return pushPartial(node, context);
@@ -328,7 +328,8 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
             auto new_desc = desc;
             const auto & out_to_inputs = old_exchange_step->getOutToInputs();
             if (!out_to_inputs.contains(desc.column_name) || out_to_inputs.at(desc.column_name).size() <= index)
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "PushPartialSortingThroughExchange: Can not find {} in out_to_inputs.", desc.column_name);
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR, "PushPartialSortingThroughExchange: Can not find {} in out_to_inputs.", desc.column_name);
             new_desc.column_name = old_exchange_step->getOutToInputs().at(desc.column_name).at(index);
             new_sort_desc.emplace_back(new_desc);
         }
@@ -479,7 +480,12 @@ TransformResult PushPartialDistinctThroughExchange::transformImpl(PlanNodePtr no
     for (const auto & exchange_child : old_exchange_node->getChildren())
     {
         auto partial_limit = std::make_unique<DistinctStep>(
-            exchange_child->getStep()->getOutputStream(), step->getSetSizeLimits(), step->getLimitHint(), step->getColumns(), true);
+            exchange_child->getStep()->getOutputStream(),
+            step->getSetSizeLimits(),
+            step->getLimitHint(),
+            step->getColumns(),
+            true,
+            step->canToAgg());
         auto partial_limit_node = PlanNodeBase::createPlanNode(
             context.context->nextNodeId(), std::move(partial_limit), PlanNodes{exchange_child}, node->getStatistics());
         exchange_children.emplace_back(partial_limit_node);
@@ -492,4 +498,96 @@ TransformResult PushPartialDistinctThroughExchange::transformImpl(PlanNodePtr no
     return node;
 }
 
+ConstRefPatternPtr PushPartialTopNDistinctThroughExchange::getPattern() const
+{
+    static auto pattern = Patterns::limit()
+        .withSingle(
+            Patterns::sorting().withSingle(Patterns::distinct()
+                                               .matchingStep<DistinctStep>([](const DistinctStep & step) { return !step.preDistinct(); })
+                                               .withSingle(Patterns::exchange())))
+        .result();
+    return pattern;
+}
+
+TransformResult PushPartialTopNDistinctThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    const auto * limit_step = dynamic_cast<const LimitStep *>(node->getStep().get());
+    const auto * sort_step = dynamic_cast<const SortingStep *>(node->getChildren()[0]->getStep().get());
+
+    const auto * step = dynamic_cast<const DistinctStep *>(node->getChildren()[0]->getChildren()[0]->getStep().get());
+    auto old_exchange_node = node->getChildren()[0]->getChildren()[0]->getChildren()[0];
+    const auto * old_exchange_step = dynamic_cast<const ExchangeStep *>(old_exchange_node->getStep().get());
+    PlanNodes sorting_children;
+    for (const auto & exchange_child : old_exchange_node->getChildren())
+    {
+        auto partial_distinct = std::make_unique<DistinctStep>(
+            exchange_child->getStep()->getOutputStream(), SizeLimits{}, 0, step->getColumns(), true, step->canToAgg());
+        auto partial_distinct_node = PlanNodeBase::createPlanNode(
+            context.context->nextNodeId(), std::move(partial_distinct), PlanNodes{exchange_child}, node->getStatistics());
+        sorting_children.emplace_back(partial_distinct_node);
+    }
+
+    auto partial_sort = std::make_unique<SortingStep>(
+        sorting_children[0]->getStep()->getOutputStream(),
+        sort_step->getSortDescription(),
+        sort_step->getLimit(),
+        SortingStep::Stage::PARTIAL,
+        SortDescription{});
+    auto partial_sort_node
+        = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(partial_sort), sorting_children, node->getStatistics());
+
+    auto distinct_limit = step->copy(context.context);
+    dynamic_cast<DistinctStep *>(distinct_limit.get())->setLimitHint(limit_step->getLimitValue() + limit_step->getOffsetValue());
+    auto before_exchange = PlanNodeBase::createPlanNode(
+        context.context->nextNodeId(),
+        limit_step->copy(context.context),
+        {PlanNodeBase::createPlanNode(context.context->nextNodeId(), distinct_limit, {partial_sort_node})});
+
+
+    auto exchange_step = old_exchange_step->copy(context.context);
+    dynamic_cast<ExchangeStep *>(exchange_step.get())->setKeepOrder(true);
+    auto exchange_node = PlanNodeBase::createPlanNode(
+        context.context->nextNodeId(), std::move(exchange_step), {before_exchange}, old_exchange_node->getStatistics());
+
+    QueryPlanStepPtr final_sort = sort_step->copy(context.context);
+    dynamic_cast<SortingStep *>(final_sort.get())->setStage(SortingStep::Stage::MERGE);
+    PlanNodes exchange{exchange_node};
+    auto final_sort_node
+        = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(final_sort), exchange, node->getStatistics());
+
+
+    return PlanNodeBase::createPlanNode(
+        context.context->nextNodeId(),
+        limit_step->copy(context.context),
+        {PlanNodeBase::createPlanNode(context.context->nextNodeId(), step->copy(context.context), {final_sort_node})});
+}
+
+ConstRefPatternPtr MarkTopNDistinctThroughExchange::getPattern() const
+{
+    static auto pattern = Patterns::limit()
+        .withSingle(Patterns::sorting().withSingle(
+            Patterns::distinct().matchingStep<DistinctStep>([](const DistinctStep & step) { return !step.preDistinct() && step.canToAgg(); })))
+        .result();
+    return pattern;
+}
+
+TransformResult MarkTopNDistinctThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
+{
+    auto distinct_node = node->getChildren()[0]->getChildren()[0];
+    const auto * step = dynamic_cast<const DistinctStep *>(distinct_node->getStep().get());
+
+    PlanNodes exchange_children;
+    auto distinct_step = std::make_unique<DistinctStep>(
+        distinct_node->getChildren()[0]->getCurrentDataStream(),
+        step->getSetSizeLimits(),
+        step->getLimitHint(),
+        step->getColumns(),
+        step->preDistinct(),
+        false);
+    auto new_distinct = PlanNodeBase::createPlanNode(
+        context.context->nextNodeId(), std::move(distinct_step), distinct_node->getChildren(), node->getStatistics());
+
+    node->getChildren()[0]->replaceChildren({new_distinct});
+    return node;
+}
 }

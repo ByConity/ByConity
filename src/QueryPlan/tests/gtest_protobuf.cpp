@@ -536,7 +536,7 @@ TEST_F(ProtobufTest, DistinctStep)
         for (int i = 0; i < 10; ++i)
             columns.emplace_back(fmt::format("text{}", eng() % 100));
         auto pre_distinct = eng() % 2 == 1;
-        auto result = std::make_shared<DistinctStep>(base_input_stream, set_size_limits, limit_hint, columns, pre_distinct);
+        auto result = std::make_shared<DistinctStep>(base_input_stream, set_size_limits, limit_hint, columns, pre_distinct, true);
         result->setStepDescription(step_description);
         return result;
     }();

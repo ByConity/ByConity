@@ -29,7 +29,8 @@ public:
             const SizeLimits & set_size_limits_,
             UInt64 limit_hint_,
             const Names & columns_,
-            bool pre_distinct_); /// If is enabled, execute distinct for separate streams. Otherwise, merge streams.
+            bool pre_distinct_,
+            bool can_to_agg_); /// If is enabled, execute distinct for separate streams. Otherwise, merge streams.
 
     String getName() const override { return "Distinct"; }
 
@@ -38,6 +39,8 @@ public:
     UInt64 getLimitHint() const { return limit_hint; }
     const Names & getColumns() const { return columns; }
     bool preDistinct() const { return pre_distinct; }
+    bool canToAgg() const { return can_to_agg; }
+    void setLimitHint(UInt64 limit_hint_) { limit_hint = limit_hint_; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
@@ -55,6 +58,7 @@ private:
     UInt64 limit_hint;
     Names columns;
     bool pre_distinct;
+    bool can_to_agg;
 };
 
 }

@@ -463,7 +463,8 @@ std::shared_ptr<DistinctStep> SymbolMapper::map(const DistinctStep & distinct)
         distinct.getSetSizeLimits(),
         distinct.getLimitHint(),
         map(distinct.getColumns()),
-        distinct.preDistinct());
+        distinct.preDistinct(),
+        distinct.canToAgg());
 }
 
 std::shared_ptr<EnforceSingleRowStep> SymbolMapper::map(const EnforceSingleRowStep & row)

@@ -905,7 +905,7 @@ PlanNodePtr ColumnPruningVisitor::visitDistinctNode(DistinctNode & node, ColumnP
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_column_pruning_context);
 
     auto distinct_step = std::make_shared<DistinctStep>(
-        child->getStep()->getOutputStream(), step->getSetSizeLimits(), step->getLimitHint(), columns, step->preDistinct());
+        child->getStep()->getOutputStream(), step->getSetSizeLimits(), step->getLimitHint(), columns, step->preDistinct(), step->canToAgg());
 
     PlanNodes children{child};
     auto distinct_node = DistinctNode::createPlanNode(context->nextNodeId(), std::move(distinct_step), children, node.getStatistics());
@@ -1327,7 +1327,7 @@ PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node)
 
     const auto & step = *distinct_node->getStep();
 
-    if (step.getLimitHint() == 0)
+    if (step.getLimitHint() == 0 && step.canToAgg())
     {
         NameSet name_set{step.getColumns().begin(), step.getColumns().end()};
         NamesAndTypes arbitrary_names;
