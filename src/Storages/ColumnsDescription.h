@@ -236,6 +236,8 @@ public:
 
     bool isBitEngineKeyStringColumn(const String & column_name) const;
 
+    String toDebugString() const;
+
     /// Keep the sequence of columns and allow to lookup by name.
     using ColumnsContainer = boost::multi_index_container<
         ColumnDescription,
