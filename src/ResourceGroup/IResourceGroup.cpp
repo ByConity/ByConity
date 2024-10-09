@@ -72,11 +72,7 @@ void IResourceGroup::queryFinished(IResourceGroup::Container::iterator it)
     setInUse(true);
 }
 
-<<<<<<< HEAD
-IResourceGroup::Container::iterator IResourceGroup::run(const String & query, const ContextPtr & query_context)
-=======
 IResourceGroup::Container::iterator IResourceGroup::run(const Context & query_context)
->>>>>>> 2d9f5e47b5 (Merge 'early_prepareQueryScope_cnch_dev' into 'cnch-dev')
 {
     std::unique_lock lock(root->mutex);
     bool canRun = true;

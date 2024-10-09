@@ -1,6 +1,5 @@
 #pragma once
 
-#include <base/common/StringRef.h>
 #include <Common/HashTable/StringHashMap.h>
 #include <IO/WriteBufferFromFileBase.h>
 #include <IO/SeekableReadBuffer.h>

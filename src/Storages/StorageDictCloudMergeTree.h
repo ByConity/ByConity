@@ -4,6 +4,7 @@
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Columns/IColumn.h>
+#include <Columns/ColumnBitMap64.h>
 #include <DataTypes/IDataType.h>
 
 namespace DB

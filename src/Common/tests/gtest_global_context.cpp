@@ -1,4 +1,4 @@
-#include <src/Common/tests/gtest_global_context.h>
+#include "gtest_global_context.h"
 
 DB::ContextMutablePtr
 ContextHolder::createQueryContext(const String & query_id, const std::unordered_map<std::string, DB::Field> & settings) const

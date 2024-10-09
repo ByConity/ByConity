@@ -21,7 +21,8 @@
 
 #include <filesystem>
 #include <Interpreters/InterpreterInsertQuery.h>
-
+#include <CloudServices/CnchServerResource.h>
+#include <CloudServices/CnchWorkerResource.h>
 #include <Access/AccessFlags.h>
 #include <CloudServices/CnchServerResource.h>
 #include <Columns/ColumnNullable.h>

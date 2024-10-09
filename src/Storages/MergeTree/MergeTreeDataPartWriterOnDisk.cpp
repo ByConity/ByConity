@@ -515,23 +515,9 @@ void MergeTreeDataPartWriterOnDisk::calculateAndSerializeSkipIndices(const Block
 
             if (skip_indices_aggregators[i]->empty() && granule.mark_on_start)
             {
-<<<<<<< HEAD
-                skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(store);
-=======
-                if (index_helper->isBHANNIndex())
-                {
-                    skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(
-                        part_rows_count,
-                        data_part->getFullPath(),
-                        settings.vector_index_build_threads != 0
-                            ? settings.vector_index_build_threads
-                            : data_part->storage.getContext()->getSettings().vector_index_build_threads);
-                }
-                else
                 {
                     skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(*writer);
                 }
->>>>>>> 8212ddca40 (Merge 'sst_gin_dict' into 'cnch-dev')
 
                 if (stream.compressed.offset() >= settings.min_compress_block_size)
                     stream.compressed.next();

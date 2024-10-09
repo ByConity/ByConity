@@ -84,19 +84,6 @@ public:
         , catalog(catalog_)
     {
         ResourceOption option;
-        if (auto bitengine_tables = query_context->getBitEngineTables())
-        {
-            for (const auto & entry : bitengine_tables->underlying_dict_tables)
-            {
-                option.table_ids.emplace(entry.second.cnch_storage_id.uuid);
-                LOG_TRACE(log, "Dict table storage id {}", entry.second.cnch_storage_id.getFullTableName());
-            }
-            for (const auto & entry : bitengine_tables->tables_in_function)
-            {
-                option.table_ids.emplace(entry.second.cnch_storage_id.uuid);
-                LOG_TRACE(log, "Table in function storage id {}", entry.second.cnch_storage_id.getFullTableName());
-            }
-        }
 
         if (!option.table_ids.empty())
         {
