@@ -22,6 +22,7 @@
 #include <Interpreters/ProcessorProfile.h>
 
 #include <Poco/JSON/Object.h>
+#include "Interpreters/Context_fwd.h"
 
 namespace DB
 {
@@ -41,11 +42,11 @@ class PlanPrinter
 public:
     PlanPrinter() = delete;
 
-    static String textPlanNode(PlanNodePtr plan)
+    static String textPlanNode(PlanNodePtr plan, ContextPtr context)
     {
-        return textPlanNode(*plan);
+        return textPlanNode(*plan, std::move(context));
     }
-    static String textPlanNode(PlanNodeBase & node);
+    static String textPlanNode(PlanNodeBase & node, ContextPtr context);
     static String textLogicalPlan(
         QueryPlan & plan,
         ContextMutablePtr context,
@@ -121,7 +122,7 @@ class PlanPrinter::TextPrinter
 public:
     explicit TextPrinter(
         const std::unordered_map<PlanNodeId, double> & costs_,
-        ContextMutablePtr context_ = nullptr,
+        ContextPtr context_ = nullptr,
         bool is_distributed_ = false,
         const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment_ = {},
         QueryPlanSettings settings_ = {},
@@ -154,7 +155,7 @@ private:
     const std::unordered_map<PlanNodeId, double> & costs;
     bool is_distributed;
     const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment;
-    ContextMutablePtr context;
+    ContextPtr context;
     QueryPlanSettings settings;
     const size_t max_predicate_text_length;
 };

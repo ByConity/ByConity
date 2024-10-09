@@ -15,8 +15,9 @@
 
 #include <memory>
 #include <optional>
-#include <QueryPlan/TableScanStep.h>
+#include <Optimizer/Rewriter/SQLFingerprintRewriter.h>
 #include <QueryPlan/ExecutePlanElement.h>
+#include <QueryPlan/TableScanStep.h>
 
 #include <Analyzers/TypeAnalyzer.h>
 #include <DataTypes/ObjectUtils.h>
@@ -65,6 +66,9 @@
 #include <Common/FieldVisitorToString.h>
 #include "Interpreters/DatabaseCatalog.h"
 #include <Common/Stopwatch.h>
+#include "IO/ReadBufferFromString.h"
+#include "IO/WriteBufferFromString.h"
+#include "Parsers/ASTSerDerHelper.h"
 
 namespace DB
 {

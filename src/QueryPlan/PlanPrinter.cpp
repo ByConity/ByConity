@@ -36,6 +36,7 @@
 #include <QueryPlan/QueryPlan.h>
 #include <magic_enum.hpp>
 #include <Poco/JSON/Object.h>
+#include "Interpreters/Context_fwd.h"
 
 #include <utility>
 #include <vector>
@@ -84,11 +85,11 @@ namespace
     }
 }
 
-String PlanPrinter::textPlanNode(PlanNodeBase & node)
+String PlanPrinter::textPlanNode(PlanNodeBase & node, ContextPtr context)
 {
     PlanCostMap costs;
     StepProfiles profiles;
-    TextPrinter printer{costs};
+    TextPrinter printer{costs, context};
     bool has_children = node.getChildren().empty();
     return printer.printLogicalPlan(node, TextPrinterIntent{0, has_children}, profiles);
 }

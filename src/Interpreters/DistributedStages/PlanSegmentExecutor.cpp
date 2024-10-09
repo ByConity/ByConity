@@ -31,6 +31,9 @@
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/executeQueryHelper.h>
+#include <Interpreters/sendPlanSegment.h>
+#include <Optimizer/Signature/PlanSegmentNormalizer.h>
+#include <Optimizer/Signature/PlanSignature.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
@@ -77,7 +80,6 @@
 #include <common/logger_useful.h>
 #include <common/scope_guard_safe.h>
 #include <common/types.h>
-#include "Interpreters/sendPlanSegment.h"
 
 namespace ProfileEvents
 {
@@ -177,6 +179,13 @@ std::optional<PlanSegmentExecutor::ExecutionResult> PlanSegmentExecutor::execute
     LOG_DEBUG(logger, "execute PlanSegment:\n" + plan_segment->toString());
     try
     {
+        if (context->getSettingsRef().log_normalized_query_plan_hash)
+        {
+            auto logical_plan = generatePlanSegmentPlanHash(plan_segment, context);
+            LOG_TRACE(logger, "Logical plan is {}", logical_plan);
+            query_log_element->normalized_query_plan_hash = std::hash<std::string>()(logical_plan);
+        }
+
         context->initPlanSegmentExHandler();
         doExecute();
 

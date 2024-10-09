@@ -1473,6 +1473,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     elem.query_plan = context->getQueryContext()->getQueryPlan();
                 }
 
+                if (res.coordinator && settings.log_normalized_query_plan_hash)
+                    elem.normalized_query_plan_hash = res.coordinator->getNormalizedQueryPlanHash();
+
                 interpreter->extendQueryLogElem(elem, ast, context, query_database, query_table);
 
                 if (settings.log_query_settings)

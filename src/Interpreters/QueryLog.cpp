@@ -59,8 +59,7 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
             {"ExceptionWhileProcessing",    static_cast<Int8>(EXCEPTION_WHILE_PROCESSING)}
         });
 
-    return
-    {
+    return {
         {"type", std::move(query_status_datatype)},
         {"event_date", std::make_shared<DataTypeDate>()},
         {"event_time", std::make_shared<DataTypeDateTime>()},
@@ -82,16 +81,12 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"query", std::make_shared<DataTypeString>()},
         {"normalized_query_hash", std::make_shared<DataTypeUInt64>()},
         {"query_kind", std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>())},
-        {"databases", std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
-        {"tables", std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
-        {"columns", std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
-        {"projections", std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
-        {"materialized_views", std::make_shared<DataTypeArray>(
-            std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
+        {"databases", std::make_shared<DataTypeArray>(std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
+        {"tables", std::make_shared<DataTypeArray>(std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
+        {"columns", std::make_shared<DataTypeArray>(std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
+        {"projections", std::make_shared<DataTypeArray>(std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
+        {"materialized_views",
+         std::make_shared<DataTypeArray>(std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
         {"exception_code", std::make_shared<DataTypeInt32>()},
         {"exception", std::make_shared<DataTypeString>()},
         {"stack_trace", std::make_shared<DataTypeString>()},
@@ -151,9 +146,8 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"segment_profiles", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
         {"virtual_warehouse", std::make_shared<DataTypeString>()},
         {"worker_group", std::make_shared<DataTypeString>()},
-        {"query_plan", std::make_shared<DataTypeString>()}
-    };
-
+        {"query_plan", std::make_shared<DataTypeString>()},
+        {"normalized_query_plan_hash", std::make_shared<DataTypeUInt64>()}};
 }
 
 NamesAndAliases QueryLogElement::getNamesAndAliases()
@@ -355,6 +349,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(virtual_warehouse);
     columns[i++]->insert(worker_group);
     columns[i++]->insert(query_plan);
+    columns[i++]->insert(normalized_query_plan_hash);
 }
 
 void QueryLogElement::appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i)

@@ -12,13 +12,15 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentInstance.h>
+#include <Interpreters/DistributedStages/ProgressManager.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/sendPlanSegment.h>
+#include <Optimizer/Signature/PlanSegmentNormalizer.h>
+#include <Optimizer/Signature/PlanSignature.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <common/logger_useful.h>
-#include "Interpreters/DistributedStages/ProgressManager.h"
-
 
 #include <boost/msm/front/euml/common.hpp>
 #include <boost/msm/front/functor_row.hpp>
@@ -234,6 +236,13 @@ BlockIO MPPQueryCoordinator::execute()
     auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
     final_segment->update(query_context);
     LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
+
+    if (query_context->getSettingsRef().log_normalized_query_plan_hash)
+    {
+        auto logical_plan = generatePlanSegmentPlanHash(final_segment, query_context);
+        LOG_TRACE(log, "Logical plan is {}", logical_plan);
+        normalized_query_plan_hash = std::hash<std::string>()(logical_plan);
+    }
 
     auto final_segment_instance = std::make_unique<PlanSegmentInstance>();
     final_segment_instance->info = scheduler_status->final_execution_info;

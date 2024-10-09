@@ -33,7 +33,8 @@ public:
     PlanSignatureProvider(PlanSignatureProvider &&) = default;
     PlanSignatureProvider(const PlanSignatureProvider &) = default;
 
-    explicit PlanSignatureProvider(const CTEInfo & _cte_info, ContextPtr context): normalizer(_cte_info, context), cte_info(_cte_info)
+    explicit PlanSignatureProvider(const CTEInfo & _cte_info, ContextPtr context_)
+        : normalizer(_cte_info, context_), cte_info(_cte_info), context(context_)
     {
     }
     static PlanSignatureProvider from(const QueryPlan & plan, ContextPtr _context)
@@ -41,7 +42,7 @@ public:
         return PlanSignatureProvider(plan.getCTEInfo(), _context);
     }
 
-    PlanSignature computeSignature(PlanNodePtr node);
+    PlanSignature computeSignature(PlanNodePtr node, PlanNormalizerOptions options = {});
 
     static PlanSignature combineSettings(PlanSignature signature, const SettingsChanges & settings);
 
@@ -50,9 +51,9 @@ public:
     {
         return normalizer.computeNormalOutputOrder(node);
     }
-    PlanNodePtr computeNormalPlan(PlanNodePtr node)
+    PlanNodePtr computeNormalPlan(PlanNodePtr node, PlanNormalizerOptions options = {})
     {
-        return normalizer.buildNormalPlan(node);
+        return normalizer.buildNormalPlan(node, options);
     }
 
 protected:
@@ -63,7 +64,9 @@ protected:
     PlanNormalizer normalizer;
 private:
     const CTEInfo & cte_info;
-    PlanSignature computeSignatureImpl(PlanNodePtr root, bool write_to_buffer, PlanNodeToSignatures & buffer);
+    ContextPtr context;
+    PlanSignature
+    computeSignatureImpl(PlanNodePtr node, bool write_to_buffer, PlanNodeToSignatures & buffer, PlanNormalizerOptions options);
 };
 
 } // DB

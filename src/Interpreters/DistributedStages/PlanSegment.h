@@ -416,7 +416,10 @@ public:
 
     void setRoot(Node * root_) { root = root_; }
 
-    Node * getRoot() { return root; }
+    Node * getRoot() const
+    {
+        return root;
+    }
 
     Node * getLastNode() { return &nodes.back(); }
 

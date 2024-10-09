@@ -50,6 +50,14 @@ public:
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;
 
     PlanSegmentInputs getInput() const { return inputs; }
+    void setInputs(PlanSegmentInputs inputs_)
+    {
+        inputs = std::move(inputs_);
+    }
+    void setInputStream(DataStream input_stream_)
+    {
+        input_streams = {std::move(input_stream_)};
+    }
 
     void setPlanSegment(PlanSegment * plan_segment_, ContextPtr context_);
     PlanSegment * getPlanSegment() const { return plan_segment; }
