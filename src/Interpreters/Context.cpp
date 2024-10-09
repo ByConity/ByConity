@@ -2307,7 +2307,7 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
     std::function<void(const SettingsChanges &)> find_dialect_type_if_any = [&](const SettingsChanges & setting_changes) {
         for (const auto & change : setting_changes)
         {
-            if (change.name == "profile" && getClientInfo().query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
+            if (change.name == "profile" && getServerType() == ServerType::cnch_server)
             {
                 UUID profile_id = getAccessControlManager().getID<SettingsProfile>(change.value.safeGet<String>());
                 auto profile_info = getAccessControlManager().getSettingsProfileInfo(profile_id);
@@ -2355,7 +2355,7 @@ void Context::applySettingsChangesWithLock(const SettingsChanges & changes, bool
 
     for (const SettingChange & change : changes)
     {
-        if (change.name == "profile" && getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+        if (change.name == "profile" && getServerType() != ServerType::cnch_server)
             continue;
         applySettingChangeWithLock(change, lock);
     }
