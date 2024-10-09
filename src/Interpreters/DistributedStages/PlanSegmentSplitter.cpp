@@ -677,7 +677,7 @@ std::vector<size_t> ParallelSizeChecker::visitTableScanNode(QueryPlan::Node * no
 
 std::vector<size_t> ParallelSizeChecker::visitReadStorageRowCountNode(QueryPlan::Node *, const Context &)
 {
-    return {shard_number};
+    return {1};
 }
 
 std::vector<size_t> ParallelSizeChecker::visitRemoteExchangeSourceNode(QueryPlan::Node * node, const Context &)
