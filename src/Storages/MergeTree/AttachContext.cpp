@@ -203,10 +203,8 @@ void AttachContext::executeOperation()
                 target_data_path = fs::path(copy_record.to_path) / "data";
             }
 
-            DiskPtr to_disk = copy_record.to_disk;
-
             pool.scheduleOrThrowOnError(
-                [&from_disk = copy_record.from_disk, &to_disk = to_disk, from = source_data_path, to = target_data_path]() {
+                [&from_disk = copy_record.from_disk, &to_disk = copy_record.to_disk, from = source_data_path, to = target_data_path]() {
                     String parent_dir = fs::path(to).parent_path();
                     if (!to_disk->exists(parent_dir))
                         to_disk->createDirectories(parent_dir);
