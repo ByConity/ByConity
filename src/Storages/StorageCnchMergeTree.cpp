@@ -105,6 +105,12 @@
 #include <common/logger_useful.h>
 
 
+namespace
+{
+const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY = 1;
+const UInt64 FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS           = 2;
+}
+
 namespace ProfileEvents
 {
 extern const Event CatalogTime;
@@ -137,6 +143,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_FORMAT_VERSION;
     extern const int NOT_IMPLEMENTED;
     extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
+    extern const int UNABLE_TO_SKIP_UNUSED_SHARDS;
 }
 
 static NameSet collectColumnsFromCommands(const AlterCommands & commands)
@@ -3164,16 +3171,29 @@ const String & StorageCnchMergeTree::getRelativeDataPath(StorageLocation locatio
 
 std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
 {
+    UInt64 force = local_context->getSettingsRef().force_optimize_skip_unused_shards;
+
     if (!isBucketTable())
+    {
+        if (force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS)
+            throw Exception("Not a bucket table", ErrorCodes::UNABLE_TO_SKIP_UNUSED_SHARDS);
         return {};
+    }
 
     std::set<Int64> bucket_numbers;
-    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
+    ASTSelectQuery & select = *(query_info.query->as<ASTSelectQuery>());
+    ASTPtr where_expression;
+    if (select.prewhere() && select.where())
+    {
+        where_expression = makeASTFunction("and", select.prewhere()->clone(), select.where()->clone());
+    }
+    else if (select.prewhere() || select.where())
+    {
+        where_expression = select.prewhere() ? select.prewhere()->clone() : select.where()->clone();
+    }
     const Settings & settings = local_context->getSettingsRef();
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    // if number of bucket columns of this table > 1, skip optimisation
-    if (settings.optimize_skip_unused_shards && where_expression
-        && metadata_snapshot->getColumnsForClusterByKey().size() == 1)
+    if (settings.optimize_skip_unused_shards && where_expression)
     {
         // get constant actions of the expression
         Block sample_block = metadata_snapshot->getSampleBlock();
@@ -3243,6 +3263,16 @@ std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQuery
                 bucket_numbers.insert(bucket_number);
             }
         }
+    }
+    if (bucket_numbers.empty() && force)
+    {
+        WriteBufferFromOwnString exception_message;
+        if (metadata_snapshot->getColumnsForClusterByKey().size() == 1)
+            exception_message << "Cluster by key is not used";
+        else
+            exception_message << "Cluster by keys are not used";
+        if (force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_ALWAYS || force == FORCE_OPTIMIZE_SKIP_UNUSED_SHARDS_HAS_SHARDING_KEY)
+            throw Exception(exception_message.str(), ErrorCodes::UNABLE_TO_SKIP_UNUSED_SHARDS);
     }
     return bucket_numbers;
 }
