@@ -14,6 +14,7 @@
  */
 
 #include <CloudServices/CnchServerClient.h>
+#include <Common/ProfileEventsTimer.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_server_rpc.pb.h>
 #include <Parsers/ASTSerDerHelper.h>
@@ -27,6 +28,12 @@
 #include <CloudServices/CnchDataWriter.h>
 #include <Optimizer/PredicateUtils.h>
 
+
+namespace ProfileEvents
+{
+    extern const int ServerRpcRequest;
+    extern const int ServerRpcElaspsedMicroseconds;
+}
 
 namespace DB
 {
@@ -63,6 +70,7 @@ static std::optional<Protos::TraceInfo> setTraceInfo()
 std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransaction(
     const TxnTimestamp & primary_txn_id, bool read_only)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::CreateTransactionReq request;
     Protos::CreateTransactionResp response;
@@ -80,6 +88,7 @@ std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransaction(
 TxnTimestamp
 CnchServerClient::commitTransaction(const ICnchTransaction & txn, const StorageID & kafka_storage_id, const size_t consumer_index)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     cntl.set_timeout_ms(10 * 1000);
 
@@ -104,6 +113,7 @@ CnchServerClient::commitTransaction(const ICnchTransaction & txn, const StorageI
 
 void CnchServerClient::precommitTransaction(const ContextPtr & context, const TxnTimestamp & txn_id, const UUID & uuid)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     cntl.set_timeout_ms(context->getSettingsRef().max_dedup_execution_time.totalMilliseconds());
 
@@ -120,6 +130,7 @@ void CnchServerClient::precommitTransaction(const ContextPtr & context, const Tx
 
 TxnTimestamp CnchServerClient::rollbackTransaction(const TxnTimestamp & txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     cntl.set_timeout_ms(10 * 1000);
 
@@ -136,6 +147,7 @@ TxnTimestamp CnchServerClient::rollbackTransaction(const TxnTimestamp & txn_id)
 
 void CnchServerClient::finishTransaction(const TxnTimestamp & txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     cntl.set_timeout_ms(20 * 1000); /// TODO: from config
 
@@ -152,6 +164,7 @@ void CnchServerClient::finishTransaction(const TxnTimestamp & txn_id)
 
 void CnchServerClient::commitTransactionViaGlobalCommitter(const TransactionCnchPtr & txn)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     cntl.set_timeout_ms(10 * 1000);  /// make it configurable later
 
@@ -168,6 +181,7 @@ void CnchServerClient::commitTransactionViaGlobalCommitter(const TransactionCnch
 
 std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransactionForKafka(const StorageID & storage_id, const size_t consumer_index)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::CreateKafkaTransactionReq request;
     Protos::CreateKafkaTransactionResp response;
@@ -186,6 +200,7 @@ std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransactionForKafk
 
 ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts, const std::set<Int64> & bucket_numbers)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
         cntl.set_timeout_ms(storage->getSettings()->cnch_meta_rpc_timeout_ms);
@@ -228,6 +243,7 @@ DeleteBitmapMetaPtrVector CnchServerClient::fetchDeleteBitmaps(
     const TxnTimestamp & ts,
     const std::set<Int64> & bucket_numbers)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
         cntl.set_timeout_ms(storage->getSettings()->cnch_meta_rpc_timeout_ms);
@@ -274,6 +290,7 @@ PrunedPartitions CnchServerClient::fetchPartitions(
     const TxnTimestamp & txn_id,
     const bool & ignore_ttl)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
         cntl.set_timeout_ms(storage->getSettings()->cnch_meta_rpc_timeout_ms);
@@ -350,6 +367,7 @@ void CnchServerClient::redirectCommitParts(
     const bool is_merged_parts,
     const bool preallocate_mode)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RedirectCommitPartsReq request;
     Protos::RedirectCommitPartsResp response;
@@ -368,6 +386,7 @@ void CnchServerClient::redirectCommitParts(
 
 void CnchServerClient::redirectClearParts(const StoragePtr & table, const Catalog::CommitItems & commit_data)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RedirectClearPartsReq request;
     Protos::RedirectClearPartsResp response;
@@ -385,6 +404,7 @@ void CnchServerClient::redirectSetCommitTime(
     const TxnTimestamp & commitTs,
     const UInt64 txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RedirectCommitPartsReq request;
     Protos::RedirectCommitPartsResp response;
@@ -415,6 +435,7 @@ void CnchServerClient::redirectAttachDetachedS3Parts(
     const DB::Protos::DetachAttachType & type,
     const UInt64 & txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RedirectAttachDetachedS3PartsReq request;
     Protos::RedirectAttachDetachedS3PartsResp response;
@@ -480,6 +501,7 @@ void CnchServerClient::redirectDetachAttachedS3Parts(
     const DB::Protos::DetachAttachType & type,
     const UInt64 & txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RedirectDetachAttachedS3PartsReq request;
     Protos::RedirectDetachAttachedS3PartsResp response;
@@ -562,6 +584,7 @@ UInt32 CnchServerClient::commitParts(
     const MySQLBinLogInfo & binlog,
     const UInt64 peak_memory_usage)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     /// TODO: check txn_id & start_ts
 
     const auto & parts = dumped_data.parts;
@@ -670,6 +693,7 @@ UInt32 CnchServerClient::precommitParts(
     const MySQLBinLogInfo & binlog,
     const UInt64 peak_memory_usage)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     const UInt64 batch_size = context->getSettingsRef().catalog_max_commit_size;
     const auto & parts = dumped_data.parts;
     const auto & delete_bitmaps = dumped_data.bitmaps;
@@ -729,6 +753,7 @@ UInt32 CnchServerClient::precommitParts(
 google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
 CnchServerClient::getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetTableInfoReq request;
     Protos::GetTableInfoResp response;
@@ -749,6 +774,7 @@ CnchServerClient::getTableInfo(const std::vector<std::shared_ptr<Protos::TableId
 
 CnchTransactionStatus CnchServerClient::getTransactionStatus(const TxnTimestamp & txn_id, const bool need_search_catalog)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetTransactionStatusReq request;
     Protos::GetTransactionStatusResp response;
@@ -765,6 +791,7 @@ CnchTransactionStatus CnchServerClient::getTransactionStatus(const TxnTimestamp 
 }
 void CnchServerClient::removeIntermediateData(const TxnTimestamp & txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RollbackTransactionReq request;
     Protos::RollbackTransactionResp response;
@@ -779,6 +806,7 @@ void CnchServerClient::removeIntermediateData(const TxnTimestamp & txn_id)
 
 void CnchServerClient::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ControlCnchBGThreadReq request;
     Protos::ControlCnchBGThreadResp response;
@@ -796,6 +824,7 @@ void CnchServerClient::controlCnchBGThread(const StorageID & storage_id, CnchBGT
 
 void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::CleanTransactionReq request;
     Protos::CleanTransactionResp response;
@@ -811,6 +840,7 @@ void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
 
 void CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::CleanUndoBuffersReq request;
     Protos::CleanUndoBuffersResp response;
@@ -826,6 +856,7 @@ void CnchServerClient::cleanUndoBuffers(const TransactionRecord & txn_record)
 
 void CnchServerClient::acquireLock(const LockInfoPtr & lock)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::AcquireLockReq request;
     Protos::AcquireLockResp response;
@@ -842,6 +873,7 @@ void CnchServerClient::acquireLock(const LockInfoPtr & lock)
 
 void CnchServerClient::releaseLock(const LockInfoPtr & lock)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ReleaseLockReq request;
     Protos::ReleaseLockResp response;
@@ -854,6 +886,7 @@ void CnchServerClient::releaseLock(const LockInfoPtr & lock)
 
 void CnchServerClient::assertLockAcquired(const LockInfoPtr & lock)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::AssertLockReq request;
     Protos::AssertLockResp response;
@@ -867,6 +900,7 @@ void CnchServerClient::assertLockAcquired(const LockInfoPtr & lock)
 
 void CnchServerClient::reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ReportCnchLockHeartBeatReq request;
     Protos::ReportCnchLockHeartBeatResp response;
@@ -881,6 +915,7 @@ void CnchServerClient::reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt
 
 std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetDeletingTablesInGlobalGCReq request;
     Protos::GetDeletingTablesInGlobalGCResp response;
@@ -897,6 +932,7 @@ std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
 
 bool CnchServerClient::removeMergeMutateTasksOnPartitions(const StorageID & storage_id, const std::unordered_set<String> & partitions)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RemoveMergeMutateTasksOnPartitionsReq request;
     RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
@@ -912,6 +948,7 @@ bool CnchServerClient::removeMergeMutateTasksOnPartitions(const StorageID & stor
 
 std::optional<TxnTimestamp> CnchServerClient::getMinActiveTimestamp(const StorageID & storage_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetMinActiveTimestampReq request;
     Protos::GetMinActiveTimestampResp response;
@@ -927,6 +964,7 @@ std::optional<TxnTimestamp> CnchServerClient::getMinActiveTimestamp(const Storag
 
 UInt64 CnchServerClient::getServerStartTime()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetServerStartTimeReq request;
     Protos::GetServerStartTimeResp response;
@@ -939,6 +977,7 @@ UInt64 CnchServerClient::getServerStartTime()
 
 UInt32 CnchServerClient::getDedupImplVersion(const TxnTimestamp & txn_id, const UUID & uuid)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetDedupImplVersionReq request;
     Protos::GetDedupImplVersionResp response;
@@ -954,6 +993,7 @@ UInt32 CnchServerClient::getDedupImplVersion(const TxnTimestamp & txn_id, const 
 
 bool CnchServerClient::scheduleGlobalGC(const std::vector<Protos::DataModelTable> & tables)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ScheduleGlobalGCReq request;
 
@@ -972,6 +1012,7 @@ bool CnchServerClient::scheduleGlobalGC(const std::vector<Protos::DataModelTable
 
 std::unordered_map<UUID, UInt64> CnchServerClient::queryUdiCounter()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::QueryUdiCounterReq request;
     Protos::QueryUdiCounterResp response;
@@ -992,6 +1033,7 @@ std::unordered_map<UUID, UInt64> CnchServerClient::queryUdiCounter()
 
 void CnchServerClient::redirectUdiCounter(const std::unordered_map<UUID, UInt64> & data)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RedirectUdiCounterReq request;
     for (auto & [k, v] : data)
@@ -1008,6 +1050,7 @@ void CnchServerClient::redirectUdiCounter(const std::unordered_map<UUID, UInt64>
 
 void CnchServerClient::scheduleDistributeUdiCount()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ScheduleDistributeUdiCountReq request;
     Protos::ScheduleDistributeUdiCountResp response;
@@ -1019,6 +1062,7 @@ void CnchServerClient::scheduleDistributeUdiCount()
 
 void CnchServerClient::scheduleAutoStatsCollect()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ScheduleAutoStatsCollectReq request;
     Protos::ScheduleAutoStatsCollectResp response;
@@ -1029,6 +1073,7 @@ void CnchServerClient::scheduleAutoStatsCollect()
 }
 void CnchServerClient::redirectAsyncStatsTasks(google::protobuf::RepeatedPtrField<Protos::AutoStats::TaskInfoCore> tasks)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RedirectAsyncStatsTasksReq request;
     *request.mutable_tasks() = std::move(tasks);
@@ -1041,6 +1086,7 @@ void CnchServerClient::redirectAsyncStatsTasks(google::protobuf::RepeatedPtrFiel
 
 UInt64 CnchServerClient::getNumOfTablesCanSendForGlobalGC()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetNumOfTablesCanSendForGlobalGCReq request;
     Protos::GetNumOfTablesCanSendForGlobalGCResp response;
@@ -1054,6 +1100,7 @@ UInt64 CnchServerClient::getNumOfTablesCanSendForGlobalGC()
 google::protobuf::RepeatedPtrField<DB::Protos::BackgroundThreadStatus>
 CnchServerClient::getBackGroundStatus(const CnchBGThreadType & type)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::BackgroundThreadStatusReq request;
     Protos::BackgroundThreadStatusResp response;
@@ -1069,6 +1116,7 @@ CnchServerClient::getBackGroundStatus(const CnchBGThreadType & type)
 
 brpc::CallId CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 timeout_ms)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     auto * cntl = new brpc::Controller();
     auto call_id = cntl->call_id();
     if (parts.empty())
@@ -1100,6 +1148,7 @@ brpc::CallId CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & stora
 
 UInt32 CnchServerClient::reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ReportDeduperHeartbeatReq request;
     Protos::ReportDeduperHeartbeatResp response;
@@ -1117,6 +1166,7 @@ UInt32 CnchServerClient::reportDeduperHeartbeat(const StorageID & cnch_storage_i
 
 void CnchServerClient::executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ExecuteOptimizeQueryReq request;
     Protos::ExecuteOptimizeQueryResp response;
@@ -1140,6 +1190,7 @@ void CnchServerClient::executeOptimize(const StorageID & storage_id, const Strin
 
 brpc::CallId CnchServerClient::submitBackupTask(const String & backup_id, const String & backup_command)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     auto * cntl = new brpc::Controller();
     Protos::SubmitBackupTaskReq request;
     auto * response = new Protos::SubmitBackupTaskResp();
@@ -1154,6 +1205,7 @@ brpc::CallId CnchServerClient::submitBackupTask(const String & backup_id, const 
 
 std::optional<String> CnchServerClient::getRunningBackupTask()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetRunningBackupTaskReq request;
     Protos::GetRunningBackupTaskResp response;
@@ -1176,6 +1228,7 @@ std::optional<String> CnchServerClient::getRunningBackupTask()
 
 void CnchServerClient::removeRunningBackupTask(const String & backup_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::RemoveRunningBackupTaskReq request;
     Protos::RemoveRunningBackupTaskResp response;
@@ -1190,6 +1243,7 @@ void CnchServerClient::removeRunningBackupTask(const String & backup_id)
 
 void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::notifyAccessEntityChangeReq request;
     Protos::notifyAccessEntityChangeResp response;
@@ -1204,6 +1258,7 @@ void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const 
 void CnchServerClient::submitMaterializedMySQLDDLQuery(
     const String & database_name, const String & sync_thread, const String & query, const MySQLBinLogInfo & binlog)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::SubmitMaterializedMySQLDDLQueryReq request;
     Protos::SubmitMaterializedMySQLDDLQueryResp response;
@@ -1225,6 +1280,7 @@ void CnchServerClient::submitMaterializedMySQLDDLQuery(
 
 void CnchServerClient::reportHeartBeatForSyncThread(const String & database_name, const String & sync_thread)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ReportHeartbeatForSyncThreadReq request;
     Protos::ReportHeartbeatForSyncThreadResp response;
@@ -1240,6 +1296,7 @@ void CnchServerClient::reportHeartBeatForSyncThread(const String & database_name
 
 void CnchServerClient::reportSyncFailedForSyncThread(const String & database_name, const String & sync_thread)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ReportSyncFailedForSyncThreadReq request;
     Protos::ReportSyncFailedForSyncThreadResp response;
@@ -1256,6 +1313,7 @@ void CnchServerClient::reportSyncFailedForSyncThread(const String & database_nam
 
 void CnchServerClient::handleRefreshTaskOnFinish(StorageID & mv_storage_id, String task_id, Int64 txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::handleRefreshTaskOnFinishReq request;
     Protos::handleRefreshTaskOnFinishResp response;
@@ -1272,6 +1330,7 @@ void CnchServerClient::handleRefreshTaskOnFinish(StorageID & mv_storage_id, Stri
 
 void CnchServerClient::forceRecalculateMetrics(const StorageID & storage_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ForceRecalculateMetricsReq request;
     Protos::ForceRecalculateMetricsResp response;
@@ -1286,6 +1345,7 @@ void CnchServerClient::forceRecalculateMetrics(const StorageID & storage_id)
 
 std::vector<Protos::LastModificationTimeHint> CnchServerClient::getLastModificationTimeHints(const StorageID & storage_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::getLastModificationTimeHintsReq request;
     Protos::getLastModificationTimeHintsResp response;
@@ -1307,6 +1367,7 @@ std::vector<Protos::LastModificationTimeHint> CnchServerClient::getLastModificat
 
 void CnchServerClient::notifyTableCreated(const UUID & uuid, const int64_t cnch_notify_table_created_rpc_timeout_ms)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     cntl.set_timeout_ms(cnch_notify_table_created_rpc_timeout_ms);
 
@@ -1325,6 +1386,7 @@ void CnchServerClient::notifyTableCreated(const UUID & uuid, const int64_t cnch_
 MergeTreeDataPartsCNCHVector CnchServerClient::fetchCloudTableMeta(
     const StorageCloudMergeTree & storage, const TxnTimestamp & ts, const std::unordered_set<Int64> & bucket_numbers)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     cntl.set_timeout_ms(storage.getSettings()->cnch_meta_rpc_timeout_ms);
     Protos::FetchCloudTableMetaReq request;
@@ -1346,6 +1408,7 @@ MergeTreeDataPartsCNCHVector CnchServerClient::fetchCloudTableMeta(
 
 void CnchServerClient::checkDelayInsertOrThrowIfNeeded(UUID storage_uuid)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::ServerRpcRequest, ProfileEvents::ServerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::checkDelayInsertOrThrowIfNeededReq req;
     Protos::checkDelayInsertOrThrowIfNeededResp resp;

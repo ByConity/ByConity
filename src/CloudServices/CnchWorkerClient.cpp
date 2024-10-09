@@ -15,8 +15,7 @@
 
 #include <CloudServices/CnchWorkerClient.h>
 
-#include <CloudServices/CnchServerResource.h>
-#include <CloudServices/DedupWorkerStatus.h>
+#include <Common/ProfileEventsTimer.h>
 #include <Interpreters/Context.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
@@ -40,6 +39,13 @@
 #include <brpc/controller.h>
 #include <common/logger_useful.h>
 #include <Storages/MergeTree/MarkRange.h>
+
+namespace ProfileEvents
+{
+    extern const int WorkerRpcRequest;
+    extern const int WorkerRpcElaspsedMicroseconds;
+}
+
 namespace DB
 {
 CnchWorkerClient::CnchWorkerClient(String host_port_)
@@ -57,6 +63,7 @@ CnchWorkerClient::~CnchWorkerClient() = default;
 void CnchWorkerClient::submitManipulationTask(
     const MergeTreeMetaBase & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     if (!params.rpc_port)
         throw Exception("Rpc port is not set in ManipulationTaskParams", ErrorCodes::LOGICAL_ERROR);
 
@@ -97,6 +104,7 @@ void CnchWorkerClient::submitManipulationTask(
 
 void CnchWorkerClient::shutdownManipulationTasks(const UUID & table_uuid, const Strings & task_ids)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::ShutdownManipulationTasksReq request;
     Protos::ShutdownManipulationTasksResp response;
@@ -115,6 +123,7 @@ void CnchWorkerClient::shutdownManipulationTasks(const UUID & table_uuid, const 
 
 std::unordered_set<std::string> CnchWorkerClient::touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::TouchManipulationTasksReq request;
     Protos::TouchManipulationTasksResp response;
@@ -134,6 +143,7 @@ std::unordered_set<std::string> CnchWorkerClient::touchManipulationTasks(const U
 
 std::vector<ManipulationInfo> CnchWorkerClient::getManipulationTasksStatus()
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetManipulationTasksStatusReq request;
     Protos::GetManipulationTasksStatusResp response;
@@ -178,6 +188,7 @@ std::vector<ManipulationInfo> CnchWorkerClient::getManipulationTasksStatus()
 void CnchWorkerClient::submitMvRefreshTask(
     const StorageMaterializedView & , const ManipulationTaskParams & params, TxnTimestamp txn_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     if (!params.rpc_port)
         throw Exception("Rpc port is not set in ManipulationTaskParams", ErrorCodes::LOGICAL_ERROR);
 
@@ -204,6 +215,7 @@ void CnchWorkerClient::submitMvRefreshTask(
 void CnchWorkerClient::sendCreateQueries(
     const ContextPtr & context, const std::vector<String> & create_queries, std::set<String> cnch_table_create_queries)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::SendCreateQueryReq request;
     Protos::SendCreateQueryResp response;
@@ -235,6 +247,7 @@ CheckResults CnchWorkerClient::checkDataParts(
     const String & create_query,
     const ServerDataPartsVector & parts)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::CheckDataPartsReq request;
     Protos::CheckDataPartsResp response;
@@ -274,6 +287,7 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     UInt64 submit_ts
    )
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     Protos::PreloadDataPartsReq request;
     request.set_txn_id(txn_id);
     request.set_create_table_query(create_local_table_query);
@@ -304,6 +318,7 @@ brpc::CallId CnchWorkerClient::dropPartDiskCache(
     bool sync,
     bool drop_vw_disk_cache)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::DropPartDiskCacheReq request;
     Protos::DropPartDiskCacheResp response;
@@ -331,6 +346,7 @@ brpc::CallId CnchWorkerClient::dropManifestDiskCache(
     const String & version,
     const bool sync)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::DropManifestDiskCacheReq request;
     Protos::DropManifestDiskCacheResp response;
@@ -367,6 +383,7 @@ brpc::CallId CnchWorkerClient::sendResources(
     const WorkerId & worker_id,
     bool with_mutations)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     Protos::SendResourcesReq request;
 
     const auto & settings = context->getSettingsRef();
@@ -527,6 +544,7 @@ brpc::CallId CnchWorkerClient::executeDedupTask(
     const ExceptionHandlerPtr & handler,
     std::function<void(bool)> funcOnCallback)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     Protos::ExecuteDedupTaskReq request;
     request.set_txn_id(txn_id);
     request.set_rpc_port(rpc_port);
@@ -578,6 +596,7 @@ brpc::CallId CnchWorkerClient::executeDedupTask(
 
 brpc::CallId CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id, ExceptionHandlerPtr handler)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller * cntl = new brpc::Controller;
     Protos::RemoveWorkerResourceReq request;
     auto * response = new Protos::RemoveWorkerResourceResp;
@@ -598,6 +617,7 @@ brpc::CallId CnchWorkerClient::broadcastManifest(
     const DeleteBitmapMetaPtrVector & delete_bitmaps,
     const ExceptionHandlerPtr & handler)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller * cntl = new brpc::Controller;
 
     cntl->set_timeout_ms(context->getSettingsRef().broadcast_manifest_timeout.totalMilliseconds());
@@ -640,6 +660,7 @@ brpc::CallId CnchWorkerClient::broadcastManifest(
 
 void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports_, const size_t & deduper_index)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::CreateDedupWorkerReq request;
     Protos::CreateDedupWorkerResp response;
@@ -656,6 +677,7 @@ void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const Str
 
 void CnchWorkerClient::assignHighPriorityDedupPartition(const StorageID & storage_id, const Names & high_priority_partition)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::AssignHighPriorityDedupPartitionReq request;
     Protos::AssignHighPriorityDedupPartitionResp response;
@@ -671,6 +693,7 @@ void CnchWorkerClient::assignHighPriorityDedupPartition(const StorageID & storag
 
 void CnchWorkerClient::assignRepairGran(const StorageID & storage_id, const String & partition_id, const Int64 & bucket_number, const UInt64 & max_event_time)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::AssignRepairGranReq request;
     Protos::AssignRepairGranResp response;
@@ -687,6 +710,7 @@ void CnchWorkerClient::assignRepairGran(const StorageID & storage_id, const Stri
 
 void CnchWorkerClient::dropDedupWorker(const StorageID & storage_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::DropDedupWorkerReq request;
     Protos::DropDedupWorkerResp response;
@@ -700,6 +724,7 @@ void CnchWorkerClient::dropDedupWorker(const StorageID & storage_id)
 
 DedupWorkerStatus CnchWorkerClient::getDedupWorkerStatus(const StorageID & storage_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetDedupWorkerStatusReq request;
     Protos::GetDedupWorkerStatusResp response;
@@ -735,6 +760,7 @@ DedupWorkerStatus CnchWorkerClient::getDedupWorkerStatus(const StorageID & stora
 brpc::CallId CnchWorkerClient::sendBackupCopyTask(
     const ContextPtr & context, const String & backup_id, const std::vector<Protos::BackupCopyTask> & copy_tasks, const ExceptionHandlerPtr & handler)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     auto * cntl = new brpc::Controller;
     Protos::SendBackupCopyTaskReq request;
     auto * response = new Protos::SendBackupCopyTaskResp();
@@ -757,6 +783,7 @@ brpc::CallId CnchWorkerClient::sendBackupCopyTask(
 #if USE_RDKAFKA
 CnchConsumerStatus CnchWorkerClient::getConsumerStatus(const StorageID & storage_id)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::GetConsumerStatusReq request;
     Protos::GetConsumerStatusResp response;
@@ -780,6 +807,7 @@ CnchConsumerStatus CnchWorkerClient::getConsumerStatus(const StorageID & storage
 
 void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     if (!command.rpc_port)
         throw Exception("Rpc port is not set in KafkaTaskCommand", ErrorCodes::LOGICAL_ERROR);
 
@@ -823,6 +851,7 @@ void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
 #if USE_MYSQL
 void CnchWorkerClient::submitMySQLSyncThreadTask(const MySQLSyncThreadCommand & command)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::SubmitMySQLSyncThreadTaskReq request;
     Protos::SubmitMySQLSyncThreadTaskResp response;
@@ -852,6 +881,7 @@ void CnchWorkerClient::submitMySQLSyncThreadTask(const MySQLSyncThreadCommand & 
 
 bool CnchWorkerClient::checkMySQLSyncThreadStatus(const String & database_name, const String & sync_thread)
 {
+    auto timer = ProfileEventsTimer(ProfileEvents::WorkerRpcRequest, ProfileEvents::WorkerRpcElaspsedMicroseconds);
     brpc::Controller cntl;
     Protos::CheckMySQLSyncThreadStatusReq request;
     Protos::CheckMySQLSyncThreadStatusResp response;
