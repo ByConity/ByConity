@@ -84,7 +84,7 @@ struct IMergeTreeIndex
 
     virtual MergeTreeIndexAggregatorPtr createIndexAggregator() const = 0;
 
-    virtual MergeTreeIndexAggregatorPtr createIndexAggregatorForPart([[maybe_unused]] GINStoreWriter & writer) const
+    virtual MergeTreeIndexAggregatorPtr createIndexAggregatorForPart([[maybe_unused]] GINStoreWriter * writer) const
     {
         return createIndexAggregator();
     }

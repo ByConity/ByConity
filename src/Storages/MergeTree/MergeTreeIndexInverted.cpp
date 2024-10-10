@@ -25,7 +25,7 @@
 
 #if USE_TSQUERY
 #include <Common/TextSreachQuery.h>
-#endif 
+#endif
 
 #include <Common/ChineseTokenExtractor.h>
 #include <common/types.h>
@@ -56,7 +56,7 @@ bool MergeTreeConditionInverted::createFunctionEqualsCondition(
     {
         ITokenExtractor::stringToGinFilter(value.data(), value.size(), token_extractor, *out.gin_filter);
     }
-    else 
+    else
     {
         ChineseTokenExtractor::stringLikeToGinFilter(value, nlp_extractor, *out.gin_filter);
     }
@@ -234,9 +234,9 @@ void MergeTreeIndexAggregatorInverted::addToGinFilter(UInt32 rowID, const char *
             gin_filter.add(data + token_start, token_len, rowID, writer);
         }
     }
-    else 
-    {   
-        String value(data, length); 
+    else
+    {
+        String value(data, length);
         ChineseTokenExtractor::WordRangesWithIterator iterator;
 
         nlp_extractor->preCutString(value, iterator);
@@ -335,7 +335,7 @@ bool MergeTreeConditionInverted::alwaysUnknownOrTrue() const
             || element.function == RPNElement::FUNCTION_IN || element.function == RPNElement::FUNCTION_NOT_IN
             || element.function == RPNElement::FUNCTION_MULTI_SEARCH || element.function == RPNElement::ALWAYS_FALSE
             #if USE_TSQUERY
-            || element.function == RPNElement::FUNCTION_TEXT_SEARCH 
+            || element.function == RPNElement::FUNCTION_TEXT_SEARCH
             #endif
         )
         {
@@ -622,9 +622,9 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(MergeTreeIndexGranuleP
             std::unique_ptr<roaring::Roaring> operator_filter = std::make_unique<roaring::Roaring>();
             rpn_stack.emplace_back(
                 TextSearchQueryExpression::calculate(
-                    element.text_search_filter, 
-                    granule->gin_filters[element.key_column], 
-                    cache_store, 
+                    element.text_search_filter,
+                    granule->gin_filters[element.key_column],
+                    cache_store,
                     *operator_filter),
                     true);
 
@@ -739,9 +739,9 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
         }
         else
             return false;
-        
+
         #if USE_TSQUERY
-        /// For textSearch 
+        /// For textSearch
         if (func_name == "textSearch")
         {
             out.key_column = key_column_num;
@@ -768,7 +768,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             {
                 ITokenExtractor::stringToGinFilter(value.data(), value.size(), token_extractor, *out.gin_filter);
             }
-            else 
+            else
             {
                 ChineseTokenExtractor::stringToGinFilter(value, nlp_extractor, *out.gin_filter);
             }
@@ -789,7 +789,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             {
                 ITokenExtractor::stringLikeToGinFilter(value.data(), value.size(), token_extractor, *out.gin_filter);
             }
-            else 
+            else
             {
                 ChineseTokenExtractor::stringLikeToGinFilter(value, nlp_extractor, *out.gin_filter);
             }
@@ -806,7 +806,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             {
                 ITokenExtractor::stringLikeToGinFilter(value.data(), value.size(), token_extractor, *out.gin_filter);
             }
-            else 
+            else
             {
                 ChineseTokenExtractor::stringLikeToGinFilter(value, nlp_extractor, *out.gin_filter);
             }
@@ -826,11 +826,11 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
             {
                 ChineseTokenExtractor::stringToGinFilter(value, nlp_extractor, *out.gin_filter);
             }
-    
+
             LOG_TRACE(getLogger("inverted index"),"search string: {} with token : [ {} ] ", value, out.gin_filter->getTermsInString());
-    
+
             return true;
-             
+
         }
         else if (func_name == "startsWith")
         {
@@ -861,7 +861,7 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
                 {
                     ITokenExtractor::stringToGinFilter(value.data(), value.size(), token_extractor, gin_filters.back().back());
                 }
-                else 
+                else
                 {
                     ChineseTokenExtractor::stringToGinFilter(value, nlp_extractor, gin_filters.back().back());
                 }
@@ -997,9 +997,9 @@ MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregator() cons
     throw Exception(ErrorCodes::LOGICAL_ERROR, "MergeTreeIndexInverted should call createIndexAggregatorForPart");
 }
 
-MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregatorForPart(GINStoreWriter& writer) const
+MergeTreeIndexAggregatorPtr MergeTreeIndexInverted::createIndexAggregatorForPart(GINStoreWriter * writer) const
 {
-    return std::make_shared<MergeTreeIndexAggregatorInverted>(writer, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get());
+    return std::make_shared<MergeTreeIndexAggregatorInverted>(*writer, index.column_names, index.name, params, token_extractor.get(), nlp_extractor.get());
 }
 
 MergeTreeIndexConditionPtr MergeTreeIndexInverted::createIndexCondition(const SelectQueryInfo & query, ContextPtr context) const
@@ -1014,7 +1014,7 @@ bool MergeTreeIndexInverted::mayBenefitFromIndexForIn(const ASTPtr & node) const
 }
 
 MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index)
-{   
+{
     if (index.arguments.size() > 2)
     {
         // String type_name = index.arguments[0].get<String>(); use for select nlp
@@ -1116,7 +1116,7 @@ void ginIndexValidator(const IndexDescription & index, bool /*attach*/)
         // now we only have token_chinese_default for nlp tokenizer, todo refactor here
         if (index.arguments[0].get<String>() != ChineseTokenExtractor::getName())
         {
-            throw Exception(ErrorCodes::INCORRECT_QUERY, "only support type {} now ", ChineseTokenExtractor::getName());  
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "only support type {} now ", ChineseTokenExtractor::getName());
         }
 
 

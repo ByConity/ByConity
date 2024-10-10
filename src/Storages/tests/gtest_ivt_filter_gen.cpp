@@ -133,7 +133,7 @@ struct IvtFilterCtx
                 std::make_unique<GinDataLocalPartHelper>(disk, table), segment_size, 1.0);
 
             auto idx_agg = std::dynamic_pointer_cast<MergeTreeIndexAggregatorInverted>(
-                idx->createIndexAggregatorForPart(*write_store));
+                idx->createIndexAggregatorForPart(write_store.get()));
 
             size_t pos = 0;
             idx_agg->update(block, &pos, block.rows());

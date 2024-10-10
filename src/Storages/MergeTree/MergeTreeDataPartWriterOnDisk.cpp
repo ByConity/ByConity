@@ -295,11 +295,10 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
                 ivt_idx->params.density);
             store = store_writer.get();
             gin_store_writers.emplace(stream_name, std::move(store_writer));
-            skip_indices_aggregators.push_back(skip_index->createIndexAggregatorForPart(*store));
         }
-        else
+
         {
-            skip_indices_aggregators.push_back(skip_index->createIndexAggregator());
+            skip_indices_aggregators.push_back(skip_index->createIndexAggregatorForPart(store));
         }
 
         skip_index_accumulated_marks.push_back(0);
@@ -518,7 +517,7 @@ void MergeTreeDataPartWriterOnDisk::calculateAndSerializeSkipIndices(const Block
             if (skip_indices_aggregators[i]->empty() && granule.mark_on_start)
             {
                 {
-                    skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(*writer);
+                    skip_indices_aggregators[i] = index_helper->createIndexAggregatorForPart(writer);
                 }
 
                 if (stream.compressed.offset() >= settings.min_compress_block_size)

@@ -214,7 +214,7 @@ public:
 
     MergeTreeIndexGranulePtr createIndexGranule() const override;
     MergeTreeIndexAggregatorPtr createIndexAggregator() const override;
-    MergeTreeIndexAggregatorPtr createIndexAggregatorForPart(GINStoreWriter& writer) const override;
+    MergeTreeIndexAggregatorPtr createIndexAggregatorForPart(GINStoreWriter * writer) const override;
     MergeTreeIndexConditionPtr createIndexCondition(const SelectQueryInfo & query_info, ContextPtr context) const override;
 
     bool mayBenefitFromIndexForIn(const ASTPtr & node) const override;
