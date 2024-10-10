@@ -223,7 +223,7 @@ size_t SerializationNumber<T>::deserializeBinaryBulk(IColumn & column, ReadBuffe
     if (zero_copy_cache_read && vec_col.has_zero_buf && !filter)
     {
         size_t init_col_size = column.size();
-        if (auto * merged_segment_istr = typeid_cast<MergedReadBufferWithSegmentCache *>(&istr); merged_segment_istr->isInternalCachedCompressedReadBuffer())
+        if (auto * merged_segment_istr = typeid_cast<MergedReadBufferWithSegmentCache *>(&istr); merged_segment_istr && merged_segment_istr->isInternalCachedCompressedReadBuffer())
         {
             bool incomplete_read = false;
             size_t size = merged_segment_istr->readZeroCopy(vec_col.getZeroCopyBuf(), sizeof(typename ColumnVector<T>::ValueType) * limit, incomplete_read);
