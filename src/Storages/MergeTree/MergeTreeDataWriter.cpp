@@ -610,6 +610,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     if (!data.getSettings()->enable_segment_bitmap_index)
         bitmap_build_info.build_all_segment_bitmap_index = false;
 
+    LOG_DEBUG(log, "There are {} secondary index,  {}", metadata_snapshot->getSecondaryIndices().size(), metadata_snapshot->getSecondaryIndices().toString());
     MergedBlockOutputStream out(
         new_data_part,
         metadata_snapshot,
@@ -857,6 +858,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPartialUpdat
     if (!data.getSettings()->enable_segment_bitmap_index)
         bitmap_build_info.build_all_segment_bitmap_index = false;
 
+    LOG_DEBUG(log, "There are {} secondary index,  {}", metadata_snapshot->getSecondaryIndices().size(), metadata_snapshot->getSecondaryIndices().toString());
     MergedBlockOutputStream out(
         new_data_part,
         metadata_snapshot,

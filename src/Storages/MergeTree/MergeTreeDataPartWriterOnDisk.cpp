@@ -267,6 +267,7 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
     for (const auto & skip_index : skip_indices)
     {
         String stream_name = skip_index->getFileName();
+        LOG_DEBUG(getLogger(), "skip index {} ", stream_name);
         skip_indices_streams.emplace_back(
                 std::make_unique<MergeTreeDataPartWriterOnDisk::Stream>(
                         stream_name,
@@ -294,10 +295,11 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
                 ivt_idx->params.density);
             store = store_writer.get();
             gin_store_writers.emplace(stream_name, std::move(store_writer));
-        }
-
-        {
             skip_indices_aggregators.push_back(skip_index->createIndexAggregatorForPart(*store));
+        }
+        else
+        {
+            skip_indices_aggregators.push_back(skip_index->createIndexAggregator());
         }
 
         skip_index_accumulated_marks.push_back(0);
